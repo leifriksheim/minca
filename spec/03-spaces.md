@@ -797,11 +797,12 @@ holding `/collection/define` for it may change the definition. A change
 applied on top, having seen them, removes `contested[name]`. A deleted one
 removes the entry.
 
-`keyDue` is true, in a private space, when some event in the set took
-reading from someone (in its own view, a reader before and not after) and the
-current key's event had not seen it; and, for the current state, when anyone
-who held the current key (a reader as it was made, or made a reader by an
-assignment it had not seen) reads no more, however that came about.
+`keyDue` is worked out for the current state alone (§9.2). It is true, in a
+private space, when some valid event took reading from someone (in its own
+view, a reader before and not after) and the current key's event had not seen
+it; and when anyone who held the current key (a reader as it was made, or made
+a reader by an assignment it had not seen) reads no more, however that came
+about.
 
 The **current state** is the merge of the valid events.
 

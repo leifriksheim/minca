@@ -343,7 +343,10 @@ export interface AccessState {
   readonly contested: ReadonlyMap<string, ReadonlyArray<string>>;
   /** A private space's keys, oldest first; the last is current. Empty in a public space. */
   readonly keys: ReadonlyArray<SpaceKeyEpoch>;
-  /** Whether someone lost their place in the space since the current key — so a new one is due */
+  /**
+   * Whether someone lost their place in the space since the current key — so
+   * a new one is due. Worked out for the history's current state only.
+   */
   readonly keyDue: boolean;
   /** The relays the space names — empty until someone names some */
   readonly relays: ReadonlyArray<string>;
@@ -1019,8 +1022,6 @@ interface Replay {
   readonly invites: ReadonlySet<string>;
   readonly views: Map<string, AccessState>;
   readonly allowedIds: ReadonlySet<string>;
-  /** Accounts each change took reading from, in its own view */
-  readonly lostReaders: ReadonlyMap<string, ReadonlyArray<string>>;
   /** Each role definition's own view, among the allowed changes */
   readonly defViews: ReadonlyMap<string, AccessState>;
   /** Each valid role definition's view among the valid changes: where the current state judges its grants */
@@ -1047,7 +1048,6 @@ function merge(
   genesis: AccessGenesis,
   events: ReadonlyArray<AccessEvent>,
   saw: ReadonlyMap<string, Seen>,
-  lostReaders: ReadonlyMap<string, ReadonlyArray<string>>,
   defViews: ReadonlyMap<string, AccessState>,
 ): MutableState {
   const state = startState(genesis);
@@ -1166,14 +1166,6 @@ function merge(
       if (event.kind === 'key')
         state.keys.push({ keyId: event.keyId, readKey: event.readKey, event: event.id });
   }
-  // Due: someone lost reading in a change the current key had not seen. They may hold it.
-  if (state.keys.length > 0) {
-    const seenByKey = currentKey ? (saw.get(currentKey.id) ?? new Set<string>()) : new Set<string>();
-    state.keyDue = events.some(
-      (event) =>
-        (lostReaders.get(event.id)?.length ?? 0) > 0 && !seenByKey.has(event.id) && event !== currentKey,
-    );
-  }
   return state;
 }
 
@@ -1192,7 +1184,6 @@ function applied(state: AccessState, event: AccessEvent, genesisId: string): Mut
   };
   change(event, next, state);
   if (event.kind === 'key') {
-    next.keyDue = false;
     // The keys before it in the order a merge gives: the space's own first, the rest by id.
     const earlier = next.keys.slice(0, -1);
     const own = earlier.filter((key) => key.event === genesisId);
@@ -1405,7 +1396,7 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
 
   // In order, ancestors first: each change's own view (the allowed changes it saw), whether it is
   // allowed there, what it takes, and the strikes it is part of.
-  const lostReaders = new Map<string, string[]>();
+  const tookReading = new Set<string>();
   const refused = new Map<string, string>();
   const allowedIds = new Set<string>();
   const scopes = new Map<string, string>();
@@ -1445,15 +1436,7 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
   const strikesOn = (reduction: AccessEvent, event: AccessEvent) =>
     !(keyWide(reduction) && event.kind === 'stepdown') && reachedBy(reduction, event);
   const reductionIds: string[] = [];
-  const allowedView = viewsAlong(
-    byIdMap,
-    saw,
-    genesis,
-    (id) => allowedIds.has(id),
-    afterOf,
-    lostReaders,
-    defViews,
-  );
+  const allowedView = viewsAlong(byIdMap, saw, genesis, (id) => allowedIds.has(id), afterOf, defViews);
 
   for (const id of order) {
     const event = byIdMap.get(id)!;
@@ -1468,8 +1451,7 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
     const scope = reductionOf(event, view);
     if (scope) scopes.set(id, scope);
     const lost = affected(event).filter((did) => isMember(view, did) && !isMember(after, did));
-    if (lost.length > 0) lostReaders.set(id, lost);
-    if (lost.length > 0 && after.keys.length > 0 && event.kind !== 'key') after.keyDue = true;
+    if (lost.length > 0) tookReading.add(id);
     afterOf.set(id, after);
     // Strikes it is part of, with the allowed changes before it.
     if (scope || keyWide(event) || (event.kind === 'invite' && !event.open)) reductionIds.push(id);
@@ -1502,7 +1484,6 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
     saw,
     allowedIds,
     strikes,
-    lostReaders,
     defViews,
   });
   const valid = within.valid;
@@ -1538,16 +1519,19 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
     genesis,
     order.filter((id) => valid.has(id)).map((id) => byIdMap.get(id)!),
     saw,
-    lostReaders,
     within.defViews,
   );
+  // Due: someone lost reading in a valid change the current key had not seen. They may hold it.
+  const keyEvent = state.keys.at(-1)?.event;
+  const sawByKey = keyEvent === undefined ? undefined : saw.get(keyEvent);
+  state.keyDue =
+    keyEvent !== undefined &&
+    order.some((id) => valid.has(id) && tookReading.has(id) && id !== keyEvent && !sawByKey?.has(id));
   // Due, too, when someone who held the current key reads no more, however that came about: two
   // changes together can take reading where neither did alone. Whoever could read as the key was
   // made held it, and so did whoever came to read after, by a change the key had not seen.
-  if (state.keys.length > 0 && !state.keyDue) {
-    const keyEvent = state.keys.at(-1)!.event;
+  if (keyEvent !== undefined && !state.keyDue) {
     const atKey = keyEvent === genesis.id ? startState(genesis) : afterOf.get(keyEvent);
-    const sawByKey = keyEvent === genesis.id ? null : saw.get(keyEvent);
     const now = readers(state);
     const held = new Set(atKey ? readers(atKey) : []);
     for (const id of order) {
@@ -1577,7 +1561,6 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
     invites,
     views: new Map(),
     allowedIds,
-    lostReaders,
     defViews,
     validDefViews: within.defViews,
     strikes,
@@ -1615,7 +1598,6 @@ function viewsAlong(
   genesis: AccessGenesis,
   counts: (id: string) => boolean,
   afterOf: ReadonlyMap<string, AccessState>,
-  lostReaders: ReadonlyMap<string, ReadonlyArray<string>>,
   defViews: Map<string, AccessState>,
 ): (event: AccessEvent) => AccessState {
   const viewOf = new Map<string, AccessState>();
@@ -1630,7 +1612,6 @@ function viewsAlong(
         genesis,
         [...saw.get(event.id)!].filter(counts).map((other) => byIdMap.get(other)!),
         saw,
-        lostReaders,
         defViews,
       );
     viewOf.set(event.id, view);
@@ -1655,7 +1636,6 @@ function validWithin(
     readonly saw: ReadonlyMap<string, Seen>;
     readonly allowedIds: ReadonlySet<string>;
     readonly strikes: ReadonlyMap<string, ReadonlyArray<string>>;
-    readonly lostReaders: ReadonlyMap<string, ReadonlyArray<string>>;
     readonly defViews: ReadonlyMap<string, AccessState>;
   },
 ): { readonly valid: ReadonlySet<string>; readonly defViews: ReadonlyMap<string, AccessState> } {
@@ -1665,15 +1645,7 @@ function validWithin(
   if (cut.every((id) => !r.allowedIds.has(id) || valid.has(id))) return { valid, defViews: r.defViews };
   const afterOf = new Map<string, AccessState>();
   const defViews = new Map<string, AccessState>();
-  const viewOf = viewsAlong(
-    r.byId,
-    r.saw,
-    r.genesis,
-    (id) => valid.has(id),
-    afterOf,
-    r.lostReaders,
-    defViews,
-  );
+  const viewOf = viewsAlong(r.byId, r.saw, r.genesis, (id) => valid.has(id), afterOf, defViews);
   for (const id of cut) {
     const event = r.byId.get(id)!;
     const view = viewOf(event);
@@ -1799,7 +1771,6 @@ function extended(r: Replay, event: AccessEvent): Replay | null {
       strikes,
       struck: new Map(r.struck).set(event.id, STRUCK),
       allowedIds: new Set(r.allowedIds).add(event.id),
-      lostReaders: lost.length > 0 ? new Map(r.lostReaders).set(event.id, lost) : r.lostReaders,
     };
   }
   const state = applied(r.state, event, genesis.id);
@@ -1810,7 +1781,8 @@ function extended(r: Replay, event: AccessEvent): Replay | null {
       .concat(event);
     state.definitions.set(event.name, { event: event.id, definedBy: definerOf(event, group, ancestry) });
   }
-  if (lost.length > 0 && state.keys.length > 0 && event.kind !== 'key') state.keyDue = true;
+  // Due once it takes reading from someone: the key saw everything else, and no one else lost it.
+  state.keyDue = lost.length > 0 && state.keys.length > 0 && event.kind !== 'key';
   const reductions = new Map(r.reductions);
   if (scope) reductions.set(scope, [...(reductions.get(scope) ?? []), event.id]);
   return {
@@ -1819,7 +1791,6 @@ function extended(r: Replay, event: AccessEvent): Replay | null {
     validDefViews,
     valid: new Set(r.valid).add(event.id),
     allowedIds: new Set(r.allowedIds).add(event.id),
-    lostReaders: lost.length > 0 ? new Map(r.lostReaders).set(event.id, lost) : r.lostReaders,
     state,
     reductions,
   };
@@ -1852,7 +1823,6 @@ function historyOf(r: Replay): AccessHistory {
         .filter((id) => among.valid.has(id))
         .map((id) => r.byId.get(id)!),
       r.saw,
-      r.lostReaders,
       among.defViews,
     );
   const cached = (key: string, make: () => AccessState): AccessState => {
