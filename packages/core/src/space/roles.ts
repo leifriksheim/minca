@@ -832,17 +832,127 @@ export function refusal(event: AccessEvent, state: AccessState): string | null {
   }
 }
 
+/** What a reduction reaches */
+type Reach =
+  /** Everything an account did: a removal, an unassignment, a stepping down */
+  | { readonly kind: 'account'; readonly root: string }
+  /** What one key signed for its account: a revoke */
+  | { readonly kind: 'key'; readonly root: string; readonly key: string }
+  /** One key's line for one collection, from a place on: a fork proof */
+  | { readonly kind: 'line'; readonly key: string; readonly collection: string; readonly from: number }
+  /** Joins through an invite: closing it */
+  | { readonly kind: 'invite'; readonly invite: string };
+
 /**
- * The account a change takes from, in its own view: a removal of a member,
- * or an unassignment of a role it holds, its own leaving included. Null when
+ * A change that takes from others. A revoke or a fork proof reaches its
+ * key's changes whatever either saw, and is never struck; any other reaches
+ * only what it had not seen and what had not seen it.
+ */
+interface Reduction {
+  readonly id: string;
+  readonly reach: Reach;
+  /** What it leaves standing: a key's versions in a collection at or below a place */
+  readonly cutoff: Cutoff;
+}
+
+/** The lowest fork proof of a line */
+type Fork = Reduction & { readonly reach: Extract<Reach, { readonly kind: 'line' }> };
+
+/** What a reduction may reach: a change, or a record judged against the history */
+interface Subject {
+  readonly root: string;
+  readonly author?: string | undefined;
+  readonly collection?: string | undefined;
+  readonly line?: number | undefined;
+  readonly viaInvite?: string | undefined;
+}
+
+const NO_CUTOFF: Cutoff = new Map();
+
+/** Whether a reduction reaches its key's changes whatever either saw */
+const reachesBack = (reduction: Reduction) =>
+  reduction.reach.kind === 'key' || reduction.reach.kind === 'line';
+
+/**
+ * What a change takes, in its own view: a removal of a member, an
+ * unassignment of a role the account holds (its own leaving included), a
+ * founder stepping down, a revoke, a fork proof or a closed invite. Null when
  * it takes nothing: it is no reduction.
  */
-function reductionOf(event: AccessEvent, view: AccessState): string | null {
-  if (event.kind === 'remove') return isMember(view, event.did) ? event.did : null;
-  if (event.kind === 'stepdown') return view.founders.has(event.did) ? event.did : null;
-  if (event.kind === 'assign' && !event.assigned)
-    return rolesOf(view, event.did).includes(event.role) ? event.did : null;
-  return null;
+function reductionOf(event: AccessEvent, view: AccessState): Reduction | null {
+  const of = (reach: Reach): Reduction => ({ id: event.id, reach, cutoff: event.cutoff });
+  const account = (holds: boolean, did: string) => (holds ? of({ kind: 'account', root: did }) : null);
+  switch (event.kind) {
+    case 'remove':
+      return account(isMember(view, event.did), event.did);
+    case 'stepdown':
+      return account(view.founders.has(event.did), event.did);
+    case 'assign':
+      return account(!event.assigned && rolesOf(view, event.did).includes(event.role), event.did);
+    case 'invite':
+      return event.open ? null : of({ kind: 'invite', invite: event.inviteKey });
+    case 'revoke':
+      return of({ kind: 'key', root: event.root, key: event.target });
+    // A fork proof carries no cutoff: its place is where it starts to reach.
+    case 'fork':
+      return {
+        id: event.id,
+        reach: { kind: 'line', key: event.writer, collection: event.collection, from: event.from },
+        cutoff: NO_CUTOFF,
+      };
+    default:
+      return null;
+  }
+}
+
+/** Whether a reduction reaches a change or a record that its cutoff doesn't cover */
+function reaches(reduction: Reduction, subject: Subject): boolean {
+  const { author, collection, line } = subject;
+  if (
+    author !== undefined &&
+    collection !== undefined &&
+    line !== undefined &&
+    (reduction.cutoff.get(author)?.get(collection) ?? -1) >= line
+  )
+    return false;
+  const reach = reduction.reach;
+  switch (reach.kind) {
+    // A removal or an unassignment reaches everything its account did: what an action needed is
+    // judged in a view its author chooses, so it can't decide what a strike leaves.
+    case 'account':
+      return subject.root === reach.root;
+    case 'key':
+      return subject.root === reach.root && author === reach.key;
+    case 'line':
+      return author === reach.key && collection === reach.collection && (line ?? 0) >= reach.from;
+    case 'invite':
+      return subject.viaInvite === reach.invite;
+  }
+}
+
+/** A change as what a reduction may reach */
+const subjectOf = (event: AccessEvent): Subject => ({
+  root: event.root,
+  author: event.author,
+  collection: KIND_COLLECTION[event.kind],
+  line: event.line,
+  viaInvite: event.kind === 'assign' ? event.viaInvite : undefined,
+});
+
+/** Adds a valid reduction to what judging looks up: by the account or key it reaches, and each line's lowest fork */
+function indexReduction(
+  taken: Map<string, ReadonlyArray<Reduction>>,
+  forks: Map<string, Fork>,
+  reduction: Reduction,
+): void {
+  const reach = reduction.reach;
+  if (reach.kind === 'line') {
+    const line = lineOf(reach.key, reach.collection);
+    if (reach.from < (forks.get(line)?.reach.from ?? Infinity)) forks.set(line, { ...reduction, reach });
+  } else if (reach.kind !== 'invite') {
+    const who = reach.kind === 'key' ? reach.key : reach.root;
+    taken.set(who, [...(taken.get(who) ?? []), reduction]);
+  }
 }
 
 /** The people whose reading a change may end */
@@ -1012,11 +1122,10 @@ interface Replay {
   /** Valid: allowed, and not struck */
   readonly valid: ReadonlySet<string>;
   readonly struck: ReadonlyMap<string, string>;
-  /** Valid reductions, by the account they took from */
-  readonly reductions: ReadonlyMap<string, ReadonlyArray<string>>;
-  readonly revokes: ReadonlyMap<string, ReadonlyArray<{ readonly event: string; readonly root: string }>>;
+  /** Valid removals, unassignments and stepping down by the account they reach, and revokes by the key */
+  readonly taken: ReadonlyMap<string, ReadonlyArray<Reduction>>;
   /** The lowest applied fork of each key's line for each collection, by {@link lineOf} */
-  readonly forks: ReadonlyMap<string, ForkedLine & { readonly event: string }>;
+  readonly forks: ReadonlyMap<string, Fork>;
   readonly state: AccessState;
   readonly named: ReadonlySet<string>;
   readonly invites: ReadonlySet<string>;
@@ -1399,43 +1508,24 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
   const tookReading = new Set<string>();
   const refused = new Map<string, string>();
   const allowedIds = new Set<string>();
-  const scopes = new Map<string, string>();
   const strikes = new Map<string, string[]>();
   const afterOf = new Map<string, AccessState>();
   const defViews = new Map<string, AccessState>();
-  const keyWide = (event: AccessEvent) => event.kind === 'revoke' || event.kind === 'fork';
-  const covers = (reduction: AccessEvent, event: AccessEvent) =>
-    (!keyWide(reduction) && saw.get(reduction.id)!.has(event.id)) ||
-    (event.line !== undefined &&
-      (reduction.cutoff.get(event.author)?.get(KIND_COLLECTION[event.kind]) ?? -1) >= event.line);
-  const reaches = (reduction: AccessEvent, event: AccessEvent): boolean => {
-    if (reduction.kind === 'revoke')
-      return event.root === reduction.root && event.author === reduction.target;
-    if (reduction.kind === 'fork')
-      return (
-        event.author === reduction.writer &&
-        KIND_COLLECTION[event.kind] === reduction.collection &&
-        (event.line ?? 0) >= reduction.from
-      );
-    // Closing an invite strikes joins through it that the close had not seen.
-    if (reduction.kind === 'invite')
-      return !reduction.open && event.kind === 'assign' && event.viaInvite === reduction.inviteKey;
-    // A removal or an unassignment reaches everything its account did: what an action needed is
-    // judged in a view its author chooses, so it can't decide what a strike leaves.
-    return scopes.get(reduction.id) === event.root;
-  };
+  /** The allowed reductions, in order */
+  const taking = new Map<string, Reduction>();
   // Revokes and fork proofs are never struck: every allowed one applies.
-  const reachedBy = (reduction: AccessEvent, event: AccessEvent) =>
+  const reachedBy = (reduction: Reduction, event: AccessEvent) =>
     reduction.id !== event.id &&
-    !keyWide(event) &&
-    (keyWide(reduction) || !saw.get(event.id)!.has(reduction.id)) &&
-    !covers(reduction, event) &&
-    reaches(reduction, event);
+    event.kind !== 'revoke' &&
+    event.kind !== 'fork' &&
+    (reachesBack(reduction) ||
+      (!saw.get(event.id)!.has(reduction.id) && !saw.get(reduction.id)!.has(event.id))) &&
+    reaches(reduction, subjectOf(event));
   // A stepping down is never struck (`invalidWithin`): founder status can't be given again. One a
   // revoke or a fork proof reaches ends founder status and does nothing more (below).
-  const strikesOn = (reduction: AccessEvent, event: AccessEvent) =>
-    !(keyWide(reduction) && event.kind === 'stepdown') && reachedBy(reduction, event);
-  const reductionIds: string[] = [];
+  const strikesOn = (reduction: Reduction, event: AccessEvent) =>
+    !(reachesBack(reduction) && event.kind === 'stepdown') && reachedBy(reduction, event);
+  const strike = (by: string, id: string) => (strikes.get(by) ?? strikes.set(by, []).get(by)!).push(id);
   const allowedView = viewsAlong(byIdMap, saw, genesis, (id) => allowedIds.has(id), afterOf, defViews);
 
   for (const id of order) {
@@ -1448,33 +1538,29 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
     }
     allowedIds.add(id);
     const after = stepped(view, event, genesis, saw, byIdMap, allowedIds);
-    const scope = reductionOf(event, view);
-    if (scope) scopes.set(id, scope);
+    const reduction = reductionOf(event, view);
     const lost = affected(event).filter((did) => isMember(view, did) && !isMember(after, did));
     if (lost.length > 0) tookReading.add(id);
     afterOf.set(id, after);
     // Strikes it is part of, with the allowed changes before it.
-    if (scope || keyWide(event) || (event.kind === 'invite' && !event.open)) reductionIds.push(id);
-    for (const r of reductionIds)
-      if (r !== id && strikesOn(byIdMap.get(r)!, event))
-        (strikes.get(r) ?? strikes.set(r, []).get(r)!).push(id);
-    if (reductionIds.at(-1) === id)
-      for (const other of order) {
-        if (other === id) break;
-        if (allowedIds.has(other) && strikesOn(event, byIdMap.get(other)!))
-          (strikes.get(id) ?? strikes.set(id, []).get(id)!).push(other);
-      }
+    for (const earlier of taking.values()) if (strikesOn(earlier, event)) strike(earlier.id, id);
+    if (!reduction) continue;
+    taking.set(id, reduction);
+    for (const other of order) {
+      if (other === id) break;
+      if (allowedIds.has(other) && strikesOn(reduction, byIdMap.get(other)!)) strike(id, other);
+    }
   }
 
   // A stepping down its key's revoke or fork proof reaches only ends founder status: it strikes
   // nothing, and withdraws nothing, as a reduction would.
-  const keyWideIds = reductionIds.filter((r) => keyWide(byIdMap.get(r)!));
+  const back = [...taking.values()].filter(reachesBack);
   for (const id of order) {
     const event = byIdMap.get(id)!;
     if (event.kind !== 'stepdown' || !allowedIds.has(id)) continue;
-    if (keyWideIds.some((r) => reachedBy(byIdMap.get(r)!, event))) {
+    if (back.some((reduction) => reachedBy(reduction, event))) {
       strikes.delete(id);
-      scopes.delete(id);
+      taking.delete(id);
     }
   }
 
@@ -1490,24 +1576,11 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
   const struck = new Map<string, string>();
   for (const id of order) if (allowedIds.has(id) && !valid.has(id)) struck.set(id, STRUCK);
 
-  const reductions = new Map<string, string[]>();
-  const revokes = new Map<string, Array<{ event: string; root: string }>>();
-  const forks = new Map<string, ForkedLine & { event: string }>();
+  const taken = new Map<string, ReadonlyArray<Reduction>>();
+  const forks = new Map<string, Fork>();
   for (const id of order) {
-    if (!valid.has(id)) continue;
-    const event = byIdMap.get(id)!;
-    const scope = scopes.get(id);
-    if (scope) (reductions.get(scope) ?? reductions.set(scope, []).get(scope)!).push(id);
-    if (event.kind === 'revoke')
-      (revokes.get(event.target) ?? revokes.set(event.target, []).get(event.target)!).push({
-        event: id,
-        root: event.root,
-      });
-    if (event.kind === 'fork') {
-      const line = lineOf(event.writer, event.collection);
-      if (event.from < (forks.get(line)?.from ?? Infinity))
-        forks.set(line, { event: id, writer: event.writer, collection: event.collection, from: event.from });
-    }
+    const reduction = valid.has(id) && taking.get(id);
+    if (reduction) indexReduction(taken, forks, reduction);
   }
   const named = new Set<string>([...genesis.founders, ...Object.keys(genesis.assigned ?? {})]);
   const invites = new Set<string>();
@@ -1553,8 +1626,7 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
     refused,
     valid,
     struck,
-    reductions,
-    revokes,
+    taken,
     forks,
     state,
     named,
@@ -1747,19 +1819,14 @@ function extended(r: Replay, event: AccessEvent): Replay | null {
   const reason = refusal(event, view);
   if (reason) return { ...r, ...base, refused: new Map(r.refused).set(event.id, reason) };
   const after = applied(view, event, genesis.id);
-  const scope = reductionOf(event, view);
+  const reduction = reductionOf(event, view);
   const lost = affected(event).filter((did) => isMember(view, did) && !isMember(after, did));
   // Valid, besides allowed: no revoke or fork of its key reaches it, whatever it saw.
-  const uncovered = (reduction: string) =>
-    (r.byId.get(reduction)!.cutoff.get(event.author)?.get(KIND_COLLECTION[event.kind]) ?? -1) <
-    (event.line ?? 0);
+  const subject = subjectOf(event);
   const fork = r.forks.get(lineOf(event.author, KIND_COLLECTION[event.kind]));
-  const strikers = [
-    ...(r.revokes.get(event.author) ?? [])
-      .filter((revoke) => revoke.root === event.root && uncovered(revoke.event))
-      .map((revoke) => revoke.event),
-    ...(fork && (event.line ?? 0) >= fork.from ? [fork.event] : []),
-  ];
+  const strikers = [...(r.taken.get(event.author) ?? []), ...(fork ? [fork] : [])]
+    .filter((other) => reachesBack(other) && reaches(other, subject))
+    .map((other) => other.id);
   // A stepping down its key's revoke reaches ends founder status and does nothing else: only a whole replay says.
   if (strikers.length > 0 && event.kind === 'stepdown') return null;
   if (strikers.length > 0) {
@@ -1783,8 +1850,9 @@ function extended(r: Replay, event: AccessEvent): Replay | null {
   }
   // Due once it takes reading from someone: the key saw everything else, and no one else lost it.
   state.keyDue = lost.length > 0 && state.keys.length > 0 && event.kind !== 'key';
-  const reductions = new Map(r.reductions);
-  if (scope) reductions.set(scope, [...(reductions.get(scope) ?? []), event.id]);
+  const taken = new Map(r.taken);
+  const forks = new Map(r.forks);
+  if (reduction) indexReduction(taken, forks, reduction);
   return {
     ...r,
     ...base,
@@ -1792,7 +1860,8 @@ function extended(r: Replay, event: AccessEvent): Replay | null {
     valid: new Set(r.valid).add(event.id),
     allowedIds: new Set(r.allowedIds).add(event.id),
     state,
-    reductions,
+    taken,
+    forks,
   };
 }
 
@@ -1892,30 +1961,31 @@ function historyOf(r: Replay): AccessHistory {
         return { ok: false, reason: 'Access changes it depends on have not arrived yet', later: true };
       // For a cited version, only what the citer had seen can take it away (02 §7.6).
       const known = within ? cutOf(within) : null;
-      const counts = (event: string) => !known || known.has(event);
-      const covered = (event: string) =>
-        record.writer !== undefined &&
-        record.collection !== undefined &&
-        record.line !== undefined &&
-        (r.byId.get(event)!.cutoff.get(record.writer)?.get(record.collection) ?? -1) >= record.line;
-      if (record.writer !== undefined) {
-        for (const revoke of r.revokes.get(record.writer) ?? [])
-          if (revoke.root === record.root && counts(revoke.event) && !covered(revoke.event))
-            return { ok: false, reason: 'The key that signed it was revoked', withdrawn: true };
-      }
+      const subject: Subject = {
+        root: record.root,
+        author: record.writer,
+        collection: record.collection,
+        line: record.line,
+      };
+      const takes = (reduction: Reduction) =>
+        (!known || known.has(reduction.id)) && reaches(reduction, subject);
+      const signed = record.writer === undefined ? [] : (r.taken.get(record.writer) ?? []);
+      if (signed.some((reduction) => reduction.reach.kind === 'key' && takes(reduction)))
+        return { ok: false, reason: 'The key that signed it was revoked', withdrawn: true };
       const fork =
         record.writer === undefined || record.collection === undefined
           ? undefined
           : r.forks.get(lineOf(record.writer, record.collection));
-      if (fork && (record.line ?? 0) >= fork.from && counts(fork.event))
+      if (fork && takes(fork))
         return { ok: false, reason: 'Its writer’s log forked at or before it', withdrawn: true };
       if (!needs(seenAs(record.seen)))
         return { ok: false, reason: 'Its author was not allowed to, as of what it had seen' };
       // What it had not seen of its author's standing: a removal or an unassignment takes everything.
       const cut = cutOf(record.seen);
-      for (const reduction of r.reductions.get(record.root) ?? [])
-        if (!cut.has(reduction) && counts(reduction) && !covered(reduction))
-          return { ok: false, reason: "Its author's access was taken away", withdrawn: true };
+      const reduced = (reduction: Reduction) =>
+        reduction.reach.kind === 'account' && !cut.has(reduction.id) && takes(reduction);
+      if ((r.taken.get(record.root) ?? []).some(reduced))
+        return { ok: false, reason: "Its author's access was taken away", withdrawn: true };
       // What it saw counts only as far as it stands: a struck change gives nothing, even cited.
       if (!needs(at(record.seen, within)))
         return {
@@ -1926,12 +1996,19 @@ function historyOf(r: Replay): AccessHistory {
       return { ok: true };
     },
     revoked: (key: string, root: string) =>
-      (r.revokes.get(key) ?? []).filter((revoke) => revoke.root === root).map((revoke) => revoke.event),
+      (r.taken.get(key) ?? [])
+        .filter(({ reach }) => reach.kind === 'key' && reach.root === root)
+        .map((revoke) => revoke.id),
     forked: (writer: string, collection: string) => {
       const fork = r.forks.get(lineOf(writer, collection));
-      return fork ? { event: fork.event, from: fork.from } : null;
+      return fork ? { event: fork.id, from: fork.reach.from } : null;
     },
-    forks: () => [...r.forks.values()].map(({ writer, collection, from }) => ({ writer, collection, from })),
+    forks: () =>
+      [...r.forks.values()].map(({ reach }) => ({
+        writer: reach.key,
+        collection: reach.collection,
+        from: reach.from,
+      })),
     named: (did: string) => r.named.has(did),
     knownInvite: (key: string) => r.invites.has(key),
     extend(event: AccessEvent) {
