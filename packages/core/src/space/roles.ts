@@ -973,11 +973,6 @@ function indexReduction(
   }
 }
 
-/** The people whose reading a change may end */
-function affected(event: AccessEvent): ReadonlyArray<string> {
-  return event.kind === 'assign' || event.kind === 'remove' || event.kind === 'stepdown' ? [event.did] : [];
-}
-
 /** A role's definition from a change, judged in `view` */
 function definitionFrom(event: AccessEvent, view: AccessState): RoleDefinition | null {
   if (event.kind !== 'role') return null;
@@ -1089,6 +1084,26 @@ interface Seen extends Iterable<string> {
   placeOf(id: string): number | undefined;
 }
 
+/** What a change names in `seen`, once each, leaving out the space itself */
+const parentsOf = (event: AccessEvent, genesisId: string) => [
+  ...new Set(event.seen.filter((parent) => parent !== genesisId)),
+];
+
+/** What a change saw, from what its parents saw: the prefix of the replay, and the places past it */
+function seenFrom(
+  parents: ReadonlyArray<string>,
+  saw: ReadonlyMap<string, Seen>,
+  index: ReadonlyMap<string, number>,
+): { readonly prefix: number; readonly extra: Set<number> } {
+  let prefix = 0;
+  for (const parent of parents) prefix = Math.max(prefix, saw.get(parent)!.prefix);
+  const extra = new Set<number>();
+  for (const parent of parents)
+    for (const n of [...saw.get(parent)!.extra, index.get(parent)!]) if (n >= prefix) extra.add(n);
+  while (extra.delete(prefix)) prefix++;
+  return { prefix, extra };
+}
+
 function seenOf(
   prefix: number,
   extra: ReadonlySet<number>,
@@ -1142,10 +1157,7 @@ interface Replay {
   /** Which allowed change strikes which: a function of the changes alone */
   readonly strikes: ReadonlyMap<string, ReadonlyArray<string>>;
   readonly index: ReadonlyMap<string, number>;
-  readonly ancestry: ReadonlyMap<string, Ancestry>;
 }
-
-type Ancestry = ReturnType<typeof seenOf>;
 
 const byId = (a: { readonly id: string }, b: { readonly id: string }) =>
   a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
@@ -1474,7 +1486,7 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
   const children = new Map<string, string[]>();
   const pending = new Map<string, number>();
   for (const event of placeable) {
-    const parents = [...new Set(event.seen.filter((p) => p !== genesis.id))];
+    const parents = parentsOf(event, genesis.id);
     pending.set(event.id, parents.length);
     for (const parent of parents)
       (children.get(parent) ?? children.set(parent, []).get(parent)!).push(event.id);
@@ -1495,15 +1507,9 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
   for (const event of placeable) if (!placed.has(event.id)) waiting.add(event.id);
 
   const index = new Map(order.map((id, i) => [id, i]));
-  const saw = new Map<string, Ancestry>();
+  const saw = new Map<string, Seen>();
   for (const id of order) {
-    const parents = [...new Set(byIdMap.get(id)!.seen.filter((parent) => parent !== genesis.id))];
-    let prefix = 0;
-    for (const parent of parents) prefix = Math.max(prefix, saw.get(parent)!.prefix);
-    const extra = new Set<number>();
-    for (const parent of parents)
-      for (const n of [...saw.get(parent)!.extra, index.get(parent)!]) if (n >= prefix) extra.add(n);
-    while (extra.delete(prefix)) prefix++;
+    const { prefix, extra } = seenFrom(parentsOf(byIdMap.get(id)!, genesis.id), saw, index);
     saw.set(id, seenOf(prefix, extra, order, index));
   }
 
@@ -1616,7 +1622,6 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
     waiting,
     order,
     saw,
-    ancestry: saw,
     index,
     refused,
     valid,
@@ -1677,11 +1682,14 @@ function step(
   const reason = refusal(event, view);
   if (reason) return { refused: reason };
   const after = stepped(view, event, c.genesis, c.saw, c.byId, c.counted);
+  const reduction = reductionOf(event, view);
+  // Only a removal, an unassignment or a stepping down can take reading, and only from a member.
+  const reach = reduction?.reach;
   return {
     refused: null,
     after,
-    reduction: reductionOf(event, view),
-    tookReading: affected(event).some((did) => isMember(view, did) && !isMember(after, did)),
+    reduction,
+    tookReading: reach?.kind === 'account' && !isMember(after, reach.root),
     reachedBy: [...c.taking.values()].filter((reduction) => reachedBy(reduction, event, c.saw)),
   };
 }
@@ -1721,7 +1729,7 @@ function viewsAlong(
 ): (event: AccessEvent) => AccessState {
   const viewOf = new Map<string, AccessState>();
   return (event) => {
-    const parents = [...new Set(event.seen.filter((parent) => parent !== genesis.id))];
+    const parents = parentsOf(event, genesis.id);
     let view: AccessState;
     if (parents.length === 0) view = startState(genesis);
     else if (parents.length === 1)
@@ -1825,20 +1833,15 @@ function extended(r: Replay, event: AccessEvent): Replay | null {
   // Where something allowed is not valid, its view (the allowed changes) is not the state; and
   // whether a key change is due rests on everyone who held the key. Both are worked out whole.
   if (r.struck.size > 0 || r.state.keyDue) return null;
-  const parents = [...new Set(event.seen.filter((parent) => parent !== genesis.id))];
-  if (parents.some((parent) => !r.ancestry.has(parent))) return null;
-  let prefix = 0;
-  for (const parent of parents) prefix = Math.max(prefix, r.ancestry.get(parent)!.prefix);
-  const extra = new Set<number>();
-  for (const parent of parents)
-    for (const n of [...r.ancestry.get(parent)!.extra, r.index.get(parent)!]) if (n >= prefix) extra.add(n);
-  while (extra.delete(prefix)) prefix++;
+  const parents = parentsOf(event, genesis.id);
+  if (parents.some((parent) => !r.saw.has(parent))) return null;
+  const { prefix, extra } = seenFrom(parents, r.saw, r.index);
   if (prefix !== r.order.length || extra.size > 0 || r.waiting.size > 0) return null;
 
   const order = [...r.order, event.id];
   const index = new Map(r.index).set(event.id, r.order.length);
   const mine = seenOf(prefix, extra, order, index);
-  const ancestry = new Map(r.ancestry).set(event.id, mine);
+  const saw = new Map(r.saw).set(event.id, mine);
   const byIdMap = new Map(r.byId).set(event.id, event);
   const named = new Set(r.named);
   if (event.kind === 'assign' && event.assigned) named.add(event.did);
@@ -1854,8 +1857,7 @@ function extended(r: Replay, event: AccessEvent): Replay | null {
     byId: byIdMap,
     waiting: r.waiting,
     order,
-    saw: ancestry,
-    ancestry,
+    saw,
     index,
     named,
     invites,
@@ -1865,7 +1867,7 @@ function extended(r: Replay, event: AccessEvent): Replay | null {
 
   const result = step(event, view, {
     genesis,
-    saw: ancestry,
+    saw,
     byId: byIdMap,
     counted: r.allowedIds,
     taking: r.taking,
@@ -1943,7 +1945,6 @@ function historyOf(r: Replay): AccessHistory {
   };
   /** Valid among what `ids` name and saw alone */
   const seenAs = (ids: ReadonlyArray<string>): AccessState => at(ids, ids);
-  const index = new Map(r.order.map((id, i) => [id, i]));
   const changesState = (id: string) => !['revoke', 'fork'].includes(r.byId.get(id)!.kind);
   let heads: ReadonlyArray<string> | null = null;
 
@@ -1951,7 +1952,7 @@ function historyOf(r: Replay): AccessHistory {
     current: r.state,
     status(id: string): EventStatus | null {
       if (r.waiting.has(id)) return { status: 'waiting' };
-      if (r.valid.has(id)) return { status: 'applied', index: index.get(id)! };
+      if (r.valid.has(id)) return { status: 'applied', index: r.index.get(id)! };
       const reason = r.refused.get(id) ?? r.struck.get(id);
       return reason ? { status: 'dropped', reason } : null;
     },
@@ -1966,7 +1967,7 @@ function historyOf(r: Replay): AccessHistory {
     headsFor(keys: ReadonlyArray<string>, max: number) {
       const all = history.heads();
       if (all.length <= max) return all;
-      const recent = [...all].sort((a, b) => index.get(b)! - index.get(a)!);
+      const recent = [...all].sort((a, b) => r.index.get(b)! - r.index.get(a)!);
       const sawOrIs = (head: string, id: string) => head === id || r.saw.get(head)!.has(id);
       const chosen: string[] = [];
       for (const key of keys) {
