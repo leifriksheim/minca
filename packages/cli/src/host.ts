@@ -649,9 +649,10 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     const next = refreshing.then(async () => {
       const state = await funds.settle(id, billed.get(id));
       const until = funds.until(state);
-      // An empty fund never moves its date later: its grace runs from when it ran out, or never starts.
+      // Run out, its grace ends where the fund stops drawing, so it is never charged for time it isn't
+      // carried; one nobody paid into keeps its date, and starts no grace.
       const was = (await node.get(id))?.paidUntil ?? 0;
-      await node.setPaidUntil(id, state.balance > 0 ? until : Math.min(until, was));
+      await node.setPaidUntil(id, state.balance > 0 || state.ran ? until : was);
     });
     refreshing = next.catch(() => {});
     void next.then(syncBots, () => {});

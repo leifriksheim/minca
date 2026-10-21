@@ -158,11 +158,38 @@ describe('a community fund', () => {
     assert.ok(state.balance <= 0, 'run out');
     const ends = t.funds.until(state) + 30 * DAY;
     assert.ok(ends - t.now() > 28 * DAY, `still about a month of grace, not ${(ends - t.now()) / DAY} days`);
-    // Once above zero again, a run starts afresh with the payment that began it.
-    t.pass(40);
-    await t.funds.settle('space:club');
-    state = await t.funds.add('space:club', 50e6);
-    assert.equal(state.most, 50e6);
+    // Nor does one made during the grace: what it lends after is still the $40.
+    t.pass(1);
+    state = await t.funds.add('space:club', 5e6);
+    assert.ok(state.balance > 0);
+    t.pass(5);
+    state = await t.funds.settle('space:club');
+    assert.ok(state.balance <= 0, 'run out again');
+    const again = t.funds.until(state) + 30 * DAY;
+    // Two days into it already: a month from when it ran out, not hours.
+    assert.ok(again - t.now() > 27 * DAY, `about a month again, not ${(again - t.now()) / DAY} days`);
+  });
+
+  test('a payment that leaves it owing moves its grace on by what it paid, and it is drawn until then only', async () => {
+    const t = await setUp();
+    // $40 a month; $20 lasts 15 days, and lends $20: 15 more.
+    await t.funds.settle('space:club', 10e9);
+    await t.funds.add('space:club', 20e6);
+    t.pass(20);
+    let state = await t.funds.settle('space:club');
+    const before = t.funds.until(state);
+    state = await t.funds.add('space:club', 6e6);
+    assert.ok(state.balance < 0, 'still owing');
+    const after = t.funds.until(state);
+    assert.ok(
+      Math.abs(after - before - 4.5 * DAY) < 60,
+      `$6 at $40 a month: 4.5 days more, not ${(after - before) / DAY}`,
+    );
+    // Past that end, nothing more is drawn.
+    t.pass(after + 30 * DAY - t.now() + DAY);
+    const at = (await t.funds.settle('space:club')).balance;
+    t.pass(3);
+    assert.equal((await t.funds.settle('space:club')).balance, at);
   });
 
   test('a balance its host lends nothing to stops at zero', async () => {

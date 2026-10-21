@@ -13,9 +13,9 @@
  * reaches (`paidUntil`).
  *
  * Grace is lent, not given, and in money: once it runs out the hosting goes
- * on drawing, below zero, until it owes as much as the largest payment since
- * it was last above zero (and for the host's grace at most), and what is
- * added next pays for it first. So a grace is what that payment would buy
+ * on drawing, below zero, until it owes as much as the largest payment ever
+ * made into it (and for the host's grace at most), and what is added next
+ * pays for it first. So a grace is what that payment would buy
  * again at the size the space is then, no payment ever shortens it, the least payment into a large space buys hours, and
  * nothing is drawn once the grace is over, whatever the space grows to. An
  * account at a host with limits is lent nothing: its room's notice is its
@@ -38,7 +38,7 @@ export interface FundState {
   readonly byBot?: Readonly<Record<string, Readonly<Record<string, number>>>>;
   /** What it pays for, as last measured: the fee is the monthly rate for each GB. Unmeasured, one. */
   readonly bytes?: number;
-  /** The most one payment added since it was last at or below zero, in millionths of a dollar: what a grace lends */
+  /** The most one payment ever added, in millionths of a dollar: what a grace lends, and no payment lowers */
   readonly most?: number;
   /** When it last ran out, and what its grace lends from then, in millionths of a dollar; absent while above zero */
   readonly ran?: { readonly at: number; readonly lent: number; readonly spent?: number };
@@ -184,12 +184,12 @@ export function createFunds(options: {
         const { ran, ...rest } = state;
         const paid = Math.round(micros);
         const balance = state.balance + paid;
-        // Above zero again, a run starts with this payment; within one, the largest stands.
-        const most = state.balance > 0 ? Math.max(state.most ?? 0, paid) : paid;
+        // The largest ever stands: no payment, whoever makes it and whenever, lends less after it.
+        const most = Math.max(state.most ?? 0, paid);
         return {
           ...rest,
           balance,
-          ...(balance > 0 ? { most } : state.most !== undefined ? { most: state.most } : {}),
+          most,
           ...(balance <= 0 && ran ? { ran } : {}),
         };
       }),

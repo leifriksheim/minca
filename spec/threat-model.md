@@ -148,16 +148,20 @@ reference implementation, or any implementation, honestly.
     an account's room unbounded, bounded only by how fast its balance
     drains, and every paying member who names a shared space pays for its
     whole size. A grace is lent, in money: the balance goes below zero
-    through it until it owes as much as the largest payment since it was
-    last above zero, and the next payment pays that first, so a little money now and then keeps
+    through it until it owes as much as the largest payment ever made into
+    it, and the next payment pays that first, so a little money now and then keeps
     nothing carried, the least payment into a large space (or one grown
     after paying) buys what that payment buys at its size, no payment
     shortens a grace (anyone may pay into a fund, so one could otherwise
     cut it), and nothing more is owed once the grace is over
     (`packages/cli/tests/fund.test.ts`, "its grace is lent…", "a grace lends
     what the payment before it was…", "paid while small, grown…", "no
-    payment shortens a grace…", "once its grace is over…"). An account at a host
-    with limits is lent nothing: its room's notice is its grace. Whoever
+    payment shortens a grace…", "a payment that leaves it owing…", "once its
+    grace is over…"); a fund is drawn on only while it is carried. An
+    account at a host with limits is lent nothing: its room's notice is its
+    grace. One payment keeps an account whose spaces fit its free room
+    `"paid"` for good, so never dropped for being idle: accepted, as that is
+    at most `accountBytes` for each such account. Whoever
     pays into a fund nobody else has can so leave its community owing at
     most what they paid, should it fund itself later; accepted. Still open
     ([#289](https://github.com/leifriksheim/minca/issues/289)): an account
