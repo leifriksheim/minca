@@ -38,6 +38,7 @@ import {
   checkGrant,
   connectToHome,
   GRANT_VERSION,
+  grantSigner,
   joinGranted,
   nodeOptionsFromGrant,
   type ConnectRequest,
@@ -310,17 +311,7 @@ export async function runAppNode(options: {
     });
 
   /** The note the node acts under: the newest grant's */
-  const signer: RootSigner = {
-    get did() {
-      return grant?.did ?? '';
-    },
-    custody: 'remote',
-    async delegate() {
-      if (!grant || expired(grant))
-        throw new Error('Access has run out. Connect to your account home again.');
-      return grant.note;
-    },
-  };
+  const signer = grantSigner(() => grant);
 
   /** Serves the node to the window, anew: a window that loaded again gets a session of its own */
   function serve(): void {

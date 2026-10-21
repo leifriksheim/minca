@@ -588,16 +588,22 @@ export async function checkGrant(
     throw new Error('The grant gives more than records, which is all that was asked for.');
 }
 
-/** A signer that answers with the note the home gave — the app holds nothing else. */
-export function grantSigner(grant: Grant): RootSigner {
+/**
+ * A signer that answers with the note the home gave — the app holds nothing
+ * else. Given a getter, it answers with whichever grant is current.
+ */
+export function grantSigner(grant: Grant | (() => Grant | null)): RootSigner {
+  const current = typeof grant === 'function' ? grant : () => grant;
   return {
-    did: grant.did,
+    get did() {
+      return current()?.did ?? '';
+    },
     custody: 'remote',
     async delegate() {
-      if (grant.expiresAt <= Math.floor(Date.now() / 1000)) {
+      const now = current();
+      if (!now || now.expiresAt <= Math.floor(Date.now() / 1000))
         throw new Error('Access has run out. Connect to your account home again.');
-      }
-      return grant.note;
+      return now.note;
     },
   };
 }

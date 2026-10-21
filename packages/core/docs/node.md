@@ -146,7 +146,9 @@ The note format, and that every record carries it, are protocol
 
 A signer need not be able to sign. `grantSigner(grant)` answers every
 `delegate` call with the one note an account home granted, unchanged, and
-refuses once `grant.expiresAt` has passed. A node started from a grant
+refuses once `grant.expiresAt` has passed. `grantSigner(() => grant)` answers
+with whichever grant the getter returns, as the desktop app's node does when
+a renewed grant replaces the last. A node started from a grant
 therefore never gets a fresh note: its "renewal" returns the same note, and when
 it runs out the app must connect again ([spec 06 §2.9](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
 
