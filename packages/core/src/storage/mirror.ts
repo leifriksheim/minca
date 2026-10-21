@@ -66,6 +66,9 @@ export interface MirrorConfig {
 }
 
 export interface Mirror {
+  /** The blob store, and this store writer's id in it: where its files go too (spec 05 §16.6) */
+  readonly store: BlobStore;
+  readonly writer: string;
   /** Takes in what others left in the store. How many versions were stored. */
   pull(): Promise<{ readonly added: number }>;
   /** Uploads what the store is missing, now */
@@ -241,6 +244,8 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
   }
 
   return Object.freeze({
+    store,
+    writer,
     pull: () => serial(pullNow),
     flush: () => serial(flushNow),
     compact: () => serial(compactNow),

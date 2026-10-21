@@ -76,6 +76,12 @@ export interface NodeConfig {
   readonly writerKey?: WriterKeySource;
   /** How often to look for writes another process made to a folder store. 0 disables. Default 2000. */
   readonly watchIntervalMs?: number;
+  /**
+   * Fetch every file the records it keeps name, as soon as they are named:
+   * what a node keeping a space for others does. Without it, a file is
+   * fetched when it is read (spec 05 §16.6).
+   */
+  readonly fetchFiles?: 'all';
   /** Hold only the collections this node uses, once a space names a keeper to hold the rest */
   readonly cache?: CacheConfig;
 }
@@ -519,6 +525,19 @@ export interface NodeSpaces {
   profiles(spaceId: string): Promise<ReadonlyArray<SpaceProfile>>;
 }
 
+/**
+ * A file a body refers to, as `records.addFile` gives it: what names it on a
+ * version (`hash`, `size`), what opens it (`key`, `salt`), and what it is.
+ */
+export interface FileRef {
+  readonly hash: string;
+  readonly size: number;
+  readonly key: string;
+  readonly salt: string;
+  readonly mime: string;
+  readonly name?: string;
+}
+
 export interface NodeRecords {
   /** Current versions, oldest record first; deleted records only with `includeDeleted` */
   list<T = unknown>(spaceId: string, options?: ListOptions): Promise<ReadonlyArray<NodeRecord<T>>>;
@@ -584,6 +603,14 @@ export interface NodeRecords {
   history<T = unknown>(spaceId: string, key: string): Promise<ReadonlyArray<NodeRecord<T>>>;
   /** Whether this account may `create` in a collection (`target` its name), or `edit` / `delete` a record (`target` its key) */
   can(spaceId: string, action: 'create' | 'edit' | 'delete', target: string): Promise<boolean>;
+  /**
+   * Seals a file under a key of its own, keeps it, and gives back the
+   * reference to put in a body: a version whose body holds it names the file
+   * on its outside, so peers fetch and keep it (spec 05 §16.6).
+   */
+  addFile(spaceId: string, bytes: Uint8Array, about: { mime: string; name?: string }): Promise<FileRef>;
+  /** The bytes of a file a body refers to: held here, or fetched from peers or mirrors */
+  readFile(spaceId: string, ref: FileRef): Promise<Uint8Array>;
   /**
    * Records matching a query, typed when it names a collection by its definition.
    * @throws When the query is malformed, saying what to fix

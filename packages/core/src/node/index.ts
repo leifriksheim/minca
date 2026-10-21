@@ -45,6 +45,7 @@ export type {
   CacheConfig,
   NodeSpaces,
   NodeRecords,
+  FileRef,
   NodeRecord,
   NodeEvent,
   NodeNetwork,

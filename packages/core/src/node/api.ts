@@ -70,6 +70,8 @@ export const API = Object.freeze({
     linked: 'scoped',
     delete: 'scoped',
     history: 'scoped',
+    addFile: 'scoped',
+    readFile: 'scoped',
     can: 'own',
     query: 'scoped',
     watch: 'own',

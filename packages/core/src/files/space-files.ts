@@ -1,0 +1,425 @@
+/**
+ * A space's files on this node (spec 05 §16.6): kept as entries in the
+ * space's own store, fetched from peers or mirrors chunk by chunk and checked
+ * as they come, served to peers, and dropped with the bodies that name them.
+ *
+ * ```
+ * f/<id>/list     the chunk list
+ * f/<id>/<n>      chunk n
+ * f/<id>/own      added here and not yet named: the time it was added
+ * ```
+ */
+import type { StorageAdapter, Version } from '../types.js';
+import type { StorageProvider } from '../storage/storage-provider.js';
+import type { BlobStore } from '../storage/blob-store.js';
+import type { SyncMessageBody } from '../sync/sync-messages.js';
+import {
+  CHUNK,
+  chunkCount,
+  chunkFits,
+  chunkLength,
+  chunkListOf,
+  fileIdOf,
+  filesOf,
+  listFits,
+  type FileName,
+} from './file-id.js';
+import { openFile, sealFile, type FileKey } from './seal.js';
+import { base64UrlDecode, base64UrlEncode, concatBytes, utf8Decode, utf8Encode } from '../utils/encoding.js';
+import { isRecord } from '../utils/guards.js';
+
+/** What `addFile` gives back: what names the file on a version, and what opens it, for the body */
+export type SealedFile = FileName & FileKey;
+
+/** A mirror a space's files are kept in, as its store writer */
+export interface FileMirror {
+  readonly store: BlobStore;
+  readonly writer: string;
+}
+
+export interface SpaceFilesConfig {
+  readonly space: string;
+  readonly adapter: StorageAdapter;
+  readonly storage: StorageProvider;
+  /** Sends a sync message to a peer */
+  readonly send: (peer: string, message: SyncMessageBody) => void;
+  /** The peers connected now */
+  readonly peers: () => ReadonlyArray<string>;
+  /** Mirrors the space is kept in */
+  readonly mirrors?: () => ReadonlyArray<FileMirror>;
+  /** Whether a version stands: a version that doesn't, though kept whole, keeps no files here */
+  readonly stands?: (version: Version) => Promise<boolean>;
+}
+
+/** Chunks asked of a peer in one `want-file` */
+const MAX_CHUNKS_PER_WANT = 64;
+/** Chunks a peer sends in answer to one `want-file`; the rest it leaves for the next ask */
+const CHUNKS_PER_REPLY = 4;
+/** Bytes in one `file` message, before base64 */
+const BYTES_PER_MESSAGE = 24_000;
+/** A request with no answer by now is given up, and the chunks asked elsewhere */
+const REQUEST_MS = 30_000;
+/** A file added here and never named is dropped after this */
+const UNNAMED_MS = 24 * 60 * 60 * 1000;
+
+const listKey = (id: string) => `f/${id}/list`;
+const chunkKey = (id: string, index: number) => `f/${id}/${index}`;
+const ownKey = (id: string) => `f/${id}/own`;
+
+type Part = number | 'list';
+
+interface Request {
+  readonly peer: string;
+  readonly file: FileName;
+  readonly asked: ReadonlySet<Part>;
+  readonly done: Set<Part>;
+  readonly parts: Map<Part, Uint8Array[]>;
+  readonly received: Map<Part, number>;
+  readonly settle: () => void;
+  list: Uint8Array | null;
+}
+
+export type SpaceFiles = ReturnType<typeof createSpaceFiles>;
+
+export function createSpaceFiles(config: SpaceFilesConfig) {
+  const { adapter, storage } = config;
+
+  // ─── Which files this node keeps ───────────────────────────────────
+
+  let named: Promise<Map<string, FileName>> | null = null;
+  /** Every file a version this store keeps whole names, and that stands */
+  const namedFiles = (): Promise<Map<string, FileName>> =>
+    (named ??= (async () => {
+      const files = new Map<string, FileName>();
+      for (const id of await storage.versionIds()) {
+        const version = await storage.getVersion(id);
+        if (!version || !('body' in version)) continue;
+        const taken = filesOf(version);
+        if (taken.length === 0 || (config.stands && !(await config.stands(version)))) continue;
+        for (const file of taken) files.set(file.hash, file);
+      }
+      return files;
+    })());
+
+  // ─── Local chunks ──────────────────────────────────────────────────
+
+  async function heldList(file: FileName): Promise<Uint8Array | null> {
+    return adapter.get(listKey(file.hash));
+  }
+
+  /** The chunks of a file held here */
+  async function heldChunks(file: FileName): Promise<Set<number>> {
+    const held = new Set<number>();
+    for (const key of await adapter.list(`f/${file.hash}/`)) {
+      const index = Number(key.slice(`f/${file.hash}/`.length));
+      if (Number.isInteger(index)) held.add(index);
+    }
+    return held;
+  }
+
+  async function keepChunk(file: FileName, index: number, bytes: Uint8Array): Promise<void> {
+    await adapter.put(chunkKey(file.hash, index), bytes);
+    // A file of one chunk needs no list to be checked; it is kept for serving all the same.
+    if (chunkCount(file.size) === 1) await adapter.put(listKey(file.hash), await chunkListOf(bytes));
+  }
+
+  /** Seals a file, keeps it, and gives back what names and opens it */
+  async function add(plain: Uint8Array): Promise<SealedFile> {
+    const { bytes, key } = await sealFile(plain);
+    const list = await chunkListOf(bytes);
+    const hash = await fileIdOf(bytes.length, list);
+    const ops = [
+      { type: 'put' as const, key: listKey(hash), value: list },
+      { type: 'put' as const, key: ownKey(hash), value: utf8Encode(String(Date.now())) },
+    ];
+    for (let index = 0; index * CHUNK < bytes.length; index++)
+      ops.push({
+        type: 'put' as const,
+        key: chunkKey(hash, index),
+        value: bytes.slice(index * CHUNK, (index + 1) * CHUNK),
+      });
+    await adapter.batch(ops);
+    return { hash, size: bytes.length, ...key };
+  }
+
+  // ─── Fetching ──────────────────────────────────────────────────────
+
+  const requests = new Map<number, Request>();
+  let lastRequest = 0;
+
+  /** Asks one peer for parts of a file; resolves with what arrived and checked, once it says it is done */
+  function ask(peer: string, file: FileName, parts: ReadonlyArray<Part>, list: Uint8Array | null) {
+    return new Promise<Set<Part>>((resolve) => {
+      const id = ++lastRequest;
+      const done = new Set<Part>();
+      const finish = () => {
+        clearTimeout(timer);
+        requests.delete(id);
+        resolve(done);
+      };
+      const timer = setTimeout(finish, REQUEST_MS);
+      requests.set(id, {
+        peer,
+        file,
+        asked: new Set(parts),
+        done,
+        parts: new Map(),
+        received: new Map(),
+        settle: finish,
+        list,
+      });
+      const numbers = parts.filter((part): part is number => part !== 'list');
+      config.send(
+        peer,
+        numbers.length
+          ? { type: 'want-file', id, hash: file.hash, chunks: [numbers[0]!, numbers.at(-1)!] }
+          : { type: 'want-file', id, hash: file.hash, list: true },
+      );
+    });
+  }
+
+  /** Runs of consecutive indices, at most `MAX_CHUNKS_PER_WANT` long: what one `want-file` can ask */
+  function runs(indices: ReadonlyArray<number>): number[][] {
+    const out: number[][] = [];
+    for (const index of indices) {
+      const run = out.at(-1);
+      if (run && run.at(-1) === index - 1 && run.length < MAX_CHUNKS_PER_WANT) run.push(index);
+      else out.push([index]);
+    }
+    return out;
+  }
+
+  /** Reads a file from a mirror, checking it as from a peer */
+  async function fromMirrors(file: FileName): Promise<boolean> {
+    for (const mirror of config.mirrors?.() ?? []) {
+      try {
+        const keys = await mirror.store.list(`files/${config.space}/`);
+        const at = keys.find((key) => key.endsWith(`/${file.hash}`));
+        if (!at) continue;
+        const list = await mirror.store.get(`${at}.list`);
+        const bytes = await mirror.store.get(at);
+        if (!list || !bytes || !(await listFits(file, list)) || bytes.length !== file.size) continue;
+        const chunks: Array<[number, Uint8Array]> = [];
+        let whole = true;
+        for (let index = 0; index < chunkCount(file.size); index++) {
+          const chunk = bytes.slice(index * CHUNK, (index + 1) * CHUNK);
+          if (!(await chunkFits(file, list, index, chunk))) {
+            whole = false;
+            break;
+          }
+          chunks.push([index, chunk]);
+        }
+        if (!whole) continue;
+        await adapter.put(listKey(file.hash), list);
+        for (const [index, chunk] of chunks) await adapter.put(chunkKey(file.hash, index), chunk);
+        return true;
+      } catch {
+        // Out of reach; the next one, or none.
+      }
+    }
+    return false;
+  }
+
+  const fetching = new Map<string, Promise<void>>();
+  /** Fetches whatever of a file is not held here: from peers, then mirrors. Throws if none has it all. */
+  function fetchFile(file: FileName): Promise<void> {
+    const running = fetching.get(file.hash);
+    if (running) return running;
+    const work = (async () => {
+      const n = chunkCount(file.size);
+      let list = n === 1 ? null : await heldList(file);
+      const missing = async () => {
+        const held = await heldChunks(file);
+        return Array.from({ length: n }, (_, i) => i).filter((i) => !held.has(i));
+      };
+      for (const peer of config.peers()) {
+        if (n > 1 && !list) {
+          await ask(peer, file, ['list'], null);
+          list = await heldList(file);
+          if (!list) continue;
+        }
+        // Ask this peer again while it brings something; the next one once it brings nothing.
+        for (let left = await missing(); left.length > 0; left = await missing()) {
+          let brought = 0;
+          for (const run of runs(left)) brought += (await ask(peer, file, run, list)).size;
+          if (brought === 0) break;
+        }
+        if ((await missing()).length === 0) return;
+      }
+      if ((await missing()).length === 0) return;
+      if (await fromMirrors(file)) return;
+      throw new Error('No peer or mirror holds that file now');
+    })().finally(() => fetching.delete(file.hash));
+    fetching.set(file.hash, work);
+    return work;
+  }
+
+  /** A file's bytes as stored: held here, or fetched */
+  async function read(file: FileName): Promise<Uint8Array> {
+    const held = (await heldChunks(file)).size === chunkCount(file.size);
+    // A peer is asked only for a file a version kept whole here names (spec 05 §16.6).
+    if (!held && !(await namedFiles()).has(file.hash)) throw new Error('No record here names that file');
+    await fetchFile(file);
+    const pieces: Uint8Array[] = [];
+    for (let index = 0; index < chunkCount(file.size); index++) {
+      const chunk = await adapter.get(chunkKey(file.hash, index));
+      if (!chunk) throw new Error('A chunk of that file went missing');
+      pieces.push(chunk);
+    }
+    return concatBytes(...pieces);
+  }
+
+  // ─── Messages ──────────────────────────────────────────────────────
+
+  async function onFile(peer: string, message: Record<string, unknown>): Promise<void> {
+    const request = typeof message.id === 'number' ? requests.get(message.id) : undefined;
+    if (!request || request.peer !== peer || message.hash !== request.file.hash) return;
+    const part: Part | null =
+      message.chunk === 'list' ? 'list' : typeof message.chunk === 'number' ? message.chunk : null;
+    if (part === null || !request.asked.has(part) || request.done.has(part)) return;
+    if (typeof message.at !== 'number' || typeof message.bytes !== 'string') return;
+    const length =
+      part === 'list' ? 32 * chunkCount(request.file.size) : chunkLength(request.file.size, part);
+    const bytes = base64UrlDecode(message.bytes);
+    const received = request.received.get(part) ?? 0;
+    // In order, within its length: anything else is dropped, and the part asked again elsewhere.
+    if (message.at !== received || received + bytes.length > length || bytes.length > BYTES_PER_MESSAGE)
+      return;
+    const pieces = request.parts.get(part) ?? [];
+    pieces.push(bytes);
+    request.parts.set(part, pieces);
+    request.received.set(part, received + bytes.length);
+    if (received + bytes.length < length) return;
+    const whole = concatBytes(...pieces);
+    request.parts.delete(part);
+    if (part === 'list') {
+      if (!(await listFits(request.file, whole))) return;
+      await adapter.put(listKey(request.file.hash), whole);
+      request.list = whole;
+    } else {
+      if (!(await chunkFits(request.file, request.list, part, whole))) return;
+      await keepChunk(request.file, part, whole);
+    }
+    request.done.add(part);
+  }
+
+  async function serve(peer: string, message: Record<string, unknown>): Promise<void> {
+    if (typeof message.id !== 'number' || typeof message.hash !== 'string') return;
+    const { id, hash } = message;
+    const file = (await namedFiles()).get(hash);
+    const missing: Part[] = [];
+    const sendPart = (chunk: Part, bytes: Uint8Array) => {
+      for (let at = 0; at < bytes.length; at += BYTES_PER_MESSAGE)
+        config.send(peer, {
+          type: 'file',
+          id,
+          hash,
+          chunk,
+          at,
+          bytes: base64UrlEncode(bytes.subarray(at, at + BYTES_PER_MESSAGE)),
+        });
+    };
+    if (message.list === true) {
+      const list = file ? await heldList(file) : null;
+      if (list) sendPart('list', list);
+      else missing.push('list');
+    } else if (Array.isArray(message.chunks)) {
+      const range: readonly unknown[] = message.chunks;
+      const [from, to] = range;
+      if (
+        typeof from === 'number' &&
+        typeof to === 'number' &&
+        Number.isInteger(from) &&
+        Number.isInteger(to) &&
+        from >= 0 &&
+        to >= from
+      ) {
+        // At most what one want may ask, and never past the file's end.
+        const last = Math.min(to, from + MAX_CHUNKS_PER_WANT - 1, file ? chunkCount(file.size) - 1 : to);
+        let sent = 0;
+        for (let index = from; index <= last; index++) {
+          const chunk = file && sent < CHUNKS_PER_REPLY ? await adapter.get(chunkKey(hash, index)) : null;
+          if (chunk) {
+            sendPart(index, chunk);
+            sent++;
+          } else missing.push(index);
+        }
+      }
+    }
+    config.send(peer, { type: 'file-done', id, hash, missing });
+  }
+
+  function onDone(peer: string, message: Record<string, unknown>): void {
+    const request = typeof message.id === 'number' ? requests.get(message.id) : undefined;
+    if (request && request.peer === peer && message.hash === request.file.hash) request.settle();
+  }
+
+  /** A files message from a peer, as the sync engine passes it on */
+  async function onMessage(peer: string, message: unknown): Promise<void> {
+    if (!isRecord(message)) return;
+    if (message.type === 'want-file') await serve(peer, message);
+    else if (message.type === 'file') await onFile(peer, message);
+    else if (message.type === 'file-done') onDone(peer, message);
+  }
+
+  // ─── Keeping, dropping, mirroring ──────────────────────────────────
+
+  /** Drops what no version kept whole names, and pushes what is to the mirrors */
+  async function tidy(): Promise<void> {
+    const wanted = await namedFiles();
+    const ids = new Set<string>();
+    for (const key of await adapter.list('f/')) ids.add(key.split('/')[1]!);
+    for (const id of ids) {
+      if (wanted.has(id)) {
+        if (await adapter.get(ownKey(id))) await adapter.delete(ownKey(id));
+        continue;
+      }
+      const added = await adapter.get(ownKey(id));
+      if (added && Date.now() - Number(utf8Decode(added)) < UNNAMED_MS) continue;
+      const keys = await adapter.list(`f/${id}/`);
+      await adapter.batch(keys.map((key) => ({ type: 'delete' as const, key })));
+    }
+    for (const mirror of config.mirrors?.() ?? []) {
+      const mine = `files/${config.space}/${mirror.writer}/`;
+      const there = new Set(await mirror.store.list(mine));
+      for (const file of wanted.values()) {
+        if (there.has(`${mine}${file.hash}`)) continue;
+        const list = await heldList(file);
+        if (!list || (await heldChunks(file)).size < chunkCount(file.size)) continue;
+        await mirror.store.put(`${mine}${file.hash}.list`, list);
+        await mirror.store.put(`${mine}${file.hash}`, await read(file));
+      }
+      for (const key of there) {
+        const id = key.slice(mine.length).replace(/\.list$/, '');
+        if (!wanted.has(id)) await mirror.store.delete(key);
+      }
+    }
+  }
+
+  /** Fetches every file a version kept whole names that is not here yet: what a keeper does */
+  async function fetchAll(): Promise<void> {
+    for (const file of (await namedFiles()).values()) {
+      if ((await heldChunks(file)).size === chunkCount(file.size)) continue;
+      await fetchFile(file).catch(() => {
+        // Nobody has it now; asked again after the next change.
+      });
+    }
+  }
+
+  return Object.freeze({
+    add,
+    read,
+    /** Opens a file a body refers to */
+    open: async (ref: SealedFile): Promise<Uint8Array> => openFile(await read(ref), ref),
+    onMessage,
+    /** Something changed in the store: which files are named is worked out again */
+    changed() {
+      named = null;
+    },
+    tidy,
+    fetchAll,
+    close() {
+      for (const request of requests.values()) request.settle();
+    },
+  });
+}

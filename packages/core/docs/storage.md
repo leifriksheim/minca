@@ -312,36 +312,56 @@ _Source: `packages/core/src/storage/mirror.ts`,
   The segment, never the single version, is the unit fetched, and syncing
   1,000 records must fit that budget.
 
-## Planned: files
+## Files
 
-> **Planned.** Not normative. What peers must agree on (the `files` member,
-> chunks and the file id, the messages, keeping a file with its body) is
-> planned in [spec 05 §16.6](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md).
-> Issue [#37](https://github.com/leifriksheim/minca/issues/37).
+What peers must agree on (the `files` member, chunks and the id, RFC 8188
+records, the three messages, keeping a file with its body) is in
+[spec 05 §16.6](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md).
+How this library does the rest:
 
-- **Where chunks live.** As entries in the space's own store, `f/<id>/<n>`,
-  and the chunk list at `f/<id>/list`: every adapter already keeps bytes
-  by key, so a file needs no store of its own, and a browser can keep only
-  the chunks it has shown.
-- **What a node fetches.** A node holding a whole space (a host, a keeper,
-  the CLI) fetches every file of every version it keeps whole. A browser
-  fetches a file when it is shown, and keeps it while it is kept whole. A
-  writer keeps its own files and pushes them, with their chunk lists, to its
-  mirrors.
-- **The API.** `node.files.add(space, bytes, { mime, name })` seals the file
-  under a key of its own, works out its id, keeps it and returns the
-  `blob` reference, with its `key`; `records.put(…, { files })` names it on the version.
-  `node.files.url(space, ref)` gives a URL that fetches, checks and opens
-  only the chunks read. What it opens is cached by version and key, never by id alone:
-  AES-GCM does not commit to its key, so two versions naming one id could
-  show each other's content.
-- **Video.** That URL is served by a service worker answering the browser's
-  range requests, so `<video>` plays and seeks with no player of its own:
-  MP4 with its index first (H.264/AAC), or WebM. Chunks are asked of several
-  peers at once, and of a slow one again elsewhere. No transcoding; a
-  poster is a second, small image file.
-- **Mirrors as sources.** `BlobStore` gains an optional `getRange(key, from,
-to)`: a `Range` header on S3, `File.slice` in a data folder. A host's bucket
-  or a Dropbox folder then serves chunks with no peer online.
-- **Profile pictures.** `std.profile`'s `avatar`, resized in the browser
-  before it is added; the generated shape stays the fallback.
+- **Adding.** `records.addFile(space, bytes, { mime, name? })` seals the
+  bytes under a fresh key and salt, keeps them, and gives back a `FileRef`:
+  `{ hash, size, key, salt, mime, name? }`. Put it anywhere in a body;
+  writing that body names every reference in it on the version
+  (`fileRefsIn`, at most 16), so the envelope and the body always agree.
+- **Reading.** `records.readFile(space, ref)` gives the bytes: held here, or
+  fetched from connected peers, one after another, then from mirrors,
+  checking every chunk. It asks only for files a version this node keeps
+  whole names. For a picture, `URL.createObjectURL(new Blob([bytes], { type:
+ref.mime }))` shows it.
+- **Where chunks live.** Entries in the space's own store: `f/<id>/list`,
+  `f/<id>/<n>`, and `f/<id>/own` with the time a file was added and not yet
+  named. A data folder keeps these in this device's own stores, not the
+  folder.
+- **What a node fetches.** A node with `fetchFiles: 'all'` (carriers and
+  hosts) fetches every named file about 2 s after its records change. Any
+  other node fetches a file when it is read.
+- **Serving.** A `want-file` is answered with at most 4 chunks; the asker
+  asks again for the rest, so a large file never floods a connection.
+- **Keeping.** About 2 s after records change, files no version kept whole
+  names are dropped (files of versions that don't stand are not kept),
+  except one added here in the last 24 hours and not yet named.
+- **Mirrors.** The same pass uploads each named file this node holds whole,
+  with its chunk list, to `files/<space>/<store writer>/`, and deletes this
+  writer's copies of files no longer named.
+
+_Source: `packages/core/src/files/space-files.ts`, `packages/core/src/files/file-id.ts`,
+`packages/core/src/files/seal.ts`, `packages/core/src/node/space-runtime.ts` ("Files").
+Tests: `packages/core/tests/files.test.ts`._
+
+### Planned: video and pictures
+
+> **Planned.** Not normative.
+
+- **Video.** `readFile` fetches a whole file. Playing before it is whole
+  needs a URL a service worker serves, answering the browser's range
+  requests from only the chunks read, opened one at a time (`fileOpener`).
+  MP4 with its index first, or WebM; no transcoding; a poster is a second,
+  small image file.
+- **Several peers at once.** Chunks asked of several peers in parallel, and
+  of a slow one again elsewhere.
+- **Mirrors as sources by range.** `BlobStore.getRange`: a `Range` header on
+  S3, `File.slice` in a data folder, so a chunk is read without the whole.
+- **Pictures.** `std.image` gains `width`, `height` and a tiny WebP
+  placeholder as a `data:` URL, shown before a chunk arrives; and
+  `std.profile`'s `avatar`, resized in the browser before it is added.
