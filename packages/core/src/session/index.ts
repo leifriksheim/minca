@@ -42,6 +42,8 @@ export {
   homeAddress,
   receiveConnectRequest,
   startConnectedNode,
+  nodeOptionsFromGrant,
+  joinGranted,
   grantSigner,
   grantStore,
   grantTerms,

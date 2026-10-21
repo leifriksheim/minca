@@ -28,8 +28,15 @@ import {
   type P2PNode,
 } from '@minca/core';
 import { profile } from '@minca/core/schemas';
-import { checkGrant, connectWithCode, GRANT_VERSION, grantSigner, type Grant } from '@minca/core/session';
-import { base64UrlDecode } from '@minca/core';
+import {
+  checkGrant,
+  connectWithCode,
+  GRANT_VERSION,
+  grantSigner,
+  joinGranted,
+  nodeOptionsFromGrant,
+  type Grant,
+} from '@minca/core/session';
 import { openFsDirectory, writeWhole } from './fs-directory.js';
 import { nodeFor, type Unlocked } from './home.js';
 import { commaList, errorCode, isRecord, messageOf } from './json.js';
@@ -394,12 +401,12 @@ async function startWithKey(
 ): Promise<{ node: P2PNode; stop(): Promise<void> }> {
   if (!options.network) await enableWebRTC();
   const data = await openFsDirectory(path.join(agentDir(home), 'data'));
-  const relays = [...new Set([...(grant.relays ?? []), ...configuredRelays()])];
+  const { relays, ...keys } = nodeOptionsFromGrant(grant, configuredRelays());
   const base = await createNode({
     signer: grantSigner(grant),
     sessionKey: key.keys,
     stores: directoryStores(data),
-    ...(grant.accountKey ? { accountKey: base64UrlDecode(grant.accountKey) } : {}),
+    ...keys,
     network: options.network ?? {
       relays,
       hosts: configuredHosts(),
@@ -407,9 +414,7 @@ async function startWithKey(
     },
   });
   // Spaces granted by name, when the grant wasn't for the whole account.
-  const held = new Set((await base.spaces.list()).map((space) => space.id));
-  for (const space of grant.spaces)
-    if (!held.has(space.id)) await base.spaces.join(space.invite).catch(() => {});
+  await joinGranted(base, grant, () => {});
 
   const node = await base.asAgent({ keys: key.keys, note: grant.note });
   const stopHolding = await holdEverySpace(node);

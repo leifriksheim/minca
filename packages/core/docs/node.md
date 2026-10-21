@@ -785,10 +785,12 @@ starts a node with:
 - `sessionKey` = the app's key;
 - stores `indexedDBStores('minca-app:<grant.did>')` unless given;
 - `cache: {}` unless `cache: false` ([holding part of a space](#holding-part-of-a-space));
-- `accountKey`, `contactKey`, `contactsSpace` from the grant when present;
-- relays = the app's relays ∪ `grant.relays`.
+- `accountKey`, `contactKey`, `contactsSpace` from the grant when present, and
+  relays = the app's relays ∪ `grant.relays` (`nodeOptionsFromGrant`).
 
-It then joins each granted space it does not hold yet, passing its `memberKey`.
+It then joins each granted space it does not hold yet, passing its `memberKey`
+(`joinGranted`). The desktop app's node (`minca app-node`) and the agent on a
+computer start theirs from a grant the same way, from their own folders.
 
 **The connection.** `createMincaConnection({ home, request, network?, storage?, stores? })`
 is the app's twin of [sign-in](sign-in.md): statuses `starting`, `disconnected`,
@@ -817,7 +819,7 @@ held the first time an automation made it look there; anything arriving after th
 is, even while the account or the list of spaces changes. How the app shows a match is its own
 to decide; a "Notify me" button is where a proposal usually starts.
 
-_Source: `packages/core/src/session/connect.ts` (`appKey`, `forgetAppKey`, `homeAddress`, `connectToHome`, `proposeToHome`, `startConnectedNode`, `grantSigner`), `packages/core/src/session/connection.ts`, `packages/core/src/node/watch-notifications.ts`, `packages/core/src/space/own-automations.ts` (`matchesRecord`). Tests: `packages/core/tests/connect.test.ts` ("an account home typed by a person", "an app showing its own notifications"), `packages/core/tests/topics.test.ts` ("an automation of the account’s own: its where"), `packages/core/tests/watch-notifications.test.ts`._
+_Source: `packages/core/src/session/connect.ts` (`appKey`, `forgetAppKey`, `homeAddress`, `connectToHome`, `proposeToHome`, `startConnectedNode`, `nodeOptionsFromGrant`, `joinGranted`, `grantSigner`), `packages/cli/src/app-node.ts` (`startDesktopNode`), `packages/core/src/session/connection.ts`, `packages/core/src/node/watch-notifications.ts`, `packages/core/src/space/own-automations.ts` (`matchesRecord`). Tests: `packages/core/tests/connect.test.ts` ("an account home typed by a person", "an app showing its own notifications"), `packages/core/tests/topics.test.ts` ("an automation of the account’s own: its where"), `packages/core/tests/watch-notifications.test.ts`._
 
 ## Carriers, hosting and notifications
 

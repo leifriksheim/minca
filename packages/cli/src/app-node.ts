@@ -38,6 +38,8 @@ import {
   checkGrant,
   connectToHome,
   GRANT_VERSION,
+  joinGranted,
+  nodeOptionsFromGrant,
   type ConnectRequest,
   type Grant,
 } from '@minca/core/session';
@@ -578,8 +580,10 @@ export interface StartParams {
 /** The node itself, as `startConnectedNode` starts a page's, from a folder whose registry is sealed */
 async function startDesktopNode(params: StartParams): Promise<P2PNode> {
   await enableWebRTC();
-  const { grant } = params;
-  const relays = [...new Set([...params.network.relays, ...configuredRelays(), ...(grant.relays ?? [])])];
+  const { relays, ...keys } = nodeOptionsFromGrant(params.grant, [
+    ...params.network.relays,
+    ...configuredRelays(),
+  ]);
   const node = await createNode({
     signer: params.signer,
     sessionKey: params.key.keys,
@@ -590,16 +594,9 @@ async function startDesktopNode(params: StartParams): Promise<P2PNode> {
       ...(params.network.nodes.length ? { nodes: params.network.nodes } : {}),
       ...(params.network.hosts.length ? { hosts: params.network.hosts } : {}),
     },
-    ...(grant.accountKey ? { accountKey: base64UrlDecode(grant.accountKey) } : {}),
-    ...(grant.contactKey ? { contactKey: base64UrlDecode(grant.contactKey) } : {}),
-    ...(grant.contactsSpace ? { contactsSpace: grant.contactsSpace } : {}),
+    ...keys,
   });
-  const held = new Set((await node.spaces.list()).map((space) => space.id));
-  for (const space of grant.spaces)
-    if (!held.has(space.id))
-      await node.spaces
-        .join(space.invite, space.memberKey ? { memberKey: base64UrlDecode(space.memberKey) } : {})
-        .catch(() => {});
+  await joinGranted(node, params.grant, () => {});
   return node;
 }
 

@@ -622,8 +622,7 @@ export async function startConnectedNode(params: {
   readonly worker?: () => WorkerLike;
 }): Promise<P2PNode> {
   const key = params.key ?? (await appKey());
-  // The home's relays as well as the app's, so the two always share one.
-  const relays = [...new Set([...(params.network?.relays ?? []), ...(params.grant.relays ?? [])])];
+  const { relays, ...keys } = nodeOptionsFromGrant(params.grant, params.network?.relays);
   const network = params.network || relays.length ? { ...params.network, relays } : undefined;
   const node = await startPageNode(
     {
@@ -632,21 +631,43 @@ export async function startConnectedNode(params: {
       stores: { indexedDB: `minca-app:${params.grant.did}` },
       ...(network ? { network } : {}),
       ...(params.cache === false ? {} : { cache: params.cache ?? {} }),
-      ...(params.grant.accountKey ? { accountKey: base64UrlDecode(params.grant.accountKey) } : {}),
-      ...(params.grant.contactKey ? { contactKey: base64UrlDecode(params.grant.contactKey) } : {}),
-      ...(params.grant.contactsSpace ? { contactsSpace: params.grant.contactsSpace } : {}),
+      ...keys,
     },
     params,
   );
-  const held = new Set((await node.spaces.list()).map((space) => space.id));
-  for (const space of params.grant.spaces) {
-    if (!held.has(space.id))
-      await node.spaces.join(
-        space.invite,
-        space.memberKey ? { memberKey: base64UrlDecode(space.memberKey) } : {},
-      );
-  }
+  await joinGranted(node, params.grant);
   return node;
+}
+
+/**
+ * What a node started under a grant takes from it: the keys it carries, and
+ * the home's relays as well as the app's, so the two always share one.
+ */
+export function nodeOptionsFromGrant(grant: Grant, relays: ReadonlyArray<string> = []) {
+  return {
+    relays: [...new Set([...relays, ...(grant.relays ?? [])])],
+    ...(grant.accountKey ? { accountKey: base64UrlDecode(grant.accountKey) } : {}),
+    ...(grant.contactKey ? { contactKey: base64UrlDecode(grant.contactKey) } : {}),
+    ...(grant.contactsSpace ? { contactsSpace: grant.contactsSpace } : {}),
+  };
+}
+
+/**
+ * Joins the spaces a grant names that the node doesn't hold yet: again,
+ * harmlessly, on later starts. A space that won't join throws, unless
+ * `onError` takes it and the rest are joined.
+ */
+export async function joinGranted(
+  node: P2PNode,
+  grant: Grant,
+  onError?: (error: unknown) => void,
+): Promise<void> {
+  const held = new Set((await node.spaces.list()).map((space) => space.id));
+  for (const { id, invite, memberKey } of grant.spaces) {
+    if (held.has(id)) continue;
+    const joining = node.spaces.join(invite, memberKey ? { memberKey: base64UrlDecode(memberKey) } : {});
+    await (onError ? joining.catch(onError) : joining);
+  }
 }
 
 /** Where an app keeps its grant between visits */
