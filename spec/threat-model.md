@@ -124,10 +124,26 @@ reference implementation, or any implementation, honestly.
     members may share, so a community writing as a few accounts stays under
     it. A host whose disk is new counts a large space's history again if it
     takes longer than the first minutes to come back. A community can also move to a successor space (03), which the line
-    counts from nothing, with a whole grace. Nor is one account's room
-    bounded in bytes: past its quota a host takes no new space for it, but
-    what it carries keeps growing, and a space its own fund pays for has no
-    bound at all ([#289](https://github.com/leifriksheim/minca/issues/289)).
+    counts from nothing, with a whole grace. One account's room is
+    bounded in bytes after a notice that neither a new key nor a dip under
+    resets: past it the host stops carrying its largest spaces for it until
+    the rest fit, and an account over by its carry space alone is carried for
+    no more; a community's fund pays for its size while it has money (08
+    §1.1, Room, §2;
+    `packages/core/tests/host-limits.test.ts`, "over its room…", "the notice
+    is the account's…", "a carry space over its room by itself…";
+    `packages/cli/tests/host.test.ts`, "past its notice, the host holds back
+    an account's largest space…"). Every space a member names counts against
+    their room, so one member's writing in a shared space fills every
+    member's; the host then holds back each such member's largest spaces,
+    which may be their own rather than the shared one, and keeps carrying a
+    held space for any member with room. A writer also drains a community's
+    fund as fast as they make its space grow. Still open
+    ([#289](https://github.com/leifriksheim/minca/issues/289)): a fund's
+    grace is free and has no size limit, so a little money each month keeps
+    any size carried; an account with two subscriptions on one carry space
+    is held and refused by the smaller room; and a refusal stays even after
+    the account pays.
     Accepted otherwise: it is the host's cost.
   - Anyone holding an invite link that is still open can push a community
     over a host's free line by joining more accounts and writing from them,

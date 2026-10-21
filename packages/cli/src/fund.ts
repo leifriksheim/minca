@@ -24,6 +24,8 @@ export interface FundState {
   readonly spent: Readonly<Record<string, number>>;
   /** The same, for each bot by its DID: what the fund shows people it pays for */
   readonly byBot?: Readonly<Record<string, Readonly<Record<string, number>>>>;
+  /** How many rooms the space takes, as last measured: the fee is the monthly rate for each */
+  readonly rooms?: number;
 }
 
 export interface Funds {
@@ -32,8 +34,8 @@ export interface Funds {
   add(id: string, micros: number): Promise<FundState>;
   /** Takes what a bot spent; with its DID, counted as that bot's too */
   charge(id: string, micros: number, bot?: string): Promise<FundState>;
-  /** Takes the hosting fee for the time since it was last taken */
-  settle(id: string): Promise<FundState>;
+  /** Takes the hosting fee for the time since it was last taken; from then on, for this many rooms */
+  settle(id: string, rooms?: number): Promise<FundState>;
   /** What the fund spends in a day, as things go: the hosting fee, and what its bots spent a day this last week */
   daily(state: FundState): number;
   /** Until when it lasts at that rate, unix seconds; when it ran out, for an empty fund */
@@ -74,7 +76,8 @@ export function createFunds(options: {
     };
     const byBot: Record<string, Record<string, number>> = {};
     if (isRecord(kept.byBot)) for (const [bot, spent] of Object.entries(kept.byBot)) byBot[bot] = days(spent);
-    return { balance: kept.balance, at: kept.at, spent: days(kept.spent), byBot };
+    const rooms = typeof kept.rooms === 'number' && kept.rooms >= 1 ? { rooms: kept.rooms } : {};
+    return { balance: kept.balance, at: kept.at, spent: days(kept.spent), byBot, ...rooms };
   };
   const write = async (id: string, state: FundState): Promise<FundState> => {
     const bytes = new TextEncoder().encode(JSON.stringify(state));
@@ -85,7 +88,7 @@ export function createFunds(options: {
   /** The fee for the time since it was last taken, taken; nothing is owed below zero */
   const settled = (state: FundState): FundState => {
     const at = now();
-    const owed = Math.max(0, at - state.at) * fee;
+    const owed = Math.max(0, at - state.at) * fee * (state.rooms ?? 1);
     return { ...state, balance: state.balance > 0 ? Math.max(0, state.balance - owed) : state.balance, at };
   };
   const day = (seconds: number) => new Date(seconds * 1000).toISOString().slice(0, 10);
@@ -94,7 +97,7 @@ export function createFunds(options: {
     Object.entries(spent)
       .filter(([when]) => now() - Date.parse(when) / 1000 < 7 * DAY)
       .reduce((sum, [, micros]) => sum + micros, 0) / 7;
-  const daily = (state: FundState) => fee * DAY + week(state.spent);
+  const daily = (state: FundState) => fee * (state.rooms ?? 1) * DAY + week(state.spent);
   /** Two weeks of spending is all the estimate needs */
   const recent = (spent: Readonly<Record<string, number>>) =>
     Object.fromEntries(Object.entries(spent).filter(([when]) => now() - Date.parse(when) / 1000 < 14 * DAY));
@@ -128,7 +131,10 @@ export function createFunds(options: {
           byBot,
         };
       }),
-    settle: (id: string) => change(id, (state) => state),
+    settle: (id: string, rooms?: number) =>
+      change(id, (state) =>
+        rooms === undefined || rooms === (state.rooms ?? 1) ? state : { ...state, rooms },
+      ),
     daily,
     botDaily: (state: FundState, bot: string) => week(state.byBot?.[bot] ?? {}),
     until(state: FundState) {

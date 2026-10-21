@@ -40,6 +40,16 @@ describe('a community fund', () => {
     assert.ok(Math.abs(state.balance - 15e6) < 10);
   });
 
+  test('a space that takes three rooms pays three times the rate, from when it was measured so', async () => {
+    const t = await setUp();
+    let state = await t.funds.add('space:club', 12e6);
+    state = await t.funds.settle('space:club', 3);
+    assert.ok(Math.abs(t.funds.daily(state) - (3 * 4e6) / 30) < 1);
+    t.pass(10);
+    state = await t.funds.settle('space:club', 3);
+    assert.ok(Math.abs(state.balance - 8e6) < 10, 'ten days at $12 a month: $4 taken');
+  });
+
   test('bots take what they spend; a busy week brings the date nearer', async () => {
     const t = await setUp();
     await t.funds.add('space:club', 30e6);

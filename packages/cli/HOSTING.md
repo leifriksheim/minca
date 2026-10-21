@@ -64,6 +64,15 @@ What to watch once limits are on:
   had, unserved, for `MINCA_HOST_KEEP_DAYS`, so a fund brings it straight back.
 - **Free again** only after a whole window with every count under 80% of its
   limit, so a busy week doesn't flip it.
+- **Room is kept too.** Every space an account names counts against its
+  room, but communities paying for themselves. Past it, the same notice
+  (`MINCA_HOST_GRACE_DAYS`, kept through dips under and new keys), then the
+  host holds back its largest spaces for that account until the rest fit;
+  another member with room keeps a shared one carried. An account over by
+  its carry space alone is refused, and the log says so: delete its
+  `room:<account DID>` entry in the host's store (and `host/rooms/` in the
+  bucket) to let it back. A community's fund pays
+  `MINCA_FUND_MONTHLY` for each paying account's room its space takes.
 - **Counts reset when the disk does.** Which accounts wrote is kept on disk
   as salted hashes and not in the bucket, so a new disk counts from nothing,
   which errs toward free. Each space's date on the line is in the bucket, so
