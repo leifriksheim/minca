@@ -397,7 +397,7 @@ account key it sees only the spaces it was given; with one it follows the
 whole account (§1.3). How the reference starts it is in
 [the app-side client](../packages/core/docs/node.md#the-app-side-client).
 
-_Source: `packages/core/src/session/connect.ts` (`startConnectedNode`, `grantSigner`). Tests: `packages/core/tests/connect.test.ts`._
+_Source: `packages/core/src/session/connect.ts` (`startConnectedNode`, `nodeOptionsFromGrant`, `joinGranted`, `grantSigner`), `packages/cli/src/app-node.ts` (`startDesktopNode`), `packages/cli/src/agent.ts` (`startWithKey`). Tests: `packages/core/tests/connect.test.ts`._
 
 ### 2.8 Scope
 
