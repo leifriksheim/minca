@@ -723,8 +723,8 @@ export interface HostingView {
   readonly live: boolean;
   /** Why it could not be reached */
   readonly error?: string;
-  /** Its plans an account may pay with, from its description; none when it takes no payments or can't be reached */
-  readonly plans: ReadonlyArray<import('../session/hosting.js').HostPlan>;
+  /** How the account's balance there is added to, from its description; null when it takes no payments or can't be reached */
+  readonly fund: import('../session/hosting.js').FundOffer | null;
   /** Whether it sends reminders by email (`remind`) */
   readonly reminds: boolean;
 }
@@ -738,10 +738,11 @@ export interface NodeHosting {
   list(): Promise<ReadonlyArray<HostingView>>;
   /** Starts using a host: a subscription key every device signs as, and the spaces once it is paid */
   use(url: string): Promise<HostingView>;
-  /** Starts paying a host with one of its plans: a `checkout` page to open (`noopener`), or a `request` for a wallet */
-  pay(url: string, plan: string): Promise<import('../session/hosting.js').PayAnswer>;
-  /** The payment provider's page for changing a card or cancelling it, as a `checkout` answer */
-  manage(url: string): Promise<import('../session/hosting.js').PayAnswer>;
+  /** Adds to the account's balance at a host: a `checkout` page to open (`noopener`), or a `request` for a wallet */
+  pay(
+    url: string,
+    payment: import('../session/hosting.js').FundPayment,
+  ): Promise<import('../session/hosting.js').PayAnswer>;
   /** Asks a host for reminders by email before paid time runs out; it mails a link to confirm first */
   remind(url: string, email: string): Promise<void>;
   /** Stops using a host: it forgets the spaces, and the subscription is let go. Cancel a card that renews first (`manage`). */

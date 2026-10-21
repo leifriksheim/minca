@@ -81,6 +81,8 @@ interface Room {
   readonly full: number;
   readonly fits?: number;
   readonly refused?: true;
+  /** The spaces held back for want of its room, each since when: past `keepDays` the host's copy goes */
+  readonly held?: Readonly<Record<string, number>>;
 }
 
 /** A payment a host asked a wallet for: an exact amount, so the transfer that arrives says whose it is */
@@ -299,12 +301,18 @@ export async function createHostNode(config: HostConfig) {
     for (const key of await store.list(ROOM_PREFIX)) {
       const bytes = await store.get(key);
       const room: unknown = bytes ? JSON.parse(utf8Decode(bytes)) : null;
-      if (isRecord(room) && typeof room.full === 'number')
+      if (isRecord(room) && typeof room.full === 'number') {
+        const held: Record<string, number> = {};
+        if (isRecord(room.held))
+          for (const [spaceId, since] of Object.entries(room.held))
+            if (typeof since === 'number') held[spaceId] = since;
         rooms.set(key.slice(ROOM_PREFIX.length), {
           full: room.full,
           ...(typeof room.fits === 'number' ? { fits: room.fits } : {}),
           ...(room.refused === true ? { refused: true } : {}),
+          ...(Object.keys(held).length ? { held } : {}),
         });
+      }
     }
   }
   const writeRoom = async (account: string, room: Room | null) => {
@@ -330,7 +338,10 @@ export async function createHostNode(config: HostConfig) {
   };
   /** Each carry space's spaces held back for want of its room, and all of them together */
   const holds = new Map<string, ReadonlySet<string>>();
+  /** Those whose copy the host still keeps: held back less than `keepDays` for some account */
   const roomHeld = new Set<string>();
+  /** Held back longer, their copy already deleted: not deleted again until the host restarts */
+  const dropped = new Set<string>();
 
   /** Spaces members' subscriptions no longer carry, being over the line with nobody paying */
   const skipped = new Set(
@@ -668,7 +679,11 @@ export async function createHostNode(config: HostConfig) {
       const room = rooms.get(account);
       const t = now();
       if (over)
-        await writeRoom(account, { full: room?.full ?? t, ...(room?.refused ? { refused: true } : {}) });
+        await writeRoom(account, {
+          full: room?.full ?? t,
+          ...(room?.refused ? { refused: true } : {}),
+          ...(room?.held ? { held: room.held } : {}),
+        });
       else if (room) {
         const fits = room.fits ?? t;
         // Fitting a whole window: the notice goes, though a refusal stays until the host's owner says.
@@ -685,8 +700,17 @@ export async function createHostNode(config: HostConfig) {
      * no others of its: the host keeps them, unserved, until they fit.
      */
     async holdForRoom(id: string, spaceIds: ReadonlyArray<string>): Promise<void> {
-      const carrySpace = (await read(id))?.carry?.space;
-      if (!carrySpace) return;
+      const subscription = await read(id);
+      const carrySpace = subscription?.carry?.space;
+      const account = subscription && accountOf(subscription);
+      if (!carrySpace || !account) return;
+      const t = now();
+      const room = rooms.get(account);
+      if (room) {
+        const { held: before = {}, ...rest } = room;
+        const held = Object.fromEntries(spaceIds.map((spaceId) => [spaceId, before[spaceId] ?? t]));
+        await writeRoom(account, Object.keys(held).length ? { ...rest, held } : rest);
+      }
       const before = [...holds]
         .map(([space, held]) => `${space}:${[...held].sort().join(',')}`)
         .sort()
@@ -694,7 +718,25 @@ export async function createHostNode(config: HostConfig) {
       if (spaceIds.length) holds.set(carrySpace, new Set(spaceIds));
       else holds.delete(carrySpace);
       roomHeld.clear();
-      for (const held of holds.values()) for (const spaceId of held) roomHeld.add(spaceId);
+      const keep = (limits?.keepDays ?? 0) * DAY;
+      for (const one of rooms.values())
+        for (const [spaceId, since] of Object.entries(one.held ?? {}))
+          if (since + keep > t) roomHeld.add(spaceId);
+      // Held back longer than that for every account that holds it: the host's copy goes, as for a stop.
+      for (const held of holds.values())
+        for (const spaceId of held) {
+          if (
+            roomHeld.has(spaceId) ||
+            dropped.has(spaceId) ||
+            skipped.has(spaceId) ||
+            core.carried.has(spaceId)
+          )
+            continue;
+          dropped.add(spaceId);
+          if (config.mirror) await deleteMirrored(config.mirror, spaceId).catch(() => {});
+        }
+      // Carried again, by room made or someone else: should it be held that long again, its copy goes again.
+      for (const spaceId of dropped) if (core.carried.has(spaceId)) dropped.delete(spaceId);
       const after = [...holds]
         .map(([space, held]) => `${space}:${[...held].sort().join(',')}`)
         .sort()
@@ -806,9 +848,14 @@ export async function createHostNode(config: HostConfig) {
         throw new Error('That subscription is not paid for');
       if (!account.startsWith('did:key:')) throw new Error('An account is named by its DID');
       if (!allowed(account)) throw new NotAllowedError();
-      // Kept by the account, so a new subscription key brings nothing back.
-      if (rooms.get(account)?.refused)
+      // Kept by the account, so a new subscription key brings nothing back; paying does, as a balance has no room.
+      const room = rooms.get(account);
+      if (room?.refused && plan(subscription) !== 'paid')
         throw new Error('This host stopped carrying for this account: its carry space was over its room');
+      if (room?.refused) {
+        const { refused: _lifted, ...rest } = room;
+        await writeRoom(account, rest);
+      }
       // A shared space stopped for being over the line comes back only through its own fund.
       const asked = parseSpaceInvite(invite).space.id;
       if (lines.get(asked)?.stopped !== undefined && !(await paysItself(asked)))

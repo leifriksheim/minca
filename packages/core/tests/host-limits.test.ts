@@ -70,7 +70,6 @@ async function device(me: Account, hub: FakeHub): Promise<P2PNode> {
 
 const LIMITS: HostLimits = {
   accountBytes: 1_000,
-  paidAccountBytes: 10_000,
   space: { writers: 1, bytes: 500, windowDays: 30, readers: 2 },
   graceDays: 30,
   keepDays: 90,
@@ -248,6 +247,39 @@ describe('room', () => {
     assert.equal(node.fullUntil((await node.get(id))!), null);
   });
 
+  test('a space held back for keepDays has the host’s copy deleted, counted from when it was first held, through a restart', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    let clock = Math.floor(Date.now() / 1000);
+    const mirror = createMemoryBlobStore();
+    const stores = memoryStores();
+    const key = await provider.generateKeyPair();
+    const node = await host(hub, { now: () => clock, mirror, stores, key });
+    const me = await account();
+    const laptop = await device(me, hub);
+    const photos = await laptop.spaces.create({ name: 'Photos', visibility: 'private' });
+    const id = await subscriptionId();
+    await node.subscribe(id);
+    await node.attach(id, me.did, (await laptop.carriers.add({ did: node.did, name: 'Host' })).invite);
+    await until(carries(node, photos.id), 5000, 'the space to be carried');
+    await until(async () => (await mirror.list(`${photos.id}/`)).length > 0, 8000, 'the bucket to hold it');
+    await node.setFull(id, true);
+    clock += 30 * DAY;
+    await node.holdForRoom(id, [photos.id]);
+    await until(async () => !(await carries(node, photos.id)()), 5000, 'held back');
+
+    clock += 89 * DAY;
+    await node.close();
+    open.splice(open.indexOf(node), 1);
+    const again = await host(hub, { now: () => clock, mirror, stores, key });
+    await again.setFull(id, true);
+    await again.holdForRoom(id, [photos.id]);
+    assert.ok((await mirror.list(`${photos.id}/`)).length > 0, 'kept for keepDays, a restart counting on');
+    clock += 2 * DAY;
+    await again.holdForRoom(id, [photos.id]);
+    assert.deepEqual(await mirror.list(`${photos.id}/`), [], 'then the host’s copy goes');
+    assert.ok((await again.namedFor(id)).includes(photos.id), 'still named, to come back once it fits');
+  });
+
   test('a carry space over its room by itself is let go, and turned away when handed over again, under any key', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const node = await host(hub);
@@ -267,6 +299,10 @@ describe('room', () => {
       /over its room/,
       'a new key brings nothing back',
     );
+    // Paying does: a balance has no room to be over.
+    await node.extend(fresh, Math.floor(Date.now() / 1000) + 86_400);
+    await node.attach(fresh, me.did, invite);
+    assert.ok((await node.get(fresh))?.carry, 'carried again once it pays');
   });
 
   test('a refusal comes back with the bucket on a new disk', async () => {

@@ -5,16 +5,15 @@
  * the way `minca run` serves: sockets at `/peer?space=`, the relay on every
  * other path. Plus what a home and a person need (spec/06-nodes-and-sessions.md, Hosts):
  *
- *   GET    /.well-known/minca-host                who the host is: key, name, plans, where it takes peers
+ *   GET    /.well-known/minca-host                who the host is: key, name, prices, where it takes peers
  *   GET    /host/subscriptions/:id                its status, signed by the host
  *   PUT    /host/subscriptions/:id/carry          { account, invite } — the account's carry space
  *   DELETE /host/subscriptions/:id/carry
- *   POST   /host/subscriptions/:id/pay            { plan } → { checkout } or { request }
- *   POST   /host/subscriptions/:id/manage         → { checkout }: the card provider's portal
+ *   POST   /host/subscriptions/:id/pay            { amount, method, monthly? } → { checkout } or { request }
  *   POST   /host/subscriptions/:id/remind         { email } — a mail to confirm reminders with
  *   GET    /host/spaces/:space                    a space's own subscription: its status, to anyone
  *   PUT    /host/spaces/:space/pass               { pass } — carry the space, once someone paid for it
- *   POST   /host/spaces/:space/pay                { plan } — anyone may chip in
+ *   POST   /host/spaces/:space/pay                { amount, method, monthly? } — anyone may chip in
  *   POST   /host/spaces/:space/remind             { email }
  *   POST   /host/bots                             { name, invite } — run a bot in a space this host carries
  *   GET    /host/spaces/:space/bots               the bots it runs there, each with its signed status
@@ -29,17 +28,18 @@
  *   GET    /host/remind/confirm?t=…, /host/remind/stop?t=…   the links in reminder mails
  *
  * `/host/subscriptions` calls are signed with the subscription key. A home
- * shows the plans and what `pay` answers itself: a page at the payment
+ * shows the price and what `pay` answers itself: a page at the payment
  * provider to open, or a payment request for a wallet, which the host sees
  * arrive by watching its address. So the host has no pages of its own but
  * two that say "done". Payment providers are behind small interfaces
- * (`Billing`, `WalletPayments`), so the host only ever learns "this
- * subscription is paid until …". Without either, and with `free`, every
+ * (`Billing`, `WalletPayments`), so the host only ever learns "this much
+ * was paid into this subscription's balance". Without either, and with `free`, every
  * subscription counts as paid — someone hosting only themselves.
  *
- * With `limits`, an account needs no payment at all: it is on the free plan
- * and paying buys room, while a community past the free line pays for itself
- * through its fund (spec 08 §1.1).
+ * Paying is pay as it grows: a balance for each subscription, which keeping
+ * its spaces online draws on by the GB (`fund.ts`). With `limits`, an
+ * account needs no payment at all for its free room, while a community past
+ * the free line pays for itself through its fund (spec 08 §1.1).
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
@@ -53,7 +53,6 @@ import {
   type BlobStore,
   type HostDescription,
   type HostLimits,
-  type HostPlan,
   type HostNode,
   type HostStatus,
   type PayAnswer,
@@ -72,30 +71,24 @@ import type { BotConnect } from './host-connect.js';
 
 /** What the host needs from a payment provider */
 export interface Billing {
-  readonly plans: ReadonlyArray<{ readonly id: string; readonly label: string }>;
-  /** A payment page for a subscription; paying it leads to a webhook call. `returnUrl` is where it sends people back. */
-  checkout(params: {
-    subscription: string;
-    plan: string;
+  /**
+   * A payment page for adding `cents` to a subscription's balance (an
+   * account's, or a community's fund), once or every month; paying leads to
+   * a webhook call. `name` is what the payer sees it called.
+   */
+  fund(params: {
+    fund: string;
+    name: string;
+    cents: number;
+    monthly: boolean;
     returnUrl: string;
-    customer?: string;
   }): Promise<string>;
-  /** The provider's page for managing what a customer pays */
-  manage(params: { customer: string; returnUrl: string }): Promise<string>;
-  /** Each plan's price as people read it ("$4 a month"), by plan id. Asked once, at start. */
-  labels?(): Promise<Record<string, string>>;
-  /** A payment page for adding `cents` to a community's fund, once or every month; paying leads to a webhook call */
-  fund(params: { fund: string; cents: number; monthly: boolean; returnUrl: string }): Promise<string>;
   /** What a webhook call, checked as the provider's, says was paid; null for anything else */
   webhook(
     body: string,
     headers: IncomingMessage['headers'],
-  ): Promise<
-    | { subscription: string; until: number; customer?: string }
-    /** Money into a community's fund, counted once by `id` */
-    | { subscription: string; cents: number; id: string }
-    | null
-  >;
+    /** Money into a subscription's balance, counted once by `id` */
+  ): Promise<{ subscription: string; cents: number; id: string } | null>;
 }
 
 export interface HostOptions {
@@ -149,8 +142,10 @@ export interface HostOptions {
   readonly connectors?: ReadonlyArray<HostConnector>;
   /** Bots one space may have here, paid or not. Default 5. */
   readonly botsPerSpace?: number;
-  /** What keeping a community online takes from its fund a month, in dollars. Default "4". */
-  readonly fundMonthly?: string;
+  /** What keeping a community online takes from its fund a month for each GB it takes, at least one, in dollars. Default "0.10". */
+  readonly fundPerGb?: string;
+  /** The least one payment into a fund may add, in dollars. Default "5". */
+  readonly fundMin?: string;
   /** What a bot's AI use costs its fund, as a multiple of what the host pays for it. Default 1.5. */
   readonly botMarkup?: number;
   /** The payment provider's page where someone stops adding to a fund every month */
@@ -168,8 +163,10 @@ export interface RunningHost {
 
 /** Largest request body the API reads */
 const MAX_BODY = 64 * 1024;
+/** What a community's fund pays for at least, whatever its space takes */
+const GB = 1e9;
 const SUBSCRIPTION_PATH =
-  /^\/host\/subscriptions\/(did%3Akey%3Az[1-9A-HJ-NP-Za-km-z]{1,120}|did:key:z[1-9A-HJ-NP-Za-km-z]{1,120})(?:\/(carry|pay|manage|remind))?$/;
+  /^\/host\/subscriptions\/(did%3Akey%3Az[1-9A-HJ-NP-Za-km-z]{1,120}|did:key:z[1-9A-HJ-NP-Za-km-z]{1,120})(?:\/(carry|pay|remind))?$/;
 /** A space's own subscription, open to anyone */
 const SPACE_PATH = /^\/host\/spaces\/([A-Za-z0-9_-]{1,120})(?:\/(pass|pay|remind))?$/;
 /**
@@ -305,13 +302,6 @@ export function addressOf(req: IncomingMessage, header?: string): string {
     .join(':')}::/64`;
 }
 
-/** "$4 a month or $36 a year", from the wallet's prices */
-function priceText(wallet: WalletPayments | null): string | undefined {
-  const plans = (wallet?.offer.plans ?? []).filter((plan) => plan.id !== 'bot');
-  const parts = plans.map((plan) => `$${plan.price} a ${plan.id === 'yearly' ? 'year' : 'month'}`);
-  return parts.length ? parts.reverse().join(' or ') : undefined;
-}
-
 export async function startHost(options: HostOptions): Promise<RunningHost> {
   const log = options.log ?? (() => {});
   const provider = createP256Provider();
@@ -377,14 +367,12 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
   /** The room a subscription's spaces have: by its plan at a host with limits, none for a space's own there */
   const quotaFor = (subscription: Subscription | null, id: string): number | undefined => {
     if (!limits) return options.quotaBytes;
-    // A community's fund pays for its size instead (`roomsOf`).
-    if (!subscription || id.startsWith('space:')) return undefined;
-    return node.plan(subscription) === 'paid'
-      ? (limits.paidAccountBytes ?? limits.accountBytes)
-      : limits.accountBytes;
+    // A community's fund pays for its size instead, and a paying account's balance for what is past its free room.
+    if (!subscription || id.startsWith('space:') || node.plan(subscription) === 'paid') return undefined;
+    return limits.accountBytes;
   };
-  /** How many paying accounts' rooms each community takes: its fund pays the monthly rate for each */
-  const rooms = new Map<string, number>();
+  /** What each subscription pays for, as last measured: a community its size, a GB at least; an account what is past its free room */
+  const billed = new Map<string, number>();
   /** What a subscription's spaces take, and its limit: null when this host doesn't measure */
   const usageOf = async (id: string): Promise<{ bytes: number; quota?: number } | null> => {
     const measure = options.measure;
@@ -414,11 +402,17 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     }
     const bytes = counted.reduce((sum, one) => sum + one.bytes, 0);
     const quota = quotaFor(subscription, id);
-    if (limits && subscription && quota !== undefined) {
-      await node.setFull(id, bytes > quota);
+    if (limits && subscription && (quota !== undefined || account)) {
+      // Paying, an account has no room to be over: its balance pays for the rest.
+      await node.setFull(id, quota !== undefined && bytes > quota);
       // Past its notice, its largest spaces wait until the rest fit; its carry space never does.
       const held: string[] = [];
-      if (account && bytes > quota && node.outOfRoom((await node.get(id)) ?? subscription)) {
+      if (
+        account &&
+        quota !== undefined &&
+        bytes > quota &&
+        node.outOfRoom((await node.get(id)) ?? subscription)
+      ) {
         let left = bytes;
         for (const one of counted.filter((c) => c.spaceId !== carrySpace).sort((a, b) => b.bytes - a.bytes)) {
           if (left <= quota) break;
@@ -429,13 +423,17 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
       if (account) await node.holdForRoom(id, held);
       // Over by its carry space alone, which can't be held back: turned away until the owner says.
       const carried = counted.find((c) => c.spaceId === carrySpace)?.bytes ?? 0;
-      if (account && carried > quota && node.outOfRoom((await node.get(id)) ?? subscription)) {
+      if (
+        account &&
+        quota !== undefined &&
+        carried > quota &&
+        node.outOfRoom((await node.get(id)) ?? subscription)
+      ) {
         await node.refuse(id);
         log(`subscription ${id}: its carry space alone is over its room; no longer carried`);
       }
     }
-    if (limits && !account)
-      rooms.set(id, Math.max(1, Math.ceil(bytes / ((limits.paidAccountBytes ?? limits.accountBytes) || 1))));
+    billed.set(id, account ? Math.max(0, bytes - (limits?.accountBytes ?? 0)) : Math.max(bytes, GB));
     const carry = subscription?.carry?.space;
     const crowded = !!limits && (await node.carriedFor(id)) >= spacesPerSubscription;
     // At a host with limits, no room is room: 0 is a quota too.
@@ -446,9 +444,12 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
   };
   /** Measures every subscription, and lets a carry space that has room again take the spaces it waited with */
   const measureAll = async (): Promise<void> => {
-    if (!options.measure || (!options.quotaBytes && !limits)) return;
+    if (!options.measure) return;
+    // With no room to keep and no balance to draw on, only a community's size matters: its fund pays by it.
+    const all = !!options.quotaBytes || !!limits || !!fundOffer;
     const before = [...full].sort().join(' ');
-    for (const subscription of await node.list()) await usageOf(subscription.id);
+    for (const subscription of await node.list())
+      if (all || subscription.id.startsWith('space:')) await usageOf(subscription.id);
     if ([...full].sort().join(' ') !== before) await node.recheck();
   };
 
@@ -470,7 +471,8 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
       ...base,
       state,
       paidUntil: subscription.paidUntil,
-      renews: subscription.customer !== undefined,
+      // A balance never renews by itself: a card that adds every month is the payer's own.
+      renews: false,
     };
     if (!id.startsWith('space:'))
       return {
@@ -478,6 +480,7 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
         carrying: subscription.carry !== undefined,
         spaces: await node.carriedFor(id),
         ...(await usageOf(id)),
+        ...(await balanceOf(id)),
         ...(limits ? { plan: node.plan(subscription) ?? 'free', over: await node.overFor(id) } : {}),
         ...fullOf(subscription),
       };
@@ -518,55 +521,44 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     const state = await funds.get(id);
     // What each bot spent a day this last week: what people see the fund pays for.
     const priced = running.map((bot) => ({ ...bot, daily: Math.round(funds.botDaily(state, bot.bot)) }));
-    return {
-      balance: Math.max(0, Math.round(state.balance)),
-      daily: Math.round(funds.daily(state)),
-      ...(priced.length ? { bots: priced } : {}),
-    };
+    return { ...(await balanceOf(id)), ...(priced.length ? { bots: priced } : {}) };
+  };
+  /** A subscription's balance and what it spends a day, where payments are taken */
+  const balanceOf = async (id: string): Promise<Pick<HostStatus, 'balance' | 'daily'>> => {
+    if (!fundOffer) return {};
+    const state = await funds.get(id);
+    return { balance: Math.round(state.balance), daily: Math.round(funds.daily(state)) };
   };
   /** A status as the home gets it: signed with the host's key, so the person holds the host's word */
   const signedStatusOf = async (id: string) =>
     signStatus(await statusOf(id), options.key.privateKey, provider);
 
   const name = options.name?.trim() || 'Minca host';
-  // Card prices as people read them, asked of the provider once; its plan names without them.
-  const labels: Record<string, string> = (await billing?.labels?.().catch(() => ({}))) ?? {};
-  const period = (id: string) => (id === 'yearly' ? 'a year' : 'a month');
-  const plans: ReadonlyArray<HostPlan> = options.free
-    ? []
-    : [
-        ...(billing?.plans ?? []).map((plan): HostPlan => ({
-          id: `card-${plan.id}`,
-          label: `${labels[plan.id] ?? plan.label}, by card`,
-          method: 'checkout',
-          renews: true,
-          for: ['account'],
-        })),
-        ...(wallet ? wallet.offer.plans : []).map((plan): HostPlan => ({
-          id: `wallet-${plan.id}`,
-          label: `$${plan.price} ${period(plan.id)}, from a wallet (${wallet?.offer.symbol} on ${wallet?.offer.chainName})`,
-          method: 'request',
-          renews: false,
-          for: ['account'],
-        })),
-      ];
-  /** Communities pay through a fund: what online costs a month, and how money goes in */
-  const monthly = options.fundMonthly ?? '4';
+  /** Accounts and communities pay into a balance: what online costs a month for each GB, and how money goes in */
+  const perGb = options.fundPerGb ?? '0.10';
   const markup = options.botMarkup ?? 1.5;
   const fundOffer =
     !options.free && (billing || wallet)
       ? {
-          monthly,
-          min: '1',
+          perGb,
+          min: options.fundMin ?? '5',
           methods: [...(billing ? (['checkout'] as const) : []), ...(wallet ? (['request'] as const) : [])],
           recurring: !!billing,
           ...(options.manageFunds ? { manage: options.manageFunds } : {}),
           ...(options.bots ? { botDailyCap: (options.bots.model.dailyCap * markup).toFixed(2) } : {}),
         }
       : null;
+  /** "$0.10 a GB a month, past 0.25 GB free", for people */
+  const priceOf = () =>
+    fundOffer
+      ? `$${perGb} a GB a month${limits?.accountBytes ? `, past ${limits.accountBytes / GB} GB free` : ''}`
+      : undefined;
   const funds = createFunds({
     store: await options.stores('host-funds'),
-    monthly: Number(monthly) * 1e6,
+    perGb: Number(perGb) * 1e6,
+    ...(options.graceDays !== undefined ? { graceDays: options.graceDays } : {}),
+    // An account at a host with limits has its room's notice as its grace: nothing is lent to it.
+    lends: (id) => !limits || id.startsWith('space:'),
     mirror: options.mirror ?? null,
   });
   const ids = (options.connectors ?? []).map((one) => one.id);
@@ -579,10 +571,9 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     did: node.did,
     name,
     free: !!options.free,
-    ...((options.price ?? priceText(wallet)) ? { price: options.price ?? priceText(wallet)! } : {}),
+    ...((options.price ?? priceOf()) ? { price: options.price ?? priceOf()! } : {}),
     // Where devices hold a socket to it: the one `serve` takes peers at.
     peer: '/peer',
-    ...(plans.length ? { plans } : {}),
     ...(fundOffer ? { fund: fundOffer } : {}),
     ...(reminders ? { remind: true } : {}),
     // Only where a bot can be paid for, from a fund, or costs nothing.
@@ -656,11 +647,12 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     if (options.free) return Promise.resolve();
     // One at a time: a timer's refresh read before a payment must not write its date after it.
     const next = refreshing.then(async () => {
-      const state = await funds.settle(id, rooms.get(id));
+      const state = await funds.settle(id, billed.get(id));
       const until = funds.until(state);
-      // An empty fund never moves its date later: its grace runs from when it ran out, or never starts.
+      // Run out, its grace ends where the fund stops drawing, so it is never charged for time it isn't
+      // carried; one nobody paid into keeps its date, and starts no grace.
       const was = (await node.get(id))?.paidUntil ?? 0;
-      await node.setPaidUntil(id, state.balance > 0 ? until : Math.min(until, was));
+      await node.setPaidUntil(id, state.balance > 0 || state.ran ? until : was);
     });
     refreshing = next.catch(() => {});
     void next.then(syncBots, () => {});
@@ -675,15 +667,10 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     // Counted first: should anything after fail, the payment is lost to a restart, never counted twice.
     await markSpent(tx, id);
     await node.setInvoice(id, null);
-    if (plan === 'fund') {
-      await funds.add(id, Number(amount));
-      await refreshFund(id);
-      log(`fund ${id} got ${(Number(amount) / 1e6).toFixed(2)} USDC from a wallet`);
-      return;
-    }
-    const until = wallet.extend(plan, Math.max(now(), subscription.paidUntil));
-    await node.extend(id, until);
-    log(`subscription ${id} paid from a wallet until ${new Date(until * 1000).toISOString()}`);
+    if (plan !== 'fund') return;
+    await funds.add(id, Number(amount));
+    await refreshFund(id);
+    log(`${id} got ${(Number(amount) / 1e6).toFixed(2)} USDC from a wallet`);
   };
 
   /**
@@ -751,49 +738,35 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     };
   }
 
-  /** Starts one of the host's plans for a subscription: a checkout page to open, or a payment request */
-  async function startPayment(req: IncomingMessage, id: string, planId: unknown): Promise<PayAnswer> {
-    const plan = plans.find((known) => known.id === planId);
-    if (!plan) throw refusal(400, 'This host has no such plan for this');
-    const [kind, period] = [plan.id.slice(0, plan.id.indexOf('-')), plan.id.slice(plan.id.indexOf('-') + 1)];
-    const subscription = await subscribeFrom(req, id);
-    if (kind === 'card' && billing) {
-      const checkout = await billing.checkout({
-        subscription: id,
-        plan: period,
-        returnUrl: returnUrl(req),
-        ...(subscription.customer ? { customer: subscription.customer } : {}),
-      });
-      return { checkout };
-    }
-    if (kind !== 'wallet' || !wallet) throw refusal(400, 'This host has no such plan for this');
-    return walletRequest(
-      id,
-      period,
-      () => true,
-      (w, taken) => w.payment(period, taken),
-    );
-  }
-
   /**
-   * Starts adding to a community's fund: an amount in dollars, by card (once,
-   * or every month) or from a wallet. The fund's subscription is made on the
-   * way, so a community's first payment is also how it starts.
+   * Starts adding to a subscription's balance, an account's or a community's
+   * fund: an amount in dollars, by card (once, or every month) or from a
+   * wallet. The subscription is made on the way, so a first payment is also
+   * how it starts.
    */
   async function startFund(
     req: IncomingMessage,
     id: string,
     input: Record<string, unknown>,
   ): Promise<PayAnswer> {
-    if (!fundOffer) throw refusal(404, 'This host takes no payments for communities');
+    if (!fundOffer) throw refusal(404, 'This host takes no payments');
     const amount = typeof input.amount === 'string' ? input.amount.trim() : '';
     if (!/^\d{1,5}(\.\d{1,2})?$/.test(amount) || Number(amount) < Number(fundOffer.min))
       throw refusal(400, `An amount in dollars is needed, at least ${fundOffer.min}`);
     const cents = Math.round(Number(amount) * 100);
     const monthly = input.monthly === true;
-    await node.subscribe(id);
+    const account = !id.startsWith('space:');
+    await subscribeFrom(req, id);
     if (input.method === 'checkout' && billing)
-      return { checkout: await billing.fund({ fund: id, cents, monthly, returnUrl: returnUrl(req) }) };
+      return {
+        checkout: await billing.fund({
+          fund: id,
+          name: account ? `Hosting at ${name}` : 'Community fund',
+          cents,
+          monthly,
+          returnUrl: returnUrl(req),
+        }),
+      };
     if (input.method !== 'request' || monthly) throw refusal(400, 'This host takes no such payment');
     return walletRequest(
       id,
@@ -907,17 +880,14 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     if (url.pathname === '/host/billing/webhook' && method === 'POST') {
       if (!billing) throw refusal(404, 'This host takes no payments');
       const paid = await billing.webhook(await readBody(req), req.headers);
-      if (paid && 'until' in paid) {
-        await node.extend(paid.subscription, paid.until, paid.customer);
-        log(`subscription ${paid.subscription} paid until ${new Date(paid.until * 1000).toISOString()}`);
-      } else if (paid) {
-        // Into a fund: added once, however often the webhook comes.
+      if (paid) {
+        // Into a balance: added once, however often the webhook comes.
         await oneAtATime(async () => {
           if (await isSpent(`card:${paid.id}`)) return;
           await markSpent(`card:${paid.id}`, paid.subscription);
           await node.subscribe(paid.subscription);
           await funds.add(paid.subscription, paid.cents * 10_000);
-          log(`fund ${paid.subscription} got $${(paid.cents / 100).toFixed(2)} by card`);
+          log(`${paid.subscription} got $${(paid.cents / 100).toFixed(2)} by card`);
         });
         await refreshFund(paid.subscription);
       }
@@ -1014,13 +984,7 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
 
     if (action === null && method === 'GET') return send(res, 200, await signedStatusOf(id));
 
-    if (action === 'pay' && method === 'POST') return send(res, 200, await startPayment(req, id, input.plan));
-
-    if (action === 'manage' && method === 'POST') {
-      const customer = (await node.get(id))?.customer;
-      if (!billing || !customer) throw refusal(404, 'Nothing has been paid by card for this subscription');
-      return send(res, 200, { checkout: await billing.manage({ customer, returnUrl: returnUrl(req) }) });
-    }
+    if (action === 'pay' && method === 'POST') return send(res, 200, await startFund(req, id, input));
 
     if (action === 'remind' && method === 'POST')
       return send(res, 200, await askReminders(req, id, input.email));
@@ -1140,14 +1104,16 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
 
   listening = served.port;
   void syncBots();
-  // Every minute, each community's fund pays for the time since, and its date and bots follow.
+  // Every minute, each balance pays for the time since, and its date and bots follow.
   const fundTick = async () => {
-    if (!options.free)
-      for (const subscription of await node.list())
-        if (subscription.id.startsWith('space:')) await refreshFund(subscription.id);
+    if (!options.free) for (const id of await funds.ids()) if (await node.get(id)) await refreshFund(id);
     await syncBots();
   };
-  void fundTick().catch(() => {});
+  // Down a while: that time was carried by nobody, so it is charged to nobody.
+  void (async () => {
+    if (!options.free) for (const id of await funds.ids()) await funds.resume(id);
+    await fundTick();
+  })().catch(() => {});
   const botSweeping = setInterval(
     () => void fundTick().catch((error: unknown) => log(`funds: ${messageOf(error)}`)),
     options.fundMs ?? 60_000,

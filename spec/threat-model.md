@@ -128,7 +128,8 @@ reference implementation, or any implementation, honestly.
     bounded in bytes after a notice that neither a new key nor a dip under
     resets: past it the host stops carrying its largest spaces for it until
     the rest fit, and an account over by its carry space alone is carried for
-    no more; a community's fund pays for its size while it has money (08
+    no more until it pays; past its free room an account's balance, and a
+    community's fund, pay for its size while they have money (08 §1,
     §1.1, Room, §2;
     `packages/core/tests/host-limits.test.ts`, "over its room…", "the notice
     is the account's…", "a carry space over its room by itself…";
@@ -137,13 +138,47 @@ reference implementation, or any implementation, honestly.
     their room, so one member's writing in a shared space fills every
     member's; the host then holds back each such member's largest spaces,
     which may be their own rather than the shared one, and keeps carrying a
-    held space for any member with room. A writer also drains a community's
-    fund as fast as they make its space grow. Still open
-    ([#289](https://github.com/leifriksheim/minca/issues/289)): a fund's
-    grace is free and has no size limit, so a little money each month keeps
-    any size carried; an account with two subscriptions on one carry space
-    is held and refused by the smaller room; and a refusal stays even after
-    the account pays.
+    held space for any member with room. A held space's bucket copy goes
+    after `keepDays`, and goes back whole once it is carried again
+    (`packages/core/tests/host-limits.test.ts`, "a space held back for
+    keepDays…"; `packages/core/tests/mirror.test.ts`, "taken out of the
+    store and mirrored again…", "a mirror that only ever read…", "a host
+    that only read its space back…"). A writer also drains a community's fund,
+    or a member's balance, as fast as they make a space grow. Paying makes
+    an account's room unbounded, bounded only by how fast its balance
+    drains, and every paying member who names a shared space pays for its
+    whole size. A grace is lent, in money: the balance goes below zero
+    through it until it owes as much as the largest payment ever made into
+    it, and the next payment pays that first, so a little money now and then keeps
+    nothing carried, the least payment into a large space (or one grown
+    after paying) buys what that payment buys at its size, no payment
+    shortens a grace (anyone may pay into a fund, so one could otherwise
+    cut it), and nothing more is owed once the grace is over
+    (`packages/cli/tests/fund.test.ts`, "its grace is lent…", "a grace lends
+    what the payment before it was…", "paid while small, grown…", "no
+    payment shortens a grace…", "a payment that leaves it owing…", "once its
+    grace is over…"), even on a host that came back from its bucket on a
+    new disk (`packages/cli/tests/fund.test.ts`, "a fund comes back from
+    the bucket…"). A fund is drawn on from its first payment, at one GB,
+    and never past its grace. A balance is charged by the size last
+    measured, every hour or so, so growth between measures goes uncharged:
+    the host's cost. Whoever brings a lapsed fund back starts a grace that
+    lends only what their payment left above zero, so a stranger paying off
+    the rest of a debt can't put it back on the members (`packages/cli/tests/fund.test.ts`,
+    "whoever brings a fund back…"). Time the host was down is charged to
+    nobody ("a gap longer than an hour…"). A card payment disputed
+    later still counts as the largest payment a grace lends: the host's
+    cost, as the chargeback is. An
+    account at a host with limits is lent nothing: its room's notice is its
+    grace. One payment keeps an account whose spaces fit its free room
+    `"paid"` for good, so never dropped for being idle: accepted, as that is
+    at most `accountBytes` for each such account. Whoever
+    pays into a fund nobody else has can so leave its community owing at
+    most what they paid, should it fund itself later; accepted. Still open
+    ([#289](https://github.com/leifriksheim/minca/issues/289)): an account
+    with two subscriptions on one carry space is held and refused by the
+    smaller room, and at a host without limits one that changes keys leaves
+    its grace's debt behind.
     Accepted otherwise: it is the host's cost.
   - Anyone holding an invite link that is still open can push a community
     over a host's free line by joining more accounts and writing from them,

@@ -85,7 +85,7 @@ export function standing(view: SpaceHostingView): { tone: Tone; pill: string; li
       return {
         tone: 'warn',
         pill: 'Not paid yet',
-        line: `Turns on once there is money in its fund · $${view.fund.monthly} a month`,
+        line: `Turns on once there is money in its fund · $${view.fund.perGb} a GB a month`,
       };
     if (!view.free)
       return { tone: 'neutral', pill: 'Off', line: `${view.name} doesn't keep communities online` };
@@ -94,7 +94,11 @@ export function standing(view: SpaceHostingView): { tone: Tone; pill: string; li
     return {
       tone: 'bad',
       pill: 'Off',
-      line: view.fund ? 'The fund ran out. Add to it to turn it back on' : `It lapsed at ${view.name}`,
+      line: !view.fund
+        ? `It lapsed at ${view.name}`
+        : (status.balance ?? 0) < 0
+          ? `The fund ran out, and owes ${dollars(-(status.balance ?? 0))} for the time it was kept on. Add more to turn it back on`
+          : 'The fund ran out. Add to it to turn it back on',
     };
   if (!status?.carrying)
     return {
@@ -107,7 +111,7 @@ export function standing(view: SpaceHostingView): { tone: Tone; pill: string; li
     return {
       tone: 'bad',
       pill: 'Fund empty',
-      line: `Ran out ${shortDate(status.paidUntil)}; kept a little longer`,
+      line: `Ran out ${shortDate(status.paidUntil)}; kept online a little longer, paid for from what's added next`,
     };
   const days = (status.paidUntil - Date.now() / 1000) / DAY;
   const lasts = `lasts about ${lastsFor(days / 30)}`;
@@ -483,7 +487,7 @@ export function KeepOnline({
                 offer?.free
                   ? 'Free'
                   : offer?.fund
-                    ? `$${offer.fund.monthly} a month, from the fund`
+                    ? `$${offer.fund.perGb} a GB a month, from the fund`
                     : offer
                       ? hostTerms(offer)
                       : ''
@@ -565,7 +569,7 @@ export function KeepOnline({
 
 /**
  * What a community's fund pays for, with a check for each: keeping it online
- * at the host's monthly rate, and each bot at what it has been spending. A
+ * at the host's monthly rate for each GB, and each bot at what it has been spending. A
  * community without bots sees one line.
  */
 export function FundPaysFor({
@@ -602,7 +606,7 @@ export function FundPaysFor({
         This fund pays for
       </p>
       <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {line('Always online, encrypted end to end', `$${fund.monthly} a month`)}
+        {line('Always online, encrypted end to end', `$${fund.perGb} a GB a month`)}
         {bots.map((bot) =>
           line(
             bot.name,

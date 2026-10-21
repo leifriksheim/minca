@@ -807,8 +807,8 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
         'minca host needs a way to take payments — Stripe (STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET), a wallet (MINCA_WALLET_ADDRESS), or both — or --free to host without them, or MINCA_HOST_FREE_GB to host for free within limits.',
       );
     }
-    // With limits, the quota is the room a paying account has: `limits` says it.
-    const quotaBytes = limits ? undefined : quotaFromEnv(process.env, !!values.free);
+    // With limits, the room is the free one: past it a balance pays.
+    const quotaBytes = limits ? undefined : quotaFromEnv(process.env);
     const stores = await hostStores(data);
     const presentation = presentationFromEnv(process.env);
     const mirror = mirrorFromEnv(process.env);

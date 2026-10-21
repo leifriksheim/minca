@@ -72,12 +72,13 @@ export function spaceSize(data: string): (spaceId: string) => Promise<number> {
 }
 
 /**
- * How much a subscription's spaces may take, from MINCA_HOST_QUOTA_GB: 10 on
- * a host that takes payments, none on a free one unless set. 0 is none.
+ * How much a subscription's spaces may take at a host without limits, from
+ * MINCA_HOST_QUOTA_GB: none unless set, as a balance pays for what they
+ * take. 0 is none.
  */
-export function quotaFromEnv(env: NodeJS.ProcessEnv, free: boolean): number | undefined {
+export function quotaFromEnv(env: NodeJS.ProcessEnv): number | undefined {
   const text = env.MINCA_HOST_QUOTA_GB?.trim();
-  const gb = text ? Number(text) : free ? 0 : 10;
+  const gb = text ? Number(text) : 0;
   if (!Number.isFinite(gb) || gb < 0)
     throw new Error(`MINCA_HOST_QUOTA_GB must be a number of gigabytes, not "${text}"`);
   return gb > 0 ? Math.round(gb * 1e9) : undefined;
@@ -108,7 +109,7 @@ function gigabytesFromEnv(env: NodeJS.ProcessEnv, name: string, otherwise: numbe
  * up to MINCA_HOST_SPACE_WRITERS accounts writing (10) and MINCA_HOST_SPACE_MB
  * (500) over MINCA_HOST_WINDOW_DAYS (30); MINCA_HOST_SPACE_READERS (50) is
  * only shown. Past the line it is carried for MINCA_HOST_GRACE_DAYS (30), and
- * kept MINCA_HOST_KEEP_DAYS (90) after; a free subscription with no call for
+ * kept MINCA_HOST_KEEP_DAYS (30) after; a free subscription with no call for
  * MINCA_HOST_IDLE_DAYS (180) is dropped. None otherwise, and never with
  * MINCA_HOST_FREE=1, which has no limits at all.
  */
@@ -119,7 +120,6 @@ export function limitsFromEnv(env: NodeJS.ProcessEnv, free: boolean): HostLimits
   if (windowDays === 0) throw new Error('MINCA_HOST_WINDOW_DAYS must be at least 1');
   return {
     accountBytes: gigabytesFromEnv(env, 'MINCA_HOST_FREE_GB', 0),
-    paidAccountBytes: gigabytesFromEnv(env, 'MINCA_HOST_QUOTA_GB', 10),
     space: {
       writers: wholeFromEnv(env, 'MINCA_HOST_SPACE_WRITERS', 10),
       bytes: wholeFromEnv(env, 'MINCA_HOST_SPACE_MB', 500) * 1_000_000,
@@ -127,7 +127,7 @@ export function limitsFromEnv(env: NodeJS.ProcessEnv, free: boolean): HostLimits
       readers: wholeFromEnv(env, 'MINCA_HOST_SPACE_READERS', 50),
     },
     graceDays: wholeFromEnv(env, 'MINCA_HOST_GRACE_DAYS', 30),
-    keepDays: wholeFromEnv(env, 'MINCA_HOST_KEEP_DAYS', 90),
+    keepDays: wholeFromEnv(env, 'MINCA_HOST_KEEP_DAYS', 30),
     idleDays: wholeFromEnv(env, 'MINCA_HOST_IDLE_DAYS', 180),
   };
 }
@@ -159,14 +159,11 @@ export function billingFromEnv(env: NodeJS.ProcessEnv): Billing | null {
   return createStripeBilling({
     secretKey: env.STRIPE_SECRET_KEY,
     webhookSecret: env.STRIPE_WEBHOOK_SECRET,
-    ...(env.STRIPE_PRICE_MONTHLY ? { monthlyPrice: env.STRIPE_PRICE_MONTHLY } : {}),
-    ...(env.STRIPE_PRICE_YEARLY ? { yearlyPrice: env.STRIPE_PRICE_YEARLY } : {}),
   });
 }
 
 /**
- * Wallet payments, when MINCA_WALLET_ADDRESS is set: USDC to that address, at
- * MINCA_WALLET_MONTHLY and/or MINCA_WALLET_YEARLY dollars, on
+ * Wallet payments, when MINCA_WALLET_ADDRESS is set: USDC to that address, on
  * MINCA_WALLET_NETWORK (base, or base-sepolia to try it; default base), read
  * through MINCA_WALLET_RPC (default: the network's public node). None otherwise.
  */
@@ -175,16 +172,9 @@ export function walletFromEnv(env: NodeJS.ProcessEnv): WalletPayments | null {
   const network = env.MINCA_WALLET_NETWORK ?? 'base';
   if (!isNetworkName(network))
     throw new Error(`MINCA_WALLET_NETWORK must be ${Object.keys(NETWORKS).join(' or ')}, not "${network}"`);
-  if (!env.MINCA_WALLET_MONTHLY && !env.MINCA_WALLET_YEARLY) {
-    throw new Error(
-      'Wallet payments need a price: MINCA_WALLET_MONTHLY, MINCA_WALLET_YEARLY, or both, in dollars (like 4 and 36)',
-    );
-  }
   return createWalletPayments({
     network,
     to: env.MINCA_WALLET_ADDRESS,
-    ...(env.MINCA_WALLET_MONTHLY ? { monthly: env.MINCA_WALLET_MONTHLY } : {}),
-    ...(env.MINCA_WALLET_YEARLY ? { yearly: env.MINCA_WALLET_YEARLY } : {}),
     ...(env.MINCA_WALLET_RPC ? { rpcUrl: env.MINCA_WALLET_RPC } : {}),
   });
 }
@@ -348,26 +338,33 @@ export async function botsFromEnv(
 }
 
 /**
- * Community funds: what keeping one online takes a month (MINCA_FUND_MONTHLY,
- * dollars, default the wallet's monthly price or 4), what a bot's AI use
- * costs as a multiple of what the host pays (MINCA_BOT_MARKUP, default 1.5),
- * and where someone who adds every month by card stops it
- * (STRIPE_PORTAL_LINK, Stripe's no-code customer portal link).
+ * Community funds: what keeping one online takes a month for each GB it
+ * takes, at least one (MINCA_FUND_PER_GB, dollars, default 0.10), the least
+ * one payment adds (MINCA_FUND_MIN, dollars, default 5: a card's fixed fee
+ * stays small beside it), what a bot's AI use costs as a multiple of what the
+ * host pays (MINCA_BOT_MARKUP, default 1.5), and where someone who adds every
+ * month by card stops it (STRIPE_PORTAL_LINK, Stripe's no-code customer
+ * portal link).
  */
 export function fundFromEnv(env: NodeJS.ProcessEnv): {
-  fundMonthly?: string;
+  fundPerGb?: string;
+  fundMin?: string;
   botMarkup?: number;
   manageFunds?: string;
 } {
-  const monthly = (env.MINCA_FUND_MONTHLY ?? env.MINCA_WALLET_MONTHLY)?.trim();
-  if (monthly && !/^\d{1,5}(\.\d{1,2})?$/.test(monthly))
-    throw new Error(`MINCA_FUND_MONTHLY must be dollars a month, like 4, not "${monthly}"`);
+  const perGb = env.MINCA_FUND_PER_GB?.trim();
+  if (perGb && !/^\d{1,5}(\.\d{1,4})?$/.test(perGb))
+    throw new Error(`MINCA_FUND_PER_GB must be dollars a month for a GB, like 0.10, not "${perGb}"`);
+  const min = env.MINCA_FUND_MIN?.trim();
+  if (min && !/^\d{1,5}(\.\d{1,2})?$/.test(min))
+    throw new Error(`MINCA_FUND_MIN must be dollars, like 5, not "${min}"`);
   const markup = env.MINCA_BOT_MARKUP ? Number(env.MINCA_BOT_MARKUP) : undefined;
   if (markup !== undefined && (!Number.isFinite(markup) || markup < 1))
     throw new Error(`MINCA_BOT_MARKUP must be 1 or more, not "${env.MINCA_BOT_MARKUP}"`);
   const portal = env.STRIPE_PORTAL_LINK?.trim();
   return {
-    ...(monthly ? { fundMonthly: monthly } : {}),
+    ...(perGb ? { fundPerGb: perGb } : {}),
+    ...(min ? { fundMin: min } : {}),
     ...(markup !== undefined ? { botMarkup: markup } : {}),
     ...(portal ? { manageFunds: portal } : {}),
   };

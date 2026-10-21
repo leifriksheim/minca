@@ -149,19 +149,18 @@ space you make, unasked.
 ## Trying hosting and payments
 
 In the home: Settings, **Keep my spaces online**, **Keep online** (the dev host
-is filled in), then one of its plans. What you can pay with:
+is filled in), then an amount to add to your balance there. What you can pay with:
 
 - **A browser wallet, on by default.** Payments go to Base Sepolia, a test
   network: test money only. In MetaMask (or any browser wallet), get test ETH
   for the fee from a Base Sepolia faucet (Coinbase's, or Alchemy's) and test
-  USDC from faucet.circle.com (choose Base Sepolia). Choose the wallet plan,
+  USDC from faucet.circle.com (choose Base Sepolia). Choose Crypto,
   then **Pay with this browser's wallet** (or scan the QR code with a phone
-  wallet); within a minute the home says "Payment received", shows "paid
-  until", and the host takes your spaces. To see payments arrive, set your own
+  wallet); within a minute the home says "Payment received", shows the
+  balance, and the host takes your spaces. To see payments arrive, set your own
   address as `MINCA_WALLET_ADDRESS` in `packages/cli/.env.host.local`.
 - **A card, in Stripe's test mode.** In `packages/cli/.env.host.local`, add
-  `STRIPE_SECRET_KEY=sk_test_…` and the price ids of a monthly and a yearly
-  recurring test price (`STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_YEARLY`). With
+  `STRIPE_SECRET_KEY=sk_test_…` and `STRIPE_WEBHOOK_SECRET`. With
   the Stripe CLI installed, `npm run dev` forwards Stripe's webhooks to the
   host by itself. Pay with card 4242 4242 4242 4242, any future date, any CVC.
 

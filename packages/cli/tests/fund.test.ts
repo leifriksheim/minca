@@ -17,7 +17,7 @@ async function setUp(mirror = createMemoryBlobStore()) {
   let clock = START;
   const funds = createFunds({
     store: await memoryStores()('funds'),
-    monthly: 4e6,
+    perGb: 4e6,
     mirror,
     now: () => clock,
   });
@@ -25,7 +25,7 @@ async function setUp(mirror = createMemoryBlobStore()) {
 }
 
 describe('a community fund', () => {
-  test('keeping the space online takes the monthly rate by the second, and the estimate follows', async () => {
+  test('keeping a small space online takes the rate for one GB by the second, and the estimate follows', async () => {
     const t = await setUp();
     let state = await t.funds.add('space:club', 12e6);
     assert.equal(state.balance, 12e6);
@@ -40,14 +40,18 @@ describe('a community fund', () => {
     assert.ok(Math.abs(state.balance - 15e6) < 10);
   });
 
-  test('a space that takes three rooms pays three times the rate, from when it was measured so', async () => {
+  test('it pays for each GB it is measured to take, from when it was measured so; unmeasured, for one', async () => {
     const t = await setUp();
     let state = await t.funds.add('space:club', 12e6);
-    state = await t.funds.settle('space:club', 3);
+    state = await t.funds.settle('space:club', 3e9);
     assert.ok(Math.abs(t.funds.daily(state) - (3 * 4e6) / 30) < 1);
     t.pass(10);
-    state = await t.funds.settle('space:club', 3);
+    state = await t.funds.settle('space:club', 3e9);
     assert.ok(Math.abs(state.balance - 8e6) < 10, 'ten days at $12 a month: $4 taken');
+    state = await t.funds.settle('space:club', 1.5e9);
+    assert.ok(Math.abs(t.funds.daily(state) - (1.5 * 4e6) / 30) < 1, 'by the byte, not rounded up');
+    state = await t.funds.settle('space:club', 0);
+    assert.equal(t.funds.daily(state), 0, 'nothing to pay for, nothing taken');
   });
 
   test('bots take what they spend; a busy week brings the date nearer', async () => {
@@ -82,16 +86,174 @@ describe('a community fund', () => {
     );
   });
 
-  test('an empty fund stays empty until paid into, and says when it ran out', async () => {
+  test('its grace is lent: the fund goes below zero by a grace at most, and the next payment pays that first', async () => {
     const t = await setUp();
+    await t.funds.add('space:club', 4e6);
+    t.pass(30);
+    let state = await t.funds.settle('space:club');
+    assert.ok(Math.abs(state.balance) < 10, 'a month at $4: empty');
+    const ranOut = t.now();
+    t.pass(15);
+    state = await t.funds.settle('space:club');
+    assert.ok(Math.abs(state.balance + 2e6) < 10, 'half its grace: $2 owed');
+    assert.ok(Math.abs(t.funds.until(state) - ranOut) < 2, 'and it says when it ran out');
+    // Part paid back within its grace: the grace it was lent stays as it was.
+    state = await t.funds.add('space:club', 1e6);
+    assert.ok(Math.abs(state.balance + 1e6) < 10);
+    assert.ok(Math.abs(t.funds.until(state) - ranOut) < 2);
+    state = await t.funds.charge('space:club', 1e6);
+    t.pass(60);
+    state = await t.funds.settle('space:club');
+    assert.ok(Math.abs(state.balance + 4e6) < 10, 'a whole grace owed, no more');
+    // A small payment pays what is owed first: it buys no grace of its own.
+    state = await t.funds.add('space:club', 1e6);
+    assert.ok(state.balance < 0);
+    state = await t.funds.add('space:club', 5e6);
+    assert.ok(Math.abs(state.balance - 2e6) < 10, '$6 in, $4 owed: $2 left');
+  });
+
+  test('a grace lends what the payment before it was: the least payment into a large space buys hours', async () => {
+    const t = await setUp();
+    // 100 GB at $4 a GB: $400 a month, so $4 lasts 0.3 days.
+    await t.funds.settle('space:big', 100e9);
+    await t.funds.add('space:big', 4e6);
+    const paidAt = t.now();
+    t.pass(1);
+    let state = await t.funds.settle('space:big');
+    assert.ok(Math.abs(state.balance + 4e6) < 100, 'lent 0.3 days, $4 owed');
+    t.pass(30);
+    state = await t.funds.settle('space:big');
+    assert.ok(Math.abs(state.balance + 4e6) < 100, 'and no more after');
+    // The host's grace runs from the date it says: so it ends 0.6 days after paying.
+    const ends = t.funds.until(state) + 30 * DAY;
+    assert.ok(Math.abs(ends - (paidAt + 0.6 * DAY)) < 60, `ends 0.6 days on, not ${(ends - paidAt) / DAY}`);
+  });
+
+  test('paid while small, grown just before it runs out: the grace is still what the payment was, at the new size', async () => {
+    const t = await setUp();
+    await t.funds.settle('space:club', 1e9);
+    await t.funds.add('space:club', 5e6);
+    t.pass(30);
+    // 10 TB at $4 a GB a month: the $1 left lasts minutes, and the grace lends $5 at that rate.
+    await t.funds.settle('space:club', 10_000e9);
+    t.pass(1);
+    let state = await t.funds.settle('space:club');
+    assert.ok(Math.abs(state.balance + 5e6) < 100, 'owes what was paid, no more');
+    const ends = t.funds.until(state) + 30 * DAY;
+    assert.ok(ends - t.now() < 0, 'its grace already over: a day of 10 TB is far past $5');
+    t.pass(31);
+    state = await t.funds.settle('space:club');
+    assert.ok(Math.abs(state.balance + 5e6) < 100);
+  });
+
+  test('no payment shortens a grace: a small one after a large one still lends what the large one was', async () => {
+    const t = await setUp();
+    // 10 GB at $4 a GB: $40 a month.
+    await t.funds.settle('space:club', 10e9);
+    await t.funds.add('space:club', 40e6);
+    t.pass(20);
     await t.funds.add('space:club', 1e6);
+    t.pass(11);
+    let state = await t.funds.settle('space:club');
+    assert.ok(state.balance <= 0, 'run out');
+    const ends = t.funds.until(state) + 30 * DAY;
+    assert.ok(ends - t.now() > 28 * DAY, `still about a month of grace, not ${(ends - t.now()) / DAY} days`);
+    // Nor does one made during the grace: what it lends after is still the $40.
+    t.pass(1);
+    state = await t.funds.add('space:club', 5e6);
+    assert.ok(state.balance > 0);
+    t.pass(5);
+    state = await t.funds.settle('space:club');
+    assert.ok(state.balance <= 0, 'run out again');
+    const again = t.funds.until(state) + 30 * DAY;
+    // Two days into it already: a month from when it ran out, not hours.
+    assert.ok(again - t.now() > 27 * DAY, `about a month again, not ${(again - t.now()) / DAY} days`);
+  });
+
+  test('a payment that leaves it owing moves its grace on by what it paid, and it is drawn until then only', async () => {
+    const t = await setUp();
+    // $40 a month; $20 lasts 15 days, and lends $20: 15 more.
+    await t.funds.settle('space:club', 10e9);
+    await t.funds.add('space:club', 20e6);
+    t.pass(20);
+    let state = await t.funds.settle('space:club');
+    const before = t.funds.until(state);
+    state = await t.funds.add('space:club', 6e6);
+    assert.ok(state.balance < 0, 'still owing');
+    const after = t.funds.until(state);
+    assert.ok(
+      Math.abs(after - before - 4.5 * DAY) < 60,
+      `$6 at $40 a month: 4.5 days more, not ${(after - before) / DAY}`,
+    );
+    // Past that end, nothing more is drawn.
+    t.pass(after + 30 * DAY - t.now() + DAY);
+    const at = (await t.funds.settle('space:club')).balance;
+    t.pass(3);
+    assert.equal((await t.funds.settle('space:club')).balance, at);
+  });
+
+  test('whoever brings a fund back after its grace was spent pays for the grace they start', async () => {
+    const t = await setUp();
+    // $40 a month; $20 lasts 15 days and lends $20.
+    await t.funds.settle('space:club', 10e9);
+    await t.funds.add('space:club', 20e6);
+    t.pass(40);
+    let state = await t.funds.settle('space:club');
+    assert.ok(Math.abs(state.balance + 20e6) < 100, 'lapsed, owing $20');
+    await t.funds.add('space:club', 15e6);
+    // Someone pays what is left, and a cent: the grace it starts lends a cent's worth, not $20.
+    await t.funds.add('space:club', 5.01e6);
+    t.pass(1);
+    state = await t.funds.settle('space:club');
+    assert.ok(state.balance > -0.1e6, `owes a cent or so, not ${-state.balance / 1e6}`);
+    // The members' next $10 still turns it back on.
+    state = await t.funds.add('space:club', 10e6);
+    assert.ok(state.balance > 9e6);
+  });
+
+  test('a gap longer than an hour since it was last settled is charged to nobody: the host was down', async () => {
+    const t = await setUp();
+    await t.funds.add('space:club', 4e6);
     t.pass(10);
+    await t.funds.resume('space:club');
     const state = await t.funds.settle('space:club');
-    assert.equal(state.balance, 0, 'nothing is owed below zero');
-    assert.equal(t.funds.until(state), t.now(), 'ran out now, as far as it knows');
-    // A bot's last call may take it just below zero; paying in starts from zero again.
-    await t.funds.charge('space:club', 50_000);
-    assert.equal((await t.funds.add('space:club', 2e6)).balance, 2e6);
+    assert.ok(Math.abs(state.balance - 4e6) < 10, 'ten days down: nothing taken');
+  });
+
+  test('a balance its host lends nothing to stops at zero', async () => {
+    let clock = START;
+    const funds = createFunds({
+      store: await memoryStores()('funds'),
+      perGb: 4e6,
+      lends: (id) => id.startsWith('space:'),
+      now: () => clock,
+    });
+    await funds.add('did:key:zMe', 4e6);
+    clock += 40 * DAY;
+    const state = await funds.settle('did:key:zMe');
+    assert.ok(Math.abs(state.balance) < 10, 'nothing owed');
+    assert.ok(funds.until(state) + 30 * DAY <= clock, 'and no grace left');
+  });
+
+  test('once its grace is over, a fund owes nothing more, whatever its space grows to', async () => {
+    const t = await setUp();
+    await t.funds.add('space:club', 4e6);
+    t.pass(70);
+    let state = await t.funds.settle('space:club');
+    assert.ok(Math.abs(state.balance + 4e6) < 10, 'a month paid, a month lent');
+    state = await t.funds.settle('space:club', 1000e9);
+    t.pass(30);
+    state = await t.funds.settle('space:club');
+    assert.ok(Math.abs(state.balance + 4e6) < 10, 'still what the grace kept online');
+  });
+
+  test('a fund nobody paid into owes nothing', async () => {
+    const t = await setUp();
+    await t.funds.settle('space:club', 5e9);
+    t.pass(20);
+    const state = await t.funds.settle('space:club');
+    assert.equal(state.balance, 0);
+    assert.equal((await t.funds.add('space:club', 5e6)).balance, 5e6);
   });
 
   test('a fund comes back from the bucket when the disk is lost', async () => {
@@ -99,10 +261,11 @@ describe('a community fund', () => {
     await t.funds.add('space:club', 7e6);
     const again = createFunds({
       store: await memoryStores()('funds'),
-      monthly: 4e6,
+      perGb: 4e6,
       mirror: t.mirror,
       now: t.now,
     });
     assert.equal((await again.get('space:club')).balance, 7e6);
+    assert.deepEqual(await again.ids(), ['space:club'], 'and is listed, so the host goes on drawing on it');
   });
 });
