@@ -71,9 +71,10 @@ identical everywhere:
 | `position` | string 1–200 that sorts where a record goes (Positions, below)                                                                                                                                            |
 
 Until the dialect has `format` ([spec 02 §6.2](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)), `when` and `day` are checked only for
-length. How a `blob`'s bytes are stored and fetched is planned
-([Planned: what the library still waits on](#planned-what-the-library-still-waits-on));
-the reference to them is not.
+length. A `blob` is what `records.addFile` gives
+([storage](storage.md#files)): its `hash` is the file's id, and it carries
+the `key` and `salt` that open it
+([spec 05 §16.6](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md)).
 
 ## The definitions
 
@@ -485,11 +486,6 @@ _Source: `packages/core/src/schemas/geo.ts` (`geohash`, `cellsOf`, `cellsAround`
 
 > **Planned.** Not normative. Each item names its own issue.
 >
-> - **File bytes** ([spec 05 §16.6](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md),
->   [#37](https://github.com/leifriksheim/minca/issues/37)). The `blob`
->   fragment names bytes by hash, but a space cannot yet store or send them,
->   so `std.file`, `std.photo`, `std.video` and the images elsewhere point at
->   bytes a reader may not be able to fetch.
 > - **References to other spaces** ([spec 02 §5.3](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md),
 >   [#38](https://github.com/leifriksheim/minca/issues/38)). `std.follow`'s
 >   `space` is a plain space id, and a repost or a list item can point only

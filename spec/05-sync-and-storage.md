@@ -880,6 +880,9 @@ where only it reads them.
       versions/                         empty
     spaces/<space id>/
       <store writer id>/<counter>-<hash>.seg    a store writer's segments (§16.2, §16.3)
+    spaces/files/<space id>/
+      <store writer id>/<id>                    a store writer's files (§16.6)
+      <store writer id>/<id>.list               and their chunk lists
 ```
 
 - `<account id>` matches `^[a-z0-9]{1,12}$`. An account's `dataPath` in
@@ -888,7 +891,8 @@ where only it reads them.
 - The registry store is the directory `<dataPath>/registry`, with exactly
   two subdirectories, `kv` and `versions`, created on open.
 - `<dataPath>/spaces/` is a blob store (§16.1) whose keys are
-  `<space id>/<store writer id>/<segment name>`: each `/`-separated part of a
+  `<space id>/<store writer id>/<segment name>` and
+  `files/<space id>/<store writer id>/<id>` (`.list`): each `/`-separated part of a
   key is a directory and the last one a file, every part encoded as in §14.2.
   A client MUST write and read a space's versions there only as §16.2–§16.4
   say, as its own store writer.
@@ -917,6 +921,8 @@ A writer MUST use exactly this encoding; a reader MUST decode it.
   (for sealed keys, §15).
 - **Segments** `spaces/<space id>/<store writer id>/<name>.seg`: as in
   §16.3, written once and never changed.
+- **Files** `spaces/files/<space id>/<store writer id>/<id>` and `<id>.list`:
+  as in §16.6, written once and deleted by their writer only.
 - Names that end in `.tmp` are a writer's work in progress and MUST be
   ignored.
 
@@ -1060,7 +1066,8 @@ to get, put, delete and list keys under a prefix. How a node talks to one
 A **store writer** is one store on one device, with its own random id: 32
 lower-case hex characters (128 random bits), never a DID. It is not a writer
 in the sense of [02](02-records.md) §4.10, a key that signs. A store writer
-MUST only create files under its own `<space id>/<writer id>/` prefix, so
+MUST only create files under its own `<space id>/<writer id>/` prefix, and
+the files it keeps under its own `files/<space id>/<writer id>/` (§16.6), so
 nothing is written twice, overwritten, or needs a lock.
 
 A host keeps its subscriptions in the same bucket, outside any space, under
@@ -1130,7 +1137,7 @@ carried forward), **then** delete the old ones. A reader in between sees
 duplicates, which are harmless.
 
 **Deleting a space** from a blob store deletes every key under
-`<space id>/`.
+`<space id>/` and under `files/<space id>/`.
 
 _Source: `packages/core/src/storage/segment.ts`, `packages/core/src/storage/mirror.ts`,
 `packages/core/src/node/space-runtime.ts` ("Mirrors"), `packages/core/src/node/host.ts`. Tests:
@@ -1156,28 +1163,161 @@ _Source: `packages/core/src/storage/segment.ts`, `packages/core/src/storage/mirr
   Together with compaction, this is the only deleting there is. Open: how to
   date a segment without trusting the store's modified times, which services
   report differently.
-- **Files and avatars** fit the same store later, as
-  `<space id>/files/<hash>`: content-addressed and immutable, so any store
-  writer may write the same one. Not designed further.
+- **Files and avatars** fit the same store, under each store writer's own
+  prefix (§16.6).
 
 Open: mirrors laid out per collection, so a node holding part of a space
 (§9) could read only what it holds; today only whole-space nodes mirror.
 
-### 16.6 Planned: files
+### 16.6 Files
 
-> **Planned.** Not normative. Issue:
-> [#37](https://github.com/leifriksheim/minca/issues/37). Records cannot
-> carry file bytes today. `std.attachment` has a `url`, outside the space's
-> access rules and sync, and a `blob`: a **blob reference** in the body,
-> `{ hash, size, mime, name? }`, where `hash` is the SHA-256 of the bytes as
-> stored ([standard library](../packages/core/docs/standard-library.md)). No
-> peer can store or send those bytes yet. The plan: the bytes are stored and synced by hash, apart from records, and
-> fetched only when wanted; the fetcher checks the hash. In a private space
-> they are encrypted under the space key before hashing, so keepers and
-> mirrors hold ciphertext. Bytes no current record references may be dropped.
-> _Open:_ how a peer asks for bytes it lacks (the sync connection, a host, a
-> mirror); chunking large files so they resume and don't hold up a sync
-> round; which key when the space key changes; limits per blob and per space.
+A record names its files on its outside; a file travels, is checked and is
+kept chunk by chunk, for as long as a body that names it is kept. Images,
+video and attachments are all files; what they mean is the library's
+([standard library](../packages/core/docs/standard-library.md)).
+
+**Naming files** (a version member, [02](02-records.md) §3.1). `files`: an
+array of objects `{ "hash": <id>, "size": <bytes> }`: `hash` the file's id
+(below) as 64 lower-case hex characters, `size` an integer from 1 to 2³¹,
+the bytes as stored. Signed, and outside the body, as `links` and `tags`
+are, so a keeper that cannot read a body still knows which files a version
+needs and how big they are.
+
+```json
+"files": [
+  { "hash": "5e2bf57d3f40c4b6df69daf1936cb766f832374b4fc0259a7cbff06e2f70f269", "size": 812345 }
+]
+```
+
+A peer never refuses a version for its `files`. On a version that is not a
+delete, it takes entries in order, skipping any that is not an object with
+`hash` and `size` as above (other members are ignored) or repeats the
+`hash` of an entry already taken, until it has 16, and ignores the rest.
+Different versions may name
+one id with different sizes; since the id binds the size, only one is ever
+the file. A node fetches, serves, keeps and mirrors an id only as the size
+its chunk list fits, so a wrong size another member names is never
+satisfied and takes nothing from the right one. Every peer takes the same
+entries, so none disagree; a peer that predates files keeps `files` as an
+unknown member ([02](02-records.md) §3.1), so no sync version moves.
+
+**Chunks, the chunk list and the id.** A file of `size` bytes is cut into
+`n = ceil(size / CHUNK)` chunks of `CHUNK` = 262,144 bytes (256 KiB), the
+last one `size − (n−1)·CHUNK` bytes. Its **chunk list** is the SHA-256 of
+each chunk, in order, concatenated: `32·n` bytes, 256 KiB for the largest
+file. Its **id** is `SHA-256(size ‖ chunk list)`, `size` as 8 bytes
+big-endian.
+
+A reader MUST check what it takes:
+
+- a chunk list, that it is exactly `32·n` bytes and gives the id;
+- a chunk, that it is that chunk's length and its SHA-256 is that entry of
+  the list. A file of one chunk may be checked without its list:
+  `SHA-256(size ‖ SHA-256(chunk))` is the id.
+
+It discards what fails, and asks elsewhere.
+
+```
+size = 300000 → n = 2: chunk 0 is bytes 0–262143, chunk 1 bytes 262144–299999
+list = SHA-256(chunk 0) ‖ SHA-256(chunk 1)          64 bytes
+id   = SHA-256(00 00 00 00 00 04 93 e0 ‖ list)
+```
+
+> Rationale: a reader checks each chunk as it arrives, so a video plays and
+> seeks before it is whole, a broken transfer resumes, and several peers
+> serve one file at once; a bad peer wastes at most a chunk. The list is
+> fetched whole, as BitTorrent v2 sends its piece layer first
+> ([BEP 52](https://bittorrent.org/beps/bep_0052.html)), so a flat list of
+> SHA-256 digests (Web Crypto's `digest`) does what a hash tree would, and
+> binding `size` into the id means one id names one length and one list.
+
+**Encryption.** Every file, in a public space too, is stored as the
+records of the `aes128gcm` content coding of
+[RFC 8188](https://www.rfc-editor.org/rfc/rfc8188) §2, without its header:
+
+- The input keying material is a fresh random 16-byte `key`, and the salt a
+  fresh random 16-byte `salt`, both carried in the body (base64url). The
+  content-encryption key and nonce are derived from them as RFC 8188 §2.2
+  and §2.3 say (HKDF-SHA-256, then AES-128-GCM).
+- The record size is `CHUNK`. Every record but the last holds `CHUNK` − 17
+  bytes of the file followed by the delimiter `0x01`; the last holds the
+  rest followed by `0x02`. A writer pads no record further (a reader
+  accepts zero padding after the delimiter, as RFC 8188 does). So record `i` is
+  exactly chunk `i`, and `size` is the file's length plus 17 per record (an
+  empty file is one record of 17 bytes).
+- A key and salt seal one file only: an edited file gets new ones, and so a
+  new id.
+
+These rules are the readers' (two implementations read each other's files
+by them); a peer that holds or serves a file never checks them.
+
+> Rationale: a key per file inside the body is how Matrix and Signal
+> encrypt attachments: changing the space key never touches a file, and a
+> removed member keeps what it could already read, as with records.
+> Encrypting public files too costs only deduplication: a stub keeps its
+> signed `files` but not its body ([02](02-records.md) §4.5), so a deleted
+> file's id is useless to anyone who never had the body, and a guess of what
+> it was can't be tested against it (§4.9). RFC 8188's records are an IETF
+> web standard built from Web Crypto's HKDF and AES-GCM; each opens on its
+> own, and the delimiter marks the last, so neither can be reordered or cut
+> short.
+
+**Asking for chunks.** Three sync messages (§4):
+
+| Message     | Fields                                                                                                                                 |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `want-file` | `id` (a request id); `hash`; either `chunks: [from, to]` (indices, inclusive, `0 ≤ from ≤ to < n`, at most 64 of them) or `list: true` |
+| `file`      | `id`; `hash`; `chunk` (an index, or `"list"`); `at` (byte offset within it); `bytes` (base64url, at most 24,000 bytes before encoding) |
+| `file-done` | `id`; `hash`; `missing`: the indices asked for and not sent (`["list"]` for the list). The last reply to every `want-file`             |
+
+- A peer MUST ask only for a file named by a version it keeps whole in that
+  space. It MUST take a `file` only for a `want-file` it has in flight with
+  that peer, with that `id`, for a chunk it asked for, with `at` equal to
+  the bytes of that chunk received so far and the bytes within the chunk's
+  length (or the list's). A chunk is complete at its length, and is then
+  checked as above.
+- A peer MUST drop, unanswered, a `want-file` whose `chunks` are not two
+  integers with `0 ≤ from ≤ to < 8192` (the chunks of the largest file) and
+  `to − from < 64`. An index past the end of a file it holds, or of one it
+  doesn't, is answered as missing.
+- A peer MUST serve only chunks it holds for that space, of files named by
+  a version it keeps whole in that space, over a session the space admitted
+  ([04](04-network.md) §6.3); it never answers from another space's
+  holdings, so an id can't be used to learn who holds what elsewhere. It
+  MUST end every reply with `file-done`. A peer that predates files drops
+  `want-file` silently (§4), so a requester gives up on one left unanswered,
+  as on a `want`, and asks elsewhere.
+- A sender SHOULD interleave `file` messages with its other messages, a
+  frame at a time: a receiver handles a peer's messages in order (§6.1), so
+  only the sender keeps a file from holding up a sync round.
+
+**Keeping.** A node keeps a file's chunks while it keeps whole (§10) a
+version naming it, and drops them when it keeps none: a file goes with the
+body that names it, so a superseded version's stub frees its files. A file
+a node has added and not yet named in a version it wrote is its own to
+keep. A node need not fetch, serve or keep the files of a version that does
+not stand ([02](02-records.md) §9): one a revoked key or a removed member
+wrote, though it is kept whole, holds nobody's bandwidth or storage. A node
+MUST NOT refuse a version because it lacks its files: a file's absence is
+about availability, never validity. Which files a node fetches, and when,
+is its own ([Sync and storage in the library](../packages/core/docs/storage.md#files)).
+
+**Mirrors.** A store writer keeps a file it holds at
+`files/<space id>/<store writer id>/<id>`, and its chunk list beside it at
+`files/<space id>/<store writer id>/<id>.list`: under a prefix of its own,
+as for its segments (§16.2), so nothing is written twice and a writer
+deletes its own copy once no version its store keeps whole names it; and
+apart from `<space id>/`, so pulling segments never lists files. A reader
+lists `files/<space id>/` only when it needs a file, and checks the list and
+every chunk exactly as from a peer, so it may read a chunk by an HTTP range
+request or a slice where the blob store can. A deleted file's bytes stay
+under a store writer that has gone quiet, as its segments do
+([02](02-records.md) §4.9).
+
+_Source: `packages/core/src/files/file-id.ts`, `packages/core/src/files/seal.ts`,
+`packages/core/src/files/space-files.ts`, `packages/core/src/sync/sync-messages.ts`,
+`packages/core/src/sync/sync-engine.ts` (files), `packages/core/src/node/space-runtime.ts` ("Files").
+Tests: `packages/core/tests/files.test.ts`._
 
 ---
 
@@ -1188,7 +1328,7 @@ are in [Sync and storage in the library](../packages/core/docs/storage.md#pacing
 
 | Name                           | Value                        | Where                     |
 | ------------------------------ | ---------------------------- | ------------------------- |
-| `SYNC_PROTOCOL_VERSION`        | 7                            | `v` on every sync message |
+| `SYNC_PROTOCOL_VERSION`        | 8                            | `v` on every sync message |
 | Negentropy version byte        | `0x61`                       | §3                        |
 | Id size / fingerprint size     | 32 / 16 bytes                | §3                        |
 | IdList threshold / buckets     | < 32 items / 16              | §3.4                      |
@@ -1198,6 +1338,11 @@ are in [Sync and storage in the library](../packages/core/docs/storage.md#pacing
 | `stored` ids considered        | 2,000                        | §4                        |
 | Collections per hello          | 1,000                        | §4                        |
 | Keepers per space              | 16                           | §9                        |
+| `CHUNK` (and RFC 8188 `rs`)    | 262,144 bytes                | §16.6                     |
+| Files taken per version        | 16                           | §16.6                     |
+| Largest file                   | 2³¹ bytes                    | §16.6                     |
+| Chunks per `want-file`         | 64                           | §16.6                     |
+| Bytes per `file` message       | 24,000 (before base64)       | §16.6                     |
 
 ---
 

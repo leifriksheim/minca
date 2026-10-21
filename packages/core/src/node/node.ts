@@ -163,6 +163,7 @@ import type {
   NodeDirect,
   DirectMessage,
   NodeRecords,
+  FileRef,
   NodeSpaces,
   P2PNode,
   RevokeOptions,
@@ -454,6 +455,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
           // The account's own spaces are always held whole: every device needs all of them.
           ...(config.cache && !ownSpace(spaceId) ? { cache: config.cache } : {}),
           watchIntervalMs: config.watchIntervalMs ?? 2000,
+          ...(config.fetchFiles ? { fetchFiles: config.fetchFiles } : {}),
           emit: fromRuntime,
           onRole: (role) => {
             if (spaceId === accountSpaceId) return;
@@ -2451,6 +2453,12 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       delete: async (spaceId: string, key: string) =>
         (await runtime(spaceId)).remove(key, as ? { as } : undefined),
       history: async <T>(spaceId: string, key: string) => (await runtime(spaceId)).history<T>(key),
+      addFile: async (spaceId: string, bytes: Uint8Array, about: { mime: string; name?: string }) => ({
+        ...(await (await runtime(spaceId)).addFile(bytes)),
+        mime: about.mime,
+        ...(about.name !== undefined ? { name: about.name } : {}),
+      }),
+      readFile: async (spaceId: string, ref: FileRef) => (await runtime(spaceId)).readFile(ref),
       can: perSpace((rt, action: 'create' | 'edit' | 'delete', target: string) => rt.can(action, target)),
       async query<const C extends CollectionRef, const I extends IncludeMap | undefined = undefined>(
         spaceId: string,

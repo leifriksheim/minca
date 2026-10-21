@@ -301,6 +301,18 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
   - Each warrant costs every member's node a replay of the offending
     version's own view, once; nothing bounds how many warrants a member
     writes, true or false ([#33](https://github.com/leifriksheim/minca/issues/33)).
+  - A member can name up to 16 files of up to 2³¹ bytes in every version,
+    and a keeper fetches and holds each while that version is kept whole:
+    for good where it is retained, a first version under `onePer`, or under
+    `history: "all"`. It can also name another member's deleted file in a
+    version of its own, keeping its ciphertext held, though nobody without
+    the old body can open it. `size` is the writer's word until the bytes
+    arrive. And any peer it serves can ask for up to four chunks (1 MiB) per
+    `want-file`, as often as it likes, and a member naming ids nobody holds
+    has every keeper ask its peers and list its mirrors for each, one id at
+    a time, again every ten minutes, which delays its fetching the files
+    that exist: nothing bounds bytes served per peer
+    (05 §16.6; [#33](https://github.com/leifriksheim/minca/issues/33)).
   - Someone who may define a collection can give it computed fields that
     every member's device works out for each record a query filters or
     sorts on them, and that grow with every record a member links to it.
@@ -827,6 +839,15 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
   - Without the space key, it can't compute or test a private space's
     `onePer` keys, so it can't check a guess of who voted on which poll, or
     how (02 §7.3, 03 §8.6).
+  - It can't read a file it keeps or serves without a body that names it:
+    each is sealed under a key only bodies hold, so in a private space it
+    reads none, and a deleted file is ciphertext to anyone who never had its
+    body; nor pass off
+    other bytes as one,
+    since every chunk is checked against the id a signed version names
+    (05 §16.6; `packages/core/tests/files.test.ts`, "a chunk that is not the
+    one its list names is dropped…", "a list of inner hashes, or of the wrong
+    length, is refused").
   - From the account's wakes it learns a collection, spaces, topic tags,
     whether only others' records wake, since when, whether paused, and which
     app's address a click leads to; for a `where` on a computed field, also
@@ -879,7 +900,10 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
   - A removed carrier keeps proving read until the key changes ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_.
   - It sees envelopes: authors, collections, record keys, timing, and the
     member list. `profile:` keys and collection names say whose and what
-    (03 §8.6, [#223](https://github.com/leifriksheim/minca/issues/223)). A host with limits also keeps, for its window, which
+    (03 §8.6, [#223](https://github.com/leifriksheim/minca/issues/223)).
+    Unlike `links`, a version's `files` stays outside a private body: how
+    many files each names, how big, and that versions naming one id share a
+    file, in one space or across the spaces it holds (05 §16.6). A host with limits also keeps, for its window, which
     accounts wrote in each space on each day, as hashes salted with a salt
     on the same disk, which hides nothing from the host or whoever holds its
     disk, since every writer is in the space's envelopes anyway, and tells

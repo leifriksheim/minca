@@ -58,6 +58,30 @@ export type SyncMessage = V &
      * writes once enough keepers have said so.
      */
     | { readonly type: 'stored'; readonly ids: ReadonlyArray<string> }
+    /** "Send me these chunks of a file, or its chunk list" (spec 05 §16.6) */
+    | {
+        readonly type: 'want-file';
+        readonly id: number;
+        readonly hash: string;
+        readonly chunks?: readonly [number, number];
+        readonly list?: true;
+      }
+    /** Part of a chunk, or of the chunk list: `bytes` base64url, from `at` */
+    | {
+        readonly type: 'file';
+        readonly id: number;
+        readonly hash: string;
+        readonly chunk: number | 'list';
+        readonly at: number;
+        readonly bytes: string;
+      }
+    /** The last answer to a `want-file`: what was asked and not sent */
+    | {
+        readonly type: 'file-done';
+        readonly id: number;
+        readonly hash: string;
+        readonly missing: ReadonlyArray<number | 'list'>;
+      }
   );
 
 /** A message before the version is stamped on — what callers construct. */

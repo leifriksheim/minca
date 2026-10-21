@@ -420,6 +420,7 @@ export type {
   NodeNetworkConfig,
   NodeSpaces,
   NodeRecords,
+  FileRef,
   NodeRecord,
   NodeEvent,
   NodeNetwork,
