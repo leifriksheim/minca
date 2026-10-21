@@ -887,10 +887,11 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       }
       case INVITE_COLLECTION: {
         const inviteDid = body.key;
-        if (typeof inviteDid !== 'string' || typeof body.role !== 'string' || typeof body.open !== 'boolean')
+        // An invite carries no cutoff: closing it takes nothing from anyone but who joins through it unseen.
+        if (body.cutoff !== undefined || typeof inviteDid !== 'string' || typeof body.role !== 'string')
           return null;
-        if (version.key !== (await inviteRecordKey(inviteDid))) return null;
-        return { ...base, cutoff, kind: 'invite', inviteKey: inviteDid, role: body.role, open: body.open };
+        if (typeof body.open !== 'boolean' || version.key !== (await inviteRecordKey(inviteDid))) return null;
+        return { ...base, kind: 'invite', inviteKey: inviteDid, role: body.role, open: body.open };
       }
       case KEY_COLLECTION: {
         if (version.key !== SPACE_KEY_RECORD || typeof body.keyId !== 'string' || body.keyId.length > 64)

@@ -23,6 +23,7 @@ import { spaceKeyFromRaw } from '../src/privacy/space-encryption.js';
 import {
   deriveInviteKey,
   deriveReadKey,
+  inviteKey,
   generateInviteSecret,
   signInvite,
   verifyInvite,
@@ -343,6 +344,28 @@ describe('space access: invites', () => {
     // Whether she used it before the close reached her or not, the close came first: she holds nothing.
     await until(async () => (await place(carol.node, space)) === null, 4000, 'Carol to hold no role');
     assert.equal(await place(bob.node, space), 'editor');
+  });
+
+  test('an invite carries no cutoff: a close that names one changes nothing', async () => {
+    const { alice, space } = await sharedWithBob();
+    await alice.node.spaces.invite(space);
+    const { key, role } = (await alice.node.spaces.access(space)).invites.find((i) => i.open)!;
+    const close = async (body: Record<string, unknown>) => {
+      await letGo(alice.node, space);
+      await forgeVersion(alice, space, {
+        collection: 'sys.invite',
+        body: { key, role, open: false, ...body },
+        retain: true,
+        version: { key: await inviteKey(key), seq: 0 },
+      });
+      await hold(alice.node, space);
+    };
+    const isOpen = async () =>
+      (await alice.node.spaces.access(space)).invites.some((i) => i.key === key && i.open);
+    await close({ cutoff: {} });
+    assert.ok(await isOpen(), 'a close with a cutoff is no change');
+    await close({});
+    await until(async () => !(await isOpen()), 4000, 'the same close without one to close it');
   });
 
   test('a view-only invite to a private space reads everything and writes nothing', async () => {

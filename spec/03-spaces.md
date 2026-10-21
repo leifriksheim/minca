@@ -564,8 +564,8 @@ Otherwise the event is `{ id: version.id, key: version.key, root, author: versio
 where `cutoff` is `body.cutoff` read as a map from key DID to a map from
 collection to a non-negative integer (absent: empty; anything else, or more
 than 1024 places in all: no event),
-always empty for `role`, `definition`, `key`, `relays`, `keepers`, `fork` and
-`succeed`, and:
+always empty for `role`, `definition`, `invite`, `key`, `relays`, `keepers`,
+`fork` and `succeed`, and:
 
 | Kind         | Checks                                                                                                                                                                                                    | Event fields                                                                           |
 | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
@@ -573,7 +573,7 @@ always empty for `role`, `definition`, `key`, `relays`, `keepers`, `fork` and
 | `role`       | no `cutoff`; `readDefinition` passes: `name`, `title?`, `grants` and `nests` as §2.1, each grant a payload as §2.2 with `iss` = root; key = `role:<name>`                                                 | `name`, `title?`, `grants` = each `{ cmd, pol }`, `nests` (absent: `[]`)               |
 | `assign`     | `did` a string starting `did:key:`, `role` a string, `assigned` a boolean, key = `assign:<hex40(did + "\|" + role)>`; if `invite` present it must be `{key: string, signature: string}` and verify (§7.3) | `did`, `role`, `assigned`, `viaInvite` = `invite.key` when present                     |
 | `remove`     | `did` a string, key = `remove:<hex40(did)>`                                                                                                                                                               | `did`                                                                                  |
-| `invite`     | `key` string, `role` string, `open` boolean, record key = `invite:<hex40(key)>`                                                                                                                           | `inviteKey`, `role`, `open`                                                            |
+| `invite`     | no `cutoff`; `key` string, `role` string, `open` boolean, record key = `invite:<hex40(key)>`                                                                                                              | `inviteKey`, `role`, `open`                                                            |
 | `key`        | record key `key:space`, `keyId` string ≤ 64 chars, `readKey` starts with `did:key:`                                                                                                                       | `keyId`, `readKey`                                                                     |
 | `relays`     | record key `relays:space`, `relays` list of strings, ≤ 8                                                                                                                                                  | `relays`                                                                               |
 | `keepers`    | record key `keepers:space`, `checkKeepers(keepers, copies ?? null)` passes (§10)                                                                                                                          | `keepers`, `copies`                                                                    |
@@ -604,7 +604,7 @@ access version from outside (a peer, a folder) unless:
 > free. Only accounts the history has heard of can get anything stored, and
 > "named" only grows, so two peers never disagree for good.
 
-_Source: `packages/core/src/space/roles.ts` (collection constants), `packages/core/src/space/space-access.ts` (record keys: `assignKey`, `removalKey`, `inviteKey`, `revokeKey`, `roleKey`, `stepDownKey`, `succeedKey`), `packages/core/src/space/grants.ts` (`readDefinition`), `packages/core/src/node/space-runtime.ts` (`buildEvent`, `loadAccess`, `admissible`). Tests: `packages/core/tests/space-access.test.ts` ("a stranger who knows the space cannot write in it…"), `packages/core/tests/access-attacks.test.ts` ("a fresh key outliving its issuer…"), `packages/core/tests/constitution.test.ts` ("access record keys"), `packages/core/tests/attacks.test.ts`._
+_Source: `packages/core/src/space/roles.ts` (collection constants, `ACCESS_KINDS`), `packages/core/src/space/space-access.ts` (record keys: `assignKey`, `removalKey`, `inviteKey`, `revokeKey`, `roleKey`, `stepDownKey`, `succeedKey`), `packages/core/src/space/grants.ts` (`readDefinition`), `packages/core/src/node/space-runtime.ts` (`buildEvent`, `loadAccess`, `admissible`). Tests: `packages/core/tests/space-access.test.ts` ("a stranger who knows the space cannot write in it…", "an invite carries no cutoff…"), `packages/core/tests/access-attacks.test.ts` ("a fresh key outliving its issuer…"), `packages/core/tests/constitution.test.ts` ("access record keys"), `packages/core/tests/attacks.test.ts`._
 
 ---
 
