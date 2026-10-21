@@ -1102,10 +1102,9 @@ as `log.prev`. A place held past a gap covers nothing, so one planted far ahead
 can't stretch a cutoff over what its writer signs later. A node holding part
 of a space keeps the lines of the collections it holds whole
 ([05](05-sync-and-storage.md) §9), so it covers all it holds. At most 1024 places in all: past that, a writer
-orders each account's lines with defined collections first, then the rest,
-each in name order, and takes one line from each account in turn (accounts by
-DID), so no one's writing can crowd out anyone else's, and nobody can make
-themselves unremovable by writing into many collections. What is left out is
+orders the account's lines with defined collections first, then the rest,
+each in name order, and takes the first 1024, so nobody can make themselves
+unremovable by writing into many collections. What is left out is
 judged with the change. A node covers only the collections it holds: one
 holding part of a space, removing someone, leaves their writes elsewhere to be
 judged with the change ([#166](https://github.com/leifriksheim/minca/issues/166)).
@@ -1146,7 +1145,7 @@ not a note, so every note to that key goes with it.
 A key can't pass its note on ([01](01-identity.md) §7.5), so no other key
 acts through a revoked one: the revoke of a key is all there is to undo.
 
-_Source: `packages/core/src/node/space-runtime.ts` (`assign`, `removeAccount`, `revoke`, `cutoffFor`, `packCutoff`), `packages/core/src/node/node.ts` (`spaces.leave`). Tests: `packages/core/tests/roles.test.ts` ("a revoked key…"), `packages/core/tests/cutoff-limits.test.ts`, `packages/core/tests/space-access.test.ts` ("taking it back", "a key cannot pass its note on: a two-link proof counts for no peer")._
+_Source: `packages/core/src/node/space-runtime.ts` (`assign`, `removeAccount`, `revoke`, `cutoffFor`, `linesOf`), `packages/core/src/node/node.ts` (`spaces.leave`). Tests: `packages/core/tests/roles.test.ts` ("a revoked key…"), `packages/core/tests/cutoff-limits.test.ts`, `packages/core/tests/space-access.test.ts` ("taking it back", "a key cannot pass its note on: a two-link proof counts for no peer")._
 
 ### 6.5 Proving a fork
 

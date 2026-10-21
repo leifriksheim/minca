@@ -3751,78 +3751,58 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
    * all it holds.
    */
   async function cutoffFor(did: string, only?: string): Promise<Record<string, Record<string, number>>> {
-    return packCutoff([(await linesOf(new Set([did]), only)).get(did) ?? []]);
-  }
-
-  /**
-   * At most what a change may carry, shared among the accounts it reaches: one
-   * line from each in turn, so no one's writing can use up anyone else's
-   * share. What is left out is judged with the change.
-   */
-  function packCutoff(
-    accounts: ReadonlyArray<ReadonlyArray<Version>>,
-  ): Record<string, Record<string, number>> {
     const cutoff: Record<string, Record<string, number>> = {};
-    let named = 0;
-    for (let round = 0; named < MAX_CUTOFF && accounts.some((lines) => round < lines.length); round++)
-      for (const lines of accounts) {
-        const end = lines[round];
-        if (!end || named >= MAX_CUTOFF) continue;
-        (cutoff[end.author] ??= {})[end.collection] = end.log!.n;
-        named++;
-      }
+    // At most what a change may carry: what is left out is judged with the change.
+    for (const end of (await linesOf(did, only)).slice(0, MAX_CUTOFF))
+      (cutoff[end.author] ??= {})[end.collection] = end.log!.n;
     return cutoff;
   }
 
   /**
-   * The ends of each account's unbroken lines this node holds: defined
-   * collections first, then the rest, each in name order. One pass over what
-   * it holds, however many accounts.
+   * The ends of an account's unbroken lines this node holds: defined
+   * collections first, then the rest, each in name order.
    */
-  async function linesOf(dids: ReadonlySet<string>, only?: string): Promise<Map<string, Version[]>> {
+  async function linesOf(did: string, only?: string): Promise<Version[]> {
     // What it holds of theirs, whatever way it came: the lines' places are kept only for what arrived by sync.
-    const placed = new Map<string, { readonly did: string; readonly held: Map<number, Version> }>();
-    const add = (did: string, version: Version) => {
+    const placed = new Map<string, Map<number, Version>>();
+    const add = (version: Version) => {
       if (!version.log) return;
       const line = `${version.author} ${version.collection}`;
-      const entry = placed.get(line) ?? { did, held: new Map<number, Version>() };
-      if (!entry.held.has(version.log.n)) entry.held.set(version.log.n, version);
-      placed.set(line, entry);
+      const held = placed.get(line) ?? new Map<number, Version>();
+      if (!held.has(version.log.n)) held.set(version.log.n, version);
+      placed.set(line, held);
     };
     for (const version of await everyCurrent()) {
       if (!version.log || (only && version.author !== only) || version.space !== space.id) continue;
-      const root = (await judge(version)).root;
-      if (root && dids.has(root)) add(root, version);
+      if ((await judge(version)).root === did) add(version);
     }
     for (const name of await adapter.list(KEY_ROOT_PREFIX)) {
       const key = name.slice(KEY_ROOT_PREFIX.length);
-      const did = utf8Decode((await adapter.get(name)) ?? new Uint8Array());
-      if ((only && key !== only) || !dids.has(did)) continue;
+      if ((only && key !== only) || utf8Decode((await adapter.get(name)) ?? new Uint8Array()) !== did)
+        continue;
       for (const place of await adapter.list(`${LOG_PREFIX}${key}/`)) {
         const id = await adapter.get(place);
         const version = id ? await storage.getVersion(utf8Decode(id)) : null;
-        if (version?.author === key) add(did, version);
+        if (version?.author === key) add(version);
       }
     }
-    const byAccount = new Map<string, Version[]>();
-    for (const { did, held } of placed.values()) {
+    const ends: Version[] = [];
+    for (const held of placed.values()) {
       let end: Version | null = null;
       for (let n = 0; ; n++) {
         const version = held.get(n);
         if (!version || (n > 0 && version.log?.prev !== end?.id)) break;
         end = version;
       }
-      if (end) byAccount.set(did, [...(byAccount.get(did) ?? []), end]);
+      if (end) ends.push(end);
     }
     // Defined collections first: writing into many undefined ones costs only whoever did.
     const defined = new Set((await catalog()).keys());
-    for (const ends of byAccount.values())
-      ends.sort(
-        (a, b) =>
-          Number(defined.has(b.collection)) - Number(defined.has(a.collection)) ||
-          (a.collection < b.collection ? -1 : a.collection > b.collection ? 1 : a.author < b.author ? -1 : 1),
-      );
-    return byAccount;
+    return ends.sort(
+      (a, b) =>
+        Number(defined.has(b.collection)) - Number(defined.has(a.collection)) ||
+        (a.collection < b.collection ? -1 : a.collection > b.collection ? 1 : a.author < b.author ? -1 : 1),
+    );
   }
 
   /** Whether this account holds a grant, now, to do something to a record */
