@@ -729,7 +729,7 @@ How the reference host connects GitHub, and what a bot does with a
 connection, are the library's ([bots](../packages/core/docs/bots.md)): no
 peer can check them.
 
-_Source: `packages/cli/src/host-connect.ts` (`createBotConnect`: `start`, `finish`, `disconnect`, `check`, `usable`), `packages/cli/src/connectors/connector.ts` (`HostConnector`), `packages/core/src/schemas/connectors.ts` (`mayConfigure`, `connect`, `connector`), `packages/core/src/session/hosting.ts` (`connectorOffers`), `packages/cli/src/host.ts` (`CONNECT_PATH`, `CALLBACK_PATH`, `DISCONNECT_PATH`). Tests: `packages/cli/tests/host-connect.test.ts` (all; "a host’s own connectors"), `packages/cli/tests/host.test.ts` ("connecting a bot to GitHub": all), `packages/core/tests/host-connectors.test.ts`._
+_Source: `packages/cli/src/host-connect.ts` (`createBotConnect`: `start`, `finish`, `disconnect`, `check`, `usable`), `packages/cli/src/connectors/connector.ts` (`HostConnector`), `packages/core/src/schemas/connectors.ts` (`mayConfigure`, `connect`, `connector`), `packages/core/src/session/hosting.ts` (`connectorOffers`), `packages/cli/src/host.ts` (`CONNECT_PATH`, `CALLBACK_PATH`, `DISCONNECT_PATH`). Tests: `packages/cli/tests/host-connect.test.ts` (all; "a host’s own connectors"), `packages/cli/tests/host-github.test.ts` ("connecting a bot to GitHub": all), `packages/core/tests/host-connectors.test.ts`._
 
 ## 4. Planned: hosts
 
