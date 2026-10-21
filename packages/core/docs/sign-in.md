@@ -386,13 +386,17 @@ lifetime, clamped to [1/24, 365].
 **Connections.** The home remembers each connection per account in
 `localStorage` under `<prefix>.connections:<accountId>` (`Connection`:
 `origin`, `name`, `audience`, `access`, `scope`, `carrySpace?`, `spaces`,
-`grantedAt`, `expiresAt`, `via?`, `recordsOnly?`). It keeps no note:
+`grantedAt`, `expiresAt`, `via?`, `recordsOnly?`, `retired?`). It keeps no note:
 disconnecting revokes the `audience` key, which is all a revoke names. A kept
 connection with any other field (a `token` from before notes were
 delegations in the UCAN 1.0 profile, say), or one of these in another
 shape, is dropped when read, not read in part: its app or program connects
 again.
-Connecting the same origin again replaces its connection; a connection with `via: 'code'` (a
+Connecting the same origin again replaces its connection, revoking nothing:
+the keys it replaced go in `retired`, for disconnecting to revoke. Nothing
+revokes an app on its own, not even once its time has passed: a revoke keeps
+only what this home has seen of the key, and a home that is seldom open has
+seen little ([spec 06 §2.9](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)). A connection with `via: 'code'` (a
 program connected by code through the app) is keyed by its audience instead,
 so each such program is its own (`connectionKey`). A carrier is kept apart from the app at its
 origin: connecting either replaces only its own kind, and one key is never
@@ -401,7 +405,8 @@ both. `auth.connections()` lists them.
 **Disconnecting.** `auth.disconnect(origin, { byCode?, audience? })` removes
 the app's connections (by default the app and every program connected through
 it by code; `byCode: true` only those programs; `audience` only that key),
-revokes the keys of those with `access: write`, and, unless only programs
+revokes the keys of those with `access: write` and every key in their
+`retired`, and, unless only programs
 connected by code go, removes the automations the app proposed. A carrier at
 that origin stays: it goes by its key alone (`audience`), and takes nothing of
 the app's with it. The app hears of it when the revokes reach it,
@@ -413,10 +418,12 @@ they are still only here, and the app keeps working until this home is next
 online with another of the account's devices or apps. The account home waits
 5 s, and says so when nobody took them in.
 
-**Signing out.** `auth.signOut()` forgets the unlocked account on this device,
-lets apps whose time has passed go and revokes the home's own session key. An
+**Signing out.** `auth.signOut()` forgets the unlocked account on this device
+and revokes the home's own session key, with a cutoff at what it wrote, so
+nothing it wrote is lost. An
 app's note doesn't need the home signed in, so the apps connected from here
-keep working until it runs out. `auth.signOut({ disconnect: true })`
+keep working; a note running out stops only their live use, and what they
+write counts until they are disconnected. `auth.signOut({ disconnect: true })`
 disconnects them first, and the programs connected through them, with the
 automations they proposed; carriers stay. The node sends nothing once it has
 stopped, so it waits, up to 5 s for them all (`signOutGraceMs` in
@@ -426,7 +433,7 @@ open space as signing out starts, so signing out with nobody else online is
 quick; `state.signingOut` is true meanwhile. A node with no network
 configured doesn't wait. With nobody reachable, they leave the next time the account signs in here. A read-only app has no key to revoke: it loses
 access when its time runs out. The account home asks each time, with
-disconnecting ticked, and is not ready to grant anything from the moment
+disconnecting unticked, since revoking is for when something is wrong, and is not ready to grant anything from the moment
 signing out starts. Choosing another account on the connect page signs out
 without disconnecting: switching accounts disconnects nothing.
 

@@ -84,8 +84,8 @@ What the reference sides add:
 - The terminal makes a new key for each code. Connecting again, after a
   disconnect or to renew, gives a new key and note; a running `minca mcp`
   takes them up without a restart. The earlier connection stays in the
-  account home until it runs out or is disconnected there, and nothing can use
-  it: its key is gone from the computer.
+  account home until it is disconnected there, and nothing can use it: its
+  key is gone from the computer.
 
 _Source: `packages/core/src/session/connect-code.ts`, `packages/cli/src/agent.ts` (`connectAgent`, `startAgentNode`, `reloadOnConnect`), `apps/example/src/components/ConnectAgent.tsx`, `apps/example/src/program-terms.ts`, `apps/home/src/components/ConnectPage.tsx`. Tests: `packages/core/tests/connect-code.test.ts`, `packages/core/tests/records-only.test.ts` ("a program connected by code, through the account home"), `apps/example/tests/program-terms.test.ts`, `packages/cli/tests/agent-reconnect.test.ts`._
 

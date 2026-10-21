@@ -21,6 +21,7 @@ export type {
   MincaSession,
   MovedToPod,
   Connection,
+  RetiredKey,
   GrantChoice,
   ProposeChoice,
 } from './auth.js';

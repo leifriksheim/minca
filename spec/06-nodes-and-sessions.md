@@ -446,15 +446,16 @@ its password or passkeys. Its note stops working for live checks at
 A note is never renewed in place. When `expiresAt` passes, the app's note
 stops working for live checks everywhere: knocks, live messages, connecting
 to peers. Its records are judged with no time (02 §9.3), so they stop counting
-when its key is revoked: the home that granted it disconnects it once the
-time has passed, while it is signed in, and at sign-out (§2.10). To continue,
-the app connects again, which produces a new note (and, at the home, replaces
-the old connection record).
+only when its key is revoked, and only the person revokes it, by disconnecting
+the app (§2.10). A home MUST NOT revoke an app's key on its own, at expiry or
+otherwise: a revoke keeps only what its writer had seen of the key (03 §6.4),
+and a home that is seldom open has seen little, so it would withdraw the
+app's honest writes. To continue, the app connects again, which produces a new
+note (and, at the home, replaces the old connection record).
 
 > **Known defect:** connections are kept in the browser that granted them,
-> so only that home revokes an app whose time has passed, and only while it
-> is signed in. Until it does, the app's records still count. Tracked in
-> [#165](https://github.com/leifriksheim/minca/issues/165).
+> so only that home can disconnect an app, and only while it is signed in.
+> Tracked in [#165](https://github.com/leifriksheim/minca/issues/165).
 
 ### 2.10 Connections and revocation
 
@@ -470,8 +471,14 @@ a request for a key already connected as the other kind, so one key is never
 both.
 
 **Disconnecting** an app, or a program connected by code, revokes the key of each connection removed
-that has `access: write` (never the home's own session key), and connecting
-the same app again with a new key revokes the old one the same way:
+that has `access: write` (never the home's own session key), and every key it
+replaced. Connecting the same app again with a new key revokes nothing: the
+home keeps each old key that could write with the connection, with the scope
+and spaces it was granted, and disconnecting revokes it where it was granted,
+as below. The same key asking again for less keeps its earlier reach there,
+since its earlier note still works. Such a key is no other connection's: the
+home MUST refuse a request for it from any other (§2.5). Each key is
+revoked:
 
 - `scope: spaces`: in every space it was granted that the account still
   writes in;
@@ -491,7 +498,7 @@ already seen of it. What the app could already read, it keeps. How the reference
 home stores connections and what the reference client does when it sees its
 key revoked are in [the account home's side](../packages/core/docs/sign-in.md#the-account-homes-side).
 
-_Source: `packages/core/src/session/auth.ts` (`disconnect`, `revokeConnection`, `connections`, `grant`, `grantCarry`), `packages/core/src/node/node.ts` (`revokeKey`, `checkRevoked`). Tests: `packages/core/tests/connect.test.ts` ("disconnecting …", "disconnecting a whole-account app revokes it in the carry spaces too…", "a carrier and an app at one origin are two connections…")._
+_Source: `packages/core/src/session/auth.ts` (`disconnect`, `revokeConnection`, `revokeWhere`, `connections`, `grant`, `grantCarry`), `packages/core/src/node/node.ts` (`revokeKey`, `checkRevoked`). Tests: `packages/core/tests/connect.test.ts` ("disconnecting …", "disconnecting a whole-account app revokes it in the carry spaces too…", "connecting again with a new key revokes nothing…", "a key a connection replaced is not granted again for anything else", "a carrier and an app at one origin are two connections…")._
 
 ### 2.11 Proposing automations
 
