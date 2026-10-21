@@ -1339,7 +1339,12 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
   /** The allowed reductions, in order */
   const taking = new Map<string, Reduction>();
   const strike = (by: string, id: string) => (strikes.get(by) ?? strikes.set(by, []).get(by)!).push(id);
-  const allowedView = viewsAlong(byIdMap, saw, genesis, (id) => allowedIds.has(id), afterOf, defViews);
+  const allowedView = viewsAlong(
+    { genesis, saw, byId: byIdMap },
+    (id) => allowedIds.has(id),
+    afterOf,
+    defViews,
+  );
 
   for (const id of order) {
     const event = byIdMap.get(id)!;
@@ -1374,14 +1379,7 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
     }
   }
 
-  const within = validWithin(order, {
-    genesis,
-    byId: byIdMap,
-    saw,
-    allowedIds,
-    strikes,
-    defViews,
-  });
+  const within = validWithin(order, { genesis, byId: byIdMap, saw, allowedIds, strikes, defViews });
   const valid = within.valid;
   const struck = new Map<string, string>();
   for (const id of order) if (allowedIds.has(id) && !valid.has(id)) struck.set(id, STRUCK);
@@ -1458,16 +1456,14 @@ const reachedBy = (reduction: Reduction, event: AccessEvent, saw: ReadonlyMap<st
     (!saw.get(event.id)!.has(reduction.id) && !saw.get(reduction.id)!.has(event.id))) &&
   reaches(reduction, { ...event, writer: event.author, collection: ACCESS_KINDS[event.kind].collection });
 
-// A stepping down is never struck (`invalidWithin`): founder status can't be given again. One a
+// A stepping down is never struck (`validWithin`): founder status can't be given again. One a
 // revoke or a fork proof reaches ends founder status and does nothing more.
 const strikesOn = (reduction: Reduction, event: AccessEvent, saw: ReadonlyMap<string, Seen>) =>
   !(reachesBack(reduction) && event.kind === 'stepdown') && reachedBy(reduction, event, saw);
 
 /**
- * One change judged in its own view, as replaying in order and extending by
- * one both do: why it is refused, or the state it leaves, what it takes,
- * whether it took reading from someone, and the reductions before it that
- * reach it.
+ * One change judged in its own view, as replaying and extending both do: why it is refused, or the
+ * state it leaves, what it takes, whether it took reading, and the reductions before it that reach it.
  */
 function step(
   event: AccessEvent,
@@ -1494,9 +1490,7 @@ function step(
  * definition's view is kept in `defViews`, where its grants are judged.
  */
 function viewsAlong(
-  byIdMap: ReadonlyMap<string, AccessEvent>,
-  saw: ReadonlyMap<string, Seen>,
-  genesis: AccessGenesis,
+  { genesis, saw, byId }: Pick<Replay, 'genesis' | 'saw' | 'byId'>,
   counts: (id: string) => boolean,
   afterOf: ReadonlyMap<string, AccessState>,
   defViews: Map<string, AccessState>,
@@ -1511,7 +1505,7 @@ function viewsAlong(
     else
       view = merge(
         genesis,
-        [...saw.get(event.id)!].filter(counts).map((other) => byIdMap.get(other)!),
+        [...saw.get(event.id)!].filter(counts).map((other) => byId.get(other)!),
         saw,
         defViews,
       );
@@ -1522,31 +1516,41 @@ function viewsAlong(
 }
 
 /**
- * The valid changes among `cut` (in replay order, closed under what they saw), and the views
- * their role definitions are judged in. First the strikes: an allowed change is struck by a valid
- * one from another component of the strikes inside the cut. Then, ancestors first, a change stays
- * valid only if the valid changes it saw still give its author the power: so a struck grant gives
- * none, to anything downstream, and a struck definition is dropped before anything resting on it
- * is judged.
+ * The valid changes among `cut` (in replay order, closed under what they saw), and the views their
+ * role definitions are judged in. First the strikes: an allowed change is struck by an unstruck one
+ * from another component of the strikes inside the cut, visited strikers first. Then, ancestors
+ * first, a change stays valid only if the valid changes it saw still give its author the power.
  */
 function validWithin(
   cut: ReadonlyArray<string>,
-  r: {
-    readonly genesis: AccessGenesis;
-    readonly byId: ReadonlyMap<string, AccessEvent>;
-    readonly saw: ReadonlyMap<string, Seen>;
-    readonly allowedIds: ReadonlySet<string>;
-    readonly strikes: ReadonlyMap<string, ReadonlyArray<string>>;
-    readonly defViews: ReadonlyMap<string, AccessState>;
-  },
+  r: Pick<Replay, 'genesis' | 'byId' | 'saw' | 'allowedIds' | 'strikes' | 'defViews'>,
 ): { readonly valid: ReadonlySet<string>; readonly defViews: ReadonlyMap<string, AccessState> } {
-  // A stepping down is never struck: founder status can't be given back.
-  const invalid = invalidWithin(cut, r.allowedIds, r.strikes, (id) => r.byId.get(id)?.kind === 'stepdown');
-  const valid = new Set(cut.filter((id) => !invalid.has(id)));
+  const inCut = new Set(cut);
+  const out = new Set(cut.filter((id) => !r.allowedIds.has(id)));
+  const edges = new Map<string, string[]>();
+  for (const [from, targets] of r.strikes) {
+    if (!inCut.has(from) || !r.allowedIds.has(from)) continue;
+    const kept = targets.filter((to) => inCut.has(to) && r.allowedIds.has(to));
+    if (kept.length > 0) edges.set(from, kept);
+  }
+  if (edges.size > 0) {
+    const nodes = [...new Set([...edges.keys(), ...[...edges.values()].flat()])].sort();
+    const { of, list } = componentsOf(nodes, edges);
+    const strikers = new Map<string, string[]>();
+    for (const [from, targets] of edges)
+      for (const to of targets)
+        if (of.get(from) !== of.get(to)) (strikers.get(to) ?? strikers.set(to, []).get(to)!).push(from);
+    // A stepping down is never struck: founder status can't be given back.
+    for (const members of list)
+      for (const id of members)
+        if (r.byId.get(id)?.kind !== 'stepdown' && (strikers.get(id) ?? []).some((from) => !out.has(from)))
+          out.add(id);
+  }
+  const valid = new Set(cut.filter((id) => !out.has(id)));
   if (cut.every((id) => !r.allowedIds.has(id) || valid.has(id))) return { valid, defViews: r.defViews };
   const afterOf = new Map<string, AccessState>();
   const defViews = new Map<string, AccessState>();
-  const viewOf = viewsAlong(r.byId, r.saw, r.genesis, (id) => valid.has(id), afterOf, defViews);
+  const viewOf = viewsAlong(r, (id) => valid.has(id), afterOf, defViews);
   for (const id of cut) {
     const event = r.byId.get(id)!;
     const view = viewOf(event);
@@ -1561,44 +1565,9 @@ function validWithin(
 }
 
 /**
- * The allowed changes among `cut` that are not valid there: struck by a
- * valid change in it, components of the strikes inside it visited so that
- * strikes come before what they strike, and strikes within one component not
- * counting. With refused changes, what a view leaves out.
- */
-function invalidWithin(
-  cut: Iterable<string>,
-  allowedIds: ReadonlySet<string>,
-  strikes: ReadonlyMap<string, ReadonlyArray<string>>,
-  immune: (id: string) => boolean,
-): ReadonlySet<string> {
-  const inCut = new Set(cut);
-  const out = new Set([...inCut].filter((id) => !allowedIds.has(id)));
-  const edges = new Map<string, string[]>();
-  for (const [from, targets] of strikes) {
-    if (!inCut.has(from) || !allowedIds.has(from)) continue;
-    const kept = targets.filter((to) => inCut.has(to) && allowedIds.has(to));
-    if (kept.length > 0) edges.set(from, kept);
-  }
-  if (edges.size === 0) return out;
-  const nodes = [...new Set([...edges.keys(), ...[...edges.values()].flat()])].sort();
-  const { of, list } = componentsOf(nodes, edges);
-  const strikers = new Map<string, string[]>();
-  for (const [from, targets] of edges)
-    for (const to of targets)
-      if (of.get(from) !== of.get(to)) (strikers.get(to) ?? strikers.set(to, []).get(to)!).push(from);
-  for (const members of list)
-    for (const id of members)
-      if (!immune(id) && (strikers.get(id) ?? []).some((from) => !out.has(from))) out.add(id);
-  return out;
-}
-
-/**
- * The replay with one more change that saw every change placed, or null for
- * any other: then only replaying whole can say. Such a change can't be struck
- * by a reduction (it saw every one) and strikes nothing (it saw everything),
- * so it is valid exactly when it is allowed and no revoke or fork reaches it,
- * its view is every allowed change, and it is the latest on its record.
+ * The replay with one more change that saw every change placed, or null for any other. Such a change
+ * strikes nothing and only a revoke or fork can strike it; its view is every allowed change, and it
+ * is the latest on its record.
  */
 function extended(r: Replay, event: AccessEvent): Replay | null {
   const { genesis } = r;
