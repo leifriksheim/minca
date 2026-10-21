@@ -41,13 +41,11 @@ export interface WalletOffer {
   readonly decimals: number;
   /** Where payments go: the host's own address */
   readonly to: string;
-  /** Each plan's price, in whole units of the token ("36") */
-  readonly plans: ReadonlyArray<{ readonly id: string; readonly label: string; readonly price: string }>;
 }
 
 /**
  * One payment to make: send exactly `amount` of the token to `to`. The amount
- * is the plan's price plus a fraction of a cent that no other open payment
+ * is what was asked for plus a fraction of a cent that no other open payment
  * has, which is how the host knows the transfer is this subscription's.
  */
 export interface WalletPayment {
@@ -94,9 +92,6 @@ export interface WalletConfig {
   readonly network: NetworkName;
   /** The host's address, where payments go */
   readonly to: string;
-  /** Prices in dollars ("4", "36"); a plan without one isn't offered */
-  readonly monthly?: string;
-  readonly yearly?: string;
   /** The node the host reads the network from. Default: the network's public one. */
   readonly rpcUrl?: string;
   /** Blocks on top of the payment's before it counts. Default 3 (a few seconds on Base). */
@@ -116,9 +111,7 @@ export interface Transfer {
 
 export interface WalletPayments {
   readonly offer: WalletOffer;
-  /** A new payment for a plan, marked with an amount that is not in `taken` */
-  payment(plan: string, taken: ReadonlySet<string>): WalletPayment;
-  /** A new payment into a fund: `units` of the token (6 decimals: millionths of a dollar), marked the same way */
+  /** A new payment into a balance: `units` of the token (6 decimals: millionths of a dollar), marked with an amount not in `taken` */
   fundPayment(units: bigint, taken: ReadonlySet<string>): WalletPayment;
   /** A payment as a link a wallet opens (EIP-681), and as people read it */
   request(amount: string): { readonly uri: string; readonly amount: string };
@@ -129,8 +122,6 @@ export interface WalletPayments {
    * a call: a later call goes on from there.
    */
   scan(after: bigint | null): Promise<{ readonly upTo: bigint; readonly transfers: ReadonlyArray<Transfer> }>;
-  /** Until when a plan paid now lasts, counted on from `from` (unix seconds) */
-  extend(plan: string, from: number): number;
 }
 
 /** "36" or "4.50" as the token's smallest unit */
@@ -206,16 +197,6 @@ export function createWalletPayments(config: WalletConfig): WalletPayments {
   const token = network.usdc.toLowerCase();
   let span = SCAN_BLOCKS;
 
-  const plans = [
-    ...(config.yearly
-      ? [{ id: 'yearly', label: 'Yearly', price: config.yearly.trim(), units: toUnits(config.yearly) }]
-      : []),
-    ...(config.monthly
-      ? [{ id: 'monthly', label: 'Monthly', price: config.monthly.trim(), units: toUnits(config.monthly) }]
-      : []),
-  ];
-  if (plans.length === 0) throw new Error('A wallet price is needed: monthly, yearly, or both');
-
   let id = 0;
   async function rpc(method: string, params: unknown[]): Promise<unknown> {
     const response = await call(rpcUrl, {
@@ -241,7 +222,6 @@ export function createWalletPayments(config: WalletConfig): WalletPayments {
     symbol: 'USDC',
     decimals: USDC_DECIMALS,
     to: config.to,
-    plans: plans.map(({ id, label, price }) => ({ id, label, price })),
   });
 
   /** A payment of `units` plus a fraction of a cent no open payment has: how its transfer is known as this one */
@@ -265,12 +245,6 @@ export function createWalletPayments(config: WalletConfig): WalletPayments {
 
   const payments: WalletPayments = {
     offer,
-
-    payment(planId, taken) {
-      const plan = plans.find((known) => known.id === planId);
-      if (!plan) throw new Error(`No such plan: ${planId}`);
-      return marked(plan.id, plan.units, taken);
-    },
 
     fundPayment(units, taken) {
       return marked('fund', units, taken);
@@ -325,14 +299,6 @@ export function createWalletPayments(config: WalletConfig): WalletPayments {
         transfers.push({ tx: log.transactionHash.toLowerCase(), amount: BigInt(log.data).toString(), at });
       }
       return { upTo, transfers };
-    },
-
-    extend(planId, from) {
-      const date = new Date(from * 1000);
-      if (planId === 'yearly') date.setUTCFullYear(date.getUTCFullYear() + 1);
-      else if (planId === 'monthly') date.setUTCMonth(date.getUTCMonth() + 1);
-      else throw new Error(`No such plan: ${planId}`);
-      return Math.floor(date.getTime() / 1000);
     },
   };
   return Object.freeze(payments);

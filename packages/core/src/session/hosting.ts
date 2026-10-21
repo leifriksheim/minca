@@ -15,8 +15,8 @@
  * more than five minutes off.
  *
  * A device never handles a payment (spec/06-nodes-and-sessions.md, Hosts). A host describes itself
- * and its plans at a well-known address (like a Nostr relay's NIP-11
- * document), and signs every status it gives. Asked to start a plan, it
+ * and how it is paid at a well-known address (like a Nostr relay's NIP-11
+ * document), and signs every status it gives. Asked to take a payment, it
  * answers with a page at a payment provider to open, or a payment request for
  * a wallet, whose arrival it sees by itself; the home shows either, so paying
  * never means visiting the host's own site.
@@ -186,10 +186,8 @@ export interface SpaceUsage {
 
 /** What a host keeps for free and what paying adds, as its description says (spec 08 §1.1) */
 export interface HostLimits {
-  /** Bytes an account's spaces may take on the free plan */
+  /** Bytes an account's spaces may take for free; past them its balance pays for the rest */
   readonly accountBytes: number;
-  /** Bytes they may take while it pays; absent: the same */
-  readonly paidAccountBytes?: number;
   /** The free line for a space several accounts write in; readers are only a hint */
   readonly space: {
     readonly writers: number;
@@ -225,13 +223,11 @@ export function hostLimits(described: unknown): HostLimits | null {
   )
     return null;
   const optional = (value: unknown) => (isCount(value) ? value : undefined);
-  const paid = optional(given.paidAccountBytes);
   const readers = optional(line.readers);
   const keep = optional(given.keepDays);
   const idle = optional(given.idleDays);
   return {
     accountBytes: given.accountBytes,
-    ...(paid !== undefined ? { paidAccountBytes: paid } : {}),
     space: {
       writers: line.writers,
       bytes: line.bytes,
@@ -285,7 +281,7 @@ export interface SignedStatus {
 
 /**
  * What a host says about itself, to anyone, at `/.well-known/minca-host`.
- * Its plans say what can be paid for; how a payment is taken is the host's own.
+ * Its `fund` says how money goes in; how a payment is taken is the host's own.
  */
 export interface HostDescription {
   readonly minca: 'host/1';
@@ -300,13 +296,11 @@ export interface HostDescription {
   readonly terms?: string;
   /** Where it takes peers: a WebSocket address, relative to the host's address or absolute */
   readonly peer?: string;
-  /** What can be paid for, and how: a home offers these itself, and asks the host to start one. Absent: it takes no payments. */
-  readonly plans?: ReadonlyArray<HostPlan>;
   /** Whether it sends reminders by email before paid time runs out, to an address given with `remind` */
   readonly remind?: boolean;
   /** Whether it runs bots for the spaces it carries (`startBot`), from their fund */
   readonly bots?: boolean;
-  /** How a community pays for itself here: a fund anyone adds to. Absent: communities can't pay here. */
+  /** How money goes in here: an account's balance, and a community's fund anyone adds to. Absent: it takes no payments. */
   readonly fund?: FundOffer;
   /** The services its bots can be connected to, at `/host/bots/<bot>/connect/<id>` (spec 08 §3.1) */
   readonly connectors?: ReadonlyArray<HostConnectorOffer>;
@@ -338,9 +332,13 @@ export function connectorOffers(described: unknown): ReadonlyArray<HostConnector
   );
 }
 
-/** What a host says about community funds: what keeping one online costs, and how people add to it */
+/** What a host says about paying: what keeping spaces online costs, and how money goes in */
 export interface FundOffer {
-  /** What keeping a space online takes from its fund a month for each GB it takes, at least one, in dollars: `"0.10"` */
+  /**
+   * Dollars a month for each GB kept online: `"0.10"`. A community's fund pays
+   * for each GB its space takes, at least one; an account's balance for each
+   * past its free room.
+   */
   readonly perGb: string;
   /** The least one payment may add, in dollars */
   readonly min: string;
@@ -354,7 +352,7 @@ export interface FundOffer {
   readonly botDailyCap?: string;
 }
 
-/** How someone adds to a community's fund */
+/** How someone adds to an account's balance, or a community's fund */
 export interface FundPayment {
   /** Dollars: `"10"` or `"12.50"` */
   readonly amount: string;
@@ -373,22 +371,8 @@ export interface HostedBot {
   readonly daily?: number;
 }
 
-/** One way to pay a host, as its description lists it */
-export interface HostPlan {
-  /** What a home sends to start it */
-  readonly id: string;
-  /** For people, with the price: "$4 a month, by card" */
-  readonly label: string;
-  /** `checkout`: a page at a payment provider. `request`: a payment request to send from a wallet. */
-  readonly method: 'checkout' | 'request';
-  /** Charged again by itself until cancelled (a card); false for time paid up front */
-  readonly renews: boolean;
-  /** Who may use it: `account` (a space pays through its fund instead) */
-  readonly for: ReadonlyArray<'account'>;
-}
-
 /**
- * What a host answers when asked to start a plan: a page to open, at a
+ * What a host answers when asked to take a payment: a page to open, at a
  * payment provider; or a request for a wallet to pay, whose arrival the host
  * sees by itself.
  */
@@ -712,10 +696,8 @@ export interface HostClient {
     invite: string,
   ): Promise<{ readonly status: HostStatus; readonly receipt: SignedStatus }>;
   detach(): Promise<void>;
-  /** Starts paying with one of the host's plans */
-  pay(plan: string): Promise<PayAnswer>;
-  /** The payment provider's page for changing a card or cancelling: a checkout answer */
-  manage(): Promise<PayAnswer>;
+  /** Starts adding to the subscription's balance */
+  pay(payment: FundPayment): Promise<PayAnswer>;
   /** Asks for reminders by email before paid time runs out; the host mails a link to confirm first */
   remind(email: string): Promise<void>;
 }
@@ -753,8 +735,7 @@ export function createHostClient(
     attach: async (account: string, invite: string) =>
       checked(await call<SignedStatus>('PUT', `${mine}/carry`, { account, invite })),
     detach: async () => void (await call('DELETE', `${mine}/carry`)),
-    pay: async (plan: string) => payAnswer(await call<unknown>('POST', `${mine}/pay`, { plan })),
-    manage: async () => payAnswer(await call<unknown>('POST', `${mine}/manage`, {})),
+    pay: async (payment: FundPayment) => payAnswer(await call<unknown>('POST', `${mine}/pay`, payment)),
     remind: async (email: string) => void (await call<unknown>('POST', `${mine}/remind`, { email })),
   });
 }

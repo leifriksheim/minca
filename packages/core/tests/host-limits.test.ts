@@ -70,7 +70,6 @@ async function device(me: Account, hub: FakeHub): Promise<P2PNode> {
 
 const LIMITS: HostLimits = {
   accountBytes: 1_000,
-  paidAccountBytes: 10_000,
   space: { writers: 1, bytes: 500, windowDays: 30, readers: 2 },
   graceDays: 30,
   keepDays: 90,
@@ -300,6 +299,10 @@ describe('room', () => {
       /over its room/,
       'a new key brings nothing back',
     );
+    // Paying does: a balance has no room to be over.
+    await node.extend(fresh, Math.floor(Date.now() / 1000) + 86_400);
+    await node.attach(fresh, me.did, invite);
+    assert.ok((await node.get(fresh))?.carry, 'carried again once it pays');
   });
 
   test('a refusal comes back with the bucket on a new disk', async () => {

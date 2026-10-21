@@ -248,7 +248,7 @@ describe('the host API', () => {
     const info = await describeHost(url);
     assert.equal(info.did, served.node.did);
     assert.equal(info.free, true);
-    assert.equal(info.plans, undefined, 'a free host takes no payments');
+    assert.equal(info.fund, undefined, 'a free host takes no payments');
     const client = createHostClient(url, info.did, key);
 
     const me = await account();
@@ -288,61 +288,38 @@ describe('the host API', () => {
     );
   });
 
-  test('a paying host refuses to carry until paid; paying starts Stripe, whose webhook moves the date once', async () => {
+  test('a paying host refuses to carry until paid; an account adds to its balance by card, counted once', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const key = await subscriptionKey(newSubscriptionSeed());
-    const periodEnd = nowSeconds() + 30 * 24 * 3600;
-    const stripeCalls: string[] = [];
     let returnUrl: string | null = null;
+    let checkout: URLSearchParams | null = null;
     const billing = createStripeBilling({
       secretKey: 'sk_test_x',
       webhookSecret: 'whsec_test',
-      monthlyPrice: 'price_month',
       fetch: async (input: string | URL | Request, init?: RequestInit) => {
         const target = urlOf(input);
-        stripeCalls.push(`${init?.method ?? 'GET'} ${new URL(target).pathname}`);
         if (target.endsWith('/v1/checkout/sessions')) {
-          assert.match(bodyOf(init), /subscription_data%5Bmetadata%5D%5Bminca_subscription%5D=did%3Akey/);
-          returnUrl = new URLSearchParams(bodyOf(init)).get('success_url');
+          checkout = new URLSearchParams(bodyOf(init));
+          returnUrl = checkout.get('success_url');
           return Response.json({ url: 'https://checkout.stripe.test/c/1' });
         }
-        if (target.includes('/v1/subscriptions/sub_1')) {
-          return Response.json({
-            id: 'sub_1',
-            customer: 'cus_1',
-            metadata: { minca_subscription: key.did },
-            items: { data: [{ current_period_end: periodEnd }] },
-          });
-        }
-        if (target.endsWith('/v1/billing_portal/sessions'))
-          return Response.json({ url: 'https://billing.stripe.test/p/1' });
-        if (target.endsWith('/v1/prices/price_month'))
-          return Response.json({ unit_amount: 400, currency: 'usd', recurring: { interval: 'month' } });
         return Response.json({ error: { message: 'unexpected' } }, { status: 400 });
       },
     });
-    const served = await running({ billing, name: 'Test Hosting', price: '$4 a month' });
+    const served = await running({ billing, name: 'Test Hosting' });
     const url = `http://127.0.0.1:${served.port}`;
     const client = createHostClient(url, served.node.did, key);
 
     const info = await describeHost(url);
     assert.deepEqual(
-      { name: info.name, price: info.price, plans: info.plans, free: info.free },
+      { name: info.name, price: info.price, fund: info.fund, free: info.free },
       {
         name: 'Test Hosting',
-        price: '$4 a month',
-        plans: [
-          {
-            id: 'card-monthly',
-            label: '$4 a month, by card',
-            method: 'checkout',
-            renews: true,
-            for: ['account'],
-          },
-        ],
+        price: '$0.10 a GB a month',
+        fund: { perGb: '0.10', min: '5', methods: ['checkout'], recurring: true },
         free: false,
       },
-      'its plans, priced as Stripe keeps them',
+      'one price, by the GB, and how money goes in',
     );
     const me = await account();
     const laptop = await device(me, hub);
@@ -353,32 +330,42 @@ describe('the host API', () => {
     );
 
     // Paying is a signed call: the home opens the page it answers with, at Stripe.
-    assert.deepEqual(await client.pay('card-monthly'), { checkout: 'https://checkout.stripe.test/c/1' });
+    assert.deepEqual(await client.pay({ amount: '10', method: 'checkout' }), {
+      checkout: 'https://checkout.stripe.test/c/1',
+    });
+    assert.equal(checkout!.get('metadata[minca_fund]'), key.did, 'into this subscription’s balance');
+    assert.equal(checkout!.get('line_items[0][price_data][product_data][name]'), 'Hosting at Test Hosting');
+    assert.equal(checkout!.get('line_items[0][price_data][unit_amount]'), '1000');
     assert.equal(returnUrl, `${url}/host/paid`, 'Stripe sends people back to a page that says done');
     assert.match(await (await fetch(returnUrl)).text(), /Done/);
     await assert.rejects(
-      client.pay('card-weekly'),
+      client.pay({ amount: '1', method: 'checkout' }),
       (error: unknown) => error instanceof HostError && error.status === 400,
+      'less than the least a payment adds',
     );
     await assert.rejects(
-      client.pay('once-monthly'),
-      /no such plan/,
-      'a plan for spaces is not for an account',
-    );
-    await assert.rejects(
-      client.manage(),
-      (error: unknown) => error instanceof HostError && error.status === 404,
+      client.pay({ amount: '10', method: 'request' }),
+      (error: unknown) => error instanceof HostError && error.status === 400,
+      'a way this host doesn’t take',
     );
     const stranger = await fetch(`${url}/host/subscriptions/${encodeURIComponent(key.did)}/pay`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ plan: 'card-monthly' }),
+      body: JSON.stringify({ amount: '10', method: 'checkout' }),
     });
     assert.equal(stranger.status, 401, 'only the subscription starts paying for itself');
 
     const event = JSON.stringify({
       type: 'checkout.session.completed',
-      data: { object: { subscription: 'sub_1' } },
+      data: {
+        object: {
+          id: 'cs_1',
+          mode: 'payment',
+          payment_status: 'paid',
+          amount_total: 1000,
+          metadata: { minca_fund: key.did },
+        },
+      },
     });
     const webhook = (body: string, secret = 'whsec_test') => {
       const t = nowSeconds();
@@ -397,11 +384,11 @@ describe('the host API', () => {
     await webhook(event);
     const { status } = await client.status();
     assert.equal(status.state, 'active');
-    assert.equal(status.paidUntil, periodEnd);
-    assert.equal(status.renews, true);
+    assert.ok(Math.abs((status.balance ?? 0) - 10e6) < 1000, 'counted once');
+    // Not measured here, so it pays for a GB: $10 at $0.10 a month.
+    const days = (status.paidUntil - nowSeconds()) / 86_400;
+    assert.ok(days > 2990 && days < 3010, `about 3000 days, not ${days}`);
     assert.equal((await client.attach(me.did, invite)).status.carrying, true);
-    assert.equal(stripeCalls.filter((call) => call.startsWith('GET /v1/subscriptions')).length, 2);
-    assert.deepEqual(await client.manage(), { checkout: 'https://billing.stripe.test/p/1' });
   });
 });
 
@@ -537,25 +524,15 @@ describe('an account using a host, end to end over sockets', () => {
     return node;
   }
 
-  test('a paying host: the home shows its plans, opens the checkout it answers, and hands over the spaces once paid', async () => {
+  test('a paying host: the home shows its price, opens the checkout it answers, and hands over the spaces once paid', async () => {
     let paidFor: string | null = null;
-    const periodEnd = nowSeconds() + 365 * 24 * 3600;
     const billing = createStripeBilling({
       secretKey: 'sk_test_x',
       webhookSecret: 'whsec_test',
-      yearlyPrice: 'price_year',
       fetch: async (input: string | URL | Request, init?: RequestInit) => {
-        const target = urlOf(input);
-        if (target.endsWith('/v1/checkout/sessions')) {
-          paidFor = new URLSearchParams(bodyOf(init)).get('client_reference_id');
-          return Response.json({ url: 'https://checkout.stripe.test/c/2' });
-        }
-        return Response.json({
-          id: 'sub_2',
-          customer: 'cus_2',
-          metadata: { minca_subscription: paidFor },
-          items: { data: [{ current_period_end: periodEnd }] },
-        });
+        paidFor = new URLSearchParams(bodyOf(init)).get('client_reference_id');
+        assert.ok(urlOf(input).endsWith('/v1/checkout/sessions'));
+        return Response.json({ url: 'https://checkout.stripe.test/c/2' });
       },
     });
     const served = await startHost({
@@ -564,7 +541,6 @@ describe('an account using a host, end to end over sockets', () => {
       port: 0,
       billing,
       name: 'Test Hosting',
-      price: '$36 a year',
     });
     open.push(served);
     const url = `http://127.0.0.1:${served.port}`;
@@ -574,20 +550,28 @@ describe('an account using a host, end to end over sockets', () => {
 
     const before = await laptop.hosting.use(url);
     assert.deepEqual(
-      { name: before.name, plans: before.plans.map((plan) => plan.id), live: before.live },
-      { name: 'Test Hosting', plans: ['card-yearly'], live: true },
+      { name: before.name, perGb: before.fund?.perGb, live: before.live },
+      { name: 'Test Hosting', perGb: '0.10', live: true },
     );
     assert.equal(before.status?.carrying, false);
 
     // What the home opens: the checkout page the host answers with, at Stripe, and nothing of the host's.
-    assert.deepEqual(await laptop.hosting.pay(url, 'card-yearly'), {
+    assert.deepEqual(await laptop.hosting.pay(url, { amount: '5', method: 'checkout' }), {
       checkout: 'https://checkout.stripe.test/c/2',
     });
     assert.equal(paidFor, before.subscription);
 
     const body = JSON.stringify({
       type: 'checkout.session.completed',
-      data: { object: { subscription: 'sub_2' } },
+      data: {
+        object: {
+          id: 'cs_2',
+          mode: 'payment',
+          payment_status: 'paid',
+          amount_total: 500,
+          metadata: { minca_fund: paidFor },
+        },
+      },
     });
     const t = nowSeconds();
     const v1 = createHmac('sha256', 'whsec_test').update(`${t}.${body}`).digest('hex');
@@ -601,14 +585,15 @@ describe('an account using a host, end to end over sockets', () => {
     const after = await laptop.hosting.use(url);
     assert.equal(after.status?.state, 'active');
     assert.equal(after.status?.carrying, true);
-    assert.equal(after.status?.paidUntil, periodEnd);
+    assert.ok(Math.abs((after.status?.balance ?? 0) - 5e6) < 1000);
+    const paidUntil = after.status?.paidUntil;
 
     // The host's signed word is kept in the registry: with the host gone, the home still knows, and says so.
     await served.close();
     open.splice(open.indexOf(served), 1);
     const offline = (await laptop.hosting.list())[0]!;
     assert.equal(offline.live, false);
-    assert.equal(offline.status?.paidUntil, periodEnd);
+    assert.equal(offline.status?.paidUntil, paidUntil);
     assert.equal(offline.name, 'Test Hosting');
   });
 
@@ -938,7 +923,6 @@ describe('bots a host runs', () => {
       wallet: createWalletPayments({
         network: 'base-sepolia',
         to: '0x1111111111111111111111111111111111111111',
-        monthly: '4',
       }),
     });
     open.push(served);
@@ -1623,8 +1607,6 @@ function fakeChain() {
   const wallet = createWalletPayments({
     network: 'base-sepolia',
     to: HOST_ADDRESS,
-    monthly: '4',
-    yearly: '36',
     fetch: chain.fetch,
   });
   return { chain, wallet, HOST_ADDRESS };
@@ -1636,22 +1618,13 @@ describe('wallet payments', () => {
     assert.equal(toUnits('4.5'), 4_500_000n);
     assert.throws(() => toUnits('36.001'), /not a price/);
     const { wallet } = fakeChain();
-    assert.deepEqual(
-      wallet.offer.plans.map((plan) => [plan.id, plan.price]),
-      [
-        ['yearly', '36'],
-        ['monthly', '4'],
-      ],
-    );
     const taken = new Set<string>();
     for (let i = 0; i < 200; i++) {
-      const amount = BigInt(wallet.payment('yearly', taken).amount);
-      assert.ok(amount > 36_000_000n && amount < 36_010_000n, 'less than a cent over the price');
+      const amount = BigInt(wallet.fundPayment(36_000_000n, taken).amount);
+      assert.ok(amount > 36_000_000n && amount < 36_010_000n, 'less than a cent over what was asked');
       assert.ok(!taken.has(amount.toString()), 'never an amount already open');
       taken.add(amount.toString());
     }
-    assert.equal(wallet.extend('yearly', Date.UTC(2026, 8, 25) / 1000), Date.UTC(2027, 8, 25) / 1000);
-    assert.equal(wallet.extend('monthly', Date.UTC(2026, 0, 15) / 1000), Date.UTC(2026, 1, 15) / 1000);
   });
 
   test('the network is read for what reached this host in USDC, once confirmed, each block once', async () => {
@@ -1708,29 +1681,23 @@ describe('wallet payments', () => {
     const url = `http://127.0.0.1:${served.port}`;
     const mine = createHostClient(url, served.node.did, await subscriptionKey(newSubscriptionSeed()));
     const theirs = createHostClient(url, served.node.did, await subscriptionKey(newSubscriptionSeed()));
-    const requestOf = async (client: typeof mine, plan: string) => {
-      const answer = await client.pay(plan);
+    const requestOf = async (client: typeof mine, amount: string) => {
+      const answer = await client.pay({ amount, method: 'request' });
       assert.ok('request' in answer, 'a wallet pays a request');
       return answer.request;
     };
     const state = async (client: typeof mine) => (await client.status()).status;
 
     const info = await describeHost(url);
-    assert.equal(info.price, '$4 a month or $36 a year', 'from the wallet prices');
-    assert.deepEqual(
-      info.plans?.map((plan) => [plan.id, plan.method, plan.renews, plan.for]),
-      [
-        ['wallet-yearly', 'request', false, ['account']],
-        ['wallet-monthly', 'request', false, ['account']],
-      ],
-    );
+    assert.equal(info.price, '$0.10 a GB a month', 'from the rate');
+    assert.deepEqual(info.fund?.methods, ['request']);
 
-    const request = await requestOf(mine, 'wallet-yearly');
+    const request = await requestOf(mine, '36');
     assert.equal(request.evm?.to, HOST_ADDRESS);
     assert.equal(request.evm?.chainId, 84532);
     assert.match(request.uri, /^ethereum:0x[0-9a-fA-F]{40}@84532\/transfer\?address=/);
-    assert.deepEqual(await requestOf(mine, 'wallet-yearly'), request, 'asked again, the same amount');
-    const their = await requestOf(theirs, 'wallet-yearly');
+    assert.deepEqual(await requestOf(mine, '36'), request, 'asked again, the same amount');
+    const their = await requestOf(theirs, '36');
     assert.notEqual(their.evm?.units, request.evm?.units);
 
     // Someone else's payment pays theirs; one made before this one was asked for pays nothing.
@@ -1747,37 +1714,24 @@ describe('wallet payments', () => {
     chain.latest = 113;
     await until(async () => (await state(mine)).state === 'active', 4000, 'my payment to count');
     const paid = await state(mine);
-    assert.equal(paid.renews, false, 'time paid up front');
-    assert.ok(Math.abs(paid.paidUntil - (nowSeconds() + 365 * 24 * 3600)) < 2 * 24 * 3600);
+    assert.ok(Math.abs((paid.balance ?? 0) - 36e6) < 10_000, 'what arrived is in its balance');
 
-    // Paying again adds a month on top of the year; the first payment is never counted twice.
-    const again = await requestOf(mine, 'wallet-monthly');
+    // Paying again adds to it; the first payment is never counted twice.
+    const again = await requestOf(mine, '5');
     assert.notEqual(again.evm?.units, request.evm?.units);
     chain.send(BigInt(again.evm!.units), { block: 114 });
     chain.latest = 120;
-    await until(
-      async () => (await state(mine)).paidUntil > paid.paidUntil + 27 * 24 * 3600,
-      4000,
-      'the month to be added',
-    );
-    assert.ok((await state(mine)).paidUntil < paid.paidUntil + 32 * 24 * 3600, 'once');
+    await until(async () => ((await state(mine)).balance ?? 0) > 40e6, 4000, 'the second payment to count');
+    assert.ok(((await state(mine)).balance ?? 0) < 41.1e6, 'once');
   });
 
-  test('from the env: an address and a price, or nothing', () => {
+  test('from the env: an address, or nothing', () => {
     assert.equal(walletFromEnv({}), null);
-    assert.throws(
-      () => walletFromEnv({ MINCA_WALLET_ADDRESS: '0x1111111111111111111111111111111111111111' }),
-      /need a price/,
-    );
-    assert.throws(
-      () => walletFromEnv({ MINCA_WALLET_ADDRESS: 'me', MINCA_WALLET_YEARLY: '36' }),
-      /not an address/,
-    );
+    assert.throws(() => walletFromEnv({ MINCA_WALLET_ADDRESS: 'me' }), /not an address/);
     assert.throws(
       () =>
         walletFromEnv({
           MINCA_WALLET_ADDRESS: '0x1111111111111111111111111111111111111111',
-          MINCA_WALLET_YEARLY: '36',
           MINCA_WALLET_NETWORK: 'solana',
         }),
       /base or base-sepolia/,
@@ -1785,7 +1739,6 @@ describe('wallet payments', () => {
     assert.equal(
       walletFromEnv({
         MINCA_WALLET_ADDRESS: '0x1111111111111111111111111111111111111111',
-        MINCA_WALLET_YEARLY: '36',
       })?.offer.chainId,
       8453,
     );
@@ -1814,12 +1767,9 @@ describe('wallet payments', () => {
     await laptop.spaces.create({ name: 'Notes', visibility: 'private' });
 
     const before = await laptop.hosting.use(url);
-    assert.deepEqual(
-      before.plans.map((plan) => plan.id),
-      ['wallet-yearly', 'wallet-monthly'],
-    );
+    assert.deepEqual(before.fund?.methods, ['request']);
     assert.equal(before.status?.carrying, false);
-    const answer = await laptop.hosting.pay(url, 'wallet-yearly');
+    const answer = await laptop.hosting.pay(url, { amount: '5', method: 'request' });
     assert.ok('request' in answer);
     chain.latest = 200;
     chain.send(BigInt(answer.request.evm!.units), { block: 198 });
@@ -1895,7 +1845,6 @@ describe('a space paying for itself', () => {
     const billing = createStripeBilling({
       secretKey: 'sk_test_x',
       webhookSecret: 'whsec_test',
-      monthlyPrice: 'price_month',
       fetch: async (input: string | URL | Request, init?: RequestInit) => {
         if (urlOf(input).endsWith('/v1/checkout/sessions')) bodies.push(bodyOf(init));
         return new Response(JSON.stringify({ url: 'https://checkout.stripe.test/c/1' }));
@@ -2041,7 +1990,6 @@ describe('a space paying for itself', () => {
 describe('a host with limits', () => {
   const limits = {
     accountBytes: 250_000_000,
-    paidAccountBytes: 10_000_000_000,
     space: { writers: 10, bytes: 500_000_000, windowDays: 30, readers: 50 },
     graceDays: 30,
     keepDays: 30,
@@ -2192,18 +2140,16 @@ describe('a host with limits', () => {
     const wallet = createWalletPayments({
       network: 'base-sepolia',
       to: '0x1111111111111111111111111111111111111111',
-      monthly: '4',
       fetch: async () => Response.json({ jsonrpc: '2.0', id: 1, error: { message: 'no' } }),
     });
     const served = await running({ newPerAddress: 2, wallet });
     const url = `http://127.0.0.1:${served.port}`;
     const info = await describeHost(url);
-    const plan = info.plans?.find((one) => one.id.startsWith('wallet'))?.id;
-    assert.ok(plan);
+    const payment = { amount: '5', method: 'request' } as const;
     const keys = await Promise.all(Array.from({ length: 3 }, () => subscriptionKey(newSubscriptionSeed())));
-    for (const key of keys.slice(0, 2)) await createHostClient(url, info.did, key).pay(plan);
+    for (const key of keys.slice(0, 2)) await createHostClient(url, info.did, key).pay(payment);
     await assert.rejects(
-      createHostClient(url, info.did, keys[2]!).pay(plan),
+      createHostClient(url, info.did, keys[2]!).pay(payment),
       (error: unknown) => error instanceof HostError && error.status === 429,
     );
     assert.equal(await served.node.get(keys[2]!.did), null, 'nothing kept for it');

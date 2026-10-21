@@ -72,12 +72,13 @@ export function spaceSize(data: string): (spaceId: string) => Promise<number> {
 }
 
 /**
- * How much a subscription's spaces may take, from MINCA_HOST_QUOTA_GB: 10 on
- * a host that takes payments, none on a free one unless set. 0 is none.
+ * How much a subscription's spaces may take at a host without limits, from
+ * MINCA_HOST_QUOTA_GB: none unless set, as a balance pays for what they
+ * take. 0 is none.
  */
-export function quotaFromEnv(env: NodeJS.ProcessEnv, free: boolean): number | undefined {
+export function quotaFromEnv(env: NodeJS.ProcessEnv): number | undefined {
   const text = env.MINCA_HOST_QUOTA_GB?.trim();
-  const gb = text ? Number(text) : free ? 0 : 10;
+  const gb = text ? Number(text) : 0;
   if (!Number.isFinite(gb) || gb < 0)
     throw new Error(`MINCA_HOST_QUOTA_GB must be a number of gigabytes, not "${text}"`);
   return gb > 0 ? Math.round(gb * 1e9) : undefined;
@@ -119,7 +120,6 @@ export function limitsFromEnv(env: NodeJS.ProcessEnv, free: boolean): HostLimits
   if (windowDays === 0) throw new Error('MINCA_HOST_WINDOW_DAYS must be at least 1');
   return {
     accountBytes: gigabytesFromEnv(env, 'MINCA_HOST_FREE_GB', 0),
-    paidAccountBytes: gigabytesFromEnv(env, 'MINCA_HOST_QUOTA_GB', 10),
     space: {
       writers: wholeFromEnv(env, 'MINCA_HOST_SPACE_WRITERS', 10),
       bytes: wholeFromEnv(env, 'MINCA_HOST_SPACE_MB', 500) * 1_000_000,
@@ -159,14 +159,11 @@ export function billingFromEnv(env: NodeJS.ProcessEnv): Billing | null {
   return createStripeBilling({
     secretKey: env.STRIPE_SECRET_KEY,
     webhookSecret: env.STRIPE_WEBHOOK_SECRET,
-    ...(env.STRIPE_PRICE_MONTHLY ? { monthlyPrice: env.STRIPE_PRICE_MONTHLY } : {}),
-    ...(env.STRIPE_PRICE_YEARLY ? { yearlyPrice: env.STRIPE_PRICE_YEARLY } : {}),
   });
 }
 
 /**
- * Wallet payments, when MINCA_WALLET_ADDRESS is set: USDC to that address, at
- * MINCA_WALLET_MONTHLY and/or MINCA_WALLET_YEARLY dollars, on
+ * Wallet payments, when MINCA_WALLET_ADDRESS is set: USDC to that address, on
  * MINCA_WALLET_NETWORK (base, or base-sepolia to try it; default base), read
  * through MINCA_WALLET_RPC (default: the network's public node). None otherwise.
  */
@@ -175,16 +172,9 @@ export function walletFromEnv(env: NodeJS.ProcessEnv): WalletPayments | null {
   const network = env.MINCA_WALLET_NETWORK ?? 'base';
   if (!isNetworkName(network))
     throw new Error(`MINCA_WALLET_NETWORK must be ${Object.keys(NETWORKS).join(' or ')}, not "${network}"`);
-  if (!env.MINCA_WALLET_MONTHLY && !env.MINCA_WALLET_YEARLY) {
-    throw new Error(
-      'Wallet payments need a price: MINCA_WALLET_MONTHLY, MINCA_WALLET_YEARLY, or both, in dollars (like 4 and 36)',
-    );
-  }
   return createWalletPayments({
     network,
     to: env.MINCA_WALLET_ADDRESS,
-    ...(env.MINCA_WALLET_MONTHLY ? { monthly: env.MINCA_WALLET_MONTHLY } : {}),
-    ...(env.MINCA_WALLET_YEARLY ? { yearly: env.MINCA_WALLET_YEARLY } : {}),
     ...(env.MINCA_WALLET_RPC ? { rpcUrl: env.MINCA_WALLET_RPC } : {}),
   });
 }

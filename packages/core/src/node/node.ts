@@ -133,7 +133,6 @@ import {
   subscriptionKey,
   type HostClient,
   type HostDescription,
-  type HostPlan,
   type HostStatus,
   type OverSpace,
   type Hosting,
@@ -1330,7 +1329,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         name: description.name,
         status,
         live: true,
-        plans: plansFor(description, 'account'),
+        fund: description.free ? null : (description.fund ?? null),
         reminds: description.remind === true,
       };
     } catch (error) {
@@ -1339,16 +1338,12 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         name: hosting.name ?? new URL(hosting.url).host,
         status: kept,
         live: false,
-        plans: [],
+        fund: null,
         reminds: false,
         error: error instanceof Error ? error.message : String(error),
       };
     }
   }
-
-  /** The plans a host describes for an account's subscription, or a space's own */
-  const plansFor = (description: HostDescription, who: 'account'): ReadonlyArray<HostPlan> =>
-    (description.plans ?? []).filter((plan) => Array.isArray(plan.for) && plan.for.includes(who));
 
   /** Every device keeps its hosts carrying: after the registry changes, ask each once more */
   async function keepHosted(): Promise<void> {
@@ -1596,12 +1591,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       return viewHosting(record, true);
     },
 
-    async pay(url, plan) {
-      return (await hostClient(await requireHosting(url))).client.pay(plan);
-    },
-
-    async manage(url) {
-      return (await hostClient(await requireHosting(url))).client.manage();
+    async pay(url, payment) {
+      return (await hostClient(await requireHosting(url))).client.pay(payment);
     },
 
     async remind(url, email) {

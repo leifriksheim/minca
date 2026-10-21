@@ -95,7 +95,6 @@ export const API = Object.freeze({
     list: 'look at hosting',
     use: 'start using a host',
     pay: 'pay for hosting',
-    manage: 'pay for hosting',
     remind: 'pay for hosting',
     stop: 'stop using a host',
     // Open to an agent in a space it was given, as reading the space is.

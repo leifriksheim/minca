@@ -128,7 +128,8 @@ reference implementation, or any implementation, honestly.
     bounded in bytes after a notice that neither a new key nor a dip under
     resets: past it the host stops carrying its largest spaces for it until
     the rest fit, and an account over by its carry space alone is carried for
-    no more; a community's fund pays for its size while it has money (08
+    no more until it pays; past its free room an account's balance, and a
+    community's fund, pay for its size while they have money (08 §1,
     §1.1, Room, §2;
     `packages/core/tests/host-limits.test.ts`, "over its room…", "the notice
     is the account's…", "a carry space over its room by itself…";
@@ -137,17 +138,24 @@ reference implementation, or any implementation, honestly.
     their room, so one member's writing in a shared space fills every
     member's; the host then holds back each such member's largest spaces,
     which may be their own rather than the shared one, and keeps carrying a
-    held space for any member with room. A writer also drains a community's
-    fund as fast as they make its space grow. A fund's grace is lent: it
-    goes below zero through it, by its size, and the next payment pays that
-    first, so a little money now and then keeps nothing carried
-    (`packages/cli/tests/fund.test.ts`, "its grace is lent…"). Whoever pays
-    into a fund nobody else has can so leave its community owing a grace's
-    worth should it fund itself later; accepted, as it is at most what that
-    grace kept online. Still open
+    held space for any member with room. A held space's bucket copy goes
+    after `keepDays`, and goes back whole once it is carried again
+    (`packages/core/tests/host-limits.test.ts`, "a space held back for
+    keepDays…"; `packages/core/tests/mirror.test.ts`, "taken out of the
+    store and mirrored again…"). A writer also drains a community's fund,
+    or a member's balance, as fast as they make a space grow. A grace is
+    lent, and no longer than the payment before it lasted: the balance goes
+    below zero through it, and the next payment pays that first, so a little
+    money now and then keeps nothing carried, the least payment into a large
+    space buys hours, and nothing more is owed once the grace is over
+    (`packages/cli/tests/fund.test.ts`, "its grace is lent…", "a grace is no
+    longer than…", "once its grace is over…"). Whoever pays into a fund
+    nobody else has can so leave its community owing what that grace kept
+    online should it fund itself later; accepted, as that is at most about
+    what they paid, unless the space grew during the grace. Still open
     ([#289](https://github.com/leifriksheim/minca/issues/289)): an account
     with two subscriptions on one carry space is held and refused by the
-    smaller room; and a refusal stays even after the account pays.
+    smaller room.
     Accepted otherwise: it is the host's cost.
   - Anyone holding an invite link that is still open can push a community
     over a host's free line by joining more accounts and writing from them,

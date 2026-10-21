@@ -1,15 +1,22 @@
 /**
- * A community's fund at the host (spec/06-nodes-and-sessions.md, Hosts: a space paying for itself).
+ * A subscription's balance at the host (spec 08 §1 and §2): an account's,
+ * or a community's fund.
  *
- * One balance per space's own subscription, in millionths of a dollar (the
- * same unit as USDC's six decimals). Anyone adds to it, by card or wallet,
- * once or every month. Keeping the space online draws from it by the second,
- * at the host's monthly rate for each GB the space takes (at least one), and
- * each bot it runs draws its AI use as it is spent. Through its grace the
- * hosting goes on drawing, below zero, so what is added next pays for the
- * grace first: grace is lent, not given. What the fund lasts is an estimate from that: the rate, and what its
- * bots spent over the last week. The host's status says the balance, the
- * daily spend, and the date the estimate reaches (`paidUntil`).
+ * One balance per subscription, in millionths of a dollar (the same unit as
+ * USDC's six decimals). Its account, or anyone for a community, adds to it,
+ * by card or wallet, once or every month. Keeping its spaces online draws
+ * from it by the second, at the host's monthly rate for each GB it pays for
+ * (`settle` says how many: the host's to count), and each bot a community
+ * runs draws its AI use as it is spent. What it lasts is an estimate from
+ * that: the rate, and what its bots spent over the last week. The host's
+ * status says the balance, the daily spend, and the date the estimate
+ * reaches (`paidUntil`).
+ *
+ * Grace is lent, not given, and no longer than the payment before it lasted:
+ * once it runs out the hosting goes on drawing, below zero, for that long
+ * (the host's grace at most), and what is added next pays for it first. So
+ * the least payment into a large space buys a short grace, and nothing is
+ * drawn once the grace is over, whatever the space grows to.
  *
  * Kept in the host's store, and in its bucket when it has one, as the
  * subscriptions are: a fund is money people paid.
@@ -26,10 +33,12 @@ export interface FundState {
   readonly spent: Readonly<Record<string, number>>;
   /** The same, for each bot by its DID: what the fund shows people it pays for */
   readonly byBot?: Readonly<Record<string, Readonly<Record<string, number>>>>;
-  /** What the space takes, as last measured: the fee is the monthly rate for each GB, at least one */
+  /** What it pays for, as last measured: the fee is the monthly rate for each GB. Unmeasured, one. */
   readonly bytes?: number;
-  /** Whether anything was ever added: only then does its grace draw on, below zero */
-  readonly paid?: true;
+  /** When something was last added, unix seconds: a grace is no longer than what it paid lasted */
+  readonly added?: number;
+  /** When it last ran out, and for how long from then its grace is lent, seconds; absent while above zero */
+  readonly ran?: { readonly at: number; readonly lent: number };
 }
 
 export interface Funds {
@@ -38,6 +47,8 @@ export interface Funds {
   add(id: string, micros: number): Promise<FundState>;
   /** Takes what a bot spent; with its DID, counted as that bot's too */
   charge(id: string, micros: number, bot?: string): Promise<FundState>;
+  /** Every subscription with a balance kept here */
+  ids(): Promise<string[]>;
   /** Takes the hosting fee for the time since it was last taken; from then on, for this many bytes */
   settle(id: string, bytes?: number): Promise<FundState>;
   /** What the fund spends in a day, as things go: the hosting fee, and what its bots spent a day this last week */
@@ -56,17 +67,17 @@ const GB = 1e9;
 
 export function createFunds(options: {
   readonly store: StorageAdapter;
-  /** What keeping a space online costs a month for each GB it takes, in millionths of a dollar */
+  /** What keeping spaces online costs a month for each GB, in millionths of a dollar */
   readonly perGb: number;
-  /** Days it is carried on after it ran out: what it may owe at most */
+  /** Days it is carried on after it ran out, at most: the host's grace */
   readonly graceDays?: number;
   readonly mirror?: BlobStore | null;
   readonly now?: () => number;
 }): Funds {
   const now = options.now ?? (() => Math.floor(Date.now() / 1000));
   const grace = (options.graceDays ?? 30) * DAY;
-  /** The hosting fee a second, in millionths of a dollar: one GB at least, whatever it takes */
-  const fee = (state: FundState) => (options.perGb / MONTH) * Math.max(1, (state.bytes ?? 0) / GB);
+  /** The hosting fee a second, in millionths of a dollar */
+  const fee = (state: FundState) => (options.perGb / MONTH) * ((state.bytes ?? GB) / GB);
   const empty = (): FundState => ({ balance: 0, at: now(), spent: {} });
 
   const read = async (id: string): Promise<FundState> => {
@@ -92,7 +103,10 @@ export function createFunds(options: {
       spent: days(kept.spent),
       byBot,
       ...size,
-      ...(kept.paid === true ? { paid: true } : {}),
+      ...(typeof kept.added === 'number' ? { added: kept.added } : {}),
+      ...(isRecord(kept.ran) && typeof kept.ran.at === 'number' && typeof kept.ran.lent === 'number'
+        ? { ran: { at: kept.ran.at, lent: kept.ran.lent } }
+        : {}),
     };
   };
   const write = async (id: string, state: FundState): Promise<FundState> => {
@@ -101,13 +115,27 @@ export function createFunds(options: {
     await options.mirror?.put(`${BUCKET_PREFIX}${encodeURIComponent(id)}.json`, bytes);
     return state;
   };
-  /** The fee for the time since it was last taken, taken; below zero for a grace's worth at most */
+  /** Running out now: lent a grace as long as what was last added lasted, the host's at most */
+  const runOut = (state: FundState, at: number): FundState['ran'] => ({
+    at,
+    lent: state.added === undefined ? 0 : Math.max(0, Math.min(grace, at - state.added)),
+  });
+  /** The fee for the time since it was last taken, taken: down to zero, then through its lent grace only */
   const settled = (state: FundState): FundState => {
     const at = now();
-    const owed = Math.max(0, at - state.at) * fee(state);
-    // One nobody ever paid into owes nothing.
-    const floor = state.paid ? Math.min(state.balance, -grace * fee(state)) : Math.min(state.balance, 0);
-    return { ...state, balance: Math.max(floor, state.balance - owed), at };
+    const rate = fee(state);
+    let { balance, ran } = state;
+    let from = state.at;
+    if (balance > 0) {
+      const lasts = rate > 0 ? balance / rate : Infinity;
+      if (at - from < lasts) return { ...state, balance: balance - (at - from) * rate, at };
+      from += lasts;
+      balance = 0;
+      ran = runOut(state, Math.round(from));
+    }
+    // One nobody ever paid into, or whose grace is over, owes nothing more.
+    if (ran) balance -= Math.max(0, Math.min(at, ran.at + ran.lent) - Math.max(from, ran.at)) * rate;
+    return { ...state, balance, at, ...(ran ? { ran } : {}) };
   };
   const day = (seconds: number) => new Date(seconds * 1000).toISOString().slice(0, 10);
   /** What a record of spending by day adds up to this last week, a day */
@@ -130,9 +158,14 @@ export function createFunds(options: {
 
   return Object.freeze({
     get: read,
+    ids: async () => (await options.store.list(PREFIX)).map((key) => key.slice(PREFIX.length)),
     add: (id: string, micros: number) =>
-      // What its grace took is paid first.
-      change(id, (state) => ({ ...state, balance: state.balance + Math.round(micros), paid: true })),
+      // What its grace took is paid first; above zero again, it has not run out.
+      change(id, (state) => {
+        const { ran, ...rest } = state;
+        const balance = state.balance + Math.round(micros);
+        return { ...rest, balance, added: now(), ...(balance <= 0 && ran ? { ran } : {}) };
+      }),
     charge: (id: string, micros: number, bot?: string) =>
       change(id, (state) => {
         const today = day(now());
@@ -143,11 +176,15 @@ export function createFunds(options: {
           const its = recent(byBot[bot] ?? {});
           byBot[bot] = { ...its, [today]: (its[today] ?? 0) + cost };
         }
+        const balance = state.balance - cost;
+        // A bot's call that empties it: it ran out now.
+        const ran = state.balance > 0 && balance <= 0 ? runOut(state, now()) : state.ran;
         return {
           ...state,
-          balance: state.balance - cost,
+          balance,
           spent: { ...kept, [today]: (kept[today] ?? 0) + cost },
           byBot,
+          ...(ran ? { ran } : {}),
         };
       }),
     settle: (id: string, bytes?: number) =>
@@ -155,11 +192,10 @@ export function createFunds(options: {
     daily,
     botDaily: (state: FundState, bot: string) => week(state.byBot?.[bot] ?? {}),
     until(state: FundState) {
+      // Run out: dated so that the host's grace from then ends where its lent grace does.
+      if (state.balance <= 0) return state.ran ? state.ran.at + state.ran.lent - grace : state.at;
       const rate = daily(state);
-      if (rate <= 0) return state.balance > 0 ? now() + 10 * 365 * DAY : state.at;
-      // Below zero, the hosting fee alone says when it ran out: bots stop at zero.
-      if (state.balance <= 0)
-        return fee(state) > 0 ? state.at - Math.ceil(-state.balance / fee(state)) : state.at;
+      if (rate <= 0) return now() + 10 * 365 * DAY;
       return now() + Math.floor((state.balance / rate) * DAY);
     },
   });

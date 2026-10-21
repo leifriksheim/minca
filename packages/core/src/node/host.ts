@@ -848,9 +848,14 @@ export async function createHostNode(config: HostConfig) {
         throw new Error('That subscription is not paid for');
       if (!account.startsWith('did:key:')) throw new Error('An account is named by its DID');
       if (!allowed(account)) throw new NotAllowedError();
-      // Kept by the account, so a new subscription key brings nothing back.
-      if (rooms.get(account)?.refused)
+      // Kept by the account, so a new subscription key brings nothing back; paying does, as a balance has no room.
+      const room = rooms.get(account);
+      if (room?.refused && plan(subscription) !== 'paid')
         throw new Error('This host stopped carrying for this account: its carry space was over its room');
+      if (room?.refused) {
+        const { refused: _lifted, ...rest } = room;
+        await writeRoom(account, rest);
+      }
       // A shared space stopped for being over the line comes back only through its own fund.
       const asked = parseSpaceInvite(invite).space.id;
       if (lines.get(asked)?.stopped !== undefined && !(await paysItself(asked)))

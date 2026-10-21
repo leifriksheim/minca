@@ -167,9 +167,6 @@ describe('reminders asked of a host', () => {
       port: 0,
       wallet: null,
       billing: {
-        plans: [{ id: 'monthly', label: 'Monthly' }],
-        checkout: async () => 'https://checkout.test',
-        manage: async () => 'https://manage.test',
         fund: async () => 'https://checkout.test',
         webhook: async () => null,
       },

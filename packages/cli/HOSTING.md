@@ -91,15 +91,13 @@ What to watch once limits are on:
 
 1. **Deploy** with `fly.toml` (commands at its top). Set `MINCA_HOST_URL` to
    the public address, and the R2 bucket, so the disk is only a cache.
-2. **A Stripe test-mode run, end to end.** With `sk_test_…` keys and test
-   prices:
-   - In a home built with `VITE_MINCA_HOST`, **Keep online**, pay with
-     `4242 4242 4242 4242`. The home should say "renews" with the date within
-     a minute, and the host's log "paid until".
-   - **Change card or cancel** in the home opens Stripe's portal. Cancel,
-     and the webhook for the end of the period should leave the date as is.
-   - A space: **Chip in** twice with the one-off price; its date moves twice.
-   - Replay a webhook from Stripe's dashboard: the date must not move again.
+2. **A Stripe test-mode run, end to end.** With `sk_test_…` keys:
+   - In a home built with `VITE_MINCA_HOST`, **More room**, add $5 with
+     `4242 4242 4242 4242`. Within a minute the home should show the balance,
+     and the host's log "got $5.00 by card".
+   - Add every month, then stop it from the link `STRIPE_PORTAL_LINK` gives.
+   - A space: **Chip in** twice; its balance moves twice.
+   - Replay a webhook from Stripe's dashboard: the balance must not move again.
 3. **A wallet payment on Base Sepolia** (`MINCA_WALLET_NETWORK=base-sepolia`),
    with test USDC from faucet.circle.com.
 4. **Tax.** Selling a digital service to consumers makes you liable for VAT

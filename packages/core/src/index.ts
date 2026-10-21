@@ -566,7 +566,6 @@ export type {
   HostStatus,
   SignedStatus,
   HostDescription,
-  HostPlan,
   HostedBot,
   FundOffer,
   HostConnectorOffer,

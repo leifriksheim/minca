@@ -278,6 +278,29 @@ describe('a mirror', () => {
     assert.deepEqual(await store.list(''), ['other/a/000001-z.seg']);
   });
 
+  test('taken out of the store and mirrored again, a space goes out whole, not only what changed since', async () => {
+    const store = createMemoryBlobStore();
+    const storage = createStorageProvider(createMemoryAdapter());
+    const state = createMemoryAdapter();
+    const accept = async (version: Version): Promise<Taken> => {
+      await storage.addVersion(version);
+      return 'stored';
+    };
+    const options = { store, space: SPACE, storage, accept, state, flushMs: 5 };
+    const me = await author();
+    for (const text of ['one', 'two', 'three']) await storage.addVersion(await note(me, text));
+    const first = await createMirror(options);
+    await first.flush();
+    await first.close();
+    await deleteMirrored(store, SPACE);
+    const again = await createMirror(options);
+    await again.flush();
+    await again.close();
+    const fresh = await device(store);
+    await fresh.mirror.pull();
+    assert.deepEqual(await texts(fresh.storage), ['one', 'three', 'two']);
+  });
+
   test('a segment that is not one, or of the format before envelopes, opens as nothing', async () => {
     assert.deepEqual(unpackSegment(new TextEncoder().encode('not json')), []);
     assert.deepEqual(unpackSegment(new TextEncoder().encode('{"v":3,"versions":[]}')), []);

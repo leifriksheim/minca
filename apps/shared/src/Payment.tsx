@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { message, useAction, useCopy } from './action';
 import qrcode from 'qrcode-generator';
-import type { FundOffer, FundPayment, HostPlan, PayAnswer } from '@minca/core';
+import type { FundOffer, FundPayment, PayAnswer } from '@minca/core';
 import { Glyph } from './Feature';
 import { styles, palette } from './styles';
 
@@ -9,108 +9,15 @@ type Request = Extract<PayAnswer, { request: unknown }>['request'];
 
 /**
  * Paying a host, shown here rather than on the host's own site
- * (spec/06-nodes-and-sessions.md, Hosts), in three steps: choose a plan, pay,
- * done. A plan is a card to pick, its price first and how it is paid under
- * it. A checkout page, at the payment provider, opens in a new tab; a payment
- * request shows here as an amount, a QR code and one click for a wallet in
- * this browser. Nothing about paying passes through this page but the host's
- * answer.
+ * (spec/06-nodes-and-sessions.md, Hosts): an amount into a balance, an
+ * account's or a community's fund (`ChipIn`). A checkout page, at the
+ * payment provider, opens in a new tab; a payment request shows here as an
+ * amount, a QR code and one click for a wallet in this browser. Nothing
+ * about paying passes through this page but the host's answer.
  *
  * `paid` is asked every few seconds once paying has started: the host sees
  * the payment arrive by itself, and says so in its status.
  */
-export function PayFlow({
-  plans,
-  start,
-  paid,
-  onDone,
-}: {
-  plans: ReadonlyArray<HostPlan>;
-  start: (plan: string) => Promise<PayAnswer>;
-  paid: () => Promise<boolean>;
-  onDone?: () => void;
-}) {
-  const [chosen, setChosen] = useState(plans[0]?.id ?? '');
-  const paying = usePaying(paid);
-  const { busy, problem } = paying;
-
-  const pay = () => {
-    const plan = plans.find((known) => known.id === chosen);
-    if (plan) paying.begin(plan.method, () => start(plan.id));
-  };
-
-  if (paying.step !== 'choose') return <PayingSteps paying={paying} onDone={onDone} />;
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div
-        role="radiogroup"
-        aria-label="How to pay"
-        style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
-      >
-        {plans.map((plan) => {
-          const [price, how] = splitLabel(plan.label);
-          const on = plan.id === chosen;
-          return (
-            <button
-              key={plan.id}
-              role="radio"
-              aria-checked={on}
-              onClick={() => setChosen(plan.id)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                padding: '12px 14px',
-                borderRadius: 10,
-                textAlign: 'left',
-                background: on ? palette.surface.sunken : palette.surface.card,
-                border: `1px solid ${on ? palette.ink.strong : palette.surface.line}`,
-                boxShadow: on ? `0 0 0 1px ${palette.ink.strong}` : 'none',
-                color: palette.ink.body,
-              }}
-            >
-              <span
-                aria-hidden
-                style={{
-                  width: 16,
-                  height: 16,
-                  borderRadius: 8,
-                  flexShrink: 0,
-                  border: `1.5px solid ${on ? palette.ink.strong : palette.surface.lineStrong}`,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                {on && (
-                  <span style={{ width: 8, height: 8, borderRadius: 4, background: palette.ink.strong }} />
-                )}
-              </span>
-              <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ display: 'block', fontSize: 14, fontWeight: 600, color: palette.ink.strong }}>
-                  {price}
-                </span>
-                {how && (
-                  <span style={{ display: 'block', fontSize: 12.5, color: palette.ink.muted }}>{how}</span>
-                )}
-              </span>
-              <Glyph
-                name={plan.method === 'request' ? 'wallet' : 'card'}
-                size={18}
-                style={{ color: palette.ink.faint }}
-              />
-            </button>
-          );
-        })}
-      </div>
-      <button onClick={pay} disabled={busy || !chosen} data-variant="primary" style={styles.button}>
-        {busy ? 'One moment…' : 'Continue to payment'}
-      </button>
-      {problem && <p style={{ fontSize: 13, color: palette.accent.danger }}>{problem}</p>}
-    </div>
-  );
-}
 
 type Step = 'choose' | 'checkout' | 'done' | Request;
 
@@ -203,10 +110,11 @@ function PayingSteps({ paying, onDone }: { paying: ReturnType<typeof usePaying>;
 const AMOUNTS = ['5', '10', '25'] as const;
 
 /**
- * Adding to a community's fund: an amount (a few to pick, or any other),
- * by card or from a wallet, and by card every month if the host offers it.
- * One fund pays for keeping the community online and for its bots, so this
- * is the one way anyone pays for either.
+ * Adding to a balance, an account's or a community's fund: an amount (a few
+ * to pick, or any other), by card or from a wallet, and by card every month
+ * if the host offers it. A community's fund pays for keeping it online and
+ * for its bots, so this is the one way anyone pays for either. What a grace
+ * left owing is paid first, and the estimate says so.
  */
 export function ChipIn({
   fund,
@@ -223,11 +131,15 @@ export function ChipIn({
   /** The button's words before the amount: "Add" */
   cta?: string;
   /**
-   * What the fund spends now, from the host's status: its daily rate in
-   * millionths of a dollar, and the bots it pays for. Without it, the rate is
-   * keeping the space online alone.
+   * What the balance spends now, from the host's status: its daily rate in
+   * millionths of a dollar, what is in it (below zero: owed), and the bots it
+   * pays for. Without it, the rate is keeping a GB online alone.
    */
-  rate?: { readonly daily?: number; readonly bots?: ReadonlyArray<{ readonly name: string }> };
+  rate?: {
+    readonly daily?: number;
+    readonly balance?: number;
+    readonly bots?: ReadonlyArray<{ readonly name: string }>;
+  };
 }) {
   const [preset, setPreset] = useState<string>(AMOUNTS[1]);
   const [other, setOther] = useState('');
@@ -239,7 +151,8 @@ export function ChipIn({
   // At the rate it spends now: keeping it online, and its bots as they have been spending.
   // Unknown, a space pays for one GB, the least it does.
   const daily = rate?.daily && rate.daily > 0 ? rate.daily : (Number(fund.perGb) * 1e6) / 30;
-  const months = valid ? (Number(amount) * 1e6) / daily / 30 : 0;
+  const owed = Math.max(0, -(rate?.balance ?? 0));
+  const months = valid ? Math.max(0, Number(amount) * 1e6 - owed) / daily / 30 : 0;
   const bots = rate?.bots ?? [];
 
   if (paying.step !== 'choose') return <PayingSteps paying={paying} onDone={onDone} />;
@@ -345,11 +258,15 @@ export function ChipIn({
           : `${cta ?? 'Add'} ${valid ? `$${amount}` : ''}${monthly && method === 'checkout' ? ' a month' : ''}`}
       </button>
       <p style={{ fontSize: 12, color: palette.ink.faint, textAlign: 'center' }}>
-        {valid
-          ? bots.length
-            ? `Lasts about ${lastsFor(months)} at the current rate, with ${bots.map((bot) => bot.name).join(' and ')}.`
-            : `Keeps it online for about ${lastsFor(months)}.`
-          : `At least $${fund.min}.`}
+        {valid && owed > 0
+          ? Number(amount) * 1e6 <= owed
+            ? `Pays ${dollars(Number(amount) * 1e6)} of the ${dollars(owed)} owed: it turns on past that.`
+            : `Pays the ${dollars(owed)} owed first, then keeps it online for about ${lastsFor(months)}.`
+          : valid
+            ? bots.length
+              ? `Lasts about ${lastsFor(months)} at the current rate, with ${bots.map((bot) => bot.name).join(' and ')}.`
+              : `Keeps it online for about ${lastsFor(months)}.`
+            : `At least $${fund.min}.`}
       </p>
       {paying.problem && <p style={{ fontSize: 13, color: palette.accent.danger }}>{paying.problem}</p>}
     </div>
@@ -369,14 +286,6 @@ export function lastsFor(months: number): string {
 /** Millionths of a dollar as dollars: $23.40 */
 export function dollars(micros: number): string {
   return `$${(micros / 1e6).toFixed(2)}`;
-}
-
-/** "$4 a month, by card" as its price and how it is paid */
-function splitLabel(label: string): [string, string] {
-  const comma = label.indexOf(', ');
-  if (comma < 0) return [label, ''];
-  const how = label.slice(comma + 2);
-  return [label.slice(0, comma), how.charAt(0).toUpperCase() + how.slice(1)];
 }
 
 function Waiting({ title, detail, onBack }: { title: string; detail: string; onBack: () => void }) {

@@ -42,29 +42,17 @@ account's key: the host learns a subscription, not who pays.
 | `price`      | Optional, free text.                                                                                                                                                 |
 | `terms`      | Optional, for people.                                                                                                                                                |
 | `peer`       | Optional: where it takes peers over WebSocket ([04](04-network.md)), relative to the host's address or absolute. Absent: devices cannot reach it by its description. |
-| `plans`      | Optional: what can be paid for, and how (below). Absent or empty: it takes no payments.                                                                              |
 | `remind`     | Optional: `true` when it sends reminders by email before paid time runs out (`…/remind`).                                                                            |
 | `bots`       | Optional: `true` when it runs bots for the spaces it carries (§3).                                                                                                   |
-| `fund`       | Optional: how communities pay here, through a fund (§2). Absent: they can't.                                                                                         |
+| `fund`       | Optional: how money goes in here, and the price: into an account's balance (below) and a community's fund (§2). Absent: it takes no payments.                        |
 | `connectors` | Optional, with `bots`: the services its bots can be connected to (§3.1), each `{ id, name }`.                                                                        |
-| `limits`     | Optional: what it keeps for free and what paying adds (§1.1). Absent: every subscription is paid for, or free with `free`.                                           |
+| `limits`     | Optional: what it keeps for free (§1.1). Absent: every subscription is paid for, or free with `free`.                                                                |
 
 A device MUST refuse a description whose `minca` is not `host/1` or whose `did`
 is not a `did:key`, and MUST treat a host whose `did` changed since it was first
 used as a different host.
 
-A **plan** is one way to pay:
-
-| Field    | Meaning                                                                                                                 |
-| -------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `id`     | What a device sends to start it (`…/pay`).                                                                              |
-| `label`  | For people, with the price: `"$4 a month, by card"`.                                                                    |
-| `method` | `checkout`: the host answers with a page at a payment provider. `request`: with a payment request for a wallet to send. |
-| `renews` | Charged again by itself until cancelled (a card). `false` for time paid up front.                                       |
-| `for`    | Who may use it: `["account"]`. A space pays through its fund instead (§2).                                              |
-
-A device shows only plans whose `for` names the subscription it pays for, and
-ignores a plan whose `method` it does not know. Example:
+Example:
 
 ```json
 {
@@ -72,33 +60,17 @@ ignores a plan whose `method` it does not know. Example:
   "did": "did:key:zDnaeXL64…",
   "name": "Minca host",
   "free": false,
-  "price": "$4 a month or $36 a year",
+  "price": "$0.10 a GB a month",
   "peer": "/peer",
   "remind": true,
   "bots": true,
   "fund": {
-    "monthly": "4",
-    "min": "1",
+    "perGb": "0.10",
+    "min": "5",
     "methods": ["checkout", "request"],
     "recurring": true,
     "botDailyCap": "1.50"
-  },
-  "plans": [
-    {
-      "id": "card-monthly",
-      "label": "$4 a month, by card",
-      "method": "checkout",
-      "renews": true,
-      "for": ["account"]
-    },
-    {
-      "id": "wallet-yearly",
-      "label": "$36 a year, from a wallet (USDC on Base)",
-      "method": "request",
-      "renews": false,
-      "for": ["account"]
-    }
-  ]
+  }
 }
 ```
 
@@ -128,14 +100,13 @@ Authorization: Minca did=did:key:zDnaet57TmtMH7vQJT8HzNLSZV5sc5JGJub2ZzpX3oHshR2
 
 **Calls.** `<id>` is the subscription DID, URL-encoded or not.
 
-| Call                                    | Body                                                                         | Answer                                                                                                                                  |
-| --------------------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /host/subscriptions/<id>`          | —                                                                            | `SignedStatus`                                                                                                                          |
-| `PUT /host/subscriptions/<id>/carry`    | `{ "account": "<account DID>", "invite": "<carry invite, ≤ 16 000 chars>" }` | `SignedStatus`. 402 when not paid (or lapsed); 403 when the host carries only named accounts and this is not one; 400 for a bad invite. |
-| `DELETE /host/subscriptions/<id>/carry` | —                                                                            | `SignedStatus`. Stops carrying; the subscription stays.                                                                                 |
-| `POST /host/subscriptions/<id>/pay`     | `{ "plan": "<plan id>" }`                                                    | A pay answer (below). 400 for a plan it doesn't have, or one not `for` accounts.                                                        |
-| `POST /host/subscriptions/<id>/manage`  | `{}`                                                                         | A pay answer with `checkout`: the provider's page to change the card or cancel. 404 when nothing renews.                                |
-| `POST /host/subscriptions/<id>/remind`  | `{ "email": "<address>" }`                                                   | `{}`. 404 when it sends no reminders; 400 for an address it can't use.                                                                  |
+| Call                                    | Body                                                                             | Answer                                                                                                                                                                              |
+| --------------------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /host/subscriptions/<id>`          | —                                                                                | `SignedStatus`                                                                                                                                                                      |
+| `PUT /host/subscriptions/<id>/carry`    | `{ "account": "<account DID>", "invite": "<carry invite, ≤ 16 000 chars>" }`     | `SignedStatus`. 402 when not paid (or lapsed); 403 when the host carries only named accounts and this is not one; 400 for a bad invite.                                             |
+| `DELETE /host/subscriptions/<id>/carry` | —                                                                                | `SignedStatus`. Stops carrying; the subscription stays.                                                                                                                             |
+| `POST /host/subscriptions/<id>/pay`     | `{ "amount": "<dollars>", "method": "checkout" \| "request", "monthly"?: true }` | A pay answer (below) that adds `amount` to its balance. 400 for an amount below `fund.min` or not matching it as in §2, or a method it doesn't take; 404 when it takes no payments. |
+| `POST /host/subscriptions/<id>/remind`  | `{ "email": "<address>" }`                                                       | `{}`. 404 when it sends no reminders; 400 for an address it can't use.                                                                                                              |
 
 Errors are `{ "error": "<message>" }` with 400, 401 (not signed by the
 subscription), 402, 403, 404, 405. The reference host sends
@@ -145,22 +116,24 @@ subscription), 402, 403, 404, 405. The reference host sends
 text of a `HostStatus` and `sig` is the host key's signature (base64url) over
 `utf8("minca-host-status/v1\n" + payload)`. `HostStatus`:
 
-| Field          | Meaning                                                                                                                                                                  |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `subscription` | The subscription DID.                                                                                                                                                    |
-| `host`         | The host's DID.                                                                                                                                                          |
-| `state`        | `active` (paid, or a free host), `grace` (past `paidUntil`, within the grace period), `lapsed`, `none` (no such subscription).                                           |
-| `paidUntil`    | Unix seconds; 0 before any payment.                                                                                                                                      |
-| `renews`       | Paid through something that renews by itself (a card).                                                                                                                   |
-| `carrying`     | Whether it carries the account's spaces now.                                                                                                                             |
-| `spaces`       | How many spaces the carry space's passes name.                                                                                                                           |
-| `at`           | When the host said it, unix seconds.                                                                                                                                     |
-| `bytes`        | Optional: what the subscription's spaces take at the host, as it last measured.                                                                                          |
-| `quota`        | Optional: what they may take. Past it the host takes no new space for the subscription; at a host with `limits`, see Room (§1.1).                                        |
-| `plan`         | Optional, at a host with `limits`, for an account's subscription: `"free"` or `"paid"`, which room applies (§1.1).                                                       |
-| `over`         | Optional, at a host with `limits`: the spaces this subscription names that are over the free line (§1.1), each an `OverSpace`.                                           |
-| `usage`        | Optional, at a host with `limits`, for a space's own subscription: how much the space is used (§1.1), a `SpaceUsage`.                                                    |
-| `full`         | Optional, at a host with `limits`: `{ since, until }`, unix seconds, from when its spaces took more than `quota` until a whole window after they fit again (§1.1, Room). |
+| Field          | Meaning                                                                                                                                                                     |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `subscription` | The subscription DID.                                                                                                                                                       |
+| `host`         | The host's DID.                                                                                                                                                             |
+| `state`        | `active` (paid, or a free host), `grace` (past `paidUntil`, within the grace period), `lapsed`, `none` (no such subscription).                                              |
+| `paidUntil`    | Unix seconds; 0 before any payment.                                                                                                                                         |
+| `renews`       | Paid through something that renews by itself. Always `false` for a balance: a card that adds every month is the payer's own (`fund.manage`).                                |
+| `carrying`     | Whether it carries the account's spaces now.                                                                                                                                |
+| `spaces`       | How many spaces the carry space's passes name.                                                                                                                              |
+| `at`           | When the host said it, unix seconds.                                                                                                                                        |
+| `bytes`        | Optional: what the subscription's spaces take at the host, as it last measured.                                                                                             |
+| `quota`        | Optional: what they may take. Past it the host takes no new space for the subscription; at a host with `limits`, the free room while its balance does not pay (Room, §1.1). |
+| `balance`      | Optional, at a host that takes payments: what is in the subscription's balance, in millionths of a dollar; below zero by what its grace (and a bot's last call, §3) took.   |
+| `daily`        | Optional, with `balance`: what it spends a day as things go, in millionths of a dollar.                                                                                     |
+| `plan`         | Optional, at a host with `limits`, for an account's subscription: `"paid"` while its balance pays for what is past its free room, `"free"` otherwise (§1.1).                |
+| `over`         | Optional, at a host with `limits`: the spaces this subscription names that are over the free line (§1.1), each an `OverSpace`.                                              |
+| `usage`        | Optional, at a host with `limits`, for a space's own subscription: how much the space is used (§1.1), a `SpaceUsage`.                                                       |
+| `full`         | Optional, at a host with `limits`: `{ since, until }`, unix seconds, from when its spaces took more than `quota` until a whole window after they fit again (§1.1, Room).    |
 
 A device MUST accept a status only if it verifies under the host's recorded DID,
 its `host` equals that DID, and its `subscription` is the device's own. Example:
@@ -174,8 +147,18 @@ its `host` equals that DID, and its `subscription` is the device's own. Example:
 
 (The format only: the DIDs are shortened and the signature is illustrative.)
 
-**Paying.** A device never handles a payment: it shows the host's plans, and
-what the host answers when asked to start one. A **pay answer** is one of:
+**The balance.** An account pays as a community does (§2): into a balance,
+any amount, from which the host takes its `fund.perGb` rate a month for each
+GB (10⁹ bytes) the subscription's spaces take past `limits.accountBytes`
+(every GB, at a host without `limits`), by the byte and for the time they
+do. Its state, its grace and `paidUntil` go as a fund's do (§2): `active`
+while the balance is above zero, a grace lent as a fund's is, and
+`paidUntil` the host's estimate. Its status says `balance` and `daily`. The
+host learns how much was paid into which subscription, never by whom.
+
+**Paying.** A device never handles a payment: it shows the host's price
+(`fund`), and what the host answers when asked to take one. A **pay answer**
+is one of:
 
 ```json
 { "checkout": "https://checkout.stripe.com/c/pay/cs_live_a1b2c3" }
@@ -210,8 +193,8 @@ what the host answers when asked to start one. A **pay answer** is one of:
   wallet in the browser (EIP-1193) can be asked to send it. A device shows
   `amount` as it is: the host tells payments apart by it.
 
-A host sees a request paid by itself, on the network, and moves `paidUntil`;
-how is its business. A device asks for the status until it moves. Where a
+A host sees a request paid by itself, on the network, and adds it to the
+balance; how is its business. A device asks for the status until it moves. Where a
 checkout page sends people back to is the host's business too; a device
 never follows a link the host gives, only opens `checkout`.
 
@@ -257,7 +240,7 @@ code finds its registry, and every space from it. The host learns the
 registry's id and the device's session key, and serves it only if it carries
 it. The reference reaches those hosts for the registry alone.
 
-_Source: `packages/core/src/session/hosting.ts` (`hostPeerAddress`), `packages/core/src/node/host.ts`, `packages/core/src/node/node.ts` (`hosting`, `reachHosts`), `packages/core/src/node/space-runtime.ts` (`useNodes`), `packages/cli/src/host.ts` (`startPayment`, `watch`), `packages/cli/src/wallet.ts` (`request`, `scan`), `packages/cli/src/reminders.ts`. Tests: `packages/cli/tests/host.test.ts` ("the host API": all; "pay answers": all; "reaching a host at the address it names": all; "a host’s room": all; "wallet payments": all), `packages/cli/tests/reminders.test.ts`._
+_Source: `packages/core/src/session/hosting.ts` (`hostPeerAddress`), `packages/core/src/node/host.ts`, `packages/core/src/node/node.ts` (`hosting`, `reachHosts`), `packages/core/src/node/space-runtime.ts` (`useNodes`), `packages/cli/src/host.ts` (`startFund`, `watch`), `packages/cli/src/fund.ts`, `packages/cli/src/wallet.ts` (`request`, `scan`), `packages/cli/src/reminders.ts`. Tests: `packages/cli/tests/host.test.ts` ("the host API": all; "pay answers": all; "reaching a host at the address it names": all; "a host’s room": all; "wallet payments": all), `packages/cli/tests/reminders.test.ts`._
 
 ### 1.1 Limits: free hosting, paid room, and the free line
 
@@ -270,20 +253,18 @@ person can compare hosts before choosing one.
 
 **Description.** `limits`:
 
-| Field              | Meaning                                                                                                                                                                      |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `accountBytes`     | Bytes an account's spaces may take on the free plan: its `quota` while it does not pay.                                                                                      |
-| `paidAccountBytes` | Optional: its `quota` while it pays (`paidUntil` ahead). Absent: the same as `accountBytes`.                                                                                 |
-| `space`            | The free line for a space several accounts write in: `{ writers, bytes, windowDays, readers? }`, below.                                                                      |
-| `graceDays`        | Days a space over the line is still carried for its members' subscriptions before only its own subscription (§2) carries it; and the notice for room (Room).                 |
-| `keepDays`         | Optional: days the host keeps a space it stopped carrying for being over the line, or held back for room (Room), so a fund or room made in that time brings it back at once. |
-| `idleDays`         | Optional: days a free subscription is kept with no signed call from any of its devices. Absent: kept while the host runs.                                                    |
+| Field          | Meaning                                                                                                                                                                      |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `accountBytes` | Bytes an account's spaces may take for free: its `quota` while its balance does not pay. Past them, a balance pays (§1).                                                     |
+| `space`        | The free line for a space several accounts write in: `{ writers, bytes, windowDays, readers? }`, below.                                                                      |
+| `graceDays`    | Days a space over the line is still carried for its members' subscriptions before only its own subscription (§2) carries it; and the notice for room (Room).                 |
+| `keepDays`     | Optional: days the host keeps a space it stopped carrying for being over the line, or held back for room (Room), so a fund or room made in that time brings it back at once. |
+| `idleDays`     | Optional: days a free subscription is kept with no signed call from any of its devices. Absent: kept while the host runs.                                                    |
 
 ```json
 {
   "limits": {
     "accountBytes": 250000000,
-    "paidAccountBytes": 10000000000,
     "space": { "writers": 10, "bytes": 500000000, "windowDays": 30, "readers": 50 },
     "graceDays": 30,
     "keepDays": 30,
@@ -301,9 +282,11 @@ always did, every subscription paid and no limits, and a host that says it
 MUST NOT also give `limits`.
 
 **Plans.** At a host with `limits`, an account's subscription is `active`
-without payment: `plan` is `"paid"` while `paidUntil` is ahead and `"free"`
-otherwise, and its `quota` is `paidAccountBytes` or `accountBytes`
-accordingly. It is never `grace` or `lapsed` for want of payment, and is
+without payment: `plan` is `"paid"` while its balance is above zero and
+`"free"` otherwise. Paying, it has no `quota`: its balance pays for what is
+past `accountBytes`. On the free plan its `quota` is `accountBytes`. So when
+a balance runs out, its room is the free one again, and the notice (Room)
+runs as its grace does. It is never `grace` or `lapsed` for want of payment, and is
 dropped only after `idleDays` with no signed call (§1) from any of its
 devices. What a space's own subscription carries (§2), while `active`,
 counts against no account's quota; its fund pays for its size instead (§2).
@@ -319,10 +302,12 @@ so neither a new key nor a dip under starts it again. Past `until`, while
 still over, it MUST NOT carry the largest of those spaces for that
 subscription until the rest fit; another subscription with room that names
 one still has it carried. It keeps what it held of them, unserved, for
-`keepDays` from when each was first held back, then deletes its copy of one
-no subscription carries; the space is still named and comes back once it
-fits. An account over by its carry space alone is carried for no more,
-under any key, until the host's owner says. Members' devices keep
+`keepDays` from when each was first held back (none, without `keepDays`),
+then deletes what its bucket keeps of one no subscription carries; the
+space is still named, comes back once it fits, and goes to the bucket whole
+again. An account over by its carry space alone is carried for no more,
+under any key, until it pays (its balance then has no room to be over) or
+the host's owner says. Members' devices keep
 everything. A space's own fund pays for its size instead (§2).
 
 **The free line.** Over the last `windowDays`, a host counts for each space
@@ -491,27 +476,31 @@ host takes from it only what it says it will: keeping the space online at its
 `fund.perGb` rate for each GB (10⁹ bytes) its space takes, and for one GB if
 it takes less, for the time it does, and what the bots it runs in that space
 spend (§3). The subscription is `active` while the balance is above zero,
-then `grace`, then `lapsed`, as in §1. Through its grace the host goes on
-taking its rate, below zero, for at most its grace period, and only from a
-fund anything was ever added to; a payment pays what is owed first. So grace
-is lent, never given: a payment that leaves the balance at or below zero
-turns nothing back on, and each grace is paid for by the payment after it.
-`paidUntil` is not a date that was bought: it is the
-host's estimate of when the balance reaches zero at what the fund spends
-now, and it MUST move as that changes (sooner as bots spend more, later with
-each payment), but an empty fund's date never moves later.
+then `grace`, then `lapsed`, as in §1. A grace is lent, never given, and
+no longer than what was last added lasted, nor the host's grace period: for
+that long after the balance reaches zero the host goes on taking its rate,
+below zero, and then takes nothing more, whatever the space grows to. A
+fund nothing was ever added to owes nothing. A payment pays what is owed
+first, so one that leaves the balance at or below zero turns nothing back
+on, and each grace is paid for by the payment after it. So the least
+payment into a large space buys a short grace. `paidUntil` is not a date
+that was bought: it is the host's estimate of when the balance reaches zero
+at what the fund spends now, and it MUST move as that changes (sooner as
+bots spend more, later with each payment). Once it ran out, it is the date
+the host's grace period counts from so that it ends where the lent grace
+does, and it never moves later.
 
-A host that takes payments for communities says how in its description
-(§1), as `fund`:
+A host that takes payments says how in its description (§1), as `fund`, for
+accounts' balances and communities' funds alike:
 
-| Field         | Meaning                                                                                                         |
-| ------------- | --------------------------------------------------------------------------------------------------------------- |
-| `perGb`       | Dollars a month that keeping the space online takes from the fund for each GB it takes, at least one: `"0.10"`. |
-| `min`         | Dollars: the least one payment may add.                                                                         |
-| `methods`     | How money is added: `checkout` (a page at a payment provider) and/or `request` (a payment for a wallet).        |
-| `recurring`   | Whether a `checkout` payment may be every month.                                                                |
-| `manage`      | Optional: the payment provider's page where someone stops paying every month.                                   |
-| `botDailyCap` | Optional, when it runs bots: dollars a bot may take from the fund a day at most.                                |
+| Field         | Meaning                                                                                                                                                       |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `perGb`       | Dollars a month for each GB kept online: a fund pays for each its space takes, at least one; an account's balance for each past its free room (§1): `"0.10"`. |
+| `min`         | Dollars: the least one payment may add.                                                                                                                       |
+| `methods`     | How money is added: `checkout` (a page at a payment provider) and/or `request` (a payment for a wallet).                                                      |
+| `recurring`   | Whether a `checkout` payment may be every month.                                                                                                              |
+| `manage`      | Optional: the payment provider's page where someone stops paying every month.                                                                                 |
+| `botDailyCap` | Optional, when it runs bots: dollars a bot may take from the fund a day at most.                                                                              |
 
 ```json
 { "perGb": "0.10", "min": "5", "methods": ["checkout", "request"], "recurring": true, "botDailyCap": "1.50" }

@@ -19,16 +19,16 @@ export function size(bytes: number): string {
 
 /**
  * What a host keeps an account's spaces for, in a few words: free, free up
- * to some room with more for its price, or its price. What hosts are
+ * to some room and its price by the GB past it, or its price. What hosts are
  * compared by when one is chosen.
  */
 export function hostTerms(offer: HostDescription): string {
   if (offer.free) return 'Free';
+  const perGb = offer.fund ? `$${offer.fund.perGb} a GB a month` : (offer.price ?? '');
   const limits = offer.limits;
-  if (!limits) return offer.price ?? '';
+  if (!limits) return perGb;
   const free = `Free up to ${size(limits.accountBytes)}`;
-  const paid = limits.paidAccountBytes ?? limits.accountBytes;
-  return offer.price && paid > limits.accountBytes ? `${free} · ${size(paid)} for ${offer.price}` : free;
+  return offer.fund ? `${free} · then ${perGb}` : free;
 }
 
 /** Whether a space over a host's free line is still kept there for free */
