@@ -4,7 +4,9 @@ import { accountHomeLink } from '@minca/core/session';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { useDismiss } from '@minca/app-shared/useDismiss';
 import { useCopy } from '@minca/app-shared/action';
+import { useNavigate } from '@tanstack/react-router';
 import { ConnectAgent } from './ConnectAgent';
+import { shortAccount } from '../account-address';
 import { shrinkImage } from '../files';
 import { palette, styles } from '../styles';
 
@@ -20,6 +22,13 @@ export function AccountMenu({ place = 'header' }: { place?: 'header' | 'sidebar'
   const [connecting, setConnecting] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const { picture, choose, picker, problem } = usePicture(account.name);
+  const navigate = useNavigate();
+  const others = state.accounts.filter((other) => other.did !== account.did);
+  // Switching is moving the address: the tab acts for whichever account it names (`account-address.ts`).
+  const switchTo = (did: string) => {
+    setOpen(false);
+    void navigate({ to: '/', search: { as: shortAccount(did) } });
+  };
 
   useDismiss(
     open,
@@ -147,8 +156,33 @@ export function AccountMenu({ place = 'header' }: { place?: 'header' | 'sidebar'
           <Divider />
 
           <div style={{ padding: 6 }}>
+            {others.map((other) => (
+              <button
+                key={other.did}
+                role="menuitem"
+                onClick={() => switchTo(other.did)}
+                data-menu-item
+                style={{ ...item, justifyContent: 'flex-start', height: 40 }}
+              >
+                <Avatar did={other.did} size={24} round />
+                <span style={{ ...ellipsis, flex: 1, textAlign: 'left' }}>{other.name}</span>
+              </button>
+            ))}
+            <Item onClick={() => void connection.connect()} hint={new URL(state.home).host}>
+              Add another account
+            </Item>
+            {state.error && (
+              <p style={{ margin: '4px 10px 6px', fontSize: 12, lineHeight: 1.45, color: palette.ink.muted }}>
+                {state.error}
+              </p>
+            )}
+          </div>
+
+          <Divider />
+
+          <div style={{ padding: 6 }}>
             <Item onClick={() => void connection.disconnect()} hint="Your account is untouched">
-              Disconnect this app
+              Disconnect {others.length > 0 ? account.name : 'this app'}
             </Item>
           </div>
         </div>

@@ -31,6 +31,7 @@ export type {
   MincaConnectionConfig,
   MincaConnectionState,
   ConnectionStatus,
+  ConnectedAccount,
 } from './connection.js';
 export {
   connectToHome,
@@ -62,6 +63,7 @@ export type {
   ProposeRequest,
   Proposed,
   Grant,
+  KeptGrant,
   CarryGrant,
   GrantedSpace,
   IncomingRequest,

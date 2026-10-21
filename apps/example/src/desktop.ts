@@ -118,10 +118,14 @@ export function desktopConnection(
     grant: null,
     node: null,
     error: null,
+    accounts: [],
   });
   const listeners = new Set<(state: MincaConnectionState) => void>();
+  // The shell's node acts for one account: the one it is connected as is all there is to switch to.
   const update = (patch: Partial<MincaConnectionState>) => {
-    state = Object.freeze({ ...state, ...patch });
+    const grant = patch.grant === undefined ? state.grant : patch.grant;
+    const accounts = grant ? [{ did: grant.did, name: grant.name, expiresAt: grant.expiresAt }] : [];
+    state = Object.freeze({ ...state, ...patch, accounts });
     for (const listener of listeners) listener(state);
   };
   /** Who waits for the node to say it has finished connecting or disconnecting */
@@ -212,6 +216,10 @@ export function desktopConnection(
       update({ status: 'connecting', error: null });
       channel.send({ kind: 'connect', home: address, request: config.request });
       await until();
+    },
+    async use(did) {
+      if (state.grant?.did !== did)
+        throw new Error('The desktop app acts for one account. Disconnect it to use another.');
     },
     async disconnect() {
       channel.send({ kind: 'disconnect' });

@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 
 import { createMincaAuth, type MincaAuth } from '../src/session/auth.js';
 import {
+  grantStore,
   homeAddress,
   startConnectedNode,
   watchGrant,
@@ -15,6 +16,7 @@ import {
   type Grant,
   type ProposeRequest,
 } from '../src/session/connect.js';
+import { createMincaConnection } from '../src/session/connection.js';
 import { createFolderAccountStore } from '../src/identity/account-store.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
@@ -1696,6 +1698,339 @@ describe('the home receiving a request', () => {
       assert.equal(incoming.origin, origin);
     } finally {
       popup.restore();
+    }
+  });
+});
+
+describe('an app connected to several accounts', () => {
+  const HOME = 'https://home.test/connect';
+
+  /** A grant from the home to a key of the app's own */
+  async function grantFrom(auth: MincaAuth, key: AppKey, spaceIds: string[] = []): Promise<Grant> {
+    const request: ConnectRequest = await asked(
+      { v: 1, audience: key.did, name: 'Todo', access: 'write' },
+      key,
+    );
+    return { ...(await auth.grant({ origin: 'https://todo.test', request, spaceIds })), home: HOME };
+  }
+
+  async function granted(hub: FakeHub): Promise<{ auth: MincaAuth; grant: Grant; key: AppKey }> {
+    const auth = await home(hub);
+    const key = await appKey();
+    return { auth, grant: await grantFrom(auth, key), key };
+  }
+
+  function memoryStorage() {
+    const values = new Map<string, string>();
+    return {
+      getItem: (k: string) => values.get(k) ?? null,
+      setItem: (k: string, v: string) => void values.set(k, v),
+      removeItem: (k: string) => void values.delete(k),
+    };
+  }
+
+  /** The app's keys, by name, as IndexedDB keeps them: a name asked for the first time makes one */
+  function keyStore(start: ReadonlyArray<[string, AppKey]> = []) {
+    const held = new Map(start);
+    return {
+      held,
+      get: async (name: string) => {
+        const found = held.get(name) ?? (await appKey());
+        held.set(name, found);
+        return found;
+      },
+      forget: async (name: string) => void held.delete(name),
+    };
+  }
+
+  /** A connection on the hub, as one tab of the app; tabs given one storage and key store share them */
+  function tab(
+    hub: FakeHub,
+    storage: ReturnType<typeof memoryStorage>,
+    keys: ReturnType<typeof keyStore>,
+    account?: string,
+  ) {
+    const connection = createMincaConnection({
+      home: HOME,
+      request: { name: 'Todo', access: 'write' },
+      storage,
+      stores: () => memoryStores(),
+      network: { transports: (spaceId, sessionDid) => [hub.transport(sessionDid, spaceId)] },
+      keys,
+      ...(account ? { account: () => account } : {}),
+    });
+    cleanup.push(() => connection.getState().node?.close() ?? Promise.resolve());
+    return connection;
+  }
+
+  /** Runs `act` with a popup that the home `auth` answers, granting `spaceIds` */
+  async function withHome(auth: MincaAuth, spaceIds: string[], act: () => Promise<void>): Promise<void> {
+    type Heard = { source: unknown; origin: string; data: unknown };
+    const listeners = new Set<(event: Heard) => void>();
+    const fromHome = (data: unknown) => {
+      for (const listener of [...listeners]) listener({ source: popup, origin: 'https://home.test', data });
+    };
+    let answered = false;
+    const popup = {
+      closed: false,
+      close() {},
+      postMessage(message: unknown) {
+        if (answered || !isRecord(message) || message.type !== 'minca:request') return;
+        answered = true;
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the app's own request, made by connectToHome
+        const request = message.request as ConnectRequest;
+        void auth
+          .grant({ origin: 'https://todo.test', request, spaceIds })
+          .then((grant) => fromHome({ type: 'minca:grant', grant }));
+      },
+    };
+    const g: {
+      open?: unknown;
+      location?: unknown;
+      addEventListener?: unknown;
+      removeEventListener?: unknown;
+    } = globalThis;
+    const saved = {
+      open: g.open,
+      location: g.location,
+      addEventListener: g.addEventListener,
+      removeEventListener: g.removeEventListener,
+    };
+    Object.assign(g, {
+      open: () => popup,
+      location: { href: 'https://todo.test/' },
+      addEventListener: (_type: string, listener: (event: Heard) => void) => listeners.add(listener),
+      removeEventListener: (_type: string, listener: (event: Heard) => void) => listeners.delete(listener),
+    });
+    const hello = setInterval(() => fromHome({ type: 'minca:hello' }), 20);
+    try {
+      await act();
+    } finally {
+      clearInterval(hello);
+      Object.assign(g, saved);
+    }
+  }
+
+  test('keeps a grant per account, each with its key; renewing one keeps its place, and letting one go keeps the rest', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const a = await granted(hub);
+    const b = await granted(hub);
+    assert.notEqual(a.grant.did, b.grant.did);
+    const grants = grantStore(memoryStorage());
+
+    grants.save(a.grant, 'account-a');
+    grants.save(b.grant, 'account-b');
+    assert.deepEqual(
+      grants.list().map((each) => [each.grant.did, each.keyName]),
+      [
+        [a.grant.did, 'account-a'],
+        [b.grant.did, 'account-b'],
+      ],
+    );
+
+    // Renewed: a new note and key, the same place in the list.
+    grants.save({ ...a.grant, expiresAt: a.grant.expiresAt + 60 }, 'account-a2');
+    assert.equal(grants.list()[0]?.grant.expiresAt, a.grant.expiresAt + 60);
+    assert.equal(grants.get(a.grant.did)?.keyName, 'account-a2');
+
+    grants.forget(a.grant.did);
+    assert.deepEqual(
+      grants.list().map((each) => each.grant.did),
+      [b.grant.did],
+    );
+  });
+
+  test('a grant that ran out is kept, to show and renew; one in an older format is not', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const a = await granted(hub);
+    const storage = memoryStorage();
+    const grants = grantStore(storage);
+    grants.save({ ...a.grant, expiresAt: 1 }, 'account-a');
+    assert.equal(grants.get(a.grant.did)?.keyName, 'account-a');
+
+    storage.setItem('minca.grants', JSON.stringify([{ grant: { ...a.grant, v: 1 }, keyName: 'old' }]));
+    assert.deepEqual(grants.list(), []);
+  });
+
+  test('switches account with no trip to the home, and letting one go acts for the next', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const a = await granted(hub);
+    const b = await granted(hub);
+    const storage = memoryStorage();
+    const grants = grantStore(storage);
+    grants.save(a.grant, 'account-a');
+    grants.save(b.grant, 'account-b');
+    const keys = keyStore([
+      ['account-a', a.key],
+      ['account-b', b.key],
+    ]);
+    const connection = tab(hub, storage, keys, b.grant.did);
+
+    await connection.start();
+    assert.equal(connection.getState().status, 'ready');
+    assert.equal(connection.getState().node?.did, b.grant.did, 'the account the address named');
+    assert.equal(connection.getState().node?.sessionDid, b.key.did);
+
+    await connection.use(a.grant.did);
+    assert.equal(connection.getState().node?.did, a.grant.did);
+    assert.equal(connection.getState().node?.sessionDid, a.key.did, 'each account signs with its own key');
+    assert.deepEqual(
+      connection.getState().accounts.map((account) => account.did),
+      [a.grant.did, b.grant.did],
+    );
+
+    await connection.disconnect();
+    assert.equal(connection.getState().node?.did, b.grant.did);
+    assert.equal(keys.held.has('account-a'), false, 'its key is forgotten');
+    assert.deepEqual(
+      connection.getState().accounts.map((account) => account.did),
+      [b.grant.did],
+    );
+
+    await connection.disconnect();
+    assert.equal(connection.getState().status, 'disconnected');
+    assert.equal(connection.getState().node, null);
+  });
+
+  test('connecting asks with a new key, so renewing one the person disconnected works, and another account chosen at the home is taken, never shown the first one’s key', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const a = await granted(hub);
+    const b = await granted(hub);
+    const space = await b.auth
+      .getState()
+      .session!.node.spaces.create({ name: 'Team', ...team, visibility: 'private' });
+    const storage = memoryStorage();
+    const grants = grantStore(storage);
+    // A's grant ran out, and its home let it go, revoking its key.
+    grants.save({ ...a.grant, expiresAt: 1 }, 'account-a');
+    await a.auth.disconnect('https://todo.test', { audience: a.key.did });
+    const bFirst = await appKey();
+    grants.save(await grantFrom(b.auth, bFirst, [space.id]), 'account-b');
+    const keys = keyStore([
+      ['account-a', a.key],
+      ['account-b', bFirst],
+    ]);
+    const connection = tab(hub, storage, keys, a.grant.did);
+    await connection.start();
+    assert.equal(connection.getState().status, 'expired');
+
+    // Renewing A, at A's home: a new key, which works.
+    await withHome(a.auth, [], () => connection.connect());
+    assert.equal(connection.getState().status, 'ready');
+    assert.equal(connection.getState().grant?.did, a.grant.did);
+    const aKey = connection.getState().node!.sessionDid;
+    assert.notEqual(aKey, a.key.did, 'not the key the home revoked');
+    assert.equal(keys.held.has('account-a'), false, 'which is forgotten');
+
+    // "Connect again" for A, at a home signed in as B: the app now acts for B, with a new key.
+    await withHome(b.auth, [space.id], () => connection.connect());
+    assert.equal(connection.getState().grant?.did, b.grant.did, 'the account the person chose');
+    const bKey = connection.getState().node!.sessionDid;
+    assert.ok(bKey !== aKey && bKey !== bFirst.did);
+    const atB = b.auth.connections().map((known) => known.audience);
+    assert.deepEqual(atB, [bKey], "B's home never holds A's key");
+    assert.equal(grants.get(a.grant.did)?.grant.did, a.grant.did, 'and A stays connected');
+    await hold(b.auth.getState().session!.node, space.id);
+    await connection.getState().node!.records.put(space.id, 'app.todo.item', { text: 'B, renewed' });
+  });
+
+  test('another tab connecting the account again leaves this one working, and a tab started later takes the newer grant', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const a = await granted(hub);
+    const { node: homeNode } = a.auth.getState().session!;
+    const space = await homeNode.spaces.create({ name: 'Team', ...team, visibility: 'private' });
+    const storage = memoryStorage();
+    const keys = keyStore([['account-old', a.key]]);
+    grantStore(storage).save(await grantFrom(a.auth, a.key, [space.id]), 'account-old');
+    const first = tab(hub, storage, keys);
+    await first.start();
+    await hold(homeNode, space.id);
+    const unseen = await first.getState().node!.records.put(space.id, 'app.todo.item', { text: 'before' });
+
+    const second = tab(hub, storage, keys);
+    await withHome(a.auth, [space.id], () => second.connect());
+    const fresh = grantStore(storage).get(a.grant.did);
+    assert.ok(fresh && fresh.keyName !== 'account-old');
+
+    // Nothing was revoked: the first tab still writes, and what it wrote stands.
+    await first.getState().node!.records.put(space.id, 'app.todo.item', { text: 'after' });
+    await until(
+      async () => (await homeNode.records.get(space.id, unseen.key)) !== null,
+      3000,
+      'what the old key wrote to stand at the home',
+    );
+    await first.getState().node!.close();
+    const third = tab(hub, storage, keys);
+    await third.start();
+    assert.equal(third.getState().node?.sessionDid, (await keys.get(fresh.keyName)).did);
+  });
+
+  test('disconnected at the home, it acts for no account rather than another one unasked', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const a = await granted(hub);
+    const b = await granted(hub);
+    const { node: homeNode } = a.auth.getState().session!;
+    const space = await homeNode.spaces.create({ name: 'Team', ...team, visibility: 'private' });
+    const storage = memoryStorage();
+    grantStore(storage).save(await grantFrom(a.auth, a.key, [space.id]), 'a');
+    grantStore(storage).save(b.grant, 'b');
+    const connection = tab(
+      hub,
+      storage,
+      keyStore([
+        ['a', a.key],
+        ['b', b.key],
+      ]),
+      a.grant.did,
+    );
+    await connection.start();
+    await hold(homeNode, space.id);
+    const node = connection.getState().node!;
+    await a.auth.disconnect('https://todo.test');
+    await until(
+      async () => {
+        await node.records.put(space.id, 'app.todo.item', { text: 'x' }).catch(() => {});
+        return connection.getState().status === 'disconnected';
+      },
+      3000,
+      'the app to hear it was disconnected',
+    );
+    assert.match(connection.getState().error ?? '', /disconnected this app/);
+    assert.deepEqual(
+      connection.getState().accounts.map((account) => account.did),
+      [b.grant.did],
+      'B is still there, to choose',
+    );
+  });
+
+  test('switching back and forth quickly leaves no node running but the one acted for', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const a = await granted(hub);
+    const b = await granted(hub);
+    const storage = memoryStorage();
+    grantStore(storage).save(a.grant, 'a');
+    grantStore(storage).save(b.grant, 'b');
+    const connection = tab(
+      hub,
+      storage,
+      keyStore([
+        ['a', a.key],
+        ['b', b.key],
+      ]),
+    );
+    await connection.start();
+    const seen = new Set<P2PNode>();
+    connection.subscribe((state) => state.node && seen.add(state.node));
+    await Promise.all([
+      connection.use(b.grant.did),
+      connection.use(a.grant.did),
+      connection.use(b.grant.did),
+    ]);
+    assert.equal(connection.getState().node?.did, b.grant.did);
+    const live = connection.getState().node;
+    for (const node of seen) {
+      if (node === live) continue;
+      await assert.rejects(node.records.list('no-such-space'), /closed/, 'one it let go is closed');
     }
   });
 });

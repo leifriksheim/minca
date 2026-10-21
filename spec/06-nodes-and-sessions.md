@@ -145,12 +145,18 @@ from the account to a key of its own, signed at the person's **account home**.
 
 An app MUST make its own P-256 key and keep the private half non-extractable.
 The key's DID is the grant's audience, and the app's node signs with this key,
-not a fresh one. Where the reference keeps it:
+not a fresh one. An app that acts for more than one account MUST use a
+different key for each: one key in two accounts' spaces would tell their
+peers the accounts are one person's. The home chooses the account, not the
+app, so an app MUST NOT ask with a key that holds one account's note and then
+use it for another; asking with a new key each time is enough. Where the reference keeps it:
 [the app-side client](../packages/core/docs/node.md#the-app-side-client).
 
-Every tab or window of one app signs with this key, so they write the same
-lines ([02](02-records.md) §4.10): each place in them is taken under a lock
-every tab shares, and read from the storage they share.
+Every tab or window of one app acting for one account signs with that
+account's key, so they write the same lines ([02](02-records.md) §4.10): each
+place in them is taken under a lock every tab shares, and read from the
+storage they share. A tab still open on a key the app has since replaced goes
+on signing with it, its own lines, until it starts again.
 
 > **Known defect:** so every tab or window of one app is the same DID on the
 > relays, and only the first gets into a space's room; the others report
@@ -159,6 +165,8 @@ every tab shares, and read from the storage they share.
 > app's key can't pass its note on ([01](01-identity.md) §7.5). See
 > [04](04-network.md) §1.2 and
 > [#162](https://github.com/leifriksheim/minca/issues/162).
+
+_Source: `packages/core/src/session/connect.ts` (`appKey`, `grantStore`), `packages/core/src/session/connection.ts` (`createMincaConnection`). Tests: `packages/core/tests/connect.test.ts` ("an app connected to several accounts")._
 
 ### 2.2 The home's address
 

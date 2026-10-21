@@ -11,7 +11,7 @@
  * reaches both by message.
  *
  * In a `SharedWorker`, every tab of a site that opens the same account's
- * stores shares one node: one copy in memory, one set of connections, and
+ * stores, signing with the same key, shares one node: one copy in memory, one set of connections, and
  * nothing to tell the other tabs when it writes. Each tab brings its signer
  * and its WebRTC; the node uses the WebRTC of the tab open longest, and moves
  * to the next when that tab goes. It closes when the last tab leaves. A tab
@@ -20,6 +20,7 @@
 import type { RootSigner } from '../identity/root-signer.js';
 import type { Delegation } from '../identity/ucan.js';
 import { createTransportSwitch, remoteTransport, serveTransport } from '../network/remote-transport.js';
+import { didOf } from '../identity/did.js';
 import { isRecord } from '../utils/guards.js';
 import { createNode } from './node.js';
 import { remoteNode, remoteSigner, serveNode, serveSigner } from './remote.js';
@@ -201,8 +202,12 @@ interface Held {
 }
 
 /** The same account's same stores: what makes two tabs' nodes one */
-function nodeKey(did: string, stores: WorkerStores): string {
-  return 'indexedDB' in stores ? `${did} idb:${stores.indexedDB}` : `${did} folder:${stores.basePath ?? ''}`;
+function nodeKey(did: string, stores: WorkerStores, sessionDid?: string): string {
+  // An app's tabs share a node only while they sign with one key: a tab connected again with a new one gets its own.
+  const signs = sessionDid ? ` key:${sessionDid}` : '';
+  return 'indexedDB' in stores
+    ? `${did}${signs} idb:${stores.indexedDB}`
+    : `${did}${signs} folder:${stores.basePath ?? ''}`;
 }
 
 /**
@@ -273,7 +278,11 @@ export function runNodeWorker(
     try {
       if (!isWorkerNodeConfig(sent)) throw new Error('The page sent no node config');
       const signer = await remoteSigner(signerPort);
-      const key = nodeKey(signer.did, sent.stores);
+      const key = nodeKey(
+        signer.did,
+        sent.stores,
+        sent.sessionKey ? await didOf(sent.sessionKey.publicKey) : undefined,
+      );
       entry = held.get(key) ?? start(key, sent, signer);
       entry.signers.add(tab, signer);
       entry.connections.add(tab, remoteTransport(transportPort, entry.iceServers));
