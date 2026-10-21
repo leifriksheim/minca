@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import * as z from 'zod';
 
 import { createNode } from '../src/node/node.js';
+import { profileKey } from '../src/node/space-runtime.js';
 import { runAction } from '../src/node/actions.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
@@ -40,7 +41,7 @@ import {
   type DraftCollection,
 } from '../src/schemas/index.js';
 import { createMincaAuth, type MincaAuth } from '../src/session/auth.js';
-import { grantSigner, type Grant } from '../src/session/connect.js';
+import { grantSigner, nodeOptionsFromGrant, type Grant } from '../src/session/connect.js';
 import { connectWithCode, offerConnectCode } from '../src/session/connect-code.js';
 import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { base64UrlDecode, base64UrlEncode } from '../src/utils/encoding.js';
@@ -52,7 +53,13 @@ import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { memoryStores } from './helpers/memory-stores.js';
 import { createMemoryDirectory } from './helpers/memory-directory.js';
 import { team } from '../src/space/presets.js';
-import { assignKey } from '../src/space/space-access.js';
+import {
+  assignKey,
+  memberKeyRecordKey,
+  removalKey,
+  revokeKey,
+  stepDownKey,
+} from '../src/space/space-access.js';
 import { nextVersion } from '../src/records/version.js';
 import { hold, letGo } from './helpers/hold.js';
 import { isRecord } from '../src/utils/guards.js';
@@ -62,7 +69,7 @@ import { asked, open, person, settle, testAppKey, type Person } from './helpers/
 /** A key for this person, and a note from their account for these spaces: records only, unless `command` says otherwise */
 async function agentFor(
   who: Person,
-  spaces: ReadonlyArray<string>,
+  spaces: ReadonlyArray<string> | 'all',
   command = '/record',
   policy: Policy = [],
 ) {
@@ -84,9 +91,9 @@ async function forgeAsAgent(
   who: Person,
   space: string,
   fields: Omit<CreateVersionParams<unknown>, 'author' | 'space' | 'proof'>,
-  note: { command?: string; policy?: Policy } = {},
+  note: { command?: string; policy?: Policy; everywhere?: boolean } = {},
 ) {
-  const agent = await agentFor(who, [space], note.command, note.policy);
+  const agent = await agentFor(who, note.everywhere ? 'all' : [space], note.command, note.policy);
   const provider = who.manager.getProvider();
   const signed = await createSigner(provider).sign(
     createVersion({
@@ -356,6 +363,168 @@ describe('an agent acting for a person', () => {
     assert.deepEqual(
       (await alice.node.spaces.access(space)).members.find((m) => m.did === bob.node.did)?.roles,
       ['editor'],
+    );
+  });
+
+  test("an app given a space never changes the account's own place there: every peer ignores it", async () => {
+    const { alice, bob, space } = await setup();
+    await until(
+      async () =>
+        (await (await stored(alice.stores, space)).getCurrent(await assignKey(bob.node.did, 'editor'))) !==
+        null,
+      4000,
+      "Alice to hold Bob's assignment",
+    );
+    const held = await (
+      await stored(alice.stores, space)
+    ).getCurrent(await assignKey(bob.node.did, 'editor'));
+    // The key Alice's node writes with.
+    const { author: aliceKey } = await alice.node.records.put(space, 'app.note', { text: 'before' });
+    await letGo(alice.node, space);
+    await letGo(bob.node, space);
+    // A note for everything, but about this one space: what a home gives an app it grants the space.
+    const asApp = { command: '/' };
+    // Each slipped into its own account's store: the other peer must refuse it.
+    const bobs = [
+      // Bob's app gives up Bob's role, makes Bob leave, and puts its own key where others seal to Bob.
+      await forgeAsAgent(
+        bob,
+        space,
+        {
+          collection: 'sys.assign',
+          body: { did: bob.node.did, role: 'editor', assigned: false },
+          retain: true,
+          version: nextVersion(held!),
+        },
+        asApp,
+      ),
+      await forgeAsAgent(
+        bob,
+        space,
+        {
+          collection: 'sys.remove',
+          body: { did: bob.node.did },
+          retain: true,
+          version: { key: await removalKey(bob.node.did), seq: 0 },
+        },
+        asApp,
+      ),
+      await forgeAsAgent(
+        bob,
+        space,
+        {
+          collection: 'sys.memberkey',
+          body: { key: (await agentFor(bob, [space])).did },
+          retain: true,
+          version: { key: await memberKeyRecordKey(bob.node.did), seq: 0 },
+        },
+        asApp,
+      ),
+      // Bob's app renames him.
+      await forgeAsAgent(
+        bob,
+        space,
+        {
+          collection: 'sys.profile',
+          body: { name: 'Not Bob' },
+          retain: true,
+          version: { key: await profileKey(bob.node.did), seq: 0 },
+        },
+        asApp,
+      ),
+    ];
+    const alices = [
+      // Alice's app gives her a role, steps her down, and revokes the key her node writes with.
+      await forgeAsAgent(
+        alice,
+        space,
+        {
+          collection: 'sys.assign',
+          body: { did: alice.node.did, role: 'editor', assigned: true },
+          retain: true,
+          version: { key: await assignKey(alice.node.did, 'editor'), seq: 0 },
+        },
+        asApp,
+      ),
+      await forgeAsAgent(
+        alice,
+        space,
+        {
+          collection: 'sys.stepdown',
+          body: { did: alice.node.did },
+          retain: true,
+          version: { key: await stepDownKey(alice.node.did), seq: 0 },
+        },
+        asApp,
+      ),
+      await forgeAsAgent(
+        alice,
+        space,
+        {
+          collection: 'sys.revoke',
+          body: { key: aliceKey },
+          retain: true,
+          version: { key: await revokeKey(aliceKey, alice.node.did), seq: 0 },
+        },
+        asApp,
+      ),
+    ];
+    await hold(alice.node, space);
+    await hold(bob.node, space);
+    await settle(500);
+    for (const version of bobs)
+      assert.equal(
+        await createStorageProvider(await alice.stores(`spaces/${space}`)).getVersion(version.id),
+        null,
+      );
+    for (const version of alices)
+      assert.equal(
+        await createStorageProvider(await bob.stores(`spaces/${space}`)).getVersion(version.id),
+        null,
+      );
+    const access = await alice.node.spaces.access(space);
+    assert.equal(access.founder, true);
+    assert.deepEqual(access.members.find((m) => m.did === alice.node.did)?.roles, []);
+    assert.notEqual(
+      (await alice.node.spaces.profiles(space)).find((profile) => profile.did === bob.node.did)?.name,
+      'Not Bob',
+    );
+    assert.deepEqual(access.members.find((m) => m.did === bob.node.did)?.roles, ['editor']);
+    assert.deepEqual((await bob.node.spaces.access(space)).mine, ['editor']);
+    // Alice still writes with the key her app tried to revoke.
+    const after = await alice.node.records.put(space, 'app.note', { text: 'still here' });
+    await until(
+      async () => (await bob.node.records.get(space, after.key))?.verified === true,
+      4000,
+      "Alice's next note at Bob's",
+    );
+  });
+
+  test('the same change under a note about the whole account counts: that key is one of the account’s devices', async () => {
+    const { alice, bob, space } = await setup();
+    await letGo(bob.node, space);
+    const leaving = await forgeAsAgent(
+      bob,
+      space,
+      {
+        collection: 'sys.remove',
+        body: { did: bob.node.did },
+        retain: true,
+        version: { key: await removalKey(bob.node.did), seq: 0 },
+      },
+      { command: '/', everywhere: true },
+    );
+    await hold(bob.node, space);
+    await until(
+      async () =>
+        (await createStorageProvider(await alice.stores(`spaces/${space}`)).getVersion(leaving.id)) !== null,
+      4000,
+      "Bob's leaving at Alice's",
+    );
+    await until(
+      async () => !(await alice.node.spaces.access(space)).members.some((m) => m.did === bob.node.did),
+      4000,
+      'Bob gone',
     );
   });
 });
@@ -1050,6 +1219,26 @@ describe('a program connected by code, through the account home', () => {
 });
 
 describe('an agent running a node of its own', () => {
+  test('it never takes a contact key, even one a home sent with a records-only note', async () => {
+    const { alice, space } = await setup();
+    const agent = await agentFor(alice, [space]);
+    const wide = await agentFor(alice, [space], '/');
+    const grant = (note: Grant['note']): Grant => ({
+      v: 2,
+      did: alice.node.did,
+      name: 'Alice',
+      note,
+      access: 'write',
+      scope: 'spaces',
+      spaces: [],
+      contactKey: base64UrlEncode(new Uint8Array(32).fill(7)),
+      expiresAt: Math.floor(Date.now() / 1000) + 3600,
+      home: 'https://home.test/connect',
+    });
+    assert.equal(nodeOptionsFromGrant(grant(agent.note)).contactKey, undefined);
+    assert.ok(nodeOptionsFromGrant(grant(wide.note)).contactKey);
+  });
+
   /** What `minca connect` ends up with: its own key, and the home's grant for the whole account */
   async function agentNode(
     who: { me: Person['me']; manager: Person['manager']; seed: Uint8Array },

@@ -109,9 +109,9 @@ made out to it in `grant.json`, each written whole, and the spaces in `data/`.
 A new key each time, since a key the account home revoked stays revoked in
 every space, so a new note made out to it would write nothing. `minca mcp`
 then starts a node of its own: signer `grantSigner(grant)`, session key = the
-agent key, the grant's account key when present, relays = the grant's ∪
-`$MINCA_RELAYS` (default `wss://minca.fly.dev`), WebRTC via `node-datachannel`;
-joins any granted spaces it lacks; wraps the node with `asAgent`; holds every
+agent key, the grant's keys when present and relays = the grant's ∪
+`$MINCA_RELAYS` (default `wss://minca.fly.dev`) (`nodeOptionsFromGrant`),
+WebRTC via `node-datachannel`; joins any granted spaces it lacks (`joinGranted`); wraps the node with `asAgent`; holds every
 space; and serves MCP over stdio: `offeredActions({ agent: true })`, without
 the `PERSON_ONLY` actions or direct messages ([actions](#actions)).
 

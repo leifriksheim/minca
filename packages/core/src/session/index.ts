@@ -7,7 +7,7 @@
  * API when used — so it lives on its own entry point, away from the
  * isomorphic core.
  */
-export { createMincaAuth } from './auth.js';
+export { createMincaAuth, connectionKey } from './auth.js';
 export { passwordStrength } from './password-strength.js';
 export type { PasswordCheck, PasswordStrength } from './password-strength.js';
 export type {
@@ -42,7 +42,12 @@ export {
   homeAddress,
   receiveConnectRequest,
   startConnectedNode,
+  nodeOptionsFromGrant,
+  joinGranted,
   grantSigner,
+  grantExpired,
+  usableGrant,
+  watchGrant,
   grantStore,
   grantTerms,
   GRANT_VERSION,

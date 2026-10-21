@@ -11,11 +11,13 @@
  * - `/collection/define`: define, change or remove a space's collections;
  * - `/access/change`: anything else in the access history — roles, members,
  *   invites, revocations, the space's key, relays and keepers;
- * - `/account/write`: the account's own spaces (its list of spaces, a
- *   carrier's passes) and its doors.
+ * - `/account/write`, about the whole account: anything about the account
+ *   itself — its own spaces (its list of spaces, a carrier's passes, its
+ *   doors), its own place in any space, and its other keys.
  *
- * A person's own sessions, and apps given write, get `/`. A key the account
- * trusts less gets `/record`, and proposes what it can't do.
+ * So a key is a device or an app by what its note says: a note for `/` about
+ * the whole account acts as the account; anything narrower acts in spaces.
+ * A key the account trusts less gets `/record`, and proposes what it can't do.
  */
 import { DEFINITION_COLLECTION } from '../space/roles.js';
 import { commandCovers, noteCovers, parseDelegation, type Delegation, type Requirement } from './ucan.js';
@@ -55,14 +57,7 @@ export const accessRequirement = (space: string, collection: string, key: string
       }
     : { space, cmd: ACCESS_COMMAND, args: { collection, space } };
 
-/** What a write in one of the account's own spaces needs besides */
-export const accountSpaceRequirement = (space: string, collection: string): Requirement => ({
-  space,
-  cmd: ACCOUNT_COMMAND,
-  args: { collection, space },
-});
-
-/** What acting for the whole account needs — a knock, opening a door: `/account/write`, no arguments */
+/** What acting as the account itself needs: `/account/write` about the whole account, no arguments */
 export const ACCOUNT_REQUIREMENT: Requirement = Object.freeze({
   space: null,
   cmd: ACCOUNT_COMMAND,
@@ -80,6 +75,9 @@ export function noteGrants(proof: unknown, required: Requirement): boolean {
   const note = parseDelegation(proof);
   return note !== null && noteCovers(note, required);
 }
+
+/** Whether a proof lets its key act as the account itself (spec 01 §8). True with no proof: the account signed. */
+export const actsForAccount = (proof: unknown): boolean => noteGrants(proof, ACCOUNT_REQUIREMENT);
 
 /** Whether a note lets its key write records somewhere. False for anything unreadable. */
 export function writesRecords(note: unknown): boolean {

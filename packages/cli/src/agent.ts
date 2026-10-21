@@ -28,8 +28,16 @@ import {
   type P2PNode,
 } from '@minca/core';
 import { profile } from '@minca/core/schemas';
-import { checkGrant, connectWithCode, GRANT_VERSION, grantSigner, type Grant } from '@minca/core/session';
-import { base64UrlDecode } from '@minca/core';
+import {
+  checkGrant,
+  connectWithCode,
+  GRANT_VERSION,
+  grantSigner,
+  joinGranted,
+  nodeOptionsFromGrant,
+  usableGrant,
+  type Grant,
+} from '@minca/core/session';
 import { openFsDirectory, writeWhole } from './fs-directory.js';
 import { nodeFor, type Unlocked } from './home.js';
 import { commaList, errorCode, isRecord, messageOf } from './json.js';
@@ -118,8 +126,7 @@ async function loadAgentGrant(home: string): Promise<Grant | null> {
 
 /** Whether this computer's agent was connected to an account, and its note still runs */
 export async function hasConnectedAgent(home: string): Promise<boolean> {
-  const grant = await loadAgentGrant(home);
-  return !!grant && grant.v === GRANT_VERSION && grant.expiresAt > Date.now() / 1000;
+  return usableGrant(await loadAgentGrant(home));
 }
 
 /** "Agent on leifs-macbook" — what the person sees in the app and their account */
@@ -291,13 +298,11 @@ async function readConnection(home: string): Promise<{ grant: Grant; key: Stored
     throw new Error(
       'No agent is connected on this computer. In the app, choose “Connect an agent” and run the command it shows.',
     );
-  if (grant.v !== GRANT_VERSION)
+  if (!usableGrant(grant))
     throw new Error(
-      'The agent was connected by an older version, whose access no peer reads now. In the app, choose “Connect an agent” and run the new command.',
-    );
-  if (grant.expiresAt <= Date.now() / 1000)
-    throw new Error(
-      "The agent's access has run out. In the app, choose “Connect an agent” and run the new command.",
+      grant.v !== GRANT_VERSION
+        ? 'The agent was connected by an older version, whose access no peer reads now. In the app, choose “Connect an agent” and run the new command.'
+        : "The agent's access has run out. In the app, choose “Connect an agent” and run the new command.",
     );
   const key = await readAgentKey(home);
   if (!key)
@@ -394,12 +399,12 @@ async function startWithKey(
 ): Promise<{ node: P2PNode; stop(): Promise<void> }> {
   if (!options.network) await enableWebRTC();
   const data = await openFsDirectory(path.join(agentDir(home), 'data'));
-  const relays = [...new Set([...(grant.relays ?? []), ...configuredRelays()])];
+  const { relays, ...keys } = nodeOptionsFromGrant(grant, configuredRelays());
   const base = await createNode({
     signer: grantSigner(grant),
     sessionKey: key.keys,
     stores: directoryStores(data),
-    ...(grant.accountKey ? { accountKey: base64UrlDecode(grant.accountKey) } : {}),
+    ...keys,
     network: options.network ?? {
       relays,
       hosts: configuredHosts(),
@@ -407,9 +412,7 @@ async function startWithKey(
     },
   });
   // Spaces granted by name, when the grant wasn't for the whole account.
-  const held = new Set((await base.spaces.list()).map((space) => space.id));
-  for (const space of grant.spaces)
-    if (!held.has(space.id)) await base.spaces.join(space.invite).catch(() => {});
+  await joinGranted(base, grant, () => {});
 
   const node = await base.asAgent({ keys: key.keys, note: grant.note });
   const stopHolding = await holdEverySpace(node);

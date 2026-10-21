@@ -245,34 +245,36 @@ Every label under which bytes are derived anywhere in `packages/core/src/`. No t
 _purposes_ share a label, but see the notes below the table. Parts other than
 this one own the use; this table is the registry.
 
-| Label (UTF-8)                            | Mechanism                                 | Input                                                                                            | Output                     | Used for                                                     | Defined in                         | Part   |
-| ---------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------ | -------------------------- | ------------------------------------------------------------ | ---------------------------------- | ------ |
-| `minca/p256-identity-key/v1`             | HKDF, L=48 → `ScalarFrom`                 | seed; or any `ikm` in §3.2's table                                                               | P-256 scalar               | Root key; second stage of invite and read keys               | `identity/crypto-p256.ts:11`       | 01     |
-| `minca/p256-contact-key/v1`              | HKDF, L=48 → `ScalarFrom`                 | seed                                                                                             | P-256 scalar (ECDH)        | Contact key                                                  | `identity/contact-key.ts:26`       | 01     |
-| `minca/p256-member-key/v1\|<spaceId>`    | HKDF, L=48 → `ScalarFrom`                 | account key                                                                                      | P-256 scalar (ECDH)        | Member key for one space                                     | `identity/contact-key.ts:27`       | 01, 03 |
-| `minca/p256-door-key/v1\|<doorId>`       | HKDF, L=48 → `ScalarFrom`                 | contact key's 32-byte private scalar                                                             | P-256 scalar (ECDH)        | Door key (knocks are sealed to it)                           | `identity/contact-key.ts:28`       | 01, 07 |
-| `minca/p256-door-sign-key/v1\|<doorId>`  | HKDF, L=48 → `ScalarFrom`                 | contact key's 32-byte private scalar                                                             | P-256 scalar (ECDSA)       | Door signing key (proves ownership of a door)                | `identity/contact-key.ts:29`       | 01, 07 |
-| `minca/door-topic/v1\|<signKey>`         | SHA-256, base64url                        | —                                                                                                | mailbox topic              | A door's mailbox topic on a relay: a hash of its signing key | `doors/doors.ts` (`doorTopic`)     | 07     |
-| `minca/local-key/v1`                     | HKDF, L=32                                | seed                                                                                             | AES-256-GCM key            | Local key: this device's storage (§11.1)                     | `identity/account-vault.ts:29`     | 01, 05 |
-| `minca/account-key/v1`                   | HKDF, L=32                                | seed                                                                                             | 32 bytes                   | Account key: root of member keys and account spaces (§11.1)  | `identity/account-vault.ts:30`     | 01, 06 |
-| `minca/pairing-room/v1`                  | CID of prefix ‖ secret (no separator)     | 16-byte pairing secret                                                                           | room id                    | Pairing room                                                 | `identity/channel.ts:39`           | 01     |
-| `minca/pairing-key/v1\|<side>\|<O>\|<J>` | HKDF, L=32                                | pairing secret ‖ ECDH shared x                                                                   | AES-256-GCM key            | Pairing messages sent by `<side>` (`offer` or `join`)        | `identity/channel.ts:40`           | 01     |
-| `minca/pairing-code/v1\|<O>\|<J>`        | HKDF, L=4 → uint32 mod 10⁶                | pairing secret ‖ ECDH shared x                                                                   | 6-digit code               | Code both screens show                                       | `identity/pairing.ts:18`           | 01     |
-| `minca/code-room/v1`                     | CID of prefix ‖ secret (no separator)     | 16-byte connect-code secret                                                                      | room id                    | Room for connecting by code                                  | `identity/channel.ts:46`           | 06     |
-| `minca/code-key/v1\|<side>\|<O>\|<J>`    | HKDF, L=32                                | connect-code secret ‖ ECDH shared x                                                              | AES-256-GCM key            | Connect-by-code messages sent by `<side>`                    | `identity/channel.ts:47`           | 06     |
-| `minca/code-account/v1`                  | SHA-256 of prefix ‖ input, first 8 bytes  | UTF-8 account DID                                                                                | account fingerprint        | The account a connect code names                             | `session/connect-code.ts:27`       | 06     |
-| `minca/space-invite/v1`                  | HKDF, L=32 → `P256KeyFrom`                | 32-byte invite secret                                                                            | P-256 key                  | Invite key                                                   | `space/space-access.ts:28`         | 03     |
-| `minca/space-read/v1`                    | HKDF, L=32 → `P256KeyFrom`                | space key K                                                                                      | P-256 key                  | Read key of a private space                                  | `space/space-access.ts:27`         | 03     |
-| `minca/space-seal/v1`                    | HKDF, L=32                                | space key K                                                                                      | AES-256-GCM key            | Every envelope under a space key                             | `privacy/space-encryption.ts:15`   | 03     |
-| `minca/space-key-id/v1`                  | HKDF, L=16, base64url                     | space key K                                                                                      | key id (22 characters)     | A space key's id                                             | `privacy/space-encryption.ts:16`   | 03     |
-| `minca/account-registry/nonce/v1`        | HKDF, L=32, first 12 bytes, base64url     | account key                                                                                      | space nonce                | Account registry space                                       | `space/account-registry.ts:82,106` | 03     |
-| `minca/account-registry/key/v1`          | HKDF, L=32                                | account key                                                                                      | space key K                | Account registry space                                       | `space/account-registry.ts:82,108` | 03     |
-| `minca/contacts/nonce/v1`                | as above                                  | account key                                                                                      | space nonce                | Contacts space                                               | `space/account-registry.ts:95,106` | 03     |
-| `minca/contacts/key/v1`                  | as above                                  | account key                                                                                      | space key K                | Contacts space                                               | `space/account-registry.ts:95,108` | 03     |
-| `minca/topic-tags/v1`                    | HKDF → HMAC-SHA256 key                    | space key K (private) or the bytes of `minca/public-topics/v1\|<spaceId>` (public)               | HMAC key                   | Topic tags                                                   | `records/topics.ts:80,87`          | 02     |
-| `minca/one-per/v1`                       | HKDF → HMAC-SHA256 key                    | the space's first key K₀ (private) or the bytes of `minca/public-one-per/v1\|<spaceId>` (public) | HMAC key                   | `onePer` record keys                                         | `records/rules.ts:78,81`           | 02     |
-| `minca/record-owner/v1\|<root>`          | SHA-256, first 16 bytes, base32 lowercase | —                                                                                                | owner part (26 characters) | The owner part of an owned record key                        | `records/key.ts:54`                | 02     |
-| `minca-room/v1\|<spaceId>`               | SHA-256, first 20 bytes, base32 lowercase | —                                                                                                | relay room name            | A space's room on a relay                                    | `node/space-runtime.ts:304`        | 04     |
+| Label (UTF-8)                            | Mechanism                                 | Input                                                                                            | Output                     | Used for                                                     | Defined in                          | Part   |
+| ---------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------ | -------------------------- | ------------------------------------------------------------ | ----------------------------------- | ------ |
+| `minca/p256-identity-key/v1`             | HKDF, L=48 → `ScalarFrom`                 | seed; or any `ikm` in §3.2's table                                                               | P-256 scalar               | Root key; second stage of invite and read keys               | `identity/crypto-p256.ts:11`        | 01     |
+| `minca/p256-contact-key/v1`              | HKDF, L=48 → `ScalarFrom`                 | seed                                                                                             | P-256 scalar (ECDH)        | Contact key                                                  | `identity/contact-key.ts:26`        | 01     |
+| `minca/p256-member-key/v1\|<spaceId>`    | HKDF, L=48 → `ScalarFrom`                 | account key                                                                                      | P-256 scalar (ECDH)        | Member key for one space                                     | `identity/contact-key.ts:27`        | 01, 03 |
+| `minca/p256-door-key/v1\|<doorId>`       | HKDF, L=48 → `ScalarFrom`                 | contact key's 32-byte private scalar                                                             | P-256 scalar (ECDH)        | Door key (knocks are sealed to it)                           | `identity/contact-key.ts:28`        | 01, 07 |
+| `minca/p256-door-sign-key/v1\|<doorId>`  | HKDF, L=48 → `ScalarFrom`                 | contact key's 32-byte private scalar                                                             | P-256 scalar (ECDSA)       | Door signing key (proves ownership of a door)                | `identity/contact-key.ts:29`        | 01, 07 |
+| `minca/door-topic/v1\|<signKey>`         | SHA-256, base64url                        | —                                                                                                | mailbox topic              | A door's mailbox topic on a relay: a hash of its signing key | `doors/doors.ts` (`doorTopic`)      | 07     |
+| `minca/local-key/v1`                     | HKDF, L=32                                | seed                                                                                             | AES-256-GCM key            | Local key: this device's storage (§11.1)                     | `identity/account-vault.ts:29`      | 01, 05 |
+| `minca/account-key/v1`                   | HKDF, L=32                                | seed                                                                                             | 32 bytes                   | Account key: root of member keys and account spaces (§11.1)  | `identity/account-vault.ts:30`      | 01, 06 |
+| `minca/pairing-room/v1`                  | CID of prefix ‖ secret (no separator)     | 16-byte pairing secret                                                                           | room id                    | Pairing room                                                 | `identity/channel.ts:39`            | 01     |
+| `minca/pairing-key/v1\|<side>\|<O>\|<J>` | HKDF, L=32                                | pairing secret ‖ ECDH shared x                                                                   | AES-256-GCM key            | Pairing messages sent by `<side>` (`offer` or `join`)        | `identity/channel.ts:40`            | 01     |
+| `minca/pairing-code/v1\|<O>\|<J>`        | HKDF, L=4 → uint32 mod 10⁶                | pairing secret ‖ ECDH shared x                                                                   | 6-digit code               | Code both screens show                                       | `identity/pairing.ts:18`            | 01     |
+| `minca/code-room/v1`                     | CID of prefix ‖ secret (no separator)     | 16-byte connect-code secret                                                                      | room id                    | Room for connecting by code                                  | `identity/channel.ts:46`            | 06     |
+| `minca/code-key/v1\|<side>\|<O>\|<J>`    | HKDF, L=32                                | connect-code secret ‖ ECDH shared x                                                              | AES-256-GCM key            | Connect-by-code messages sent by `<side>`                    | `identity/channel.ts:47`            | 06     |
+| `minca/code-account/v1`                  | SHA-256 of prefix ‖ input, first 8 bytes  | UTF-8 account DID                                                                                | account fingerprint        | The account a connect code names                             | `session/connect-code.ts:27`        | 06     |
+| `minca/space-invite/v1`                  | HKDF, L=32 → `P256KeyFrom`                | 32-byte invite secret                                                                            | P-256 key                  | Invite key                                                   | `space/space-access.ts:28`          | 03     |
+| `minca/space-read/v1`                    | HKDF, L=32 → `P256KeyFrom`                | space key K                                                                                      | P-256 key                  | Read key of a private space                                  | `space/space-access.ts:27`          | 03     |
+| `minca/space-seal/v1`                    | HKDF, L=32                                | space key K                                                                                      | AES-256-GCM key            | Every envelope under a space key                             | `privacy/space-encryption.ts:15`    | 03     |
+| `minca/space-key-id/v1`                  | HKDF, L=16, base64url                     | space key K                                                                                      | key id (22 characters)     | A space key's id                                             | `privacy/space-encryption.ts:16`    | 03     |
+| `minca/account-registry/nonce/v1`        | HKDF, L=32, first 12 bytes, base64url     | account key                                                                                      | space nonce                | Account registry space                                       | `space/account-registry.ts:85,127`  | 03     |
+| `minca/account-registry/key/v1`          | HKDF, L=32                                | account key                                                                                      | space key K                | Account registry space                                       | `space/account-registry.ts:85,130`  | 03     |
+| `minca/contacts/nonce/v1`                | as above                                  | account key                                                                                      | space nonce                | Contacts space                                               | `space/account-registry.ts:98,127`  | 03     |
+| `minca/contacts/key/v1`                  | as above                                  | account key                                                                                      | space key K                | Contacts space                                               | `space/account-registry.ts:98,130`  | 03     |
+| `minca/carry/nonce/v1\|<did>\|<gen>`     | as above                                  | account key                                                                                      | space nonce                | A carrier's carry space                                      | `space/account-registry.ts:114,127` | 03, 06 |
+| `minca/carry/key/v1\|<did>\|<gen>`       | as above                                  | account key                                                                                      | space key K                | A carrier's carry space                                      | `space/account-registry.ts:114,130` | 03, 06 |
+| `minca/topic-tags/v1`                    | HKDF → HMAC-SHA256 key                    | space key K (private) or the bytes of `minca/public-topics/v1\|<spaceId>` (public)               | HMAC key                   | Topic tags                                                   | `records/topics.ts:80,87`           | 02     |
+| `minca/one-per/v1`                       | HKDF → HMAC-SHA256 key                    | the space's first key K₀ (private) or the bytes of `minca/public-one-per/v1\|<spaceId>` (public) | HMAC key                   | `onePer` record keys                                         | `records/rules.ts:78,81`            | 02     |
+| `minca/record-owner/v1\|<root>`          | SHA-256, first 16 bytes, base32 lowercase | —                                                                                                | owner part (26 characters) | The owner part of an owned record key                        | `records/key.ts:54`                 | 02     |
+| `minca-room/v1\|<spaceId>`               | SHA-256, first 20 bytes, base32 lowercase | —                                                                                                | relay room name            | A space's room on a relay                                    | `node/space-runtime.ts:304`         | 04     |
 
 Labels of sealed things: every envelope and every HPKE seal (§9) names one,
 with the fields of its `bound`. _docs_ marks a label used by a convention
@@ -632,17 +634,32 @@ it does requires: a command, where (a space `S`, or the account as a whole),
 and the **arguments** the note's policy reads. The protocol never asks
 what kind of thing holds a key: a person's session, an app, any other
 program and a borrowed device are told apart only by what their notes grant.
+A note for `/` about the whole account acts as the account itself: that key
+is one of its devices. Any narrower note is an app's, whatever holds it.
 
-| A version in space `S`…                                                                                                     | requires (in `S`)    | with arguments                                                                             |
-| --------------------------------------------------------------------------------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------ |
-| any record                                                                                                                  | `/record/write`      | `{ "space": S, "collection": <its collection> }`                                           |
-| and in `sys.collection`                                                                                                     | `/collection/define` | `{ "space": S, "collection": C }`, `C` the collection defined: its key after `collection:` |
-| and in any other collection of the access history ([03 — Spaces](03-spaces.md))                                             | `/access/change`     | `{ "space": S, "collection": <its collection> }`                                           |
-| and in one of the account's own spaces (its registry, its contacts space, its carry spaces; [06](06-nodes-and-sessions.md)) | `/account/write`     | `{ "space": S, "collection": <its collection> }`                                           |
+| A version in space `S`…                                                         | requires (in `S`)                            | with arguments                                                                             |
+| ------------------------------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| any record                                                                      | `/record/write`                              | `{ "space": S, "collection": <its collection> }`                                           |
+| and in `sys.collection`                                                         | `/collection/define`                         | `{ "space": S, "collection": C }`, `C` the collection defined: its key after `collection:` |
+| and in any other collection of the access history ([03 — Spaces](03-spaces.md)) | `/access/change`                             | `{ "space": S, "collection": <its collection> }`                                           |
+| and about the account itself (below)                                            | `/account/write`, for the account as a whole | `{}`                                                                                       |
 
-A knock ([07 — Doors](07-doors.md)) requires `/account/write` for the
-account as a whole, with arguments `{}`: only a note about the account
-grants it, and a policy that limits it to some spaces does not hold there.
+A version is **about the account itself** when it is in one of the
+account's own spaces (its registry, its contacts space, its carry spaces;
+[06](06-nodes-and-sessions.md)), or, in any space, when it is:
+
+- a `sys.assign` or `sys.remove` naming the account that signs it: taking or
+  giving up a role, joining by invite, leaving;
+- a `sys.stepdown`;
+- a `sys.memberkey` or `sys.profile`: what others seal to the account, and
+  what they see of it;
+- a `sys.revoke` of a key other than its own author: another of the
+  account's keys.
+
+So is a knock ([07 — Doors](07-doors.md)). Each requires `/account/write`
+for the account as a whole, with arguments `{}`: only a note about the
+account grants it, and a policy that limits it to some spaces does not hold
+there.
 
 `space` is the space's id, without `space:`. `S` is the space the version is
 judged in, never one it claims. The arguments are exactly these: a policy
@@ -652,9 +669,12 @@ that reads anything else finds `null` (a missing member) or nothing.
   do anything (§6).
 - A peer MUST ignore a change to the access history whose proof does not
   grant what it requires: it is not an event in the history, whatever the
-  writer's roles ([03 — Spaces](03-spaces.md)). A version in one of the
-  account's own spaces whose proof lacks `/account/write` MUST NOT count
-  there.
+  writer's roles ([03 — Spaces](03-spaces.md)). Any other version about the
+  account itself whose proof lacks `/account/write` for the account as a
+  whole MUST NOT count. Before v1 this applies to what is already stored:
+  a member key, profile, joining or leaving an app wrote under a narrower
+  note stops counting, and a device of the account publishes the account's
+  own again when it next opens the space.
 
 A person's own sessions, and apps granted write, get `/` about the account.
 A key the account trusts less gets `/record` (a request for records only,
@@ -672,13 +692,19 @@ excludes spaces (`["not", ["==", ".space", "<id>"]]`) holds for it. To keep
 a note to some spaces, name them, as above.
 
 A key whose note grants `/access/change` in a space with no policy on
-`.collection` changes anything there its account may: it can make the
-account leave, and, for a founder, step down (`sys.stepdown`), and it can
-name a successor (`sys.succeed`, [03](03-spaces.md) §2.5, §2.7). Revoking
-the key undoes all of it but stepping down, which nothing undoes (03 §4.3):
-a key revoked and still held can end its account's founder status, and
-nothing else. A home that gives an app the access command, and wants less,
-names the collections it may change.
+`.collection` changes there what its account may do to others: roles,
+members, invites, the space's key, relays and keepers, and a successor
+(`sys.succeed`, [03](03-spaces.md) §2.5, §2.7). Its account's own place it
+leaves alone unless the note is about the whole account: an app given a
+space never makes the account leave or step down, never gives up its roles,
+never puts a key of its own where others seal to the account, and never
+revokes the account's other keys. A home that gives an app the access
+command, and wants less, names the collections it may change.
+
+> Rationale: one rule, not a command per act. Whether a key may act as the
+> account is what a note about the whole account already says, so the same
+> check guards the account's own spaces, its doors and its place in every
+> space, and a home tells a device from an app by the note it gives.
 
 A note carries no fact a peer reads. A peer MUST NOT judge a version, a live
 message or a knock differently for anything in `meta`: what the key may do is
@@ -696,8 +722,8 @@ what the proof grants.
 > several. So one token per version, and one requirement checked against it,
 > keep everything notes granted before.
 
-_Source:_ `packages/core/src/identity/abilities.ts` (`writeRequirement`, `accessRequirement`, `accountSpaceRequirement`, `ACCOUNT_REQUIREMENT`, `noteGrants`, `noteTerms`), `packages/core/src/node/space-runtime.ts` (`buildEvent`, `judgeStanding`), `packages/core/src/doors/doors.ts` (`openKnock`), `packages/core/src/session/connect.ts` (`grantTerms`).
-_Tests:_ `packages/core/tests/records-only.test.ts` ("what counts is what the note grants", "a note's policy is checked by every peer", "a definition signed by hand under a records-only note is ignored by every peer", "taking someone out of the space, under a records-only note, is ignored too", "in the account's own spaces, a version under a records-only note does not stand"), `packages/core/tests/doors.test.ts` ("needs a note that grants /account/write: …").
+_Source:_ `packages/core/src/identity/abilities.ts` (`writeRequirement`, `accessRequirement`, `ACCOUNT_REQUIREMENT`, `actsForAccount`, `noteGrants`, `noteTerms`), `packages/core/src/node/space-runtime.ts` (`aboutItself`, `buildEvent`, `judgeStanding`, `write`), `packages/core/src/doors/doors.ts` (`openKnock`), `packages/core/src/session/connect.ts` (`grantTerms`).
+_Tests:_ `packages/core/tests/records-only.test.ts` ("what counts is what the note grants", "a note's policy is checked by every peer", "a definition signed by hand under a records-only note is ignored by every peer", "taking someone out of the space, under a records-only note, is ignored too", "an app given a space never changes the account's own place there: every peer ignores it", "the same change under a note about the whole account counts: that key is one of the account’s devices", "in the account's own spaces, a version under a records-only note does not stand"), `packages/core/tests/connect.test.ts` ("it lists them and opens requests sent to the account, and sees no other space"), `packages/core/tests/doors.test.ts` ("needs a note that grants /account/write: …").
 
 ---
 

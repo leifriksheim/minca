@@ -86,15 +86,18 @@ export const CARRIER_COLLECTION = 'sys.carrier';
 
 /** A carrier record's body */
 export interface Carrier {
-  /** The carry space shared with it */
-  readonly space: string;
-  /** A view-only invite to the carry space — how other devices of the account open it */
-  readonly invite: string;
   /** The carrier's own key, as it appears to peers */
   readonly did: string;
   /** What it called itself */
   readonly name: string;
   readonly since: string;
+  /** How many times the account used it before: its carry space is derived from this and `did` */
+  readonly gen?: number;
+  /** When the account stopped using it. Kept, so adding it again takes a new carry space. */
+  readonly removed?: string;
+  /** Added before carry spaces were derived: the carry space made for it, and a view-only invite to it */
+  readonly space?: string;
+  readonly invite?: string;
 }
 
 /**
@@ -122,6 +125,22 @@ export function deriveContactsSpace(
   return deriveAccountSpace(accountKey, owner, 'minca/contacts', 'Contacts', provider);
 }
 
+/**
+ * A carrier's carry space, derived the same way and bound to its key: the
+ * carrier is handed its key, so each carrier gets one of its own. `gen`
+ * counts the times the account used it before, so one added again after a
+ * removal is not handed the space that told it to forget.
+ */
+export function deriveCarrySpace(
+  accountKey: Uint8Array,
+  owner: string,
+  carrier: string,
+  gen: number,
+  provider: CryptoProvider = createP256Provider(),
+): Promise<SpaceRecord> {
+  return deriveAccountSpace(accountKey, owner, 'minca/carry', 'Carry space', provider, `|${carrier}|${gen}`);
+}
+
 /** A private space only the account can find: its key and nonce derived from the account key under `label`. */
 async function deriveAccountSpace(
   accountKey: Uint8Array,
@@ -129,10 +148,13 @@ async function deriveAccountSpace(
   label: string,
   name: string,
   provider: CryptoProvider,
+  bound = '',
 ): Promise<SpaceRecord> {
-  const nonce = base64UrlEncode((await expandSecret(accountKey, `${label}/nonce/v1`)).subarray(0, 12));
+  const nonce = base64UrlEncode(
+    (await expandSecret(accountKey, `${label}/nonce/v1${bound}`)).subarray(0, 12),
+  );
   const createdAt = new Date(0).toISOString(); // fixed, so every device derives the same record
-  const key = await spaceKeyFromRaw(await expandSecret(accountKey, `${label}/key/v1`), createdAt);
+  const key = await spaceKeyFromRaw(await expandSecret(accountKey, `${label}/key/v1${bound}`), createdAt);
   const fixed: Constitution = {
     minca: CONSTITUTION,
     name,

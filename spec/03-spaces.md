@@ -473,7 +473,7 @@ successor's constitution; a reader that holds it does.
 > view from before anyone held it, and the result is the same: a name in a
 > list, and a choice for each member.
 
-_Source: `packages/core/src/space/grants.ts` (`checkFoundingRole`, `readDefinition`, `grantFits`, `grantShape`, the command constants), `packages/core/src/space/roles.ts` (`may`, `roleMay`, `refusal`, `rolesOf`, `isMember`, `startState`), `packages/core/src/space/space-access.ts` (`stepDownKey`, `succeedKey`), `packages/core/src/node/space-runtime.ts` (`stepDown`, `succeed`), `packages/core/src/identity/policy.ts` (`policyOutcome`, `policyReads`). Tests: `packages/core/tests/roles.test.ts` (all of "founders and roles", "definitions", "unassigning and removing", "invites"), `packages/core/tests/access-attacks.test.ts` ("attacks on grants"), `packages/core/tests/constitution.test.ts` ("top: founders", "stepping down", "top: none", "/space/succeed", "the constitution on nodes")._
+_Source: `packages/core/src/space/grants.ts` (`checkFoundingRole`, `readDefinition`, `grantFits`, `grantShape`, the command constants), `packages/core/src/space/roles.ts` (`may`, `effectiveRole`, `roleHolds`, `refusal`, `rolesOf`, `isMember`, `startState`), `packages/core/src/space/space-access.ts` (`stepDownKey`, `succeedKey`), `packages/core/src/node/space-runtime.ts` (`stepDown`, `succeed`), `packages/core/src/identity/policy.ts` (`policyOutcome`, `policyReads`). Tests: `packages/core/tests/roles.test.ts` (all of "founders and roles", "definitions", "unassigning and removing", "invites"), `packages/core/tests/access-attacks.test.ts` ("attacks on grants"), `packages/core/tests/constitution.test.ts` ("top: founders", "stepping down", "top: none", "/space/succeed", "the constitution on nodes")._
 
 ---
 
@@ -564,8 +564,8 @@ Otherwise the event is `{ id: version.id, key: version.key, root, author: versio
 where `cutoff` is `body.cutoff` read as a map from key DID to a map from
 collection to a non-negative integer (absent: empty; anything else, or more
 than 1024 places in all: no event),
-always empty for `role`, `definition`, `key`, `relays`, `keepers`, `fork` and
-`succeed`, and:
+always empty for `role`, `definition`, `invite`, `key`, `relays`, `keepers`,
+`fork` and `succeed`, and:
 
 | Kind         | Checks                                                                                                                                                                                                    | Event fields                                                                           |
 | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
@@ -573,7 +573,7 @@ always empty for `role`, `definition`, `key`, `relays`, `keepers`, `fork` and
 | `role`       | no `cutoff`; `readDefinition` passes: `name`, `title?`, `grants` and `nests` as §2.1, each grant a payload as §2.2 with `iss` = root; key = `role:<name>`                                                 | `name`, `title?`, `grants` = each `{ cmd, pol }`, `nests` (absent: `[]`)               |
 | `assign`     | `did` a string starting `did:key:`, `role` a string, `assigned` a boolean, key = `assign:<hex40(did + "\|" + role)>`; if `invite` present it must be `{key: string, signature: string}` and verify (§7.3) | `did`, `role`, `assigned`, `viaInvite` = `invite.key` when present                     |
 | `remove`     | `did` a string, key = `remove:<hex40(did)>`                                                                                                                                                               | `did`                                                                                  |
-| `invite`     | `key` string, `role` string, `open` boolean, record key = `invite:<hex40(key)>`                                                                                                                           | `inviteKey`, `role`, `open`                                                            |
+| `invite`     | no `cutoff`; `key` string, `role` string, `open` boolean, record key = `invite:<hex40(key)>`                                                                                                              | `inviteKey`, `role`, `open`                                                            |
 | `key`        | record key `key:space`, `keyId` string ≤ 64 chars, `readKey` starts with `did:key:`                                                                                                                       | `keyId`, `readKey`                                                                     |
 | `relays`     | record key `relays:space`, `relays` list of strings, ≤ 8                                                                                                                                                  | `relays`                                                                               |
 | `keepers`    | record key `keepers:space`, `checkKeepers(keepers, copies ?? null)` passes (§10)                                                                                                                          | `keepers`, `copies`                                                                    |
@@ -604,7 +604,7 @@ access version from outside (a peer, a folder) unless:
 > free. Only accounts the history has heard of can get anything stored, and
 > "named" only grows, so two peers never disagree for good.
 
-_Source: `packages/core/src/space/roles.ts` (collection constants), `packages/core/src/space/space-access.ts` (record keys: `assignKey`, `removalKey`, `inviteKey`, `revokeKey`, `roleKey`, `stepDownKey`, `succeedKey`), `packages/core/src/space/grants.ts` (`readDefinition`), `packages/core/src/node/space-runtime.ts` (`buildEvent`, `loadAccess`, `admissible`). Tests: `packages/core/tests/space-access.test.ts` ("a stranger who knows the space cannot write in it…"), `packages/core/tests/access-attacks.test.ts` ("a fresh key outliving its issuer…"), `packages/core/tests/constitution.test.ts` ("access record keys"), `packages/core/tests/attacks.test.ts`._
+_Source: `packages/core/src/space/roles.ts` (collection constants, `ACCESS_KINDS`), `packages/core/src/space/space-access.ts` (record keys: `assignKey`, `removalKey`, `inviteKey`, `revokeKey`, `roleKey`, `stepDownKey`, `succeedKey`), `packages/core/src/space/grants.ts` (`readDefinition`), `packages/core/src/node/space-runtime.ts` (`buildEvent`, `loadAccess`, `admissible`). Tests: `packages/core/tests/space-access.test.ts` ("a stranger who knows the space cannot write in it…", "an invite carries no cutoff…"), `packages/core/tests/access-attacks.test.ts` ("a fresh key outliving its issuer…"), `packages/core/tests/constitution.test.ts` ("access record keys"), `packages/core/tests/attacks.test.ts`._
 
 ---
 
@@ -797,11 +797,12 @@ holding `/collection/define` for it may change the definition. A change
 applied on top, having seen them, removes `contested[name]`. A deleted one
 removes the entry.
 
-`keyDue` is true, in a private space, when some event in the set took
-reading from someone (in its own view, a reader before and not after) and the
-current key's event had not seen it; and, for the current state, when anyone
-who held the current key (a reader as it was made, or made a reader by an
-assignment it had not seen) reads no more, however that came about.
+`keyDue` is worked out for the current state alone (§9.2). It is true, in a
+private space, when some valid event took reading from someone (in its own
+view, a reader before and not after) and the current key's event had not seen
+it; and when anyone who held the current key (a reader as it was made, or made
+a reader by an assignment it had not seen) reads no more, however that came
+about.
 
 The **current state** is the merge of the valid events.
 
@@ -917,7 +918,7 @@ reduction of her that it hadn't seen, so it strikes it. Carol, an admin,
 removes Alice naming the same old view: refused, since Alice was a founder
 there. Removing her naming a view that holds the stepping down is allowed.
 
-_Source: `packages/core/src/space/roles.ts` (`replayAccess`, `startState`, `invalidWithin`, `validWithin`, `componentsOf`, `merge`, `may`, `refusal`, `reductionOf`, `definerOf`, `extended`). Tests: `packages/core/tests/roles.test.ts` ("what a struck change carries with it", "unassigning and removing"), `packages/core/tests/constitution.test.ts` ("top: founders", "stepping down", "top: none", "/space/succeed"), `packages/core/tests/access-attacks.test.ts` ("backdating past an unassignment", among them invites judged as their opener's assignment), `packages/core/tests/access-properties.test.ts` (random histories: order, safety, liveness, ids, reductions, removals), `packages/core/tests/access-convergence.test.ts` (every arrival order, and extending one change at a time, against replaying whole), `packages/core/tests/access-fuzz.test.ts` (the same with nestings, invites and people changing their own roles), `packages/core/tests/record-keys.test.ts` ("who first defined a collection"), `packages/core/tests/key-change.test.ts` ("when a new key is due")._
+_Source: `packages/core/src/space/roles.ts` (`replayAccess`, `startState`, `validWithin`, `componentsOf`, `merge`, `may`, `refusal`, `reductionOf`, `reaches`, `step`, `definerOf`, `extended`). Tests: `packages/core/tests/roles.test.ts` ("what a struck change carries with it", "unassigning and removing"), `packages/core/tests/constitution.test.ts` ("top: founders", "stepping down", "top: none", "/space/succeed"), `packages/core/tests/access-attacks.test.ts` ("backdating past an unassignment", among them invites judged as their opener's assignment), `packages/core/tests/access-properties.test.ts` (random histories: order, safety, liveness, ids, reductions, removals), `packages/core/tests/access-convergence.test.ts` (every arrival order, and extending one change at a time, against replaying whole), `packages/core/tests/access-fuzz.test.ts` (the same with nestings, invites and people changing their own roles), `packages/core/tests/record-keys.test.ts` ("who first defined a collection"), `packages/core/tests/key-change.test.ts` ("when a new key is due")._
 
 ---
 
@@ -990,8 +991,9 @@ A version outside the access collections **stands** when, in this order:
 
 1. its `space` equals the space id;
 2. its signature and note verify ([02](02-records.md)) — giving `root`;
-3. in the account's own spaces (registry, contacts, carry spaces) its proof
-   grants `/account/write` there ([01](01-identity.md) §8);
+3. when it is about its account itself (in the account's own spaces, or its
+   `sys.memberkey` or `sys.profile`), its proof grants `/account/write` for
+   the account as a whole ([01](01-identity.md) §8);
 4. its first version is present, is `seq` 0, has the same key and collection;
 5. `at(seen)` and `seenAs(seen)` are available (else: not yet);
 6. its **invocation** is `/record/delete` with `{ collection, byCreator }` for
@@ -1101,10 +1103,9 @@ as `log.prev`. A place held past a gap covers nothing, so one planted far ahead
 can't stretch a cutoff over what its writer signs later. A node holding part
 of a space keeps the lines of the collections it holds whole
 ([05](05-sync-and-storage.md) §9), so it covers all it holds. At most 1024 places in all: past that, a writer
-orders each account's lines with defined collections first, then the rest,
-each in name order, and takes one line from each account in turn (accounts by
-DID), so no one's writing can crowd out anyone else's, and nobody can make
-themselves unremovable by writing into many collections. What is left out is
+orders the account's lines with defined collections first, then the rest,
+each in name order, and takes the first 1024, so nobody can make themselves
+unremovable by writing into many collections. What is left out is
 judged with the change. A node covers only the collections it holds: one
 holding part of a space, removing someone, leaves their writes elsewhere to be
 judged with the change ([#166](https://github.com/leifriksheim/minca/issues/166)).
@@ -1145,7 +1146,7 @@ not a note, so every note to that key goes with it.
 A key can't pass its note on ([01](01-identity.md) §7.5), so no other key
 acts through a revoked one: the revoke of a key is all there is to undo.
 
-_Source: `packages/core/src/node/space-runtime.ts` (`assign`, `removeAccount`, `revoke`, `cutoffFor`, `packCutoff`), `packages/core/src/node/node.ts` (`spaces.leave`). Tests: `packages/core/tests/roles.test.ts` ("a revoked key…"), `packages/core/tests/cutoff-limits.test.ts`, `packages/core/tests/space-access.test.ts` ("taking it back", "a key cannot pass its note on: a two-link proof counts for no peer")._
+_Source: `packages/core/src/node/space-runtime.ts` (`assign`, `removeAccount`, `revoke`, `cutoffFor`, `linesOf`), `packages/core/src/node/node.ts` (`spaces.leave`). Tests: `packages/core/tests/roles.test.ts` ("a revoked key…"), `packages/core/tests/cutoff-limits.test.ts`, `packages/core/tests/space-access.test.ts` ("taking it back", "a key cannot pass its note on: a two-link proof counts for no peer")._
 
 ### 6.5 Proving a fork
 
@@ -1707,12 +1708,13 @@ in [its docs](../packages/core/docs/spaces.md#the-space-manager).
 ### 13.1 Derived account spaces
 
 An account derives private spaces that only it can find, the same on every
-device, from its account key ([01 §11.1](01-identity.md), `deriveAccountKey`)
-and a label:
+device, from its account key ([01 §11.1](01-identity.md), `deriveAccountKey`),
+a label and what the space is bound to (empty, or for a carry space
+`|<carrier DID>|<gen>`, §14):
 
 ```
-nonce   = base64url( HKDF-SHA256(accountKey, salt = empty, info = "<label>/nonce/v1", 32)[0..12] )
-K       = HKDF-SHA256(accountKey, salt = empty, info = "<label>/key/v1", 32)      // the space key, §8.1
+nonce   = base64url( HKDF-SHA256(accountKey, salt = empty, info = "<label>/nonce/v1<bound>", 32)[0..12] )
+K       = HKDF-SHA256(accountKey, salt = empty, info = "<label>/key/v1<bound>", 32)      // the space key, §8.1
 space   = { minca: "constitution/1", name, visibility: "private",
             resolver: "strong-remove/1", top: { founders: [accountDid] }, roles: [],
             createdAt: "1970-01-01T00:00:00.000Z", nonce,
@@ -1724,13 +1726,17 @@ There are no founding roles: the account is the space's one founder, and
 holds every command. `name` is the name in the table below. Any other bytes
 give another id.
 
-| Label                    | Space                | Name               |
-| ------------------------ | -------------------- | ------------------ |
-| `minca/account-registry` | the account registry | `Account registry` |
-| `minca/contacts`         | the contacts space   | `Contacts`         |
+| Label                    | Bound                    | Space                | Name               |
+| ------------------------ | ------------------------ | -------------------- | ------------------ |
+| `minca/account-registry` | empty                    | the account registry | `Account registry` |
+| `minca/contacts`         | empty                    | the contacts space   | `Contacts`         |
+| `minca/carry`            | `\|<carrier DID>\|<gen>` | a carry space (§14)  | `Carry space`      |
 
 Example (seed `01 02 … 10`): registry `b42wsegs2enqkhuzz4ba2hwaqgzvdcziz7bkn23ue7qoekuzv5usq`
-(nonce `75Pq-CByGn9iQXOe`), contacts `b4ha5cfxach7u4z2i3so43ftysegxr5jg2x6ji53zc5yfy3scsnga`.
+(nonce `75Pq-CByGn9iQXOe`), contacts `b4ha5cfxach7u4z2i3so43ftysegxr5jg2x6ji53zc5yfy3scsnga`,
+carry space for `did:key:zexample` with `gen` 0 `b3lfzv5ewy4v3xxvx2plwxkfxmlmodwvkb7xlsfr5ef36imn7p5gq`
+(info `minca/carry/key/v1|did:key:zexample|0`), with `gen` 1
+`b67rxv2qo47ur7wx26ea6o4os3njv7srv7e6jv2fll3m5gxgeqnoq`.
 
 > Rationale: the DID alone is not enough to find them — it appears on
 > everything the account signs.
@@ -1744,7 +1750,7 @@ account is ignored by readers), and nothing written under a note without
 | Collection       | Record key                               | Body                                   | Meaning                                                                                                                          |
 | ---------------- | ---------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `sys.joined`     | `space:<spaceId>`                        | `{ space: spaceId, invite }`           | The account belongs to the space. `invite` is a **view-only** invite (§7.5) — secrets are never kept. Deleted: the account left. |
-| `sys.carrier`    | `carrier:<hex40(carrySpaceId)>`          | `{ space, invite, did, name, since }`  | A carrier the account uses (§14).                                                                                                |
+| `sys.carrier`    | `carrier:<hex40(carrySpaceId)>`          | `{ did, name, since, gen?, removed? }` | A carrier the account uses, or used until `removed` (§14).                                                                       |
 | `sys.automation` | `automation:<base32 of 10 random bytes>` | An automation, in the library's format | One of the account's own automations, from which its wakes are made (§15).                                                       |
 | `sys.hosting`    | —                                        | —                                      | Hosting; see [08](08-hosting.md).                                                                                                |
 
@@ -1770,9 +1776,12 @@ _Source: `packages/core/src/space/account-registry.ts`, `packages/core/src/node/
 ## 14. Passes and carry spaces
 
 A **carrier** (an extension, a host) stores and forwards a space it cannot
-read. It gets a **carry space**: a private space the account creates, with itself the only member:
-its constitution names the account as its one founder and assigns nothing,
-and shares with it by a view-only invite recorded in `sys.carrier` (§13.2). In
+read. It gets a **carry space**: a private space the account derives (§13.1)
+from its account key, bound to the carrier's DID and `gen`, the number of
+`sys.carrier` records for that DID before this one (`gen` absent means 0).
+Its constitution names the account as its one founder and assigns nothing.
+Each device derives it from the carrier's `sys.carrier` record, whose key
+names it, and the account hands the carrier a view-only invite to it. In
 it the account keeps one **pass** per space to carry:
 
 ```
@@ -1791,12 +1800,18 @@ private space — the read seed gives a read DID equal to `space.readKey` or to
 the pass's `readKey`. (With a later key, the space's history is what vouches
 for that read key: one it does not name gets the carrier nowhere.)
 
-When the account stops using a carrier, it deletes the passes and writes
-`sys.pass` at `carry:closed` with `{ v: 1, closed: true }`; a carrier that
-reads it forgets everything. The account registry and contacts space are
-passed too.
+When the account stops using a carrier, it deletes the passes, writes
+`sys.pass` at `carry:closed` with `{ v: 1, closed: true }`, and sets
+`removed` in the carrier's record rather than deleting it; a carrier that
+reads `carry:closed` forgets everything. Adding the same DID again counts the
+removed record, so it gets a new carry space, never the one that told it to
+forget. The account registry and contacts space are passed too.
 
-_Source: `packages/core/src/space/pass.ts`, `packages/core/src/node/node.ts` (`syncPasses`, `carriers`). Tests: `packages/core/tests/carrier.test.ts` ("passes", "a carrier")._
+A `sys.carrier` record written before carry spaces were derived also has
+`space` and `invite`: its carry space is the one `invite` names, which a
+device joins with it. Such records are read, never written.
+
+_Source: `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts` (`deriveCarrySpace`), `packages/core/src/node/node.ts` (`syncPasses`, `carriers`, `carrySpaceOf`, `carrierRecords`). Tests: `packages/core/tests/carrier.test.ts` ("passes", "a carrier", "added again after it was removed…"), `packages/core/tests/account-vault.test.ts` ("the account key, and the spaces derived from it, match the spec's examples")._
 
 ---
 
@@ -1863,10 +1878,11 @@ A carrier treats every wake alike, whatever its key. A
 wake carries no words of the person's and no topic values, only their tags,
 at most 16 for a space; a device that would need more leaves that space
 without an entry.
-No carrier shows a notification yet; a wake is what a carrier needs to wake
-an app that is closed ([06](06-nodes-and-sessions.md) §4.4).
+A carrier on one of the account's own devices may show a match there itself,
+as the desktop app's does; a wake is also what a carrier needs to wake an app
+that is closed ([06](06-nodes-and-sessions.md) §4.4).
 
-_Source: `packages/core/src/space/own-automations.ts` (`readWake`, `wakes`, `wakeFor`, `linkedWakes`), `packages/core/src/node/node.ts` (`syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`). Tests: `packages/core/tests/carrier.test.ts` ("a carrier gets tags, never the values it matches", "someone mentions you in a private space: the carrier says so, and nothing else"), `packages/core/tests/computed.test.ts` ("a wake for a filter on a computed field also wakes on what that field reads")._
+_Source: `packages/core/src/space/own-automations.ts` (`readWake`, `wakes`, `wakeFor`, `linkedWakes`), `packages/core/src/node/node.ts` (`syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`), `apps/desktop/src/bun/notify.ts`. Tests: `packages/core/tests/carrier.test.ts` ("a carrier gets tags, never the values it matches", "someone mentions you in a private space: the carrier says so, and nothing else"), `packages/core/tests/computed.test.ts` ("a wake for a filter on a computed field also wakes on what that field reads"), `apps/desktop/tests/notify.test.ts`._
 
 > **Planned: devices deliver wakes, by Web Push.** Issue:
 > [#60](https://github.com/leifriksheim/minca/issues/60). Delivery moves to

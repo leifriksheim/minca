@@ -167,11 +167,10 @@ export async function startNodeInWorker(
 }
 
 /** A signer made of every tab's: the newest first, since an app's newest tab holds its freshest grant */
-function createSignerSwitch(did: string, custody: RootSigner['custody']) {
+function createSignerSwitch(did: string) {
   const signers = new Map<string, RootSigner>();
   const signer: RootSigner = Object.freeze({
     did,
-    custody,
     async delegate(params: Parameters<RootSigner['delegate']>[0]): Promise<Delegation> {
       let refused: unknown = new Error('No tab is open to sign with');
       for (const each of [...signers.values()].reverse()) {
@@ -315,7 +314,7 @@ export function runNodeWorker(
 
   const start = (key: string, config: WorkerNodeConfig, signer: RootSigner): Held => {
     const { stores, network, ...rest } = config;
-    const signers = createSignerSwitch(signer.did, signer.custody);
+    const signers = createSignerSwitch(signer.did);
     const connections = createTransportSwitch();
     let meshIce: () => ReadonlyArray<RTCIceServer> = () => [];
     const entry: Held = {

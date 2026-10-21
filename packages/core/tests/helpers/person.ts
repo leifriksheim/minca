@@ -74,16 +74,17 @@ type ForgedFields = Omit<CreateVersionParams<unknown>, 'author' | 'space' | 'pro
   Partial<Pick<CreateVersionParams<unknown>, 'author' | 'space' | 'proof'>>;
 
 /**
- * Signs a version by hand, as a modified app or an attacker could, under a
- * key the person delegated to. Unless `keep` is false it is slipped into the
- * writer's own copy of the space, from where it syncs. `seen` defaults to
- * what the writer's node has seen.
+ * Signs a version by hand, as a modified client of the person's own could,
+ * under a key their account gave a device's note (`/` about the whole
+ * account), or with `app`, an app's (`/` about this space alone). Unless
+ * `keep` is false it is slipped into the writer's own copy of the space,
+ * from where it syncs. `seen` defaults to what the writer's node has seen.
  */
 export async function forge(
   who: Person,
   space: string,
   fields: ForgedFields,
-  { keep = true } = {},
+  { keep = true, app = false } = {},
 ): Promise<Version> {
   const provider = who.manager.getProvider();
   const pair = await provider.generateKeyPair();
@@ -91,7 +92,7 @@ export async function forge(
   const ucan = await createLocalRootSigner(who.me, provider).delegate({
     audience: keyDid,
     command: '/',
-    subject: `space:${space}`,
+    ...(app ? { subject: `space:${space}` } : {}),
     expiration: Math.floor(Date.now() / 1000) + 3600,
   });
   const signed = await createSigner(provider).sign(

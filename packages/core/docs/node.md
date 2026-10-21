@@ -55,12 +55,16 @@ A node acts for one account (`node.did`) and signs with one session key
 (`node.sessionDid`) for its whole lifetime. To act for another account, start
 another node.
 
-`revokeSelf()` revokes the node's session key in every space it writes in,
-its carry spaces, the contacts space and the account registry, each with a
-cutoff at what it wrote, and forgets a lasting key at once; the account
-home's sign-out calls it ([spec 01 §7.4](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md)).
-A record is judged with no time, so this, not the note running out, is what
-ends what a key can write. An agent's view refuses it.
+`revokeKey(key, { spaces?, waitMs? })` revokes a key of the account, each
+revoke with a cutoff at what the key wrote: in `spaces`, or by default
+wherever the account writes (every space it lists, its carry spaces, the
+contacts space and the account registry). It says whether a peer took each in
+within `waitMs`. The account home's disconnect calls it for an app's key.
+`revokeSelf()` does the same for the node's own session key, and forgets a
+lasting key at once; the account home's sign-out calls it
+([spec 01 §7.4](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md)).
+A record is judged with no time, so a revoke, not the note running out, is
+what ends what a key can write. An agent's view refuses both.
 
 `close()` stops renewal, closes every open space (flushing what each keeps,
 stopping sync and disconnecting its transports), closes the registry store,
@@ -76,11 +80,10 @@ which hides where the key lives and is asked only for notes. This is an
 in-process interface, not a wire format; what a note must be is
 [spec 01 §7](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md).
 
-| Member                                                         | Type                    | Meaning                                                                                          |
-| -------------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------ |
-| `did`                                                          | string                  | The account DID                                                                                  |
-| `custody`                                                      | `'local'` \| `'remote'` | `local`: the seed is unlocked in this page. `remote`: another context (an account home) holds it |
-| `delegate({audience, command, subject?, policy?, expiration})` | → `Delegation`          | Issue a note from the account to `audience`                                                      |
+| Member                                                         | Type           | Meaning                                     |
+| -------------------------------------------------------------- | -------------- | ------------------------------------------- |
+| `did`                                                          | string         | The account DID                             |
+| `delegate({audience, command, subject?, policy?, expiration})` | → `Delegation` | Issue a note from the account to `audience` |
 
 - The **local** signer (`createLocalRootSigner`) calls `issueDelegation` with
   the root key. `subject` defaults to the account's own DID (the whole
@@ -89,6 +92,12 @@ in-process interface, not a wire format; what a note must be is
   already issued to the app's key, unchanged, and refuses once the grant's
   `expiresAt` has passed. It cannot mint new notes
   ([spec 06 §2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
+- A signer **across a port** (`serveSigner` on the side that holds the key,
+  `remoteSigner` on the node's, as a page signs for its worker's node) signs
+  only notes of the session note's shape below: `command` `/`, no `subject`,
+  no `policy`. It refuses anything else without asking the signer behind it.
+  The audience and expiration are the far end's to pick, so it bounds
+  neither.
 
 The **session note** a node asks for when it starts:
 
@@ -124,7 +133,7 @@ policy statement it can't read that way, so it never offers more than the
 note grants; peers judge each use against the note itself
 ([spec 06 §2.5](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
 
-_Source: `packages/core/src/identity/root-signer.ts`, `packages/core/src/identity/ucan.ts` (`issueDelegation`, `verifyNote`), `packages/core/src/identity/abilities.ts` (`noteTerms`, `noteSpaces`), `packages/core/src/node/node.ts` (`SESSION_COMMAND`, `delegate`), `packages/core/src/session/connect.ts` (`grantSigner`, `grantTerms`). Tests: `packages/core/tests/ucan.test.ts`, `packages/core/tests/node.test.ts`, `packages/core/tests/connect.test.ts`._
+_Source: `packages/core/src/identity/root-signer.ts`, `packages/core/src/node/remote.ts` (`serveSigner`, `remoteSigner`), `packages/core/src/identity/ucan.ts` (`issueDelegation`, `verifyNote`), `packages/core/src/identity/abilities.ts` (`noteTerms`, `noteSpaces`), `packages/core/src/node/node.ts` (`SESSION_COMMAND`, `delegate`), `packages/core/src/session/connect.ts` (`grantSigner`, `grantTerms`). Tests: `packages/core/tests/ucan.test.ts`, `packages/core/tests/remote.test.ts` ("the page's signer, from a worker"), `packages/core/tests/node.test.ts`, `packages/core/tests/connect.test.ts`._
 
 ## Renewing the session note
 
@@ -142,7 +151,9 @@ The note format, and that every record carries it, are protocol
 
 A signer need not be able to sign. `grantSigner(grant)` answers every
 `delegate` call with the one note an account home granted, unchanged, and
-refuses once `grant.expiresAt` has passed. A node started from a grant
+refuses once `grant.expiresAt` has passed. `grantSigner(() => grant)` answers
+with whichever grant the getter returns, as the desktop app's node does when
+a renewed grant replaces the last. A node started from a grant
 therefore never gets a fresh note: its "renewal" returns the same note, and when
 it runs out the app must connect again ([spec 06 §2.9](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
 
@@ -301,8 +312,8 @@ needs no grant. A founder who leaves is a founder no more, for good; to stay
 without being one, `spaces.stepDown`
 ([spaces](spaces.md#the-top-and-founders)). Then it deletes
 the space's `sys.joined` record in the account registry, closes the space and
-forgets it with its keys. The account registry and the contacts space cannot
-be left.
+forgets it with its keys. The account registry, the contacts space and carry
+spaces cannot be left.
 
 - The removal goes out only while the space is open, so `leave` waits up to
   5 s for a peer of another account to say it has it. With nobody reachable,
@@ -317,7 +328,7 @@ be left.
 
 `contacts.remove` and `contacts.block` leave the space for two this way.
 
-_Source: `packages/core/src/node/node.ts` (`spaces.leave`, `giveUpPlace`, `forget`, `LEAVE_WAIT_MS`), `packages/core/src/node/space-runtime.ts` (`giveUpPlace`). Tests: `packages/core/tests/key-change.test.ts` ("leaving a private space"), `packages/core/tests/contacts.test.ts` ("removing a contact gives up your place"), `packages/core/tests/node.test.ts` ("the account registry")._
+_Source: `packages/core/src/node/node.ts` (`spaces.leave`, `giveUpPlace`, `forget`, `LEAVE_WAIT_MS`), `packages/core/src/node/space-runtime.ts` (`giveUpPlace`). Tests: `packages/core/tests/key-change.test.ts` ("leaving a private space"), `packages/core/tests/contacts.test.ts` ("removing a contact gives up your place"), `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/carrier.test.ts` ("its carry space cannot be left…")._
 
 ## Holding part of a space
 
@@ -407,26 +418,23 @@ Three kinds of space are the account's own machinery and are hidden from
 | -------------------- | ------------------------------------------ | -------------------------------------------------------------- |
 | The account registry | the account key                            | Never in the node's registry; opened directly. Cannot be left. |
 | The contacts space   | the account key, or `config.contactsSpace` | Held in the registry, hidden. Cannot be left.                  |
-| Carry spaces         | one per carrier the account uses           | Held in the registry, hidden.                                  |
+| Carry spaces         | the account key and the carrier's key      | Never in the node's registry; opened directly. Cannot be left. |
 
 **Reconciling.** With an account key, the node makes its spaces match the
 account's list of `sys.joined` records. This runs at start and whenever
 records change in the account registry, one run at a time. It:
 
-1. joins every carry space a live `sys.carrier` record names, and closes and
-   forgets one whose carrier was removed more than 30 days ago (kept open until
-   then, so an offline carrier still hears it was removed);
-2. joins every space a live `sys.joined` record names that the node does not
+1. joins every space a live `sys.joined` record names that the node does not
    hold, using the view-only invite in the record;
-3. leaves every space whose `sys.joined` record is deleted;
-4. writes a `sys.joined` record for any space held here that the account
+2. leaves every space whose `sys.joined` record is deleted;
+3. writes a `sys.joined` record for any space held here that the account
    registry has never heard of (joined before the registry existed, or on a
    node without the account key);
-5. brings every carrier's passes and wakes up to date
+4. brings every carrier's passes and wakes up to date
    ([spec 06 §4.2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md));
-6. names the account's carriers as keepers of the open spaces it manages
+5. names the account's carriers as keepers of the open spaces it manages
    (also whenever a space opens);
-7. asks every host the account uses how it stands, handing it the spaces if it
+6. asks every host the account uses how it stands, handing it the spaces if it
    has been paid since ([carriers and hosting](#carriers-hosting-and-notifications)),
    without waiting for the answer.
 
@@ -703,7 +711,9 @@ throws unless the note verifies, grants records only (its command is under
   `delegate`; `asAgent`;
 - sees the contact list only if the contacts space is within its note.
 
-Closing the agent leaves the underlying node running.
+Closing the agent leaves the underlying node running. A node used across a
+port (`remoteNode`) starts no agent: the agent's keys would have to cross, so
+an agent is started on the node itself.
 
 An agent granted `scope: account` gets a records-only note for every space
 (`/record`, about the whole account) and the account key in its
@@ -713,7 +723,7 @@ requests and knocks on the account's doors ([doors.md](doors.md)).
 
 Which of these each method of the node is — passed through, held to the note's spaces, or refused — is one table, `API` in `packages/core/src/node/api.ts`; a new method does not type-check until it is decided there. The same table lists what `remoteNode` forwards.
 
-_Source: `packages/core/src/node/node.ts` (`asAgent`), `packages/core/src/node/api.ts` (`API`). Tests: `packages/core/tests/records-only.test.ts` ("an agent acting for a person"), `packages/core/tests/remote.test.ts`._
+_Source: `packages/core/src/node/node.ts` (`asAgent`), `packages/core/src/node/api.ts` (`API`). Tests: `packages/core/tests/records-only.test.ts` ("an agent acting for a person"), `packages/core/tests/remote.test.ts` ("no agent is started across the port…")._
 
 ## The app-side client
 
@@ -778,14 +788,16 @@ closed it, and gives up after 10 minutes by default.
 starts a node with:
 
 - `signer = grantSigner(grant)` ([renewing the session note](#renewing-the-session-note)):
-  `did` = `grant.did`, `custody: "remote"`;
+  `did` = `grant.did`;
 - `sessionKey` = the app's key;
 - stores `indexedDBStores('minca-app:<grant.did>')` unless given;
 - `cache: {}` unless `cache: false` ([holding part of a space](#holding-part-of-a-space));
-- `accountKey`, `contactKey`, `contactsSpace` from the grant when present;
-- relays = the app's relays ∪ `grant.relays`.
+- `accountKey`, `contactKey`, `contactsSpace` from the grant when present (never `contactKey` under a records-only note), and
+  relays = the app's relays ∪ `grant.relays` (`nodeOptionsFromGrant`).
 
-It then joins each granted space it does not hold yet, passing its `memberKey`.
+It then joins each granted space it does not hold yet, passing its `memberKey`
+(`joinGranted`). The desktop app's node (`minca app-node`) and the agent on a
+computer start theirs from a grant the same way, from their own folders.
 
 **The connection.** `createMincaConnection({ home, request, network?, storage?, stores? })`
 is the app's twin of [sign-in](sign-in.md): statuses `starting`, `disconnected`,
@@ -794,9 +806,9 @@ is the app's twin of [sign-in](sign-in.md): statuses `starting`, `disconnected`,
 node started within 30 s (`WorkerNotStarted`), is given up on and the node
 runs in the page. A worker that started and refused passes its reason on. It keeps the grant in `localStorage` under
 `minca.grant` and the person's chosen home under `minca.home` (`home` in the
-config is only a default). It switches to `expired` at `expiresAt` and does not
+config is only a default). It switches to `expired` at `expiresAt` (`watchGrant`) and does not
 load an expired grant from storage, nor one of another format (`v` other
-than `GRANT_VERSION`, 2): the person connects again. When the node sees its own note revoked in
+than `GRANT_VERSION`, 2; `usableGrant`): the person connects again. When the node sees its own note revoked in
 a space it emits `revoked` ([events](#events)), and the connection forgets the
 grant and the app key. `propose(automations)` sends a proposal to the grant's home
 ([spec 06 §2.11](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
@@ -814,20 +826,19 @@ held the first time an automation made it look there; anything arriving after th
 is, even while the account or the list of spaces changes. How the app shows a match is its own
 to decide; a "Notify me" button is where a proposal usually starts.
 
-_Source: `packages/core/src/session/connect.ts` (`appKey`, `forgetAppKey`, `homeAddress`, `connectToHome`, `proposeToHome`, `startConnectedNode`, `grantSigner`), `packages/core/src/session/connection.ts`, `packages/core/src/node/watch-notifications.ts`, `packages/core/src/space/own-automations.ts` (`matchesRecord`). Tests: `packages/core/tests/connect.test.ts` ("an account home typed by a person", "an app showing its own notifications"), `packages/core/tests/topics.test.ts` ("an automation of the account’s own: its where"), `packages/core/tests/watch-notifications.test.ts`._
+_Source: `packages/core/src/session/connect.ts` (`appKey`, `forgetAppKey`, `homeAddress`, `connectToHome`, `proposeToHome`, `startConnectedNode`, `nodeOptionsFromGrant`, `joinGranted`, `grantSigner`, `usableGrant`, `watchGrant`), `packages/cli/src/app-node.ts` (`startDesktopNode`), `packages/core/src/session/connection.ts`, `packages/core/src/node/watch-notifications.ts`, `packages/core/src/space/own-automations.ts` (`matchesRecord`). Tests: `packages/core/tests/connect.test.ts` ("an account home typed by a person", "watching a grant", "an app showing its own notifications"), `packages/core/tests/topics.test.ts` ("an automation of the account’s own: its where"), `packages/core/tests/watch-notifications.test.ts`._
 
 ## Carriers, hosting and notifications
 
 What goes into a carry space, what a carrier checks and the host's HTTP API
 are protocol ([spec 06 §4](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)). The reference node's side:
 
-**Carriers.** `node.carriers.add({ did, name })` (needs the account key) makes
-the carry space, named `Carried by <name>` (name trimmed to 80, default
-`Carrier`), writes the `sys.carrier` record, fills the carry space, and returns
-`{ space, invite }` for the carrier to join with; for a carrier it already
-has, by `did`, it returns that one's. If the record can't be written, it
-takes the carry space back out before failing, so a restart never lists it as
-a space the account uses. A node that starts, or hears the registry change,
+**Carriers.** `node.carriers.add({ did, name })` (needs the account key)
+derives the carry space, writes the `sys.carrier` record (name trimmed to 80,
+default `Carrier`), fills the carry space, and returns `{ space, invite }` for
+the carrier to join with; for a carrier it already has, by `did`, it returns
+that one's. Carry spaces are never kept in the node's own list: each is
+derived again from its record. A node that starts, or hears the registry change,
 refills every carrier's carry space in the background: it opens every space
 the account holds, which from a data folder is slow, and signing in doesn't
 wait for it. Adding an automation doesn't either (adding a carrier writes that
@@ -838,8 +849,8 @@ waits up to `waitMs` for the node to be level with the carrier in the carry
 space and then the account registry, and says whether it was: a node about to
 close (the home's window, once it has answered) waits on it, so what it wrote
 for the carrier is not left with nobody (spec 06 §4.3). `node.carriers.remove(carrySpace)`
-writes `carry:closed` and deletes the record; the node keeps the carry space
-open for 30 days after, so a carrier that is offline still hears it.
+writes `carry:closed` and marks the record removed; the node keeps the carry
+space open until it closes, so the carrier hears it.
 
 **The account's own automations.** `node.automations` (needs the account
 key) lists, adds, updates (`name`, `paused`) and removes the account's own
@@ -851,7 +862,7 @@ person to pause or remove ([sign-in](sign-in.md#the-account-homes-side)).
 **A carrier's matches.** `CarrierNode` reports a version that wakes one of
 the account's wakes through a `wake` event, with only the wake, the space and
 the record's key, collection and `createdAt`; `wakes()` lists the wakes it
-holds. Nothing shows these yet, the browser extension included.
+holds. The desktop app shows them as notifications (`apps/desktop/src/bun/notify.ts`); the browser extension shows none yet.
 
 **Hosting.** `node.hosting`:
 

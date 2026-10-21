@@ -98,8 +98,7 @@ describe('profiles', () => {
     const keyDid = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
     const ucan = await createLocalRootSigner(mallory.me, provider).delegate({
       audience: keyDid,
-      command: '/record/write',
-      subject: `space:${space}`,
+      command: '/',
       expiration: Math.floor(Date.now() / 1000) + 3600,
     });
     const authored = await createSigner(provider).sign(

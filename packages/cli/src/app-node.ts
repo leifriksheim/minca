@@ -38,6 +38,11 @@ import {
   checkGrant,
   connectToHome,
   GRANT_VERSION,
+  grantExpired,
+  grantSigner,
+  joinGranted,
+  nodeOptionsFromGrant,
+  watchGrant,
   type ConnectRequest,
   type Grant,
 } from '@minca/core/session';
@@ -225,8 +230,6 @@ const saveGrant = async (folder: string, seal: CryptoKey, grant: Grant, request:
     `${await sealValue(seal, GRANT_LABEL, { file: 'grant.sealed' }, { grant, request })}\n`,
   );
 
-const expired = (grant: Grant) => grant.expiresAt <= Math.floor(Date.now() / 1000);
-
 /**
  * Runs until stdin ends. `send` writes a line for the shell; `lines` are the
  * shell's. Globals a page would have (`open`, `location`, message events) are
@@ -292,7 +295,6 @@ export async function runAppNode(options: {
   let attached = false;
   let stopServing: (() => void) | null = null;
   let stopWatching: (() => void) | null = null;
-  let expiry: ReturnType<typeof setTimeout> | null = null;
   /** Counts connections asked for, and disconnections: an answer to one that was superseded is dropped */
   let generation = 0;
   const portListeners = new Set<(event: MessageEvent) => void>();
@@ -308,17 +310,7 @@ export async function runAppNode(options: {
     });
 
   /** The note the node acts under: the newest grant's */
-  const signer: RootSigner = {
-    get did() {
-      return grant?.did ?? '';
-    },
-    custody: 'remote',
-    async delegate() {
-      if (!grant || expired(grant))
-        throw new Error('Access has run out. Connect to your account home again.');
-      return grant.note;
-    },
-  };
+  const signer = grantSigner(() => grant);
 
   /** Serves the node to the window, anew: a window that loaded again gets a session of its own */
   function serve(): void {
@@ -336,23 +328,6 @@ export async function runAppNode(options: {
     };
     // The window's view: closing it lets go, and leaves the node running for the menu bar.
     stopServing = serveNode(Object.freeze({ ...node, close: async () => {} }), port);
-  }
-
-  function watchExpiry(): void {
-    if (expiry) clearTimeout(expiry);
-    if (!grant) return;
-    const left = grant.expiresAt * 1000 - Date.now();
-    expiry = setTimeout(
-      () => {
-        if (grant && expired(grant)) {
-          // Nothing runs on a note that ran out: no automations, no syncing.
-          status = 'expired';
-          serve();
-          void stop().then(say);
-        } else watchExpiry();
-      },
-      Math.min(Math.max(left, 0), 2 ** 31 - 1),
-    );
   }
 
   /** Stops the node, and what runs on it: the window's view and the automations */
@@ -383,10 +358,16 @@ export async function runAppNode(options: {
     await mkdir(mine, { recursive: true, mode: 0o700 });
     const started = await start({ grant: next, key, stores: mine, seal, signer, network });
     node = started;
-    started.subscribe((event) => {
-      if (event.type === 'revoked' && node === started) void end('Your account home disconnected this app.');
+    const unwatch = watchGrant(started, next, {
+      // Nothing runs on a note that ran out: no automations, no syncing.
+      onExpired: () => {
+        status = 'expired';
+        serve();
+        void stop().then(say);
+      },
+      onRevoked: () => node === started && void end('Your account home disconnected this app.'),
     });
-    stopWatching = watchNotifications(started, {
+    const stopNotifying = watchNotifications(started, {
       origin,
       onNotify: ({ automation, record }) =>
         void started.spaces
@@ -402,9 +383,12 @@ export async function runAppNode(options: {
           .catch(() => {}),
       onError: (problem) => log(`notifications: ${messageOf(problem)}`),
     });
+    stopWatching = () => {
+      unwatch();
+      stopNotifying();
+    };
     status = 'ready';
     error = null;
-    watchExpiry();
     serve();
     say();
   }
@@ -416,7 +400,6 @@ export async function runAppNode(options: {
    */
   async function end(why: string | null): Promise<void> {
     generation += 1;
-    if (expiry) clearTimeout(expiry);
     await stop();
     grant = null;
     request = null;
@@ -428,12 +411,6 @@ export async function runAppNode(options: {
     const fresh = await appNodeKey(folder, seal);
     if (fresh) key = fresh;
     say();
-  }
-
-  /** The shell has gone: stop, and keep everything for next time */
-  async function shutdown(): Promise<void> {
-    if (expiry) clearTimeout(expiry);
-    await stop();
   }
 
   // The home's window while connecting, as a page would see its popup.
@@ -497,7 +474,7 @@ export async function runAppNode(options: {
       Reflect.set(globalThis, 'location', saved.location);
       if (mine !== generation) return;
       // A grant that came but whose node didn't start leaves no node to be ready with.
-      status = was === 'ready' && !node ? (grant && expired(grant) ? 'expired' : 'disconnected') : was;
+      status = was === 'ready' && !node ? (grant && grantExpired(grant) ? 'expired' : 'disconnected') : was;
       error = messageOf(problem);
       say();
     } finally {
@@ -511,7 +488,7 @@ export async function runAppNode(options: {
     if (kept) {
       await checkGrant(kept.grant, key.did);
       request = kept.request;
-      if (expired(kept.grant)) {
+      if (grantExpired(kept.grant)) {
         grant = kept.grant;
         status = 'expired';
         say();
@@ -560,7 +537,7 @@ export async function runAppNode(options: {
     if (next.done) break;
     handle(next.value);
   }
-  await shutdown();
+  await stop();
   await release();
 }
 
@@ -578,8 +555,10 @@ export interface StartParams {
 /** The node itself, as `startConnectedNode` starts a page's, from a folder whose registry is sealed */
 async function startDesktopNode(params: StartParams): Promise<P2PNode> {
   await enableWebRTC();
-  const { grant } = params;
-  const relays = [...new Set([...params.network.relays, ...configuredRelays(), ...(grant.relays ?? [])])];
+  const { relays, ...keys } = nodeOptionsFromGrant(params.grant, [
+    ...params.network.relays,
+    ...configuredRelays(),
+  ]);
   const node = await createNode({
     signer: params.signer,
     sessionKey: params.key.keys,
@@ -590,16 +569,9 @@ async function startDesktopNode(params: StartParams): Promise<P2PNode> {
       ...(params.network.nodes.length ? { nodes: params.network.nodes } : {}),
       ...(params.network.hosts.length ? { hosts: params.network.hosts } : {}),
     },
-    ...(grant.accountKey ? { accountKey: base64UrlDecode(grant.accountKey) } : {}),
-    ...(grant.contactKey ? { contactKey: base64UrlDecode(grant.contactKey) } : {}),
-    ...(grant.contactsSpace ? { contactsSpace: grant.contactsSpace } : {}),
+    ...keys,
   });
-  const held = new Set((await node.spaces.list()).map((space) => space.id));
-  for (const space of grant.spaces)
-    if (!held.has(space.id))
-      await node.spaces
-        .join(space.invite, space.memberKey ? { memberKey: base64UrlDecode(space.memberKey) } : {})
-        .catch(() => {});
+  await joinGranted(node, params.grant, () => {});
   return node;
 }
 

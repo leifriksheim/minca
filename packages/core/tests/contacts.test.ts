@@ -242,10 +242,15 @@ describe('asking to be added', () => {
     const real = (await leif.node.records.list(club, { collection: 'std.contact-request' }))[0]!;
     // The same request again, signed by a key whose note covers this one space only.
     await letGo(leif.node, club);
-    await forge(leif, club, {
-      collection: 'std.contact-request',
-      body: real.body,
-    });
+    await forge(
+      leif,
+      club,
+      {
+        collection: 'std.contact-request',
+        body: real.body,
+      },
+      { app: true },
+    );
     await hold(leif.node, club);
     await until(
       async () => (await anna.node.records.list(club, { collection: 'std.contact-request' })).length === 2,

@@ -588,19 +588,58 @@ export async function checkGrant(
     throw new Error('The grant gives more than records, which is all that was asked for.');
 }
 
-/** A signer that answers with the note the home gave — the app holds nothing else. */
-export function grantSigner(grant: Grant): RootSigner {
+/**
+ * A signer that answers with the note the home gave — the app holds nothing
+ * else. Given a getter, it answers with whichever grant is current.
+ */
+export function grantSigner(grant: Grant | (() => Grant | null)): RootSigner {
+  const current = typeof grant === 'function' ? grant : () => grant;
   return {
-    did: grant.did,
-    custody: 'remote',
+    get did() {
+      return current()?.did ?? '';
+    },
     async delegate() {
-      if (grant.expiresAt <= Math.floor(Date.now() / 1000)) {
+      const now = current();
+      if (!now || grantExpired(now))
         throw new Error('Access has run out. Connect to your account home again.');
-      }
-      return grant.note;
+      return now.note;
     },
   };
 }
+
+/** Whether a grant's note has run out */
+export const grantExpired = (grant: Pick<Grant, 'expiresAt'>): boolean =>
+  grant.expiresAt <= Math.floor(Date.now() / 1000);
+
+/**
+ * Watches a node started under a grant: `onExpired` once its note runs out,
+ * `onRevoked` for each space where the home revoked its key.
+ * @returns How to stop watching
+ */
+export function watchGrant(
+  node: Pick<P2PNode, 'subscribe'>,
+  grant: Pick<Grant, 'expiresAt'>,
+  on: { readonly onExpired?: () => void; readonly onRevoked?: (space: string) => void },
+): () => void {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  // A timer waits at most 2^31 − 1 ms, some 24 days: a note that runs longer is looked at again then.
+  const arm = () => {
+    const left = Math.min(Math.max(grant.expiresAt * 1000 - Date.now(), 0), 2 ** 31 - 1);
+    timer = globalThis.setTimeout(() => (grantExpired(grant) ? on.onExpired?.() : arm()), left);
+  };
+  if (on.onExpired) arm();
+  const unsubscribe = node.subscribe((event) => {
+    if (event.type === 'revoked') on.onRevoked?.(event.space);
+  });
+  return () => {
+    globalThis.clearTimeout(timer);
+    unsubscribe();
+  };
+}
+
+/** Whether a kept grant still works: one kept in an older format holds a note no peer reads now */
+export const usableGrant = (grant: Grant | null): boolean =>
+  !!grant && grant.v === GRANT_VERSION && !grantExpired(grant);
 
 /**
  * Starts a node acting for the account, under a grant.
@@ -622,8 +661,7 @@ export async function startConnectedNode(params: {
   readonly worker?: () => WorkerLike;
 }): Promise<P2PNode> {
   const key = params.key ?? (await appKey());
-  // The home's relays as well as the app's, so the two always share one.
-  const relays = [...new Set([...(params.network?.relays ?? []), ...(params.grant.relays ?? [])])];
+  const { relays, ...keys } = nodeOptionsFromGrant(params.grant, params.network?.relays);
   const network = params.network || relays.length ? { ...params.network, relays } : undefined;
   const node = await startPageNode(
     {
@@ -632,21 +670,46 @@ export async function startConnectedNode(params: {
       stores: { indexedDB: `minca-app:${params.grant.did}` },
       ...(network ? { network } : {}),
       ...(params.cache === false ? {} : { cache: params.cache ?? {} }),
-      ...(params.grant.accountKey ? { accountKey: base64UrlDecode(params.grant.accountKey) } : {}),
-      ...(params.grant.contactKey ? { contactKey: base64UrlDecode(params.grant.contactKey) } : {}),
-      ...(params.grant.contactsSpace ? { contactsSpace: params.grant.contactsSpace } : {}),
+      ...keys,
     },
     params,
   );
-  const held = new Set((await node.spaces.list()).map((space) => space.id));
-  for (const space of params.grant.spaces) {
-    if (!held.has(space.id))
-      await node.spaces.join(
-        space.invite,
-        space.memberKey ? { memberKey: base64UrlDecode(space.memberKey) } : {},
-      );
-  }
+  await joinGranted(node, params.grant);
   return node;
+}
+
+/**
+ * What a node started under a grant takes from it: the keys it carries, and
+ * the home's relays as well as the app's, so the two always share one.
+ */
+export function nodeOptionsFromGrant(grant: Grant, relays: ReadonlyArray<string> = []) {
+  return {
+    relays: [...new Set([...relays, ...(grant.relays ?? [])])],
+    ...(grant.accountKey ? { accountKey: base64UrlDecode(grant.accountKey) } : {}),
+    // Never under records only, whatever the home sent: it opens contact requests and knocks.
+    ...(grant.contactKey && !grantsRecordsOnly(grant.note)
+      ? { contactKey: base64UrlDecode(grant.contactKey) }
+      : {}),
+    ...(grant.contactsSpace ? { contactsSpace: grant.contactsSpace } : {}),
+  };
+}
+
+/**
+ * Joins the spaces a grant names that the node doesn't hold yet: again,
+ * harmlessly, on later starts. A space that won't join throws, unless
+ * `onError` takes it and the rest are joined.
+ */
+export async function joinGranted(
+  node: P2PNode,
+  grant: Grant,
+  onError?: (error: unknown) => void,
+): Promise<void> {
+  const held = new Set((await node.spaces.list()).map((space) => space.id));
+  for (const { id, invite, memberKey } of grant.spaces) {
+    if (held.has(id)) continue;
+    const joining = node.spaces.join(invite, memberKey ? { memberKey: base64UrlDecode(memberKey) } : {});
+    await (onError ? joining.catch(onError) : joining);
+  }
 }
 
 /** Where an app keeps its grant between visits */
@@ -655,10 +718,8 @@ export function grantStore(storage: KeyValueStore | null = defaultStorage(), key
   return {
     load(): Grant | null {
       const grant = kept.read<Grant>(key);
-      // One kept in an older format holds a note no peer reads now: connecting again replaces it.
-      return grant && grant.v === GRANT_VERSION && grant.expiresAt > Math.floor(Date.now() / 1000)
-        ? grant
-        : null;
+      // Connecting again replaces one that doesn't work.
+      return usableGrant(grant) ? grant : null;
     },
     save: (grant: Grant): void => kept.write(key, grant),
     forget: (): void => kept.write(key, null),

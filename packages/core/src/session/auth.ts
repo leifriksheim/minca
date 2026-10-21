@@ -239,6 +239,13 @@ export interface Connection {
   readonly recordsOnly?: true;
 }
 
+/**
+ * Which kept connection this is: an app by its origin, and a program
+ * connected by code or a carrier by its key, since one origin has several.
+ */
+export const connectionKey = (known: Connection): string =>
+  known.via === 'code' || known.access === 'carry' ? known.audience : known.origin;
+
 /** Every field a kept connection may have */
 const CONNECTION_FIELDS = new Set([
   'origin',
@@ -767,29 +774,15 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
    * With `waitMs`, until a peer has each revoke or that time has passed (they wait together).
    */
   async function revokeConnection(node: P2PNode, connection: Connection, waitMs = 0): Promise<boolean> {
-    if (connection.access !== 'write') return true;
-    if (connection.audience === node.sessionDid) return true;
-    const contactsSpace = await node.contacts.space();
-    const writable = (await node.spaces.list()).filter((space) => space.writable).map((space) => space.id);
-    // A space the account has left, or no longer writes in, has nothing to revoke, and nobody to tell.
-    const covered =
-      connection.scope === 'account'
-        ? [...writable, ...(contactsSpace ? [contactsSpace] : [])]
-        : connection.spaces
-            .map((space) => space.id)
-            .filter((id) => writable.includes(id) || id === contactsSpace);
-    // Every space at once: each is its own store. A space that is gone, or
-    // that this account no longer writes in, has nothing to revoke.
-    const key = connection.audience;
-    const options = { waitMs };
-    // One that can't be written (a space gone, or no longer the account's to write in) has
-    // nothing to send: it isn't one that went unheard.
-    const taken = await Promise.all([
-      ...covered.map((spaceId) => node.spaces.revoke(spaceId, key, options).catch(() => true)),
-      // A whole-account app could also add spaces to the account's list, and rename it.
-      ...(connection.scope === 'account' ? [node.account.revoke(key, options).catch(() => true)] : []),
-    ]);
-    return taken.every(Boolean);
+    if (connection.access !== 'write' || connection.audience === node.sessionDid) return true;
+    // A whole-account app acts as the account, so wrote wherever it does: its own spaces too.
+    if (connection.scope === 'account') return node.revokeKey(connection.audience, { waitMs });
+    // Any other wrote only in the spaces it was given. One the account has left has nobody to tell.
+    const writable = new Set(
+      (await node.spaces.list()).filter((space) => space.writable).map((space) => space.id),
+    );
+    const spaces = connection.spaces.map((space) => space.id).filter((id) => writable.has(id));
+    return node.revokeKey(connection.audience, { waitMs, spaces });
   }
 
   /** Disconnects every app connected here whose chosen time has passed */
@@ -1783,10 +1776,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       };
       // Connecting again replaces the old note. A program connected by code is its own key: connecting one replaces only that one.
       // A carrier at the same origin is not the app, and stays (§2.10).
-      const replaced = (known: Connection) =>
-        byCode
-          ? known.audience === request.audience
-          : known.origin === choice.origin && !known.via && known.access !== 'carry';
+      const replaced = (known: Connection) => connectionKey(known) === connectionKey(connection);
       // A note it replaces stops too: no time ends it, so revoking does (unless it is the same key, still in use).
       for (const known of auth.connections().filter(replaced))
         if (known.audience !== connection.audience) await revokeConnection(node, known);
@@ -1816,9 +1806,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       if (!session) throw new Error('Sign in first.');
       const { node } = session;
       // Only the app itself: a program connected through it by code isn't what the person is looking at, and a carrier can't read what it would notify about.
-      const connection = auth
-        .connections()
-        .find((known) => known.origin === origin && !known.via && known.access !== 'carry');
+      const connection = auth.connections().find((known) => connectionKey(known) === origin);
       if (!connection)
         throw new Error(
           'Only an app connected to your account here may suggest what to notify you about. Connect it first.',

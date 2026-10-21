@@ -397,18 +397,18 @@ account key it sees only the spaces it was given; with one it follows the
 whole account (§1.3). How the reference starts it is in
 [the app-side client](../packages/core/docs/node.md#the-app-side-client).
 
-_Source: `packages/core/src/session/connect.ts` (`startConnectedNode`, `grantSigner`). Tests: `packages/core/tests/connect.test.ts`._
+_Source: `packages/core/src/session/connect.ts` (`startConnectedNode`, `nodeOptionsFromGrant`, `joinGranted`, `grantSigner`), `packages/cli/src/app-node.ts` (`startDesktopNode`), `packages/cli/src/agent.ts` (`startWithKey`). Tests: `packages/core/tests/connect.test.ts`._
 
 ### 2.8 Scope
 
-|                       | `scope: spaces`                                                    | `scope: account`                        |
-| --------------------- | ------------------------------------------------------------------ | --------------------------------------- |
-| Note                  | about the one space, or the account with a policy naming them      | about the account, no policy            |
-| Account key           | no                                                                 | yes                                     |
-| Sees                  | the granted spaces                                                 | every space; the account registry       |
-| Makes or joins spaces | the home makes them at grant time                                  | itself; they land in the account's list |
-| Contacts              | only with `contacts: true` (list and requests; not `ask`/`accept`) | yes, including `ask`/`accept`           |
-| Member keys           | one per granted private space                                      | derived from the account key            |
+|                       | `scope: spaces`                                                                         | `scope: account`                        |
+| --------------------- | --------------------------------------------------------------------------------------- | --------------------------------------- |
+| Note                  | about the one space, or the account with a policy naming them                           | about the account, no policy            |
+| Account key           | no                                                                                      | yes                                     |
+| Sees                  | the granted spaces                                                                      | every space; the account registry       |
+| Makes or joins spaces | the home makes them at grant time                                                       | itself; they land in the account's list |
+| Contacts              | only with `contacts: true`: reads the list and requests, changes neither, opens no door | yes, including `ask`/`accept` and doors |
+| Member keys           | one per granted private space                                                           | derived from the account key            |
 
 With `recordsOnly` the note grants `/record` (or `/record/read`) under either
 scope, so every peer refuses from it what a records-only note can't do
@@ -473,9 +473,12 @@ both.
 that has `access: write` (never the home's own session key), and connecting
 the same app again with a new key revokes the old one the same way:
 
-- `scope: spaces`: in every space it was granted;
-- `scope: account`: in every space the account can write in, the contacts
-  space, and the account registry.
+- `scope: spaces`: in every space it was granted that the account still
+  writes in;
+- `scope: account`: wherever the account writes: every space it lists, its
+  carry spaces, the contacts space and the account registry. Such an app
+  acts as the account ([01](01-identity.md) §8), so it could write in all of
+  them.
 
 Disconnecting an app (not only the programs connected through it, which go
 with it) also removes every automation of the account's own whose
@@ -488,7 +491,7 @@ already seen of it. What the app could already read, it keeps. How the reference
 home stores connections and what the reference client does when it sees its
 key revoked are in [the account home's side](../packages/core/docs/sign-in.md#the-account-homes-side).
 
-_Source: `packages/core/src/session/auth.ts` (`disconnect`, `connections`, `grant`, `grantCarry`), `packages/core/src/node/node.ts` (`checkRevoked`). Tests: `packages/core/tests/connect.test.ts` ("disconnecting …", "a carrier and an app at one origin are two connections…")._
+_Source: `packages/core/src/session/auth.ts` (`disconnect`, `revokeConnection`, `connections`, `grant`, `grantCarry`), `packages/core/src/node/node.ts` (`revokeKey`, `checkRevoked`). Tests: `packages/core/tests/connect.test.ts` ("disconnecting …", "disconnecting a whole-account app revokes it in the carry spaces too…", "a carrier and an app at one origin are two connections…")._
 
 ### 2.11 Proposing automations
 
@@ -783,42 +786,42 @@ _Source: `packages/core/src/space/pass.ts`, `packages/core/src/node/carrier.ts`.
 
 Using a carrier needs the account key:
 
-1. The node makes a private space, with the account as its only writer.
+1. The node derives the carry space from the account key, the carrier's
+   `did` and `gen`: 0 for a carrier new to the account, else one more than
+   the highest `gen` of the `sys.carrier` records it holds for that `did`
+   ([03](03-spaces.md) §13.1, §14). A `gen` that is not a non-negative
+   integer names no carry space: such a record is ignored.
 2. It writes a `sys.carrier` record in the account registry, key
    `carrier:<hex of the first 20 bytes of SHA-256(utf8(carry space id))>`, body
-   `{ space, invite, did, name, since }`, where `invite` is a view-only invite
-   to the carry space ([03](03-spaces.md)). If that record can't be
-   written, the node removes the carry space it made: nothing else says it
-   is one, and held, a later reconcile would record it as a space the
-   account uses.
-3. It fills the carry space (below) and returns `{ space, invite }`; the
-   carrier joins with the invite. Keeping the other carriers' carry spaces
-   in step (below) needs no waiting for.
+   `{ did, name, since, gen? }` (`gen` only when not 0).
+3. It fills the carry space (below) and returns `{ space, invite }`, where
+   `invite` is a view-only invite to the carry space; the carrier joins with
+   it. Keeping the other carriers' carry spaces in step (below) needs no
+   waiting for.
 
-> **Known defect:** two devices that add the same carrier at once, each before
-> hearing of the other's record, make two carry spaces for it. Both stay live
-> and are kept in step; the carrier holds whichever invite reached it.
-> Nothing removes one on its own, since it could be the one the carrier holds.
-> Removing the carrier removes every carry space with its `did`
-> ([#283](https://github.com/leifriksheim/minca/issues/283)).
-
-> **Known defect:** a node that stops between steps 1 and 2 (a tab closed
-> mid-connect) leaves the carry space held with no record, and a later
-> reconcile records it as a space the account uses, where every app lists it.
-> Nothing in the space says it is a carry space
-> ([#283](https://github.com/leifriksheim/minca/issues/283)).
+Every device derives the same carry space, so two devices that add a carrier
+at once, each before hearing of the other's record, write one record for one
+space. Nothing is stored before step 2, so a node that stops before it
+leaves nothing behind. A space is a carry space when a `sys.carrier` record
+of the account's, live or removed, is keyed by its id: the key alone decides
+it, whatever the body says. A node never lists one as a space the account
+uses, nor leaves it.
 
 A carrier the account already uses, by `did`, is not added again: the node
-returns its carry space and invite as they are. A node asked to add a carrier
-it is already adding answers both with the one carry space. So a carrier that connects
+returns its carry space and invite as they are. So a carrier that connects
 again keeps what it holds, and is never sent `carry:closed` (below) for a
-space it is still using.
+space it is still using. One added again after it was removed gets a new
+carry space, one `gen` past its removed record's.
+
+A `sys.carrier` record from before carry spaces were derived names its carry
+space and a view-only invite to it in `space` and `invite`; a node opens that
+space with the invite. No node writes one.
 
 A removal made on a device that is offline can cross a reconnect made
 through another device that has not heard of it yet. The removal wins: once
 it arrives, the carrier reads `carry:closed`, forgets what it held and says
-the account disconnected it, and connecting it again then makes a new carry
-space. That device could not tell the record was already deleted, so nothing
+the account disconnected it, and connecting it again then derives a new carry
+space. That device could not tell the carrier was already removed, so nothing
 it does at the reconnect could prevent this.
 
 Every device holding the account key keeps each live carrier's carry space in
@@ -827,7 +830,7 @@ step with the account (§1.3): one `sys.pass` record per space, and one
 It writes each pass from the key its registry holds for the space, and opens
 the space, which is how it learns of a change of key; the refill that change
 starts writes the pass for the new key. It writes no pass in the
-carry space of a carrier its registry shows deleted, and a removal on that
+carry space of a carrier its registry shows removed, and a removal on that
 device waits for a refill already under way.
 
 > **Known defect:** a device behind on a key change writes the pass from the
@@ -858,9 +861,10 @@ When two accounts name one space, a pass for a later key wins over one for the
 first key.
 
 **Removing a carrier**: delete every pass, write `sys.pass` key `carry:closed`
-with body `{ "v": 1, "closed": true }`, then delete the `sys.carrier` record. A
+with body `{ "v": 1, "closed": true }`, then write the `sys.carrier` record
+again with `removed` (the time), rather than deleting it. A
 carrier that reads `carry:closed` from the account MUST stop carrying for it and
-forget what it held. The node keeps the carry space open for a while after, so
+forget what it held. The node keeps the carry space open until it closes, so
 the carrier hears it ([the node](../packages/core/docs/node.md#carriers-hosting-and-notifications)).
 
 A pass cannot be taken back. A removed carrier that does not forget keeps the
@@ -873,7 +877,7 @@ its keepers (`{ did, name }`, at most 16, [03](03-spaces.md)) and stops naming
 carriers the account removed. Other keepers stay. So apps holding part of a
 space ([05](05-sync-and-storage.md) §5) can rely on the carriers.
 
-_Source: `packages/core/src/node/node.ts` (`carriers`, `syncPasses`, `passAll`, `nameKeepers`), `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/carrier.test.ts` ("added twice at once, it gets one carry space", "one added on two devices at once is removed whole…", "adding one that fails leaves no carry space behind…", "removed while a refill runs, no pass is written back", "a removal reaches the carrier even when the home closes straight after")._
+_Source: `packages/core/src/node/node.ts` (`carriers`, `syncPasses`, `passAll`, `nameKeepers`), `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/carrier.test.ts` ("added twice at once, it gets one carry space", "added on two devices at once, it gets one carry space…", "added again after it was removed…", "its carry space cannot be left…", "adding one that fails leaves no carry space behind…", "removed while a refill runs, no pass is written back", "a removal reaches the carrier even when the home closes straight after")._
 
 ### 4.3 Connecting a carrier through the account home
 

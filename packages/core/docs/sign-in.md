@@ -394,7 +394,7 @@ shape, is dropped when read, not read in part: its app or program connects
 again.
 Connecting the same origin again replaces its connection; a connection with `via: 'code'` (a
 program connected by code through the app) is keyed by its audience instead,
-so each such program is its own. A carrier is kept apart from the app at its
+so each such program is its own (`connectionKey`). A carrier is kept apart from the app at its
 origin: connecting either replaces only its own kind, and one key is never
 both. `auth.connections()` lists them.
 
@@ -441,4 +441,4 @@ carrier from the same origin (never an app there), adds the carrier with `node.c
 returns the `CarryGrant`. Its connection is kept with `expiresAt: 0`, since a
 carry connection never expires.
 
-_Source: `packages/core/src/session/auth.ts` (`grant`, `grantCarry`, `propose`, `connections`, `disconnect`, `signOut`, `isConnection`), `packages/core/src/session/connect.ts` (`receiveConnectRequest`). Tests: `packages/core/tests/connect.test.ts` ("the home receiving a request", "connecting an app to an account home", "disconnecting …", "connecting a carrier to an account home", "signing out and disconnecting…", "signing out alone…"), `packages/core/tests/records-only.test.ts` ("a connection kept in an older shape is dropped, not read as the app’s own")._
+_Source: `packages/core/src/session/auth.ts` (`grant`, `grantCarry`, `propose`, `connections`, `disconnect`, `signOut`, `isConnection`, `connectionKey`), `apps/home/src/components/Settings.tsx`, `packages/core/src/session/connect.ts` (`receiveConnectRequest`). Tests: `packages/core/tests/connect.test.ts` ("the home receiving a request", "connecting an app to an account home", "disconnecting …", "connecting a carrier to an account home", "signing out and disconnecting…", "signing out alone…"), `packages/core/tests/records-only.test.ts` ("a connection kept in an older shape is dropped, not read as the app’s own")._

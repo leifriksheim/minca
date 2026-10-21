@@ -658,6 +658,43 @@ describe('records against the history', () => {
     assert.ok(!at(4));
   });
 
+  test('a cutoff covers only a change with a place: one added on top is struck as replaying whole strikes it', () => {
+    const bob = assign('alice', 'bob', 'admin', []);
+    const rv = revoke('bob', 'bobLaptop', [bob.id], { cutoff: { bobLaptop: { 'sys.assign': 3 } } });
+    const late = assign('bob', 'carol', 'member', [rv.id], { author: 'bobLaptop' });
+    const whole = replayed([bob, rv, late]);
+    assert.equal(status(whole, late), 'dropped');
+    assert.equal(replayed([bob, rv]).extend(late)?.status(late.id)?.status ?? 'dropped', 'dropped');
+  });
+
+  test('a fork proof reaches from its place on, whatever cutoff it carries', () => {
+    const bob = assign('alice', 'bob', 'admin', []);
+    const carol = assign('bob', 'carol', 'member', [bob.id], { author: 'bobLaptop', line: 5 });
+    const fork: AccessEvent = {
+      id: 'fork-proof',
+      root: 'bob',
+      author: 'bob',
+      seen: [carol.id],
+      cutoff: new Map([['bobLaptop', new Map([['sys.assign', 9]])]]),
+      key: 'fork:bobLaptop',
+      kind: 'fork',
+      writer: 'bobLaptop',
+      collection: 'sys.assign',
+      from: 2,
+    };
+    const h = replayed([bob, carol, fork]);
+    assert.equal(status(h, carol), 'dropped');
+    const record = {
+      id: 'r',
+      root: 'bob',
+      seen: [bob.id],
+      writer: 'bobLaptop',
+      collection: 'sys.assign',
+      line: 5,
+    };
+    assert.ok(!h.judge(record, () => true).ok);
+  });
+
   test('collection definitions: /collection/define to create, its definer or /collection/define to change', () => {
     const bob = assign('alice', 'bob', 'member', []);
     const g: AccessGenesis = {

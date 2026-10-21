@@ -21,14 +21,7 @@ import { createP256Provider } from '../identity/crypto-p256.js';
 import type { Link, SpaceRole } from '../types.js';
 import { didOf } from '../identity/did.js';
 import { verifyNote, type Delegation } from '../identity/ucan.js';
-import {
-  ACCOUNT_COMMAND,
-  ACCOUNT_REQUIREMENT,
-  ALL_COMMAND,
-  grantsRecordsOnly,
-  noteGrants,
-  noteSpaces,
-} from '../identity/abilities.js';
+import { actsForAccount, ALL_COMMAND, grantsRecordsOnly, noteSpaces } from '../identity/abilities.js';
 import { createSigner } from '../schema/signer.js';
 import { createSchemaEngine } from '../schema/schema-engine.js';
 import {
@@ -102,6 +95,7 @@ import { team } from '../space/presets.js';
 import {
   CARRIER_COLLECTION,
   deriveAccountRegistry,
+  deriveCarrySpace,
   deriveContactsSpace,
   MEMBERSHIP_COLLECTION,
   PROFILE_COLLECTION,
@@ -177,8 +171,13 @@ export const SESSION_COMMAND = ALL_COMMAND;
 
 const DEFAULT_TTL_SECONDS = 3600;
 
-/** How long a removed carrier's space is kept open, for the carrier to hear it was removed */
-const FORGET_CARRIER_AFTER_MS = 30 * 24 * 3600 * 1000;
+/** A carrier record of the account's, with its carry space */
+interface CarrierEntry {
+  readonly key: string;
+  readonly body: Carrier;
+  readonly carry: SpaceRecord;
+}
+
 /** How long leaving waits for a peer to take the account's removal before forgetting the space anyway */
 const LEAVE_WAIT_MS = 5000;
 
@@ -276,12 +275,12 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   );
   const mesh = meshFor(config.network, sessionDid);
   /**
-   * A node whose note doesn't grant `account/write` — an agent on someone's
-   * computer running a node of its own, say. It follows the account, but never
-   * writes for it: no list of spaces, no passes, no name. Every peer would
-   * ignore those.
+   * A node whose note doesn't let it act as the account itself — an app, or
+   * an agent on someone's computer running a node of its own. It may follow
+   * the account, but never writes for it: no list of spaces, no passes, no
+   * name, no doors. Every peer would ignore those (spec 01 §8).
    */
-  const narrowNote = !noteGrants(current, ACCOUNT_REQUIREMENT);
+  const narrowNote = !actsForAccount(current);
 
   // ─── Events ────────────────────────────────────────────────────────
 
@@ -321,8 +320,12 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   if (contactsRecord && !(await registry.get(contactsRecord.space.id))) {
     await joinRegistry(await encodeSpaceInvite(contactsRecord, config.signer.did));
   }
-  /** Whether a space is the account's own machinery, not one it uses */
-  const hidden = (spaceId: string) => carrySpaces.has(spaceId) || spaceId === contactsSpaceId;
+  /** Which of the account's own spaces this is, or null for one it uses */
+  async function kindOf(spaceId: string): Promise<'registry' | 'contacts' | 'carry' | null> {
+    if (spaceId === accountSpaceId) return 'registry';
+    if (spaceId === contactsSpaceId) return 'contacts';
+    return (await isCarrySpace(spaceId)) ? 'carry' : null;
+  }
 
   /** The contact key, for a node allowed to open contact requests */
   const contactKeys = config.contactKey ? await contactKeyPair(config.contactKey) : null;
@@ -342,7 +345,9 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   }
 
   async function findRecord(spaceId: string): Promise<SpaceRecord | null> {
-    return spaceId === accountSpaceId ? account : registry.get(spaceId);
+    if (spaceId === accountSpaceId) return account;
+    const held = await registry.get(spaceId);
+    return held ?? (await carrierRecords()).find(({ carry }) => carry.space.id === spaceId)?.carry ?? null;
   }
 
   async function requireRecord(spaceId: string): Promise<SpaceRecord> {
@@ -368,16 +373,15 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       for (const spaceId of runtimes.keys())
         if (spaceId !== accountSpaceId) emit({ type: 'status', space: spaceId });
     }
-    if (event.type === 'records')
-      void runtimes
-        .get(event.space)
-        ?.then((rt) => checkRevoked(event.space, rt))
-        .catch(() => {});
-    if (event.type === 'records' && event.space !== accountSpaceId)
-      void keepSpaceHosts(event.space).catch(() => {});
+    if (event.type !== 'records') return;
+    void runtimes
+      .get(event.space)
+      ?.then((rt) => checkRevoked(event.space, rt))
+      .catch(() => {});
+    void keepSpaceHosts(event.space).catch(() => {});
     // A space joined with an invite whose record had not arrived: perhaps it has now.
-    if (event.type === 'records' && event.space !== accountSpaceId) void finishJoining(event.space);
-    if (event.type === 'records' && event.space === accountSpaceId) {
+    void finishJoining(event.space);
+    if (event.space === accountSpaceId) {
       emit({ type: 'account' });
       void reconcile();
       // A rename on another device reaches the spaces open here too.
@@ -421,16 +425,13 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   }
   const ownName = async () => (await ownProfile())?.name ?? null;
 
-  /** Whether a space is the account's own machinery: its registry, its contacts, a carry space */
-  const ownSpace = (spaceId: string) => spaceId === accountSpaceId || hidden(spaceId);
-
   /**
    * Tells a space who this account is. Done when the space opens and when the
    * name changes — not by opening every space, which would start syncing them
    * all; a space not open now hears on its next open.
    */
   async function publishProfile(spaceId: string, open: SpaceRuntime): Promise<void> {
-    if (spaceId === accountSpaceId || spaceId === contactsSpaceId || narrowNote) return;
+    if (narrowNote || (await kindOf(spaceId))) return;
     const own = await ownProfile();
     if (!own) return;
     const base = { name: own.name, ...(contactKeys ? { contactKey: contactKeys.publicKey } : {}) };
@@ -482,8 +483,9 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     if (closed) return Promise.reject(new Error('Node is closed'));
     let open = runtimes.get(spaceId);
     if (!open) {
-      open = requireRecord(spaceId).then(async (record) =>
-        openSpaceRuntime({
+      open = requireRecord(spaceId).then(async (record) => {
+        const kind = await kindOf(spaceId);
+        return openSpaceRuntime({
           record,
           writers,
           stores: config.stores,
@@ -494,14 +496,13 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
           rootDid: config.signer.did,
           ...(config.network ? { network: config.network } : {}),
           ...(mesh ? { mesh } : {}),
-          accountOnly: ownSpace(spaceId),
+          accountOnly: kind !== null,
           // The account's own spaces are always held whole: every device needs all of them.
-          ...(config.cache && !ownSpace(spaceId) ? { cache: config.cache } : {}),
+          ...(config.cache && !kind ? { cache: config.cache } : {}),
           watchIntervalMs: config.watchIntervalMs ?? 2000,
           ...(config.fetchFiles ? { fetchFiles: config.fetchFiles } : {}),
           emit: fromRuntime,
           onRole: (role) => {
-            if (spaceId === accountSpaceId) return;
             // Holding a role now — perhaps just joined — means the space may hear who this is.
             if (role !== null)
               void runtimes
@@ -517,23 +518,22 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
             void registry.clearInvite(spaceId).then(() => emit({ type: 'spaces' }));
           },
           memberKey:
-            spaceId === accountSpaceId
+            kind === 'registry'
               ? null
               : config.accountKey
                 ? await deriveMemberKeyBytes(config.accountKey, spaceId)
                 : (record.memberKey ?? null),
-          onRelays: async (relays) => {
-            if (spaceId !== accountSpaceId) await registry.setRelays(spaceId, relays);
-          },
+          // Kept only for a space in the list: the registry is not in it.
+          onRelays: (relays) => registry.setRelays(spaceId, relays),
           onKeys: async (keys, current) => {
-            if (spaceId === accountSpaceId) return;
+            if (kind === 'registry') return;
             await registry.addKeys(spaceId, keys, current);
-            // The account's other devices, and its carriers, follow the new key.
-            await remember(spaceId, { refresh: true });
-            void reconcile();
+            // The account's other devices follow the new key, and its carriers: passes and wakes, not a whole reconcile.
+            if (!kind) await remember(spaceId, { refresh: true });
+            void passAll().catch(() => {});
           },
-        }),
-      );
+        });
+      });
       // A failed open must not be cached, or the space stays broken until restart.
       open.catch(() => runtimes.delete(spaceId));
       void open.then((rt) => publishProfile(spaceId, rt)).catch(() => {});
@@ -630,14 +630,11 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     if (!accountSpaceId || narrowNote) return;
     const open = await runtime(accountSpaceId);
     const known = await open.get<Membership>(membershipKey(spaceId));
+    if (known && (!options.refresh || known.deleted)) return;
     // A view-only invite: what lets the account write is its role in the
     // space, which every device reads there. Invite secrets are never kept.
     const invite = await inviteTo(spaceId);
-    if (
-      known &&
-      (!options.refresh || known.deleted || inviteKeyOf(known.body?.invite) === inviteKeyOf(invite))
-    )
-      return;
+    if (known && inviteKeyOf(known.body?.invite) === inviteKeyOf(invite)) return;
     await open.upsertSystem<Membership>(MEMBERSHIP_COLLECTION, membershipKey(spaceId), {
       space: spaceId,
       invite,
@@ -663,49 +660,70 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
   // ─── Carriers ──────────────────────────────────────────────────────
   //
-  // One record per carrier in the registry, naming the carry space shared with
-  // it. Every device of the account opens that space and keeps a pass in it
-  // for each of the account's spaces (`space/pass.ts`) — so a space joined in
-  // any app is carried, with nothing to do in the home.
+  // One record per carrier in the registry. Its carry space is derived from
+  // the account key and the carrier's key, so every device finds the same one
+  // and none is stored. Every device of the account opens it and keeps a pass
+  // in it for each of the account's spaces (`space/pass.ts`) — so a space
+  // joined in any app is carried, with nothing to do in the home.
 
   const carrierKey = async (spaceId: string) => (await passKey(spaceId)).replace(/^pass:/, 'carrier:');
 
-  /**
-   * Carrier records the account wrote, live and removed, each with its carry
-   * space — for a removed one, as its last version with a body said.
-   */
-  async function carrierRecords(): Promise<
-    ReadonlyArray<{ readonly record: NodeRecord<Carrier>; readonly space: string }>
-  > {
+  /** Whether a `sys.carrier` record of the account's, live or not, is keyed by this space */
+  async function isCarrySpace(spaceId: string): Promise<boolean> {
+    if (!accountSpaceId) return false;
+    const versions = await (await runtime(accountSpaceId)).history(await carrierKey(spaceId));
+    return versions.some(
+      (version) =>
+        version.collection === CARRIER_COLLECTION && version.verified && version.root === config.signer.did,
+    );
+  }
+
+  const derivedCarry = new Map<string, Promise<SpaceRecord>>();
+  /** A carrier's carry space: derived, or for one added before they were, the one its invite names */
+  async function carrySpaceOf(carrier: Carrier): Promise<SpaceRecord | null> {
+    if (carrier.invite && carrier.space)
+      return (await registry.get(carrier.space)) ?? joinRegistry(carrier.invite).catch(() => null);
+    if (!config.accountKey) return null;
+    const at = `${carrier.did}|${carrier.gen ?? 0}`;
+    const known = derivedCarry.get(at);
+    if (known) return known;
+    const derived = deriveCarrySpace(
+      config.accountKey,
+      config.signer.did,
+      carrier.did,
+      carrier.gen ?? 0,
+      provider,
+    );
+    derivedCarry.set(at, derived);
+    return derived;
+  }
+
+  /** The account's carriers, live and removed, each with its carry space */
+  async function carrierRecords(): Promise<ReadonlyArray<CarrierEntry>> {
     if (!accountSpaceId) return [];
-    const open = await runtime(accountSpaceId);
-    const found: Array<{ record: NodeRecord<Carrier>; space: string }> = [];
-    for (const record of await ownRecords<Carrier>(open, {
-      collection: CARRIER_COLLECTION,
-      includeDeleted: true,
-    })) {
-      if (!record.deleted) {
-        if (typeof record.body?.space === 'string' && typeof record.body.invite === 'string')
-          found.push({ record, space: record.body.space });
-        continue;
-      }
-      const before = (await open.history<Carrier>(record.key)).find(
-        (version) => typeof version.body?.space === 'string',
-      );
-      if (before?.body) found.push({ record, space: before.body.space });
+    const found: CarrierEntry[] = [];
+    for (const record of await ownRecords<Carrier>(
+      await runtime(accountSpaceId),
+      { collection: CARRIER_COLLECTION },
+      // A generation is a count: anything else names no carry space.
+      (one) =>
+        typeof one.body?.did === 'string' &&
+        (one.body.gen === undefined || (Number.isSafeInteger(one.body.gen) && one.body.gen >= 0)),
+    )) {
+      const carry = await carrySpaceOf(record.body!);
+      // Its key names its carry space: that is how every device knows the space is one.
+      if (carry && record.key === (await carrierKey(carry.space.id)))
+        found.push({ key: record.key, body: record.body!, carry });
     }
     return found;
   }
-
-  /** Every carry space, live or not — kept out of the account's own list */
-  let carrySpaces = new Set<string>();
 
   /**
    * Puts a pass in a carrier's space for each of the account's spaces, and
    * takes away the rest; and a wake for each of its own automations, each value replaced by
    * the space's tag: the carrier matches, never learns.
    */
-  async function syncPasses(carrier: Carrier): Promise<void> {
+  async function syncPasses(carrier: CarrierEntry): Promise<void> {
     if (!account || narrowNote) return;
     const passes = new Map<string, SpacePass>();
     const spaces: WakeSpace[] = [];
@@ -714,7 +732,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     passes.set(await passKey(account.space.id), await makePass(account));
     if (contactsRecord) passes.set(await passKey(contactsRecord.space.id), await makePass(contactsRecord));
     for (const membership of await memberships()) {
-      if (membership.deleted || !membership.body || hidden(membership.body.space)) continue;
+      if (membership.deleted || !membership.body || (await kindOf(membership.body.space))) continue;
       const record = await registry.get(membership.body.space);
       if (!record) continue;
       // Opened even with no wakes to make: opening is also how this device learns the space's key changed.
@@ -735,8 +753,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       }
     }
     // Removed meanwhile, on this device or another: its passes stay deleted.
-    if (!(await liveCarriers()).some((live) => live.space === carrier.space)) return;
-    const carry = await runtime(carrier.space);
+    if (!(await liveCarriers()).some((live) => live.key === carrier.key)) return;
+    const carry = await runtime(carrier.carry.space.id);
     await writeExactly(carry, PASS_COLLECTION, passes, (key) => key.startsWith('pass:'));
     const wakes = new Map<string, unknown>();
     for (const own of owned) {
@@ -783,8 +801,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   }
 
   /** The carriers the account uses now */
-  const liveCarriers = async (): Promise<Carrier[]> =>
-    (await carrierRecords()).flatMap(({ record }) => (!record.deleted && record.body ? [record.body] : []));
+  const liveCarriers = async () => (await carrierRecords()).filter(({ body }) => !body.removed);
 
   /**
    * Names the account's carriers — its extensions, its hosts — as keepers of
@@ -794,17 +811,12 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
    * manage is left to whoever does.
    */
   async function nameKeepers(spaceId: string, rt: SpaceRuntime): Promise<void> {
-    if (!account || narrowNote || spaceId === accountSpaceId || hidden(spaceId)) return;
+    if (!account || narrowNote || (await kindOf(spaceId))) return;
     if (!(await rt.may(SPACE_KEEPERS))) return;
     const access = await rt.access();
     const carriers = await carrierRecords();
-    const active = await liveCarriers();
-    const gone = new Set<string>();
-    for (const { record } of carriers) {
-      if (!record.deleted) continue;
-      for (const version of await (await runtime(accountSpaceId!)).history<Carrier>(record.key))
-        if (version.body?.did) gone.add(version.body.did);
-    }
+    const active = carriers.filter(({ body }) => !body.removed).map(({ body }) => body);
+    const gone = new Set(carriers.filter(({ body }) => body.removed).map(({ body }) => body.did));
     for (const carrier of active) gone.delete(carrier.did);
     const kept = access.keepers.filter((keeper) => !gone.has(keeper.did));
     const added = active
@@ -824,31 +836,6 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     const held = new Set((await registry.list()).map((record) => record.space.id));
     const known = new Set<string>();
     let changed = false;
-
-    // Carry spaces first: they are the account's, but not spaces it uses.
-    const carriers = await carrierRecords();
-    carrySpaces = new Set([...carrySpaces, ...carriers.map(({ space }) => space)]);
-    for (const { record, space: spaceId } of carriers) {
-      if (record.deleted) {
-        // Removed on some device. Its carry space stays open a while, so the
-        // carrier — perhaps offline now — still hears that it should forget.
-        if (!held.has(spaceId) || Date.now() - Date.parse(record.updatedAt) < FORGET_CARRIER_AFTER_MS)
-          continue;
-        await closeRuntime(spaceId);
-        await registry.remove(spaceId);
-        held.delete(spaceId);
-      } else if (!held.has(spaceId)) {
-        try {
-          await joinRegistry(record.body!.invite);
-          held.add(spaceId);
-        } catch {
-          // An unreadable invite; the next version written for it will do.
-        }
-      }
-    }
-    for (const spaceId of carrySpaces) known.add(spaceId);
-    // Derived on every device: nothing to record.
-    if (contactsSpaceId) known.add(contactsSpaceId);
 
     for (const membership of await memberships()) {
       const spaceId = membership.key.slice('space:'.length);
@@ -871,10 +858,10 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
     // Held here but never recorded — joined before the registry existed, or on
     // a node without the account key. Recorded now, so other devices follow.
-    // Held still: a carrier that failed while this ran has taken its carry space back out.
+    // Held still: one left while this ran stays left.
     const stillHeld = new Set((await registry.list()).map((record) => record.space.id));
     for (const spaceId of held) {
-      if (!known.has(spaceId) && stillHeld.has(spaceId) && !carrySpaces.has(spaceId)) await remember(spaceId);
+      if (!known.has(spaceId) && stillHeld.has(spaceId) && !(await kindOf(spaceId))) await remember(spaceId);
     }
 
     // Not awaited: it opens every space the account holds, which from a data
@@ -906,7 +893,6 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       );
     });
 
-  /** Every carrier the account uses gets its passes and wakes as they are now, one run at a time */
   /** Writing in carry spaces, one thing at a time: a removal never lands in the middle of a refill */
   let carryTurn: Promise<unknown> = Promise.resolve();
   const inCarryTurn = <T>(work: () => Promise<T>): Promise<T> => {
@@ -915,13 +901,13 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     return run;
   };
 
+  /** Every carrier the account uses gets its passes and wakes as they are now, one run at a time */
   const passAll = serial(() =>
     inCarryTurn(async () => {
-      for (const { record, space: spaceId } of await carrierRecords()) {
+      for (const carrier of await liveCarriers()) {
         if (closed) return;
-        if (record.deleted || !record.body || !(await registry.get(spaceId))) continue;
         // Only a device that may write in the carry space can do this; others leave it to one that can.
-        await syncPasses(record.body).catch(() => {});
+        await syncPasses(carrier).catch(() => {});
       }
     }),
   );
@@ -934,7 +920,9 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
   const spaces = Object.freeze<NodeSpaces>({
     async list() {
-      return (await registry.list()).filter((record) => !hidden(record.space.id)).map(summarize);
+      const used: SpaceRecord[] = [];
+      for (const record of await registry.list()) if (!(await kindOf(record.space.id))) used.push(record);
+      return used.map(summarize);
     },
 
     async get(spaceId) {
@@ -997,8 +985,9 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     },
 
     async leave(spaceId) {
-      if (spaceId === accountSpaceId) throw new Error('The account registry cannot be left');
-      if (spaceId === contactsSpaceId) throw new Error('The contacts space cannot be left');
+      const kind = await kindOf(spaceId);
+      if (kind)
+        throw new Error(`The ${kind === 'registry' ? 'account registry' : `${kind} space`} cannot be left`);
       await giveUpPlace(spaceId);
       await forget(spaceId);
       await closeRuntime(spaceId);
@@ -1034,7 +1023,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       // A peer's key does not say whose it is. But only this account's devices
       // and apps can read the account registry, so a peer there is one of ours
       // — except a carrier, which the registry names by its key.
-      const carrierKeys = new Set((await liveCarriers()).map((carrier) => carrier.did));
+      const carrierKeys = new Set((await liveCarriers()).map(({ body }) => body.did));
       const inRegistry = new Set((await (await runtime(accountSpaceId)).status()).peers);
       return {
         ...status,
@@ -1168,91 +1157,76 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     },
   });
 
-  /** Carriers being added now, by key */
-  const adding = new Map<string, Promise<{ readonly space: string; readonly invite: string }>>();
-
-  async function addCarrier(carrier: { readonly did: string; readonly name: string }): Promise<{
-    readonly space: string;
-    readonly invite: string;
-  }> {
-    const registryRt = await requireAccount('Using a carrier');
-    // The same carrier again keeps its carry space: what it holds stays good, and nothing is closed under it.
-    const known = (await liveCarriers()).find((c) => c.did === carrier.did);
-    if (known) {
-      void passAll().catch(() => {});
-      return { space: known.space, invite: known.invite };
-    }
-    const name = carrier.name.trim().slice(0, 80) || 'Carrier';
-    // Private, so the passes in it are sealed; the account alone may write there.
-    const record = await registry.create({
-      name: `Carried by ${name}`,
-      visibility: 'private',
-      creator: config.signer.did,
-    });
-    carrySpaces.add(record.space.id);
-    let body: Carrier;
-    try {
-      const invite = await registry.createInvite(record.space.id, config.signer.did);
-      body = { space: record.space.id, invite, did: carrier.did, name, since: new Date().toISOString() };
-      await registryRt.upsertSystem<Carrier>(CARRIER_COLLECTION, await carrierKey(record.space.id), body);
-    } catch (error) {
-      // Without its record nothing says it is a carry space: held, a restart would list it as one the account uses.
-      // Left in `carrySpaces`: a reconcile already under way must not record it either.
-      await closeRuntime(record.space.id);
-      await registry.remove(record.space.id);
-      throw error;
-    }
-    // Its passes before its invite, as one batch: a carrier joining an empty carry space takes spaces as they trickle in.
-    // Not in turn behind a refill: nothing removes a carrier that is only now being added.
-    await syncPasses(body);
-    return { space: record.space.id, invite: body.invite };
-  }
-
   const carriers = Object.freeze<NodeCarriers>({
     list: async () =>
-      (await liveCarriers()).map(({ space, did, name, since }) => ({ space, did, name, since })),
+      (await liveCarriers()).map(({ body: { did, name, since }, carry }) => ({
+        space: carry.space.id,
+        did,
+        name,
+        since,
+      })),
 
-    add(carrier) {
-      // Asked again while the first is under way (a click and a reconcile, say): the same answer, not a second carry space.
-      const pending = adding.get(carrier.did);
-      if (pending) return pending;
-      const made = addCarrier(carrier).finally(() => adding.delete(carrier.did));
-      adding.set(carrier.did, made);
-      return made;
+    async add(carrier) {
+      const registryRt = await requireAccount('Using a carrier');
+      const all = await carrierRecords();
+      // The same carrier again keeps its carry space: what it holds stays good, and nothing is closed under it.
+      let entry = all.find(({ body }) => body.did === carrier.did && !body.removed);
+      if (entry) void passAll().catch(() => {});
+      else {
+        // Added again after a removal, a new carry space: the last one tells it to forget. One past the
+        // highest seen, not a count: a device that hasn't synced every earlier one must not land on a closed space.
+        const gens = all.filter(({ body }) => body.did === carrier.did).map(({ body }) => body.gen ?? 0);
+        const gen = gens.length ? Math.max(...gens) + 1 : 0;
+        const body: Carrier = {
+          did: carrier.did,
+          name: carrier.name.trim().slice(0, 80) || 'Carrier',
+          since: new Date().toISOString(),
+          ...(gen ? { gen } : {}),
+        };
+        const carry = (await carrySpaceOf(body))!;
+        // Two devices adding it at once write the one record, for the one space.
+        entry = { key: await carrierKey(carry.space.id), body, carry };
+        await registryRt.upsertSystem<Carrier>(CARRIER_COLLECTION, entry.key, body);
+        // Its passes before its invite, as one batch: a carrier joining an empty carry space takes spaces as they trickle in.
+        // Not in turn behind a refill: nothing removes a carrier that is only now being added.
+        await syncPasses(entry);
+      }
+      return { space: entry.carry.space.id, invite: await encodeSpaceInvite(entry.carry, config.signer.did) };
     },
 
     settled: (waitMs) => within(passAll.done(), waitMs),
 
     async reached(spaceId, waitMs) {
-      const carrier = (await liveCarriers()).find((c) => c.space === spaceId);
-      if (!carrier || !accountSpaceId) return false;
+      const did = (await liveCarriers()).find(({ carry }) => carry.space.id === spaceId)?.body.did;
+      if (!did || !accountSpaceId) return false;
       const deadline = Date.now() + waitMs;
       // Level with the passes and wakes as they are now: a refill under way first, within the same time.
       await within(passAll.done(), waitMs);
       // Its passes first: only through them does it come to the registry, and hold its own record there.
-      if (!(await (await runtime(spaceId)).syncedWith(carrier.did, Math.max(0, deadline - Date.now()))))
-        return false;
-      return (await runtime(accountSpaceId)).syncedWith(carrier.did, Math.max(0, deadline - Date.now()));
+      if (!(await (await runtime(spaceId)).syncedWith(did, Math.max(0, deadline - Date.now())))) return false;
+      return (await runtime(accountSpaceId)).syncedWith(did, Math.max(0, deadline - Date.now()));
     },
 
     async remove(spaceId) {
       const registryRt = await requireAccount('Removing a carrier');
       // In turn with any refill, which would otherwise put the passes back.
       await inCarryTurn(async () => {
-        const live = (await carrierRecords()).filter(({ record }) => !record.deleted && record.body);
-        const did = live.find(({ space }) => space === spaceId)?.record.body?.did;
-        if (!did) return;
-        // Every carry space it has: added on two devices at once, it may hold the other one (spec 06 §4.2).
-        for (const { record, space } of live) {
-          if (record.body?.did !== did) continue;
-          const carry = await runtime(space);
+        const live = await liveCarriers();
+        const did = live.find(({ carry }) => carry.space.id === spaceId)?.body.did;
+        // Every carry space it has: one added on two devices at once, before they were derived, has two.
+        for (const { key, body, carry } of live.filter((one) => one.body.did === did)) {
+          const rt = await runtime(carry.space.id);
           // Passes gone first, then the word to forget everything, then the carrier's record.
-          for (const pass of await ownRecords(carry, { collection: PASS_COLLECTION }, (r) =>
+          for (const pass of await ownRecords(rt, { collection: PASS_COLLECTION }, (r) =>
             r.key.startsWith('pass:'),
           ))
-            await carry.removeSystem(pass.key);
-          await carry.upsertSystem(PASS_COLLECTION, CARRY_CLOSED_KEY, { v: 1, closed: true });
-          await registryRt.removeSystem(record.key);
+            await rt.removeSystem(pass.key);
+          await rt.upsertSystem(PASS_COLLECTION, CARRY_CLOSED_KEY, { v: 1, closed: true });
+          // Kept, so adding it again counts this one and takes a new carry space.
+          await registryRt.upsertSystem<Carrier>(CARRIER_COLLECTION, key, {
+            ...body,
+            removed: new Date().toISOString(),
+          });
         }
       });
     },
@@ -1289,14 +1263,6 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     if (description.did !== hosting.host)
       throw new Error("The host at this address has another key now, so it's another host");
     return description;
-  }
-
-  /** The carry space shared with a host: the one the account made for it, or a new one */
-  async function carryFor(hosting: Hosting): Promise<string> {
-    const known = (await liveCarriers()).find((carrier) => carrier.did === hosting.host);
-    return known
-      ? known.invite
-      : (await carriers.add({ did: hosting.host, name: new URL(hosting.url).host })).invite;
   }
 
   /** Last time each host was handed the spaces, or refused them — so asking again waits a while */
@@ -1358,7 +1324,9 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         if (handed) ({ status, receipt } = handed);
       } else if (!status.carrying && paid && due && !narrowNote) {
         handedAt.set(hosting.url, Date.now());
-        const attaching = carryFor(hosting).then((invite) => client.attach(config.signer.did, invite));
+        const attaching = carriers
+          .add({ did: hosting.host, name: new URL(hosting.url).host })
+          .then(({ invite }) => client.attach(config.signer.did, invite));
         handing.set(hosting.url, attaching);
         try {
           ({ status, receipt } = await attaching);
@@ -1514,7 +1482,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
   /** Hands the hosts a space names its pass, when they were paid and don't carry it with its key yet */
   async function keepSpaceHosts(spaceId: string): Promise<void> {
-    if (ownSpace(spaceId)) return;
+    // Only while it is open: a change heard as it closed must not open it again.
+    if ((await kindOf(spaceId)) || !runtimes.has(spaceId)) return;
     const hosts = await namedHosts(spaceId);
     await reachHosts(spaceId, hosts);
     if (narrowNote) return;
@@ -1584,7 +1553,9 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       ...(await hostingRecords()),
     ];
     if (spaceId === accountSpaceId) hosts.push(...(config.network.hosts ?? []).map((url) => ({ url })));
-    if (!ownSpace(spaceId)) hosts.push(...(spaceHosts ?? (await namedHosts(spaceId))));
+    // Asked only while it is still open: asking would open it again.
+    if (!(await kindOf(spaceId)) && runtimes.get(spaceId) === open)
+      hosts.push(...(spaceHosts ?? (await namedHosts(spaceId))));
     const peers = [
       ...new Set((await Promise.all(hosts.map(peerOf))).filter((peer): peer is string => peer !== null)),
     ].sort();
@@ -1700,8 +1671,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       const known = await requireHosting(url);
       const { client } = await hostClient(known);
       await client.detach().catch(() => {});
-      const carrier = (await liveCarriers()).find((found) => found.did === known.host);
-      if (carrier) await carriers.remove(carrier.space);
+      const carrier = (await liveCarriers()).find(({ body }) => body.did === known.host);
+      if (carrier) await carriers.remove(carrier.carry.space.id);
       await registryRt.removeSystem(await hostingKey(known.url));
     },
   });
@@ -1732,7 +1703,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   /** Making and joining spaces for two needs a note good for every space — whole-account access. */
   function requireEverywhere(what: string): void {
     // As a knock needs: `/account/write` for the whole account (spec 01 §8, 07).
-    if (!noteGrants(current, ACCOUNT_REQUIREMENT)) {
+    if (narrowNote) {
       throw new Error(
         `${what} makes or joins a space, which needs access to your whole account. Connect to your account home again, and ask for it.`,
       );
@@ -1822,7 +1793,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     if (record.body?.to !== config.signer.did || typeof record.body.sealed !== 'string') return null;
     // Asking makes a space for two for the account, as a knock does: only a note that may write for all of it.
     const note = await (await runtime(spaceId)).noteOf(record.key);
-    if (!noteGrants(note, ACCOUNT_REQUIREMENT)) return null;
+    if (!actsForAccount(note)) return null;
     const from = record.root;
     if (!from || record.createdBy !== from || from === config.signer.did) return null;
     const value = await openValueFrom(
@@ -2014,10 +1985,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   >();
   const DAY_MS = 24 * 3600 * 1000;
 
-  /** Doors live in the contacts space: a note must grant `/account/write` there, as every peer checks */
-  const doorsAllowed = () =>
-    contactsSpaceId !== null &&
-    noteGrants(current, { space: contactsSpaceId, cmd: ACCOUNT_COMMAND, args: { space: contactsSpaceId } });
+  /** Doors are the account's own, in its contacts space: only a key acting as the account opens one, as every peer checks */
+  const doorsAllowed = () => contactsSpaceId !== null && !narrowNote;
 
   function requireContactKey(what: string): Uint8Array {
     // Doors are the account's: a key whose note doesn't grant `/account/write` never opens one or knocks.
@@ -2655,6 +2624,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       delegation: () => note,
       iceServers: () => node.iceServers(),
       asAgent: person('start another agent'),
+      revokeKey: person('revoke a key'),
       revokeSelf: person('sign the account out'),
       subscribe: (listener: (event: NodeEvent) => void) =>
         node.subscribe((event) => {
@@ -2691,17 +2661,29 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
     subscribe: events.subscribe,
 
+    async revokeKey(key: string, options: RevokeOptions & { readonly spaces?: ReadonlyArray<string> } = {}) {
+      // Everywhere the account writes, unless told where: the listed spaces, its carry spaces and contacts space.
+      const ids = options.spaces ?? [
+        ...new Set([
+          ...(await spaces.list()).filter((space) => space.writable).map((space) => space.id),
+          ...(await carrierRecords()).map(({ carry }) => carry.space.id),
+          ...(contactsSpaceId ? [contactsSpaceId] : []),
+        ]),
+      ];
+      const wait = options.waitMs === undefined ? {} : { waitMs: options.waitMs };
+      // Each its own store: one that can't be written (a space gone, or no longer the account's
+      // to write in) has nothing to send, and must not keep the rest from happening.
+      const taken = await Promise.all([
+        ...ids.map((spaceId) => spaces.revoke(spaceId, key, wait).catch(() => true)),
+        ...(options.spaces ? [] : [node.account.revoke(key, wait).catch(() => true)]),
+      ]);
+      return taken.every(Boolean);
+    },
+
     async revokeSelf(options: RevokeOptions = {}) {
-      const key = sessionDid;
       // Forgotten first: a tab closed while the revokes wait must not leave a
       // revoked key behind, to be claimed and refused on every write after.
       await claimed?.forget().catch(() => {});
-      // Every space it may write in: the listed ones, its carry spaces and the contacts space.
-      const ids = new Set([
-        ...(await spaces.list()).filter((space) => space.writable).map((space) => space.id),
-        ...carrySpaces,
-        ...(contactsSpaceId ? [contactsSpaceId] : []),
-      ]);
       // With anyone online, every revoke waits for a peer to take it in, closed
       // spaces too, which open for it. With nobody, waiting would only keep a
       // person signing out looking at a spinner: they go out with the next sync.
@@ -2710,12 +2692,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         const rt = await open.catch(() => null);
         if (rt && (await rt.status()).peers.length > 0) anyone = true;
       }
-      const wait = anyone ? options : {};
-      // Each its own store: one that can't be done must not keep the rest from happening.
-      await Promise.all([
-        ...[...ids].map((spaceId) => spaces.revoke(spaceId, key, wait).catch(() => false)),
-        node.account.revoke(key, wait).catch(() => false),
-      ]);
+      await node.revokeKey(sessionDid, anyone ? options : {});
     },
 
     async close() {

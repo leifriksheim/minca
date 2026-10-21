@@ -9,6 +9,7 @@ import { createMincaAuth, type MincaAuth } from '../src/session/auth.js';
 import {
   homeAddress,
   startConnectedNode,
+  watchGrant,
   type AppKey,
   type ConnectRequest,
   type Grant,
@@ -17,7 +18,7 @@ import {
 import { createFolderAccountStore } from '../src/identity/account-store.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
-import type { P2PNode } from '../src/node/types.js';
+import type { NodeEvent, P2PNode } from '../src/node/types.js';
 import { createMemoryDirectory } from './helpers/memory-directory.js';
 import { memoryStores } from './helpers/memory-stores.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
@@ -588,6 +589,42 @@ describe('connecting an app to an account home', () => {
       'the revoke to reach the app',
     );
   });
+
+  test('disconnecting a whole-account app revokes it in the carry spaces too: it can no longer change what a carrier keeps', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const auth = await home(hub);
+    const carrier = await appKey();
+    const { carry } = await auth.grantCarry({
+      origin: 'chrome-extension://abcdef',
+      request: await asked(
+        { v: 1, audience: carrier.did, name: 'Minca for Chrome', access: 'carry' },
+        carrier,
+      ),
+    });
+    const key = await appKey();
+    const grant = await auth.grant({
+      origin: 'https://browser.test',
+      request: await asked({ v: 1, audience: key.did, access: 'write', scope: 'account' }, key),
+      spaceIds: [],
+    });
+    const browser = await app(hub, grant, key);
+    const told: string[] = [];
+    browser.subscribe((event) => event.type === 'revoked' && told.push(event.space));
+    // A whole-account app follows the account's carriers, as its devices do.
+    await until(
+      async () => (await browser.carriers.list()).some((known) => known.did === carrier.did),
+      3000,
+      'the carrier to reach the app',
+    );
+    await hold(browser, carry.space);
+
+    await auth.disconnect('https://browser.test');
+    await until(
+      async () => told.includes(carry.space),
+      3000,
+      'the revoke in the carry space to reach the app',
+    );
+  });
 });
 
 describe('giving an app the contacts', () => {
@@ -653,6 +690,9 @@ describe('giving an app the contacts', () => {
       people.contacts.accept(club.id, (await people.contacts.requests(club.id))[0]!.key),
       /whole account/,
     );
+    // The list and the doors are the account's own: it reads them, and changes neither.
+    await assert.rejects(people.contacts.put({ did: bob.did, name: 'Someone else' }), /the account itself/);
+    await assert.rejects(people.doors.open(), /doesn't let it use doors/);
   });
 
   test('an app not given them has no contact key, and cannot open requests', async () => {
@@ -723,12 +763,51 @@ describe('an account home typed by a person', () => {
   });
 });
 
+describe('watching a grant', () => {
+  test('a note that runs longer than a timer waits is said to run out only once it has', (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
+    const day = 24 * 3600;
+    let expired = 0;
+    const stop = watchGrant(
+      { subscribe: () => () => {} },
+      { expiresAt: 30 * day },
+      {
+        onExpired: () => (expired += 1),
+      },
+    );
+    t.mock.timers.tick(29 * day * 1000);
+    assert.equal(expired, 0, 'not after 24 days, when the longest timer fires');
+    t.mock.timers.tick(day * 1000);
+    assert.equal(expired, 1);
+    stop();
+  });
+
+  test('a revoked key is told for each space, and not once it stops watching', () => {
+    const listeners = new Set<(event: NodeEvent) => void>();
+    const node = {
+      subscribe: (listener: (event: NodeEvent) => void) => {
+        listeners.add(listener);
+        return () => void listeners.delete(listener);
+      },
+    };
+    const emit = (event: NodeEvent) => listeners.forEach((listener) => listener(event));
+    const revoked: string[] = [];
+    const stop = watchGrant(node, { expiresAt: 0 }, { onRevoked: (space) => revoked.push(space) });
+    emit({ type: 'revoked', space: 'one' });
+    emit({ type: 'records', space: 'two' });
+    emit({ type: 'revoked', space: 'three' });
+    stop();
+    assert.equal(listeners.size, 0);
+    assert.deepEqual(revoked, ['one', 'three']);
+  });
+});
+
 describe('connecting a carrier to an account home', () => {
   test('it gets an invite to a carry space and no note; disconnecting removes it', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const auth = await home(hub);
     const { node, did } = auth.getState().session!;
-    await node.spaces.create({ name: 'Notes', visibility: 'private' });
+    const notes = await node.spaces.create({ name: 'Notes', visibility: 'private' });
     const key = await appKey();
 
     const request: ConnectRequest = await asked(
@@ -751,6 +830,12 @@ describe('connecting a carrier to an account home', () => {
       [key.did],
     );
     assert.equal(auth.connections()[0]?.access, 'carry');
+    // The account says who it is in the spaces it uses, never in one a carrier reads.
+    await until(async () => (await node.spaces.profiles(notes.id)).length === 1, 3000, 'the name in Notes');
+    await hold(node, grant.carry.space);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.deepEqual(await node.spaces.profiles(grant.carry.space), []);
+    await letGo(node, grant.carry.space);
     await assert.rejects(
       () => auth.grant({ origin: 'chrome-extension://abcdef', request, spaceIds: [] }),
       /grantCarry/,
