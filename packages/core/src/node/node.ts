@@ -107,6 +107,8 @@ import {
   PROFILE_COLLECTION,
   PROFILE_KEY,
   type AccountProfile,
+  type AvatarRef,
+  isAvatarRef,
   type Carrier,
   type Membership,
 } from '../space/account-registry.js';
@@ -164,6 +166,7 @@ import type {
   DirectMessage,
   NodeRecords,
   FileRef,
+  AccountProfileView,
   NodeSpaces,
   P2PNode,
   RevokeOptions,
@@ -405,12 +408,17 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
    * or before one is set. One record: its current version is the name, by the
    * ordering rule, the same on every device whatever their clocks say.
    */
-  async function ownProfile(): Promise<{ name: string; updatedAt: string } | null> {
+  async function ownProfile(): Promise<AccountProfileView | null> {
     if (!accountSpaceId) return null;
     const profile = await (await runtime(accountSpaceId)).get<AccountProfile>(PROFILE_KEY);
-    return profile?.verified && profile.root === config.signer.did && typeof profile.body?.name === 'string'
-      ? { name: profile.body.name, updatedAt: profile.updatedAt }
-      : null;
+    if (!profile?.verified || profile.root !== config.signer.did || typeof profile.body?.name !== 'string')
+      return null;
+    const avatar = profile.body.avatar;
+    return {
+      name: profile.body.name,
+      updatedAt: profile.updatedAt,
+      ...(isAvatarRef(avatar) ? { avatar } : {}),
+    };
   }
   const ownName = async () => (await ownProfile())?.name ?? null;
 
@@ -424,10 +432,38 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
    */
   async function publishProfile(spaceId: string, open: SpaceRuntime): Promise<void> {
     if (spaceId === accountSpaceId || spaceId === contactsSpaceId || narrowNote) return;
-    const name = await ownName();
-    if (name)
-      await open.publishProfile({ name, ...(contactKeys ? { contactKey: contactKeys.publicKey } : {}) });
+    const own = await ownProfile();
+    if (!own) return;
+    await open.publishProfile({
+      name: own.name,
+      ...(contactKeys ? { contactKey: contactKeys.publicKey } : {}),
+      ...(own.avatar ? { avatar: await avatarIn(spaceId, open, own.avatar) } : {}),
+    });
   }
+
+  /**
+   * The account's picture as a file of this space: a space's members can't
+   * read the registry, so each space holds its own copy, made once and named
+   * by the registry file it copies.
+   */
+  function avatarIn(spaceId: string, open: SpaceRuntime, avatar: AvatarRef): Promise<AvatarRef> {
+    // One copy per space and picture, however many publishes ask at once (a space opening, a change).
+    const at = `${spaceId}:${avatar.hash}`;
+    let copying = avatarCopies.get(at);
+    if (!copying) {
+      copying = (async () => {
+        const held = (await open.profiles()).find((profile) => profile.did === config.signer.did)?.avatar;
+        if (isAvatarRef(held) && held.source === avatar.hash) return held;
+        const registryRt = await runtime(accountSpaceId!);
+        const copy = await open.addFile(await registryRt.readFile(avatar));
+        return { ...copy, mime: avatar.mime, source: avatar.hash };
+      })();
+      copying.catch(() => avatarCopies.delete(at));
+      avatarCopies.set(at, copying);
+    }
+    return copying;
+  }
+  const avatarCopies = new Map<string, Promise<AvatarRef>>();
 
   async function publishProfileToOpenSpaces(): Promise<void> {
     for (const [spaceId, open] of runtimes) {
@@ -2414,12 +2450,33 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       const registryRt = await requireAccount('Renaming across devices');
       const trimmed = name.trim();
       if (!trimmed) throw new Error('A name cannot be empty');
+      const avatar = (await ownProfile())?.avatar;
       const written = await registryRt.upsertSystem<AccountProfile>(PROFILE_COLLECTION, PROFILE_KEY, {
         name: trimmed,
+        ...(avatar ? { avatar } : {}),
       });
       emit({ type: 'account' });
       await publishProfileToOpenSpaces();
-      return { name: trimmed, updatedAt: written.updatedAt };
+      return { name: trimmed, updatedAt: written.updatedAt, ...(avatar ? { avatar } : {}) };
+    },
+    async setAvatar(image, options = {}) {
+      const registryRt = await requireAccount('Changing the picture across devices');
+      const name = (await ownName()) ?? options.name?.trim();
+      if (!name) throw new Error('Give the account a name first');
+      if (image && !image.mime.startsWith('image/')) throw new Error('A picture is an image');
+      const avatar = image ? { ...(await registryRt.addFile(image.bytes)), mime: image.mime } : null;
+      const written = await registryRt.upsertSystem<AccountProfile>(PROFILE_COLLECTION, PROFILE_KEY, {
+        name,
+        ...(avatar ? { avatar } : {}),
+      });
+      emit({ type: 'account' });
+      await publishProfileToOpenSpaces();
+      return { name, updatedAt: written.updatedAt, ...(avatar ? { avatar } : {}) };
+    },
+    async picture() {
+      const avatar = (await ownProfile())?.avatar;
+      if (!avatar || !accountSpaceId) return null;
+      return { bytes: await (await runtime(accountSpaceId)).readFile(avatar), mime: avatar.mime };
     },
     revoke: async (key, options) =>
       (await requireAccount('Revoking in the account registry')).revoke(key, options),

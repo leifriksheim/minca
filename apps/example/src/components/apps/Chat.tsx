@@ -14,7 +14,7 @@ import { useAction } from '@minca/app-shared/action';
 import { useAccess, useAccount, useCan, useLive, useNode, useProfiles } from '@minca/core/react';
 import { useMayDefine } from '@minca/app-shared/may';
 import type { DirectMessage, NodeRecord, ResultOf } from '@minca/core';
-import { channel, message, poll, positionBetween, reaction, vote } from '@minca/core/schemas';
+import { attachment, channel, message, poll, positionBetween, reaction, vote } from '@minca/core/schemas';
 import type { Channel } from '@minca/core/schemas';
 import { nameOf, peopleFrom, writerOf, type People } from '../../derive/people';
 import { useActivity, type AtWork } from '../../activity';
@@ -24,6 +24,8 @@ import { Avatar } from '@minca/app-shared/Avatar';
 import { createPortal } from 'react-dom';
 import { Modal } from '@minca/app-shared/Modal';
 import { Reactions } from '../std/Reactions';
+import { Attachments, attachFiles } from '../std/Attachments';
+import { PersonAvatar } from '../std/PersonAvatar';
 import { useBots } from '../../bots';
 import { MentionField, MentionList, MentionText, useMentions } from '../std/Mentions';
 import { styles, palette, ui } from '../../styles';
@@ -192,6 +194,7 @@ function Room({
   const mayWrite = useCan(space.id, 'create', message.name);
   const defined = (name: string) => collections.find((c) => c.name === name && c.version !== null);
   const reacts = !!defined(reaction.name);
+  const attaches = !!defined(attachment.name);
   // A space that defined messages before they could share records has no such link to write.
   const shares = !!defined(message.name)?.links?.shares;
   const polls = shares && !!defined(poll.name) && !!defined(vote.name);
@@ -206,6 +209,9 @@ function Room({
     !!defined(message.name) &&
     !(defined(message.name)?.topics.includes('mentions') && defined(message.name)?.links?.channel);
   const [draft, setDraft] = useState('');
+  /** Files picked to go with the next message */
+  const [pending, setPending] = useState<File[]>([]);
+  const picker = useRef<HTMLInputElement>(null);
   const [asking, setAsking] = useState<string | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -243,8 +249,10 @@ function Room({
 
   const send = () => {
     const text = draft.trim();
-    if (!text) return;
+    const files = pending;
+    if (!text && !files.length) return;
     setDraft('');
+    setPending([]);
     const command = polls ? POLL_COMMAND.exec(text) : null;
     if (command) return setAsking(command[1]?.trim() ?? '');
     stuck.current = true;
@@ -252,12 +260,15 @@ function Room({
     const to = replying;
     setReplying(null);
     const body = {
-      text,
+      // A message of files alone says what it carries, for whoever can't see them.
+      text: text || files.map((file) => file.name).join(', '),
       ...(mentions.length ? { mentions } : {}),
       ...(to?.root && to.root !== me ? { replyingTo: to.root } : {}),
     };
     const links = [...inRoom, ...(to && linksReplies ? [{ rel: 'replyTo', to: to.key }] : [])];
-    void node.records.put(space.id, message.name, body, { links });
+    void node.records
+      .put(space.id, message.name, body, { links })
+      .then((sent) => (files.length ? attachFiles(node, space.id, sent.key, files) : undefined));
   };
 
   const sendPoll = async (question: string, options: string[]) => {
@@ -401,26 +412,72 @@ function Room({
       composer={
         mayWrite && {
           onSend: send,
-          canSend: !!draft.trim(),
+          canSend: !!draft.trim() || pending.length > 0,
           field: (
-            <MentionField
-              input={input}
-              marked={mention.marked}
-              value={draft}
-              onChange={mention.onChange}
-              onSelect={mention.onSelect}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape' && replying && !mention.suggestions.length) return setReplying(null);
-                mention.onKeyDown(e);
-              }}
-              placeholder={
-                replying
-                  ? 'Write a reply'
-                  : `Message ${titled ? `#${roomName}` : space.name} · @ to mention someone`
-              }
-              aria-label="Write a message"
-              style={styles.input}
-            />
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {pending.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }} aria-label="Files to send">
+                  {pending.map((file, at) => (
+                    <button
+                      key={`${file.name}-${at}`}
+                      type="button"
+                      onClick={() => setPending((was) => was.filter((_, i) => i !== at))}
+                      aria-label={`Don't send ${file.name}`}
+                      data-variant="quiet"
+                      style={{ ...styles.smallButton, height: 26 }}
+                    >
+                      {file.name} ✕
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 8 }}>
+                {attaches && (
+                  <>
+                    <input
+                      ref={picker}
+                      type="file"
+                      multiple
+                      hidden
+                      onChange={(e) => {
+                        const picked = [...(e.target.files ?? [])];
+                        setPending((was) => [...was, ...picked]);
+                        e.target.value = '';
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => picker.current?.click()}
+                      aria-label="Attach files"
+                      title="Attach files"
+                      data-variant="quiet"
+                      style={{ ...styles.smallButton, width: 36, padding: 0, flexShrink: 0 }}
+                    >
+                      📎
+                    </button>
+                  </>
+                )}
+                <MentionField
+                  input={input}
+                  marked={mention.marked}
+                  value={draft}
+                  onChange={mention.onChange}
+                  onSelect={mention.onSelect}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape' && replying && !mention.suggestions.length)
+                      return setReplying(null);
+                    mention.onKeyDown(e);
+                  }}
+                  placeholder={
+                    replying
+                      ? 'Write a reply'
+                      : `Message ${titled ? `#${roomName}` : space.name} · @ to mention someone`
+                  }
+                  aria-label="Write a message"
+                  style={styles.input}
+                />
+              </div>
+            </div>
           ),
         }
       }
@@ -539,6 +596,7 @@ const CHAT = {
   sort: { '@createdAt': 'asc' },
   include: {
     reactions: { rel: 'about', from: reaction },
+    attachments: { rel: 'about', from: attachment },
     shared: { rel: 'shares', direction: 'out', include: withVotes },
   },
 } as const;
@@ -589,7 +647,10 @@ function Line({
   answers,
   below,
   children,
+  spaceId,
 }: {
+  /** The space it is in: its writer's picture is shown, when they chose one */
+  spaceId?: string;
   from: string;
   at: string;
   name: string;
@@ -616,7 +677,14 @@ function Line({
         ...(forMe ? { background: FOR_ME, boxShadow: `inset 3px 0 0 ${FOR_ME_EDGE}` } : {}),
       }}
     >
-      <div style={{ width: 28, flexShrink: 0 }}>{startsRun && <Avatar did={from} size={28} />}</div>
+      <div style={{ width: 28, flexShrink: 0 }}>
+        {startsRun &&
+          (spaceId ? (
+            <PersonAvatar spaceId={spaceId} did={from} size={28} />
+          ) : (
+            <Avatar did={from} size={28} />
+          ))}
+      </div>
       <div style={{ minWidth: 0, flex: 1 }}>
         {answers && (
           <div style={{ ...ui.ellipsis, fontSize: 12, color: palette.ink.muted }}>
@@ -670,8 +738,10 @@ function MessageLine({
   // It can share anything; a poll is the one this chat knows how to show.
   const sharesPoll = shared?.collection === poll.name;
   const reactions = reactionsOf(record);
+  const attachments = record.included.attachments;
   return (
     <Line
+      spaceId={space.id}
       from={record.root ?? record.author}
       at={ago(record.createdAt)}
       name={name}
@@ -697,6 +767,11 @@ function MessageLine({
           <p style={textStyle}>
             <MentionText text={record.body.text} mentions={record.body.mentions} people={people} />
           </p>
+          {attachments.length > 0 && (
+            <div style={{ margin: '6px 0 4px' }}>
+              <Attachments space={space} target={record.key} attachments={attachments} compact />
+            </div>
+          )}
           {shared && (
             <button
               onClick={() => onOpen(shared)}

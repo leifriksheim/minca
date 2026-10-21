@@ -591,7 +591,8 @@ successors, mine, heads, key, relays, keepers, copies, forks, flagged }`
   with at most one more queued.
 - `node.account` — `profile()`, `setName(name)` (writes `sys.profile`, key
   `profile`, in the account registry, then republishes the profile in every
-  open space), `revoke(key, { waitMs? })` (one of the account's keys, by DID, in the account registry). All need the account
+  open space), `setAvatar({ bytes, mime } | null, { name? })` and `picture()`
+  (the account's picture, likewise; see [spaces](spaces.md)), `revoke(key, { waitMs? })` (one of the account's keys, by DID, in the account registry). All need the account
   key.
 - `spaces.revoke(space, key, { waitMs? })` and `account.revoke` resolve once the revoke is written; with
   `waitMs`, once a peer says it has taken it in, or that long has passed (`true` when one did). A node

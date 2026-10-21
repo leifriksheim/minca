@@ -452,6 +452,8 @@ export interface SpaceProfile {
   readonly updatedAt: string;
   /** The public half of their contact key, which a contact request to them is sealed with (`contacts.ask`) */
   readonly contactKey?: string;
+  /** Their picture, a file in this space: read it with `records.readFile` */
+  readonly avatar?: FileRef;
 }
 
 export interface NodeSpaces {
@@ -630,6 +632,8 @@ export interface NodeRecords {
 
 export interface AccountProfileView {
   readonly name: string;
+  /** The account's picture, a file in its registry; each space holds its own copy (`SpaceProfile.avatar`) */
+  readonly avatar?: FileRef;
   /** When it was set, on whichever device set it */
   readonly updatedAt: string;
 }
@@ -816,6 +820,19 @@ export interface NodeAccount {
   profile(): Promise<AccountProfileView | null>;
   /** Renames the account on every device and app that opens it. Needs an account key. */
   setName(name: string): Promise<AccountProfileView>;
+  /**
+   * Sets the account's picture on every device, and in every space it opens:
+   * an image, already as small as it should be (the app resizes it). `null`
+   * takes it away. `name` is the account's name as the app knows it, kept
+   * with the picture when the registry has none yet (an app just connected,
+   * before the registry has synced). Needs an account key.
+   */
+  setAvatar(
+    image: { bytes: Uint8Array; mime: string } | null,
+    options?: { name?: string },
+  ): Promise<AccountProfileView>;
+  /** The account's picture, read from its registry; null without one, or without an account key */
+  picture(): Promise<{ bytes: Uint8Array; mime: string } | null>;
   /** Revokes one of this account's keys, by DID, in the account registry. Needs an account key. `waitMs` as for a space's */
   revoke(key: string, options?: RevokeOptions): Promise<boolean>;
 }

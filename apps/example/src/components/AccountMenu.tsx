@@ -1,10 +1,11 @@
-import { useCallback, useRef, useState, type ReactNode } from 'react';
-import { useAccount, useConnection } from '@minca/core/react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useAccount, useConnection, useNode } from '@minca/core/react';
 import { accountHomeLink } from '@minca/core/session';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { useDismiss } from '@minca/app-shared/useDismiss';
 import { useCopy } from '@minca/app-shared/action';
 import { ConnectAgent } from './ConnectAgent';
+import { shrinkImage } from '../files';
 import { palette, styles } from '../styles';
 
 /**
@@ -18,6 +19,7 @@ export function AccountMenu({ place = 'header' }: { place?: 'header' | 'sidebar'
   const { copied, copy } = useCopy();
   const [connecting, setConnecting] = useState(false);
   const root = useRef<HTMLDivElement>(null);
+  const { picture, choose, picker, problem } = usePicture(account.name);
 
   useDismiss(
     open,
@@ -42,7 +44,7 @@ export function AccountMenu({ place = 'header' }: { place?: 'header' | 'sidebar'
           aria-label="Account"
           className="you-button"
         >
-          <Avatar did={account.did} size={32} round />
+          <Avatar did={account.did} size={32} round src={picture} />
           <span style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column' }}>
             <span style={{ ...ellipsis, fontSize: 13.5, fontWeight: 600, color: palette.ink.strong }}>
               {account.name}
@@ -72,7 +74,7 @@ export function AccountMenu({ place = 'header' }: { place?: 'header' | 'sidebar'
             fontWeight: 500,
           }}
         >
-          <Avatar did={account.did} size={28} round />
+          <Avatar did={account.did} size={28} round src={picture} />
           <span className="account-name">{account.name}</span>
         </button>
       )}
@@ -80,7 +82,7 @@ export function AccountMenu({ place = 'header' }: { place?: 'header' | 'sidebar'
       {open && (
         <div role="menu" style={{ ...menu, ...(place === 'sidebar' ? above : below) }}>
           <div style={{ padding: '14px 14px 12px', display: 'flex', gap: 10, alignItems: 'center' }}>
-            <Avatar did={account.did} size={36} round />
+            <Avatar did={account.did} size={36} round src={picture} />
             <div style={{ minWidth: 0, flex: 1 }}>
               <div
                 style={{
@@ -118,6 +120,15 @@ export function AccountMenu({ place = 'header' }: { place?: 'header' | 'sidebar'
             <Item onClick={openHome} hint={new URL(state.home).host}>
               Account settings
             </Item>
+            <Item onClick={choose} hint="Shown in every space">
+              {picture ? 'Change picture' : 'Add a picture'}
+            </Item>
+            {picker}
+            {problem && (
+              <p style={{ margin: '4px 10px 6px', fontSize: 12, lineHeight: 1.45, color: palette.ink.muted }}>
+                {problem}
+              </p>
+            )}
             <Item
               onClick={() => {
                 setOpen(false);
@@ -211,3 +222,67 @@ const item = {
   fontSize: 14,
   textAlign: 'left' as const,
 };
+
+/**
+ * The account's picture: shown where the account is, and chosen from a file,
+ * made small before it is kept. Kept in the account registry, so every device
+ * and every space the account opens has it (`account.setAvatar`).
+ */
+function usePicture(name: string) {
+  const node = useNode();
+  const [picture, setPicture] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let live = true;
+    void node.account
+      .picture()
+      .then((found) => {
+        if (live && found)
+          setPicture(URL.createObjectURL(new Blob([found.bytes.slice()], { type: found.mime })));
+      })
+      .catch(() => {
+        // An app without the account key reads no registry: the shape stands in.
+      });
+    return () => {
+      live = false;
+    };
+  }, [node]);
+
+  const take = async (file: File | undefined) => {
+    if (!file) return;
+    setProblem(null);
+    try {
+      const image = await shrinkImage(file, 256);
+      await node.account.setAvatar(image, { name });
+      setPicture(URL.createObjectURL(new Blob([image.bytes.slice()], { type: image.mime })));
+    } catch (error) {
+      setProblem(
+        error instanceof Error && /account key|registry/i.test(error.message)
+          ? 'This app can’t change your picture. Change it in account settings.'
+          : error instanceof Error
+            ? error.message
+            : String(error),
+      );
+    }
+  };
+
+  return {
+    picture,
+    problem,
+    choose: () => input.current?.click(),
+    picker: (
+      <input
+        ref={input}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(event) => {
+          void take(event.target.files?.[0]);
+          event.target.value = '';
+        }}
+      />
+    ),
+  };
+}

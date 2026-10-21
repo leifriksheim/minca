@@ -29,6 +29,7 @@ import type { FileRef, P2PNode } from '../src/node/types.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
+import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { team } from '../src/space/presets.js';
 import { createFakeHub } from './helpers/fake-transport.js';
 import { memoryStores } from './helpers/memory-stores.js';
@@ -163,9 +164,11 @@ describe('files between nodes', () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const start = async (extra: Partial<Parameters<typeof createNode>[0]> = {}) => {
       const manager = createIdentityManager();
-      const identity = await manager.fromSeed(generateSeed());
+      const seed = generateSeed();
+      const identity = await manager.fromSeed(seed);
       const node = await createNode({
         signer: createLocalRootSigner(identity, manager.getProvider()),
+        accountKey: await deriveAccountKey(seed),
         stores: memoryStores(),
         watchIntervalMs: 0,
         network: { transports: (spaceId, sessionDid) => [hub.transport(sessionDid, spaceId)] },
@@ -210,6 +213,33 @@ describe('files between nodes', () => {
     await new Promise((resolve) => setTimeout(resolve, 3000));
     await alice.close();
     assert.deepEqual(await bob.records.readFile(space.id, ref), bytesOf(CHUNK + 10));
+  });
+
+  test('a picture set on the account reaches the profile others see in a space, and opens there', async () => {
+    const { alice, bob, space } = await pair();
+    await alice.account.setName('Alice');
+    const picture = bytesOf(5000);
+    await alice.account.setAvatar({ bytes: picture, mime: 'image/webp' });
+    await until(
+      async () => !!(await bob.spaces.profiles(space.id)).find((p) => p.did === alice.did)?.avatar,
+      8000,
+      'the picture to reach the space',
+    );
+    const seen = (await bob.spaces.profiles(space.id)).find((p) => p.did === alice.did)!;
+    assert.equal(seen.name, 'Alice');
+    assert.deepEqual(await bob.records.readFile(space.id, seen.avatar!), picture);
+    // Opening the space again makes no second copy.
+    const before = seen.avatar!.hash;
+    await alice.account.setName('Alice B');
+    await until(
+      async () => (await bob.spaces.profiles(space.id)).find((p) => p.did === alice.did)?.name === 'Alice B',
+      8000,
+      'the rename',
+    );
+    assert.equal(
+      (await bob.spaces.profiles(space.id)).find((p) => p.did === alice.did)?.avatar?.hash,
+      before,
+    );
   });
 
   test('a file nobody names is asked for by nobody, and served to nobody', async () => {

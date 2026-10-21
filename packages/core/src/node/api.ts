@@ -77,7 +77,13 @@ export const API = Object.freeze({
     watch: 'own',
   },
   collections: { list: 'scoped', define: 'own', delete: 'remove collections', tag: 'scoped' },
-  account: { profile: 'pass', setName: 'rename the account', revoke: 'revoke notes' },
+  account: {
+    profile: 'pass',
+    setName: 'rename the account',
+    setAvatar: "change the account's picture",
+    picture: 'pass',
+    revoke: 'revoke notes',
+  },
   carriers: {
     list: 'pass',
     add: 'add a carrier',

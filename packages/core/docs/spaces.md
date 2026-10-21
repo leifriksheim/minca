@@ -196,17 +196,25 @@ whose root's `hex40` is not the record key:
   empty means no profile), `did` (its root) and `updatedAt` (its `createdAt`);
 - `contactKey` comes from the newest remaining version that carries a valid
   P-256 point, so a newer version written without one does not hide it.
+- `avatar` comes from the newest version only (one without it has taken it
+  away): a file reference (`records.addFile`) whose `mime` is an image.
 
 **Writing.** Profiles are written with `retain`, so older versions stay. A
 writer that does not hold the contact key must carry forward the
 `contactKey` of its current profile.
 
-**The account's name.** The account keeps its name in the account registry,
-as `sys.profile` at key `profile` with body `{ name }`; the newest version
-wins. `node.account.setName` writes it. The node publishes that name into
-every space it opens, and again on a rename, except the registry, the
-contacts space and nodes whose note lacks `/account/write` (an agent's); a
-non-member publishes nothing
+**The account's name and picture.** The account keeps its name in the
+account registry, as `sys.profile` at key `profile` with body
+`{ name, avatar? }`; the newest version wins. `node.account.setName` writes
+the name, `setAvatar({ bytes, mime })` the picture (a file in the registry;
+the app resizes it first), and `picture()` reads it back. The node publishes
+both into every space it opens, and again on a change. A space's members
+can't read the registry, so the picture is copied into each space once, as a
+file of that space, and its reference names the registry file it copies
+(`source`), so opening the space again makes no second copy. It publishes
+in every space but the registry and the contacts space, and not at all from
+a node whose note lacks `/account/write` (an agent's); a non-member
+publishes nothing
 ([spec 06 §1.3](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
 
 > **Planned:** profiles, round two.
@@ -215,10 +223,6 @@ non-member publishes nothing
 >   per space; what is missing is a way to say the name was chosen for this
 >   space, so publishing the account name on the next rename does not
 >   overwrite it.
-> - **An avatar**, as a reference to an image on the profile. Depends on a
->   way for a record to carry a file, which is not specified yet (the blob
->   stores of [spec 05](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md) hold mirrors, not files records
->   point to).
 > - **Private nicknames for others**: a name you give someone, seen only by
 >   you. It belongs in the account's own spaces, not in the shared one;
 >   `std.contact`'s `name` already does this for contacts.

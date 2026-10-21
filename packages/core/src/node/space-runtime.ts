@@ -184,7 +184,13 @@ import {
   type SchemaIssue,
   type StoredCollection,
 } from '../schema/collection-def.js';
-import { CARRIER_COLLECTION, MEMBERSHIP_COLLECTION, PROFILE_COLLECTION } from '../space/account-registry.js';
+import {
+  CARRIER_COLLECTION,
+  MEMBERSHIP_COLLECTION,
+  PROFILE_COLLECTION,
+  isAvatarRef,
+  type AvatarRef,
+} from '../space/account-registry.js';
 import { PASS_COLLECTION } from '../space/pass.js';
 import { base32Encode, cidOfDigest, hashedKey, sha256 } from '../utils/hash.js';
 import { sameTags, tagsFor, topicKey, topicTag } from '../records/topics.js';
@@ -2072,6 +2078,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
           if (typeof name !== 'string' || !name.trim()) break;
           found = { did: verdict.root, name: name.trim().slice(0, 64), updatedAt: version.createdAt };
         }
+        // The picture, from the newest version: taken away is gone.
+        if (!found.avatar && found.updatedAt === version.createdAt && isAvatarRef(body?.avatar))
+          found = { ...found, avatar: body.avatar };
         // The contact key from the newest version that has one: it never changes, and an app
         // without it that wrote a newer version first must not hide it.
         if (isContactPublicKey(body?.contactKey)) {
@@ -4035,17 +4044,22 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     },
 
     /** For the node itself: says who this account is here, when that changed and the space takes its writes */
-    async publishProfile(profile: { name: string; contactKey?: string }) {
+    async publishProfile(profile: { name: string; contactKey?: string; avatar?: AvatarRef }) {
       // Someone following a space without a role in it cannot write there, and says nothing.
       if (await cannotWrite()) return;
       const name = profile.name.trim().slice(0, 64);
       const mine = (await profileMap()).get(deps.rootDid);
       // An app without the contact key must not take away the one another device published.
       const contactKey = profile.contactKey ?? mine?.contactKey;
-      if (!name || (mine?.name === name && mine.contactKey === contactKey)) return;
+      if (
+        !name ||
+        (mine?.name === name && mine.contactKey === contactKey && mine.avatar?.hash === profile.avatar?.hash)
+      )
+        return;
       await upsert(PROFILE_COLLECTION, await profileKey(deps.rootDid), {
         name,
         ...(contactKey ? { contactKey } : {}),
+        ...(profile.avatar ? { avatar: profile.avatar } : {}),
       });
     },
 
