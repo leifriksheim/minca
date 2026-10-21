@@ -40,7 +40,7 @@ import {
   type DraftCollection,
 } from '../src/schemas/index.js';
 import { createMincaAuth, type MincaAuth } from '../src/session/auth.js';
-import { grantSigner, type Grant } from '../src/session/connect.js';
+import { grantSigner, nodeOptionsFromGrant, type Grant } from '../src/session/connect.js';
 import { connectWithCode, offerConnectCode } from '../src/session/connect-code.js';
 import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { base64UrlDecode, base64UrlEncode } from '../src/utils/encoding.js';
@@ -1190,6 +1190,26 @@ describe('a program connected by code, through the account home', () => {
 });
 
 describe('an agent running a node of its own', () => {
+  test('it never takes a contact key, even one a home sent with a records-only note', async () => {
+    const { alice, space } = await setup();
+    const agent = await agentFor(alice, [space]);
+    const wide = await agentFor(alice, [space], '/');
+    const grant = (note: Grant['note']): Grant => ({
+      v: 2,
+      did: alice.node.did,
+      name: 'Alice',
+      note,
+      access: 'write',
+      scope: 'spaces',
+      spaces: [],
+      contactKey: base64UrlEncode(new Uint8Array(32).fill(7)),
+      expiresAt: Math.floor(Date.now() / 1000) + 3600,
+      home: 'https://home.test/connect',
+    });
+    assert.equal(nodeOptionsFromGrant(grant(agent.note)).contactKey, undefined);
+    assert.ok(nodeOptionsFromGrant(grant(wide.note)).contactKey);
+  });
+
   /** What `minca connect` ends up with: its own key, and the home's grant for the whole account */
   async function agentNode(
     who: { me: Person['me']; manager: Person['manager']; seed: Uint8Array },

@@ -94,8 +94,10 @@ in-process interface, not a wire format; what a note must be is
   ([spec 06 §2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
 - A signer **across a port** (`serveSigner` on the side that holds the key,
   `remoteSigner` on the node's, as a page signs for its worker's node) signs
-  only the session note below: `command` `/`, no `subject`, no `policy`. It
-  refuses anything else without asking the signer behind it.
+  only notes of the session note's shape below: `command` `/`, no `subject`,
+  no `policy`. It refuses anything else without asking the signer behind it.
+  The audience and expiration are the far end's to pick, so it bounds
+  neither.
 
 The **session note** a node asks for when it starts:
 
@@ -792,7 +794,7 @@ starts a node with:
 - `sessionKey` = the app's key;
 - stores `indexedDBStores('minca-app:<grant.did>')` unless given;
 - `cache: {}` unless `cache: false` ([holding part of a space](#holding-part-of-a-space));
-- `accountKey`, `contactKey`, `contactsSpace` from the grant when present, and
+- `accountKey`, `contactKey`, `contactsSpace` from the grant when present (never `contactKey` under a records-only note), and
   relays = the app's relays ∪ `grant.relays` (`nodeOptionsFromGrant`).
 
 It then joins each granted space it does not hold yet, passing its `memberKey`

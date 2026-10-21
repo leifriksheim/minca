@@ -686,7 +686,10 @@ export function nodeOptionsFromGrant(grant: Grant, relays: ReadonlyArray<string>
   return {
     relays: [...new Set([...relays, ...(grant.relays ?? [])])],
     ...(grant.accountKey ? { accountKey: base64UrlDecode(grant.accountKey) } : {}),
-    ...(grant.contactKey ? { contactKey: base64UrlDecode(grant.contactKey) } : {}),
+    // Never under records only, whatever the home sent: it opens contact requests and knocks.
+    ...(grant.contactKey && !grantsRecordsOnly(grant.note)
+      ? { contactKey: base64UrlDecode(grant.contactKey) }
+      : {}),
     ...(grant.contactsSpace ? { contactsSpace: grant.contactsSpace } : {}),
   };
 }

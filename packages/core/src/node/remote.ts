@@ -389,8 +389,8 @@ const SIGNER_TAG = 'minca-signer';
 /**
  * Signs session notes for a `remoteSigner` on the other side of `port`: the
  * one note a node asks for, everything about the account (`SESSION_COMMAND`)
- * to its session key until a time. Nothing else: whatever runs at the other
- * end can't have it sign a note of another shape. The root key stays here: a
+ * to its key until a time. No other shape: the far end still picks the key and
+ * the time, as the node it runs does. The root key stays here: a
  * passkey needs a document, and a key in a tab should stay in the tab that
  * holds it. Returns a function that stops.
  */
