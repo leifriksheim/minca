@@ -38,6 +38,7 @@ import {
   checkGrant,
   connectToHome,
   GRANT_VERSION,
+  grantExpired,
   grantSigner,
   joinGranted,
   nodeOptionsFromGrant,
@@ -228,8 +229,6 @@ const saveGrant = async (folder: string, seal: CryptoKey, grant: Grant, request:
     `${await sealValue(seal, GRANT_LABEL, { file: 'grant.sealed' }, { grant, request })}\n`,
   );
 
-const expired = (grant: Grant) => grant.expiresAt <= Math.floor(Date.now() / 1000);
-
 /**
  * Runs until stdin ends. `send` writes a line for the shell; `lines` are the
  * shell's. Globals a page would have (`open`, `location`, message events) are
@@ -337,7 +336,7 @@ export async function runAppNode(options: {
     const left = grant.expiresAt * 1000 - Date.now();
     expiry = setTimeout(
       () => {
-        if (grant && expired(grant)) {
+        if (grant && grantExpired(grant)) {
           // Nothing runs on a note that ran out: no automations, no syncing.
           status = 'expired';
           serve();
@@ -490,7 +489,7 @@ export async function runAppNode(options: {
       Reflect.set(globalThis, 'location', saved.location);
       if (mine !== generation) return;
       // A grant that came but whose node didn't start leaves no node to be ready with.
-      status = was === 'ready' && !node ? (grant && expired(grant) ? 'expired' : 'disconnected') : was;
+      status = was === 'ready' && !node ? (grant && grantExpired(grant) ? 'expired' : 'disconnected') : was;
       error = messageOf(problem);
       say();
     } finally {
@@ -504,7 +503,7 @@ export async function runAppNode(options: {
     if (kept) {
       await checkGrant(kept.grant, key.did);
       request = kept.request;
-      if (expired(kept.grant)) {
+      if (grantExpired(kept.grant)) {
         grant = kept.grant;
         status = 'expired';
         say();

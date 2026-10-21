@@ -601,12 +601,19 @@ export function grantSigner(grant: Grant | (() => Grant | null)): RootSigner {
     custody: 'remote',
     async delegate() {
       const now = current();
-      if (!now || now.expiresAt <= Math.floor(Date.now() / 1000))
+      if (!now || grantExpired(now))
         throw new Error('Access has run out. Connect to your account home again.');
       return now.note;
     },
   };
 }
+
+/** Whether a grant's note has run out */
+export const grantExpired = (grant: Grant): boolean => grant.expiresAt <= Math.floor(Date.now() / 1000);
+
+/** Whether a kept grant still works: one kept in an older format holds a note no peer reads now */
+export const usableGrant = (grant: Grant | null): boolean =>
+  !!grant && grant.v === GRANT_VERSION && !grantExpired(grant);
 
 /**
  * Starts a node acting for the account, under a grant.
@@ -682,10 +689,8 @@ export function grantStore(storage: KeyValueStore | null = defaultStorage(), key
   return {
     load(): Grant | null {
       const grant = kept.read<Grant>(key);
-      // One kept in an older format holds a note no peer reads now: connecting again replaces it.
-      return grant && grant.v === GRANT_VERSION && grant.expiresAt > Math.floor(Date.now() / 1000)
-        ? grant
-        : null;
+      // Connecting again replaces one that doesn't work.
+      return usableGrant(grant) ? grant : null;
     },
     save: (grant: Grant): void => kept.write(key, grant),
     forget: (): void => kept.write(key, null),

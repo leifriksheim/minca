@@ -35,6 +35,7 @@ import {
   grantSigner,
   joinGranted,
   nodeOptionsFromGrant,
+  usableGrant,
   type Grant,
 } from '@minca/core/session';
 import { openFsDirectory, writeWhole } from './fs-directory.js';
@@ -125,8 +126,7 @@ async function loadAgentGrant(home: string): Promise<Grant | null> {
 
 /** Whether this computer's agent was connected to an account, and its note still runs */
 export async function hasConnectedAgent(home: string): Promise<boolean> {
-  const grant = await loadAgentGrant(home);
-  return !!grant && grant.v === GRANT_VERSION && grant.expiresAt > Date.now() / 1000;
+  return usableGrant(await loadAgentGrant(home));
 }
 
 /** "Agent on leifs-macbook" — what the person sees in the app and their account */
@@ -298,13 +298,11 @@ async function readConnection(home: string): Promise<{ grant: Grant; key: Stored
     throw new Error(
       'No agent is connected on this computer. In the app, choose “Connect an agent” and run the command it shows.',
     );
-  if (grant.v !== GRANT_VERSION)
+  if (!usableGrant(grant))
     throw new Error(
-      'The agent was connected by an older version, whose access no peer reads now. In the app, choose “Connect an agent” and run the new command.',
-    );
-  if (grant.expiresAt <= Date.now() / 1000)
-    throw new Error(
-      "The agent's access has run out. In the app, choose “Connect an agent” and run the new command.",
+      grant.v !== GRANT_VERSION
+        ? 'The agent was connected by an older version, whose access no peer reads now. In the app, choose “Connect an agent” and run the new command.'
+        : "The agent's access has run out. In the app, choose “Connect an agent” and run the new command.",
     );
   const key = await readAgentKey(home);
   if (!key)

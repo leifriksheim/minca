@@ -45,6 +45,8 @@ export {
   nodeOptionsFromGrant,
   joinGranted,
   grantSigner,
+  grantExpired,
+  usableGrant,
   grantStore,
   grantTerms,
   GRANT_VERSION,
