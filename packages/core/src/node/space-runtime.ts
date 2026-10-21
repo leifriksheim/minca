@@ -2124,18 +2124,33 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     throw new Error('The space is still opening');
   };
   let filesTimer: ReturnType<typeof setTimeout> | null = null;
+  /** One pass at a time; a change during one runs another after it */
+  let filesPass: Promise<void> | null = null;
+  let filesAgain = false;
   /** After a change: which files are named is worked out again, and soon kept, dropped and fetched to match */
   function filesChanged(): void {
     spaceFiles?.changed();
+    if (filesPass) {
+      filesAgain = true;
+      return;
+    }
     if (filesTimer || closed) return;
     filesTimer = setTimeout(() => {
       filesTimer = null;
-      void (async () => {
+      filesPass = (async () => {
         await spaceFiles?.tidy();
         if (deps.fetchFiles === 'all') await spaceFiles?.fetchAll();
-      })().catch(() => {
-        // A peer or mirror out of reach; the next change tries again.
-      });
+      })()
+        .catch(() => {
+          // A peer or mirror out of reach; the next change tries again.
+        })
+        .finally(() => {
+          filesPass = null;
+          if (filesAgain && !closed) {
+            filesAgain = false;
+            filesChanged();
+          }
+        });
     }, 2000);
     unref(filesTimer);
   }

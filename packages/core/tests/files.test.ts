@@ -303,6 +303,33 @@ describe('what a peer refuses', () => {
     await assert.rejects(files.b.read(ref), /No peer or mirror holds that file/);
   });
 
+  test('a want for chunks no file can have is dropped at once, unanswered', async () => {
+    const sent: unknown[] = [];
+    const adapter = createMemoryAdapter();
+    const files = createSpaceFiles({
+      space: 'demo',
+      adapter,
+      storage: createStorageProvider(adapter),
+      send: (_peer, message) => sent.push(message),
+      peers: () => [],
+    });
+    const started = Date.now();
+    for (const chunks of [
+      [2 ** 53, 2 ** 53],
+      [0, 64],
+      [5, 4],
+      [-1, 0],
+      [8192, 8192],
+      [0.5, 1],
+    ])
+      await files.onMessage('p', { type: 'want-file', id: 1, hash: 'a'.repeat(64), chunks });
+    assert.ok(Date.now() - started < 500);
+    assert.deepEqual(sent, []);
+    // A well-formed ask for a file it doesn't hold is answered, as missing.
+    await files.onMessage('p', { type: 'want-file', id: 2, hash: 'a'.repeat(64), chunks: [8190, 8191] });
+    assert.deepEqual(sent, [{ type: 'file-done', id: 2, hash: 'a'.repeat(64), missing: [8190, 8191] }]);
+  });
+
   test('bytes nobody asked for, or out of order, are not taken', async () => {
     const { b, files } = await wired();
     const ref = await files.a.add(bytesOf(100));

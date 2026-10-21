@@ -22,6 +22,7 @@ import {
   fileIdOf,
   filesOf,
   listFits,
+  MAX_FILE_SIZE,
   type FileName,
 } from './file-id.js';
 import { openFile, sealFile, type FileKey } from './seal.js';
@@ -53,6 +54,12 @@ export interface SpaceFilesConfig {
 
 /** Chunks asked of a peer in one `want-file` */
 const MAX_CHUNKS_PER_WANT = 64;
+/** Chunks the largest file has: no index is ever this or more */
+const MAX_CHUNKS = MAX_FILE_SIZE / CHUNK;
+/** A request that hears nothing for this long is given up, and what it lacks asked elsewhere */
+const IDLE_MS = 5_000;
+/** A file nobody had is not asked for again before this */
+const RETRY_MS = 10 * 60_000;
 /** Chunks a peer sends in answer to one `want-file`; the rest it leaves for the next ask */
 const CHUNKS_PER_REPLY = 4;
 /** Bytes in one `file` message, before base64 */
@@ -76,6 +83,8 @@ interface Request {
   readonly parts: Map<Part, Uint8Array[]>;
   readonly received: Map<Part, number>;
   readonly settle: () => void;
+  /** Heard from: the wait for the next frame starts again */
+  readonly touch: () => void;
   list: Uint8Array | null;
 }
 
@@ -145,6 +154,8 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
 
   /** Seals a file, keeps it, and gives back what names and opens it */
   async function add(plain: Uint8Array): Promise<SealedFile> {
+    if (plain.length + 17 * Math.ceil((plain.length + 1) / (CHUNK - 17)) > MAX_FILE_SIZE)
+      throw new Error('A file is at most 2 GiB');
     const { bytes, key } = await sealFile(plain);
     const list = await chunkListOf(bytes);
     const hash = await fileIdOf(bytes.length, list);
@@ -174,10 +185,17 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
       const done = new Set<Part>();
       const finish = () => {
         clearTimeout(timer);
+        clearTimeout(idle);
         requests.delete(id);
         resolve(done);
       };
+      // Given up when it falls silent, or at the latest after REQUEST_MS: a peer that trickles is left for another.
       const timer = setTimeout(finish, REQUEST_MS);
+      let idle = setTimeout(finish, IDLE_MS);
+      const touch = () => {
+        clearTimeout(idle);
+        idle = setTimeout(finish, IDLE_MS);
+      };
       requests.set(id, {
         peer,
         file,
@@ -186,6 +204,7 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
         parts: new Map(),
         received: new Map(),
         settle: finish,
+        touch,
         list,
       });
       const numbers = parts.filter((part): part is number => part !== 'list');
@@ -308,6 +327,7 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
     // In order, within its length: anything else is dropped, and the part asked again elsewhere.
     if (message.at !== received || received + bytes.length > length || bytes.length > BYTES_PER_MESSAGE)
       return;
+    request.touch();
     const pieces = request.parts.get(part) ?? [];
     pieces.push(bytes);
     request.parts.set(part, pieces);
@@ -353,18 +373,26 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
     } else if (Array.isArray(message.chunks)) {
       const range: readonly unknown[] = message.chunks;
       const [from, to] = range;
+      // Indices a file can have, at most 64 of them: anything else is dropped unanswered (spec 05 §16.6).
       if (
-        typeof from === 'number' &&
-        typeof to === 'number' &&
-        Number.isInteger(from) &&
-        Number.isInteger(to) &&
-        from >= 0 &&
-        to >= from
-      ) {
-        // At most what one want may ask, and never past the file's end.
-        const last = Math.min(to, from + MAX_CHUNKS_PER_WANT - 1, file ? chunkCount(file.size) - 1 : to);
+        typeof from !== 'number' ||
+        typeof to !== 'number' ||
+        !Number.isInteger(from) ||
+        !Number.isInteger(to) ||
+        from < 0 ||
+        to < from ||
+        to >= MAX_CHUNKS ||
+        to - from >= MAX_CHUNKS_PER_WANT
+      )
+        return;
+      {
+        const last = file ? Math.min(to, chunkCount(file.size) - 1) : to;
         let sent = 0;
-        for (let index = from; index <= last; index++) {
+        for (let index = from; index <= to; index++) {
+          if (index > last) {
+            missing.push(index);
+            continue;
+          }
           const chunk = file && sent < CHUNKS_PER_REPLY ? await adapter.get(chunkKey(hash, index)) : null;
           if (chunk) {
             await sendPart(index, chunk);
@@ -425,18 +453,27 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
     }
   }
 
+  /** Files a keeper found nobody had, and when */
+  const unfound = new Map<string, number>();
+
   /** Fetches every file a version kept whole names that is not here yet: what a keeper does */
   async function fetchAll(): Promise<void> {
     for (const [hash, sizes] of await namedFiles()) {
       const held = await heldFile(hash);
       if (held && (await isWhole(held))) continue;
+      // One nobody had a moment ago is not asked of everyone again on every change.
+      if (Date.now() - (unfound.get(hash) ?? 0) < RETRY_MS) continue;
       // Every size named for it, the file's own first if its list is here: the wrong ones fail on the list.
       for (const file of held ? [held] : sizes) {
         const fetched = await fetchFile(file).then(
           () => true,
           () => false,
         );
-        if (fetched) break;
+        if (fetched) {
+          unfound.delete(hash);
+          break;
+        }
+        unfound.set(hash, Date.now());
       }
     }
   }

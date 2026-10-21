@@ -14,7 +14,7 @@ import { isRecord } from '../utils/guards.js';
 /** A chunk, and the record size of the files' encryption: one record is one chunk */
 export const CHUNK = 262_144;
 /** The largest file, in bytes as stored */
-const MAX_FILE_SIZE = 2 ** 31;
+export const MAX_FILE_SIZE = 2 ** 31;
 /** Files a version names that peers take */
 export const MAX_FILES = 16;
 

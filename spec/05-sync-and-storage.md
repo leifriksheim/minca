@@ -1275,6 +1275,10 @@ by them); a peer that holds or serves a file never checks them.
   the bytes of that chunk received so far and the bytes within the chunk's
   length (or the list's). A chunk is complete at its length, and is then
   checked as above.
+- A peer MUST drop, unanswered, a `want-file` whose `chunks` are not two
+  integers with `0 ≤ from ≤ to < 8192` (the chunks of the largest file) and
+  `to − from < 64`. An index past the end of a file it holds, or of one it
+  doesn't, is answered as missing.
 - A peer MUST serve only chunks it holds for that space, of files named by
   a version it keeps whole in that space, over a session the space admitted
   ([04](04-network.md) §6.3); it never answers from another space's

@@ -292,7 +292,9 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     version of its own, keeping its ciphertext held, though nobody without
     the old body can open it. `size` is the writer's word until the bytes
     arrive. And any peer it serves can ask for up to four chunks (1 MiB) per
-    `want-file`, as often as it likes: nothing bounds bytes served per peer
+    `want-file`, as often as it likes, and a member naming ids nobody holds
+    has every keeper ask its peers and list its mirrors for each, again
+    every ten minutes: nothing bounds bytes served per peer
     (05 §16.6; [#33](https://github.com/leifriksheim/minca/issues/33)).
   - Someone who may define a collection can give it computed fields that
     every member's device works out for each record a query filters or
