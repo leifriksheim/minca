@@ -43,9 +43,9 @@ jobs:
         env:
           PATHS: ${{ matrix.paths }}
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-        # When the base can't be read (a new branch), run anyway.
+        # When there is no base, or it can't be read (a new branch), run anyway.
         run: |
-          if [[ -z "$PATHS" ]] || ! files=$(git diff --name-only "$BASE"...HEAD 2>/dev/null) || grep -qE "$PATHS" <<<"$files"; then
+          if [[ -z "$PATHS" || -z "$BASE" ]] || ! files=$(git diff --name-only "$BASE"...HEAD 2>/dev/null) || grep -qE "$PATHS" <<<"$files"; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           fi
       - if: steps.changed.outputs.run == 'true'
