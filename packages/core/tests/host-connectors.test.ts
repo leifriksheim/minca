@@ -16,6 +16,7 @@ test('a device takes only well-formed connectors from a host’s description, an
       { id: 'x'.repeat(41), name: 'Too long' },
       { id: 'drive', name: '' },
       { id: 'drive', name: 'n'.repeat(61) },
+      { id: 'drive', name: '\u202eevirD' },
       { id: 'drive' },
       'github',
       null,

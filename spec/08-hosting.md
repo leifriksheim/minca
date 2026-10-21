@@ -524,9 +524,14 @@ only what this section says. `botTypical` and `lines` are how a host says what
 a person can't tell from the numbers, its model and its price per token, say,
 without a new field for each. In a line, `for` says where it belongs:
 `hosting`, beside keeping the space online; `bots`, beside each bot; any other,
-on its own. A device MUST leave out a `botTypical` that does not match, MUST
+on its own, and a `hosting` line goes beside the `perGb` rate, never in its
+place. A device MUST treat a `fund` whose `perGb` or `min` does not match
+`^\d{1,5}(\.\d{1,4})?$` as absent, MUST leave out a `botDailyCap` or
+`botTypical` that does not match it, a `manage` that is not an `https:` URL,
+and a method it does not know, MUST
 leave out a line whose `for` does not match `^[a-z0-9-]{1,40}$` or whose `name`
-or `price` is not a string of 1 to 60 characters, MUST show at most the first
+or `price` is not a string of 1 to 60 characters with no control or format
+characters (Unicode `Cc`, `Cf`), MUST show at most the first
 eight lines that remain, and MUST show them as text only.
 
 ```json
@@ -666,8 +671,9 @@ at any host. No secret of a service enters the space.
 ```
 
 `id` is 1 to 40 lowercase letters, digits and dashes, and names the service
-in the addresses and records below; `name` is for people, at most 60
-characters. A device MUST ignore an entry that isn't both.
+in the addresses and records below; `name` is for people, 1 to 60
+characters with no control or format characters (Unicode `Cc`, `Cf`), as a
+fund's lines (§2). A device MUST ignore an entry that isn't both.
 
 **Who may.** Someone who holds `/std.automation/instruct` in the space and
 every role the bot holds there, by the host's view of the space's access

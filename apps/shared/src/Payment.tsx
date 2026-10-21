@@ -291,7 +291,7 @@ export function lastsFor(months: number): string {
 export function perReply(typical: string): string {
   const cents = Number(typical) * 100;
   if (cents < 1) return 'under 1¢ a reply';
-  return cents < 100 ? `about ${Math.round(cents)}¢ a reply` : `about $${(cents / 100).toFixed(2)} a reply`;
+  return cents < 99.5 ? `about ${Math.round(cents)}¢ a reply` : `about $${(cents / 100).toFixed(2)} a reply`;
 }
 
 /** Millionths of a dollar as dollars: $23.40 */

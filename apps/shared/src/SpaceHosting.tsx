@@ -604,8 +604,8 @@ export function FundPaysFor({
   /** A bot about to start */
   adding?: string;
 }) {
-  const line = (label: string, price: string, note?: string) => (
-    <li key={label} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 14 }}>
+  const line = (key: string, label: string, price: string, note?: string) => (
+    <li key={key} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 14 }}>
       <span
         style={{
           width: 20,
@@ -649,12 +649,15 @@ export function FundPaysFor({
       </p>
       <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
         {line(
-          hosting?.name ?? 'Always online, encrypted end to end',
-          hosting?.price ?? `$${fund.perGb} a GB a month`,
-          kept,
+          'hosting',
+          'Always online, encrypted end to end',
+          `$${fund.perGb} a GB a month`,
+          // The host's own words sit beside the rate it bills by, never in its place.
+          [kept, hosting && `${hosting.name}, ${hosting.price}`].filter(Boolean).join(' · '),
         )}
-        {bots.map((bot) =>
+        {bots.map((bot, index) =>
           line(
+            `bot-${index}`,
             bot.name,
             bot.daily === undefined
               ? 'as it is used'
@@ -666,10 +669,10 @@ export function FundPaysFor({
         )}
         {adding &&
           !bots.some((bot) => bot.name === adding) &&
-          line(adding, fund.botTypical ? perReply(fund.botTypical) : 'as it is used', thinks)}
+          line('adding', adding, fund.botTypical ? perReply(fund.botTypical) : 'as it is used', thinks)}
         {lines
           .filter((one) => one.for !== 'hosting' && one.for !== 'bots')
-          .map((one) => line(one.name, one.price))}
+          .map((one, index) => line(`line-${index}`, one.name, one.price))}
       </ul>
       <p style={{ fontSize: 12, color: palette.ink.faint, marginTop: 10 }}>
         Anyone in the community can chip in, once or every month.

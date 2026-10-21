@@ -326,7 +326,8 @@ export function connectorOffers(described: unknown): ReadonlyArray<HostConnector
     /^[a-z0-9-]{1,40}$/.test(one.id) &&
     typeof one.name === 'string' &&
     one.name.length > 0 &&
-    one.name.length <= 60
+    one.name.length <= 60 &&
+    !/[\p{Cc}\p{Cf}]/u.test(one.name)
       ? [{ id: one.id, name: one.name }]
       : [],
   );
@@ -372,8 +373,9 @@ const DOLLARS = /^\d{1,5}(\.\d{1,4})?$/;
 /** The lines a host's fund gives that are well formed, eight at most: a lowercase `for`, and a short name and price */
 export function fundLines(described: unknown): ReadonlyArray<FundLine> {
   if (!Array.isArray(described)) return [];
+  // No control or format characters: a right-to-left override would show a price reversed.
   const text = (value: unknown): value is string =>
-    typeof value === 'string' && value.length > 0 && value.length <= 60;
+    typeof value === 'string' && value.length > 0 && value.length <= 60 && !/[\p{Cc}\p{Cf}]/u.test(value);
   return described
     .flatMap((one: unknown) =>
       typeof one === 'object' &&
@@ -391,13 +393,27 @@ export function fundLines(described: unknown): ReadonlyArray<FundLine> {
     .slice(0, 8);
 }
 
-/** A fund as shown: its lines and usual reply cost kept only when well formed */
-function fundShown(fund: FundOffer): FundOffer {
-  const { lines: givenLines, botTypical, ...rest } = fund;
-  const lines = fundLines(givenLines);
+/**
+ * A fund as shown, or none: its price and least payment must be dollars, and
+ * the rest is kept only when well formed, so a host's words never stand in
+ * for its numbers or run past a few short lines.
+ */
+function fundShown(fund: Record<string, unknown>): FundOffer | null {
+  const dollars = (value: unknown): value is string => typeof value === 'string' && DOLLARS.test(value);
+  const { perGb, min, methods, recurring, manage, botDailyCap, botTypical } = fund;
+  if (!dollars(perGb) || !dollars(min)) return null;
+  const ways = (Array.isArray(methods) ? methods : []).filter(
+    (way: unknown): way is 'checkout' | 'request' => way === 'checkout' || way === 'request',
+  );
+  const lines = fundLines(fund.lines);
   return {
-    ...rest,
-    ...(typeof botTypical === 'string' && DOLLARS.test(botTypical) ? { botTypical } : {}),
+    perGb,
+    min,
+    methods: ways,
+    recurring: recurring === true,
+    ...(typeof manage === 'string' && /^https:\/\//.test(manage) && URL.canParse(manage) ? { manage } : {}),
+    ...(dollars(botDailyCap) ? { botDailyCap } : {}),
+    ...(dollars(botTypical) ? { botTypical } : {}),
     ...(lines.length ? { lines } : {}),
   };
 }
@@ -629,9 +645,10 @@ export async function describeHost(url: string, timeoutMs = HOST_TIMEOUT_MS): Pr
   // Limits and a fund's words are for showing: badly described, they are left out, and the host still stands.
   const { limits: given, fund, ...rest } = description;
   const limits = description.free ? null : hostLimits(given);
+  const shown = typeof fund === 'object' && fund !== null ? fundShown({ ...fund }) : null;
   return {
     ...rest,
-    ...(typeof fund === 'object' && fund !== null ? { fund: fundShown(fund) } : {}),
+    ...(shown ? { fund: shown } : {}),
     ...(limits ? { limits } : {}),
   };
 }

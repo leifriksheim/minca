@@ -16,6 +16,8 @@ test('a device takes only well-formed fund lines, eight at most, and ignores the
       { for: 'bots', name: 'n'.repeat(61), price: '$1' },
       { for: 'bots', name: 'No price' },
       { for: 'bots', name: 'A number', price: 3 },
+      { for: 'bots', name: 'Reversed', price: '\u202e51$' },
+      { for: 'bots', name: 'Hidden\u200b', price: '$1' },
       'bots',
       null,
     ]),
@@ -48,6 +50,25 @@ test('a host whose fund words are badly formed still stands, without them', asyn
     assert.deepEqual((await describeHost('https://host.example')).fund, fund);
     globalThis.fetch = answer('a fund');
     assert.equal((await describeHost('https://host.example')).fund, undefined);
+
+    // Its numbers must be dollars, or there is no fund to show: words never stand in for them.
+    globalThis.fetch = answer({ ...fund, perGb: 'x'.repeat(10_000) });
+    assert.equal((await describeHost('https://host.example')).fund, undefined);
+    globalThis.fetch = answer({ ...fund, min: { dollars: 5 } });
+    assert.equal((await describeHost('https://host.example')).fund, undefined);
+    globalThis.fetch = answer({
+      ...fund,
+      methods: ['checkout', 'barter'],
+      botDailyCap: 'y'.repeat(10_000),
+      manage: 'http://pay.example/stop',
+    });
+    assert.deepEqual((await describeHost('https://host.example')).fund, fund);
+    globalThis.fetch = answer({ ...fund, manage: 'https://pay.example/stop', botDailyCap: '1.50' });
+    assert.deepEqual((await describeHost('https://host.example')).fund, {
+      ...fund,
+      manage: 'https://pay.example/stop',
+      botDailyCap: '1.50',
+    });
   } finally {
     globalThis.fetch = original;
   }

@@ -959,9 +959,12 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
   - What it says it charges is its word. No peer can check the model its
     bots think with, what a reply cost, or the size it bills by, and its
     `botTypical` and fund `lines` are words for people (08 §2). A device
-    shows them as text only, at most eight short lines
-    (`packages/core/tests/fund-lines.test.ts`), so a host can't put more in
-    the dialog than a few words of its own. Accepted: a host is chosen and
+    keeps a fund only when its numbers are dollars, and of its words at most
+    eight short lines with no control or format characters
+    (`fundShown` and `fundLines` in `packages/core/src/session/hosting.ts`;
+    `packages/core/tests/fund-lines.test.ts`), and the reference app shows
+    them as text beside the `perGb` rate it bills by, never in its place
+    (`FundPaysFor` in `apps/shared/src/SpaceHosting.tsx`). Accepted: a host is chosen and
     paid as a provider is, and left as one.
   - It can hold back what it likes from a node that syncs with nobody else.
     Only a node holding part of a space notices a gap, and only in ordinary
