@@ -350,6 +350,56 @@ export interface FundOffer {
   readonly manage?: string;
   /** What a bot takes from the fund a day at most, in dollars, when the host runs bots */
   readonly botDailyCap?: string;
+  /** What one usual bot reply takes from the fund, in dollars, as the host reckons it: `"0.038"` */
+  readonly botTypical?: string;
+  /** What it charges for, in words, for people: its model, say. Shown as given, never counted on. */
+  readonly lines?: ReadonlyArray<FundLine>;
+}
+
+/**
+ * One thing a fund pays for, as the host words it: `for` says where it
+ * belongs (`hosting`, `bots`, or one an app doesn't know, shown on its own).
+ */
+export interface FundLine {
+  readonly for: string;
+  readonly name: string;
+  readonly price: string;
+}
+
+/** Dollars as a fund's numbers give them: `"0.10"`, `"0.038"` */
+const DOLLARS = /^\d{1,5}(\.\d{1,4})?$/;
+
+/** The lines a host's fund gives that are well formed, eight at most: a lowercase `for`, and a short name and price */
+export function fundLines(described: unknown): ReadonlyArray<FundLine> {
+  if (!Array.isArray(described)) return [];
+  const text = (value: unknown): value is string =>
+    typeof value === 'string' && value.length > 0 && value.length <= 60;
+  return described
+    .flatMap((one: unknown) =>
+      typeof one === 'object' &&
+      one !== null &&
+      'for' in one &&
+      'name' in one &&
+      'price' in one &&
+      typeof one.for === 'string' &&
+      /^[a-z0-9-]{1,40}$/.test(one.for) &&
+      text(one.name) &&
+      text(one.price)
+        ? [{ for: one.for, name: one.name, price: one.price }]
+        : [],
+    )
+    .slice(0, 8);
+}
+
+/** A fund as shown: its lines and usual reply cost kept only when well formed */
+function fundShown(fund: FundOffer): FundOffer {
+  const { lines: givenLines, botTypical, ...rest } = fund;
+  const lines = fundLines(givenLines);
+  return {
+    ...rest,
+    ...(typeof botTypical === 'string' && DOLLARS.test(botTypical) ? { botTypical } : {}),
+    ...(lines.length ? { lines } : {}),
+  };
 }
 
 /** How someone adds to an account's balance, or a community's fund */
@@ -576,10 +626,14 @@ export async function describeHost(url: string, timeoutMs = HOST_TIMEOUT_MS): Pr
   ) {
     throw new Error(NOT_A_HOST);
   }
-  // Limits are for showing: badly described, they are left out, and the host still stands.
-  const { limits: given, ...rest } = description;
+  // Limits and a fund's words are for showing: badly described, they are left out, and the host still stands.
+  const { limits: given, fund, ...rest } = description;
   const limits = description.free ? null : hostLimits(given);
-  return limits ? { ...rest, limits } : rest;
+  return {
+    ...rest,
+    ...(typeof fund === 'object' && fund !== null ? { fund: fundShown(fund) } : {}),
+    ...(limits ? { limits } : {}),
+  };
 }
 
 /** A space id as it may appear in a host's path */

@@ -8,6 +8,7 @@ import { Benefit, FeatureIcon, Glyph, StatusPill } from './Feature';
 import { KeepOnline, onlineHost, useSpaceHosts } from './SpaceHosting';
 import { BotConnectors, BotInstructions } from './BotConnectors';
 import { message, useAction, useCopy } from './action';
+import { perReply } from './Payment';
 import { styles, palette } from './styles';
 
 /** Where running a bot on a server is explained */
@@ -57,6 +58,7 @@ export function AddBotDialog({
   // Until the community is kept online, adding to its fund comes first.
   const view = hosts === null ? 'wait' : !host && chosenView === 'add' ? 'fund' : chosenView;
   const cap = host?.fund?.botDailyCap;
+  const model = host?.fund?.lines?.find((one) => one.for === 'bots');
 
   const add = () =>
     run(async () => {
@@ -99,7 +101,7 @@ export function AddBotDialog({
               One fund keeps the community online and runs its bots. Add to it to start; anyone in the
               community can top it up.
             </p>
-            <KeepOnline spaceId={spaceId} writable={writable} onClose={look} hero={false} />
+            <KeepOnline spaceId={spaceId} writable={writable} onClose={look} hero={false} adding={called} />
           </>
         )}
 
@@ -144,7 +146,7 @@ export function AddBotDialog({
             <p style={{ display: 'flex', gap: 8, fontSize: 12, color: palette.ink.faint, lineHeight: 1.5 }}>
               <Glyph name="lock" size={12} style={{ marginTop: 2 }} />
               {host.fund
-                ? `Its AI use comes from the community fund, up to $${cap ?? '1'} a day and usually far less. `
+                ? `Its AI use comes from the community fund${model ? `: ${model.name}` : ''}${host.fund.botTypical ? `, ${perReply(host.fund.botTypical)}` : ''}, up to $${cap ?? '1'} a day. `
                 : ''}
               {host.name} runs the bot's account, so it can read what the bot can read
               {host.connectors.length
