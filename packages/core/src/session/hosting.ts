@@ -368,7 +368,7 @@ export interface FundLine {
 }
 
 /** Dollars as a fund's numbers give them: `"0.10"`, `"0.038"` */
-const DOLLARS = /^\d{1,5}(\.\d{1,4})?$/;
+const DOLLARS = /^[0-9]{1,5}(\.[0-9]{1,4})?$/;
 
 /** The lines a host's fund gives that are well formed, eight at most: a lowercase `for`, and a short name and price */
 export function fundLines(described: unknown): ReadonlyArray<FundLine> {

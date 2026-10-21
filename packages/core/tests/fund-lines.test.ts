@@ -53,7 +53,11 @@ test('a host whose fund words are badly formed still stands, without them', asyn
 
     // Its numbers must be dollars, or there is no fund to show: words never stand in for them.
     globalThis.fetch = answer({ ...fund, perGb: 'x'.repeat(10_000) });
-    assert.equal((await describeHost('https://host.example')).fund, undefined);
+    const dropped = await describeHost('https://host.example');
+    assert.equal(dropped.fund, undefined);
+    assert.equal(dropped.free, false, 'a host whose fund is dropped is still not free');
+    globalThis.fetch = answer({ ...fund, min: '٥' });
+    assert.equal((await describeHost('https://host.example')).fund, undefined, 'ASCII digits only');
     globalThis.fetch = answer({ ...fund, min: { dollars: 5 } });
     assert.equal((await describeHost('https://host.example')).fund, undefined);
     globalThis.fetch = answer({

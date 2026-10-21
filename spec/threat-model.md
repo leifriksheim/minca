@@ -959,8 +959,11 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
   - What it says it charges is its word. No peer can check the model its
     bots think with, what a reply cost, or the size it bills by, and its
     `botTypical` and fund `lines` are words for people (08 §2). A device
-    keeps a fund only when its numbers are dollars, and of its words at most
-    eight short lines with no control or format characters
+    keeps a fund only when its numbers are dollars (a host that is not free
+    and whose fund it drops shows as taking no payments, not as free), and
+    of its fund's lines at most eight short ones with no control or format
+    characters; the host's own `name`, `price` and `terms`, and bot names,
+    are not held to that
     (`fundShown` and `fundLines` in `packages/core/src/session/hosting.ts`;
     `packages/core/tests/fund-lines.test.ts`), and the reference app shows
     them as text beside the `perGb` rate it bills by, never in its place

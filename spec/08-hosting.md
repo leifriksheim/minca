@@ -515,10 +515,12 @@ accounts' balances and communities' funds alike:
 | `recurring`   | Whether a `checkout` payment may be every month.                                                                                                              |
 | `manage`      | Optional: the payment provider's page where someone stops paying every month.                                                                                 |
 | `botDailyCap` | Optional, when it runs bots: dollars a bot may take from the fund a day at most.                                                                              |
-| `botTypical`  | Optional, when it runs bots: dollars one usual bot reply takes from the fund, as the host reckons it, matching `^\d{1,5}(\.\d{1,4})?$`: `"0.038"`.            |
+| `botTypical`  | Optional, when it runs bots: dollars one usual bot reply takes from the fund, as the host reckons it, matching `^[0-9]{1,5}(\.[0-9]{1,4})?$`: `"0.038"`.      |
 | `lines`       | Optional: what it charges for, in words for people, each `{ for, name, price }`.                                                                              |
 
-Every field but `perGb`, `min`, `methods` and `recurring` is for people: a
+A host MUST give `perGb`, `min`, `botDailyCap` and `botTypical` as dollars
+matching `^[0-9]{1,5}(\.[0-9]{1,4})?$`. Every field but `perGb`, `min`,
+`methods` and `recurring` is for people: a
 device shows it and counts on none of it, and what the host takes is still
 only what this section says. `botTypical` and `lines` are how a host says what
 a person can't tell from the numbers, its model and its price per token, say,
@@ -526,11 +528,12 @@ without a new field for each. In a line, `for` says where it belongs:
 `hosting`, beside keeping the space online; `bots`, beside each bot; any other,
 on its own, and a `hosting` line goes beside the `perGb` rate, never in its
 place. A device MUST treat a `fund` whose `perGb` or `min` does not match
-`^\d{1,5}(\.\d{1,4})?$` as absent, MUST leave out a `botDailyCap` or
+`^[0-9]{1,5}(\.[0-9]{1,4})?$` as absent, MUST leave out a `botDailyCap` or
 `botTypical` that does not match it, a `manage` that is not an `https:` URL,
-and a method it does not know, MUST
+and a method it does not know, MUST show a host that is not `free` and has
+no `fund` it keeps as taking no payments there, never as free, MUST
 leave out a line whose `for` does not match `^[a-z0-9-]{1,40}$` or whose `name`
-or `price` is not a string of 1 to 60 characters with no control or format
+or `price` is not a string of 1 to 60 UTF-16 code units with no control or format
 characters (Unicode `Cc`, `Cf`), MUST show at most the first
 eight lines that remain, and MUST show them as text only.
 
@@ -672,7 +675,7 @@ at any host. No secret of a service enters the space.
 
 `id` is 1 to 40 lowercase letters, digits and dashes, and names the service
 in the addresses and records below; `name` is for people, 1 to 60
-characters with no control or format characters (Unicode `Cc`, `Cf`), as a
+UTF-16 code units with no control or format characters (Unicode `Cc`, `Cf`), as a
 fund's lines (§2). A device MUST ignore an entry that isn't both.
 
 **Who may.** Someone who holds `/std.automation/instruct` in the space and

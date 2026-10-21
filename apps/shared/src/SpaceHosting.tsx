@@ -110,7 +110,9 @@ export function standing(view: SpaceHostingView): { tone: Tone; pill: string; li
       pill: 'Waiting',
       line: `${view.name} takes it the next time a member's device is online`,
     };
-  if (!view.fund) return { tone: 'good', pill: 'Online', line: `Free at ${view.name}` };
+  // No fund is free only at a free host: a paid one whose fund this device can't read still bills.
+  if (!view.fund)
+    return { tone: 'good', pill: 'Online', line: view.free ? `Free at ${view.name}` : `At ${view.name}` };
   if (status.state === 'grace')
     return {
       tone: 'bad',
