@@ -724,6 +724,42 @@ describe('reaching a host at the address it names', () => {
     assert.deepEqual((await phone.records.list(notes.id))[0]?.body, { text: 'found through the host' });
   });
 
+  test('someone invited reaches the space through the inviter’s host, with nobody else online', async () => {
+    const served = await startHost({
+      key: await provider.generateKeyPair(),
+      stores: memoryStores(),
+      port: 0,
+      free: true,
+    });
+    open.push(served);
+    const url = `http://127.0.0.1:${served.port}`;
+    const laptop = await unconfigured(await account());
+    const { id } = await laptop.spaces.create({ name: 'Club', ...team, visibility: 'private' });
+    await laptop.records.put(id, 'note', { text: 'kept by the inviter’s host' });
+    await laptop.hosting.use(url);
+    await until(
+      async () => (await served.node.spaces()).some((space) => space.id === id && space.peers > 0),
+      15_000,
+      'the laptop to reach its host',
+    );
+    const invite = await laptop.spaces.invite(id, { role: 'editor' });
+    assert.deepEqual(parseSpaceInvite(invite).nodes, [
+      `ws://127.0.0.1:${served.port}/peer#${served.node.did}`,
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await laptop.close();
+
+    // A friend whose app knows no host at all: the invite names the inviter's.
+    const friend = await unconfigured(await account());
+    await friend.spaces.join(invite);
+    await until(
+      async () => (await friend.records.list(id).catch(() => [])).length === 1,
+      15_000,
+      'the note to reach the friend',
+    );
+    assert.deepEqual((await friend.records.list(id))[0]?.body, { text: 'kept by the inviter’s host' });
+  });
+
   test('a space that pays a host: its members’ devices reach it with nothing configured', async () => {
     const served = await startHost({
       key: await provider.generateKeyPair(),

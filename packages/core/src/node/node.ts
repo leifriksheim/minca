@@ -47,6 +47,7 @@ import {
 import { createServerAuth } from '../network/peer-auth.js';
 import { DEFAULT_ICE_SERVERS } from '../network/rtc-transport.js';
 import { deriveInviteKey } from '../space/space-access.js';
+import { MAX_INVITE_NODES } from '../space/invite-link.js';
 import { foundersOf, soleFounder } from '../space/constitution.js';
 import { base64UrlDecode, base64UrlEncode } from '../utils/encoding.js';
 import { isRecord, unref } from '../utils/guards.js';
@@ -338,10 +339,34 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   async function inviteTo(spaceId: string, options: InviteLinkOptions = {}): Promise<string> {
     const named = (await findRecord(spaceId))?.relays ?? [];
     const own = usableRelays(config.network).slice(0, MAX_RELAYS);
+    const nodes = await nodesOf(spaceId);
     return registry.createInvite(spaceId, config.signer.did, {
       ...options,
       ...(named.length ? {} : own.length ? { relays: own } : {}),
+      ...(nodes.length ? { nodes } : {}),
     });
+  }
+
+  /**
+   * The always-on nodes an invite names, so a joiner reaches one with nobody
+   * else online: the account's hosts, the space's own, and those the invite
+   * that brought this node here named. A host that can't be described in a
+   * few seconds is left out rather than holding the invite up.
+   */
+  async function nodesOf(spaceId: string): Promise<ReadonlyArray<string>> {
+    if (!config.network) return [];
+    const hosts = [
+      ...(await hostingRecords()),
+      ...((await kindOf(spaceId)) ? [] : await namedHosts(spaceId).catch(() => [])),
+    ];
+    const inTime = (peer: Promise<string | null>) =>
+      Promise.race([peer, new Promise<null>((resolve) => unref(setTimeout(() => resolve(null), 3000)))]);
+    const peers = await Promise.all(hosts.map((host) => inTime(peerOf(host).catch(() => null))));
+    const found = [...peers, ...((await findRecord(spaceId))?.nodes ?? [])];
+    const pinned = [
+      ...new Set(found.filter((peer): peer is string => peer !== null && peer.includes('#did:key:'))),
+    ];
+    return pinned.slice(0, MAX_INVITE_NODES);
   }
 
   async function findRecord(spaceId: string): Promise<SpaceRecord | null> {
@@ -1558,8 +1583,14 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     // Asked only while it is still open: asking would open it again.
     if (!(await kindOf(spaceId)) && runtimes.get(spaceId) === open)
       hosts.push(...(spaceHosts ?? (await namedHosts(spaceId))));
+    // The nodes the invite that brought it here named: the inviter's hosts, reached before the space's own records are.
+    const invited = (await registry.get(spaceId))?.nodes ?? [];
     const peers = [
-      ...new Set((await Promise.all(hosts.map(peerOf))).filter((peer): peer is string => peer !== null)),
+      ...new Set(
+        [...(await Promise.all(hosts.map(peerOf))), ...invited].filter(
+          (peer): peer is string => peer !== null,
+        ),
+      ),
     ].sort();
     const said = peers.join(' ');
     if (reaching.get(spaceId) === said || runtimes.get(spaceId) !== open) return;
