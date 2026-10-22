@@ -23,13 +23,14 @@ import {
   encodeInviteLink,
   inviteLinkKeys,
   isShortInvite,
+  linkInviteSecret,
   linkTopic,
   openInvite,
   parseInviteLink,
   pinOf,
   sealInvite,
 } from '../src/space/invite-link.js';
-import { expandSecret } from '../src/space/space-access.js';
+import { deriveInviteKey, expandSecret } from '../src/space/space-access.js';
 import { base64UrlEncode } from '../src/utils/encoding.js';
 import { bufferSource } from '../src/utils/guards.js';
 
@@ -264,6 +265,41 @@ describe('short links between nodes', () => {
     assert.equal(parseSpaceInvite(invite).space.id, space.id);
   });
 
+  test('past its until, the account closes its invite', async () => {
+    const { alice, space } = await club();
+    const link = await alice.spaces.invite(space.id, {
+      role: 'editor',
+      short: true,
+      until: Date.now() - 1000,
+    });
+    assert.equal(isShortInvite(link), true);
+    const key = (await deriveInviteKey(await linkInviteSecret(parseInviteLink(link).secret), provider)).did;
+    await until(
+      async () =>
+        (await alice.spaces.access(space.id)).invites.some((invite) => invite.key === key && !invite.open),
+      5000,
+      'the invite to close',
+    );
+  });
+
+  test('a key change ends a role link: nobody holding the new key joins with it', async () => {
+    const { alice, space, link } = await club();
+    const key = (
+      await deriveInviteKey(await linkInviteSecret(parseInviteLink(bareInvite(link)).secret), provider)
+    ).did;
+    assert.equal(
+      (await alice.spaces.access(space.id)).invites.find((invite) => invite.key === key)?.open,
+      true,
+    );
+    await alice.spaces.changeKey(space.id);
+    await until(
+      async () =>
+        (await alice.spaces.access(space.id)).invites.find((invite) => invite.key === key)?.open === false,
+      5000,
+      "the old link's invite to close",
+    );
+  });
+
   test('a link whose invite is nowhere says so', async () => {
     const bob = (await person(createFakeHub(), { accountKey: true })).node;
     await assert.rejects(
@@ -275,9 +311,53 @@ describe('short links between nodes', () => {
 
 const provider = createP256Provider();
 
+describe('a mailbox that keeps blobs for others', () => {
+  test('answers a topic with what it keeps there, first, and with what was dropped', async () => {
+    const kept = await sealInvite(secret, { invite: { space: { id: 'abc', name: 'Kept' } } });
+    const topic = await linkTopic(kept.pin);
+    const relay = await startRelay({}, (asked) => (asked === topic ? [kept.blob] : []));
+    try {
+      const mailbox = createMailboxClient();
+      assert.deepEqual(
+        (await mailbox.fetch(relay.url, topic)).map((item) => item.blob),
+        [kept.blob],
+      );
+      await mailbox.drop(relay.url, topic, 'ZHJvcHBlZA');
+      assert.deepEqual(
+        (await mailbox.fetch(relay.url, topic)).map((item) => item.blob),
+        [kept.blob, 'ZHJvcHBlZA'],
+      );
+      // Nothing under another topic.
+      assert.deepEqual(await mailbox.fetch(relay.url, await linkTopic(new Uint8Array(16))), []);
+    } finally {
+      relay.close();
+    }
+  });
+
+  test('a blob dropped again once its copy expired is kept again, not answered for', async () => {
+    const relay = await startRelay({ ttlSeconds: 1 });
+    try {
+      const mailbox = createMailboxClient();
+      const topic = await linkTopic(pin);
+      await mailbox.drop(relay.url, topic, 'YWdhaW4');
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+      await mailbox.drop(relay.url, topic, 'YWdhaW4');
+      assert.deepEqual(
+        (await mailbox.fetch(relay.url, topic)).map((item) => item.blob),
+        ['YWdhaW4'],
+      );
+    } finally {
+      relay.close();
+    }
+  });
+});
+
 /** A relay on a free port, for its mailbox */
-async function startRelay(mailbox: Partial<MailboxLimits> = {}) {
-  const relay = createRelay({ mailbox });
+async function startRelay(
+  mailbox: Partial<MailboxLimits> = {},
+  mailboxFrom?: (topic: string) => ReadonlyArray<string>,
+) {
+  const relay = createRelay({ mailbox, ...(mailboxFrom ? { mailboxFrom } : {}) });
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_MESSAGE_BYTES });
   const server = createServer();
   server.on('upgrade', (req, socket, head) => relay.upgrade(wss, req, socket, head));

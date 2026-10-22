@@ -1149,6 +1149,8 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     },
     inbound,
     routes,
+    // Its mailbox serves the links its accounts keep, while every device of theirs is away.
+    mailboxFrom: (topic) => node.linksAt(topic),
     port: options.port,
     ...(options.host ? { host: options.host } : {}),
   }).catch(async (error: unknown) => {

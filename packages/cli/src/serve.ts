@@ -132,6 +132,8 @@ export interface ServeOptions {
   /** More HTTP routes, tried before the default answer: true when it answered */
   readonly routes?: (req: IncomingMessage, res: ServerResponse) => Promise<boolean>;
   readonly inbound: InboundPeers;
+  /** Blobs its relay's mailbox answers under a topic besides what was dropped there */
+  readonly mailboxFrom?: (topic: string) => ReadonlyArray<string>;
   readonly port: number;
   readonly host?: string;
   /** Close a peer that has not said hello within this many ms. Default 10 000. */
@@ -176,7 +178,10 @@ export function parseHello(
 export async function serve(options: ServeOptions): Promise<Served> {
   const { node, inbound } = options;
   // The same relay as the public one, so the app can meet peers through this node too.
-  const relay = createRelay({ turn: turnFromEnv(process.env) });
+  const relay = createRelay({
+    turn: turnFromEnv(process.env),
+    ...(options.mailboxFrom ? { mailboxFrom: options.mailboxFrom } : {}),
+  });
   const sockets = new WebSocketServer({ noServer: true, maxPayload: 16 * 1024 * 1024 });
   const relaySockets = new WebSocketServer({
     noServer: true,

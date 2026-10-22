@@ -53,6 +53,7 @@ import { until } from '../../core/tests/helpers/until.js';
 import { host as hostSchema } from '../../core/src/schemas/library/community.js';
 import { team } from '../../core/src/space/presets.js';
 import { parseSpaceInvite } from '../../core/src/space/space-manager.js';
+import { linkTopic, parseInviteLink } from '../../core/src/space/invite-link.js';
 import { hold } from '../../core/tests/helpers/hold.js';
 import { joined } from '../../core/tests/helpers/joined.js';
 
@@ -758,6 +759,42 @@ describe('reaching a host at the address it names', () => {
       'the note to reach the friend',
     );
     assert.deepEqual((await friend.records.list(id))[0]?.body, { text: 'kept by the inviter’s host' });
+  });
+
+  test('a short link: the host keeps it and serves the space, with every device of the inviter away', async () => {
+    const served = await startHost({
+      key: await provider.generateKeyPair(),
+      stores: memoryStores(),
+      port: 0,
+      free: true,
+    });
+    open.push(served);
+    const url = `http://127.0.0.1:${served.port}`;
+    const laptop = await unconfigured(await account());
+    const { id } = await laptop.spaces.create({ name: 'Club', ...team, visibility: 'private' });
+    await laptop.records.put(id, 'note', { text: 'found through a short link' });
+    await laptop.hosting.use(url);
+    await until(
+      async () => (await served.node.spaces()).some((space) => space.id === id && space.peers > 0),
+      15_000,
+      'the laptop to reach its host',
+    );
+    const link = await laptop.spaces.invite(id, { role: 'editor', short: true });
+    // The host's relay is the place it names: the laptop's app knows no relay at all.
+    assert.equal(link.split('@')[1], `127.0.0.1:${served.port}`);
+    const topic = await linkTopic(parseInviteLink(link).pin);
+    await until(async () => served.node.linksAt(topic).length === 1, 15_000, 'the host to keep the link');
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await laptop.close();
+
+    const friend = await unconfigured(await account());
+    assert.equal((await friend.spaces.preview(link)).space.name, 'Club');
+    await friend.spaces.join(link);
+    await until(
+      async () => (await friend.records.list(id).catch(() => [])).length === 1,
+      15_000,
+      'the note to reach the friend',
+    );
   });
 
   test('a space that pays a host: its members’ devices reach it with nothing configured', async () => {

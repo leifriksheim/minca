@@ -35,6 +35,8 @@ import {
   type OpenedPass,
 } from '../space/pass.js';
 import { readWake, wakes, WAKE_COLLECTION, type Wake } from '../space/own-automations.js';
+import { isKeptLink, LINK_COLLECTION } from '../space/account-registry.js';
+import { linkTopic, pinOf } from '../space/invite-link.js';
 import type { Version } from '../types.js';
 import { createLocalHub, type LocalHub } from '../network/local-transport.js';
 import { meshFor, openSpaceRuntime, type SpaceRuntime } from './space-runtime.js';
@@ -131,7 +133,12 @@ interface Carry {
   named: ReadonlySet<string>;
   /** Its wakes, by key, as last read */
   wakes: ReadonlyMap<string, Wake>;
+  /** The short links it keeps, by the topic each blob's own hash gives: served from a host's mailbox */
+  links: ReadonlyMap<string, { readonly blob: string; readonly until?: number }>;
 }
+
+/** At most this many links an account, the most recently written */
+const MAX_LINKS_PER_ACCOUNT = 64;
 
 export interface CarryCoreConfig {
   readonly key: CryptoKeyPair;
@@ -171,6 +178,24 @@ export interface CarryCoreConfig {
  * for — and every space their passes name, each held once however many
  * accounts ask for it.
  */
+/** The short links an account keeps in its carry space, by topic: at most 64, the newest */
+async function linksIn(
+  carryRuntime: SpaceRuntime,
+  account: string,
+): Promise<ReadonlyMap<string, { readonly blob: string; readonly until?: number }>> {
+  const records = (await carryRuntime.list<unknown>({ collection: LINK_COLLECTION }))
+    .filter((record) => record.verified && record.root === account && isKeptLink(record.body))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, MAX_LINKS_PER_ACCOUNT);
+  const links = new Map<string, { readonly blob: string; readonly until?: number }>();
+  for (const record of records) {
+    if (!isKeptLink(record.body)) continue;
+    const { blob, until } = record.body;
+    links.set(await linkTopic(await pinOf(blob)), { blob, ...(until !== undefined ? { until } : {}) });
+  }
+  return links;
+}
+
 export async function createCarryCore(config: CarryCoreConfig) {
   const provider = config.provider ?? createP256Provider();
   const signer = createSigner(provider);
@@ -340,6 +365,7 @@ export async function createCarryCore(config: CarryCoreConfig) {
         if (wake) found.set(record.key, wake);
       }
       entry.wakes = found;
+      entry.links = await linksIn(carryRuntime, entry.account);
       const wants = new Set<string>();
       const named = new Set<string>();
       const passes: OpenedPass[] = [];
@@ -418,7 +444,13 @@ export async function createCarryCore(config: CarryCoreConfig) {
         throw new Error('That is not an invite to a carry space.');
       }
       if (!carries.has(carrySpace))
-        carries.set(carrySpace, { account, wants: new Set(), named: new Set(), wakes: new Map() });
+        carries.set(carrySpace, {
+          account,
+          wants: new Set(),
+          named: new Set(),
+          wakes: new Map(),
+          links: new Map(),
+        });
       await carry(record);
       await refresh();
       return carrySpace;
@@ -471,6 +503,21 @@ export async function createCarryCore(config: CarryCoreConfig) {
         if (stores) entry.pod = openPod(entry.record, entry.hub, stores);
       }
       emit({ type: 'spaces' });
+    },
+
+    /**
+     * The sealed invites kept under a mailbox topic, from every account's
+     * carry space: what a host's mailbox answers besides what was dropped.
+     * The topic comes from each blob, so an account can name no other.
+     */
+    linksAt: (topic: string): ReadonlyArray<string> => {
+      const now = Date.now();
+      const found: string[] = [];
+      for (const entry of carries.values()) {
+        const link = entry.links.get(topic);
+        if (link && (link.until === undefined || link.until > now)) found.push(link.blob);
+      }
+      return found;
     },
 
     /** The account's wakes, as this carrier holds them */
