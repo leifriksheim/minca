@@ -3,6 +3,7 @@ import { useNode } from '@minca/core/react';
 import type { FileRef, NodeRecord, SpaceSummary } from '@minca/core';
 import { attachment } from '@minca/core/schemas';
 import { bodyOf } from '../../derive/schema-ui';
+import { fitImage } from '@minca/ui/image';
 import { sizeOf } from '@minca/ui/size';
 import { saveFile, useFileUrl } from '../../files';
 import { palette, styles } from '../../styles';
@@ -21,14 +22,14 @@ function fileOf(record: NodeRecord): FileRef | null {
     : null;
 }
 
-/** Adds files to a record as `std.attachment`s about it */
+/** Adds files to a record as `std.attachment`s about it; large pictures made smaller */
 async function attachFiles(
   node: ReturnType<typeof useNode>,
   spaceId: string,
   target: string,
   files: Iterable<File>,
 ): Promise<void> {
-  for (const file of files) {
+  for (const file of await Promise.all([...files].map(fitImage))) {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const mime = file.type || 'application/octet-stream';
     const blob = await node.records.addFile(spaceId, bytes, { mime, name: file.name });

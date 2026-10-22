@@ -60,10 +60,15 @@ export function useFile(key: string, ref: { readonly hash: string } | null | und
     let live = true;
     let known = files.get(hash);
     if (!known) {
-      known = minca.file(key, hash).catch(() => null);
+      known = minca.file(key, hash);
+      // A file that couldn't be had now, like one still syncing, may be had later: not remembered.
+      known.catch(() => files.delete(hash));
       files.set(hash, known);
     }
-    void known.then((found) => live && setUrl(found));
+    known.then(
+      (found) => live && setUrl(found),
+      () => live && setUrl(null),
+    );
     return () => {
       live = false;
     };
