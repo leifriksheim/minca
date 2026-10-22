@@ -76,6 +76,35 @@ export function useFile(key: string, ref: { readonly hash: string } | null | und
   return url;
 }
 
+/**
+ * The whole file a record refers to, as a URL for `<img>`, `<video>` or
+ * `<audio>`; null until it is here, or if it can't be had. Let go of when
+ * the screen stops showing it, since whole files can be large.
+ */
+export function useBlob(key: string, ref: { readonly hash: string } | null | undefined): string | null {
+  const [url, setUrl] = useState<string | null>(null);
+  const hash = ref?.hash ?? null;
+  useEffect(() => {
+    setUrl(null);
+    if (!hash) return;
+    let live = true;
+    let made: string | null = null;
+    minca.blob(key, hash).then(
+      (blob) => {
+        if (!live) return;
+        made = URL.createObjectURL(blob);
+        setUrl(made);
+      },
+      () => {},
+    );
+    return () => {
+      live = false;
+      if (made) URL.revokeObjectURL(made);
+    };
+  }, [key, hash]);
+  return url;
+}
+
 /** Whether the person looking may `create`, `edit` or `delete` in a collection; false until known */
 export const useCan = (action: 'create' | 'edit' | 'delete', collection: string) =>
   useLoaded(() => minca.can(action, collection), [action, collection]) ?? false;

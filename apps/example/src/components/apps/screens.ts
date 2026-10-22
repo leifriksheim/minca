@@ -127,6 +127,8 @@ Inside it, window.minca is:
   await minca.open({ record: key }) or minca.open({ person: did })   shows it in the app around the screen
   await minca.file(key, ref)        a picture one of these records refers to ({ hash, mime, … } in its body), as a data: URL,
                                     made smaller when it is large; null if it isn't a picture or can't be shown
+  await minca.blob(key, ref)        the whole file one of these records refers to, as a Blob of its type: for video, audio,
+                                    full-size pictures, or reading and changing the bytes (URL.createObjectURL shows it)
   await minca.addFile(bytes, { name?, mime? })   keeps a file (a Uint8Array, at most 25 MB) in the space: → { hash, size, mime, … },
                                     to put in a record's body, like std.attachment's "blob"
   await minca.download(key, ref)    saves a file one of these records refers to on the person's device
@@ -221,6 +223,7 @@ export const SCREEN_CLIENT = `(() => {
     picture: (did) => call('picture', did),
     open: (target) => call('open', target),
     file: (key, ref) => call('file', key, ref),
+    blob: (key, ref) => call('blob', key, ref),
     addFile: (bytes, about) => call('addFile', bytes, about || {}),
     download: (key, ref) => call('download', key, ref),
     places: Object.freeze({
@@ -559,6 +562,16 @@ export function createScreenBridge(params: {
       if (!file.mime.startsWith('image/')) return null;
       return picture(await node.records.readFile(spaceId, file), file.mime);
     },
+    // The whole file, from the record rather than on the screen's word; a Blob crosses the port without JSON.
+    blob: async (...args) => {
+      const { key, ref } = spread(args, ['key', 'ref']);
+      const hash = typeof ref === 'string' ? ref : fieldOf(ref, 'hash');
+      if (typeof hash !== 'string')
+        throw new Error('minca.blob takes a record key and the file it refers to');
+      const file = fileIn((await ownRecord(key)).body, hash);
+      if (!file) throw new Error(`Record ${String(key)} refers to no such file`);
+      return new Blob([(await node.records.readFile(spaceId, file)).slice()], { type: file.mime });
+    },
     // A file's bytes, kept in the space as the person looking; a record of the app's then refers to it.
     addFile: async (...args) => {
       const [bytes, about] = args;
@@ -637,7 +650,9 @@ export function createScreenBridge(params: {
     const { id } = message;
     const args: unknown[] = Array.isArray(message.args) ? message.args : [];
     methods[message.method]!(...args).then(
-      (value) => !closed && port.postMessage({ id, ok: true, value: plain(value, 'The answer') }),
+      (value) =>
+        !closed &&
+        port.postMessage({ id, ok: true, value: value instanceof Blob ? value : plain(value, 'The answer') }),
       (error: unknown) =>
         !closed &&
         port.postMessage({
