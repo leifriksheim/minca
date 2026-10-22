@@ -47,9 +47,22 @@ import {
 import { createServerAuth } from '../network/peer-auth.js';
 import { DEFAULT_ICE_SERVERS } from '../network/rtc-transport.js';
 import { deriveInviteKey } from '../space/space-access.js';
-import { MAX_INVITE_NODES } from '../space/invite-link.js';
+import {
+  encodeInviteLink,
+  generateLinkSecret,
+  inviteLinkKeys,
+  isShortInvite,
+  linkInviteSecret,
+  linkTopic,
+  MAX_INVITE_NODES,
+  MAX_LINK_PLACES,
+  openInvite,
+  parseInviteLink,
+  relayOfNode,
+  sealInvite,
+} from '../space/invite-link.js';
 import { foundersOf, soleFounder } from '../space/constitution.js';
-import { base64UrlDecode, base64UrlEncode } from '../utils/encoding.js';
+import { base64UrlDecode, base64UrlEncode, utf8Encode } from '../utils/encoding.js';
 import { isRecord, unref } from '../utils/guards.js';
 import { createListeners } from '../utils/events.js';
 import { serial } from '../utils/serial.js';
@@ -975,7 +988,11 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     },
 
     async invite(spaceId, options = {}) {
-      if (options.write === false) return inviteTo(spaceId);
+      // A short link's secret comes first: a role invite's own secret is derived from it.
+      const link = options.short ? generateLinkSecret() : null;
+      const share = (opened: InviteLinkOptions = {}) =>
+        link ? shortInvite(spaceId, link, opened, options.until) : inviteTo(spaceId, opened);
+      if (options.write === false) return share();
       const open = await runtime(spaceId);
       const { roles, founder, mine } = await open.access();
       const member = founder || mine.length > 0;
@@ -991,16 +1008,19 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
               ? `There is no role "${options.role}"`
               : 'You hold no role here, so you can only share it to view',
           );
-        return inviteTo(spaceId);
+        return share();
       }
-      const { secret } = await open.openInvite(role);
-      return inviteTo(spaceId, { secret, role });
+      const { secret } = await open.openInvite(role, link ? await linkInviteSecret(link) : undefined);
+      return share({ secret, role });
     },
 
-    preview: previewInvite,
+    async preview(invite) {
+      const { long, until } = await resolveInvite(invite);
+      return { ...previewInvite(long), ...(until !== undefined ? { until } : {}) };
+    },
 
     async join(invite, options = {}) {
-      const record = await joinRegistry(bareInvite(invite));
+      const record = await joinRegistry((await resolveInvite(invite)).long);
       if (options.memberKey) await registry.setMemberKey(record.space.id, options.memberKey);
       // A runtime opened before the key arrived would still be unable to read.
       await closeRuntime(record.space.id);
@@ -1082,7 +1102,11 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     async closeInvite(spaceId, keyOrLink) {
       let key = keyOrLink;
       // The link itself will do: its secret names the invite.
-      if (!keyOrLink.startsWith('did:key:')) {
+      if (!keyOrLink.startsWith('did:key:') && isShortInvite(bareInvite(keyOrLink))) {
+        // A short link's invite secret is derived from its own; a view-only one has no record to close.
+        const secret = await linkInviteSecret(parseInviteLink(bareInvite(keyOrLink)).secret);
+        key = (await deriveInviteKey(secret, provider)).did;
+      } else if (!keyOrLink.startsWith('did:key:')) {
         const secret = parseSpaceInvite(bareInvite(keyOrLink)).invite;
         if (!secret)
           throw new Error(
@@ -2011,6 +2035,120 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   // See `packages/core/src/doors/doors.ts`.
 
   const mailbox = config.mailbox ?? createMailboxClient();
+
+  // ── Short invite links (spec 03 §7.7) ──
+  //
+  // The link holds a secret and the hash of one sealed invite; the invite
+  // sits in mailboxes: the account's host's first, which keeps it while every
+  // device is away, then the relays where the space's members meet.
+
+  /** Where a link's sealed invite is left: its nodes' relays, then the space's or this node's */
+  async function linkPlaces(spaceId: string, nodes: ReadonlyArray<string>): Promise<ReadonlyArray<string>> {
+    const named = (await findRecord(spaceId))?.relays ?? [];
+    const relays = named.length ? named : usableRelays(config.network).slice(0, MAX_RELAYS);
+    return [...new Set([...nodes.map(relayOfNode), ...relays])];
+  }
+
+  /**
+   * A short link to a space: the invite `inviteTo` would give, sealed under a
+   * fresh secret and left in mailboxes. Where none takes it, or it is too large
+   * for one, the long invite is given instead: it works the same.
+   */
+  async function shortInvite(
+    spaceId: string,
+    secret: Uint8Array,
+    options: InviteLinkOptions,
+    until: number | undefined,
+  ): Promise<string> {
+    const long = await inviteTo(spaceId, options);
+    const { invite: _secret, ...invite } = parseSpaceInvite(long);
+    let sealed: { readonly blob: string; readonly pin: Uint8Array };
+    try {
+      sealed = await sealInvite(secret, { invite, ...(until !== undefined ? { until } : {}) });
+    } catch {
+      return long;
+    }
+    const topic = await linkTopic(sealed.pin);
+    const ttl = until !== undefined ? Math.max(60, Math.ceil((until - Date.now()) / 1000)) : undefined;
+    const hosts = new Set((invite.nodes ?? []).map(relayOfNode));
+    const places = await linkPlaces(spaceId, invite.nodes ?? []);
+    const kept = (
+      await Promise.all(
+        places.map((place) =>
+          mailbox.drop(place, topic, sealed.blob, ttl).then(
+            () => place,
+            () => null,
+          ),
+        ),
+      )
+    ).filter((place): place is string => place !== null);
+    if (kept.length === 0) return long;
+    // A host first, which keeps it; then a relay, so one going away leaves the other.
+    const host = kept.find((place) => hosts.has(place));
+    const relay = kept.find((place) => !hosts.has(place));
+    const named = [host, relay].filter((place): place is string => place !== undefined);
+    return encodeInviteLink({ secret, pin: sealed.pin, places: named.slice(0, MAX_LINK_PLACES) });
+  }
+
+  /** Pages of a topic read for a short link: a relay holds 64 blobs, at least four a page */
+  const INVITE_PAGES = 16;
+
+  /** A short link's invite, fetched once and kept: a preview and the join that follows ask once */
+  const resolved = new Map<string, Promise<{ readonly long: string; readonly until?: number }>>();
+
+  /** The long invite a text holds or a short link names, and when its inviter stops sharing it */
+  function resolveInvite(text: string): Promise<{ readonly long: string; readonly until?: number }> {
+    const bare = bareInvite(text);
+    if (!isShortInvite(bare)) return Promise.resolve({ long: bare });
+    let found = resolved.get(bare);
+    if (!found) {
+      found = fetchInvite(bare);
+      resolved.set(bare, found);
+      found.catch(() => resolved.delete(bare));
+    }
+    return found;
+  }
+
+  /**
+   * Asks every place the link names, and this node's relays, for its topic.
+   * Of what comes back, only the blob that hashes to the pin is taken — any
+   * other, whoever left it, is ignored unopened.
+   */
+  async function fetchInvite(bare: string): Promise<{ readonly long: string; readonly until?: number }> {
+    const link = parseInviteLink(bare);
+    const { topic, inviteSecret } = await inviteLinkKeys(link.secret, link.pin);
+    const places = [...new Set([...link.places, ...usableRelays(config.network)])];
+    if (places.length === 0)
+      throw new Error('That invite names no place to find it, and this app knows none');
+    const blobs = new Set<string>();
+    await Promise.all(
+      places.map((place) =>
+        mailbox.fetch(place, topic, 0, INVITE_PAGES).then(
+          (items) => items.forEach((item) => blobs.add(item.blob)),
+          () => {},
+        ),
+      ),
+    );
+    const opened = (await Promise.all([...blobs].map((blob) => openInvite(link, blob)))).filter(
+      (sealed) => sealed !== null,
+    );
+    if (opened.length === 0)
+      throw new Error('That invite was not found. It may have expired, or the places it names may be down.');
+    // Only the inviter could make two blobs share a pin, and then neither is trusted.
+    if (opened.length > 1) throw new Error('That invite link names more than one invite, so it is not used');
+    const { invite, until } = opened[0]!;
+    const { invite: _ignored, ...rest } = invite;
+    const long = base64UrlEncode(
+      utf8Encode(
+        JSON.stringify({
+          ...rest,
+          ...(typeof rest.role === 'string' ? { invite: base64UrlEncode(inviteSecret) } : {}),
+        }),
+      ),
+    );
+    parseSpaceInvite(long);
+    return { long, ...(until !== undefined ? { until } : {}) };
+  }
   /** Knocks seen at this node's doors, by id: opened (null when they didn't check out), and until when to keep them */
   const knockCache = new Map<
     string,

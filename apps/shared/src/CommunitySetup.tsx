@@ -249,7 +249,10 @@ function RunItYourself({
   const { run, error: problem } = useAction();
   // Single quotes around what the person typed: nothing in it is read by the shell.
   const quoted = (text: string) => `'${text.replace(/'/g, `'\\''`)}'`;
-  const make = () => run(async () => setInvite(await node.spaces.invite(spaceId, role ? { role } : {})));
+  const make = () =>
+    run(async () =>
+      setInvite(await node.spaces.invite(spaceId, role ? { role, short: true } : { short: true })),
+    );
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <p style={{ fontSize: 13, color: palette.ink.muted, lineHeight: 1.5 }}>

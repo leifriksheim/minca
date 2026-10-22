@@ -376,7 +376,7 @@ describe('space access: invites', () => {
     const note = await alice.node.records.put(space, 'app.note', { text: 'meet at 8' });
 
     const viewOnly = await alice.node.spaces.invite(space, { write: false });
-    const preview = bob.node.spaces.preview(viewOnly);
+    const preview = await bob.node.spaces.preview(viewOnly);
     assert.deepEqual(
       { carriesKey: preview.carriesKey, carriesWrite: preview.carriesWrite },
       { carriesKey: true, carriesWrite: false },

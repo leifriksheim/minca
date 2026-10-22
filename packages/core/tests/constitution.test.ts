@@ -752,7 +752,7 @@ describe('the constitution on nodes', () => {
     await assert.rejects(bob.node.spaces.succeed(old, next.id), /may not name a successor/);
     await alice.node.spaces.succeed(old, next.id);
     assert.equal(
-      alice.node.spaces.preview(await alice.node.spaces.invite(next.id)).space.succeeds,
+      (await alice.node.spaces.preview(await alice.node.spaces.invite(next.id))).space.succeeds,
       old,
       'an invite to it says what it succeeds',
     );

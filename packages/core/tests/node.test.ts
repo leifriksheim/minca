@@ -94,7 +94,7 @@ describe('spaces', () => {
     const space = await alice.spaces.create({ name: 'Trip', ...team, visibility: 'private' });
     const invite = await alice.spaces.invite(space.id);
 
-    const preview = bob.spaces.preview(invite);
+    const preview = await bob.spaces.preview(invite);
     assert.equal(preview.space.name, 'Trip');
     assert.equal(preview.carriesKey, true);
 

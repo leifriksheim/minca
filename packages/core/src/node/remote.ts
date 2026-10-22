@@ -20,7 +20,6 @@ import type { Query } from '../query/types.js';
 import { plainQuery, type CollectionRef, type IncludeMap, type ResultFor } from '../query/types.js';
 import { toJsonSchema } from '../schema/collection-def.js';
 import { storedComputed, storedContract } from '../records/contract-builder.js';
-import { previewInvite } from '../space/space-manager.js';
 import { isRecord } from '../utils/guards.js';
 import { SESSION_COMMAND } from './node.js';
 import type { MessagePortLike } from '../utils/port.js';
@@ -297,7 +296,6 @@ export async function remoteNode(port: MessagePortLike): Promise<P2PNode> {
   // Every method is asked of the other end, except these.
   const here: { readonly [N in Namespace]?: Partial<P2PNode[N]> } = {
     spaces: {
-      preview: previewInvite,
       async hold(spaceId: string) {
         const held = await ask<number>('hold', [spaceId]);
         return () => ask<void>('release', [held]);
