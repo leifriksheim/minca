@@ -612,8 +612,8 @@ export function createScreenBridge(params: {
           host.open({ record });
           return null;
         }
-        // What the app's own record points to, shown by the page. The screen learns nothing of it, not even
-        // whether it is here: the answer is the same either way. Never the space's own records.
+        // What the app's own record points to, shown by the page; never the space's own records. The answer is
+        // the same whether or not it is here, though the page visibly opens one that is.
         if (typeof link !== 'string') throw new Error('link names a link role, like "about"');
         const to = record.links.find((l) => l.rel === link)?.to;
         const target = to ? await node.records.get(spaceId, to) : null;

@@ -168,11 +168,7 @@ its app's collections and the people in its space: it lists and writes
 records as the person looking, asks what they may do (`can`), gets someone's
 picture (`picture`), and asks the page to show a record or a person
 (`open`), or the record one of its own links to (`open` with `link`: the
-message a file was shared on). Following a link is the one way past its
-collections, and it is blind: the page opens the record for the person, who
-can see it anyway, and the screen gets the same answer whether or not the
-record is there; the space's own records (`sys.*`, `launcher.app`) are never
-opened. What a sealed frame can't do, the page does for it when it asks,
+message a file was shared on). Following a link is the one way past its collections. The bridge answers the same whether or not the record is there, and never opens the space's own records (`sys.*`, `launcher.app`); but the page visibly opens a record that is there, for the person, who can see it anyway, so a screen that already knows a key could notice, from outside, that it exists. What a sealed frame can't do, the page does for it when it asks,
 after checking the request: it searches for places and asks where the person
 is (`places`), opens http and https pages (`link`), saves text files
 (`save`), keeps a few kilobytes per app on the device (`remember`, `recall`),
