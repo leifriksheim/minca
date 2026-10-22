@@ -22,6 +22,7 @@
  * unlocks with MINCA_RECOVERY_CODE or MINCA_PASSPHRASE, a file named by
  * --code-file / --passphrase-file, or a prompt.
  */
+import { version } from '../package.json';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { runCarrier } from './carry.js';
 import { runAppNode, stdinLines } from './app-node.js';
@@ -93,7 +94,8 @@ import * as ask from './ask.js';
 import { commaList, isRecord, messageOf } from './json.js';
 import { completeInput } from './complete.js';
 
-const VERSION = '0.1.0';
+// From the package itself, so a release's bump is the version it reports; every bundler inlines it.
+const VERSION = version;
 
 const USAGE = `minca ${VERSION} — your spaces, from a terminal
 
