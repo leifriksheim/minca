@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { useNode } from '@minca/core/react';
 import type { FileRef, NodeRecord, SpaceSummary } from '@minca/core';
-import { attachment } from '@minca/core/schemas';
+import { file as fileCollection } from '@minca/core/schemas';
 import { bodyOf } from '../../derive/schema-ui';
 import { fitImage } from '@minca/ui/image';
 import { sizeOf } from '@minca/ui/size';
@@ -22,7 +22,7 @@ function fileOf(record: NodeRecord): FileRef | null {
     : null;
 }
 
-/** Adds files to a record as `std.attachment`s about it; large pictures made smaller */
+/** Adds files to a record as `std.file`s about it; large pictures made smaller */
 async function attachFiles(
   node: ReturnType<typeof useNode>,
   spaceId: string,
@@ -35,7 +35,7 @@ async function attachFiles(
     const blob = await node.records.addFile(spaceId, bytes, { mime, name: file.name });
     await node.records.put(
       spaceId,
-      attachment.name,
+      fileCollection.name,
       { name: file.name, mime, size: file.size, blob },
       { links: [{ rel: 'about', to: target }] },
     );
@@ -43,7 +43,7 @@ async function attachFiles(
 }
 
 /**
- * `std.attachment` on a record: pictures shown, other files to save, and a
+ * `std.file`s on a record: pictures shown, other files to save, and a
  * button to attach more. Any mini app showing a record can use it: the files
  * belong to the record, not to the app.
  */

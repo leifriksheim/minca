@@ -105,6 +105,21 @@ export function useBlob(key: string, ref: { readonly hash: string } | null | und
   return url;
 }
 
+/**
+ * The key of the record this app was last asked to show, opened from
+ * elsewhere (a file's message, from the Files app, opens in the chat); null
+ * until one is. Each opening is a new value, even of the same record, so an
+ * effect on it runs every time.
+ */
+export function useShown(): { key: string } | null {
+  const [shown, setShown] = useState<{ key: string } | null>(() => {
+    const key = minca.shown();
+    return key ? { key } : null;
+  });
+  useEffect(() => minca.onShow((key) => setShown({ key })), []);
+  return shown;
+}
+
 /** Whether the person looking may `create`, `edit` or `delete` in a collection; false until known */
 export const useCan = (action: 'create' | 'edit' | 'delete', collection: string) =>
   useLoaded(() => minca.can(action, collection), [action, collection]) ?? false;

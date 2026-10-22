@@ -1,4 +1,4 @@
-<!-- Chat: std.message as one room, with "@" mentions and files (std.attachment) dropped anywhere on it, pasted or picked. -->
+<!-- Chat: std.message as one room, with "@" mentions and files (std.file) dropped anywhere on it, pasted or picked. -->
 <style>
   html,
   body {
@@ -30,6 +30,9 @@
   }
   .line.for-me {
     background: var(--minca-accent-soft);
+  }
+  .line.shown {
+    outline: 2px solid var(--minca-accent);
   }
   .line:hover {
     background: var(--minca-sunken);
@@ -105,7 +108,7 @@
   }
 </style>
 <script>
-  const { html, render, useState, useEffect, useRef, useRecords, useCan, usePeople } = ui;
+  const { html, render, useState, useEffect, useRef, useRecords, useCan, usePeople, useShown } = ui;
   const { Avatar, Person, MentionInput, MentionText, mentionsIn, Attachments, attach, ago } = ui;
   const MESSAGE = 'std.message';
   const me = minca.me.did;
@@ -117,10 +120,20 @@
     const maySend = useCan('create', MESSAGE);
     const list = useRef(null);
     const count = messages?.length ?? 0;
-    // New messages land at the bottom, so keep it in view as they arrive.
+    // A message opened from elsewhere, like the one a file was shared on: scrolled to and marked a moment.
+    const shown = useShown();
+    const [marked, setMarked] = useState(null);
+    // New messages land at the bottom, so keep it in view as they arrive, unless one was opened.
     useEffect(() => {
-      list.current?.scrollTo({ top: list.current.scrollHeight });
+      if (!marked) list.current?.scrollTo({ top: list.current.scrollHeight });
     }, [count]);
+    useEffect(() => {
+      if (!shown || !messages?.some((m) => m.key === shown.key)) return;
+      setMarked(shown.key);
+      document.getElementById(`m-${shown.key}`)?.scrollIntoView({ block: 'center' });
+      const done = setTimeout(() => setMarked(null), 2500);
+      return () => clearTimeout(done);
+    }, [shown, count > 0]);
     if (!messages) return null;
     return html`
       <div class="messages" ref=${list}>
@@ -131,7 +144,7 @@
             !before ||
             before.createdBy !== m.createdBy ||
             Date.parse(m.createdAt) - Date.parse(before.createdAt) > RUN_MS;
-          return html`<${Line} key=${m.key} message=${m} starts=${starts} />`;
+          return html`<${Line} key=${m.key} message=${m} starts=${starts} marked=${m.key === marked} />`;
         })}
       </div>
       ${
@@ -143,9 +156,12 @@
   }
 
   /** One message: its writer when it starts a run, what it says, what is attached, and Delete for your own */
-  function Line({ message, starts }) {
+  function Line({ message, starts, marked }) {
     const forMe = message.body.mentions?.includes(me);
-    return html`<div class=${`line${starts ? ' starts' : ''}${forMe ? ' for-me' : ''}`}>
+    return html`<div
+      id=${`m-${message.key}`}
+      class=${`line${starts ? ' starts' : ''}${forMe ? ' for-me' : ''}${marked ? ' shown' : ''}`}
+    >
       <div class="face">${starts && html`<${Avatar} did=${message.createdBy} size=${28} round />`}</div>
       <div class="stack" style="flex: 1; min-width: 0; gap: 4px">
         ${

@@ -400,11 +400,16 @@ export function MadeAppScreen({
   record,
   collections,
   onOpen,
+  shown,
+  onShown,
 }: {
   space: SpaceSummary;
   record: NodeRecord<LauncherApp>;
   collections: ReadonlyArray<NodeCollection>;
   onOpen: (record: NodeRecord) => void;
+  /** A record its screen was asked to show (`shows`), and what to do once it has been handed over */
+  shown?: string | undefined;
+  onShown?: () => void;
 }) {
   const body = record.body!;
   const names = body.collections ?? [];
@@ -449,6 +454,8 @@ export function MadeAppScreen({
           network={body.network ?? []}
           title={body.title ?? 'An app'}
           onOpen={onOpen}
+          shown={shown}
+          onShown={onShown}
         />
       ) : (
         // The app fills the window edge to edge, so the lists bring their own margin and scroll.

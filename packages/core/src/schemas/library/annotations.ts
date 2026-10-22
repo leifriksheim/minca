@@ -1,5 +1,5 @@
 /** Annotations: records that attach to any other record with an `about` link. */
-import { about, blob, choice, count, people, person, text, define, url, words } from '../fragments.js';
+import { about, choice, count, people, person, text, define, words } from '../fragments.js';
 import type { BodyOf } from '../../query/types.js';
 
 /** An emoji reaction to any record. Link it: `{ rel: 'about', to: <key> }`. */
@@ -32,7 +32,7 @@ export type Reaction = BodyOf<typeof reaction>;
 export const comment = define({
   name: 'std.comment',
   title: 'Comment',
-  description: 'A comment on any record, optionally replying to another comment.',
+  description: 'A comment on any record, optionally replying to another comment. To chat, use std.message.',
   schema: {
     type: 'object',
     properties: {
@@ -55,65 +55,17 @@ export type Comment = BodyOf<typeof comment>;
 export const tag = define({
   name: 'std.tag',
   title: 'Tag',
-  description: 'A label on one or more records.',
+  description:
+    'A loose label on one record, like #urgent: many per record, and anyone may add one. For a named group that exists while empty, use std.list; for a moderator’s label that apps act on, use std.label.',
   schema: {
     type: 'object',
     properties: { label: { type: 'string', minLength: 1, maxLength: 100 } },
     required: ['label'],
   },
-  links: { about: { to: '*', cardinality: 'many', description: 'The records tagged' } },
+  links: { about: about('The record tagged') },
+  rules: { onePer: ['@author', 'link:about', 'label'] },
 });
 export type Tag = BodyOf<typeof tag>;
-
-/**
- * A file attached to a record. `blob` names its bytes by hash; `url` is where
- * they are when they live outside the space.
- */
-export const attachment = define({
-  name: 'std.attachment',
-  title: 'Attachment',
-  description: 'A file attached to a record: its bytes by hash, or where they are.',
-  schema: {
-    type: 'object',
-    properties: {
-      name: { type: 'string', minLength: 1 },
-      mime: { type: 'string', minLength: 1 },
-      size: { type: 'integer', minimum: 0 },
-      url: { type: 'string' },
-      blob: blob('Its bytes'),
-    },
-    required: ['name', 'mime'],
-  },
-  links: { about: about('The record the file is attached to') },
-});
-export type Attachment = BodyOf<typeof attachment>;
-
-/** A note that one record refers to another. */
-export const reference = define({
-  name: 'std.reference',
-  title: 'Reference',
-  description: 'A note that one record refers to another.',
-  schema: { type: 'object', properties: { note: { type: 'string' } } },
-  links: { about: about('The record doing the referring'), to: about('The record referred to') },
-});
-export type Reference = BodyOf<typeof reference>;
-
-/**
- * Something saved to come back to: a record (`about`) or a web page (`url`).
- * Not one per record, since a web page has no record to key it by; an app
- * looks for an existing bookmark before adding another.
- */
-export const bookmark = define({
-  name: 'std.bookmark',
-  title: 'Bookmark',
-  description: 'A record or a web page saved to come back to.',
-  schema: {
-    type: 'object',
-    properties: { title: text(500), url: url('The page saved, when it is not a record'), note: text(2000) },
-  },
-  links: { about: about('The record saved') },
-});
-export type Bookmark = BodyOf<typeof bookmark>;
 
 /** One person's score for something, from 1 to 5, and what they thought. */
 export const rating = define({
@@ -156,7 +108,8 @@ export type Highlight = BodyOf<typeof highlight>;
 export const pin = define({
   name: 'std.pin',
   title: 'Pin',
-  description: 'A record pinned for everyone, by a moderator.',
+  description:
+    'A record pinned for everyone by a moderator. To keep something for yourself, put it on a std.list.',
   schema: { type: 'object', properties: { note: text(500) } },
   links: { about: about('The record pinned') },
   rules: { onePer: ['link:about'] },
@@ -188,7 +141,8 @@ export type Report = BodyOf<typeof report>;
 export const label = define({
   name: 'std.label',
   title: 'Label',
-  description: 'A moderator’s label on a record, like nsfw or spoiler.',
+  description:
+    'A moderator’s label that apps act on, like nsfw (blurred) or spoiler (hidden). Members label things with std.tag.',
   schema: {
     type: 'object',
     properties: { value: words(64, 'Like "nsfw", "spoiler", "outdated"') },
@@ -206,7 +160,8 @@ export type Label = BodyOf<typeof label>;
 export const claim = define({
   name: 'std.claim',
   title: 'Claim',
-  description: 'Someone taking something on: one claimer per thing, first come.',
+  description:
+    'Someone taking something on, one per thing, first come: a task, an item to bring, a std.slot to book.',
   schema: {
     type: 'object',
     properties: { respondingTo: person('Whose record it responds to, so they can be told'), note: text(500) },
@@ -219,18 +174,5 @@ export type Claim = BodyOf<typeof claim>;
 
 /** This file's part of `standardGroups` */
 export const annotationGroups = {
-  Annotations: [
-    reaction,
-    comment,
-    tag,
-    attachment,
-    reference,
-    bookmark,
-    rating,
-    highlight,
-    pin,
-    report,
-    label,
-    claim,
-  ],
+  Annotations: [reaction, comment, tag, rating, highlight, pin, report, label, claim],
 };

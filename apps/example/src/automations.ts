@@ -104,7 +104,7 @@ export function compile(picked: Picked): AutomationWhen {
   const count = picked.count;
   if (count) parts.push({ [`include:${COUNTED}`]: { [COUNT_OPERATOR[count.op]]: count.value } });
   const only = count ? whereOf(count.clauses ?? [], ME) : undefined;
-  // Where a record is, as the query's filter: `link:channel` is also a topic a carrier can match.
+  // Where a record is, as the query's filter: `link:in` on a message is also a topic a carrier can match.
   const inside = (picked.within ?? []).map((w) => ({ [`link:${w.rel}`]: w.to }));
   return {
     query: {

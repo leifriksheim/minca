@@ -6,7 +6,7 @@ import type { DefineCollection } from '../node/types.js';
 import { annotationGroups } from './library/annotations.js';
 import { socialGroups } from './library/social.js';
 import { publishingGroups } from './library/publishing.js';
-import { mediaGroups } from './library/media.js';
+import { file, mediaGroups } from './library/media.js';
 import { planningGroups } from './library/planning.js';
 import { lifeGroups } from './library/life.js';
 import { moneyGroups } from './library/money.js';
@@ -17,8 +17,8 @@ import { botSettings, connect, connector } from './connectors.js';
 
 type Definitions = ReadonlyArray<DefineCollection>;
 
-/** Shapes that attach to anything */
-export const standardAnnotations: Definitions = annotationGroups.Annotations;
+/** Shapes that attach to anything: the annotations, and files, which may be about a record */
+export const standardAnnotations: Definitions = [...annotationGroups.Annotations, file];
 
 /**
  * The library by area, in the order it is listed: what `collections_standard`

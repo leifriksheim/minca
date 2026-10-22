@@ -120,7 +120,7 @@ export function WatchBuilder({
   const submit = () => {
     if (!chosen) return;
     // Whoever runs it is `$me`. A carrier wakes the app for what a topic in this narrows to,
-    // like a channel (`link:channel`) or a person; the app judges the rest.
+    // like a channel (`link:in` on a message) or a person; the app judges the rest.
     const condition = allOf([whereOf(clauses, ME), ...within.map(linkedTo)].filter((c) => c !== undefined));
     void ask([
       {

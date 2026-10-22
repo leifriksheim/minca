@@ -1,4 +1,4 @@
-<!-- Files: every std.attachment in the space, by kind, size and name, in categories that are std.tag labels on them. -->
+<!-- Files: every std.file in the space, by kind, size and name, in categories that are std.lists with an item about each file. -->
 <style>
   html,
   body {
@@ -286,10 +286,25 @@
   }
 </style>
 <script>
-  const { html, render, useState, useEffect, useMemo, useRef, useRecords, useCan, useFile, useBlob } = ui;
+  const {
+    html,
+    render,
+    useState,
+    useEffect,
+    useMemo,
+    useRef,
+    useRecords,
+    useCan,
+    useFile,
+    useBlob,
+    useShown,
+  } = ui;
   const { useSeen, Avatar, Person, attach, sizeOf, ago } = ui;
-  const FILE = 'std.attachment';
-  const TAG = 'std.tag';
+  const FILE = 'std.file';
+  const LIST = 'std.list';
+  const ITEM = 'std.list-item';
+  /** Lists shown as categories even when empty; any other list shows once a file is in it, like a photo app's album */
+  const GROUPS = ['category', 'folder', 'album'];
   /** What a card carries when it is dragged onto a category */
   const DRAGGED = 'application/x-minca-file';
   /** A video's whole file is fetched for its card only up to this size */
@@ -323,13 +338,13 @@
     name: ['Name', (a, b) => a.body.name.localeCompare(b.body.name)],
   };
 
-  /** A category's colour, the same on every device, from its name */
+  /** A category's colour, the same on every device, from its key */
   const COLOURS = ['cobalt', 'coral', 'peach', 'sage', 'lilac'];
-  const colourOf = (label) =>
-    `var(--minca-${COLOURS[[...label].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % COLOURS.length]})`;
+  const colourOf = (key) =>
+    `var(--minca-${COLOURS[[...key].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % COLOURS.length]})`;
 
-  /** The files a tag is on, of those here */
-  const filesOf = (tag) => tag.links.filter((l) => l.rel === 'about').map((l) => l.to);
+  /** Where a record's link of this role points, if it has one */
+  const linkOf = (record, rel) => record.links.find((l) => l.rel === rel)?.to;
 
   /** Files dropped anywhere on the screen, or pasted wherever the focus is */
   function useIncoming(onFiles) {
@@ -385,10 +400,12 @@
 
   function Files() {
     const files = useRecords(FILE);
-    const tags = useRecords(TAG);
+    const lists = useRecords(LIST);
+    const items = useRecords(ITEM);
     const mayAdd = useCan('create', FILE);
-    const mayTag = useCan('create', TAG);
-    // { kind: 'all' } | { kind: 'type', type } | { kind: 'tag', label }
+    const mayGroup = useCan('create', ITEM);
+    const mayMake = useCan('create', LIST);
+    // { kind: 'all' } | { kind: 'type', type } | { kind: 'group', key }
     const [view, setView] = useState({ kind: 'all' });
     const [sort, setSort] = useState('newest');
     const [query, setQuery] = useState('');
@@ -396,35 +413,38 @@
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(null);
     const [naming, setNaming] = useState(null);
-    // Categories made on this device that nothing is in yet: one exists for everyone once a file is in it.
-    const [made, setMade] = useState([]);
     const picker = useRef(null);
-
+    // A file opened from elsewhere, like one in a chat: shown in the viewer, among all files.
+    const shown = useShown();
     useEffect(() => {
-      minca.recall('categories').then((kept) => Array.isArray(kept) && setMade(kept));
-    }, []);
-    const keepMade = (list) => {
-      setMade(list);
-      minca.remember('categories', list.length ? list : null);
-    };
+      if (!shown) return;
+      setView({ kind: 'all' });
+      setQuery('');
+      setOpened(shown.key);
+    }, [shown]);
 
     const all = files ?? [];
     const keys = useMemo(() => new Set(all.map((f) => f.key)), [files]);
-    // File key → the tags on it
-    const tagsOn = useMemo(() => {
+    // File key → the items putting it in a list
+    const itemsOn = useMemo(() => {
       const on = new Map();
-      for (const tag of tags ?? [])
-        for (const key of filesOf(tag)) if (keys.has(key)) on.set(key, [...(on.get(key) ?? []), tag]);
+      for (const item of items ?? []) {
+        const key = linkOf(item, 'about');
+        if (keys.has(key)) on.set(key, [...(on.get(key) ?? []), item]);
+      }
       return on;
-    }, [tags, keys]);
-    const labelsOn = (key) => [...new Set((tagsOn.get(key) ?? []).map((t) => t.body.label))];
+    }, [items, keys]);
+    const groupsOf = (key) => [...new Set((itemsOn.get(key) ?? []).map((item) => linkOf(item, 'in')))];
     const counts = useMemo(() => {
-      const byLabel = new Map();
-      for (const [key] of tagsOn)
-        for (const label of labelsOn(key)) byLabel.set(label, (byLabel.get(label) ?? 0) + 1);
-      return byLabel;
-    }, [tagsOn]);
-    const labels = [...new Set([...counts.keys(), ...made])].sort((a, b) => a.localeCompare(b));
+      const byList = new Map();
+      for (const [key] of itemsOn)
+        for (const list of groupsOf(key)) byList.set(list, (byList.get(list) ?? 0) + 1);
+      return byList;
+    }, [itemsOn]);
+    const groups = (lists ?? [])
+      .filter((list) => GROUPS.includes(list.body.kind) || counts.has(list.key))
+      .sort((a, b) => a.body.title.localeCompare(b.body.title));
+    const group = view.kind === 'group' ? groups.find((g) => g.key === view.key) : null;
 
     const shown = useMemo(() => {
       const text = query.trim().toLowerCase();
@@ -432,28 +452,36 @@
         .filter((f) =>
           view.kind === 'type'
             ? kindOf(f.body.mime)[0] === view.type
-            : view.kind === 'tag'
-              ? labelsOn(f.key).includes(view.label)
+            : view.kind === 'group'
+              ? groupsOf(f.key).includes(view.key)
               : true,
         )
         .filter((f) => !text || f.body.name.toLowerCase().includes(text))
         .sort(SORTS[sort][1]);
-    }, [files, tagsOn, view, sort, query]);
+    }, [files, itemsOn, view, sort, query]);
 
     const fail = (e) => setError(e.message ?? String(e));
 
-    /** Puts a file in a category, unless someone already has */
-    const tag = async (key, label) => {
-      if (labelsOn(key).includes(label)) return;
-      await minca.put(TAG, { label }, { links: [{ rel: 'about', to: key }] });
-      if (made.includes(label)) keepMade(made.filter((l) => l !== label));
+    /** Puts a file in a category, unless it is in it already */
+    const putIn = async (key, list) => {
+      if (groupsOf(key).includes(list)) return;
+      await minca.put(
+        ITEM,
+        {},
+        {
+          links: [
+            { rel: 'in', to: list },
+            { rel: 'about', to: key },
+          ],
+        },
+      );
     };
-    /** Takes a file out of a category: every tag saying so that the person looking may remove */
-    const untag = async (key, label) => {
-      const refused = [];
-      for (const t of tagsOn.get(key) ?? [])
-        if (t.body.label === label) await minca.remove(t.key).catch(() => refused.push(t));
-      if (refused.length) setError(`Only whoever put it in “${label}”, or a moderator, can take it out.`);
+    /** Takes a file out of a category: every item saying so that the person looking may remove */
+    const takeOut = async (key, list) => {
+      let refused = false;
+      for (const item of itemsOn.get(key) ?? [])
+        if (linkOf(item, 'in') === list) await minca.remove(item.key).catch(() => (refused = true));
+      if (refused) setError('Only whoever put it there, or a moderator, can take it out.');
     };
 
     const upload = async (list) => {
@@ -463,7 +491,7 @@
       try {
         const written = await attach(null, list);
         // Added while a category is open, they go in it.
-        if (view.kind === 'tag' && mayTag) for (const file of written) await tag(file.key, view.label);
+        if (group && mayGroup) for (const file of written) await putIn(file.key, group.key);
       } catch (e) {
         fail(e);
       } finally {
@@ -475,26 +503,35 @@
     const remove = async (file) => {
       setOpened(null);
       try {
-        for (const t of tagsOn.get(file.key) ?? []) if (t.mine) await minca.remove(t.key).catch(() => {});
+        for (const item of itemsOn.get(file.key) ?? [])
+          if (item.mine) await minca.remove(item.key).catch(() => {});
         await minca.remove(file.key);
       } catch (e) {
         fail(e);
       }
     };
-    const dropCategory = async (label) => {
-      keepMade(made.filter((l) => l !== label));
-      for (const [key] of tagsOn) if (labelsOn(key).includes(label)) await untag(key, label);
-      setView({ kind: 'all' });
+    const makeGroup = async (title) => {
+      try {
+        const made = await minca.put(LIST, { title, kind: 'category' });
+        setView({ kind: 'group', key: made.key });
+      } catch (e) {
+        fail(e);
+      }
+    };
+    // The files in it are left as they are, in no category.
+    const dropGroup = async (list) => {
+      try {
+        await minca.remove(list.key);
+        setView({ kind: 'all' });
+      } catch {
+        setError('Only whoever made this category, or a moderator, can remove it.');
+      }
     };
 
     if (!files) return null;
     const total = shown.reduce((sum, f) => sum + (f.body.size ?? 0), 0);
     const title =
-      view.kind === 'type'
-        ? KINDS.find(([k]) => k === view.type)[1]
-        : view.kind === 'tag'
-          ? view.label
-          : 'All files';
+      view.kind === 'type' ? KINDS.find(([k]) => k === view.type)[1] : group ? group.body.title : 'All files';
     const at = shown.findIndex((f) => f.key === opened);
 
     return html`
@@ -523,7 +560,7 @@
         <h3>
           Categories
           ${
-            mayTag &&
+            mayMake &&
             html`<button
               type="button"
               data-variant="ghost"
@@ -539,11 +576,9 @@
           html`<form
             onSubmit=${(event) => {
               event.preventDefault();
-              const label = naming.trim().slice(0, 100);
+              const title = naming.trim().slice(0, 200);
               setNaming(null);
-              if (!label) return;
-              if (!labels.includes(label)) keepMade([...made, label]);
-              setView({ kind: 'tag', label });
+              if (title) makeGroup(title);
             }}
           >
             <${Focused}
@@ -555,17 +590,17 @@
             />
           </form>`
         }
-        ${labels.length === 0 && naming === null && html`<p class="faint" style="margin: 0 8px; font-size: 12px">None yet</p>`}
-        ${labels.map(
-          (label) =>
+        ${groups.length === 0 && naming === null && html`<p class="faint" style="margin: 0 8px; font-size: 12px">None yet</p>`}
+        ${groups.map(
+          (list) =>
             html`<${Place}
-              key=${label}
-              on=${view.kind === 'tag' && view.label === label}
-              label=${label}
-              colour=${colourOf(label)}
-              count=${counts.get(label)}
-              onClick=${() => setView({ kind: 'tag', label })}
-              onFile=${mayTag && ((key) => tag(key, label))}
+              key=${list.key}
+              on=${view.kind === 'group' && view.key === list.key}
+              label=${list.body.title}
+              colour=${colourOf(list.key)}
+              count=${counts.get(list.key)}
+              onClick=${() => setView({ kind: 'group', key: list.key })}
+              onFile=${mayGroup && ((key) => putIn(key, list.key))}
               onError=${setError}
             />`,
         )}
@@ -589,8 +624,8 @@
             ${Object.entries(SORTS).map(([key, [name]]) => html`<option value=${key}>${name}</option>`)}
           </select>
           ${
-            view.kind === 'tag' &&
-            html`<button type="button" data-variant="ghost" onClick=${() => dropCategory(view.label)}>
+            group?.mine &&
+            html`<button type="button" data-variant="ghost" onClick=${() => dropGroup(group)}>
               Remove category
             </button>`
           }
@@ -624,7 +659,7 @@
               ${
                 query
                   ? 'Nothing by that name.'
-                  : view.kind === 'tag'
+                  : group
                     ? 'Nothing in this category yet. Drag files onto it, or drop new ones here.'
                     : 'No files yet. Drop some here, paste them, or share them in a chat.'
               }
@@ -635,22 +670,22 @@
               html`<${Card}
                 key=${file.key}
                 file=${file}
-                labels=${labelsOn(file.key)}
+                groups=${groups.filter((g) => groupsOf(file.key).includes(g.key))}
                 onOpen=${() => setOpened(file.key)}
               />`,
           )}
         </div>
       </main>
-      ${dropping && html`<div class="drop">Drop files to add them${view.kind === 'tag' ? ` to “${view.label}”` : ''}</div>`}
+      ${dropping && html`<div class="drop">Drop files to add them${group ? ` to “${group.body.title}”` : ''}</div>`}
       ${
         at >= 0 &&
         html`<${Viewer}
           key=${opened}
           file=${shown[at]}
-          labels=${labels}
-          on=${labelsOn(opened)}
-          mayTag=${mayTag}
-          onTag=${(label, add) => (add ? tag(opened, label) : untag(opened, label)).catch(fail)}
+          groups=${groups}
+          on=${groupsOf(opened)}
+          mayGroup=${mayGroup}
+          onGroup=${(list, add) => (add ? putIn(opened, list) : takeOut(opened, list)).catch(fail)}
           onStep=${(by) => shown[at + by] && setOpened(shown[at + by].key)}
           hasPrevious=${at > 0}
           hasNext=${at < shown.length - 1}
@@ -702,7 +737,7 @@
   }
 
   /** A file in the grid: a picture of it where there can be one, its name, size, age and categories */
-  function Card({ file, labels, onOpen }) {
+  function Card({ file, groups, onOpen }) {
     const { name, mime, size, blob } = file.body;
     const [kind, , icon] = kindOf(mime);
     const box = useRef(null);
@@ -733,14 +768,14 @@
         ${file.createdBy && html`<${Avatar} did=${file.createdBy} size=${16} round />`} ${sizeOf(size ?? 0)} ·
         ${ago(file.createdAt)}
         <span class="dots">
-          ${labels.map((label) => html`<span key=${label} class="dot" title=${label} style=${{ background: colourOf(label) }}></span>`)}
+          ${groups.map((g) => html`<span key=${g.key} class="dot" title=${g.body.title} style=${{ background: colourOf(g.key) }}></span>`)}
         </span>
       </span>
     </button>`;
   }
 
   /** One file over the whole screen: shown as well as it can be, ← and → to the next, Esc to close */
-  function Viewer({ file, labels, on, mayTag, onTag, onStep, hasPrevious, hasNext, onDelete, onClose }) {
+  function Viewer({ file, groups, on, mayGroup, onGroup, onStep, hasPrevious, hasNext, onDelete, onClose }) {
     const { name, mime, size, blob, url } = file.body;
     const [kind, , icon] = kindOf(mime);
     const picture = useFile(file.key, kind === 'picture' ? blob : null);
@@ -827,21 +862,21 @@
         </button>
       </div>
       <footer>
-        ${labels.map(
-          (label) =>
+        ${groups.map(
+          (g) =>
             html`<button
               type="button"
-              key=${label}
-              class=${on.includes(label) ? 'chip on' : 'chip'}
-              disabled=${!mayTag}
-              aria-pressed=${on.includes(label)}
-              onClick=${() => onTag(label, !on.includes(label))}
+              key=${g.key}
+              class=${on.includes(g.key) ? 'chip on' : 'chip'}
+              disabled=${!mayGroup}
+              aria-pressed=${on.includes(g.key)}
+              onClick=${() => onGroup(g.key, !on.includes(g.key))}
             >
-              <span class="dot" style=${{ background: colourOf(label) }}></span> ${label}
+              <span class="dot" style=${{ background: colourOf(g.key) }}></span> ${g.body.title}
             </button>`,
         )}
         <span style="flex: 1"></span>
-        ${about && html`<button type="button" onClick=${() => minca.open({ record: file.key })}>Where it was shared</button>`}
+        ${about && html`<button type="button" onClick=${() => minca.open({ record: file.key, link: 'about' })}>Where it was shared</button>`}
         ${
           blob
             ? html`<button type="button" onClick=${() => minca.download(file.key, blob.hash)}>

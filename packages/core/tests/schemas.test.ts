@@ -77,10 +77,10 @@ describe('standard nouns', () => {
       space,
       task.name,
       { title: 'Pack', position: positionBetween() },
-      { links: [{ rel: 'column', to: todo.key }] },
+      { links: [{ rel: 'in', to: todo.key }] },
     );
     assert.ok(card.verified);
-    const inTodo = await me.records.linked(space, todo.key, { rel: 'column' });
+    const inTodo = await me.records.linked(space, todo.key, { rel: 'in' });
     assert.deepEqual(
       inTodo.map((r) => r.key),
       [card.key],
@@ -195,12 +195,12 @@ describe('the standard library', () => {
     );
   });
 
-  test('a vote on a proposal can rank its options', async () => {
+  test('a vote on a poll can rank its options, and a proposal takes ballots, not votes', async () => {
     const me = await person();
     const { id: space } = await me.spaces.create({ name: 'Club', ...team, visibility: 'private' });
-    await useSchemas(me, space, [proposal, vote]);
-    const where = await me.records.put(space, proposal.name, {
-      title: 'Where next?',
+    await useSchemas(me, space, [poll, proposal, vote]);
+    const where = await me.records.put(space, poll.name, {
+      question: 'Where next?',
       options: ['A', 'B', 'C'],
     });
     const ranked = await me.records.put(
@@ -210,6 +210,11 @@ describe('the standard library', () => {
       { links: [{ rel: 'about', to: where.key }] },
     );
     assert.ok(ranked.verified);
+    const decide = await me.records.put(space, proposal.name, { title: 'Move?', options: ['Yes', 'No'] });
+    await assert.rejects(
+      me.records.put(space, vote.name, { choice: 0 }, { links: [{ rel: 'about', to: decide.key }] }),
+      /must point at std.poll/,
+    );
   });
 });
 

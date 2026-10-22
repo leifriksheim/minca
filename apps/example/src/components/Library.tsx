@@ -9,8 +9,7 @@ const WHAT_IT_ADDS: Record<string, string> = {
   'std.reaction': 'Emoji reactions on anything — one of each per person.',
   'std.comment': 'A comment thread on every record.',
   'std.tag': 'Labels on records, shown as #tags.',
-  'std.attachment': 'Describe a file attached to a record.',
-  'std.reference': 'Note that one record refers to another.',
+  'std.file': 'Files on any record: pictures, videos and documents, shown with it.',
 };
 
 /** The standard schemas this space has not added yet, each a click away */

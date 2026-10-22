@@ -530,6 +530,42 @@ describe('an agent acting for a person', () => {
 });
 
 describe('collections proposed in a blueprint', () => {
+  test('a twin of a standard collection, or a link of its own for where a record sits, is warned of', async () => {
+    const { alice, space } = await setup();
+    const agent = await agentFor(alice, [space]);
+    const helper = await alice.node.asAgent({ keys: agent.keys, note: agent.note });
+    const Proposed = z.object({ key: z.string(), next: z.string(), warnings: z.array(z.string()) });
+    const proposed = Proposed.parse(
+      await runAction(helper, 'collections_propose', {
+        space,
+        title: 'Photos',
+        collections: [
+          'std.list',
+          {
+            name: 'trip.photo',
+            title: 'Photo',
+            schema: {
+              type: 'object',
+              properties: {
+                caption: { type: 'string' },
+                image: { type: 'object', properties: { hash: { type: 'string' }, mime: { type: 'string' } } },
+              },
+            },
+            links: { album: { to: ['std.list'], cardinality: 'one' } },
+          },
+        ],
+      }),
+    );
+    assert.equal(proposed.warnings.length, 2);
+    assert.match(proposed.warnings[0]!, /trip\.photo keeps a file, like std\.file\. Use std\.file/);
+    assert.match(proposed.warnings[1]!, /"album": the library calls that link "in"/);
+    assert.match(proposed.next, /Read the warnings/);
+
+    // The standard collections themselves, and one of an app's own that is nothing like them, say nothing.
+    const quiet = await runAction(helper, 'collections_propose', { space, ...carpool });
+    assert.equal(z.object({ warnings: z.unknown().optional() }).parse(quiet).warnings, undefined);
+  });
+
   test('an agent proposes, someone who may define applies it, and the space then has the collections', async () => {
     const { alice, bob, space } = await setup();
     const agent = await agentFor(alice, [space]);
@@ -754,10 +790,18 @@ describe('collections proposed in a blueprint', () => {
 
   test('collections_standard lists the library by area, and gives definitions in full', async () => {
     const { alice } = await setup();
-    const Areas = z.array(
-      z.object({ area: z.string(), collections: z.array(z.object({ name: z.string(), title: z.string() })) }),
-    );
-    const areas = Areas.parse(await runAction(alice.node, 'collections_standard', {}));
+    const Library = z.object({
+      choose: z.array(z.string()),
+      areas: z.array(
+        z.object({
+          area: z.string(),
+          collections: z.array(z.object({ name: z.string(), title: z.string() })),
+        }),
+      ),
+    });
+    const { choose, areas } = Library.parse(await runAction(alice.node, 'collections_standard', {}));
+    // The map comes first: which collection holds what, so an agent reaches for the same one as every other app.
+    assert.ok(choose.some((line) => line.startsWith('Any file') && line.includes('std.file')));
     const listed = areas.flatMap((a) => a.collections.map((c) => c.name));
     assert.equal(listed.length, standardSchemas.length);
     assert.ok(listed.includes('std.event') && listed.includes('std.list-item'));
@@ -891,8 +935,8 @@ describe('collections proposed in a blueprint', () => {
 describe('what a collection allows, in words', () => {
   test('a vote, from its rules', () => {
     assert.deepEqual(describeCollection(vote), [
-      'One vote per person per poll or proposal — adding another changes the first.',
-      'Each vote points at one thing: a poll or a proposal (“about”).',
+      'One vote per person per poll — adding another changes the first.',
+      'Each vote points at one thing: a poll (“about”).',
     ]);
   });
 

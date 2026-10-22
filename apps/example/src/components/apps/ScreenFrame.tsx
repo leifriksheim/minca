@@ -21,6 +21,8 @@ export function ScreenFrame({
   network,
   title,
   onOpen,
+  shown,
+  onShown,
 }: {
   spaceId: string;
   /** The app's launcher record, which carries the screen */
@@ -31,6 +33,10 @@ export function ScreenFrame({
   title: string;
   /** Shows a record the screen asked to open (`minca.open`) */
   onOpen: (record: NodeRecord) => void;
+  /** A record of a collection this app shows that it was asked to show (`minca.onShow`) */
+  shown?: string | undefined;
+  /** Called once `shown` is handed to the screen */
+  onShown?: (() => void) | undefined;
 }) {
   const node = useNode();
   const account = useAccount();
@@ -42,6 +48,20 @@ export function ScreenFrame({
   useEffect(() => {
     opens.current = onOpen;
   }, [onOpen]);
+  // The bridge of the running screen, and a record to show once there is one.
+  const live = useRef<ScreenBridge | null>(null);
+  const pending = useRef<string | undefined>(undefined);
+  const handed = useRef(onShown);
+  useEffect(() => {
+    handed.current = onShown;
+  }, [onShown]);
+  useEffect(() => {
+    if (!shown) return;
+    if (live.current) {
+      live.current.show(shown);
+      handed.current?.();
+    } else pending.current = shown;
+  }, [shown]);
   // A new screen, or a new app, starts a new frame.
   const [generation, setGeneration] = useState(0);
   const origins = [...network].sort().join(' ');
@@ -84,6 +104,7 @@ export function ScreenFrame({
         // Only the page we loaded says ready, and only once. Anything after that navigated the frame.
         bridge?.close();
         bridge = null;
+        live.current = null;
         setStoppedRun(run);
         return;
       }
@@ -110,11 +131,18 @@ export function ScreenFrame({
         '*',
         [channel.port2],
       );
+      live.current = bridge;
+      if (pending.current) {
+        bridge.show(pending.current);
+        pending.current = undefined;
+        handed.current?.();
+      }
     };
     globalThis.addEventListener('message', onMessage);
     return () => {
       globalThis.removeEventListener('message', onMessage);
       bridge?.close();
+      live.current = null;
     };
   }, [node, spaceId, appKey, screen, names, account.name, generation, answer, allowed, run]);
 

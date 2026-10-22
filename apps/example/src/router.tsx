@@ -65,7 +65,11 @@ const contacts = createRoute({ getParentRoute: () => home, path: 'contacts', com
 const space = createRoute({
   getParentRoute: () => root,
   path: 'spaces/$spaceId',
-  validateSearch: (search: Record<string, unknown>): { record?: string } => ({ record: text(search.record) }),
+  // record: open in the panel beside; at: the record the open app was asked to show.
+  validateSearch: (search: Record<string, unknown>): { record?: string; at?: string } => ({
+    record: text(search.record),
+    at: text(search.at),
+  }),
   component: SpaceLayout,
 });
 const inSpace = () => space;

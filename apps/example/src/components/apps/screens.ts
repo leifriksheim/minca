@@ -124,13 +124,18 @@ Inside it, window.minca is:
   await minca.people()              [{ did, name }] — everyone in the space who said their name
   await minca.can(action, collection)   whether the person looking may "create", "edit" or "delete" there
   await minca.picture(did)          the picture someone in the space chose, as a data: URL, or null
-  await minca.open({ record: key }) or minca.open({ person: did })   shows it in the app around the screen
+  await minca.open({ record: key }) or minca.open({ person: did })   shows it in the app around the screen: a record opens in the
+                                    app that shows its collection (a message in the chat), else beside this screen
+  await minca.open({ record: key, link: 'about' })   opens what that record links to with that role, of any collection:
+                                    the message a file was shared on, say
+  minca.shown()                     the key of the record this app was last asked to show, or null; minca.onShow(callback)
+                                    calls back with each new one: a record of a collection in "shows", opened from anywhere
   await minca.file(key, ref)        a picture one of these records refers to ({ hash, mime, … } in its body), as a data: URL,
                                     made smaller when it is large; null if it isn't a picture or can't be shown
   await minca.blob(key, ref)        the whole file one of these records refers to, as a Blob of its type: for video, audio,
                                     full-size pictures, or reading and changing the bytes (URL.createObjectURL shows it)
   await minca.addFile(bytes, { name?, mime? })   keeps a file (a Uint8Array, at most 25 MB) in the space: → { hash, size, mime, … },
-                                    to put in a record's body, like std.attachment's "blob"
+                                    to put in a record's body, like std.file's "blob"
   await minca.download(key, ref)    saves a file one of these records refers to on the person's device
   await minca.places.search(text, near?)   places matching what was typed: [{ name, detail, street, locality, area, country, lat, lon }]
   await minca.places.here()         where the person is, named, if they let the app know; or null
@@ -165,6 +170,8 @@ export const SCREEN_CLIENT = `(() => {
   const pending = new Map();
   const listeners = new Set();
   const hearing = new Set();
+  const showing = new Set();
+  let shown = null;
   let next = 0;
   const call = (method, ...args) =>
     new Promise((resolve, reject) => {
@@ -174,6 +181,13 @@ export const SCREEN_CLIENT = `(() => {
     });
   port.onmessage = (event) => {
     const message = event.data || {};
+    if (message.show) {
+      shown = message.show;
+      for (const listener of showing) {
+        try { listener(shown); } catch (error) { console.error(error); }
+      }
+      return;
+    }
     if (message.live) {
       for (const listener of hearing) {
         try { listener(message.live); } catch (error) { console.error(error); }
@@ -249,6 +263,11 @@ export const SCREEN_CLIENT = `(() => {
     onChange: (listener) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
+    },
+    shown: () => shown,
+    onShow: (listener) => {
+      showing.add(listener);
+      return () => showing.delete(listener);
     },
     live: Object.freeze({
       send: (data, options) => call('liveSend', data, options || {}),
@@ -436,6 +455,8 @@ async function picture(bytes: Uint8Array, mime: string): Promise<string | null> 
 export interface ScreenBridge {
   /** Tell the screen that records changed */
   changed(): void;
+  /** Ask the screen to show one of its records, opened from elsewhere (`minca.onShow`) */
+  show(key: string): void;
   /** Stop answering, and stop listening to the node */
   close(): void;
 }
@@ -585,7 +606,20 @@ export function createScreenBridge(params: {
       const first = args[0];
       const host = hosted();
       if (isObject(first) && 'record' in first) {
-        host.open({ record: await ownRecord(first.record) });
+        const record = await ownRecord(first.record);
+        const { link } = first;
+        if (link === undefined) {
+          host.open({ record });
+          return null;
+        }
+        // What the app's own record points to, shown by the page: the screen learns nothing of it.
+        const to = typeof link === 'string' ? record.links.find((l) => l.rel === link)?.to : undefined;
+        const target = to ? await node.records.get(spaceId, to) : null;
+        if (!target)
+          throw new Error(
+            `Record ${record.key} has no "${typeof link === 'string' ? link : JSON.stringify(link)}" link to a record here`,
+          );
+        host.open({ record: target });
         return null;
       }
       const did = fieldOf(first, 'person');
@@ -738,6 +772,9 @@ export function createScreenBridge(params: {
 
   return {
     changed,
+    show(key) {
+      if (!closed) port.postMessage({ show: key });
+    },
     close() {
       closed = true;
       if (soon) clearTimeout(soon);

@@ -1,4 +1,4 @@
-<!-- Kanban: std.task and std.column as a board. Dragging a card rewrites only its column link and position. -->
+<!-- Kanban: std.task and std.column as a board. Dragging a card rewrites only its in link (to its column) and position. -->
 <style>
   body {
     padding: 16px 16px 4px;
@@ -93,8 +93,9 @@
     if (pa !== pb) return pa === undefined ? 1 : pb === undefined ? -1 : pa < pb ? -1 : 1;
     return a.createdAt.localeCompare(b.createdAt) || a.key.localeCompare(b.key);
   };
-  const laneOf = (t) => t.links.find((l) => l.rel === 'column')?.to ?? LOOSE;
-  const columnLinks = (lane) => (lane === LOOSE ? [] : [{ rel: 'column', to: lane }]);
+  // A task is `in` its column; one `in` a project with no column on the board is loose.
+  const laneOf = (t) => t.links.find((l) => l.rel === 'in')?.to ?? LOOSE;
+  const columnLinks = (lane) => (lane === LOOSE ? [] : [{ rel: 'in', to: lane }]);
 
   function Board() {
     const columns = useRecords(COLUMN);
@@ -148,7 +149,7 @@
         key,
         { ...t.body, position: place(to.lane, to.before, key) },
         {
-          links: [...t.links.filter((l) => l.rel !== 'column'), ...columnLinks(to.lane)],
+          links: [...t.links.filter((l) => l.rel !== 'in'), ...columnLinks(to.lane)],
         },
       );
     };

@@ -49,6 +49,11 @@ export interface LauncherApp {
   readonly description?: string;
   /** The collections it shows, by name */
   readonly collections?: ReadonlyArray<string>;
+  /**
+   * Of those, the ones whose records it is where to open: a message anywhere
+   * opens in the app that shows `std.message`, at that message.
+   */
+  readonly shows?: ReadonlyArray<string>;
   /** What in it is worth hearing about */
   readonly notify?: ReadonlyArray<AppAutomation>;
   /** Its own screen: one HTML document, run sealed (`screens.ts`) */
@@ -78,6 +83,11 @@ export const launcherApp = fragments.typed<LauncherApp>()({
         maxItems: 10,
         items: { type: 'string', minLength: 1, maxLength: 200 },
       },
+      shows: {
+        type: 'array',
+        maxItems: 10,
+        items: { type: 'string', minLength: 1, maxLength: 200 },
+      },
       notify: { type: 'array', minItems: 1, maxItems: 8, items: { type: 'object' } },
       screen: { type: 'string', minLength: 1, maxLength: MAX_SCREEN_BYTES },
       network: { type: 'array', maxItems: 8, items: { type: 'string', maxLength: 300 } },
@@ -103,6 +113,8 @@ export function checkLauncherApp(body: LauncherApp): string | null {
   // Its screen writes these as whoever looks: the launcher's own would let it add apps.
   const kept = [...names].find(offLimits);
   if (kept) return `${kept} is the space's own, not an app's to show`;
+  const stray = body.shows?.find((name) => !names.has(name));
+  if (stray) return `shows: ${stray} is not one of its collections`;
   if (body.screen !== undefined) {
     const bytes = new TextEncoder().encode(body.screen).length;
     if (bytes > MAX_SCREEN_BYTES)
@@ -214,6 +226,7 @@ export const EXAMPLE_APP = {
   title: 'Carpool',
   description: 'Who drives to the match, and who rides with them',
   collections: ['carpool.trip', 'carpool.seat'],
+  shows: ['carpool.trip'],
   notify: [
     notifyOn('New trip', 'carpool.trip'),
     notifyOn('A seat on my trip', 'carpool.seat', { driver: '$me' }),
@@ -233,7 +246,9 @@ const LAUNCHER_GUIDE = `To make an app for this space that people open from its 
 2. Write one launcher.app record with records_put, like this one:
    ${shown(EXAMPLE_APP)}
    with links [{ "rel": "blueprint", "to": "<the blueprint's key>" }].
-   "collections" names every collection it shows. "notify" is optional: what is worth hearing about, each a name and
+   "collections" names every collection it shows. "shows" is optional: of those, the ones whose records it is the
+   place to open, like ["std.message"] for a chat; a record of one opened anywhere opens in this app, which its
+   screen hears through minca.onShow. "notify" is optional: what is worth hearing about, each a name and
    the query whose new records it tells of, in one of its collections. A "where" naming "$me" keeps it to records that
    name the person it would tell, as the second one does.
 3. If plain lists and forms can't show it (a game board, a calendar, a whiteboard), add "screen": its own HTML UI, one

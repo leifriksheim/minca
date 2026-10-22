@@ -33,7 +33,8 @@ import type { BodyOf } from '../../query/types.js';
 export const message = define({
   name: 'std.message',
   title: 'Message',
-  description: 'A chat message, optionally replying to another, or sharing a record.',
+  description:
+    'A chat message, in order with the rest, optionally in a std.channel, replying to another or sharing a record. Posts to a feed are std.post; remarks on a record are std.comment.',
   schema: {
     type: 'object',
     properties: {
@@ -43,9 +44,9 @@ export const message = define({
     },
     required: ['text'],
   },
-  topics: ['link:channel', 'mentions', 'replyingTo'],
+  topics: ['link:in', 'mentions', 'replyingTo'],
   links: {
-    channel: one(['std.channel'], 'The channel it is in, when the space has several'),
+    in: one(['std.channel'], 'The channel it is in, when the space has several'),
     replyTo: { to: ['std.message'], cardinality: 'one', description: 'The message this replies to' },
     shares: { to: '*', cardinality: 'one', description: 'A record this message shares, like a poll' },
   },
@@ -141,7 +142,7 @@ export type Direct = BodyOf<typeof direct>;
 export const post = define({
   name: 'std.post',
   title: 'Post',
-  description: 'A post to a feed, optionally replying to or quoting another.',
+  description: 'A post to a feed, optionally replying to or quoting another. Chat in order is std.message.',
   schema: {
     type: 'object',
     properties: {
@@ -217,7 +218,8 @@ export type Publication = BodyOf<typeof publication>;
 export const doc = define({
   name: 'std.doc',
   title: 'Document',
-  description: 'A document made of blocks that people can edit at once.',
+  description:
+    'A document people write together, as std.doc-blocks in it. An uploaded file, like a PDF or .docx, is a std.file.',
   schema: { type: 'object', properties: { title: words(500) }, required: ['title'] },
 });
 export type Doc = BodyOf<typeof doc>;
@@ -272,7 +274,8 @@ export type DocBlock = BodyOf<typeof docBlock>;
 export const wikiPage = define({
   name: 'std.wiki-page',
   title: 'Wiki page',
-  description: 'A page anyone can edit, one per name, keeping every version.',
+  description:
+    'A page anyone can edit, one per name, keeping every version. For a note of one’s own, use std.note.',
   schema: {
     type: 'object',
     properties: {
@@ -291,7 +294,8 @@ export type WikiPage = BodyOf<typeof wikiPage>;
 export const note = define({
   name: 'std.note',
   title: 'Note',
-  description: 'A note: a title and some text.',
+  description:
+    'A note: a title and some text. A page anyone edits under one name is std.wiki-page; a document several people write at once is std.doc.',
   schema: {
     type: 'object',
     properties: {

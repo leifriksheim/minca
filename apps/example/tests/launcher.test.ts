@@ -9,7 +9,7 @@ import { readdir, readFile } from 'node:fs/promises';
 
 import type { NodeRecord, P2PNode } from '@minca/core';
 import {
-  attachment,
+  file,
   column,
   guide,
   message,
@@ -176,7 +176,7 @@ describe('the launcher', () => {
         screen,
       },
       needs: [task, column],
-      uses: [attachment],
+      uses: [file],
       setup: async (node, spaceId) => {
         await node.records.put(spaceId, column.name, { name: 'To do', position: 'a' });
       },
@@ -196,7 +196,7 @@ describe('the launcher', () => {
     assert.equal(placed.length, 1, 'added once');
     assert.equal(placed[0]!.body?.template, 'kanban');
     assert.equal(placed[0]!.body?.screen, screen, 'an ordinary app, with the screen it shipped with');
-    assert.ok((await bob.node.collections.list(space)).some((c) => c.name === attachment.name));
+    assert.ok((await bob.node.collections.list(space)).some((c) => c.name === file.name));
     assert.equal((await bob.node.records.list(space, { collection: column.name })).length, 1);
   });
 

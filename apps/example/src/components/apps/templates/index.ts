@@ -4,13 +4,15 @@
  * someone adds it (`addTemplate` in `launcher.ts`).
  */
 import {
-  attachment,
   ballot,
   call,
   column,
   comment,
   decision,
   event,
+  file,
+  list,
+  listItem,
   listing,
   message,
   notifyOn,
@@ -20,7 +22,6 @@ import {
   positionBetween,
   proposal,
   rsvp,
-  tag,
   task,
   vote,
 } from '@minca/core/schemas';
@@ -41,14 +42,15 @@ export const TEMPLATES: ReadonlyArray<Template> = [
       title: 'Chat',
       description:
         'Talk with everyone in the space. "@" someone to tell them, and drop files in to share them.',
-      collections: [message.name, attachment.name],
+      collections: [message.name, file.name],
+      shows: [message.name],
       notify: [
         notifyOn('Mentions me', message.name, { mentions: { $contains: '$me' } }),
         notifyOn('New message', message.name),
       ],
       screen: chat,
     },
-    needs: [message, attachment],
+    needs: [message, file],
   },
   {
     app: {
@@ -56,10 +58,11 @@ export const TEMPLATES: ReadonlyArray<Template> = [
       title: 'Files',
       description:
         'Every file shared in the space, from chats and boards alike: by kind, size and name, and in categories of your own.',
-      collections: [attachment.name, tag.name],
+      collections: [file.name, list.name, listItem.name],
+      shows: [file.name],
       screen: files,
     },
-    needs: [attachment, tag],
+    needs: [file, list, listItem],
   },
   {
     app: {
@@ -74,7 +77,7 @@ export const TEMPLATES: ReadonlyArray<Template> = [
       screen: kanban,
     },
     needs: [task, column],
-    uses: [attachment],
+    uses: [file],
     setup: async (node, spaceId) => {
       if ((await node.records.list(spaceId, { collection: column.name })).length > 0) return;
       let position: string | null = null;

@@ -1,8 +1,8 @@
 /**
- * `std.attachment` on a record: files kept in the space (`minca.addFile`) and
- * an attachment record about the record for each. Pictures show, and open
+ * Files on a record: each kept in the space (`minca.addFile`) with a
+ * `std.file` record about the record. Pictures show, and open
  * larger when clicked; videos and sound play where they are; other files are
- * saved to the person's device. A screen whose app names `std.attachment`
+ * saved to the person's device. A screen whose app names `std.file`
  * among its collections can use it.
  */
 import { fitImage } from '../image';
@@ -14,7 +14,7 @@ import { html } from './html';
 import { Modal } from './modal';
 import type { ScreenRecord } from './minca';
 
-const ATTACHMENT = 'std.attachment';
+const FILE = 'std.file';
 
 /** A file a record refers to, as `minca.addFile` gives it */
 interface FileRef {
@@ -31,9 +31,9 @@ interface AttachmentBody {
 }
 
 /**
- * Adds files to a record, each kept in the space with an attachment about the
+ * Adds files to a record, each kept in the space with a `std.file` about the
  * record, or about nothing when `about` is null; large pictures made smaller.
- * Gives the attachments written.
+ * Gives the files written.
  */
 export async function attach(about: string | null, files: Iterable<File>): Promise<ScreenRecord[]> {
   const written: ScreenRecord[] = [];
@@ -42,7 +42,7 @@ export async function attach(about: string | null, files: Iterable<File>): Promi
     const blob = await minca.addFile(new Uint8Array(await file.arrayBuffer()), { name: file.name, mime });
     written.push(
       await minca.put(
-        ATTACHMENT,
+        FILE,
         { name: file.name, mime, size: file.size, blob },
         about ? { links: [{ rel: 'about', to: about }] } : {},
       ),
@@ -134,7 +134,7 @@ function Attachment({ record }: { record: ScreenRecord<AttachmentBody> }) {
 
 /** The files attached to a record */
 export function Attachments({ about }: { about: string }) {
-  const attachments = useRecords<AttachmentBody>(ATTACHMENT, { 'link:about': about });
+  const attachments = useRecords<AttachmentBody>(FILE, { 'link:about': about });
   if (!attachments?.length) return null;
   return html`<div class="attachments">
     ${attachments.map((record) => html`<${Attachment} key=${record.key} record=${record} />`)}
