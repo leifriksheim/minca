@@ -1,6 +1,7 @@
 # Draft: short invites, and finding a space with nobody else online
 
-Status: design, October 2026. Not normative. Fixes the first half of
+Status: design, October 2026, revised after one adversarial review (below).
+Not normative. Fixes the first half of
 [#220](https://github.com/leifriksheim/minca/issues/220) and makes invite links
 short enough to paste, say and print.
 
@@ -30,109 +31,146 @@ both is that the link is the only thing the joiner gets.
   by URL, and a new kind (Nostr, a torrent tracker) is a new plugin, not a new
   invite format.
 - **Nothing new to trust.** A relay or host that holds part of an invite
-  learns no more than it does today, and can't change what the joiner gets.
-- **Simple.** One secret in the link. Everything else is derived from it or
-  checked against the space's own history.
+  learns little more than it does today, and can't change what the joiner
+  gets.
+- **A link is fixed when it is made.** Whoever holds it can read it, and can
+  add to where it is kept, but nobody can change or remove it, the inviter
+  included. A key change ends it, as it ends a long link today.
+- **Simple.** One secret and one pin in the link. Everything else is derived
+  from them or checked against the space's own history.
 
 ## The design
 
-**The link carries a key. The key names a mailbox. The mailbox holds the
-invite, sealed.**
+**The link carries a key and a pin. The key names a mailbox and opens what
+is in it. The pin says which space it must be.**
 
 ```
-https://minca.social/j#k7Qw2mZ9xP4vL8nR3tY6bA@relay.minca.social
-                       └──── 16-byte secret ───┘ └── where it is kept ─┘
+https://minca.social/j#ohIu8keaS7VhX3p8HTc70P8q9ohX-_2RrbU1UUUVESo@relay.minca.social
+                       └ secret (16 B) ┘└─ pin (16 B) ─┘           └ where it is kept ┘
 ```
 
-### 1. The link secret
+The fragment is 43 characters, plus one or two places. About 85 in all,
+against 800 to 1,500 today.
 
-`S` is 16 random bytes (128 bits). Everything comes from it:
+### 1. The link
+
+The link's 32 bytes are `S ‖ pin`:
+
+- `S`, 16 random bytes (128 bits). The mailbox's topic and blob are public to
+  whoever asks, so `S` must resist offline guessing; 2¹²⁸ does, and nothing
+  shorter leaves a margin against guessing many links at once.
+- `pin`, the first 16 bytes of the space id's hash (03 §1.2). A constitution
+  that doesn't hash to it is refused. Finding another constitution with the
+  same first 128 bits is a second preimage of SHA-256 truncated to 128 bits,
+  out of reach.
+
+Everything else comes from `S`, each with its own label:
 
 ```
 invite secret = HKDF-SHA256(S, salt = empty, info = "minca/invite-link/v1|secret", L = 32)
 seal key      = HKDF-SHA256(S, salt = empty, info = "minca/invite-link/v1|seal",   L = 32)
-invite key    = from the invite secret, exactly as 03 §7.1
-topic         = base64url(SHA-256(UTF-8("minca/door-topic/v1|" + compressed invite public key)))
+lookup        = HKDF-SHA256(S, salt = empty, info = "minca/invite-link/v1|topic",  L = 32)
+topic         = base64url(SHA-256(UTF-8("minca/invite-topic/v1|" + base64url(lookup))))   — 43 characters
 ```
 
 - The **invite secret** is today's 32-byte secret. The `sys.invite` record,
-  joining and closing (03 §7.2–7.3) don't change at all.
-- A view-only invite gets an `S` too. Its invite key is used only for the
-  mailbox (below); it has no record in the space.
-- The **topic** is a door's topic (07 §4) over the invite key. The relay
-  can't tell an invite from a door, and the purge it already checks (07 §5)
-  works unchanged: whoever holds `S` can clear the topic.
-
-128 bits is enough: the topic and the sealed blob are public to whoever asks
-the relay, so `S` must resist offline guessing, and 2¹²⁸ does.
+  joining and closing (03 §7.1–7.3) don't change.
+- A view-only link has an `S` too, used only for the seal key and the topic.
+- The **topic** is a relay mailbox topic (07 §5), but not a door's: no key
+  hashes to it, so the relay's purge check (07 §4–5) never passes and **no
+  one can clear it**. It comes from neither the invite key nor anything in
+  the space, so a peer that holds the space's records can't compute it.
 
 ### 2. The sealed invite
 
-What was the whole link is now the plaintext of a blob dropped in the
-mailbox:
+What was the whole link is now the plaintext of a blob in the mailbox:
 
 ```json
 {
   "v": 1,
-  "at": 1790000000000,
   "invite": { "space": { … }, "key": "…", "role": "member", "relays": ["wss://relay.minca.social"] },
   "nodes": ["wss://host.example/peer#did:key:zDnae…"]
 }
 ```
 
+```
+blob = base64url( nonce(12) ‖ AES-256-GCM(seal key, nonce, deflate-raw(UTF-8(JSON)), aad = UTF-8(topic)) )
+```
+
 - `invite` is today's `SpaceInvite` (03 §7.4) without `invite` (the secret is
-  in the link) and without `invitedBy` (unauthenticated today, and the space's
+  in the link) and without `invitedBy` (unauthenticated, and the space's
   history says who opened the invite).
-- `nodes` are the always-on nodes the space is reached at, pinned by DID
-  (04 §5.2). This is what fixes #220: the joiner dials them at once, and
-  stops when the space's own records (`std.host`, `sys.hosting`) take over.
-- `at` orders versions. The joiner takes the newest blob that opens.
+- `key` is the space key **when the link was made**. A blob is never sealed
+  again: not for a key change, not for new relays or hosts.
+- `nodes` are always-on nodes that hold the space, pinned by DID (04 §5.2).
+  This is what fixes #220.
+- Compressed with `CompressionStream("deflate-raw")`, a web standard in
+  browsers, Node and Bun. The sealed blob fits a mailbox blob (12,000
+  characters, 07 §5); a reader refuses one that inflates past 64 KiB.
 
-```
-blob = base64url( nonce(12) ‖ AES-256-GCM(seal key, nonce, deflate-raw(UTF-8(JSON)), aad = topic) )
-```
-
-Compressed with `CompressionStream("deflate-raw")`, a web standard in
-browsers, Node and Bun. It must fit a mailbox blob: 12,000 characters
-(07 §5), about 8.9 KB sealed, which compressed holds a large constitution.
-
-No signature. Only a holder of `S` can make a blob that opens, and a holder of
-`S` can already join; a relay can only withhold blobs or replay old ones
-(below).
+No signature. Any holder of `S` can make a blob that opens, so the joiner
+trusts no single blob: the pin fixes the space, and the rest are hints it
+takes together (§4).
 
 ### 3. Where it is kept
 
 The inviter drops the blob in the mailboxes of the space's relays
-(`sys.relays`), its own relays, and its hosts. A host already serves a relay
-on its address (04 §5.3), so it has a mailbox. The link names one or two of
-them after `@`, as `host[:port][/path]` with `wss://` implied (`ws://` only
-for `localhost`). A joiner asks the named mailboxes and its own relays.
+(`sys.relays`) and its own. The link names one or two of them after `@`, as
+`host[:port][/path]`, read as `wss://` (as `ws://` for `localhost`,
+`127.0.0.1` and `[::1]`, so a hint never sends a joiner to plain `ws://`
+elsewhere). A joiner asks the named mailboxes and its own relays.
 
-Keeping it alive: a mailbox keeps a blob up to 14 days (07 §5) and may forget
-it on a restart.
+A relay keeps a blob up to 14 days (07 §5) and may forget it on a restart.
+Two things keep it longer, and neither holds `S`:
 
-- The **inviter's devices** keep `S` for every open invite, in the account
-  registry (03 §13), so any of them can drop the blob again, seal it again
-  after a key change or a change of relays or hosts, and purge it when the
-  invite is closed.
-- **Hosts** keep it alive while every device is offline. The blob is already
-  sealed, and dropping the same blob again needs no key. The account puts
-  `{ topic, blob, mailboxes, until }` in each carrier's carry space
-  (06 §4.2) next to the passes, and the carrier drops it again before it
-  expires. It sees what any relay sees: a topic and ciphertext.
+- **The account.** The inviter's device writes `{ topic, blob, mailboxes,
+until }` in the account registry (03 §13). Any of the account's devices
+  that is online drops the same blob again when it is gone from a mailbox.
+  Dropping a blob a relay already holds stores nothing new (07 §5), so this
+  costs nothing while it is there. An app holding the account sees a topic
+  and ciphertext, as a relay does.
+- **The host.** Each device keeps these records in step with the carry spaces
+  of the account's carriers (06 §4.2), as it does passes. A host's mailbox
+  answers a fetch of that topic with the blob, from the record, for as long
+  as the record is there and `until` has not passed. It drops nothing
+  anywhere, so the record can't point the host at another server. A host
+  keeps at most 64 such records an account.
+
+The device that made the link keeps `S` under its local key (05 §15), so
+the person can copy the link again. That is a library convenience; `S` is
+never written to the registry or any space.
+
+Closing a link is closing its invite in the space (03 §7.2), which every peer
+judges. The account deletes the registry record, so its devices and host stop
+serving the blob, and relays forget it within 14 days. Anyone who fetched it
+can drop it again; that gives nothing a closed invite doesn't already give.
 
 ### 4. Joining
 
-1. Read `S` and the mailboxes from the link.
-2. Fetch the topic from each mailbox at once. Open every blob; ignore any that
-   doesn't open; keep the newest by `at`.
-3. Check it as an invite is checked today (03 §7.6): the constitution hashes
-   to the id, a public space carries no key.
-4. Join with the invite and the invite secret derived from `S`. Dial `nodes`
-   and the relays at the same time.
+1. Read `S`, `pin` and the places from the link.
+2. Fetch the topic from each place at once. Open every blob, and keep those
+   that open, inflate within the limit, and whose constitution hashes to an id
+   starting with `pin`.
+3. Check each as an invite is checked today (03 §7.6).
+4. Take them together, not the newest:
+   - the constitution is the same in all of them (the pin);
+   - every `key` is imported. A key's id is its hash, so it is a key the
+     history names or one that opens nothing (03 §7.6);
+   - `relays` and `nodes` are hints, unauthenticated, as `relays` is today;
+   - `role` is for display; the invite record decides.
+5. Join with the invite secret derived from `S`, and dial the nodes and relays
+   at once.
 
-Preview is steps 1–3. No blob found means the invite has expired or was
-closed, and the joiner is told so.
+The nodes from the invite are kept with the space as its relays are. Once
+the joiner holds the space's access history, it keeps dialling only nodes
+whose DID `sys.keepers` names (03 §10). A device holding the account key
+names the account's carriers as keepers in every space where it may
+(06 §4.2), so the inviter's own host stays; a node someone else put in a
+blob goes. A space that names no keepers keeps the invite's nodes until the
+device restarts.
+
+Preview is steps 1–4. No blob found means the link has expired or the
+places named are gone; the joiner is told that, not that it was closed.
 
 ### 5. Still works with no server
 
@@ -157,70 +195,101 @@ goes in 04 when it is built: for Nostr, the event kinds and tags; for a
 tracker, the info hash. A room is already 20 bytes of hash (04 §1.3), the
 size of a torrent info hash. What stays the same across all of them: peers
 prove who they are and that they may read once connected (04 §6), so a
-meeting place is trusted with no more than a relay is.
+meeting place is trusted with no more than a relay is. A mailbox is trusted
+with even less: it holds what any link holder may add to, and the joiner
+takes nothing from it on trust.
 
 This draft builds only the relay mailbox and the node address. The table is
 there so the link format doesn't have to change when the others arrive: a
-mailbox hint is a URL, and a plugin claims the schemes it knows.
+place in the link is a URL, and a plugin claims the schemes it knows.
 
-## What a party learns
+## What a party learns, and can do
 
-| Party       | Today                                  | With short invites                                                                                            |
-| ----------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Link holder | The space, its key, the right to join  | The same                                                                                                      |
-| Relay       | Rooms, peers, door mailboxes           | Also: an invite's topic, its blob's size, when and from which address it is fetched. Not the space or its id. |
-| Host        | Its spaces, sizes, which account asked | Also: that the account keeps an invite open, its topic, until when                                            |
-| Chat app    | The whole invite, if it reads the URL  | The secret, if it reads the fragment; unfurlers don't                                                         |
+| Party       | Today                                  | With short invites                                                                                                                                     |
+| ----------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Link holder | The space, its key, the right to join  | The same. Also: may add blobs. They can't change the space (the pin) or remove the inviter's blob; they can add relays and nodes, which are only hints |
+| Relay       | Rooms, peers, door mailboxes           | Also: a topic, a blob's size, when and from which address it is fetched. Not which space, even for a relay that holds it                               |
+| Host        | Its spaces, sizes, which account asked | Also: that an account keeps a link, its topic, until when, and who fetches it                                                                          |
+| Chat app    | The whole invite, if it reads the URL  | The secret, if it reads the fragment; unfurlers don't                                                                                                  |
 
-What a relay can do to an invite:
+What a relay, or a link holder, can do to a link:
 
-- **Withhold it.** The joiner asks every mailbox named and its own; the long
-  link is the fallback.
-- **Replay an old version.** The joiner keeps the newest it can open.
-  An old version's key may be stale after a key change; the joiner then
-  holds a key that opens nothing new, as with an old long link.
-- **Flood the topic** (64 blobs, 07 §5) so a fresh drop is refused. The
-  inviter purges it; a host can't, and waits for the inviter.
-- A closed invite whose blob a relay kept still holds the space key, as a
-  long link copied before closing does. Closing stops the join (03 §7.2);
-  only a key change stops reading.
+- **Withhold it.** The joiner asks every place named and its own relays; the
+  host serves it from a record nobody else can touch; the long link is the
+  fallback.
+- **Flood the topic** at a relay (64 blobs, 07 §5), so a drop after the
+  inviter's blob expires is refused. Blobs a relay holds stay until they
+  expire, and the host's copy is not in the relay's queue. Takes 16 addresses
+  an hour on the reference relay; it joins
+  [#162](https://github.com/leifriksheim/minca/issues/162).
+- **Add a node it runs.** The joiner dials it and learns nothing it couldn't
+  learn by joining; the node can't forge records. It is let go of once the
+  history shows the keepers.
+- **Add an old key** (a former member's). The joiner imports it; it opens
+  only what that member could already read.
 
 ## Changes to the spec
 
-- **03 §7**: a new §7.7, the short link (secret, derivations, link format,
-  sealed invite, joining). §7.4 says the long form stays.
-- **03 §13.2**: the registry keeps open invites' `S`.
-- **06 §4.2**: the carry space's invite record, and that a carrier drops it
-  again.
-- **07 §5**: the mailbox holds invites as well as knocks; nothing a relay does
-  changes.
+- **03 §7**: a new §7.7, the short link (derivations, link format, sealed
+  invite, joining). §7.4 says the long form stays; §7.6 that keys from
+  several blobs are imported alike.
+- **03 §13.2**: the registry record holding a link's blob, and that `S` is
+  never kept there ("secrets are never kept" still holds).
+- **06 §4.2**: the carry space's copy of that record, and that a host's
+  mailbox serves it.
+- **07 §5**: the mailbox holds invite topics as well as door topics; a topic
+  no key hashes to can't be purged. Nothing a relay does changes.
 - **08 §4**: the "Invites that name the space's hosts" Planned text goes.
-- **Threat model**: §3.7 Relay and §3.8 Host gain the rows above; §3.1
-  Stranger is unchanged (a leaked link gives what it gave).
+- **Threat model**: §2 Stranger (a leaked short link lets it add hints);
+  §3.1 (the forging claim holds for the space, and says what a link holder may
+  add); §3.7 Relay and §3.8 Host gain the rows above.
 
 ## Plan
 
 1. `packages/core/src/space/invite-link.ts`: `deriveInviteLink(S)`,
    `encodeInviteLink`, `parseInviteLink`, `sealInvite`, `openInvite`. Tests
    with fixed vectors.
-2. `packages/core/src/network/mailbox.ts`: nothing new; reuse `drop`, `fetch`,
-   `purge`.
+2. `packages/core/src/network/mailbox.ts`: nothing new; reuse `drop` and
+   `fetch`.
 3. `packages/core/src/node/node.ts`: `spaces.invite` returns the short link
    (`{ long: true }` for the old one); `preview` and `join` accept both;
-   `join` dials `nodes` until the space names its own; keep `S` in the
-   registry, drop again before expiry, seal again on key, relay or host
-   change, purge on `closeInvite`.
-4. `packages/core/src/node/carrier.ts` and `host.ts`: read invite records in
-   the carry space, drop them again.
+   `join` takes blobs together and keeps invite nodes as above; the registry
+   record, dropping again when gone, deleting it on `closeInvite`; the copy in
+   carry spaces.
+4. `packages/core/src/node/host.ts`, `packages/cli/src/serve.ts`: the host's
+   mailbox answers from carry-space records.
 5. Spec and docs as above; `packages/core/docs/spaces.md#invites`.
 6. Apps: the shorter link and a QR code.
 7. Tests:
    - a joiner with only a host online gets the space (fails today, #220);
-   - blobs that don't open are ignored, the newest wins;
-   - a closed invite's blob is purged, and a join after closing is refused;
-   - after a key change the blob is sealed again and a new joiner reads;
-   - with every device offline, the host keeps the blob past one TTL;
+   - a link holder's blob for another space is refused by the pin; one with
+     other nodes adds only hints, and its node is let go of after sync;
+   - nobody can clear the topic (the relay refuses a purge);
+   - after a removal and a key change, the link no longer lets anyone read,
+     and the removed member gets nothing from the mailbox;
+   - with every device offline, the host serves the blob past a relay's TTL,
+     and stops once the record is deleted;
+   - a blob that inflates past the limit is refused;
    - the long link still joins.
+8. A scenario: the chess club posts a role link publicly; a link holder
+   tries to redirect it, to clear it, and a removed member tries to keep
+   reading.
+
+## Adversarial review
+
+The first review found two blockers. Both came from one assumption: that
+holding `S` is no more than joining, so it could also update and clear the
+link. It can't.
+
+| Finding                                                                                                   | What changed                                                                                                        |
+| --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **Blocker.** Sealing again after a key change gave a removed member the new key                           | Blobs are never sealed again. A key change ends a link, as today                                                    |
+| **Blocker.** Any link holder could clear the topic and replace the invite                                 | The topic is no door's, so nobody can purge it. The pin fixes the space. Blobs are taken together, not newest-first |
+| The topic came from `sys.invite.key`, so whoever holds the space could find it                            | The topic comes from `S` alone                                                                                      |
+| A carrier's drop instructions could point a host at any server                                            | The host drops nothing; it serves from the record. At most 64 an account                                            |
+| Keeping `S` in the registry broke "secrets are never kept" and §3.6                                       | `S` stays on the device that made the link; the registry holds only ciphertext                                      |
+| The nodes' stop condition named records a joiner never sees                                               | Kept while `sys.keepers` names them                                                                                 |
+| `at` followed device clocks; "not found" claimed "closed"; deflate bombs; door-topic claim; `ws://` hints | `at` gone; wording fixed; a 64 KiB limit; claim gone; hints read as `ws://` only on localhost                       |
 
 ## Considered and not chosen
 
@@ -233,16 +302,19 @@ What a relay can do to an invite:
   (256 rooms a socket, 50 messages a second) bite a host with many spaces.
 - **Short codes held by one host** (`host/i/x7k2`). Short, but the invite
   lives or dies with that host. The `@` hint gets most of this.
+- **Signing the blob with a key only the inviter holds.** Would let the
+  inviter update it, but the joiner needs the public key or a hash of it in
+  the link, and an update after a key change is exactly the first blocker.
 - **Signed contact cards for every keeper.** Useful once nodes move often;
-  not needed while the inviter can seal the invite again.
+  not needed while links are short-lived and keepers are named in the space.
 
 ## Prior art
 
 - **Hypercore's blind pairing** (`holepunchto/blind-pairing-core`) is this
   design's nearest relative: a seed in the invite gives a key pair, and the
   invite id, the encryption key and the nonce are separate hashes of it. Its
-  joiner checks that what it got hashes to what the invite named, as ours
-  checks the constitution against the id.
+  joiner checks that what it got hashes to what the invite committed to, as
+  ours checks the constitution against the pin.
 - **Signal's group links** carry a 32-byte master key and a 16-byte password
   in the fragment; the group's title and members sit encrypted on Signal's
   server, fetched by the password. The same split: a lookup name and a
@@ -256,7 +328,7 @@ What a relay can do to an invite:
   key, and carry `seq` and an expiry so any store can hold it. That is the
   shape for contact cards, if they come.
 - **Nostr's outbox model** (NIP-65) and Matrix's `via=` hints: the address
-  names where to look. The `@` hint is the same idea.
+  names where to look. The `@` places are the same idea.
 
 Each other network needs its own key: Nostr signs with Schnorr on
 secp256k1, BEP 44 and Pkarr with ed25519. A plugin derives its key from `S`
@@ -265,12 +337,14 @@ already has both.
 
 ## Open questions
 
-- **How many mailboxes in the link.** One keeps it short; two survives one
+- **How many places in the link.** One keeps it short; two survives one
   relay going away.
-- **QR codes.** Uppercase base32 (26 characters for 16 bytes) fits a QR
+- **A shorter pin.** 12 bytes (96 bits) would save 5 characters and still
+  be far out of reach for one space; 16 leaves a margin.
+- **QR codes.** Uppercase base32 (52 characters for 32 bytes) fits a QR
   code's alphanumeric mode and makes it much smaller, but `#` and lowercase
-  hosts don't. A QR code could carry `MINCA:` and the base32 secret, and the
-  scanning app supply its own mailboxes.
+  hosts don't. A QR code could carry `MINCA:` and the base32 bytes, and the
+  scanning app supply its own places.
 - **The app's origin.** The link names an app (`minca.social/j`). Should any
   Minca app open any link, by a registered scheme or a shared path?
 - **Rooms on public networks.** On Nostr or the DHT anyone who knows a
