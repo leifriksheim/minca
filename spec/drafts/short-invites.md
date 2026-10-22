@@ -146,11 +146,11 @@ must not touch one.
 Section 3 makes the mailbox one kind of place. The design names two kinds,
 each by URL, so each gets plugins:
 
-| Kind                                 | Does                                     | Today                     | Could be                                                 |
-| ------------------------------------ | ---------------------------------------- | ------------------------- | -------------------------------------------------------- |
-| **Mailbox**                          | Keeps a small sealed blob under a topic  | A relay's mailbox (07 §5) | A Nostr addressable event; a host over HTTPS; BEP 44 DHT |
-| **Meeting place**                    | Finds peers in a room and passes signals | A relay's room (04 §1)    | Nostr ephemeral events; a WebTorrent tracker; mDNS       |
-| **Node** (a place you dial directly) | Takes a connection                       | `wss://…/peer` (04 §5.2)  | WebTransport                                             |
+| Kind                                 | Does                                     | Today                     | Could be                                                               |
+| ------------------------------------ | ---------------------------------------- | ------------------------- | ---------------------------------------------------------------------- |
+| **Mailbox**                          | Keeps a small sealed blob under a topic  | A relay's mailbox (07 §5) | A Nostr addressable event; a host over HTTPS; BEP 44 DHT               |
+| **Meeting place**                    | Finds peers in a room and passes signals | A relay's room (04 §1)    | Nostr ephemeral events; a WebTorrent tracker; mDNS                     |
+| **Node** (a place you dial directly) | Takes a connection                       | `wss://…/peer` (04 §5.2)  | WebTransport, with `serverCertificateHashes` so a host needs no domain |
 
 What each plugin must agree on with other implementations is protocol, and
 goes in 04 when it is built: for Nostr, the event kinds and tags; for a
@@ -236,10 +236,41 @@ What a relay can do to an invite:
 - **Signed contact cards for every keeper.** Useful once nodes move often;
   not needed while the inviter can seal the invite again.
 
+## Prior art
+
+- **Hypercore's blind pairing** (`holepunchto/blind-pairing-core`) is this
+  design's nearest relative: a seed in the invite gives a key pair, and the
+  invite id, the encryption key and the nonce are separate hashes of it. Its
+  joiner checks that what it got hashes to what the invite named, as ours
+  checks the constitution against the id.
+- **Signal's group links** carry a 32-byte master key and a 16-byte password
+  in the fragment; the group's title and members sit encrypted on Signal's
+  server, fetched by the password. The same split: a lookup name and a
+  separate key.
+- **Magic Wormhole** keeps codes tiny with a PAKE against a party that is
+  online. With nobody online, a mailbox needs a secret that resists offline
+  guessing, so ours is 128 bits; Trystero, which hashes a password with no
+  KDF, shows what happens otherwise.
+- **Signed records anyone may carry**: Pkarr (a signed DNS packet on the
+  Mainline DHT), IPNS, BEP 44 and libp2p's peer records name a record by its
+  key, and carry `seq` and an expiry so any store can hold it. That is the
+  shape for contact cards, if they come.
+- **Nostr's outbox model** (NIP-65) and Matrix's `via=` hints: the address
+  names where to look. The `@` hint is the same idea.
+
+Each other network needs its own key: Nostr signs with Schnorr on
+secp256k1, BEP 44 and Pkarr with ed25519. A plugin derives its key from `S`
+with its own HKDF label, never from the P-256 invite key; `@noble/curves`
+already has both.
+
 ## Open questions
 
 - **How many mailboxes in the link.** One keeps it short; two survives one
   relay going away.
+- **QR codes.** Uppercase base32 (26 characters for 16 bytes) fits a QR
+  code's alphanumeric mode and makes it much smaller, but `#` and lowercase
+  hosts don't. A QR code could carry `MINCA:` and the base32 secret, and the
+  scanning app supply its own mailboxes.
 - **The app's origin.** The link names an app (`minca.social/j`). Should any
   Minca app open any link, by a registered scheme or a shared path?
 - **Rooms on public networks.** On Nostr or the DHT anyone who knows a
