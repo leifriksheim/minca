@@ -114,7 +114,7 @@ Leave out `network` to stay offline. Call `node.close()` when done.
 ```typescript
 const space = await node.spaces.create({ name: 'Groceries', visibility: 'private', ...rolePresets.team });
 
-const invite = await node.spaces.invite(space.id); // a link-safe string; treat it as a secret
+const invite = await node.spaces.invite(space.id, { short: true }); // ~85 characters; treat it as a secret
 const view = await node.spaces.invite(space.id, { write: false }); // read-only
 await node.spaces.join(invite); // on the friend's side
 await node.spaces.closeInvite(space.id, invite); // nobody else joins with it
@@ -179,7 +179,7 @@ page was opened with:
 ```tsx
 import { inviteLink, useInviteLink, useMyName, useNode } from '@minca/core/react';
 
-const link = inviteLink(await node.spaces.invite(space.id)); // https://app.example/#invite=…
+const link = inviteLink(await node.spaces.invite(space.id, { short: true })); // https://app.example/#invite=…
 
 function Invited({ onJoin }: { onJoin: (invite: string) => Promise<unknown> }) {
   const { invite, preview, dismiss } = useInviteLink();

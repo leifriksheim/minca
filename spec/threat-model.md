@@ -58,6 +58,11 @@ reference implementation, or any implementation, honestly.
     of its `seen` (03 §5.2), and its access changes are never applied (03 §4.4,
     §4.5).
   - It cannot forge a version, a note or an invite (02 §3, 01 §7, 03 §7).
+    Holding a short link, it can seal other blobs under its secret and leave
+    them under its topic, but a joiner takes only the blob whose hash is the
+    link's pin, so it can't change what a link gives anyone, nor clear it:
+    no key hashes to a link's topic (03 §7.7; `invite-link.test.ts`, "a link
+    holder's own blob…", "nobody can clear it…").
   - It cannot give someone's note a second id, nor make one of its own count
     for an account: a token has one form (low-S signatures only, one
     spelling, exact fields), and a note is one token signed by the account's
@@ -73,6 +78,9 @@ reference implementation, or any implementation, honestly.
     never causes a key change, so whoever holds it reads everything new
     ([#170](https://github.com/leifriksheim/minca/issues/170)).
   - A leaked role invite lets it join, as often as it likes ([#170](https://github.com/leifriksheim/minca/issues/170)).
+    A short link is as good as a long one for as long as anyone who holds its
+    sealed invite leaves it in a mailbox: its `until` stops only the
+    account's own copies (03 §7.7).
   - What it sends must be checked, stored or refused, with few limits
     ([#33](https://github.com/leifriksheim/minca/issues/33)). That includes knocks on doors and contact requests (07),
     whose mailbox can be flooded ([#162](https://github.com/leifriksheim/minca/issues/162)).
@@ -881,6 +889,14 @@ _Source: 01 §7.5, §8, §11; 06 §2, §3; 05 §14, §15; 02 §4.1. Tests: `pack
   - Joiners don't prove they hold their DID's key, so anyone can take a
     victim's place in a room ([#162](https://github.com/leifriksheim/minca/issues/162)).
   - Its door mailbox can be flooded ([#162](https://github.com/leifriksheim/minca/issues/162)).
+    So can a short link's topic: 64 blobs fill it, and a drop of the link's
+    blob after its copy expired is then refused. Joiners read every page, so
+    junk can't hide a copy that is there, and a host's copy is not in the
+    relay's queue.
+  - Of a short link it learns the topic, the sealed invite's size, and when
+    and from which address it is fetched; a relay also serving the space's
+    room can tie a fetch to the room joined a moment later
+    ([#162](https://github.com/leifriksheim/minca/issues/162)).
   - It can fill the 32 exchanges an app offering a code runs before the right
     program arrives, with peers that say hello, so the program is never
     answered. Denial of service only: none of them holds the code, so none
@@ -934,6 +950,10 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
     plaintext ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_.
   - A host asked for a bot receives a lasting role invite carrying the space
     key ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_.
+  - It learns which account keeps which short link, until when, and who
+    fetches it from its relay (06 §4.2). It serves only sealed invites, and
+    only under the topic each one's own hash gives, so it can withhold a link
+    but not change it.
   - A host whose bot is connected to a service (08 §3.1) can act there as
     the community, within what the service granted it: for GitHub, the App's
     permissions on the repositories an admin of the account chose. Each host

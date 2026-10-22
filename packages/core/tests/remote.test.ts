@@ -177,11 +177,11 @@ describe('a node across a port', () => {
     assert.equal((await remote.spaces.list()).length, 1);
   });
 
-  test('previews an invite without asking the node, and holds a space until released', async () => {
+  test('previews an invite through the node, which fetches a short one, and holds a space until released', async () => {
     const { node, remote } = await served();
     const { id: space } = await node.spaces.create({ name: 'Climbing', ...team, visibility: 'public' });
     const invite = await remote.spaces.invite(space);
-    assert.deepEqual(remote.spaces.preview(invite), node.spaces.preview(invite));
+    assert.deepEqual(await remote.spaces.preview(invite), await node.spaces.preview(invite));
 
     const release = await remote.spaces.hold(space);
     await release();

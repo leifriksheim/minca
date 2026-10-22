@@ -137,7 +137,8 @@ needs no `join` and names no DID.
   client's, whichever is shorter; a client can't ask for more.
 - The relay files the blob under `id = base64url(SHA-256(UTF-8(blob)))`, and
   records `at`, when it took it (ms). Dropping a blob already held under that
-  topic MUST answer `dropped` with the same id and store nothing new.
+  topic MUST answer `dropped` with the same id and store nothing new. A copy
+  past its TTL is not held, even before the relay sweeps it away.
 
 **fetch** — read a topic's blobs.
 
@@ -213,7 +214,13 @@ keeps its code working.
 A relay need not keep its mailbox across a restart (the reference relay keeps
 it in memory), which is one reason a knock goes to every relay a door names.
 
-_Source: `packages/relay/relay.mjs` (`handleMail`, `purge`, `sweepMail`, `MAILBOX_LIMITS`), `packages/core/src/network/mailbox.ts`. Tests: `packages/core/tests/doors.test.ts` ("the relay's mailbox")._
+**Short links.** The mailbox also keeps sealed invites under a short link's
+topic ([03](03-spaces.md) §7.7). The relay can't tell them from knocks, and
+does nothing different. No key hashes to such a topic, so a purge of it always
+fails: nobody can clear it. A host's relay also answers a fetch with the
+links its accounts keep ([06](06-nodes-and-sessions.md) §4.2).
+
+_Source: `packages/relay/relay.mjs` (`handleMail`, `purge`, `sweepMail`, `MAILBOX_LIMITS`, `mailboxFrom`), `packages/core/src/network/mailbox.ts`. Tests: `packages/core/tests/doors.test.ts` ("the relay's mailbox"), `packages/core/tests/invite-link.test.ts` ("a mailbox that keeps blobs for others", "nobody can clear it…")._
 
 ## 6. Knocks
 

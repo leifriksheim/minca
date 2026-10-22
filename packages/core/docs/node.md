@@ -450,7 +450,8 @@ and never under a note that lacks `/account/write`, such as an agent's. The prof
 [03](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md).
 
 **Joining.** `spaces.join(invite)` accepts a bare invite or any link carrying
-`#invite=…`, `?invite=…` or `&invite=…`. It stores the space (and its key, for
+`#invite=…`, `?invite=…` or `&invite=…`, long or short; a short one is
+fetched from its mailboxes first ([spaces](spaces.md#invites)). It stores the space (and its key, for
 a private space), stores `memberKey` when given, writes the `sys.joined`
 record, then tries to use the invite's role secret at once. If the space's
 invite record has not reached this device yet, the space is held with

@@ -20,15 +20,15 @@ import { checkRelays } from './roles.js';
 import { nodeAddress } from '../network/ws-transport.js';
 
 /** The secret's length: 128 bits, out of reach of offline guessing */
-export const LINK_SECRET_BYTES = 16;
+const LINK_SECRET_BYTES = 16;
 /** The pin's length: a second blob with the same pin is a 128-bit second preimage */
-export const LINK_PIN_BYTES = 16;
+const LINK_PIN_BYTES = 16;
 /** At most this many places in a link, and asked of one */
 export const MAX_LINK_PLACES = 2;
 /** A sealed invite opens to at most this much */
-export const MAX_SEALED_INVITE_BYTES = 64 * 1024;
+const MAX_SEALED_INVITE_BYTES = 64 * 1024;
 /** A mailbox blob's limit (spec 07 §5): a sealed invite must fit it */
-export const MAX_SEALED_BLOB_CHARS = 12_000;
+const MAX_SEALED_BLOB_CHARS = 12_000;
 
 const CODE = /^[A-Za-z0-9_-]{43}$/;
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);

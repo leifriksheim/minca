@@ -82,6 +82,12 @@ describe('the link', () => {
       base64UrlEncode(await expandSecret(secret, 'minca/invite-link/v1|secret')),
     );
     assert.equal(keys.inviteSecret.length, 32);
+    // The spec's example (03 §7.7), checked against Node's own HKDF when it was written.
+    assert.equal(base64UrlEncode(keys.inviteSecret), '-VeKPkDHj10Sod96XjdaMmYrdj2qD0hAugTgfzBceX4');
+    assert.equal(
+      base64UrlEncode(await expandSecret(secret, 'minca/invite-link/v1|seal')),
+      'vh2bIf3PYkKDDgSCyeY-s-HPP4xgGk6pTj_YhCd-Gt8',
+    );
     assert.equal(keys.topic, await linkTopic(pin));
     assert.equal(keys.topic.length, 43);
     // Fixed, so another implementation can check its own.

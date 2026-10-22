@@ -882,6 +882,17 @@ carrier that reads `carry:closed` from the account MUST stop carrying for it and
 forget what it held. The node keeps the carry space open until it closes, so
 the carrier hears it ([the node](../packages/core/docs/node.md#carriers-hosting-and-notifications)).
 
+**Links.** Beside the passes, the device writes each `sys.link` record of
+the account's registry ([03](03-spaces.md) §13.2) into the carry space, same
+key and body, and deletes those the registry no longer holds. A carrier that
+runs a relay (a host) answers a mailbox fetch ([07](07-doors.md) §5) of a
+topic with the blob of every such record whose topic, computed from the blob
+itself (03 §7.7), is that topic, until its `until`: first, on the first page,
+with `seq` 0. The account never names a topic, so its records can't make the
+host answer for a door's topic or for another link's. The reference host
+serves an account's 64 most recently written. A host leaves nothing in any
+other relay's mailbox.
+
 A pass cannot be taken back. A removed carrier that does not forget keeps the
 read key seeds it was given, so it can still prove itself to peers and fetch
 ciphertext until each space's key changes ([03](03-spaces.md), `changeKey`).
@@ -892,7 +903,7 @@ its keepers (`{ did, name }`, at most 16, [03](03-spaces.md)) and stops naming
 carriers the account removed. Other keepers stay. So apps holding part of a
 space ([05](05-sync-and-storage.md) §5) can rely on the carriers.
 
-_Source: `packages/core/src/node/node.ts` (`carriers`, `syncPasses`, `passAll`, `nameKeepers`), `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/carrier.test.ts` ("added twice at once, it gets one carry space", "added on two devices at once, it gets one carry space…", "added again after it was removed…", "its carry space cannot be left…", "adding one that fails leaves no carry space behind…", "removed while a refill runs, no pass is written back", "a removal reaches the carrier even when the home closes straight after")._
+_Source: `packages/core/src/node/node.ts` (`carriers`, `syncPasses`, `passAll`, `nameKeepers`), `packages/core/src/node/carrier.ts` (`linksIn`, `linksAt`), `packages/cli/src/host.ts` (`mailboxFrom`), `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts`. Tests: `packages/cli/tests/host.test.ts` ("a short link: the host keeps it…"), `packages/core/tests/carrier.test.ts` ("added twice at once, it gets one carry space", "added on two devices at once, it gets one carry space…", "added again after it was removed…", "its carry space cannot be left…", "adding one that fails leaves no carry space behind…", "removed while a refill runs, no pass is written back", "a removal reaches the carrier even when the home closes straight after")._
 
 ### 4.3 Connecting a carrier through the account home
 

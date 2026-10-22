@@ -1,9 +1,23 @@
 # Draft: short invites, and finding a space with nobody else online
 
-Status: design, October 2026, revised after two adversarial reviews (below).
-Not normative. Fixes the first half of
+Status: built, October 2026: the specification is
+[03 §7.7](../03-spaces.md), with §13.2, 06 §4.2 and 07 §5. This page keeps the
+design and its three reviews. Not normative. Fixes the first half of
 [#220](https://github.com/leifriksheim/minca/issues/220) and makes invite links
 short enough to paste, say and print.
+
+## What changed in building it
+
+- `nodes` went into the long invite itself (03 §7.4), not beside it in the
+  sealed body, so a long link carries them too and the account's other
+  devices learn them from `sys.joined`. The sealed body is the long invite
+  without its secret; `invitedBy` stayed, for the preview.
+- `deflate` (zlib) rather than `deflate-raw`: Node 20, which the library
+  supports, lacks the raw form.
+- Invite nodes are kept like invite relays, not dropped after `4003`s: they
+  come from the inviter, as the relays do. Whether to let them go belongs to
+  #220's keepers plan.
+- The record key is `link:<hex of the pin>`: record keys are lowercase.
 
 ## The problem
 
