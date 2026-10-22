@@ -8,7 +8,7 @@
  *   yours in packages/cli/.env.host.local. Wallet payments on Base Sepolia by default.
  * - stripe: when .env.host.local has a Stripe test key, the Stripe CLI
  *   forwards Stripe's webhooks to the host, and the host gets its secret.
- * - home (5174), app (5173), site (5185) and Liquid (5176); their .env.development point at the rest.
+ * - home (5174), app (5173), site (5185) and Liquid (5186); their .env.development point at the rest.
  *
  * Ctrl-C stops them all.
  */

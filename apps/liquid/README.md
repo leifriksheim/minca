@@ -17,6 +17,6 @@ and keeps everything in collections of its own.
 What it can't promise is on its own **?** page.
 
 ```bash
-npm run dev -w @minca/liquid    # http://localhost:5176, with `npm run dev` running for the home and node
+npm run dev -w @minca/liquid    # http://localhost:5186, with `npm run dev` running for the home and node
 npm test -w @minca/liquid
 ```
