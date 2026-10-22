@@ -415,13 +415,13 @@
     const [naming, setNaming] = useState(null);
     const picker = useRef(null);
     // A file opened from elsewhere, like one in a chat: shown in the viewer, among all files.
-    const shown = useShown();
+    const asked = useShown();
     useEffect(() => {
-      if (!shown) return;
+      if (!asked) return;
       setView({ kind: 'all' });
       setQuery('');
-      setOpened(shown.key);
-    }, [shown]);
+      setOpened(asked.key);
+    }, [asked]);
 
     const all = files ?? [];
     const keys = useMemo(() => new Set(all.map((f) => f.key)), [files]);

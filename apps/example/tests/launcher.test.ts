@@ -6,6 +6,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
+import { compileFunction } from 'node:vm';
 
 import type { NodeRecord, P2PNode } from '@minca/core';
 import {
@@ -207,6 +208,9 @@ describe('the launcher', () => {
     for (const file of screens) {
       const screen = await readFile(new URL(file, folder), 'utf8');
       assert.equal(checkLauncherApp({ title: file, collections: ['std.task'], screen }), null, file);
+      // Its scripts at least parse: a name declared twice stops the whole screen.
+      for (const [, script] of screen.matchAll(/<script>([\s\S]*?)<\/script>/g))
+        assert.doesNotThrow(() => compileFunction(script ?? '', ['ui', 'minca']), file);
     }
   });
 
