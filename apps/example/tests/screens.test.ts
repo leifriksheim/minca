@@ -16,6 +16,7 @@ import {
   type ScreenHost,
 } from '../src/components/apps/screens';
 import type { P2PNode } from '@minca/core';
+import { attachment, tag, useSchemas as addSchemas } from '@minca/core/schemas';
 import { setup, waitFor } from './helpers';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -394,6 +395,54 @@ function fakeHost() {
   };
   return { host, asked };
 }
+
+describe('the Files app', () => {
+  test("a file kept about nothing is a file of the space, and anyone may put anyone's file in a category", async () => {
+    const { alice, bob, space } = await setup();
+    await addSchemas(alice.node, space, [attachment, tag]);
+    const mine = bridgeFor(alice.node, space, [attachment.name, tag.name]);
+    const theirs = bridgeFor(bob.node, space, [attachment.name, tag.name]);
+    try {
+      // Uploaded in Files, not shared anywhere: an attachment with no about
+      const bytes = z
+        .looseObject({ hash: z.string(), size: z.number(), mime: z.string() })
+        .parse(
+          (await mine.call('addFile', new Uint8Array([1, 2]), { name: 'plan.txt', mime: 'text/plain' }))
+            .value,
+        );
+      const put = await mine.call('put', attachment.name, {
+        name: 'plan.txt',
+        mime: 'text/plain',
+        size: 2,
+        blob: bytes,
+      });
+      assert.equal(put.ok, true, put.error ?? '');
+      const file = z.object({ key: z.string() }).parse(put.value);
+      await waitFor(async () => (await bob.node.records.get(space, file.key)) !== null, 'the file');
+
+      const tagged = await theirs.call(
+        'put',
+        tag.name,
+        { label: 'Plans' },
+        { links: [{ rel: 'about', to: file.key }] },
+      );
+      assert.equal(tagged.ok, true, tagged.error ?? '');
+      const listed = await theirs.call('list', tag.name, { where: { 'link:about': file.key } });
+      assert.deepEqual(
+        z
+          .array(z.object({ body: z.object({ label: z.string() }) }))
+          .parse(listed.value)
+          .map((t) => t.body.label),
+        ['Plans'],
+      );
+      // The bytes follow the record; once here, Bob's screen gets them whole.
+      await waitFor(async () => (await theirs.call('blob', file.key, bytes.hash)).ok, 'the bytes');
+    } finally {
+      mine.close();
+      theirs.close();
+    }
+  });
+});
 
 describe('live messages between screens', () => {
   test("a screen hears the same app's screens on other devices, as who sent it, and no other app's", async () => {

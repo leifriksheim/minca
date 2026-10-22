@@ -1,0 +1,866 @@
+<!-- Files: every std.attachment in the space, by kind, size and name, in categories that are std.tag labels on them. -->
+<style>
+  html,
+  body {
+    height: 100%;
+  }
+  body {
+    padding: 0;
+  }
+  #app {
+    height: 100%;
+    display: flex;
+  }
+  .side {
+    flex: 0 0 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 16px 10px;
+    border-right: 1px solid var(--minca-line);
+    overflow-y: auto;
+  }
+  .side h3 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 14px 8px 4px;
+    font-size: 12px;
+    color: var(--minca-muted);
+  }
+  .side h3 button {
+    min-height: 0;
+    padding: 0 6px;
+    font-size: 16px;
+  }
+  .place {
+    justify-content: flex-start;
+    gap: 8px;
+    min-height: 32px;
+    padding: 0 8px;
+    border: 1px solid transparent;
+    background: none;
+    font-weight: 400;
+    text-align: left;
+  }
+  .place .count {
+    margin-left: auto;
+    color: var(--minca-faint);
+    font-size: 12px;
+  }
+  .place.on {
+    background: var(--minca-accent-soft);
+    color: var(--minca-accent);
+    font-weight: 600;
+  }
+  .place.target {
+    border-color: var(--minca-accent);
+    border-style: dashed;
+  }
+  .dot {
+    width: 10px;
+    height: 10px;
+    flex-shrink: 0;
+    border-radius: 50%;
+  }
+  .main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--minca-line);
+  }
+  .bar h2 {
+    flex: 1;
+    min-width: 120px;
+    margin: 0;
+  }
+  .bar input[type='search'] {
+    width: 180px;
+  }
+  .bar select {
+    width: auto;
+  }
+  .grid {
+    flex: 1;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    align-content: start;
+    gap: 12px;
+    padding: 16px;
+  }
+  .file {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    min-height: 0;
+    padding: 6px 6px 8px;
+    border: 1px solid var(--minca-line);
+    border-radius: var(--minca-radius-md);
+    background: var(--minca-card);
+    font-weight: 400;
+    text-align: left;
+  }
+  .file:hover {
+    border-color: var(--minca-line-strong);
+    background: var(--minca-card);
+  }
+  .thumb {
+    position: relative;
+    display: grid;
+    place-items: center;
+    aspect-ratio: 4 / 3;
+    margin-bottom: 4px;
+    overflow: hidden;
+    border-radius: var(--minca-radius-sm);
+    background: var(--minca-sunken);
+    font-size: 30px;
+  }
+  .thumb img,
+  .thumb video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .thumb .ext {
+    position: absolute;
+    bottom: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--minca-muted);
+  }
+  .thumb .play {
+    position: absolute;
+    font-size: 22px;
+    color: #fff;
+    text-shadow: 0 1px 4px rgb(0 0 0 / 0.6);
+  }
+  .file .name {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .file .meta {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+  }
+  .file .dots {
+    display: flex;
+    gap: 3px;
+    margin-left: auto;
+  }
+  .file .dots .dot {
+    width: 8px;
+    height: 8px;
+  }
+  .drop {
+    position: fixed;
+    inset: 8px;
+    z-index: 10;
+    display: grid;
+    place-items: center;
+    border: 2px dashed var(--minca-accent);
+    border-radius: var(--minca-radius-lg);
+    background: var(--minca-accent-soft);
+    color: var(--minca-accent);
+    font-weight: 600;
+    pointer-events: none;
+  }
+  .viewer {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    background: rgb(10 10 12 / 0.94);
+    color: #fff;
+  }
+  .viewer header,
+  .viewer footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+  }
+  .viewer header strong {
+    flex: 1;
+    min-width: 0;
+  }
+  .viewer .stage {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 8px;
+  }
+  .viewer .show {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    display: grid;
+    place-items: center;
+  }
+  .viewer .show img,
+  .viewer .show video {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+  .viewer .show pre {
+    width: min(100%, 860px);
+    max-height: 100%;
+    overflow: auto;
+    margin: 0;
+    padding: 16px;
+    border-radius: var(--minca-radius-md);
+    background: var(--minca-card);
+    color: var(--minca-body);
+    font-size: 13px;
+    white-space: pre-wrap;
+  }
+  .viewer .icon {
+    font-size: 64px;
+    text-align: center;
+  }
+  .viewer button {
+    color: #fff;
+    border-color: rgb(255 255 255 / 0.3);
+    background: rgb(255 255 255 / 0.08);
+  }
+  .viewer button[data-variant='danger'] {
+    border-color: transparent;
+    background: var(--minca-danger);
+  }
+  .viewer .step {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    font-size: 20px;
+  }
+  .viewer .step:disabled {
+    visibility: hidden;
+  }
+  .viewer .chip.on {
+    border-color: transparent;
+    background: #fff;
+    color: #111;
+  }
+  @media (max-width: 640px) {
+    #app {
+      flex-direction: column;
+    }
+    .side {
+      flex: none;
+      flex-direction: row;
+      align-items: center;
+      padding: 8px 10px;
+      border-right: none;
+      border-bottom: 1px solid var(--minca-line);
+      overflow-x: auto;
+    }
+    .side h3 {
+      margin: 0 4px 0 12px;
+    }
+    .place {
+      flex-shrink: 0;
+    }
+    .bar input[type='search'] {
+      width: 100%;
+      order: 3;
+    }
+    .grid {
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    }
+  }
+</style>
+<script>
+  const { html, render, useState, useEffect, useMemo, useRef, useRecords, useCan, useFile, useBlob } = ui;
+  const { useSeen, Avatar, Person, attach, sizeOf, ago } = ui;
+  const FILE = 'std.attachment';
+  const TAG = 'std.tag';
+  /** What a card carries when it is dragged onto a category */
+  const DRAGGED = 'application/x-minca-file';
+  /** A video's whole file is fetched for its card only up to this size */
+  const THUMB_VIDEO = 10_000_000;
+
+  const KINDS = [
+    ['picture', 'Pictures', '🖼', (m) => m.startsWith('image/')],
+    ['video', 'Videos', '🎬', (m) => m.startsWith('video/')],
+    ['audio', 'Sound', '🎵', (m) => m.startsWith('audio/')],
+    [
+      'document',
+      'Documents',
+      '📄',
+      (m) =>
+        m.startsWith('text/') ||
+        /pdf|word|officedocument|opendocument|rtf|json|csv|presentation|sheet/.test(m),
+    ],
+    ['archive', 'Archives', '🗜', (m) => /zip|tar|7z|rar|compressed/.test(m)],
+    ['other', 'Other', '📎', () => true],
+  ];
+  const kindOf = (mime = '') => KINDS.find(([, , , is]) => is(mime));
+  const extOf = (name) => /\.([a-z0-9]{1,5})$/i.exec(name)?.[1]?.toUpperCase() ?? '';
+  /** Text worth showing as it is, when not too long */
+  const isText = (mime) => /^text\/|json|csv|xml|javascript/.test(mime);
+
+  const SORTS = {
+    newest: ['Newest', (a, b) => b.createdAt.localeCompare(a.createdAt)],
+    oldest: ['Oldest', (a, b) => a.createdAt.localeCompare(b.createdAt)],
+    largest: ['Largest', (a, b) => (b.body.size ?? 0) - (a.body.size ?? 0)],
+    smallest: ['Smallest', (a, b) => (a.body.size ?? 0) - (b.body.size ?? 0)],
+    name: ['Name', (a, b) => a.body.name.localeCompare(b.body.name)],
+  };
+
+  /** A category's colour, the same on every device, from its name */
+  const COLOURS = ['cobalt', 'coral', 'peach', 'sage', 'lilac'];
+  const colourOf = (label) =>
+    `var(--minca-${COLOURS[[...label].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % COLOURS.length]})`;
+
+  /** The files a tag is on, of those here */
+  const filesOf = (tag) => tag.links.filter((l) => l.rel === 'about').map((l) => l.to);
+
+  /** Files dropped anywhere on the screen, or pasted wherever the focus is */
+  function useIncoming(onFiles) {
+    const [dropping, setDropping] = useState(false);
+    const latest = useRef(onFiles);
+    latest.current = onFiles;
+    useEffect(() => {
+      let depth = 0;
+      // A card dragged within the screen carries its picture as a file too: that is a move, not an upload.
+      const carriesFiles = (event) =>
+        event.dataTransfer?.types.includes('Files') && !event.dataTransfer.types.includes(DRAGGED);
+      const done = () => {
+        depth = 0;
+        setDropping(false);
+      };
+      const on = {
+        dragenter: (event) => {
+          if (!carriesFiles(event)) return;
+          event.preventDefault();
+          depth += 1;
+          setDropping(true);
+        },
+        dragover: (event) => carriesFiles(event) && event.preventDefault(),
+        dragleave: (event) => carriesFiles(event) && --depth <= 0 && done(),
+        drop: (event) => {
+          if (!carriesFiles(event)) return;
+          event.preventDefault();
+          done();
+          latest.current([...event.dataTransfer.files]);
+        },
+        dragend: done,
+        paste: (event) => {
+          const data = event.clipboardData;
+          const pasted = data?.files.length
+            ? [...data.files]
+            : [...(data?.items ?? [])]
+                .map((item) => item.kind === 'file' && item.getAsFile())
+                .filter(Boolean);
+          if (!pasted.length) return;
+          event.preventDefault();
+          latest.current(pasted);
+        },
+      };
+      for (const [name, listener] of Object.entries(on)) document.addEventListener(name, listener);
+      addEventListener('blur', done);
+      return () => {
+        for (const [name, listener] of Object.entries(on)) document.removeEventListener(name, listener);
+        removeEventListener('blur', done);
+      };
+    }, []);
+    return dropping;
+  }
+
+  function Files() {
+    const files = useRecords(FILE);
+    const tags = useRecords(TAG);
+    const mayAdd = useCan('create', FILE);
+    const mayTag = useCan('create', TAG);
+    // { kind: 'all' } | { kind: 'type', type } | { kind: 'tag', label }
+    const [view, setView] = useState({ kind: 'all' });
+    const [sort, setSort] = useState('newest');
+    const [query, setQuery] = useState('');
+    const [opened, setOpened] = useState(null);
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState(null);
+    const [naming, setNaming] = useState(null);
+    // Categories made on this device that nothing is in yet: one exists for everyone once a file is in it.
+    const [made, setMade] = useState([]);
+    const picker = useRef(null);
+
+    useEffect(() => {
+      minca.recall('categories').then((kept) => Array.isArray(kept) && setMade(kept));
+    }, []);
+    const keepMade = (list) => {
+      setMade(list);
+      minca.remember('categories', list.length ? list : null);
+    };
+
+    const all = files ?? [];
+    const keys = useMemo(() => new Set(all.map((f) => f.key)), [files]);
+    // File key → the tags on it
+    const tagsOn = useMemo(() => {
+      const on = new Map();
+      for (const tag of tags ?? [])
+        for (const key of filesOf(tag)) if (keys.has(key)) on.set(key, [...(on.get(key) ?? []), tag]);
+      return on;
+    }, [tags, keys]);
+    const labelsOn = (key) => [...new Set((tagsOn.get(key) ?? []).map((t) => t.body.label))];
+    const counts = useMemo(() => {
+      const byLabel = new Map();
+      for (const [key] of tagsOn)
+        for (const label of labelsOn(key)) byLabel.set(label, (byLabel.get(label) ?? 0) + 1);
+      return byLabel;
+    }, [tagsOn]);
+    const labels = [...new Set([...counts.keys(), ...made])].sort((a, b) => a.localeCompare(b));
+
+    const shown = useMemo(() => {
+      const text = query.trim().toLowerCase();
+      return all
+        .filter((f) =>
+          view.kind === 'type'
+            ? kindOf(f.body.mime)[0] === view.type
+            : view.kind === 'tag'
+              ? labelsOn(f.key).includes(view.label)
+              : true,
+        )
+        .filter((f) => !text || f.body.name.toLowerCase().includes(text))
+        .sort(SORTS[sort][1]);
+    }, [files, tagsOn, view, sort, query]);
+
+    const fail = (e) => setError(e.message ?? String(e));
+
+    /** Puts a file in a category, unless someone already has */
+    const tag = async (key, label) => {
+      if (labelsOn(key).includes(label)) return;
+      await minca.put(TAG, { label }, { links: [{ rel: 'about', to: key }] });
+      if (made.includes(label)) keepMade(made.filter((l) => l !== label));
+    };
+    /** Takes a file out of a category: every tag saying so that the person looking may remove */
+    const untag = async (key, label) => {
+      const refused = [];
+      for (const t of tagsOn.get(key) ?? [])
+        if (t.body.label === label) await minca.remove(t.key).catch(() => refused.push(t));
+      if (refused.length) setError(`Only whoever put it in “${label}”, or a moderator, can take it out.`);
+    };
+
+    const upload = async (list) => {
+      if (!list.length || !mayAdd) return;
+      setBusy(true);
+      setError(null);
+      try {
+        const written = await attach(null, list);
+        // Added while a category is open, they go in it.
+        if (view.kind === 'tag' && mayTag) for (const file of written) await tag(file.key, view.label);
+      } catch (e) {
+        fail(e);
+      } finally {
+        setBusy(false);
+      }
+    };
+    const dropping = useIncoming(upload);
+
+    const remove = async (file) => {
+      setOpened(null);
+      try {
+        for (const t of tagsOn.get(file.key) ?? []) if (t.mine) await minca.remove(t.key).catch(() => {});
+        await minca.remove(file.key);
+      } catch (e) {
+        fail(e);
+      }
+    };
+    const dropCategory = async (label) => {
+      keepMade(made.filter((l) => l !== label));
+      for (const [key] of tagsOn) if (labelsOn(key).includes(label)) await untag(key, label);
+      setView({ kind: 'all' });
+    };
+
+    if (!files) return null;
+    const total = shown.reduce((sum, f) => sum + (f.body.size ?? 0), 0);
+    const title =
+      view.kind === 'type'
+        ? KINDS.find(([k]) => k === view.type)[1]
+        : view.kind === 'tag'
+          ? view.label
+          : 'All files';
+    const at = shown.findIndex((f) => f.key === opened);
+
+    return html`
+      <nav class="side" aria-label="Files">
+        <${Place}
+          on=${view.kind === 'all'}
+          label="All files"
+          icon="🗂"
+          count=${all.length}
+          onClick=${() => setView({ kind: 'all' })}
+        />
+        ${KINDS.map(([type, name, icon]) => {
+          const count = all.filter((f) => kindOf(f.body.mime)[0] === type).length;
+          return (
+            count > 0 &&
+            html`<${Place}
+              key=${type}
+              on=${view.kind === 'type' && view.type === type}
+              label=${name}
+              icon=${icon}
+              count=${count}
+              onClick=${() => setView({ kind: 'type', type })}
+            />`
+          );
+        })}
+        <h3>
+          Categories
+          ${
+            mayTag &&
+            html`<button
+              type="button"
+              data-variant="ghost"
+              title="New category"
+              onClick=${() => setNaming('')}
+            >
+              +
+            </button>`
+          }
+        </h3>
+        ${
+          naming !== null &&
+          html`<form
+            onSubmit=${(event) => {
+              event.preventDefault();
+              const label = naming.trim().slice(0, 100);
+              setNaming(null);
+              if (!label) return;
+              if (!labels.includes(label)) keepMade([...made, label]);
+              setView({ kind: 'tag', label });
+            }}
+          >
+            <${Focused}
+              value=${naming}
+              placeholder="Name it"
+              aria-label="Category name"
+              onInput=${(event) => setNaming(event.currentTarget.value)}
+              onBlur=${(event) => !event.currentTarget.value.trim() && setNaming(null)}
+            />
+          </form>`
+        }
+        ${labels.length === 0 && naming === null && html`<p class="faint" style="margin: 0 8px; font-size: 12px">None yet</p>`}
+        ${labels.map(
+          (label) =>
+            html`<${Place}
+              key=${label}
+              on=${view.kind === 'tag' && view.label === label}
+              label=${label}
+              colour=${colourOf(label)}
+              count=${counts.get(label)}
+              onClick=${() => setView({ kind: 'tag', label })}
+              onFile=${mayTag && ((key) => tag(key, label))}
+              onError=${setError}
+            />`,
+        )}
+      </nav>
+      <main class="main">
+        <div class="bar">
+          <h2>
+            ${title}
+            <span class="faint" style="font-size: 13px; font-weight: 400"
+              >${shown.length} · ${sizeOf(total)}</span
+            >
+          </h2>
+          <input
+            type="search"
+            placeholder="Search"
+            aria-label="Search by name"
+            value=${query}
+            onInput=${(event) => setQuery(event.currentTarget.value)}
+          />
+          <select aria-label="Sort" value=${sort} onChange=${(event) => setSort(event.currentTarget.value)}>
+            ${Object.entries(SORTS).map(([key, [name]]) => html`<option value=${key}>${name}</option>`)}
+          </select>
+          ${
+            view.kind === 'tag' &&
+            html`<button type="button" data-variant="ghost" onClick=${() => dropCategory(view.label)}>
+              Remove category
+            </button>`
+          }
+          ${
+            mayAdd &&
+            html`<button
+                type="button"
+                data-variant="primary"
+                disabled=${busy}
+                onClick=${() => picker.current?.click()}
+              >
+                ${busy ? 'Uploading…' : 'Upload'}
+              </button>
+              <input
+                ref=${picker}
+                type="file"
+                multiple
+                hidden
+                onChange=${(event) => {
+                  upload([...event.currentTarget.files]);
+                  event.currentTarget.value = '';
+                }}
+              />`
+          }
+        </div>
+        ${error && html`<p class="error" style="margin: 8px 16px 0">${error}</p>`}
+        <div class="grid">
+          ${
+            shown.length === 0 &&
+            html`<p class="empty" style="grid-column: 1 / -1">
+              ${
+                query
+                  ? 'Nothing by that name.'
+                  : view.kind === 'tag'
+                    ? 'Nothing in this category yet. Drag files onto it, or drop new ones here.'
+                    : 'No files yet. Drop some here, paste them, or share them in a chat.'
+              }
+            </p>`
+          }
+          ${shown.map(
+            (file) =>
+              html`<${Card}
+                key=${file.key}
+                file=${file}
+                labels=${labelsOn(file.key)}
+                onOpen=${() => setOpened(file.key)}
+              />`,
+          )}
+        </div>
+      </main>
+      ${dropping && html`<div class="drop">Drop files to add them${view.kind === 'tag' ? ` to “${view.label}”` : ''}</div>`}
+      ${
+        at >= 0 &&
+        html`<${Viewer}
+          key=${opened}
+          file=${shown[at]}
+          labels=${labels}
+          on=${labelsOn(opened)}
+          mayTag=${mayTag}
+          onTag=${(label, add) => (add ? tag(opened, label) : untag(opened, label)).catch(fail)}
+          onStep=${(by) => shown[at + by] && setOpened(shown[at + by].key)}
+          hasPrevious=${at > 0}
+          hasNext=${at < shown.length - 1}
+          onDelete=${() => remove(shown[at])}
+          onClose=${() => setOpened(null)}
+        />`
+      }
+    `;
+  }
+
+  /** A text field that takes the focus when it appears; autofocus only works as the page loads */
+  function Focused(props) {
+    const input = useRef(null);
+    useEffect(() => input.current?.focus(), []);
+    return html`<input ref=${input} ...${props} />`;
+  }
+
+  /** A place in the side list; a category also takes a file dragged onto it */
+  function Place({ on, label, icon, colour, count, onClick, onFile, onError }) {
+    const [target, setTarget] = useState(false);
+    return html`<button
+      type="button"
+      class=${`place${on ? ' on' : ''}${target ? ' target' : ''}`}
+      onClick=${onClick}
+      onDragOver=${
+        onFile &&
+        ((event) => {
+          if (!event.dataTransfer.types.includes(DRAGGED)) return;
+          event.preventDefault();
+          setTarget(true);
+        })
+      }
+      onDragLeave=${() => setTarget(false)}
+      onDrop=${
+        onFile &&
+        ((event) => {
+          const key = event.dataTransfer.getData(DRAGGED);
+          setTarget(false);
+          if (!key) return;
+          event.preventDefault();
+          onFile(key).catch((e) => onError(e.message));
+        })
+      }
+    >
+      ${colour ? html`<span class="dot" style=${{ background: colour }}></span>` : html`<span>${icon}</span>`}
+      <span class="ellipsis">${label}</span>
+      <span class="count">${count || ''}</span>
+    </button>`;
+  }
+
+  /** A file in the grid: a picture of it where there can be one, its name, size, age and categories */
+  function Card({ file, labels, onOpen }) {
+    const { name, mime, size, blob } = file.body;
+    const [kind, , icon] = kindOf(mime);
+    const box = useRef(null);
+    const seen = useSeen(box);
+    const picture = useFile(file.key, seen && kind === 'picture' ? blob : null);
+    const clip = useBlob(file.key, seen && kind === 'video' && size <= THUMB_VIDEO ? blob : null);
+    return html`<button
+      ref=${box}
+      type="button"
+      class="file"
+      title=${name}
+      draggable="true"
+      onDragStart=${(event) => event.dataTransfer.setData(DRAGGED, file.key)}
+      onClick=${onOpen}
+    >
+      <div class="thumb">
+        ${
+          picture
+            ? html`<img src=${picture} alt="" loading="lazy" />`
+            : clip
+              ? html`<video src=${`${clip}#t=0.1`} muted playsinline preload="metadata"></video>`
+              : html`<span aria-hidden="true">${icon}</span><span class="ext">${extOf(name)}</span>`
+        }
+        ${kind === 'video' && html`<span class="play" aria-hidden="true">▶</span>`}
+      </div>
+      <span class="ellipsis name">${name}</span>
+      <span class="meta faint">
+        ${file.createdBy && html`<${Avatar} did=${file.createdBy} size=${16} round />`} ${sizeOf(size ?? 0)} ·
+        ${ago(file.createdAt)}
+        <span class="dots">
+          ${labels.map((label) => html`<span key=${label} class="dot" title=${label} style=${{ background: colourOf(label) }}></span>`)}
+        </span>
+      </span>
+    </button>`;
+  }
+
+  /** One file over the whole screen: shown as well as it can be, ← and → to the next, Esc to close */
+  function Viewer({ file, labels, on, mayTag, onTag, onStep, hasPrevious, hasNext, onDelete, onClose }) {
+    const { name, mime, size, blob, url } = file.body;
+    const [kind, , icon] = kindOf(mime);
+    const picture = useFile(file.key, kind === 'picture' ? blob : null);
+    const whole = useBlob(file.key, /^(picture|video|audio)$/.test(kind) ? blob : null);
+    const [text, setText] = useState(null);
+    const [sure, setSure] = useState(false);
+    const box = useRef(null);
+
+    useEffect(() => {
+      box.current?.focus();
+      const keys = (event) => {
+        if (event.target.closest?.('input, textarea, select')) return;
+        if (event.key === 'Escape') onClose();
+        else if (event.key === 'ArrowLeft') onStep(-1);
+        else if (event.key === 'ArrowRight') onStep(1);
+        else return;
+        event.preventDefault();
+      };
+      addEventListener('keydown', keys);
+      return () => removeEventListener('keydown', keys);
+    }, [onClose, onStep]);
+    useEffect(() => {
+      if (!blob || !isText(mime) || size > 1_000_000) return;
+      let live = true;
+      minca
+        .blob(file.key, blob.hash)
+        .then((b) => b.text())
+        .then(
+          (t) => live && setText(t),
+          () => {},
+        );
+      return () => {
+        live = false;
+      };
+    }, [file.key]);
+
+    const about = file.links.some((l) => l.rel === 'about');
+    return html`<div
+      class="viewer"
+      ref=${box}
+      tabindex="-1"
+      role="dialog"
+      aria-modal="true"
+      aria-label=${name}
+    >
+      <header>
+        <strong class="ellipsis">${name}</strong>
+        ${file.createdBy && html`<${Person} did=${file.createdBy} size=${20} />`}
+        <span style="opacity: 0.7">${sizeOf(size ?? 0)} · ${ago(file.createdAt)}</span>
+        <button type="button" aria-label="Close" onClick=${onClose}>✕</button>
+      </header>
+      <div class="stage">
+        <button
+          type="button"
+          class="step"
+          aria-label="Previous"
+          disabled=${!hasPrevious}
+          onClick=${() => onStep(-1)}
+        >
+          ←
+        </button>
+        <div class="show">
+          ${
+            kind === 'picture' && (whole || picture)
+              ? html`<img src=${whole ?? picture} alt=${name} />`
+              : kind === 'video' && whole
+                ? html`<video src=${whole} controls autoplay playsinline></video>`
+                : kind === 'audio' && whole
+                  ? html`<div class="stack" style="align-items: center">
+                      <span class="icon">${icon}</span><audio src=${whole} controls autoplay></audio>
+                    </div>`
+                  : text !== null
+                    ? html`<pre>${text}</pre>`
+                    : html`<div class="icon">
+                        ${icon}
+                        <p style="font-size: 14px; opacity: 0.7">
+                          ${blob ? (whole === null && /^(picture|video|audio)$/.test(kind) ? 'Loading…' : 'No preview') : 'Kept elsewhere'}
+                        </p>
+                      </div>`
+          }
+        </div>
+        <button type="button" class="step" aria-label="Next" disabled=${!hasNext} onClick=${() => onStep(1)}>
+          →
+        </button>
+      </div>
+      <footer>
+        ${labels.map(
+          (label) =>
+            html`<button
+              type="button"
+              key=${label}
+              class=${on.includes(label) ? 'chip on' : 'chip'}
+              disabled=${!mayTag}
+              aria-pressed=${on.includes(label)}
+              onClick=${() => onTag(label, !on.includes(label))}
+            >
+              <span class="dot" style=${{ background: colourOf(label) }}></span> ${label}
+            </button>`,
+        )}
+        <span style="flex: 1"></span>
+        ${about && html`<button type="button" onClick=${() => minca.open({ record: file.key })}>Where it was shared</button>`}
+        ${
+          blob
+            ? html`<button type="button" onClick=${() => minca.download(file.key, blob.hash)}>
+                Download
+              </button>`
+            : url && html`<button type="button" onClick=${() => minca.link(url)}>Open</button>`
+        }
+        ${
+          file.mine &&
+          (sure
+            ? html`<button type="button" data-variant="danger" onClick=${onDelete}>
+                  Delete for everyone
+                </button>
+                <button type="button" onClick=${() => setSure(false)}>Keep</button>`
+            : html`<button type="button" onClick=${() => setSure(true)}>Delete</button>`)
+        }
+      </footer>
+    </div>`;
+  }
+
+  render(html`<${Files} />`);
+</script>

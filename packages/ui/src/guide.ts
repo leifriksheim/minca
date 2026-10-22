@@ -27,6 +27,12 @@ ui has:
   <\${Avatar} did size? round? />   someone's face: their picture, or the shape their account gives. Always use it for a person
   <\${Person} did size? name? face? />   face and name (face={false}: the name alone); a click opens their card in the app
   <\${Comments} about=\${record} />   the comments on a record and a box to add one, with @mentions (needs "std.comment" in collections)
+  <\${Attachments} about=\${key} />   the files attached to a record (std.attachment): pictures, videos and sound that play, others saved
+  attach(about, files)              keeps Files (from a drop, a paste or <input type=file>) as std.attachment records about a record,
+                                    or about nothing when about is null; → the records written
+  <\${Playable} record />          a std.attachment that is a video or a sound, playing where it is; fetched once it comes into view
+  useSeen(ref)                      whether the element in ref has come into view: load something large only then
+  sizeOf(bytes)                     "812 KB", "3.1 MB"
   <\${Modal} title onClose width?>…</\${Modal}>   a dialog over the screen
   <\${Shape} kind colour? size? />  one of Minca's shapes; <\${Cover} seed colour size? class?>…</\${Cover}> a picture for what has none
                                     (colour: cobalt, coral, peach, sage or lilac)

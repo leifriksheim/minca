@@ -11,7 +11,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, u
 import { positionBetween } from '@minca/core/schemas';
 import { ago } from '../time';
 import * as when from '../when';
-import { Attachments, attach } from './attachments';
+import { Attachments, Playable, attach, useSeen } from './attachments';
+import { sizeOf } from '../size';
 import { Comments } from './comments';
 import { useBlob, useCan, useFile, usePeople, useRecords } from './hooks';
 import { useLive, usePresence } from './live';
@@ -83,7 +84,10 @@ Object.defineProperty(globalThis, 'ui', {
     MentionText,
     mentionsIn,
     Attachments,
+    Playable,
     attach,
+    useSeen,
+    sizeOf,
     Modal,
     Shape,
     Cover,

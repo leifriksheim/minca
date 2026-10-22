@@ -20,6 +20,7 @@ import {
   positionBetween,
   proposal,
   rsvp,
+  tag,
   task,
   vote,
 } from '@minca/core/schemas';
@@ -28,6 +29,7 @@ import calls from './calls.html?raw';
 import chat from './chat.html?raw';
 import decisions from './decisions.html?raw';
 import events from './events.html?raw';
+import files from './files.html?raw';
 import kanban from './kanban.html?raw';
 import marketplace from './marketplace.html?raw';
 import polls from './polls.html?raw';
@@ -47,6 +49,17 @@ export const TEMPLATES: ReadonlyArray<Template> = [
       screen: chat,
     },
     needs: [message, attachment],
+  },
+  {
+    app: {
+      template: 'files',
+      title: 'Files',
+      description:
+        'Every file shared in the space, from chats and boards alike: by kind, size and name, and in categories of your own.',
+      collections: [attachment.name, tag.name],
+      screen: files,
+    },
+    needs: [attachment, tag],
   },
   {
     app: {

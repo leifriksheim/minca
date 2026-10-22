@@ -1,4 +1,4 @@
-<!-- Chat: std.message as one room, with "@" mentions and files (std.attachment) dropped, pasted or picked onto the box. -->
+<!-- Chat: std.message as one room, with "@" mentions and files (std.attachment) dropped anywhere on it, pasted or picked. -->
 <style>
   html,
   body {
@@ -57,8 +57,18 @@
     padding: 8px 16px 16px;
     border-top: 1px solid var(--minca-line);
   }
-  .composer.dropping {
+  .drop {
+    position: fixed;
+    inset: 8px;
+    z-index: 10;
+    display: grid;
+    place-items: center;
+    border: 2px dashed var(--minca-accent);
+    border-radius: var(--minca-radius-lg);
     background: var(--minca-accent-soft);
+    color: var(--minca-accent);
+    font-weight: 600;
+    pointer-events: none;
   }
   .pending {
     display: flex;
@@ -176,7 +186,7 @@
     </button>`;
   }
 
-  /** The box: text with "@" mentions, and files dropped on it, pasted into it or picked */
+  /** The box: text with "@" mentions, and files dropped anywhere on the screen, pasted or picked */
   function Composer() {
     const people = usePeople();
     const [draft, setDraft] = useState('');
@@ -186,6 +196,52 @@
     const [error, setError] = useState(null);
     const picker = useRef(null);
     const add = (list) => list?.length && setFiles((was) => [...was, ...list]);
+
+    // Files dropped anywhere on the screen, or pasted wherever the focus is, wait in the box.
+    useEffect(() => {
+      // Entering a child leaves its parent, so count rather than flicker.
+      let depth = 0;
+      const carriesFiles = (event) => event.dataTransfer?.types.includes('Files');
+      const enter = (event) => {
+        if (!carriesFiles(event)) return;
+        event.preventDefault();
+        depth += 1;
+        setDropping(true);
+      };
+      const over = (event) => carriesFiles(event) && event.preventDefault();
+      const leave = (event) => {
+        if (!carriesFiles(event)) return;
+        depth = Math.max(0, depth - 1);
+        if (depth === 0) setDropping(false);
+      };
+      const done = () => {
+        depth = 0;
+        setDropping(false);
+      };
+      const drop = (event) => {
+        if (!carriesFiles(event)) return;
+        event.preventDefault();
+        done();
+        add([...event.dataTransfer.files]);
+      };
+      const paste = (event) => {
+        // A copied screenshot is a file among the clipboard's items, whichever list the browser puts it in.
+        const data = event.clipboardData;
+        const pasted = data?.files.length
+          ? [...data.files]
+          : [...(data?.items ?? [])].map((item) => item.kind === 'file' && item.getAsFile()).filter(Boolean);
+        if (!pasted.length) return;
+        event.preventDefault();
+        add(pasted);
+      };
+      const on = { dragenter: enter, dragover: over, dragleave: leave, drop, dragend: done, paste };
+      for (const [name, listener] of Object.entries(on)) document.addEventListener(name, listener);
+      addEventListener('blur', done);
+      return () => {
+        for (const [name, listener] of Object.entries(on)) document.removeEventListener(name, listener);
+        removeEventListener('blur', done);
+      };
+    }, []);
 
     const send = async () => {
       const text = draft.trim() || files.map((file) => `📎 ${file.name}`).join('\n');
@@ -206,23 +262,13 @@
     };
 
     return html`<form
-      class=${dropping ? 'composer dropping' : 'composer'}
+      class="composer"
       onSubmit=${(event) => {
         event.preventDefault();
         send();
       }}
-      onDragOver=${(event) => {
-        if (!event.dataTransfer?.types.includes('Files')) return;
-        event.preventDefault();
-        setDropping(true);
-      }}
-      onDragLeave=${() => setDropping(false)}
-      onDrop=${(event) => {
-        event.preventDefault();
-        setDropping(false);
-        add([...(event.dataTransfer?.files ?? [])]);
-      }}
     >
+      ${dropping && html`<div class="drop">Drop files to attach</div>`}
       ${
         files.length > 0 &&
         html`<div class="pending">
@@ -258,20 +304,8 @@
         <${MentionInput}
           value=${draft}
           onChange=${setDraft}
-          placeholder="Message… @ to mention, or drop files here"
+          placeholder="Message… @ to mention, or drop files anywhere"
           aria-label="Message"
-          onPaste=${(event) => {
-            // A copied screenshot is a file among the clipboard's items, whichever list the browser puts it in.
-            const data = event.clipboardData;
-            const pasted = data?.files.length
-              ? [...data.files]
-              : [...(data?.items ?? [])]
-                  .map((item) => item.kind === 'file' && item.getAsFile())
-                  .filter(Boolean);
-            if (!pasted.length) return;
-            event.preventDefault();
-            add(pasted);
-          }}
         />
         <button type="submit" data-variant="primary" disabled=${busy || (!draft.trim() && !files.length)}>
           ${busy ? 'Sending…' : 'Send'}
