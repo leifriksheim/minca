@@ -20,6 +20,9 @@ ui has:
   usePeople()                       [{ did, name }], kept current
   useName(did)                      their name here, "You" for the person looking
   useFile(key, ref)                 a picture the record \`key\` refers to, as a URL for <img>; null until here
+  usePresence(state)                [{ did, device, state }] of everyone else with this app open, each sharing their state (a cursor,
+                                    what is selected, "typing"): yours goes out when it changes, ten times a second at most. Once per screen
+  useLive(callback)                 callback({ from, device, data }) for each minca.live.send from another device, kept nowhere
   useBlob(key, ref)                 the whole file, as a URL for <img>, <video> or <audio>; null until here
   <\${Avatar} did size? round? />   someone's face: their picture, or the shape their account gives. Always use it for a person
   <\${Person} did size? name? face? />   face and name (face={false}: the name alone); a click opens their card in the app

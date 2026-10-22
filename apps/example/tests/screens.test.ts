@@ -60,6 +60,27 @@ describe('screens', () => {
     ]);
   });
 
+  test('the script in front of a screen hands live messages to whoever listens, until they stop', () => {
+    const port: { postMessage: () => void; onmessage: ((event: unknown) => void) | null } = {
+      postMessage: () => {},
+      onmessage: null,
+    };
+    const window: Record<string, unknown> = {
+      __minca: { port, me: { did: 'did:key:zMe', name: 'Anna' }, collections: [] },
+    };
+    runScreenClient(window, () => {}, {});
+    const live = isRecord(window.minca) ? window.minca.live : null;
+    assert.ok(isRecord(live) && typeof live.on === 'function');
+    const heard: unknown[] = [];
+    const stop: unknown = Reflect.apply(live.on, undefined, [(one: unknown) => heard.push(one)]);
+    const message = { from: 'did:key:zBo', device: 'did:key:zPhone', data: { x: 1 }, viaAgent: false };
+    port.onmessage?.({ data: { live: message } });
+    assert.ok(typeof stop === 'function');
+    Reflect.apply(stop, undefined, []);
+    port.onmessage?.({ data: { live: message } });
+    assert.deepEqual(heard, [message]);
+  });
+
   test("the script in front of a screen shows the screen's own errors, not those of a browser extension in its frame", () => {
     const listeners: Record<string, (event: unknown) => void> = {};
     const shown: string[] = [];
@@ -374,18 +395,63 @@ function fakeHost() {
   return { host, asked };
 }
 
+describe('live messages between screens', () => {
+  test("a screen hears the same app's screens on other devices, as who sent it, and no other app's", async () => {
+    const { alice, bob, space } = await setup();
+    const board = bridgeFor(alice.node, space, [], undefined, 'app.board');
+    const bobsBoard = bridgeFor(bob.node, space, [], undefined, 'app.board');
+    const bobsGame = bridgeFor(bob.node, space, [], undefined, 'app.game');
+    try {
+      assert.deepEqual((await board.call('liveSend', { x: 3, y: 4 })).value, true);
+      await waitFor(async () => bobsBoard.heard.length > 0, 'the cursor');
+      assert.deepEqual(bobsBoard.heard, [
+        { from: alice.node.did, device: alice.node.sessionDid, data: { x: 3, y: 4 }, viaAgent: false },
+      ]);
+      // To one device only, and kept apart from another app's screens in the same space
+      assert.equal((await board.call('liveSend', 'just you', { to: bob.node.sessionDid })).ok, true);
+      await waitFor(async () => bobsBoard.heard.length > 1, 'the reply');
+      assert.equal(bobsGame.heard.length, 0);
+      assert.equal(board.heard.length, 0, 'not what this device sent');
+      assert.equal((await board.call('liveSend', 'x', { to: 'someone' })).ok, false);
+      assert.equal((await board.call('liveSend', 'x'.repeat(70_000))).ok, false, 'at most 64 KB');
+
+      // A screen that sends too fast has some dropped, leaving room for the rest of the app.
+      const sent = await Promise.all(Array.from({ length: 60 }, (_, at) => bobsGame.call('liveSend', at)));
+      const dropped = sent.filter((answer) => answer.value === false).length;
+      assert.ok(dropped >= 20 && dropped < 60, `dropped ${dropped}`);
+    } finally {
+      board.close();
+      bobsBoard.close();
+      bobsGame.close();
+    }
+  });
+});
+
 const Answer = z.object({ ok: z.boolean(), value: z.unknown().optional(), error: z.string().optional() });
 
 /** A bridge for these collections, and a way to call it as a screen would */
-function bridgeFor(node: P2PNode, spaceId: string, collections: ReadonlyArray<string>, host?: ScreenHost) {
+function bridgeFor(
+  node: P2PNode,
+  spaceId: string,
+  collections: ReadonlyArray<string>,
+  host?: ScreenHost,
+  app = 'app.test',
+) {
   const channel = new MessageChannel();
   const bridge = createScreenBridge({
     node,
     spaceId,
     collections,
+    app,
     port: channel.port1,
     ...(host ? { host } : {}),
   });
+  // The live messages handed to the screen
+  const heard: unknown[] = [];
+  channel.port2.addEventListener('message', (event: MessageEvent<unknown>) => {
+    if (isRecord(event.data) && 'live' in event.data) heard.push(event.data.live);
+  });
+  channel.port2.start();
   let next = 0;
   const call = (method: string, ...args: unknown[]) =>
     new Promise<z.infer<typeof Answer>>((resolve) => {
@@ -401,6 +467,7 @@ function bridgeFor(node: P2PNode, spaceId: string, collections: ReadonlyArray<st
     });
   return {
     call,
+    heard,
     close: () => {
       bridge.close();
       channel.port2.close();

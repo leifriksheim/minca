@@ -14,6 +14,7 @@ import * as when from '../when';
 import { Attachments, attach } from './attachments';
 import { Comments } from './comments';
 import { useBlob, useCan, useFile, usePeople, useRecords } from './hooks';
+import { useLive, usePresence } from './live';
 import { html } from './html';
 import { MentionInput, MentionText, mentionsIn } from './mentions';
 import { Modal } from './modal';
@@ -72,6 +73,8 @@ Object.defineProperty(globalThis, 'ui', {
     useCan,
     useFile,
     useBlob,
+    useLive,
+    usePresence,
     useName,
     Avatar,
     Person,

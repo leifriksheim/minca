@@ -68,6 +68,20 @@ export interface Minca {
   recall(key: string): Promise<unknown>;
   remember(key: string, value: unknown): Promise<null>;
   onChange(listener: () => void): () => void;
+  readonly live: {
+    send(data: unknown, options?: { to?: string }): Promise<boolean>;
+    on(listener: (heard: Heard) => void): () => void;
+  };
+}
+
+/** A live message from another device with this app open */
+export interface Heard {
+  /** Who sent it */
+  readonly from: string;
+  /** The device that sent it, to answer that device alone */
+  readonly device: string;
+  readonly data: unknown;
+  readonly viaAgent: boolean;
 }
 
 declare global {
