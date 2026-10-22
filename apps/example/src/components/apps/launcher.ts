@@ -3,10 +3,10 @@
  * `launcher.app` records, one per app. Everyone in the space sees the same
  * apps in the same order.
  *
- * A built-in app's record only names it (`builtIn: "chat"`). A made app's
- * record is the app: its title, the collections it uses, what it notifies
- * about, and maybe a screen of its own, with a link to the blueprint that
- * proposed its collections. Anyone may write one, an agent too; it counts as
+ * An app's record is the app: its title, the collections it uses, what it
+ * notifies about, and maybe a screen of its own, with a link to the blueprint
+ * that proposed its collections. The ready-made ones (`templates/`) are copied
+ * in the same way. Anyone may write one, an agent too; it counts as
  * added only once someone who may define collections in the space has written
  * its current version, with a key whose note let them, and its collections are
  * there. Until then it is a proposal. That is what lets a screen run: someone
@@ -44,8 +44,6 @@ import {
 import { checkScreenNetwork, MAX_SCREEN_BYTES, SCREEN_GUIDE, offLimits } from './screens';
 
 export interface LauncherApp {
-  /** A built-in app, by its id: `chat`. A made app leaves it out and says the rest. */
-  readonly builtIn?: string;
   readonly title?: string;
   /** What it is for, in its proposer's words */
   readonly description?: string;
@@ -61,6 +59,8 @@ export interface LauncherApp {
   readonly position?: string;
   /** For a proposed change: the key of the app it is a new version of */
   readonly updates?: string;
+  /** The ready-made app it began as, by id: `kanban`. The space's copy is its own to change. */
+  readonly template?: string;
 }
 
 /** An app on the space's launcher, or one proposed for it. */
@@ -71,7 +71,6 @@ export const launcherApp = fragments.typed<LauncherApp>()({
   schema: {
     type: 'object',
     properties: {
-      builtIn: { type: 'string', minLength: 1, maxLength: 100 },
       title: { type: 'string', minLength: 1, maxLength: 100 },
       description: { type: 'string', maxLength: 1000 },
       collections: {
@@ -84,6 +83,7 @@ export const launcherApp = fragments.typed<LauncherApp>()({
       network: { type: 'array', maxItems: 8, items: { type: 'string', maxLength: 300 } },
       position: { type: 'string', minLength: 1, maxLength: 200 },
       updates: { type: 'string', minLength: 1, maxLength: 128 },
+      template: { type: 'string', minLength: 1, maxLength: 100 },
     },
   },
   links: {
@@ -97,8 +97,6 @@ export const launcherApp = fragments.typed<LauncherApp>()({
 
 /** Why this can't be a launcher record, or null */
 export function checkLauncherApp(body: LauncherApp): string | null {
-  if (body.builtIn !== undefined)
-    return body.title === undefined ? null : 'A built-in app is named, not described';
   if (!body.title?.trim()) return 'An app needs a title';
   const names = new Set(body.collections ?? []);
   if (names.size === 0) return 'An app needs the collections it shows';
@@ -158,43 +156,30 @@ const byPosition = (a: NodeRecord<LauncherApp>, b: NodeRecord<LauncherApp>) => {
 };
 
 export interface Launcher {
-  /** On the launcher, in order: each built-in app once, and made apps that stand */
+  /** On the launcher, in order: the apps that stand */
   readonly placed: ReadonlyArray<NodeRecord<LauncherApp>>;
-  /** Made apps waiting for someone who may define collections to add them */
+  /** Apps waiting for someone who may define collections to add them */
   readonly proposed: ReadonlyArray<NodeRecord<LauncherApp>>;
 }
 
 /**
  * Sorts a space's launcher records into what is on it, in order, and what is
- * proposed. `needsOf` names the collections a built-in app needs, by its id;
- * a built-in this app doesn't know is left out. A built-in counts only when
- * someone who may define collections put it there and its collections are
- * here; anything else naming one is ignored, not proposed.
+ * proposed. An app counts only when someone who may define collections put it
+ * there and its collections are here.
  */
 export function sortLauncher(
   records: ReadonlyArray<NodeRecord<LauncherApp>>,
   collections: ReadonlyArray<NodeCollection>,
   access: SpaceAccess | null | undefined,
-  needsOf: (id: string) => ReadonlyArray<string> | undefined,
 ): Launcher {
   const here = defined(collections);
   const placed: NodeRecord<LauncherApp>[] = [];
   const proposed: NodeRecord<LauncherApp>[] = [];
-  const builtIns = new Set<string>();
   for (const record of [...records].sort(byPosition)) {
     const body = record.body;
     if (!body || record.deleted) continue;
     const broken = checkLauncherApp(body) !== null;
-    if (body.builtIn !== undefined) {
-      if (broken) continue;
-      const needs = needsOf(body.builtIn);
-      const stands = needs !== undefined && vouchedFor(record, access) && needs.every((n) => here.has(n));
-      // Two people adding the same app at once: the first one placed counts.
-      if (stands && !builtIns.has(body.builtIn)) placed.push(record);
-      if (stands) builtIns.add(body.builtIn);
-      continue;
-    }
-    // A made app the launcher can't take stays a proposal, so whoever reviews it sees why.
+    // An app the launcher can't take stays a proposal, so whoever reviews it sees why.
     const stands =
       !broken &&
       body.updates === undefined &&
@@ -211,14 +196,14 @@ function atEnd(placed: ReadonlyArray<NodeRecord<LauncherApp>>): string {
   return positionBetween(last || null);
 }
 
-/** The made app on the launcher a proposal updates, if it still is one */
+/** The app on the launcher a proposal updates, if it still is one */
 export const updated = (
   proposal: NodeRecord<LauncherApp>,
   placed: ReadonlyArray<NodeRecord<LauncherApp>>,
 ): NodeRecord<LauncherApp> | undefined =>
   proposal.body?.updates === undefined
     ? undefined
-    : placed.find((record) => record.key === proposal.body?.updates && record.body?.builtIn === undefined);
+    : placed.find((record) => record.key === proposal.body?.updates);
 
 /**
  * The app the guide shows agents, kept as a value rather than written out:
@@ -284,45 +269,9 @@ export async function prepareLauncher(node: P2PNode, spaceId: string): Promise<v
   });
 }
 
-/** What adding a built-in app needs to know of it */
-export interface BuiltIn {
-  readonly id: string;
-  readonly needs: ReadonlyArray<DefineCollection>;
-  readonly uses?: ReadonlyArray<DefineCollection>;
-  readonly setup?: (node: P2PNode, spaceId: string) => Promise<void>;
-}
-
-/**
- * Adds a built-in app: defines every collection it can use, not only the
- * ones it needs, so an agent asked to do something in it finds them all
- * there; runs its setup; and puts it on the launcher.
- */
-export async function addBuiltIn(
-  node: P2PNode,
-  spaceId: string,
-  app: BuiltIn,
-  placed: ReadonlyArray<NodeRecord<LauncherApp>>,
-): Promise<void> {
-  await addSchemas(node, spaceId, [...app.needs, ...(app.uses ?? [])]);
-  await app.setup?.(node, spaceId);
-  await placeBuiltIn(node, spaceId, app.id, placed);
-}
-
-/** Puts a built-in app on the launcher, at the end */
-export async function placeBuiltIn(
-  node: P2PNode,
-  spaceId: string,
-  id: string,
-  placed: ReadonlyArray<NodeRecord<LauncherApp>>,
-): Promise<void> {
-  if (placed.some((record) => record.body?.builtIn === id)) return;
-  await prepareLauncher(node, spaceId);
-  await node.records.put(spaceId, launcherApp, { builtIn: id, position: atEnd(placed) });
-}
-
 /** An app as it stands once added: its place is the launcher's, and it updates nothing */
 function settled(body: LauncherApp): LauncherApp {
-  const { title, description, collections, notify, screen, network } = body;
+  const { title, description, collections, notify, screen, network, template } = body;
   return {
     ...(title !== undefined ? { title } : {}),
     ...(description !== undefined ? { description } : {}),
@@ -330,7 +279,46 @@ function settled(body: LauncherApp): LauncherApp {
     ...(notify !== undefined ? { notify } : {}),
     ...(screen !== undefined ? { screen } : {}),
     ...(network !== undefined ? { network } : {}),
+    ...(template !== undefined ? { template } : {}),
   };
+}
+
+/**
+ * A ready-made app: an ordinary app, kept here rather than in a space, with
+ * the collections it needs. Adding one copies it into the space, which then
+ * changes its copy the way it changes any app.
+ */
+export interface Template {
+  readonly app: LauncherApp & {
+    readonly template: string;
+    readonly title: string;
+    readonly description: string;
+  };
+  readonly needs: ReadonlyArray<DefineCollection>;
+  /** Defined too, so whatever the app shows a record with (comments, attachments) has them */
+  readonly uses?: ReadonlyArray<DefineCollection>;
+  /** Runs once, right after it is added: a board's first columns */
+  readonly setup?: (node: P2PNode, spaceId: string) => Promise<void>;
+}
+
+/**
+ * Adds a ready-made app: defines every collection it can use, runs its
+ * setup, and writes its copy at the end of the launcher, as this account's.
+ * Returns the key of the app on the launcher.
+ */
+export async function addTemplate(
+  node: P2PNode,
+  spaceId: string,
+  template: Template,
+  placed: ReadonlyArray<NodeRecord<LauncherApp>>,
+): Promise<string> {
+  const there = placed.find((record) => record.body?.template === template.app.template);
+  if (there) return there.key;
+  await addSchemas(node, spaceId, [...template.needs, ...(template.uses ?? [])]);
+  await template.setup?.(node, spaceId);
+  await prepareLauncher(node, spaceId);
+  const record = await node.records.put(spaceId, launcherApp, { ...template.app, position: atEnd(placed) });
+  return record.key;
 }
 
 /**
@@ -375,7 +363,7 @@ export async function addMade(
 
 /**
  * Takes an app off the launcher. Its collections and records stay. For a
- * built-in app, every record naming it goes, so one two people added at once
+ * ready-made app, every copy of it goes, so one two people added at once
  * doesn't come back.
  */
 export async function removeApp(
@@ -384,8 +372,11 @@ export async function removeApp(
   record: NodeRecord<LauncherApp>,
   records: ReadonlyArray<NodeRecord<LauncherApp>>,
 ): Promise<void> {
-  const id = record.body?.builtIn;
-  const all = id === undefined ? [record] : records.filter((one) => one.body?.builtIn === id && !one.deleted);
+  const template = record.body?.template;
+  const all =
+    template === undefined
+      ? [record]
+      : records.filter((one) => one.body?.template === template && !one.deleted);
   for (const one of all) await node.records.delete(spaceId, one.key);
 }
 

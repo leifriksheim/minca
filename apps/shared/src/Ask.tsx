@@ -1,7 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import { Modal } from './Modal';
 import { styles } from './styles';
-import { accent, ink } from './tokens';
+import { accent, ink } from '@minca/ui/tokens';
 
 export interface Asking {
   /** Above the question; "Are you sure?" by default */

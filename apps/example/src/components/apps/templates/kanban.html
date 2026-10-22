@@ -1,0 +1,287 @@
+<!-- Kanban: std.task and std.column as a board. Dragging a card rewrites only its column link and position. -->
+<style>
+  body {
+    padding: 16px 16px 4px;
+  }
+  .board {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    overflow-x: auto;
+    padding-bottom: 12px;
+  }
+  .lane {
+    flex: 0 0 264px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+    border-radius: var(--minca-radius-lg);
+    background: var(--minca-sunken);
+  }
+  .lane > header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 2px 4px 6px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .lane > header button {
+    min-height: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    font-weight: 600;
+  }
+  .task {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    min-height: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--minca-line);
+    border-radius: var(--minca-radius-md);
+    background: var(--minca-card);
+    color: var(--minca-body);
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.4;
+    text-align: left;
+    word-break: break-word;
+  }
+  .task:hover {
+    background: var(--minca-card);
+    border-color: var(--minca-line-strong);
+  }
+  .task[draggable='true'] {
+    cursor: grab;
+  }
+  .marker {
+    height: 2px;
+    margin: 2px 0 4px;
+    border-radius: var(--minca-radius-pill);
+    background: var(--minca-ink);
+  }
+  .add {
+    justify-content: flex-start;
+    min-height: 32px;
+    padding: 0 8px;
+  }
+  .new-column {
+    flex: 0 0 264px;
+  }
+  .new-column > button {
+    width: 100%;
+    height: 40px;
+  }
+</style>
+<script>
+  const { html, render, useState, useEffect, useRef, useRecords, useCan, positionBetween } = ui;
+  const TASK = 'std.task';
+  const COLUMN = 'std.column';
+  /** The lane for tasks whose column is gone, or that never had one */
+  const LOOSE = '';
+
+  /** By position; records without one go last, oldest first */
+  const byPosition = (a, b) => {
+    const pa = a.body.position;
+    const pb = b.body.position;
+    if (pa !== pb) return pa === undefined ? 1 : pb === undefined ? -1 : pa < pb ? -1 : 1;
+    return a.createdAt.localeCompare(b.createdAt) || a.key.localeCompare(b.key);
+  };
+  const laneOf = (t) => t.links.find((l) => l.rel === 'column')?.to ?? LOOSE;
+  const columnLinks = (lane) => (lane === LOOSE ? [] : [{ rel: 'column', to: lane }]);
+
+  function Board() {
+    const columns = useRecords(COLUMN);
+    const tasks = useRecords(TASK);
+    const mayAddTask = useCan('create', TASK);
+    const mayMove = useCan('edit', TASK);
+    const mayAddColumn = useCan('create', COLUMN);
+    const [dragging, setDragging] = useState(null);
+    // Where a dragged card would land: a lane, and the card it would go before (null: the end)
+    const [drop, setDrop] = useState(null);
+    const [addingTo, setAddingTo] = useState(null);
+    const [addingColumn, setAddingColumn] = useState(false);
+    if (!columns || !tasks) return null;
+
+    const cols = [...columns].sort(byPosition);
+    const known = new Set(cols.map((c) => c.key));
+    const sorted = [...tasks].sort(byPosition);
+    const tasksIn = (lane) => sorted.filter((t) => (known.has(laneOf(t)) ? laneOf(t) : LOOSE) === lane);
+    const nextIn = (lane, key) => {
+      const list = tasksIn(lane);
+      return list[list.findIndex((t) => t.key === key) + 1]?.key ?? null;
+    };
+    const lanes = [
+      ...(tasksIn(LOOSE).length > 0 ? [{ key: LOOSE, name: 'No column', record: null }] : []),
+      ...cols.map((c) => ({ key: c.key, name: c.body.name, record: c })),
+    ];
+
+    const place = (lane, before, moving) => {
+      const list = tasksIn(lane).filter((t) => t.key !== moving);
+      const at =
+        before === null
+          ? list.length
+          : Math.max(
+              0,
+              list.findIndex((t) => t.key === before),
+            );
+      // Unpositioned tasks sit at the end, so the nearest positioned ones are the neighbours.
+      const prev = list
+        .slice(0, at)
+        .reverse()
+        .find((t) => t.body.position)?.body.position;
+      const next = list.slice(at).find((t) => t.body.position)?.body.position;
+      return positionBetween(prev, next);
+    };
+    const move = (key, to) => {
+      const t = sorted.find((x) => x.key === key);
+      if (!t) return;
+      const lane = known.has(laneOf(t)) ? laneOf(t) : LOOSE;
+      if (lane === to.lane && (to.before === key || nextIn(lane, key) === to.before)) return; // dropped where it was
+      minca.update(
+        key,
+        { ...t.body, position: place(to.lane, to.before, key) },
+        {
+          links: [...t.links.filter((l) => l.rel !== 'column'), ...columnLinks(to.lane)],
+        },
+      );
+    };
+    const endDrag = () => {
+      setDragging(null);
+      setDrop(null);
+    };
+    const overCard = (event, lane, key) => {
+      if (!dragging) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const box = event.currentTarget.getBoundingClientRect();
+      const before = event.clientY < box.top + box.height / 2 ? key : nextIn(lane, key);
+      if (drop?.lane !== lane || drop.before !== before) setDrop({ lane, before });
+    };
+    const landing = (lane, before) => dragging !== null && drop?.lane === lane && drop.before === before;
+
+    return html`<div class="board">
+      ${lanes.map((lane) => {
+        const cards = tasksIn(lane.key);
+        return html`<section
+          class="lane"
+          key=${lane.key}
+          aria-label=${lane.name}
+          onDragOver=${(event) => {
+            if (!dragging) return;
+            event.preventDefault();
+            if (drop?.lane !== lane.key || drop.before !== null) setDrop({ lane: lane.key, before: null });
+          }}
+          onDrop=${(event) => {
+            event.preventDefault();
+            if (dragging && drop) move(dragging, drop);
+            endDrag();
+          }}
+        >
+          <header>
+            ${
+              lane.record
+                ? html`<button
+                    title="Open this column"
+                    onClick=${() => minca.open({ record: lane.record.key })}
+                  >
+                    ${lane.name}
+                  </button>`
+                : html`<span class="muted">${lane.name}</span>`
+            }
+            <span class="faint">${cards.length}</span>
+          </header>
+          ${cards.map(
+            (t) =>
+              html`<div key=${t.key}>
+                ${landing(lane.key, t.key) && html`<div class="marker" aria-hidden="true"></div>`}
+                <button
+                  type="button"
+                  class="task"
+                  draggable=${mayMove}
+                  style=${{ opacity: dragging === t.key ? 0.4 : 1 }}
+                  onDragStart=${(event) => {
+                    event.dataTransfer.effectAllowed = 'move';
+                    event.dataTransfer.setData('text/plain', t.body.title);
+                    setDragging(t.key);
+                  }}
+                  onDragEnd=${endDrag}
+                  onDragOver=${(event) => overCard(event, lane.key, t.key)}
+                  onClick=${() => minca.open({ record: t.key })}
+                >
+                  <span>${t.body.title}</span>
+                  ${t.body.notes && html`<span class="faint">Has notes</span>`}
+                </button>
+              </div>`,
+          )}
+          ${landing(lane.key, null) && html`<div class="marker" aria-hidden="true"></div>`}
+          ${
+            mayAddTask &&
+            (addingTo === lane.key
+              ? html`<${OneLine}
+                  placeholder="Task title"
+                  onDone=${() => setAddingTo(null)}
+                  onSubmit=${(title) => minca.put(TASK, { title, position: place(lane.key, null) }, { links: columnLinks(lane.key) })}
+                />`
+              : html`<button class="add" data-variant="ghost" onClick=${() => setAddingTo(lane.key)}>
+                  + Add task
+                </button>`)
+          }
+        </section>`;
+      })}
+      ${
+        mayAddColumn &&
+        html`<div class="new-column">
+          ${
+            addingColumn
+              ? html`<${OneLine}
+                  placeholder="Column name"
+                  onDone=${() => setAddingColumn(false)}
+                  onSubmit=${(name) =>
+                    minca.put(COLUMN, {
+                      name,
+                      position: positionBetween(
+                        [...cols].reverse().find((c) => c.body.position)?.body.position,
+                      ),
+                    })}
+                />`
+              : html`<button onClick=${() => setAddingColumn(true)}>+ Add column</button>`
+          }
+        </div>`
+      }
+    </div>`;
+  }
+
+  /** A one-line input that adds on Enter, stays open for the next, and closes on Escape or when left empty */
+  function OneLine({ placeholder, onSubmit, onDone }) {
+    const [text, setText] = useState('');
+    // autofocus only works on what the page loads with, not on what is added later
+    const input = useRef(null);
+    useEffect(() => input.current?.focus(), []);
+    return html`<form
+      onSubmit=${(event) => {
+        event.preventDefault();
+        if (text.trim()) onSubmit(text.trim());
+        setText('');
+      }}
+    >
+      <input
+        ref=${input}
+        value=${text}
+        onInput=${(event) => setText(event.currentTarget.value)}
+        onKeyDown=${(event) => event.key === 'Escape' && onDone()}
+        onBlur=${() => !text.trim() && onDone()}
+        placeholder=${placeholder}
+        aria-label=${placeholder}
+      />
+    </form>`;
+  }
+
+  render(html`<${Board} />`);
+</script>

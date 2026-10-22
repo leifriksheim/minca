@@ -2,14 +2,12 @@
   "name": "@minca/app-shared",
   "private": true,
   "type": "module",
-  "description": "What the example app, the account home and the mini apps share: the design system (tokens, shapes, styles), the relay configuration, a few components, and the mini app contract. Source only; each app's Vite build compiles it.",
+  "description": "What the example app, the account home and the mini apps share: styles and shapes built on the design system (@minca/ui), the relay configuration, a few components, and the mini app contract. Source only; each app's Vite build compiles it.",
   "exports": {
     "./styles": "./src/styles.ts",
-    "./tokens": "./src/tokens.ts",
     "./shapes": "./src/shapes.tsx",
     "./relay": "./src/relay.ts",
     "./Avatar": "./src/Avatar.tsx",
-    "./avatar": "./src/avatar.ts",
     "./Info": "./src/Info.tsx",
     "./SpaceHosting": "./src/SpaceHosting.tsx",
     "./HostAddress": "./src/HostAddress.tsx",
@@ -21,9 +19,7 @@
     "./mark": "./src/mark.ts",
     "./useDismiss": "./src/useDismiss.ts",
     "./action": "./src/action.ts",
-    "./hash": "./src/hash.ts",
     "./places": "./src/places.ts",
-    "./mini-app": "./src/mini-app.ts",
     "./Payment": "./src/Payment.tsx",
     "./CommunitySetup": "./src/CommunitySetup.tsx",
     "./Feature": "./src/Feature.tsx",
@@ -44,6 +40,7 @@
   },
   "dependencies": {
     "@minca/core": "*",
-    "qrcode-generator": "^2.0.4"
+    "qrcode-generator": "^2.0.4",
+    "@minca/ui": "*"
   }
 }

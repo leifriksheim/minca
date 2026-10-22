@@ -1,0 +1,339 @@
+<!-- Decisions: std.proposal, std.ballot and std.decision. A decision cites the ballots that reach quorum, and every device checks them. -->
+<style>
+  .badge {
+    margin-left: auto;
+  }
+  #app {
+    max-width: 640px;
+  }
+  .proposal {
+    gap: 12px;
+    padding: 16px;
+  }
+  .proposal header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--minca-faint);
+  }
+  .title {
+    min-height: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    font-size: 16px;
+    font-weight: 600;
+    justify-content: flex-start;
+    text-align: left;
+    word-break: break-word;
+  }
+  .title:hover {
+    background: none;
+    text-decoration: underline;
+  }
+  .option {
+    position: relative;
+    overflow: hidden;
+    justify-content: flex-start;
+    gap: 10px;
+    height: 40px;
+    border-radius: var(--minca-radius-md);
+    border-color: var(--minca-line);
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--minca-body);
+  }
+  .option:disabled {
+    opacity: 1;
+  }
+  .option.strong {
+    border-color: var(--minca-ink);
+    font-weight: 600;
+  }
+  .option .fill {
+    position: absolute;
+    inset: 0;
+    background: var(--minca-sunken);
+    transition: width 0.3s ease;
+  }
+  .option.strong .fill {
+    background: var(--minca-accent-soft);
+  }
+  .option .label {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+  }
+  .option .count {
+    position: relative;
+    font-size: 12px;
+    color: var(--minca-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  footer.row,
+  .confirm {
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: var(--minca-faint);
+  }
+  .confirm {
+    font-size: 13px;
+    color: var(--minca-body);
+  }
+  footer button,
+  .confirm button {
+    min-height: 28px;
+    font-size: 12px;
+  }
+  .error {
+    font-size: 13px;
+    color: var(--minca-danger);
+  }
+</style>
+<script>
+  const { html, render, useState, useEffect, useRef, useRecords, useCan, usePeople, Person, ago } = ui;
+  const PROPOSAL = 'std.proposal';
+  const BALLOT = 'std.ballot';
+  const DECISION = 'std.decision';
+  const me = minca.me.did;
+  const about = (record) => (other) => other.links.some((l) => l.rel === 'about' && l.to === record.key);
+
+  function Decisions() {
+    const proposals = useRecords(PROPOSAL);
+    const ballots = useRecords(BALLOT);
+    const decisions = useRecords(DECISION);
+    const mayPropose = useCan('create', PROPOSAL);
+    const mayCast = useCan('create', BALLOT);
+    const mayDecide = useCan('create', DECISION);
+    const [proposing, setProposing] = useState(false);
+    if (!proposals || !ballots || !decisions) return null;
+    return html`<div class="stack" style="gap: 16px">
+      ${
+        mayPropose &&
+        (proposing
+          ? html`<${Propose}
+              onCancel=${() => setProposing(false)}
+              onPropose=${async (title, options, quorum) => {
+                await minca.put(PROPOSAL, { title, options, quorum });
+                setProposing(false);
+              }}
+            />`
+          : html`<button
+              data-variant="primary"
+              style="align-self: flex-start"
+              onClick=${() => setProposing(true)}
+            >
+              New proposal
+            </button>`)
+      }
+      ${
+        proposals.length === 0 &&
+        !proposing &&
+        html`<p class="empty">Nothing to decide yet.${mayPropose ? ' Put something to the space.' : ''}</p>`
+      }
+      ${[...proposals]
+        .reverse()
+        .map(
+          (proposal) =>
+            html`<${Proposal}
+              key=${proposal.key}
+              proposal=${proposal}
+              ballots=${ballots.filter(about(proposal))}
+              decisions=${decisions.filter(about(proposal))}
+              mayCast=${mayCast}
+              mayDecide=${mayDecide}
+            />`,
+        )}
+    </div>`;
+  }
+
+  /** The id of a record's first version: what a decision cites, since that is what every device holds whole */
+  async function firstVersion(record) {
+    if (record.seq === 0) return record.version;
+    const first = (await minca.history(record.key)).find((version) => version.seq === 0);
+    if (!first) throw new Error('The proposal’s first version isn’t on this device yet');
+    return first.version;
+  }
+
+  function Proposal({ proposal, ballots: all, decisions, mayCast, mayDecide }) {
+    const people = usePeople();
+    const nameOf = (did) => (did === me ? 'You' : (people.find((p) => p.did === did)?.name ?? 'Someone'));
+    const [confirming, setConfirming] = useState(null);
+    const [error, setError] = useState(null);
+    const run = (work) => {
+      setError(null);
+      work().catch((e) => setError(e.message));
+    };
+    const link = { links: [{ rel: 'about', to: proposal.key }] };
+    const { title, options, quorum } = proposal.body;
+    // A ballot counts as first cast: that is the version a decision can cite.
+    const ballots = all.filter((b) => b.seq === 0 && b.body.choice < options.length);
+    const mine = ballots.find((b) => b.createdBy === me);
+    const decided = decisions.find((d) => d.verified && d.body.outcome < options.length);
+    const reached = quorum
+      ? options.findIndex((_, i) => ballots.filter((b) => b.body.choice === i).length >= quorum)
+      : -1;
+    const open = mayCast && !decided;
+    const responding =
+      proposal.createdBy && proposal.createdBy !== me ? { respondingTo: proposal.createdBy } : {};
+
+    return html`<article class="card stack proposal">
+      <header>
+        <${Person} did=${proposal.createdBy} size=${18} />
+        <span>proposed · ${ago(proposal.createdAt)}</span>
+        ${decided && html`<span class="badge">Decided</span>`}
+      </header>
+      <button class="title" title="Open this proposal" onClick=${() => minca.open({ record: proposal.key })}>
+        ${title}
+      </button>
+      <div class="stack" role="group" aria-label="Options" style="gap: 6px">
+        ${options.map((option, i) => {
+          const these = ballots.filter((b) => b.body.choice === i);
+          const won = decided?.body.outcome === i;
+          const chosen = mine?.body.choice === i;
+          return html`<button
+            class=${chosen || won ? 'option strong' : 'option'}
+            key=${i}
+            disabled=${!open || !!mine}
+            aria-pressed=${chosen}
+            title=${these.map((b) => nameOf(b.createdBy)).join(', ') || undefined}
+            onClick=${() => setConfirming(i)}
+          >
+            <span
+              class="fill"
+              style=${{ width: `${quorum ? Math.min(1, these.length / quorum) * 100 : 0}%` }}
+            ></span>
+            <span class="label">${option}${won ? ' ✓' : ''}</span>
+            <span class="count">${quorum ? `${these.length} of ${quorum}` : these.length}</span>
+          </button>`;
+        })}
+      </div>
+      ${
+        confirming !== null &&
+        html`<div class="row confirm">
+          <span style="flex: 1"
+            >Cast your ballot for “${options[confirming]}”? It can’t be changed afterwards.</span
+          >
+          <button onClick=${() => setConfirming(null)}>Cancel</button>
+          <button
+            data-variant="primary"
+            onClick=${() => {
+              const choice = confirming;
+              setConfirming(null);
+              run(() => minca.put(BALLOT, { choice, ...responding }, link));
+            }}
+          >
+            Cast ballot
+          </button>
+        </div>`
+      }
+      <footer class="row">
+        <span style="flex: 1">
+          ${
+            decided
+              ? `Decided by ${decided.body.ballots.length} ballots, checked by every device`
+              : !quorum
+                ? 'No quorum set, so it can’t be decided here'
+                : mine
+                  ? `You chose “${options[mine.body.choice]}”. ${quorum} ballots for one option decide it.`
+                  : `${quorum} ballots for one option decide it. Ballots are final.`
+          }
+        </span>
+        ${
+          !decided &&
+          mayDecide &&
+          reached >= 0 &&
+          html`<button
+            data-variant="primary"
+            onClick=${() =>
+              run(async () =>
+                minca.put(
+                  DECISION,
+                  {
+                    outcome: reached,
+                    proposal: await firstVersion(proposal),
+                    ballots: ballots.filter((b) => b.body.choice === reached).map((b) => b.version),
+                  },
+                  link,
+                ),
+              )}
+          >
+            Record the decision
+          </button>`
+        }
+      </footer>
+      ${error && html`<p class="error">${error}</p>`}
+    </article>`;
+  }
+
+  /** A title, its options, and how many ballots for one option decide it */
+  function Propose({ onPropose, onCancel }) {
+    const [title, setTitle] = useState('');
+    const [options, setOptions] = useState(['Yes', 'No']);
+    const [quorum, setQuorum] = useState(2);
+    const [busy, setBusy] = useState(false);
+    // autofocus only works on what the page loads with, not on what is added later
+    const first = useRef(null);
+    useEffect(() => first.current?.focus(), []);
+    const filled = options.map((o) => o.trim()).filter(Boolean);
+    const unique = new Set(filled).size === filled.length;
+    const ready = title.trim() && filled.length >= 2 && unique && quorum >= 1;
+    return html`<form
+      class="card stack"
+      style="padding: 16px"
+      onSubmit=${(event) => {
+        event.preventDefault();
+        if (!ready) return;
+        setBusy(true);
+        onPropose(title.trim(), filled, quorum).finally(() => setBusy(false));
+      }}
+    >
+      <input
+        ref=${first}
+        value=${title}
+        onInput=${(e) => setTitle(e.currentTarget.value)}
+        placeholder="What should the space decide?"
+        aria-label="Proposal"
+      />
+      ${options.map(
+        (option, i) =>
+          html`<input
+            key=${i}
+            value=${option}
+            onInput=${(e) => setOptions(options.map((o, j) => (j === i ? e.currentTarget.value : o)))}
+            placeholder=${`Option ${i + 1}`}
+            aria-label=${`Option ${i + 1}`}
+          />`,
+      )}
+      <label class="row" style="font-size: 13px">
+        Decided by
+        <input
+          type="number"
+          min="1"
+          max="10000"
+          value=${quorum}
+          onInput=${(e) => setQuorum(Math.max(1, Math.floor(Number(e.currentTarget.value) || 1)))}
+          aria-label="Quorum"
+          style="width: 72px"
+        />
+        ballots for one option
+      </label>
+      ${!unique && html`<p class="error">Two options are the same.</p>`}
+      <div class="row" style="flex-wrap: wrap">
+        ${options.length < 10 && html`<button type="button" onClick=${() => setOptions([...options, ''])}>+ Add option</button>`}
+        <span style="flex: 1"></span>
+        <button type="button" onClick=${onCancel}>Cancel</button>
+        <button type="submit" data-variant="primary" disabled=${!ready || busy}>
+          ${busy ? 'Proposing…' : 'Propose'}
+        </button>
+      </div>
+    </form>`;
+  }
+
+  render(html`<${Decisions} />`);
+</script>

@@ -1,0 +1,869 @@
+<!--
+  Marketplace: std.listing, the way people shop from neighbours: a grid of things with their prices, browsed by
+  category. Asking for something is a std.order about it, and the seller answers with a std.order-update; only the
+  seller's answers count. Questions are std.comments on the listing.
+-->
+<style>
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 24px 16px;
+  }
+  .tools {
+    display: flex;
+    gap: 8px;
+  }
+  .tools select {
+    width: auto;
+  }
+  .count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: var(--minca-radius-pill);
+    background: var(--minca-danger);
+    color: var(--minca-card);
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .item {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    min-height: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    font-weight: 400;
+    text-align: left;
+  }
+  .item:hover {
+    background: none;
+  }
+  .photo {
+    aspect-ratio: 1 / 1;
+    width: 100%;
+    border-radius: var(--minca-radius-lg);
+    object-fit: cover;
+    transition: filter 0.2s ease;
+  }
+  .item:hover .photo {
+    filter: brightness(0.96);
+  }
+  .sold {
+    opacity: 0.55;
+  }
+  .pill {
+    position: absolute;
+    top: 10px;
+    padding: 3px 9px;
+    border-radius: var(--minca-radius-pill);
+    background: var(--minca-card);
+    border: 1px solid var(--minca-rule);
+    color: var(--minca-ink);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .pill.left {
+    left: 10px;
+  }
+  .pill.right {
+    right: 10px;
+    background: var(--minca-accent);
+    color: var(--minca-card);
+  }
+  .price {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--minca-ink);
+  }
+  .price.free {
+    color: var(--minca-good);
+  }
+  .name {
+    font-size: 14px;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+  }
+  .detail {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    gap: 32px;
+    align-items: start;
+  }
+  .detail .photo {
+    aspect-ratio: 4 / 3;
+  }
+  .back {
+    align-self: flex-start;
+    min-height: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--minca-muted);
+  }
+  .back:hover {
+    background: none;
+    color: var(--minca-ink);
+  }
+  .state {
+    padding: 16px;
+    border-radius: var(--minca-radius-lg);
+    background: var(--minca-sunken);
+  }
+  .state.accepted,
+  .state.done {
+    background: var(--minca-good-soft);
+  }
+  .state.declined {
+    background: var(--minca-danger-soft);
+  }
+  .steps {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 12px;
+  }
+  .steps li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--minca-faint);
+    font-weight: 500;
+  }
+  .steps li.reached {
+    color: var(--minca-good);
+  }
+  .steps li[aria-current] {
+    font-weight: 600;
+  }
+  .steps .line {
+    width: 16px;
+    height: 1.5px;
+    background: var(--minca-line-strong);
+  }
+  .steps li.reached .line {
+    background: var(--minca-good);
+  }
+  .dark {
+    background: var(--minca-ink);
+    border-color: var(--minca-ink);
+    color: var(--minca-inverse);
+  }
+  .dark:hover {
+    background: var(--minca-accent);
+  }
+  .requests > div + div {
+    border-top: 1px solid var(--minca-line);
+  }
+  .text {
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  @media (max-width: 760px) {
+    .detail {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+  @media (max-width: 640px) {
+    .grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px 10px;
+    }
+  }
+</style>
+<script>
+  const {
+    html,
+    render,
+    useState,
+    useEffect,
+    useRef,
+    useRecords,
+    useCan,
+    useFile,
+    Person,
+    Avatar,
+    Comments,
+    Modal,
+  } = ui;
+  const {
+    Shape,
+    Cover,
+    PlaceField,
+    NearButton,
+    MapLink,
+    useNear,
+    placeLabel,
+    distanceText,
+    inReach,
+    nearWhere,
+    ago,
+  } = ui;
+  const LISTING = 'std.listing';
+  const ORDER = 'std.order';
+  const UPDATE = 'std.order-update';
+  const me = minca.me.did;
+
+  /** What a listing can be, for its cover and for browsing. The last is the catch-all. */
+  const CATEGORIES = [
+    { id: 'furniture', label: 'Furniture', emoji: '🛋️', colour: 'peach' },
+    { id: 'electronics', label: 'Electronics', emoji: '🎧', colour: 'cobalt' },
+    { id: 'clothes', label: 'Clothes', emoji: '👕', colour: 'lilac' },
+    { id: 'bikes', label: 'Bikes', emoji: '🚲', colour: 'sage' },
+    { id: 'sports', label: 'Sports & outdoors', emoji: '🏂', colour: 'sage' },
+    { id: 'home', label: 'Home & garden', emoji: '🪴', colour: 'sage' },
+    { id: 'kids', label: 'Kids', emoji: '🧸', colour: 'peach' },
+    { id: 'books', label: 'Books & media', emoji: '📚', colour: 'cobalt' },
+    { id: 'music', label: 'Instruments', emoji: '🎸', colour: 'lilac' },
+    { id: 'tickets', label: 'Tickets', emoji: '🎟️', colour: 'coral' },
+    { id: 'other', label: 'Other', emoji: '📦', colour: 'peach' },
+  ];
+  const kindOf = (id) => CATEGORIES.find((k) => k.id === id) ?? CATEGORIES[CATEGORIES.length - 1];
+  const CONDITIONS = [
+    { id: 'new', label: 'New' },
+    { id: 'like-new', label: 'Like new' },
+    { id: 'good', label: 'Good' },
+    { id: 'fair', label: 'Fair' },
+    { id: 'for-parts', label: 'For parts' },
+  ];
+  const CURRENCIES = ['EUR', 'USD', 'GBP', 'NOK', 'SEK', 'DKK', 'CHF'];
+
+  const aboutOf = (record) => record.links.find((l) => l.rel === 'about')?.to;
+  const isFree = (price) => !price || Number(price.amount) === 0;
+  /** A price as people read it: "€120", "kr 450", or Free */
+  function priceLabel(price) {
+    if (isFree(price)) return 'Free';
+    const value = Number(price.amount);
+    try {
+      return new Intl.NumberFormat(undefined, {
+        style: 'currency',
+        currency: price.currency,
+        maximumFractionDigits: Number.isInteger(value) ? 0 : 2,
+      }).format(value);
+    } catch {
+      return `${price.amount} ${price.currency}`;
+    }
+  }
+  /** For sorting by price; currencies are compared as plain numbers */
+  const priceOf = (l) => Number(l.body.price?.amount ?? 0);
+  /** How far a place is, in km, for sorting nearest first; places with no point go last */
+  const kmTo = (near, place) => ui.distanceFrom(near, place) ?? Infinity;
+  const responding = (to) => (to && to !== me ? { respondingTo: to } : {});
+
+  /**
+   * Where a request stands. Anyone in the space could write an update about someone's order, so only the seller's
+   * and the buyer's own count: the seller's latest says yes or no, and after a yes either side saying it was handed
+   * over (`delivered`) finishes it. A seller who never comes back, a bot say, still leaves the buyer able to finish.
+   */
+  function answerTo(request, listing) {
+    const seller = listing.createdBy;
+    const buyer = request.createdBy;
+    const updates = request.updates.filter(
+      (u) => u.createdBy && (u.createdBy === seller || u.createdBy === buyer),
+    );
+    const latest = updates
+      .filter((u) => u.createdBy === seller && u.body.status !== 'delivered')
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    if (!latest) return 'waiting';
+    if (latest.body.status === 'cancelled' || latest.body.status === 'refunded') return 'declined';
+    return updates.some((u) => u.body.status === 'delivered') ? 'done' : 'accepted';
+  }
+  const myRequest = (listing) => listing.requests.find((r) => r.createdBy === me);
+
+  function Marketplace() {
+    const listed = useRecords(LISTING);
+    const orders = useRecords(ORDER);
+    const updates = useRecords(UPDATE);
+    const maySell = useCan('create', LISTING);
+    const [view, setView] = useState('browse');
+    const [category, setCategory] = useState(null);
+    const [search, setSearch] = useState('');
+    const [sort, setSort] = useState('new');
+    const [freeOnly, setFreeOnly] = useState(false);
+    const [openKey, setOpenKey] = useState(null);
+    const [editing, setEditing] = useState(null);
+    const [near, setNear] = useNear();
+    // The cells around the circle, as a keeper would match them; then the exact distance. With no circle, every listing.
+    const where = nearWhere(near);
+    const candidates = useRecords(LISTING, where);
+    if (!listed || !orders || !updates) return null;
+
+    // Each listing with its requests, each request with the answers to it; newest listing first.
+    const listings = [...listed].reverse().map((l) => ({
+      ...l,
+      requests: orders
+        .filter((o) => aboutOf(o) === l.key)
+        .map((o) => ({ ...o, updates: updates.filter((u) => aboutOf(u) === o.key) })),
+    }));
+    const close = near
+      ? new Set((candidates ?? []).filter((l) => inReach(near, l.body.place)).map((l) => l.key))
+      : null;
+
+    const form =
+      editing &&
+      html`<${ListingForm}
+        initial=${editing === 'new' ? null : editing}
+        near=${near}
+        onClose=${() => setEditing(null)}
+        onSave=${async (body) => {
+          if (editing === 'new') {
+            const made = await minca.put(LISTING, body);
+            setOpenKey(made.key);
+          } else await minca.update(editing.key, body);
+          setEditing(null);
+        }}
+      />`;
+
+    const open = openKey && listings.find((l) => l.key === openKey);
+    if (open)
+      return html`<${ListingPage}
+          listing=${open}
+          near=${near}
+          onBack=${() => setOpenKey(null)}
+          onEdit=${() => setEditing(open)}
+        />${form}`;
+
+    const words = search.trim().toLowerCase();
+    const matches = (l) =>
+      !words ||
+      [l.body.title, l.body.description, placeLabel(l.body.place)].some((t) =>
+        t?.toLowerCase().includes(words),
+      );
+    const inView =
+      view === 'selling'
+        ? listings.filter((l) => l.createdBy === me)
+        : view === 'buying'
+          ? listings.filter((l) => myRequest(l))
+          : listings.filter((l) => l.body.status !== 'sold' && (!close || close.has(l.key)));
+    const shown = inView
+      .filter((l) => !category || kindOf(l.body.category).id === category)
+      .filter((l) => !freeOnly || isFree(l.body.price))
+      .filter(matches)
+      .sort((a, b) =>
+        sort === 'near' && near
+          ? kmTo(near, a.body.place) - kmTo(near, b.body.place)
+          : sort === 'cheap' || sort === 'dear'
+            ? (priceOf(a) - priceOf(b)) * (sort === 'cheap' ? 1 : -1)
+            : 0,
+      );
+    const categoriesHere = CATEGORIES.filter((c) =>
+      listings.some((l) => kindOf(l.body.category).id === c.id),
+    );
+    const waiting = listings
+      .filter((l) => l.createdBy === me)
+      .reduce((n, l) => n + l.requests.filter((r) => answerTo(r, l) === 'waiting').length, 0);
+    const filtered = words || category || freeOnly;
+
+    return html`<div class="stack" style="gap: 18px">
+      <div class="row" style="gap: 12px; flex-wrap: wrap">
+        <div class="tabs" role="tablist" aria-label="Marketplace">
+          ${[
+            ['browse', 'Browse'],
+            ['selling', 'Selling'],
+            ['buying', 'Buying'],
+          ].map(
+            ([id, label]) =>
+              html`<button key=${id} role="tab" aria-selected=${view === id} onClick=${() => setView(id)}>
+                ${label} ${id === 'selling' && waiting > 0 && html`<span class="count">${waiting}</span>`}
+              </button>`,
+          )}
+        </div>
+        <span style="flex: 1"></span>
+        ${maySell && html`<button data-variant="primary" onClick=${() => setEditing('new')}>+ Sell something</button>`}
+      </div>
+
+      <div class="tools">
+        <input
+          type="search"
+          value=${search}
+          onInput=${(e) => setSearch(e.currentTarget.value)}
+          placeholder="Search the marketplace"
+          aria-label="Search"
+        />
+        <select value=${sort} onChange=${(e) => setSort(e.currentTarget.value)} aria-label="Sort">
+          <option value="new">Newest first</option>
+          ${near && html`<option value="near">Nearest first</option>`}
+          <option value="cheap">Price: low to high</option>
+          <option value="dear">Price: high to low</option>
+        </select>
+      </div>
+
+      ${
+        view === 'browse' &&
+        html`<div class="scroll-x" role="group" aria-label="Categories">
+          <${NearButton} near=${near} onChange=${setNear} />
+          <span class="divider" aria-hidden="true"></span>
+          <button
+            class="chip"
+            aria-pressed=${!category && !freeOnly}
+            onClick=${() => {
+              setCategory(null);
+              setFreeOnly(false);
+            }}
+          >
+            All
+          </button>
+          <button class="chip" aria-pressed=${freeOnly} onClick=${() => setFreeOnly(!freeOnly)}>
+            <span aria-hidden="true">🎁</span> Free
+          </button>
+          ${categoriesHere.map(
+            (c) =>
+              html`<button
+                key=${c.id}
+                class="chip"
+                aria-pressed=${category === c.id}
+                onClick=${() => setCategory(category === c.id ? null : c.id)}
+              >
+                <span aria-hidden="true">${c.emoji}</span> ${c.label}
+              </button>`,
+          )}
+        </div>`
+      }
+      ${
+        shown.length === 0
+          ? html`<div class="empty stack" style="align-items: center; gap: 12px">
+              <${Shape} kind="leaf" colour="cobalt" size=${40} />
+              <span>
+                ${
+                  filtered
+                    ? 'Nothing matches.'
+                    : view === 'selling'
+                      ? "You aren't selling anything."
+                      : view === 'buying'
+                        ? "You haven't asked for anything yet."
+                        : 'Nothing for sale yet.'
+                }
+              </span>
+              ${maySell && view !== 'buying' && !filtered && html`<button data-variant="primary" onClick=${() => setEditing('new')}>Sell something</button>`}
+            </div>`
+          : html`<div class="grid">
+              ${shown.map((l) => html`<${ListingCard} key=${l.key} listing=${l} near=${near} onOpen=${() => setOpenKey(l.key)} />`)}
+            </div>`
+      }
+      ${form}
+    </div>`;
+  }
+
+  /** The listing's first photo, or a cover in its category's colour when it has none */
+  function Photo({ listing, size, children }) {
+    const photo = useFile(listing.key, listing.body.images?.[0]?.blob);
+    const sold = listing.body.status === 'sold' ? ' sold' : '';
+    if (photo)
+      return html`<div style="position: relative">
+        <img class=${`photo${sold}`} src=${photo} alt=${listing.body.images[0].alt ?? ''} />${children}
+      </div>`;
+    return html`<${Cover} seed=${listing.key} colour=${kindOf(listing.body.category).colour} size=${size} class=${`photo${sold}`}>${children}</${Cover}>`;
+  }
+
+  /** A thing in the grid: its picture, its price, what it is and where */
+  function ListingCard({ listing, near, onOpen }) {
+    const body = listing.body;
+    const mineWaiting =
+      listing.createdBy === me
+        ? listing.requests.filter((r) => answerTo(r, listing) === 'waiting').length
+        : 0;
+    return html`<button class="item" onClick=${onOpen}>
+      <${Photo} listing=${listing} size=${64}>
+        ${body.status && body.status !== 'available' && html`<span class="pill left">${body.status === 'sold' ? 'Sold' : 'Reserved'}</span>`}
+        ${mineWaiting > 0 && html`<span class="pill right">${mineWaiting} ${mineWaiting === 1 ? 'request' : 'requests'}</span>`}
+      </${Photo}>
+      <span class="stack" style="gap: 2px; min-width: 0; padding: 0 2px">
+        <strong class=${isFree(body.price) ? 'price free' : 'price'}>${priceLabel(body.price)}</strong>
+        <span class="name">${body.title}</span>
+        <span class="faint ellipsis">${[distanceText(near, body.place), placeLabel(body.place), ago(listing.createdAt)].filter(Boolean).join(' · ')}</span>
+      </span>
+    </button>`;
+  }
+
+  /** One listing's own page: the thing, its seller, and asking for it */
+  function ListingPage({ listing, near, onBack, onEdit }) {
+    const body = listing.body;
+    const cat = kindOf(body.category);
+    const away = distanceText(near, body.place);
+    const selling = listing.createdBy === me;
+    const mayEdit = useCan('edit', LISTING);
+    const condition = CONDITIONS.find((c) => c.id === body.condition);
+    const [confirmDelete, setConfirmDelete] = useState(false);
+    const setStatus = (status) => minca.update(listing.key, { ...body, status });
+
+    return html`<div class="stack" style="gap: 20px">
+      <button class="back" onClick=${onBack}>‹ Marketplace</button>
+      <div class="detail">
+        <${Photo} listing=${listing} size=${140} />
+        <div class="stack" style="gap: 18px; min-width: 0">
+          <header class="stack" style="gap: 6px">
+            <h1 style="font-size: 26px; word-break: break-word">${body.title}</h1>
+            <strong class=${isFree(body.price) ? 'price free' : 'price'} style="font-size: 22px"
+              >${priceLabel(body.price)}</strong
+            >
+            <span class="muted" style="font-size: 13px">
+              ${`Listed ${ago(listing.createdAt)}`}${placeLabel(body.place) ? ` in ${placeLabel(body.place)}` : ''}${away ? ` · ${away} away` : ''}
+            </span>
+            <div class="row" style="gap: 6px; flex-wrap: wrap; margin-top: 4px">
+              ${body.status && body.status !== 'available' && html`<span class="badge" style="color: var(--minca-ink); font-weight: 600">${body.status === 'sold' ? 'Sold' : 'Reserved'}</span>`}
+              <span class="badge">${cat.emoji} ${cat.label}</span>
+              ${condition && html`<span class="badge">${condition.label}</span>`}
+            </div>
+          </header>
+
+          ${
+            selling
+              ? mayEdit &&
+                html`<div class="stack" style="gap: 10px">
+                  <div role="group" aria-label="Status" class="tabs" style="align-self: stretch">
+                    ${['available', 'reserved', 'sold'].map(
+                      (s) =>
+                        html`<button
+                          key=${s}
+                          aria-selected=${(body.status ?? 'available') === s}
+                          onClick=${() => setStatus(s)}
+                          style="flex: 1"
+                        >
+                          ${s === 'available' ? 'Available' : s === 'reserved' ? 'Reserved' : 'Sold'}
+                        </button>`,
+                    )}
+                  </div>
+                  <div class="row">
+                    <button style="flex: 1" onClick=${onEdit}>Edit listing</button>
+                    <button
+                      style="flex: 1"
+                      data-variant="danger"
+                      onBlur=${() => setConfirmDelete(false)}
+                      onClick=${() => {
+                        if (!confirmDelete) return setConfirmDelete(true);
+                        onBack();
+                        minca.remove(listing.key);
+                      }}
+                    >
+                      ${confirmDelete ? 'Delete for everyone?' : 'Delete'}
+                    </button>
+                  </div>
+                </div>`
+              : html`<${Ask} listing=${listing} />`
+          }
+          ${
+            listing.createdBy &&
+            html`<div class="card row" style="gap: 12px; padding: 14px">
+              <${Avatar} did=${listing.createdBy} size=${40} />
+              <span class="stack" style="gap: 2px; min-width: 0">
+                <span class="faint">Seller</span>
+                <strong><${Person} did=${listing.createdBy} face=${false} /></strong>
+              </span>
+            </div>`
+          }
+
+          <${MapLink} place=${body.place} />
+
+          ${
+            body.description &&
+            html`<section class="stack">
+              <h3>Details</h3>
+              <p class="text" style="font-size: 15px; line-height: 1.6">${body.description}</p>
+            </section>`
+          }
+        </div>
+      </div>
+
+      ${selling && html`<${Requests} listing=${listing} />`}
+
+      <div style="max-width: 640px">
+        <${Comments} about=${listing} />
+      </div>
+    </div>`;
+  }
+
+  /** Asked, said yes, picked up: how far a request has come */
+  function Steps({ at }) {
+    const steps = ['Asked', 'Accepted', 'Picked up'];
+    return html`<ol class="steps">
+      ${steps.map(
+        (step, i) =>
+          html`<li
+            key=${step}
+            class=${i <= at ? 'reached' : ''}
+            aria-current=${i === at ? 'step' : undefined}
+          >
+            ${i > 0 && html`<span class="line" aria-hidden="true"></span>`}
+            <span>${i < at || at === steps.length - 1 ? '✓ ' : ''}${step}</span>
+          </li>`,
+      )}
+    </ol>`;
+  }
+
+  /** Asking the seller for it, and then where that stands */
+  function Ask({ listing }) {
+    const mayAsk = useCan('create', ORDER);
+    const mayAnswer = useCan('create', UPDATE);
+    const [writing, setWriting] = useState(false);
+    const [note, setNote] = useState('Hi! Is this still available?');
+    const [busy, setBusy] = useState(false);
+    const box = useRef(null);
+    // autofocus only works on what the page loads with, not on what is added later
+    useEffect(() => writing && box.current?.focus(), [writing]);
+    const mine = myRequest(listing);
+    const body = listing.body;
+
+    if (mine) {
+      const state = answerTo(mine, listing);
+      const seller = html`<strong><${Person} did=${listing.createdBy} face=${false} /></strong>`;
+      const said = {
+        waiting: [html`Request sent`, html`${seller} will answer here.`],
+        accepted: [
+          html`${seller} said yes`,
+          'Agree on when and where to pick it up in the comments below. Once you have it, say so here.',
+        ],
+        declined: [html`${seller} said no this time`, 'It may have gone to someone else.'],
+        done: [html`It's yours 🎉`, html`You got it from ${seller}.`],
+      }[state];
+      const gotIt = () =>
+        minca.put(
+          UPDATE,
+          { status: 'delivered', ...responding(listing.createdBy) },
+          { links: [{ rel: 'about', to: mine.key }] },
+        );
+      return html`<div class=${`state stack ${state}`} style="gap: 10px">
+        ${state !== 'declined' && html`<${Steps} at=${state === 'waiting' ? 0 : state === 'accepted' ? 1 : 2} />`}
+        <strong style="font-size: 15px; color: var(--minca-ink)">${said[0]}</strong>
+        <span class="muted" style="font-size: 13px">${said[1]}</span>
+        ${mine.body.note && state === 'waiting' && html`<span style="font-size: 13px; font-style: italic">“${mine.body.note}”</span>`}
+        ${
+          state !== 'done' &&
+          html`<div class="row" style="flex-wrap: wrap; margin-top: 2px">
+            ${state === 'accepted' && mayAnswer && html`<button class="dark" onClick=${gotIt}>I've got it</button>`}
+            <button onClick=${() => minca.remove(mine.key)}>
+              ${state === 'declined' ? 'Remove request' : state === 'accepted' ? "I don't want it after all" : 'Withdraw request'}
+            </button>
+          </div>`
+        }
+      </div>`;
+    }
+
+    if (!mayAsk) return null;
+    if (body.status === 'sold') return html`<p class="muted">This has been sold.</p>`;
+    if (!writing)
+      return html`<button data-variant="primary" style="min-height: 44px" onClick=${() => setWriting(true)}>
+        ${isFree(body.price) ? 'I’d like this' : `Ask to buy · ${priceLabel(body.price)}`}
+      </button>`;
+    return html`<form
+      class="card stack"
+      onSubmit=${(event) => {
+        event.preventDefault();
+        setBusy(true);
+        minca
+          .put(
+            ORDER,
+            {
+              items: [{ title: body.title, quantity: 1, ...(body.price ? { price: body.price } : {}) }],
+              ...(body.price ? { total: body.price } : {}),
+              ...(note.trim() ? { note: note.trim() } : {}),
+              ...responding(listing.createdBy),
+            },
+            { links: [{ rel: 'about', to: listing.key }] },
+          )
+          .finally(() => {
+            setBusy(false);
+            setWriting(false);
+          });
+      }}
+    >
+      <label class="label" for="note">A message to the seller</label>
+      <textarea
+        id="note"
+        ref=${box}
+        rows="3"
+        maxlength="2000"
+        value=${note}
+        onInput=${(e) => setNote(e.currentTarget.value)}
+      ></textarea>
+      <div class="row" style="justify-content: flex-end">
+        <button type="button" onClick=${() => setWriting(false)}>Cancel</button>
+        <button type="submit" data-variant="primary" disabled=${busy}>
+          ${busy ? 'Sending…' : 'Send request'}
+        </button>
+      </div>
+    </form>`;
+  }
+
+  /** For the seller: who asked, and an answer to each */
+  function Requests({ listing }) {
+    const mayAnswer = useCan('create', UPDATE);
+    const requests = [...listing.requests].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    if (requests.length === 0) return null;
+    const markSold = () =>
+      listing.body.status === 'sold'
+        ? Promise.resolve()
+        : minca.update(listing.key, { ...listing.body, status: 'sold' });
+    const reply = async (request, status) => {
+      await minca.put(
+        UPDATE,
+        { status, ...responding(request.createdBy) },
+        { links: [{ rel: 'about', to: request.key }] },
+      );
+      // Accepting one holds the thing for that person.
+      if (status === 'accepted' && (listing.body.status ?? 'available') === 'available')
+        await minca.update(listing.key, { ...listing.body, status: 'reserved' });
+      if (status === 'delivered') await markSold();
+    };
+    const sellerSaidDone = (r) => r.updates.some((u) => u.createdBy === me && u.body.status === 'delivered');
+    const label = { done: 'Handed over', accepted: 'Accepted', declined: 'Declined', waiting: 'Waiting' };
+
+    return html`<section class="stack" style="gap: 10px">
+      <h3>Requests <span class="faint">${requests.length}</span></h3>
+      <div class="card requests" style="padding: 0; overflow: hidden">
+        ${requests.map((r) => {
+          const state = answerTo(r, listing);
+          return html`<div key=${r.key} class="row" style="gap: 12px; align-items: flex-start; padding: 14px">
+            <${Avatar} did=${r.createdBy ?? ''} size=${32} />
+            <div class="stack" style="gap: 4px; flex: 1; min-width: 0">
+              <span
+                ><strong><${Person} did=${r.createdBy ?? ''} face=${false} /></strong>
+                <span class="faint">· ${ago(r.createdAt)}</span></span
+              >
+              ${r.body.note && html`<p class="text">${r.body.note}</p>`}
+            </div>
+            <div class="row" style="gap: 6px; flex-shrink: 0">
+              ${
+                state === 'waiting' && mayAnswer
+                  ? html`<button onClick=${() => reply(r, 'cancelled')}>Decline</button>
+                      <button class="dark" onClick=${() => reply(r, 'accepted')}>Accept</button>`
+                  : state === 'accepted' && mayAnswer
+                    ? html`<button class="dark" onClick=${() => reply(r, 'delivered')}>Handed over</button>`
+                    : state === 'done' && !sellerSaidDone(r) && listing.body.status !== 'sold' && mayAnswer
+                      ? html`<span style="font-size: 13px; color: var(--minca-good)">They have it</span>
+                          <button class="dark" onClick=${markSold}>Mark as sold</button>`
+                      : html`<span
+                          class="badge"
+                          style=${`color: var(--minca-${state === 'declined' ? 'muted' : 'good'})`}
+                          >${label[state]}</span
+                        >`
+              }
+            </div>
+          </div>`;
+        })}
+      </div>
+    </section>`;
+  }
+
+  function Field({ label, children }) {
+    return html`<div class="stack" role="group" aria-label=${label} style="gap: 6px">
+      <span class="label">${label}</span>${children}
+    </div>`;
+  }
+
+  /** Putting something up for sale, or changing it */
+  function ListingForm({ initial, near, onSave, onClose }) {
+    const was = initial?.body;
+    const [title, setTitle] = useState(was?.title ?? '');
+    const [category, setCategory] = useState(was ? kindOf(was.category).id : '');
+    const [condition, setCondition] = useState(was?.condition ?? '');
+    const [amount, setAmount] = useState(was?.price?.amount ?? '');
+    const [currency, setCurrency] = useState(was?.price?.currency ?? 'EUR');
+    const [place, setPlace] = useState(was?.place);
+    const [description, setDescription] = useState(was?.description ?? '');
+    const [busy, setBusy] = useState(false);
+    const first = useRef(null);
+    useEffect(() => {
+      first.current?.focus();
+      // The currency this person last priced something in, so they don't pick it every time
+      if (!was?.price)
+        minca.recall('currency').then((kept) => CURRENCIES.includes(kept) && setCurrency(kept));
+    }, []);
+
+    const price = String(amount).trim().replace(',', '.');
+    const badPrice = !!price && !/^\d{1,9}(\.\d{1,2})?$/.test(price);
+    const ready = !!title.trim() && !!category && !badPrice;
+    const chosenCondition = CONDITIONS.find((c) => c.id === condition)?.id;
+
+    return html`<${Modal} title=${initial ? 'Edit listing' : 'Sell something'} onClose=${onClose} width=${560}>
+      <form
+        class="stack"
+        style="gap: 14px"
+        onSubmit=${(event) => {
+          event.preventDefault();
+          if (!ready) return;
+          setBusy(true);
+          minca.remember('currency', currency);
+          onSave({
+            ...(was?.images ? { images: was.images } : {}),
+            title: title.trim(),
+            category,
+            ...(price && Number(price) > 0 ? { price: { amount: price, currency } } : {}),
+            ...(chosenCondition ? { condition: chosenCondition } : {}),
+            ...(place ? { place } : {}),
+            ...(description.trim() ? { description: description.trim() } : {}),
+            status: was?.status ?? 'available',
+          }).finally(() => setBusy(false));
+        }}
+      >
+        <${Field} label="What are you selling?">
+          <input ref=${first} value=${title} onInput=${(e) => setTitle(e.currentTarget.value)} placeholder="Oak dining table, seats six" maxlength="300" />
+        </${Field}>
+        <${Field} label="Price">
+          <div class="row">
+            <input value=${amount} onInput=${(e) => setAmount(e.currentTarget.value)} placeholder="0 or empty for free" inputmode="decimal" style="flex: 1; min-width: 0" />
+            <select value=${currency} onChange=${(e) => setCurrency(e.currentTarget.value)} aria-label="Currency" style="width: auto">
+              ${CURRENCIES.map((c) => html`<option key=${c}>${c}</option>`)}
+            </select>
+          </div>
+        </${Field}>
+        ${badPrice && html`<p class="error">A price is a number, like 120 or 49.50.</p>`}
+        <${Field} label="Category">
+          <div class="row" style="gap: 6px; flex-wrap: wrap">
+            ${CATEGORIES.map(
+              (c) =>
+                html`<button
+                  key=${c.id}
+                  type="button"
+                  class="chip"
+                  aria-pressed=${category === c.id}
+                  onClick=${() => setCategory(c.id)}
+                >
+                  <span aria-hidden="true">${c.emoji}</span> ${c.label}
+                </button>`,
+            )}
+          </div>
+        </${Field}>
+        <${Field} label="Condition">
+          <div class="row" style="gap: 6px; flex-wrap: wrap">
+            ${CONDITIONS.map(
+              (c) =>
+                html`<button
+                  key=${c.id}
+                  type="button"
+                  class="chip"
+                  aria-pressed=${condition === c.id}
+                  onClick=${() => setCondition(condition === c.id ? '' : c.id)}
+                >
+                  ${c.label}
+                </button>`,
+            )}
+          </div>
+        </${Field}>
+        <${Field} label="Where to pick it up">
+          <${PlaceField} value=${place} onChange=${setPlace} coarse near=${near} placeholder="Neighbourhood or town" />
+        </${Field}>
+        <${Field} label="Description">
+          <textarea rows="4" maxlength="10000" value=${description} onInput=${(e) => setDescription(e.currentTarget.value)} placeholder="Size, age, any marks, why you're selling"></textarea>
+        </${Field}>
+        <div class="row" style="justify-content: flex-end">
+          <button type="button" onClick=${onClose}>Cancel</button>
+          <button type="submit" data-variant="primary" disabled=${!ready || busy}>${busy ? 'Saving…' : initial ? 'Save' : 'Publish'}</button>
+        </div>
+      </form>
+    </${Modal}>`;
+  }
+
+  render(html`<${Marketplace} />`);
+</script>

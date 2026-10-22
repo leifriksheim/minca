@@ -13,7 +13,9 @@ import {
   SCREEN_CLIENT,
   screenDocument,
   screenPolicy,
+  type ScreenHost,
 } from '../src/components/apps/screens';
+import type { P2PNode } from '@minca/core';
 import { setup, waitFor } from './helpers';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -41,6 +43,21 @@ describe('screens', () => {
     assert.equal(me.name, 'Anna');
     assert.deepEqual(Reflect.apply(me, undefined, []), { did: 'did:key:zMe', name: 'Anna' });
     assert.deepEqual(minca.collections, ['app.chess.game']);
+  });
+
+  test("the script in front of a screen passes a list's where on, so a screen gets only what it asked for", () => {
+    const sent: unknown[] = [];
+    const port = { postMessage: (message: unknown) => sent.push(message), onmessage: null };
+    const window: Record<string, unknown> = {
+      __minca: { port, me: { did: 'did:key:zMe', name: 'Anna' }, collections: ['std.comment'] },
+    };
+    runScreenClient(window, () => {}, {});
+    const minca = window.minca;
+    assert.ok(isRecord(minca) && typeof minca.list === 'function');
+    void Reflect.apply(minca.list, undefined, ['std.comment', { where: { 'link:about': 'event-1' } }]);
+    assert.deepEqual(sent, [
+      { id: 1, method: 'list', args: ['std.comment', { where: { 'link:about': 'event-1' } }] },
+    ]);
   });
 
   test("the script in front of a screen shows the screen's own errors, not those of a browser extension in its frame", () => {
@@ -154,28 +171,8 @@ describe('screens', () => {
       'the definition',
     );
 
-    const channel = new MessageChannel();
-    const bridge = createScreenBridge({
-      node: bob.node,
-      spaceId: space,
-      // Handed the launcher's own collection too, which no screen may use.
-      collections: ['app.chess.game', 'launcher.app'],
-      port: channel.port1,
-    });
-    const Answer = z.object({ ok: z.boolean(), value: z.unknown().optional(), error: z.string().optional() });
-    let next = 0;
-    const call = (method: string, ...args: unknown[]) =>
-      new Promise<z.infer<typeof Answer>>((resolve) => {
-        const id = ++next;
-        const listen = (event: MessageEvent<unknown>) => {
-          if (!isRecord(event.data) || event.data.id !== id) return;
-          channel.port2.removeEventListener('message', listen);
-          resolve(Answer.parse(event.data));
-        };
-        channel.port2.addEventListener('message', listen);
-        channel.port2.start();
-        channel.port2.postMessage({ id, method, args });
-      });
+    // Handed the launcher's own collection too, which no screen may use.
+    const { call, close } = bridgeFor(bob.node, space, ['app.chess.game', 'launcher.app']);
     try {
       const secret = await call('list', 'app.secret');
       assert.equal(secret.ok, false);
@@ -207,11 +204,186 @@ describe('screens', () => {
       assert.equal(open.length, 1);
       assert.equal(open[0]!.id, open[0]!.key);
       assert.equal(open[0]!.data.status, 'open');
+
+      // What a record that cites this one needs: its version, and the first one through its history.
+      const cited = z.object({
+        key: z.string(),
+        version: z.string(),
+        seq: z.number(),
+        verified: z.boolean(),
+      });
+      const [opened] = z.array(cited).parse(listed.value);
+      assert.ok(opened);
+      assert.equal(opened.seq, 0);
+      assert.equal(opened.verified, true);
+      const updated = cited.parse((await call('update', opened.key, { status: 'closed' })).value);
+      const history = z.array(cited).parse((await call('history', opened.key)).value);
+      assert.equal(history[0]?.version, updated.version, 'newest first');
+      assert.equal(
+        (await call('history', hers.key)).ok,
+        true,
+        "another person's record of the app's, to read",
+      );
+      assert.equal((await call('history', 'nope')).ok, false);
+
       const wrong = await call('list', 42);
       assert.match(wrong.error!, /Name the collection as text, like minca\.list\("app\.chess\.game"\)/);
     } finally {
-      bridge.close();
-      channel.port2.close();
+      close();
+    }
+  });
+
+  test('a screen checks, shows faces and opens things only within its app and its space', async () => {
+    const { alice, bob, space } = await setup();
+    await alice.node.collections.define(space, { name: 'app.chess.game', schema: { type: 'object' } });
+    await alice.node.records.put(space, 'app.secret', { pin: 1234 });
+    const picture = new Uint8Array([82, 73, 70, 70, 1, 2, 3]);
+    await alice.node.account.setAvatar({ bytes: picture, mime: 'image/webp' });
+    await waitFor(
+      async () => !!(await bob.node.spaces.profiles(space)).find((p) => p.did === alice.node.did)?.avatar,
+      "Alice's picture",
+    );
+    const game = await alice.node.records.put(space, 'app.chess.game', { white: 'alice' });
+    const secret = (await alice.node.records.list(space, { collection: 'app.secret' }))[0]!;
+    await waitFor(async () => (await bob.node.records.get(space, secret.key)) !== null, 'the records');
+
+    const { host, asked } = fakeHost();
+    const { call, close } = bridgeFor(bob.node, space, ['app.chess.game'], host);
+    try {
+      assert.equal((await call('can', 'create', 'app.chess.game')).value, true);
+      assert.equal((await call('can', 'create', 'app.secret')).ok, false, "not another app's collection");
+      assert.equal((await call('can', 'define', 'app.chess.game')).ok, false);
+
+      assert.equal(
+        (await call('picture', alice.node.did)).value,
+        `data:image/webp;base64,${Buffer.from(picture).toString('base64')}`,
+      );
+      assert.equal((await call('picture', 'did:key:zNobodyHere')).value, null);
+
+      assert.equal((await call('open', { record: game.key })).ok, true);
+      assert.equal((await call('open', { record: secret.key })).ok, false, "not a record of another app's");
+      assert.equal((await call('open', { person: alice.node.did })).ok, true);
+      assert.equal(
+        (await call('open', { person: 'did:key:zNobodyHere' })).ok,
+        false,
+        'not someone elsewhere',
+      );
+      const opened = asked.filter(([what]) => what === 'open').map(([, target]) => target);
+      assert.equal(opened.length, 2);
+      assert.ok(isRecord(opened[0]) && isRecord(opened[0].record) && opened[0].record.key === game.key);
+      assert.deepEqual(opened[1], { person: alice.node.did });
+    } finally {
+      close();
+    }
+  });
+
+  test('what the page does for a screen, it does only as asked properly', async () => {
+    const { alice, bob, space } = await setup();
+    await alice.node.collections.define(space, { name: 'app.market.listing', schema: { type: 'object' } });
+    const photo = await alice.node.records.addFile(space, new Uint8Array([1, 2, 3]), { mime: 'image/webp' });
+    const manual = await alice.node.records.addFile(space, new Uint8Array([4, 5]), {
+      mime: 'application/pdf',
+    });
+    const listing = await alice.node.records.put(space, 'app.market.listing', { images: [photo], manual });
+    await waitFor(async () => (await bob.node.records.get(space, listing.key)) !== null, 'the listing');
+
+    const { host, asked } = fakeHost();
+    const { call, close } = bridgeFor(bob.node, space, ['app.market.listing'], host);
+    try {
+      // A picture comes from the record that refers to it, whatever the screen says it is.
+      assert.equal(
+        (await call('file', listing.key, { hash: photo.hash, mime: 'text/html' })).value,
+        'data:image/webp;base64,AQID',
+      );
+      assert.equal((await call('file', listing.key, manual)).value, null, 'only pictures');
+      assert.equal((await call('file', listing.key, 'not-a-file-of-its')).ok, false);
+
+      assert.equal((await call('link', 'javascript:alert(1)')).ok, false);
+      assert.equal((await call('link', 'https://example.com/a')).ok, true);
+      assert.equal((await call('save', '../evil.sh', 'x')).ok, false);
+      assert.equal((await call('save', 'trip.ics', 'BEGIN:VCALENDAR', 'text/html')).ok, false);
+      assert.equal((await call('save', 'trip.ics', 'BEGIN:VCALENDAR', 'text/calendar')).ok, true);
+      assert.equal((await call('remember', 'near', 'x'.repeat(9000))).ok, false, 'small things only');
+      assert.equal((await call('remember', 'near', { km: 5 })).ok, true);
+      assert.deepEqual((await call('recall', 'near')).value, { km: 5 });
+      assert.equal((await call('searchPlaces', 'Oslo', { lat: 59.9, lon: 10.7 })).ok, true);
+
+      // A file the screen adds is the space's, as the person looking; one a record refers to can be saved.
+      assert.equal((await call('addFile', 'not bytes')).ok, false);
+      const added = z
+        .object({ hash: z.string(), mime: z.string() })
+        .parse(
+          (await call('addFile', new Uint8Array([9, 9]), { name: 'note.txt', mime: 'text/plain' })).value,
+        );
+      assert.equal(added.mime, 'text/plain');
+      assert.equal((await call('download', listing.key, manual)).ok, true);
+      assert.equal((await call('download', listing.key, added)).ok, false, 'not a file the record refers to');
+
+      assert.deepEqual(
+        asked.filter(([what]) => what !== 'recall'),
+        [
+          ['link', 'https://example.com/a'],
+          ['save', 'trip.ics', 'BEGIN:VCALENDAR', 'text/calendar'],
+          ['remember', 'near', { km: 5 }],
+          ['searchPlaces', 'Oslo', { lat: 59.9, lon: 10.7 }],
+          ['save', 'file', '\u0004\u0005', 'application/pdf'],
+        ],
+      );
+    } finally {
+      close();
     }
   });
 });
+
+/** A page that does what a screen asks by writing it down */
+function fakeHost() {
+  const asked: unknown[][] = [];
+  const kept = new Map<string, unknown>();
+  const host: ScreenHost = {
+    open: (target) => void asked.push(['open', target]),
+    searchPlaces: async (text, near) => (asked.push(['searchPlaces', text, near]), []),
+    here: async () => null,
+    link: (url) => void asked.push(['link', url]),
+    save: (name, bytes, type) => void asked.push(['save', name, new TextDecoder().decode(bytes), type]),
+    recall: (key) => (asked.push(['recall', key]), kept.get(key) ?? null),
+    remember: (key, value) => {
+      asked.push(['remember', key, value]);
+      kept.set(key, value);
+    },
+  };
+  return { host, asked };
+}
+
+const Answer = z.object({ ok: z.boolean(), value: z.unknown().optional(), error: z.string().optional() });
+
+/** A bridge for these collections, and a way to call it as a screen would */
+function bridgeFor(node: P2PNode, spaceId: string, collections: ReadonlyArray<string>, host?: ScreenHost) {
+  const channel = new MessageChannel();
+  const bridge = createScreenBridge({
+    node,
+    spaceId,
+    collections,
+    port: channel.port1,
+    ...(host ? { host } : {}),
+  });
+  let next = 0;
+  const call = (method: string, ...args: unknown[]) =>
+    new Promise<z.infer<typeof Answer>>((resolve) => {
+      const id = ++next;
+      const listen = (event: MessageEvent<unknown>) => {
+        if (!isRecord(event.data) || event.data.id !== id) return;
+        channel.port2.removeEventListener('message', listen);
+        resolve(Answer.parse(event.data));
+      };
+      channel.port2.addEventListener('message', listen);
+      channel.port2.start();
+      channel.port2.postMessage({ id, method, args });
+    });
+  return {
+    call,
+    close: () => {
+      bridge.close();
+      channel.port2.close();
+    },
+  };
+}

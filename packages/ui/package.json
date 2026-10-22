@@ -1,0 +1,30 @@
+{
+  "name": "@minca/ui",
+  "private": true,
+  "type": "module",
+  "description": "Minca's design system, and the kit an app's screen draws with. Its tokens, shapes and avatars are plain data every UI reads; src/frame/ is the kit, which a host bundles into one script (src/bundle.ts) and writes in front of every screen.",
+  "exports": {
+    "./tokens": "./src/tokens.ts",
+    "./shapes": "./src/shapes.ts",
+    "./avatar": "./src/avatar.ts",
+    "./hash": "./src/hash.ts",
+    "./round": "./src/round.ts",
+    "./time": "./src/time.ts",
+    "./size": "./src/size.ts",
+    "./guide": "./src/guide.ts",
+    "./bundle": "./src/bundle.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@minca/core": "*",
+    "htm": "3.1.1",
+    "preact": "10.29.8"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "esbuild": "^0.25.0",
+    "typescript": "^7.0.2"
+  }
+}

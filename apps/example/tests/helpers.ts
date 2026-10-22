@@ -13,10 +13,10 @@ import { noteTerms, team } from '@minca/core';
 
 export const waitFor = (check: () => Promise<boolean>, what: string) => untilWithin(check, 4000, what);
 
-/** Alice owns a team space; Bob is an editor there, so he may define collections too */
+/** Alice owns a team space; Bob is an editor there, so he may define collections too. Alice's account can take a picture. */
 export async function setup() {
   const hub = createFakeHub({ latencyMs: 1 });
-  const alice = await person(hub);
+  const alice = await person(hub, { accountKey: true, name: 'Alice' });
   const bob = await person(hub);
   const { id: space } = await alice.node.spaces.create({ name: 'Climbing', ...team, visibility: 'public' });
   await bob.node.spaces.join(await alice.node.spaces.invite(space));

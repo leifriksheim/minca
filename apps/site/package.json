@@ -14,7 +14,8 @@
     "@tanstack/react-router": "^1.170.44",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "sugar-high": "^2.4.1"
+    "sugar-high": "^2.4.1",
+    "@minca/ui": "*"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

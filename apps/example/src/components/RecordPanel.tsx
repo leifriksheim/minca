@@ -21,7 +21,7 @@ import {
   type LinkedByRel,
 } from '../derive/schema-ui';
 import { nameOf, peopleFrom, writerOf } from '../derive/people';
-import { ago } from '../derive/time';
+import { ago } from '@minca/ui/time';
 import { SchemaForm, FieldInput } from './SchemaForm';
 import { Value } from './Value';
 import { Avatar } from '@minca/app-shared/Avatar';

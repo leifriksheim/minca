@@ -4,7 +4,7 @@
  */
 import type { CarriedSpace } from '@minca/core/node';
 import { ensureFolderPermission, recallDataFolder } from '@minca/core/storage';
-import { avatarElement } from '@minca/app-shared/avatar';
+import { avatarElement } from '@minca/ui/avatar';
 import { MARK_BANDS, MARK_VIEWBOX } from '@minca/app-shared/mark';
 import type { CarrierStatus, PodState } from './shared';
 

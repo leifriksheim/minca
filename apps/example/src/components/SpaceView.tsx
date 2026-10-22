@@ -643,17 +643,10 @@ function SpaceView({ space }: { space: SpaceSummary }) {
   );
 }
 
-/** An open app: a built-in one's own view, or one made for the space */
+/** An open app: its screen, or its records as lists */
 export function OpenApp({ app }: { app: AppEntry }) {
   const { space, collections, openRecord } = useSpaceScreen();
-  // What was new when it opened stays marked as new while it is open, though opening marks it seen.
-  const seen = useSeen();
-  const [since] = useState(() => seenAt(seen, space.id, app.id));
-  if (app.made)
-    return <MadeAppScreen space={space} record={app.made} collections={collections} onOpen={openRecord} />;
-  if (!app.builtIn) return null;
-  const View = app.builtIn.View;
-  return <View space={space} collections={collections} onOpen={openRecord} since={since} />;
+  return <MadeAppScreen space={space} record={app.record} collections={collections} onOpen={openRecord} />;
 }
 
 /** Who can read the space, in a word */

@@ -13,8 +13,9 @@ import * as typescript from 'sugar-high/lang/typescript';
 import * as shell from 'sugar-high/lang/shell';
 import { STAFF_COLLECTIONS } from '@minca/core';
 import { Mark } from '@minca/app-shared/Wordmark';
-import { Shape, type ShapeKind } from '@minca/app-shared/shapes';
-import { SHAPE_CYCLE, type ShapeColour } from '@minca/app-shared/tokens';
+import { Shape } from '@minca/app-shared/shapes';
+import { type ShapeKind } from '@minca/ui/shapes';
+import { SHAPE_CYCLE, type ShapeColour } from '@minca/ui/tokens';
 import { CONCEPTS } from './concepts';
 
 import { CONNECT, SCENARIOS, describePreset } from './walkthrough';

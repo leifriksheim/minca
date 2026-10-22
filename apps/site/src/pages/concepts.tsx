@@ -3,8 +3,8 @@
  * line of code, and a small drawing in HTML and CSS.
  */
 import type { ReactNode } from 'react';
-import type { ShapeKind } from '@minca/app-shared/shapes';
-import type { ShapeColour } from '@minca/app-shared/tokens';
+import type { ShapeKind } from '@minca/ui/shapes';
+import type { ShapeColour } from '@minca/ui/tokens';
 
 export interface Concept {
   /** Its tab's id */

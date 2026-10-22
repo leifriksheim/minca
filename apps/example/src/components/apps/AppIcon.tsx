@@ -1,4 +1,5 @@
-import { Shape, shapeFor } from '@minca/app-shared/shapes';
+import { Shape } from '@minca/app-shared/shapes';
+import { shapeFor } from '@minca/ui/shapes';
 import type { Unread } from '../../seen';
 
 /**

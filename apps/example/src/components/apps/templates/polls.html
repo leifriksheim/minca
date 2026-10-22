@@ -1,0 +1,264 @@
+<!-- Polls: std.poll and std.vote. One vote per person per poll, so voting again changes it. -->
+<style>
+  .badge {
+    margin-left: auto;
+  }
+  #app {
+    max-width: 640px;
+  }
+  .poll {
+    gap: 12px;
+    padding: 16px;
+  }
+  .poll header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--minca-faint);
+  }
+  .title {
+    min-height: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    font-size: 16px;
+    font-weight: 600;
+    justify-content: flex-start;
+    text-align: left;
+    word-break: break-word;
+  }
+  .title:hover {
+    background: none;
+    text-decoration: underline;
+  }
+  .option {
+    position: relative;
+    overflow: hidden;
+    justify-content: flex-start;
+    gap: 10px;
+    height: 40px;
+    border-radius: var(--minca-radius-md);
+    border-color: var(--minca-line);
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--minca-body);
+  }
+  .option:disabled {
+    opacity: 1;
+  }
+  .option[aria-pressed='true'] {
+    border-color: var(--minca-ink);
+    font-weight: 500;
+  }
+  .option .fill {
+    position: absolute;
+    inset: 0;
+    background: var(--minca-sunken);
+    transition: width 0.3s ease;
+  }
+  .option[aria-pressed='true'] .fill {
+    background: var(--minca-accent-soft);
+  }
+  .option .radio {
+    position: relative;
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: 1.5px solid var(--minca-line-strong);
+  }
+  .option[aria-pressed='true'] .radio {
+    border-color: var(--minca-ink);
+    background: var(--minca-ink);
+    box-shadow: inset 0 0 0 2px var(--minca-card);
+  }
+  .option .label {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+  }
+  .option .count {
+    position: relative;
+    font-size: 12px;
+    color: var(--minca-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  footer.row {
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: var(--minca-faint);
+  }
+  footer button {
+    min-height: 28px;
+    font-size: 12px;
+  }
+</style>
+<script>
+  const { html, render, useState, useEffect, useRef, useRecords, useCan, usePeople, Person, ago } = ui;
+  const POLL = 'std.poll';
+  const VOTE = 'std.vote';
+  const me = minca.me.did;
+
+  function Polls() {
+    const polls = useRecords(POLL);
+    const votes = useRecords(VOTE);
+    const mayAsk = useCan('create', POLL);
+    const mayVote = useCan('create', VOTE);
+    const [asking, setAsking] = useState(false);
+    if (!polls || !votes) return null;
+    const newest = [...polls].reverse();
+    return html`<div class="stack" style="gap: 16px">
+      ${
+        mayAsk &&
+        (asking
+          ? html`<${Ask}
+              onCancel=${() => setAsking(false)}
+              onAsk=${async (question, options) => {
+                await minca.put(POLL, { question, options });
+                setAsking(false);
+              }}
+            />`
+          : html`<button
+              data-variant="primary"
+              style="align-self: flex-start"
+              onClick=${() => setAsking(true)}
+            >
+              New poll
+            </button>`)
+      }
+      ${
+        polls.length === 0 &&
+        !asking &&
+        html`<p class="empty">No polls yet.${mayAsk ? ' Ask the space something.' : ''}</p>`
+      }
+      ${newest.map(
+        (poll) =>
+          html`<${Poll}
+            key=${poll.key}
+            poll=${poll}
+            votes=${votes.filter((v) => v.links.some((l) => l.rel === 'about' && l.to === poll.key))}
+            mayVote=${mayVote}
+          />`,
+      )}
+    </div>`;
+  }
+
+  function Poll({ poll, votes: all, mayVote }) {
+    const people = usePeople();
+    const nameOf = (did) => (did === me ? 'You' : (people.find((p) => p.did === did)?.name ?? 'Someone'));
+    const { question, options, closed } = poll.body;
+    // Only votes for an option that exists count: a vote from a buggy app for option 7 of 2 is ignored.
+    const votes = all.filter((v) => v.body.choice < options.length);
+    const mine = votes.find((v) => v.createdBy === me);
+    const open = mayVote && !closed;
+    const vote = (choice) =>
+      mine && mine.body.choice === choice
+        ? minca.remove(mine.key)
+        : minca.put(
+            VOTE,
+            { choice, ...(poll.createdBy && poll.createdBy !== me ? { respondingTo: poll.createdBy } : {}) },
+            { links: [{ rel: 'about', to: poll.key }] },
+          );
+    return html`<article class="card stack poll">
+      <header>
+        <${Person} did=${poll.createdBy} size=${18} />
+        <span>asked · ${ago(poll.createdAt)}</span>
+        ${closed && html`<span class="badge">Closed</span>`}
+      </header>
+      <button class="title" title="Open this poll" onClick=${() => minca.open({ record: poll.key })}>
+        ${question}
+      </button>
+      <div class="stack" role="group" aria-label="Options" style="gap: 6px">
+        ${options.map((option, i) => {
+          const these = votes.filter((v) => v.body.choice === i);
+          const share = votes.length ? these.length / votes.length : 0;
+          return html`<button
+            class="option"
+            key=${i}
+            disabled=${!open}
+            aria-pressed=${mine?.body.choice === i}
+            title=${these.map((v) => nameOf(v.createdBy)).join(', ') || undefined}
+            onClick=${() => vote(i)}
+          >
+            <span class="fill" style=${{ width: `${share * 100}%` }}></span>
+            <span class="radio"></span>
+            <span class="label">${option}</span>
+            <span class="count">${these.length} · ${Math.round(share * 100)}%</span>
+          </button>`;
+        })}
+      </div>
+      <footer class="row">
+        <span>
+          ${votes.length} ${votes.length === 1 ? 'vote' : 'votes'}
+          ${open && (mine ? ' · click your choice again to take it back' : ' · pick one')}
+        </span>
+        ${
+          poll.mine &&
+          html`<span class="row" style="margin-left: auto; gap: 6px">
+            <button onClick=${() => minca.update(poll.key, { ...poll.body, closed: !closed })}>
+              ${closed ? 'Reopen' : 'Close poll'}
+            </button>
+            <button data-variant="danger" onClick=${() => minca.remove(poll.key)}>Delete</button>
+          </span>`
+        }
+      </footer>
+    </article>`;
+  }
+
+  /** A question and its options: two to start, more on demand, blanks dropped */
+  function Ask({ onAsk, onCancel }) {
+    const [question, setQuestion] = useState('');
+    const [options, setOptions] = useState(['', '']);
+    const [busy, setBusy] = useState(false);
+    // autofocus only works on what the page loads with, not on what is added later
+    const first = useRef(null);
+    useEffect(() => first.current?.focus(), []);
+    const filled = options.map((o) => o.trim()).filter(Boolean);
+    const unique = new Set(filled).size === filled.length;
+    const ready = question.trim() && filled.length >= 2 && unique;
+    return html`<form
+      class="card stack"
+      style="padding: 16px"
+      onSubmit=${(event) => {
+        event.preventDefault();
+        if (!ready) return;
+        setBusy(true);
+        onAsk(question.trim(), filled).finally(() => setBusy(false));
+      }}
+    >
+      <input
+        ref=${first}
+        value=${question}
+        onInput=${(e) => setQuestion(e.currentTarget.value)}
+        placeholder="Ask a question"
+        aria-label="Question"
+      />
+      ${options.map(
+        (option, i) =>
+          html`<input
+            key=${i}
+            value=${option}
+            onInput=${(e) => setOptions(options.map((o, j) => (j === i ? e.currentTarget.value : o)))}
+            placeholder=${`Option ${i + 1}`}
+            aria-label=${`Option ${i + 1}`}
+          />`,
+      )}
+      ${!unique && html`<p style="color: var(--minca-danger); font-size: 13px">Two options are the same.</p>`}
+      <div class="row" style="flex-wrap: wrap">
+        ${options.length < 10 && html`<button type="button" onClick=${() => setOptions([...options, ''])}>+ Add option</button>`}
+        <span style="flex: 1"></span>
+        <button type="button" onClick=${onCancel}>Cancel</button>
+        <button type="submit" data-variant="primary" disabled=${!ready || busy}>
+          ${busy ? 'Asking…' : 'Ask'}
+        </button>
+      </div>
+    </form>`;
+  }
+
+  render(html`<${Polls} />`);
+</script>

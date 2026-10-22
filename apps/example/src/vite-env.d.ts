@@ -19,6 +19,12 @@ interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
 
+/** The kit every screen gets, as one script (`mincaUi` in vite.config.ts) */
+declare module 'virtual:minca-ui' {
+  const script: string;
+  export default script;
+}
+
 /** Document Picture-in-Picture (Chrome, Edge), not yet in TypeScript's DOM types */
 interface DocumentPictureInPicture {
   requestWindow(options: { width: number; height: number }): Promise<Window>;

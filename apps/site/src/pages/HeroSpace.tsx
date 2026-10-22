@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Shape, type RoundKind } from '@minca/app-shared/shapes';
-import { shapeColours, type ShapeColour } from '@minca/app-shared/tokens';
+import { Shape } from '@minca/app-shared/shapes';
+import { type RoundKind } from '@minca/ui/shapes';
+import { shapeColours, type ShapeColour } from '@minca/ui/tokens';
 
 /**
  * The front page's hero: many hands making one small app. A handful of

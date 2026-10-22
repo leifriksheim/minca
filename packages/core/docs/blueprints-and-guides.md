@@ -163,7 +163,26 @@ define collections wrote it under a note that isn't records-only
 (`NodeRecord.recordsOnly`). It writes a guide on `launcher.app` saying how to
 propose one.
 
-_Source: `apps/example/src/components/apps/launcher.ts`, `apps/example/src/components/apps/screens.ts`, `apps/example/src/components/apps/ScreenFrame.tsx`, `apps/example/public/screen.html`. Tests: `apps/example/tests/launcher.test.ts`, `apps/example/tests/screens.test.ts`._
+A screen reaches the page around it only through `window.minca`, and only for
+its app's collections and the people in its space: it lists and writes
+records as the person looking, asks what they may do (`can`), gets someone's
+picture (`picture`), and asks the page to show a record or a person
+(`open`). What a sealed frame can't do, the page does for it when it asks,
+after checking the request: it searches for places and asks where the person
+is (`places`), opens http and https pages (`link`), saves text files
+(`save`), keeps a few kilobytes per app on the device (`remember`, `recall`),
+and reads a picture that one of the app's own records refers to (`file`),
+taking its type from the record rather than from the screen. In front of every screen the example app also writes `@minca/ui`
+(`packages/ui`): Preact with htm, hooks that keep records current, people's
+faces, and Minca's look, so a screen is mostly what it is about. It isn't
+part of the screen, so it doesn't count toward the 48 KB a screen may be.
+
+The ready-made apps are screens too, written the same way. Adding one
+defines its collections and writes a copy of it, naming where it came from
+(`template: "kanban"`), and from then on the space changes its copy like any
+other app.
+
+_Source: `apps/example/src/components/apps/launcher.ts` (`addTemplate`), `apps/example/src/components/apps/screens.ts`, `apps/example/src/components/apps/ScreenFrame.tsx`, `apps/example/src/components/apps/templates/`, `apps/example/public/screen.html`, `packages/ui/src/frame/`, `packages/ui/src/guide.ts`. Tests: `apps/example/tests/launcher.test.ts` ("adding a ready-made app copies it into the space once, with its collections and first records"), `apps/example/tests/screens.test.ts` ("a screen checks, shows faces and opens things only within its app and its space", "what the page does for a screen, it does only as asked properly")._
 
 ## Describing a collection
 

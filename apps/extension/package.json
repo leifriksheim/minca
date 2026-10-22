@@ -10,7 +10,8 @@
   },
   "dependencies": {
     "@minca/app-shared": "*",
-    "@minca/core": "*"
+    "@minca/core": "*",
+    "@minca/ui": "*"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.5",

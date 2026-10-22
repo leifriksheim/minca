@@ -1,0 +1,237 @@
+<!-- Chat: std.message as one room, with "@" mentions and files (std.attachment) dropped, pasted or picked onto the box. -->
+<style>
+  html,
+  body {
+    height: 100%;
+  }
+  body {
+    padding: 0;
+  }
+  #app {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  .messages {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px 16px 8px;
+  }
+  .line {
+    display: flex;
+    gap: 10px;
+    padding: 2px 8px;
+    margin: 0 -8px;
+    border-radius: var(--minca-radius-md);
+  }
+  .line.starts {
+    margin-top: 10px;
+  }
+  .line.for-me {
+    background: var(--minca-accent-soft);
+  }
+  .line:hover {
+    background: var(--minca-sunken);
+  }
+  .line .face {
+    width: 28px;
+    flex-shrink: 0;
+  }
+  .line .text {
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .line .delete {
+    visibility: hidden;
+    align-self: flex-start;
+    min-height: 24px;
+    padding: 0 8px;
+    font-size: 12px;
+  }
+  .line:hover .delete,
+  .line:focus-within .delete {
+    visibility: visible;
+  }
+  .composer {
+    padding: 8px 16px 16px;
+    border-top: 1px solid var(--minca-line);
+  }
+  .composer.dropping {
+    background: var(--minca-accent-soft);
+  }
+  .pending {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+</style>
+<script>
+  const { html, render, useState, useEffect, useRef, useRecords, useCan, usePeople } = ui;
+  const { Avatar, Person, MentionInput, MentionText, mentionsIn, Attachments, attach, ago } = ui;
+  const MESSAGE = 'std.message';
+  const me = minca.me.did;
+  /** Messages from one person this close together read as one run, under one name */
+  const RUN_MS = 5 * 60 * 1000;
+
+  function Chat() {
+    const messages = useRecords(MESSAGE);
+    const maySend = useCan('create', MESSAGE);
+    const list = useRef(null);
+    const count = messages?.length ?? 0;
+    // New messages land at the bottom, so keep it in view as they arrive.
+    useEffect(() => {
+      list.current?.scrollTo({ top: list.current.scrollHeight });
+    }, [count]);
+    if (!messages) return null;
+    return html`
+      <div class="messages" ref=${list}>
+        ${messages.length === 0 && html`<p class="empty">No messages yet. Say hello.</p>`}
+        ${messages.map((m, i) => {
+          const before = messages[i - 1];
+          const starts =
+            !before ||
+            before.createdBy !== m.createdBy ||
+            Date.parse(m.createdAt) - Date.parse(before.createdAt) > RUN_MS;
+          return html`<${Line} key=${m.key} message=${m} starts=${starts} />`;
+        })}
+      </div>
+      ${
+        maySend
+          ? html`<${Composer} />`
+          : html`<p class="composer muted">Your role here doesn't let you send messages.</p>`
+      }
+    `;
+  }
+
+  /** One message: its writer when it starts a run, what it says, what is attached, and Delete for your own */
+  function Line({ message, starts }) {
+    const forMe = message.body.mentions?.includes(me);
+    return html`<div class=${`line${starts ? ' starts' : ''}${forMe ? ' for-me' : ''}`}>
+      <div class="face">${starts && html`<${Avatar} did=${message.createdBy} size=${28} round />`}</div>
+      <div class="stack" style="flex: 1; min-width: 0; gap: 4px">
+        ${
+          starts &&
+          html`<div>
+            <${Person} did=${message.createdBy} face=${false} />
+            <span class="faint"> · ${ago(message.createdAt)}</span>
+          </div>`
+        }
+        <p class="text"><${MentionText} text=${message.body.text} /></p>
+        <${Attachments} about=${message.key} />
+      </div>
+      ${
+        message.mine &&
+        html`<button class="delete" data-variant="ghost" onClick=${() => minca.remove(message.key)}>
+          Delete
+        </button>`
+      }
+    </div>`;
+  }
+
+  /** The box: text with "@" mentions, and files dropped on it, pasted into it or picked */
+  function Composer() {
+    const people = usePeople();
+    const [draft, setDraft] = useState('');
+    const [files, setFiles] = useState([]);
+    const [dropping, setDropping] = useState(false);
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState(null);
+    const picker = useRef(null);
+    const add = (list) => list?.length && setFiles((was) => [...was, ...list]);
+
+    const send = async () => {
+      const text = draft.trim() || files.map((file) => `📎 ${file.name}`).join('\n');
+      if (!text || busy) return;
+      setBusy(true);
+      setError(null);
+      try {
+        const mentions = mentionsIn(draft, people);
+        const sent = await minca.put(MESSAGE, { text, ...(mentions.length ? { mentions } : {}) });
+        await attach(sent.key, files);
+        setDraft('');
+        setFiles([]);
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        setBusy(false);
+      }
+    };
+
+    return html`<form
+      class=${dropping ? 'composer dropping' : 'composer'}
+      onSubmit=${(event) => {
+        event.preventDefault();
+        send();
+      }}
+      onDragOver=${(event) => {
+        if (!event.dataTransfer?.types.includes('Files')) return;
+        event.preventDefault();
+        setDropping(true);
+      }}
+      onDragLeave=${() => setDropping(false)}
+      onDrop=${(event) => {
+        event.preventDefault();
+        setDropping(false);
+        add([...(event.dataTransfer?.files ?? [])]);
+      }}
+    >
+      ${
+        files.length > 0 &&
+        html`<div class="pending">
+          ${files.map(
+            (file, i) =>
+              html`<button
+                type="button"
+                class="chip"
+                key=${`${file.name}:${i}`}
+                title="Take it off"
+                onClick=${() => setFiles(files.filter((_, j) => j !== i))}
+              >
+                📎 ${file.name} ✕
+              </button>`,
+          )}
+        </div>`
+      }
+      <div class="row">
+        <button
+          type="button"
+          aria-label="Attach files"
+          title="Attach files"
+          onClick=${() => picker.current?.click()}
+        >
+          +
+        </button>
+        <input
+          ref=${picker}
+          type="file"
+          multiple
+          hidden
+          onChange=${(event) => {
+            add([...event.currentTarget.files]);
+            event.currentTarget.value = '';
+          }}
+        />
+        <${MentionInput}
+          value=${draft}
+          onChange=${setDraft}
+          placeholder="Message… @ to mention, or drop files here"
+          aria-label="Message"
+          onPaste=${(event) => {
+            const pasted = [...(event.clipboardData?.files ?? [])];
+            if (!pasted.length) return;
+            event.preventDefault();
+            add(pasted);
+          }}
+        />
+        <button type="submit" data-variant="primary" disabled=${busy || (!draft.trim() && !files.length)}>
+          ${busy ? 'Sending…' : 'Send'}
+        </button>
+      </div>
+      ${error && html`<p class="error">${error}</p>`}
+    </form>`;
+  }
+
+  render(html`<${Chat} />`);
+</script>

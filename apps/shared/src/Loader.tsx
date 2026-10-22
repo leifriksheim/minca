@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
-import { Shape, type ShapeKind } from './shapes';
-import { ink, type ShapeColour } from './tokens';
+import { type ShapeKind } from '@minca/ui/shapes';
+import { Shape } from './shapes';
+import { ink, type ShapeColour } from '@minca/ui/tokens';
 
 /**
  * Minca's loader: five shapes in a row, each hopping and turning a little in

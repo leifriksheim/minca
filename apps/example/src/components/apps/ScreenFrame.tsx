@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
+import type { NodeRecord } from '@minca/core';
 import { useAccount, useNode } from '@minca/core/react';
-import { createScreenBridge, screenDocument, type ScreenBridge } from './screens';
+import ui from 'virtual:minca-ui';
+import { placeAt, searchPlaces, whereAmI } from '@minca/app-shared/places';
+import { createScreenBridge, screenDocument, type ScreenBridge, type ScreenHost } from './screens';
+import { PersonCardHere } from '../Person';
+import { saveFile } from '../../files';
 import { isObject } from '../../derive/schema-ui';
 import { styles, palette } from '../../styles';
 
@@ -15,6 +20,7 @@ export function ScreenFrame({
   screen,
   network,
   title,
+  onOpen,
 }: {
   spaceId: string;
   /** The app's launcher record, which carries the screen */
@@ -23,10 +29,19 @@ export function ScreenFrame({
   screen: string;
   network: ReadonlyArray<string>;
   title: string;
+  /** Shows a record the screen asked to open (`minca.open`) */
+  onOpen: (record: NodeRecord) => void;
 }) {
   const node = useNode();
   const account = useAccount();
   const frame = useRef<HTMLIFrameElement>(null);
+  // The person whose card the screen asked for
+  const [person, setPerson] = useState<string | null>(null);
+  // Read when the screen asks, so a new handler doesn't start the frame again.
+  const opens = useRef(onOpen);
+  useEffect(() => {
+    opens.current = onOpen;
+  }, [onOpen]);
   // A new screen, or a new app, starts a new frame.
   const [generation, setGeneration] = useState(0);
   const origins = [...network].sort().join(' ');
@@ -79,11 +94,14 @@ export function ScreenFrame({
         spaceId,
         collections: list,
         port: channel.port1,
+        host: screenHost(`minca.screen:${node.did}:${spaceId}:${appKey}:`, (open) =>
+          'record' in open ? opens.current(open.record) : setPerson(open.person),
+        ),
       });
       target.postMessage(
         {
           minca: 'load',
-          document: screenDocument(screen, answer === 'yes' && allowed ? allowed.split(' ') : []),
+          document: screenDocument(screen, answer === 'yes' && allowed ? allowed.split(' ') : [], ui),
           me: { did: node.did, name: account.name },
           collections: list,
         },
@@ -97,7 +115,7 @@ export function ScreenFrame({
       globalThis.removeEventListener('message', onMessage);
       bridge?.close();
     };
-  }, [node, spaceId, screen, names, account.name, generation, answer, allowed, run]);
+  }, [node, spaceId, appKey, screen, names, account.name, generation, answer, allowed, run]);
 
   if (answer === null) {
     return (
@@ -199,8 +217,48 @@ export function ScreenFrame({
           background: palette.surface.card,
         }}
       />
+      {person && <PersonCardHere did={person} onClose={() => setPerson(null)} />}
     </div>
   );
+}
+
+/**
+ * What this page does for a screen when it asks (`ScreenHost`): finds places
+ * and where the person is the way the rest of the app does, opens pages and
+ * saves files, and keeps the app's own small things under `kept`, a prefix
+ * for this person, space and app.
+ */
+function screenHost(kept: string, open: ScreenHost['open']): ScreenHost {
+  return {
+    open,
+    searchPlaces: (text, near) => searchPlaces(text, near ? { near } : {}),
+    here: async () => {
+      const at = await whereAmI();
+      if (!at) return null;
+      const found = await placeAt(at.lat, at.lon).catch(() => null);
+      return found
+        ? { ...found, lat: at.lat, lon: at.lon }
+        : { name: 'My location', detail: '', lat: at.lat, lon: at.lon, kind: 'point' };
+    },
+    link: (url) => void globalThis.open(url, '_blank', 'noopener,noreferrer'),
+    save: (name, bytes, type) => saveFile(bytes, name, type),
+    recall: (key) => {
+      try {
+        const value: unknown = JSON.parse(globalThis.localStorage?.getItem(kept + key) ?? 'null');
+        return value;
+      } catch {
+        return null;
+      }
+    },
+    remember: (key, value) => {
+      try {
+        if (value === null) globalThis.localStorage?.removeItem(kept + key);
+        else globalThis.localStorage?.setItem(kept + key, JSON.stringify(value));
+      } catch {
+        // Private windows can refuse: it is kept until the page closes, or not at all.
+      }
+    },
+  };
 }
 
 /** What this person said to a screen's list of origins, when it was this same list */

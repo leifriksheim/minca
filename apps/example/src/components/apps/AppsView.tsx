@@ -43,7 +43,7 @@ export function AppsView({
   };
   const remove = async (app: AppEntry) => {
     const sure = await ask(
-      app.builtIn
+      app.record.body?.template
         ? 'Everything it holds stays in the space, and adding it again brings it back.'
         : 'Everything it holds stays in the space; to have the app again, someone proposes it again.',
       { title: `Take ${app.title} off ${space.name}?`, yes: 'Take it off', danger: true },

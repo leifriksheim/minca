@@ -14,7 +14,7 @@ import { useNode, useProfiles } from '@minca/core/react';
 import type { NodeCollection, NodeRecord, Query, QueryRecord, QueryResult, SpaceSummary } from '@minca/core';
 import { collectionLabel, fieldsOf, recordLabel, titleField } from '../derive/schema-ui';
 import { nameOf, peopleFrom } from '../derive/people';
-import { ago } from '../derive/time';
+import { ago } from '@minca/ui/time';
 import { message as messageOf } from '@minca/app-shared/action';
 import { Loader } from '@minca/app-shared/Loader';
 import { styles, palette, ui } from '../styles';
