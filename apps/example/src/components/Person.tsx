@@ -4,7 +4,7 @@ import { useNode } from '@minca/core/react';
 import { styles, palette } from '../styles';
 import { isBot, nameOf, type People } from '../derive/people';
 import { takeBack, useContacts, useStanding } from '../contacts';
-import { Avatar } from '@minca/app-shared/Avatar';
+import { PersonAvatar } from './std/PersonAvatar';
 import { Modal } from '@minca/app-shared/Modal';
 import { useAction, useCopy } from '@minca/app-shared/action';
 import { Loader } from '@minca/app-shared/Loader';
@@ -91,6 +91,12 @@ export function Person({
   );
 }
 
+/** Someone's card in the space on screen, opened from somewhere other than their name: a click in an app's screen */
+export function PersonCardHere({ did, onClose }: { did: string; onClose: () => void }) {
+  const scope = useContext(Scope);
+  return scope ? <PersonCard did={did} scope={scope} onClose={onClose} /> : null;
+}
+
 /**
  * Who someone is here, and whether they can be a contact. Says why not when
  * they can't, since the + that used to be the only way in gave no reason.
@@ -109,7 +115,7 @@ function PersonCard({ did, scope, onClose }: { did: string; scope: PersonScope; 
   return (
     <Modal title={name} onClose={onClose}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-        <Avatar did={did} size={48} />
+        <PersonAvatar spaceId={space.id} did={did} size={48} />
         <div style={{ minWidth: 0 }}>
           <p style={{ fontSize: 13, color: palette.ink.muted }}>
             {did === me ? 'You' : profile ? `In ${space.name}` : `No profile in ${space.name}`}

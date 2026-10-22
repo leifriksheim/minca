@@ -1,7 +1,7 @@
 /* The landing pages. Everything is scoped under .site so the app's own styles
    (inline, from styles.ts) are untouched; the values are the design system's
-   tokens (apps/shared/src/tokens.ts, here as its --minca-* properties), and
-   apps/shared/DESIGN.md says how to use them.
+   tokens (packages/ui/src/tokens.ts, here as its --minca-* properties), and
+   packages/ui/DESIGN.md says how to use them.
 
    Paper, navy ink and one navy rule for every edge; round corners on one
    scale; colour comes in shapes. Controls change colour on hover and never

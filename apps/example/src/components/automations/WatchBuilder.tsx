@@ -8,7 +8,7 @@ import { clauseFields, clausesWords, whereOf, type Clause } from '../../derive/c
 import { computedFieldsOf, withComputed } from '../../derive/schema-ui';
 import { collectionLabel, recordLabel } from '../../derive/schema-ui';
 import { nameOf } from '../../derive/people';
-import { ago } from '../../derive/time';
+import { ago } from '@minca/ui/time';
 import { useAsk } from '../../notifications';
 import { usePeopleHere } from '../Person';
 import { styles, palette } from '../../styles';

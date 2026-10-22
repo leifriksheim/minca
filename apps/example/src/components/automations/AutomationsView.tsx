@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { NodeCollection, NodeRecord, SpaceSummary } from '@minca/core';
 import { useAccount, useLive, useNode } from '@minca/core/react';
 import { nameOf } from '../../derive/people';
-import { ago } from '../../derive/time';
+import { ago } from '@minca/ui/time';
 import {
   automation as ruleCollection,
   automationOf,

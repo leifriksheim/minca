@@ -11,7 +11,7 @@ import { parseDoorCode } from '@minca/core/doors';
 import { useAccount, useNode } from '@minca/core/react';
 import { clearDoorFromUrl, doorLink, readDoorFromUrl, takeBack, useContacts, useStanding } from '../contacts';
 import { nameOf, peopleFrom } from '../derive/people';
-import { ago } from '../derive/time';
+import { ago } from '@minca/ui/time';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { Modal } from '@minca/app-shared/Modal';
 import { styles, palette } from '../styles';

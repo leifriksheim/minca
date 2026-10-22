@@ -1,30 +1,22 @@
 import { matches, type NodeCollection, type NodeRecord, type SpaceSummary } from '@minca/core';
 import { useAccess, useLive } from '@minca/core/react';
 import { asRunner, namesTheRunner, notifyOn, type AppAutomation } from '@minca/core/schemas';
-import { hash } from '@minca/app-shared/hash';
-import { APPS, type MincaApp } from './index';
 import { launcherApp, sortLauncher, type LauncherApp } from './launcher';
-import type { Glyph } from '../Icon';
+import { TEMPLATES } from './templates';
 
 /**
- * An app a space can open, whichever kind: written as code here, or made for
- * the space and kept in it. Either way it is on the space's launcher
- * (`launcher.ts`). The sidebar, the launcher, what counts as new and what can
- * be notified about all read this one list.
+ * An app a space can open: a launcher record (`launcher.ts`), ready-made or
+ * made for the space. The sidebar, the launcher, what counts as new and what
+ * can be notified about all read this one list.
  */
 export interface AppEntry {
-  /** A built-in app's id, or `made:<record key>` */
+  /** A ready-made app's id (`kanban`), or `made:<record key>` */
   readonly id: string;
-  /** Its launcher record */
+  /** Its launcher record, which is the app */
   readonly record: NodeRecord<LauncherApp>;
   readonly title: string;
   readonly description?: string | undefined;
-  readonly icon: Glyph;
-  readonly hue: number;
   readonly notify: ReadonlyArray<AppAutomation>;
-  readonly builtIn?: MincaApp;
-  /** A made app's launcher record, which is the app */
-  readonly made?: NodeRecord<LauncherApp>;
 }
 
 /**
@@ -54,31 +46,16 @@ export function namesMe(
   });
 }
 
-const builtInEntry = (app: MincaApp, record: NodeRecord<LauncherApp>): AppEntry => ({
-  id: app.id,
-  record,
-  title: app.title,
-  description: app.description,
-  icon: app.icon,
-  hue: app.hue,
-  notify: app.notify,
-  builtIn: app,
-});
-
-const madeEntry = (record: NodeRecord<LauncherApp>): AppEntry => ({
-  id: `made:${record.key}`,
+const entryOf = (record: NodeRecord<LauncherApp>, id = `made:${record.key}`): AppEntry => ({
+  id,
   record,
   title: record.body?.title ?? 'An app',
   description: record.body?.description,
-  icon: 'sparkle',
-  hue: hash(record.key) % 360,
   notify: record.body ? madeNotify(record.body) : [],
-  made: record,
 });
 
-/** Whether an app takes the whole window: a conversation, or a screen of its own */
-export const fills = (entry: AppEntry): boolean =>
-  entry.builtIn ? entry.builtIn.fill === true : !!entry.made?.body?.screen;
+/** Whether an app takes the whole window: a screen of its own does */
+export const fills = (entry: AppEntry): boolean => !!entry.record.body?.screen;
 
 /** The space's launcher records, live */
 export function useLauncherRecords(spaceId: string): ReadonlyArray<NodeRecord<LauncherApp>> {
@@ -89,34 +66,36 @@ export function useLauncherRecords(spaceId: string): ReadonlyArray<NodeRecord<La
   );
 }
 
-/** The entries for what is on a launcher, in its order: built-in apps this app doesn't know are left out */
+/** The entries for what is on a launcher, in its order */
 function entriesOf(placed: ReadonlyArray<NodeRecord<LauncherApp>>): ReadonlyArray<AppEntry> {
-  return placed.flatMap((record) => {
-    const id = record.body?.builtIn;
-    if (id === undefined) return [madeEntry(record)];
-    const app = APPS.find((one) => one.id === id);
-    return app ? [builtInEntry(app, record)] : [];
+  const named = new Set<string>();
+  return placed.map((record) => {
+    const template = record.body?.template;
+    // A ready-made app goes by its own id, so its shape and what was seen in it carry over; a second copy, by its key.
+    if (template !== undefined && !named.has(template)) {
+      named.add(template);
+      return entryOf(record, template);
+    }
+    return entryOf(record);
   });
 }
 
-/** The collections a built-in app needs, by its id; undefined for one this app doesn't know */
-export const needsOf = (id: string): ReadonlyArray<string> | undefined =>
-  APPS.find((app) => app.id === id)?.needs.map((need) => need.name);
-
 /**
- * A space's apps: those on its launcher, in order, the built-in ones it could
- * add, and proposals waiting. Until the space's access is known nothing can be
+ * A space's apps: those on its launcher, in order, the ready-made ones it
+ * could add, and proposals waiting. Until the space's access is known nothing can be
  * vouched for, so `loading` says to wait rather than show apps as gone.
  */
 export function useSpaceApps(space: SpaceSummary, collections: ReadonlyArray<NodeCollection>) {
   const records = useLauncherRecords(space.id);
   const access = useAccess(space.id);
-  const { placed, proposed } = sortLauncher(records, collections, access, needsOf);
+  const { placed, proposed } = sortLauncher(records, collections, access);
   return {
     ready: entriesOf(placed),
     placed,
     records,
-    addable: APPS.filter((app) => !placed.some((record) => record.body?.builtIn === app.id)),
+    templates: TEMPLATES.filter(
+      ({ app }) => !placed.some((record) => record.body?.template === app.template),
+    ),
     proposed: access ? proposed : [],
     loading: !access,
   };

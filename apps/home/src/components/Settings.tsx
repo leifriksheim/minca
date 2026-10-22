@@ -12,8 +12,9 @@ import {
   type StaySignedIn,
 } from '@minca/core/session';
 import { useAuth, useSession } from '@minca/core/react';
-import { Shape, shapeFor, type ShapeKind } from '@minca/app-shared/shapes';
-import type { ShapeColour } from '@minca/app-shared/tokens';
+import { Shape } from '@minca/app-shared/shapes';
+import { shapeFor, type ShapeKind } from '@minca/ui/shapes';
+import type { ShapeColour } from '@minca/ui/tokens';
 import { message, useAction, useCopy } from '@minca/app-shared/action';
 import { PairPhone } from './PairPhone';
 import { ConfirmItsYou } from './ConfirmItsYou';

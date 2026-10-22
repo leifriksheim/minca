@@ -1,10 +1,21 @@
 import type { CSSProperties } from 'react';
 
-import { accent, display, font, ink, mono, radius, shadow, shapeColours, surface, tokenCss } from './tokens';
+import {
+  accent,
+  display,
+  font,
+  ink,
+  mono,
+  radius,
+  shadow,
+  shapeColours,
+  surface,
+  tokenCss,
+} from '@minca/ui/tokens';
 
 /**
  * One visual vocabulary for the example app and the account home,
- * built from Minca's tokens (`tokens.ts`; DESIGN.md says how to use them).
+ * built from Minca's tokens (`@minca/ui/tokens`; `packages/ui/DESIGN.md` says how to use them).
  *
  * Warm paper, navy ink, cobalt for the thing to do. What stands on the page
  * (a card, a frame, the nav, a secondary button) has round corners and the

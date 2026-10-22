@@ -1,5 +1,5 @@
 import { MincaAuth, useMinca } from '@minca/core/react';
-import { avatarElement } from '@minca/app-shared/avatar';
+import { avatarElement } from '@minca/ui/avatar';
 import { Loader } from '@minca/app-shared/Loader';
 
 /** The sign-in flow, with Minca's own loader while it starts or signs out */

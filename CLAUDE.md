@@ -14,9 +14,11 @@ the docs, a change touches before changing the code.
 | `packages/core`                               | `@minca/core`: the protocol library, its tests (`tests/*.test.ts`) and docs (`docs/`)          |
 | `packages/cli`                                | `@minca/cli`: `minca`, the always-on node, hosting, agents, MCP                                |
 | `packages/relay`                              | The signaling relay and its mailbox                                                            |
-| `apps/home`, `apps/example`, `apps/extension` | The account home, the app (Liquid among its apps), the Chrome extension                        |
+| `packages/ui`                                 | `@minca/ui`: the design system (tokens, shapes, avatars) and the kit every app's screen gets   |
+| `apps/home`, `apps/example`, `apps/extension` | The account home, the app, the Chrome extension                                                |
+| `apps/liquid`                                 | Liquid: liquid democracy as an app of its own, a reference for what can be built on Minca      |
 | `apps/site`                                   | The website, minca.social                                                                      |
-| `apps/shared`                                 | What the apps share: styles, relay settings, components, the mini app contract                 |
+| `apps/shared`                                 | What the apps share: React components on the design system, relay settings                     |
 | `scenarios`                                   | Kinds of community written as tests: grants, contracts and their attacks (`npm run scenarios`) |
 
 Everything imports the protocol as `@minca/core`, only through what it
@@ -106,8 +108,8 @@ Tests show a change does what its author meant. They don't show it can't be
 turned against someone, so they aren't enough. A protocol change is one to
 `spec/`, or to code or tests any spec _Source:_ line cites
 (`packages/core/src`, `packages/core/tests`, `packages/relay`, the protocol
-parts of `packages/cli`, the grant in `apps/home`, the mini app contract in
-`apps/example`). Before one is called done or merged:
+parts of `packages/cli`, the grant in `apps/home`). Before one is called done
+or merged:
 
 1. Run the `protocol-reviewer` agent (`.claude/agents/protocol-reviewer.md`)
    on the branch, with nothing about why the change is right. It works from
@@ -230,6 +232,13 @@ Elsewhere:
   since 2022, very widely used, and its few dependencies are TanStack's own
   plus `isbot`. Code-based routes only, so no build plugin or generated
   files. Apps only, never `packages/core`.
+- `preact` 10 with `htm` in `packages/ui` (`packages/ui/src/frame/`):
+  what an app's screen draws with, bundled into the kit written in front of
+  every screen. A diffing renderer with hooks is hard to get right, and agents
+  write React-style components far more reliably than DOM code. Preact has
+  been released since 2015 and is used very widely; it and htm (its authors'
+  tagged templates, so no build step) have no dependencies and come to about
+  13 KB. Pinned to 10, since 11 is weeks old. Never `packages/core`.
 - `qrcode-generator` in `apps/shared` (`apps/shared/src/Payment.tsx`): a QR code
   for a wallet to scan when paying a host. QR encoding (ISO 18004) is a spec
   with a long tail; this one has no dependencies, has been released since

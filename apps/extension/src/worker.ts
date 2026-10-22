@@ -8,7 +8,7 @@
  * updated, when any page asks, and on a one-minute alarm in case Chrome closed
  * it for any reason.
  */
-import { accent, ink } from '@minca/app-shared/tokens';
+import { accent, ink } from '@minca/ui/tokens';
 import type { CarrierStatus, WorkerMessage } from './shared';
 
 const OFFSCREEN = 'offscreen.html';

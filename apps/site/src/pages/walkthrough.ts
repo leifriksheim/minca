@@ -4,8 +4,8 @@
  * real library API; each tab's steps run in order as one program.
  */
 import { rolePresets, STAFF_COLLECTIONS, type RolePreset, type Statement } from '@minca/core';
-import type { ShapeKind } from '@minca/app-shared/shapes';
-import type { ShapeColour } from '@minca/app-shared/tokens';
+import type { ShapeKind } from '@minca/ui/shapes';
+import type { ShapeColour } from '@minca/ui/tokens';
 
 /** The constitution templates a step can spread */
 type PresetName = keyof typeof rolePresets;

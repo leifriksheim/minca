@@ -1,6 +1,7 @@
 import { defaultClientConditions, defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import type { Plugin } from 'vite';
+import { bundleUi } from '@minca/ui/bundle';
 
 /**
  * Security headers for the deployed site.
@@ -40,6 +41,25 @@ function securityHeaders(): Plugin {
 }
 
 /**
+ * The kit every screen gets (`@minca/ui`), as one script: `virtual:minca-ui`
+ * is its text, which `ScreenFrame` writes into each screen's document. Made
+ * again when a file it is made from changes.
+ */
+function mincaUi(): Plugin {
+  const id = 'virtual:minca-ui';
+  return {
+    name: 'minca-ui',
+    resolveId: (source) => (source === id ? `\0${id}` : undefined),
+    async load(source) {
+      if (source !== `\0${id}`) return undefined;
+      const { script, files } = await bundleUi();
+      for (const file of files) this.addWatchFile(file);
+      return `export default ${JSON.stringify(script)};`;
+    },
+  };
+}
+
+/**
  * The protocol comes from the workspace, as source: the `@minca/source`
  * export condition points each entry at `packages/core/src`, so there is no
  * build step and edits there hot-reload here.
@@ -53,6 +73,6 @@ export default defineConfig({
   },
   // The node's worker (src/minca-worker.ts) is a module, like the page.
   worker: { format: 'es' },
-  plugins: [securityHeaders(), react()],
+  plugins: [securityHeaders(), mincaUi(), react()],
   server: { port: 5173 },
 });

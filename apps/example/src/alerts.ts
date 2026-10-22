@@ -1,7 +1,7 @@
 /** What this app's notifications matched lately, for the bell and the dot on the tab's icon; kept in this browser only. */
 import { useEffect, useSyncExternalStore } from 'react';
 import { MARK_BANDS } from '@minca/app-shared/mark';
-import { accent, surface } from '@minca/app-shared/tokens';
+import { accent, surface } from '@minca/ui/tokens';
 
 export interface Alert {
   /** The record it is about */

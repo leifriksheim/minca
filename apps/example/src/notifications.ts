@@ -10,8 +10,8 @@ import {
 } from '@minca/core';
 import { accountHomeLink } from '@minca/core/session';
 import { notifyOn, type AppAutomation } from '@minca/core/schemas';
-import { APPS } from './components/apps';
-import { isForMe, madeNotify, needsOf } from './components/apps/entries';
+import { TEMPLATES } from './components/apps/templates';
+import { isForMe, madeNotify } from './components/apps/entries';
 import { launcherApp, sortLauncher, type LauncherApp } from './components/apps/launcher';
 import { message } from '@minca/app-shared/action';
 import { addAlert } from './alerts';
@@ -144,8 +144,8 @@ function useEverything(): ReadonlyArray<AutomationProposal> {
           node.collections.list(space.id),
           node.spaces.access(space.id),
         ]).catch(() => [[], [], null] as const);
-        for (const record of sortLauncher(records, collections, access, needsOf).placed)
-          if (record.body && record.body.builtIn === undefined) made.push(record.body);
+        for (const record of sortLauncher(records, collections, access).placed)
+          if (record.body) made.push(record.body);
       }
       if (live) setOffers(gather(made));
     };
@@ -165,9 +165,9 @@ function useEverything(): ReadonlyArray<AutomationProposal> {
   return offers;
 }
 
-/** Contact requests, the built-in apps and these made ones, once each, as many as one request may carry */
+/** Contact requests, the ready-made apps and those in the spaces, once each, as many as one request may carry */
 function gather(made: ReadonlyArray<LauncherApp>): ReadonlyArray<AutomationProposal> {
-  const all = [CONTACTS, ...APPS.flatMap((app) => app.notify), ...made.flatMap(madeNotify)];
+  const all = [CONTACTS, ...TEMPLATES.flatMap(({ app }) => madeNotify(app)), ...made.flatMap(madeNotify)];
   const once = new Map(all.map((offer) => [lookingFor(offer), offer]));
   return [...once.values()].slice(0, MAX_PROPOSALS);
 }

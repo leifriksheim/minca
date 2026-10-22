@@ -4,8 +4,9 @@ import { APP, Band, ChromeMark, DownloadMark, EXTERNAL, Marked, Page, Points } f
 import { HeroSpace } from './HeroSpace';
 import { Loader } from '@minca/app-shared/Loader';
 import { MARK_BANDS } from '@minca/app-shared/mark';
-import { Morph, Shape, type ShapeKind } from '@minca/app-shared/shapes';
-import type { ShapeColour } from '@minca/app-shared/tokens';
+import { Morph, Shape } from '@minca/app-shared/shapes';
+import { type ShapeKind } from '@minca/ui/shapes';
+import type { ShapeColour } from '@minca/ui/tokens';
 import { Carpool, SchoolRun, type CarpoolChange } from './demos';
 import { usePlatform } from './downloads';
 import { downloadLink } from './Install';

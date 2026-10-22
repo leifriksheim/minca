@@ -113,7 +113,7 @@ function AskForApp({
   const apps = useLauncherRecords(space.id);
   // A proposal made since this opened is the answer. The creator's clock only shows the way; it decides nothing.
   const [since] = useState(() => new Date(Date.now() - 60_000).toISOString());
-  const proposed = apps.find((one) => one.createdAt >= since && one.body && !one.body.builtIn)?.body;
+  const proposed = apps.find((one) => one.createdAt >= since && one.body && !one.body.template)?.body;
   const adds = mayDefine ? 'you add it' : 'someone who runs the space adds it';
   // Said here too, so the person can tell the agent while its chat is still open.
   const problem = proposed ? checkLauncherApp(proposed) : null;

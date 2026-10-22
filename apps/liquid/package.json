@@ -1,0 +1,26 @@
+{
+  "name": "@minca/liquid",
+  "private": true,
+  "type": "module",
+  "description": "Liquid: liquid democracy on Minca, as an app of its own. Vote on proposals yourself, or trust someone to vote for you, topic by topic. A reference for what can be built on the protocol.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "typecheck": "tsc --noEmit && tsc -p tests",
+    "test": "node --conditions=@minca/source --import tsx --test --test-concurrency=4 --test-timeout=60000 --test-force-exit tests/*.test.ts"
+  },
+  "dependencies": {
+    "@minca/app-shared": "*",
+    "@minca/core": "*",
+    "@minca/ui": "*",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "typescript": "^7.0.2",
+    "vite": "^6.0.0"
+  }
+}

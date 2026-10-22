@@ -5,22 +5,33 @@
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { readdir, readFile } from 'node:fs/promises';
 
 import type { NodeRecord, P2PNode } from '@minca/core';
-import { guide, message, notifyOn, proposeCollections, reaction, type Guide } from '@minca/core/schemas';
 import {
-  addBuiltIn,
+  attachment,
+  column,
+  guide,
+  message,
+  notifyOn,
+  proposeCollections,
+  reaction,
+  task,
+  type Guide,
+} from '@minca/core/schemas';
+import {
   addMade,
+  addTemplate,
   checkLauncherApp,
   copyApp,
   EXAMPLE_APP,
   launcherApp,
   moveApp,
-  placeBuiltIn,
   prepareLauncher,
   removeApp,
   sortLauncher,
   type LauncherApp,
+  type Template,
 } from '../src/components/apps/launcher';
 import { agentOf, setup, waitFor } from './helpers';
 
@@ -30,9 +41,12 @@ const trip = {
   schema: { type: 'object', properties: { when: { type: 'string' } }, required: ['when'] },
 } as const;
 
-/** The built-in apps these tests know, and the collections each needs */
-const NEEDS: Readonly<Record<string, ReadonlyArray<string>>> = { chat: [message.name], polls: [] };
-const needsOf = (id: string) => NEEDS[id];
+/** A ready-made app these tests add: a room of messages, which can be reacted to */
+const CHAT: Template = {
+  app: { template: 'chat', title: 'chat', description: 'Talk', collections: [message.name] },
+  needs: [message],
+  uses: [reaction],
+};
 
 /** The space's launcher as this node sees it, and every record behind it */
 async function launcherOf(node: P2PNode, space: string) {
@@ -41,11 +55,11 @@ async function launcherOf(node: P2PNode, space: string) {
     node.collections.list(space),
     node.spaces.access(space),
   ]);
-  return { ...sortLauncher(records, collections, access, needsOf), records };
+  return { ...sortLauncher(records, collections, access), records };
 }
 
 const titles = (records: ReadonlyArray<NodeRecord<LauncherApp>>) =>
-  records.map((record) => record.body?.builtIn ?? record.body?.title);
+  records.map((record) => record.body?.title);
 
 describe('the launcher', () => {
   test('an agent proposes an app; it stays a proposal until someone who may define collections adds it', async () => {
@@ -98,8 +112,7 @@ describe('the launcher', () => {
 
   test('adding applies the blueprint it points at, and a change goes into the app it updates, in its place', async () => {
     const { alice, space } = await setup();
-    await alice.node.collections.define(space, message);
-    await placeBuiltIn(alice.node, space, 'chat', []);
+    await addTemplate(alice.node, space, CHAT, []);
     const plan = await proposeCollections(alice.node, space, { title: 'Carpool', collections: [trip] });
     const first = await alice.node.records.put(
       space,
@@ -132,11 +145,10 @@ describe('the launcher', () => {
     assert.equal(await alice.node.records.get(space, change.key), null, 'the proposal goes');
   });
 
-  test('adding a built-in app defines every collection it can use at once, not when it first writes one', async () => {
+  test('adding a ready-made app defines every collection it can use at once, not when it first writes one', async () => {
     const { alice, bob, space } = await setup();
-    const chat = { id: 'chat', needs: [message], uses: [reaction] };
-    await addBuiltIn(alice.node, space, chat, []);
-    await addBuiltIn(alice.node, space, chat, (await launcherOf(alice.node, space)).placed);
+    await addTemplate(alice.node, space, CHAT, []);
+    await addTemplate(alice.node, space, CHAT, (await launcherOf(alice.node, space)).placed);
     // Bob, or an agent of his, finds them before anyone has written a reaction.
     const definedFor = async (node: P2PNode) =>
       (await node.collections.list(space)).filter((c) => c.version !== null).map((c) => c.name);
@@ -148,10 +160,59 @@ describe('the launcher', () => {
     assert.deepEqual(titles((await launcherOf(alice.node, space)).placed), ['chat'], 'placed once');
   });
 
+  test('adding a ready-made app copies it into the space once, with its collections and first records', async () => {
+    const { alice, bob, space } = await setup();
+    // The board as it ships, screen and all: what the browser imports with ?raw.
+    const screen = await readFile(
+      new URL('../src/components/apps/templates/kanban.html', import.meta.url),
+      'utf8',
+    );
+    const kanban: Template = {
+      app: {
+        template: 'kanban',
+        title: 'Kanban',
+        description: 'Tasks on a board',
+        collections: [task.name, column.name],
+        screen,
+      },
+      needs: [task, column],
+      uses: [attachment],
+      setup: async (node, spaceId) => {
+        await node.records.put(spaceId, column.name, { name: 'To do', position: 'a' });
+      },
+    };
+    assert.equal(checkLauncherApp(kanban.app), null, 'its screen fits');
+
+    const key = await addTemplate(alice.node, space, kanban, []);
+    assert.equal(
+      await addTemplate(alice.node, space, kanban, (await launcherOf(alice.node, space)).placed),
+      key,
+    );
+    await waitFor(
+      async () => (await launcherOf(bob.node, space)).placed.some((record) => record.key === key),
+      'the app to stand for Bob',
+    );
+    const placed = (await launcherOf(bob.node, space)).placed;
+    assert.equal(placed.length, 1, 'added once');
+    assert.equal(placed[0]!.body?.template, 'kanban');
+    assert.equal(placed[0]!.body?.screen, screen, 'an ordinary app, with the screen it shipped with');
+    assert.ok((await bob.node.collections.list(space)).some((c) => c.name === attachment.name));
+    assert.equal((await bob.node.records.list(space, { collection: column.name })).length, 1);
+  });
+
+  test('every ready-made screen fits on a launcher record', async () => {
+    const folder = new URL('../src/components/apps/templates/', import.meta.url);
+    const screens = (await readdir(folder)).filter((file) => file.endsWith('.html'));
+    assert.ok(screens.length >= 3);
+    for (const file of screens) {
+      const screen = await readFile(new URL(file, folder), 'utf8');
+      assert.equal(checkLauncherApp({ title: file, collections: ['std.task'], screen }), null, file);
+    }
+  });
+
   test('taking an app off keeps its collections and records', async () => {
     const { alice, bob, space } = await setup();
-    await alice.node.collections.define(space, message);
-    await placeBuiltIn(alice.node, space, 'chat', []);
+    await addTemplate(alice.node, space, CHAT, []);
     const said = await alice.node.records.put(space, message.name, { text: 'Bring chalk' });
     const before = await launcherOf(alice.node, space);
     await removeApp(alice.node, space, before.placed[0]!, before.records);
@@ -165,32 +226,17 @@ describe('the launcher', () => {
     await waitFor(async () => (await launcherOf(bob.node, space)).placed.length === 0, 'Bob to see it gone');
   });
 
-  test('a built-in app counts only when someone who may define put it there, and its collections are here', async () => {
+  test('two copies of a ready-made app, added at once, both go when it is taken off', async () => {
     const { alice, bob, space } = await setup();
-    await prepareLauncher(alice.node, space);
-    const agent = await agentOf(alice, [space]);
-    // An agent naming one: ignored, not proposed. So is one whose collections the space lacks.
-    await agent.records.put(space, launcherApp, { builtIn: 'polls', position: 'a' });
-    await alice.node.records.put(space, launcherApp, { builtIn: 'chat', position: 'b' });
-    let launcher = await launcherOf(alice.node, space);
-    assert.deepEqual(launcher.placed, []);
-    assert.deepEqual(launcher.proposed, []);
-    // Once chat's collection is here it counts; the agent's polls still don't.
-    await alice.node.collections.define(space, message);
-    launcher = await launcherOf(alice.node, space);
-    assert.deepEqual(titles(launcher.placed), ['chat']);
-
-    // Two people adding it at once: one shows, and taking it off takes both.
-    await bob.node.collections.define(space, message).catch(() => {});
+    await addTemplate(alice.node, space, CHAT, []);
     await waitFor(async () => (await launcherOf(bob.node, space)).placed.length === 1, 'chat to reach Bob');
-    await bob.node.records.put(space, launcherApp, { builtIn: 'chat', position: 'c' });
+    await bob.node.records.put(space, launcherApp, { ...CHAT.app, position: 'c' });
     await waitFor(
       async () =>
-        (await launcherOf(alice.node, space)).records.filter((r) => r.body?.builtIn === 'chat').length === 2,
+        (await launcherOf(alice.node, space)).records.filter((r) => r.body?.template === 'chat').length === 2,
       "Bob's chat to reach Alice",
     );
-    launcher = await launcherOf(alice.node, space);
-    assert.equal(launcher.placed.length, 1);
+    const launcher = await launcherOf(alice.node, space);
     await removeApp(alice.node, space, launcher.placed[0]!, launcher.records);
     assert.deepEqual((await launcherOf(alice.node, space)).placed, []);
   });
@@ -223,27 +269,10 @@ describe('the launcher', () => {
     assert.equal(new Set(positions).size, positions.length, 'no two the same');
   });
 
-  test('a change may update a made app, never a built-in one, and someone without define only proposes', async () => {
+  test('someone without define only proposes', async () => {
     const { alice, bob, space } = await setup();
-    await alice.node.collections.define(space, message);
-    await placeBuiltIn(alice.node, space, 'chat', []);
+    await prepareLauncher(alice.node, space);
     await alice.node.collections.define(space, trip);
-    let launcher = await launcherOf(alice.node, space);
-    const chat = launcher.placed[0]!;
-    const takeover = await alice.node.records.put(space, launcherApp, {
-      title: 'Not chat',
-      collections: ['carpool.trip'],
-      updates: chat.key,
-    });
-    launcher = await launcherOf(alice.node, space);
-    const proposal = launcher.proposed.find((r) => r.key === takeover.key)!;
-    assert.equal(
-      await addMade(alice.node, space, proposal, launcher.placed),
-      takeover.key,
-      'added as its own',
-    );
-    launcher = await launcherOf(alice.node, space);
-    assert.deepEqual(titles(launcher.placed), ['chat', 'Not chat']);
 
     // Bob loses define: what he writes now stays a proposal.
     await alice.node.spaces.defineRole(space, {
@@ -315,7 +344,6 @@ describe('the launcher', () => {
   test('a made app names its collections, and notifies only about those', () => {
     const app = { title: 'Carpool', collections: ['carpool.trip'] };
     assert.equal(checkLauncherApp(app), null);
-    assert.equal(checkLauncherApp({ builtIn: 'chat' }), null);
     assert.match(checkLauncherApp({ title: 'x' }) ?? '', /collections/);
     assert.match(
       checkLauncherApp({ ...app, notify: [notifyOn('Any message', message.name)] }) ?? '',

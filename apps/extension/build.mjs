@@ -81,7 +81,7 @@ await writeFile(here('dist/tokens.css'), await tokenCss());
 /** The shared `tokenCss`, bundled from its TypeScript source and evaluated here. */
 async function tokenCss() {
   const result = await build({
-    stdin: { contents: "export { tokenCss } from '@minca/app-shared/tokens';", resolveDir: here('.') },
+    stdin: { contents: "export { tokenCss } from '@minca/ui/tokens';", resolveDir: here('.') },
     bundle: true,
     format: 'esm',
     write: false,

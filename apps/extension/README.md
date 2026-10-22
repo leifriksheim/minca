@@ -61,7 +61,7 @@ the defaults too, so you only need the local one to work offline.
 | `src/welcome.ts`   | a tab              | Connecting to the home, picking the pod, status, disconnecting. Connecting has to happen here: the toolbar popup closes when the home's window takes focus.        |
 | `src/popup.ts`     | the toolbar popup  | Status at a glance, and **Resume pod sync** when Chrome wants a click.                                                                                             |
 
-The pages follow the shared design system (`apps/shared/DESIGN.md`):
+The pages follow the shared design system (`packages/ui/DESIGN.md`):
 `static/styles.css` reads its colours as `--minca-*` properties, which the
 build writes to `dist/tokens.css` from `@minca/app-shared/tokens`. The faces
 ship in `static/fonts/` (OFL), so opening the popup fetches nothing.

@@ -16,7 +16,7 @@ import {
   type Field,
 } from '../../derive/schema-ui';
 import { nameOf, peopleFrom, writerOf, type People } from '../../derive/people';
-import { ago } from '../../derive/time';
+import { ago } from '@minca/ui/time';
 import { styles, palette, ui } from '../../styles';
 import { Loader } from '@minca/app-shared/Loader';
 

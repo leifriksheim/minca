@@ -1,5 +1,5 @@
 import { MARK_BANDS, MARK_VIEWBOX } from './mark';
-import { display, ink } from './tokens';
+import { display, ink } from '@minca/ui/tokens';
 
 /**
  * Minca's mark and wordmark. A minca (minka, in the Andes) is when everyone

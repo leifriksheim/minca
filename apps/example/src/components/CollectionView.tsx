@@ -25,7 +25,7 @@ import {
   type LinkedByRel,
 } from '../derive/schema-ui';
 import { nameOf, peopleFrom, type People } from '../derive/people';
-import { ago } from '../derive/time';
+import { ago } from '@minca/ui/time';
 import { SchemaForm } from './SchemaForm';
 import { CollectionEditor, useMayRedefine } from './CollectionDesigner';
 import { Value } from './Value';

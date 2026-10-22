@@ -3,7 +3,7 @@ import { useAccess, useAccount, useNode, useProfiles } from '@minca/core/react';
 import type { NodeRecord, SpaceSummary } from '@minca/core';
 import { comment } from '@minca/core/schemas';
 import { bodyOf } from '../../derive/schema-ui';
-import { ago } from '../../derive/time';
+import { ago } from '@minca/ui/time';
 import { PersonAvatar } from './PersonAvatar';
 import { styles, palette } from '../../styles';
 import { Person } from '../Person';

@@ -208,8 +208,8 @@ VITE_SIGNALING_URL=wss://your-relay.example npm run dev
 ### Derived UI
 
 A space opens on its **Apps** tab: apps built on the standard schemas (a chat,
-a kanban board, polls, decisions, events and a marketplace) show up once
-someone who may add collections has put them on the space's launcher
+a kanban board, polls, decisions, events, a marketplace and a call log) show
+up once someone who may add collections has put them on the space's launcher
 (`launcher.app` records, `src/components/apps/launcher.ts`). Adding one
 defines every collection it uses, and someone who may can arrange or remove
 them; removing one keeps what it holds. The
@@ -260,20 +260,19 @@ home, and the command adds `minca` to the agents it finds, which start
 `minca mcp` themselves: a node of its own that keeps working with every tab
 closed. See [agents](../../packages/core/docs/agents.md).
 
-### Mini apps
+### Ready-made apps
 
-Liquid (`src/components/apps/liquid/`) is an app for one job: an assembly
-votes on proposals, and anyone can trust a person or a party with their vote,
-topic by topic, and take it back. Its collections are its own (`schema.ts`),
-every device counts the votes the same way (`tally.ts`, tested in
-`tests/liquid-*.test.ts`), and what it can't promise is on its own **?** page.
+Every app in a space is a screen: one HTML document on its `launcher.app`
+record, run in a sealed frame. The ready-made ones are no different from one an
+agent makes. Each is a file in `src/components/apps/templates/`, written
+against the kit every screen gets (`@minca/ui`: Preact, people's faces,
+comments, places, Minca's look), and adding one copies it into the space,
+which then changes its copy like any other app. What the frame can't do (find
+a place, open a page, save a file) the app does for it when asked
+(`src/components/apps/screens.ts`).
 
-It is bigger than the other apps, so it sits in a folder of its own behind the
-`MiniApp` contract in `apps/shared/src/mini-app.ts`: the collections the app
-needs, its icon, and a `Space` component that shows one space in whatever
-frame it gets. Liquid exports one (`mini-app.tsx`), and this app lists it with
-`fromMiniApp` (`src/components/apps/index.tsx`). A new one is a folder that
-exports a `MiniApp`, plus one line in `APPS`.
+Liquid, an app for an assembly that votes and delegates, is an app of its own:
+[apps/liquid](../liquid/README.md).
 
 ## Layout
 

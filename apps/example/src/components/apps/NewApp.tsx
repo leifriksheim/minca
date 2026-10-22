@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { useAction } from '@minca/app-shared/action';
-import type { NodeCollection, SpaceSummary } from '@minca/core';
+import type { DefineCollection, NodeCollection, SpaceSummary } from '@minca/core';
 import { useNode } from '@minca/core/react';
-import { has, type MincaApp } from './index';
 import type { useSpaceApps } from './entries';
 import { AppIcon } from './AppIcon';
-import { addBuiltIn } from './launcher';
+import { addTemplate } from './launcher';
 import { Icon } from '../Icon';
 import { styles, palette } from '../../styles';
 
@@ -29,13 +28,23 @@ export function NewApp({
   onOwn: () => void;
 }) {
   const node = useNode();
-  const [adding, setAdding] = useState<MincaApp | null>(null);
+  const [adding, setAdding] = useState<Ready | null>(null);
   const { run, busy, error } = useAction();
+  const ready: ReadonlyArray<Ready> = [
+    ...apps.templates.map((template) => ({
+      id: template.app.template,
+      title: template.app.title,
+      description: template.app.description,
+      needs: template.needs,
+      uses: template.uses,
+      add: () => addTemplate(node, space.id, template, apps.placed),
+    })),
+  ];
 
-  const add = (app: MincaApp) => {
+  const add = (app: Ready) => {
     setAdding(app);
     void run(async () => {
-      await addBuiltIn(node, space.id, app, apps.placed);
+      await app.add();
       onOpenApp(app.id);
     });
   };
@@ -61,14 +70,14 @@ export function NewApp({
       )}
       <h2 style={{ ...styles.sectionTitle, marginTop: 18 }}>Ready-made</h2>
       <p style={{ fontSize: 13, color: palette.ink.muted }}>
-        {apps.addable.length === 0
+        {ready.length === 0
           ? `${space.name} has every ready-made app.`
           : mayDefine
             ? 'Ready-made. Adding one adds every collection it uses, which hold ordinary records.'
             : 'Someone whose role lets them add collections can add these.'}
       </p>
       <div className="app-list">
-        {apps.addable.map((app) => (
+        {ready.map((app) => (
           <div key={app.id} style={addRow}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <AppIcon id={app.id} size={40} />
@@ -106,8 +115,18 @@ export function NewApp({
   );
 }
 
+/** A ready-made app to add: what the list shows of it, and how to add it */
+interface Ready {
+  readonly id: string;
+  readonly title: string;
+  readonly description: string;
+  readonly needs: ReadonlyArray<DefineCollection>;
+  readonly uses?: ReadonlyArray<DefineCollection> | undefined;
+  readonly add: () => Promise<unknown>;
+}
+
 /** What an app reads and writes, and whether this space has each yet */
-function SchemaList({ app, collections }: { app: MincaApp; collections: ReadonlyArray<NodeCollection> }) {
+function SchemaList({ app, collections }: { app: Ready; collections: ReadonlyArray<NodeCollection> }) {
   const rows = [
     ...app.needs.map((s) => ({ s, optional: false })),
     ...(app.uses ?? []).map((s) => ({ s, optional: true })),
@@ -125,7 +144,7 @@ function SchemaList({ app, collections }: { app: MincaApp; collections: Readonly
       }}
     >
       {rows.map(({ s, optional }) => {
-        const here = has(collections, s.name);
+        const here = collections.some((c) => c.name === s.name && c.version !== null);
         return (
           <li
             key={s.name}

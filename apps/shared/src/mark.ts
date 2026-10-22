@@ -1,4 +1,4 @@
-import { shapeColours } from './tokens';
+import { shapeColours } from '@minca/ui/tokens';
 
 /**
  * Minca's mark: a rainbow of four bands, four hands making one bridge, on a

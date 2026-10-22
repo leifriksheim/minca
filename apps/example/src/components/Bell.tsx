@@ -4,7 +4,7 @@ import { useAccount, useCollections } from '@minca/core/react';
 import { useDismiss } from '@minca/app-shared/useDismiss';
 import { markRead, useAlerts, useTabDot } from '../alerts';
 import { useAppNotifications, useOwnAutomations } from '../notifications';
-import { ago } from '../derive/time';
+import { ago } from '@minca/ui/time';
 import { SpaceMark } from './SpaceList';
 import { Icon } from './Icon';
 import { WatchBuilder } from './automations/WatchBuilder';

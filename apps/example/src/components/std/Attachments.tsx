@@ -3,7 +3,8 @@ import { useNode } from '@minca/core/react';
 import type { FileRef, NodeRecord, SpaceSummary } from '@minca/core';
 import { attachment } from '@minca/core/schemas';
 import { bodyOf } from '../../derive/schema-ui';
-import { saveFile, sizeOf, useFileUrl } from '../../files';
+import { sizeOf } from '@minca/ui/size';
+import { saveFile, useFileUrl } from '../../files';
 import { palette, styles } from '../../styles';
 
 /** The file an attachment names, when its body holds one */
@@ -21,7 +22,7 @@ function fileOf(record: NodeRecord): FileRef | null {
 }
 
 /** Adds files to a record as `std.attachment`s about it */
-export async function attachFiles(
+async function attachFiles(
   node: ReturnType<typeof useNode>,
   spaceId: string,
   target: string,

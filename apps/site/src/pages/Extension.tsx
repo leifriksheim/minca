@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Mark } from '@minca/app-shared/Wordmark';
-import { Shape, type ShapeKind } from '@minca/app-shared/shapes';
+import { Shape } from '@minca/app-shared/shapes';
+import { type ShapeKind } from '@minca/ui/shapes';
 import { Band, ChromeMark, EXTERNAL, GITHUB, Marked, Page } from './Site';
 import { downloadLink } from './Install';
 

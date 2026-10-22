@@ -1,4 +1,4 @@
-import { avatarFit, avatarRadius, avatarShape } from './avatar';
+import { avatarFit, avatarRadius, avatarShape } from '@minca/ui/avatar';
 
 /**
  * A visual fingerprint for an account.

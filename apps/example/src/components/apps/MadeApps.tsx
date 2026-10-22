@@ -11,7 +11,7 @@ import {
 import { AppBoard } from './AppBoard';
 import { addMade, checkLauncherApp, copyApp, removeApp, updated, type LauncherApp } from './launcher';
 import { ScreenFrame } from './ScreenFrame';
-import { ago } from '../../derive/time';
+import { ago } from '@minca/ui/time';
 import { styles, palette } from '../../styles';
 import { Person } from '../Person';
 import { ask } from '@minca/app-shared/Ask';
@@ -448,6 +448,7 @@ export function MadeAppScreen({
           screen={screen}
           network={body.network ?? []}
           title={body.title ?? 'An app'}
+          onOpen={onOpen}
         />
       ) : (
         // The app fills the window edge to edge, so the lists bring their own margin and scroll.
