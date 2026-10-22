@@ -454,6 +454,7 @@ export function MadeAppScreen({
           network={body.network ?? []}
           title={body.title ?? 'An app'}
           onOpen={onOpen}
+          shows={body.shows}
           shown={shown}
           onShown={onShown}
         />

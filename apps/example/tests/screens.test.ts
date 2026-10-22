@@ -467,10 +467,6 @@ describe('the Files app', () => {
       { name: 'plan.txt', mime: 'text/plain' },
       { links: [{ rel: 'about', to: said.key }] },
     );
-    const loose = await alice.node.records.put(space, fileCollection.name, {
-      name: 'a.txt',
-      mime: 'text/plain',
-    });
     const { host, asked } = fakeHost();
     const { call, close, show, showed } = bridgeFor(alice.node, space, [fileCollection.name], host);
     try {
@@ -480,8 +476,42 @@ describe('the Files app', () => {
       assert.equal((await call('open', { record: shared.key, link: 'about' })).ok, true);
       const opened = asked.find(([what]) => what === 'open')?.[1];
       assert.ok(isRecord(opened) && isRecord(opened.record) && opened.record.key === said.key);
-      assert.equal((await call('open', { record: loose.key, link: 'about' })).ok, false, 'it links nowhere');
       assert.equal((await call('open', { record: said.key })).ok, false, 'not a record of its own');
+    } finally {
+      close();
+    }
+  });
+
+  test('a link a screen points anywhere tells it nothing, and never opens the space’s own records', async () => {
+    const { alice, space } = await setup();
+    await addSchemas(alice.node, space, [fileCollection]);
+    const secret = await alice.node.records.put(space, 'app.secret', { pin: 1234 });
+    const { host, asked } = fakeHost();
+    const { call, close } = bridgeFor(alice.node, space, [fileCollection.name], host);
+    // A record of its own, pointed wherever the screen likes, then followed
+    const follow = async (to: string) => {
+      const own = await call(
+        'put',
+        fileCollection.name,
+        { name: 'x', mime: 'text/plain' },
+        {
+          links: [{ rel: 'about', to }],
+        },
+      );
+      const { key } = z.object({ key: z.string() }).parse(own.value);
+      return call('open', { record: key, link: 'about' });
+    };
+    try {
+      const here = await follow(secret.key);
+      const missing = await follow(`${secret.key.split('.')[0]}.aaaaaaaaaaaaaaaaaaaaaaaaaa`);
+      const own = await follow(`collection:${fileCollection.name}`);
+      // The same answer whether or not the record is here, or is the space's own: no way to probe for keys.
+      assert.deepEqual([here, missing, own], [here, here, here]);
+      assert.equal(here.ok, true);
+      // The page shows the person a record they can see anyway; the space's own records it never opens.
+      const opened = asked.filter(([what]) => what === 'open').map(([, target]) => target);
+      assert.equal(opened.length, 1);
+      assert.ok(isRecord(opened[0]) && isRecord(opened[0].record) && opened[0].record.key === secret.key);
     } finally {
       close();
     }

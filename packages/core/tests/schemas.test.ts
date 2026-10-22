@@ -195,7 +195,7 @@ describe('the standard library', () => {
     );
   });
 
-  test('a vote on a poll can rank its options, and a proposal takes ballots, not votes', async () => {
+  test('a vote on a poll can rank its options, and its writer refuses one on a proposal, which takes ballots', async () => {
     const me = await person();
     const { id: space } = await me.spaces.create({ name: 'Club', ...team, visibility: 'private' });
     await useSchemas(me, space, [poll, proposal, vote]);

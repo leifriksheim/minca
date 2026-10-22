@@ -168,7 +168,11 @@ its app's collections and the people in its space: it lists and writes
 records as the person looking, asks what they may do (`can`), gets someone's
 picture (`picture`), and asks the page to show a record or a person
 (`open`), or the record one of its own links to (`open` with `link`: the
-message a file was shared on). What a sealed frame can't do, the page does for it when it asks,
+message a file was shared on). Following a link is the one way past its
+collections, and it is blind: the page opens the record for the person, who
+can see it anyway, and the screen gets the same answer whether or not the
+record is there; the space's own records (`sys.*`, `launcher.app`) are never
+opened. What a sealed frame can't do, the page does for it when it asks,
 after checking the request: it searches for places and asks where the person
 is (`places`), opens http and https pages (`link`), saves text files
 (`save`), keeps a few kilobytes per app on the device (`remember`, `recall`),
@@ -182,7 +186,10 @@ to open (`shows: ["std.message"]` for a chat). Whatever asks the example app
 to open a record, a screen's `open` or a link beside a record, goes to the
 app that shows that record's collection, the one open first, and that app's
 screen is handed the record's key (`minca.shown`, `minca.onShow`, the kit's
-`useShown`) to scroll to or open. With no app that shows it, the record
+`useShown`) to scroll to or open, but only of a collection it shows, which
+it could list anyway. That app does learn which of those records the person
+opens from elsewhere, which is why only someone who may define collections
+adds an app. With no app that shows it, the record
 opens beside whatever is open. So the Files app opens a file's message in
 the chat, and a chat's file in Files, without either knowing the other. An
 app that names a collection in `shows` must do something with what it is

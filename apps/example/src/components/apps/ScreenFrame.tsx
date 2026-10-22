@@ -21,6 +21,7 @@ export function ScreenFrame({
   network,
   title,
   onOpen,
+  shows = [],
   shown,
   onShown,
 }: {
@@ -33,6 +34,8 @@ export function ScreenFrame({
   title: string;
   /** Shows a record the screen asked to open (`minca.open`) */
   onOpen: (record: NodeRecord) => void;
+  /** The collections whose records it is the place to open (`launcher.app`'s `shows`) */
+  shows?: ReadonlyArray<string> | undefined;
   /** A record of a collection this app shows that it was asked to show (`minca.onShow`) */
   shown?: string | undefined;
   /** Called once `shown` is handed to the screen */
@@ -55,13 +58,24 @@ export function ScreenFrame({
   useEffect(() => {
     handed.current = onShown;
   }, [onShown]);
+  // Only a record of a collection it shows: the address is anyone's to write, and a screen
+  // handed any key would learn which records exist and which the person opens.
+  const showing = shows.join('|');
   useEffect(() => {
     if (!shown) return;
-    if (live.current) {
-      live.current.show(shown);
-      handed.current?.();
-    } else pending.current = shown;
-  }, [shown]);
+    let current = true;
+    void node.records.get(spaceId, shown).then((record) => {
+      if (!current) return;
+      if (!record || !showing.split('|').includes(record.collection)) return void handed.current?.();
+      if (live.current) {
+        live.current.show(shown);
+        handed.current?.();
+      } else pending.current = shown;
+    });
+    return () => {
+      current = false;
+    };
+  }, [node, spaceId, shown, showing]);
   // A new screen, or a new app, starts a new frame.
   const [generation, setGeneration] = useState(0);
   const origins = [...network].sort().join(' ');

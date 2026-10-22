@@ -612,14 +612,12 @@ export function createScreenBridge(params: {
           host.open({ record });
           return null;
         }
-        // What the app's own record points to, shown by the page: the screen learns nothing of it.
-        const to = typeof link === 'string' ? record.links.find((l) => l.rel === link)?.to : undefined;
+        // What the app's own record points to, shown by the page. The screen learns nothing of it, not even
+        // whether it is here: the answer is the same either way. Never the space's own records.
+        if (typeof link !== 'string') throw new Error('link names a link role, like "about"');
+        const to = record.links.find((l) => l.rel === link)?.to;
         const target = to ? await node.records.get(spaceId, to) : null;
-        if (!target)
-          throw new Error(
-            `Record ${record.key} has no "${typeof link === 'string' ? link : JSON.stringify(link)}" link to a record here`,
-          );
-        host.open({ record: target });
+        if (target && !offLimits(target.collection)) host.open({ record: target });
         return null;
       }
       const did = fieldOf(first, 'person');
