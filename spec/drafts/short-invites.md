@@ -57,9 +57,9 @@ The link's 32 bytes are `S ‖ pin`.
 
 - `S` is 16 random bytes (128 bits). It must resist offline guessing, since
   the sealed invite is public to whoever finds it, and 2¹²⁸ does.
-- `pin` is the first 16 bytes of `SHA-256(blob)`, the hash of the sealed
-  invite (§2) exactly as kept. A relay already files a blob under that hash
-  (07 §5).
+- `pin` is the first 16 bytes of `SHA-256(UTF-8(blob))`, the hash of the
+  sealed invite's base64url text (§2) exactly as kept: the same hash a relay
+  files a blob under (07 §5's `id`).
 
 From them:
 
@@ -103,8 +103,10 @@ blob = base64url( nonce(12) ‖ AES-256-GCM(seal key, nonce, deflate-raw(UTF-8(J
   `checkRelays` (03 §10).
 - `until` is optional: when the inviter wants the link to stop being served.
 - Compressed with `CompressionStream("deflate-raw")`, a web standard in
-  browsers, Node and Bun. A reader inflates as a stream and stops at 64 KiB.
-  The sealed blob fits a mailbox blob (12,000 characters, 07 §5).
+  browsers, Node and Bun. A reader checks the seal before inflating, inflates
+  as a stream and stops at 64 KiB. A sealed invite must fit a mailbox blob
+  (12,000 characters, 07 §5); a constitution too large for that (up to 64
+  roles of 64 grants) gets a long link instead.
 
 No signature: the pin is stronger. A blob whose hash doesn't start with
 `pin` is not this link's, whoever made it, and is ignored before it is
@@ -113,41 +115,60 @@ opened.
 ### 3. Where it is kept
 
 The inviter drops the blob in the mailboxes of the space's relays
-(`sys.relays`) and its own, under the topic. The link names one or two of
-them after `@`. A place is a URL; written without a scheme, `host[:port][/path]`
-means `wss://`, or `ws://` for `localhost`, `127.0.0.1` and `[::1]`, and a
-plugin claims any other scheme. A joiner asks the places named and its own
-relays.
+(`sys.relays`) and its own, under the topic. The link names at most two
+places after `@`, separated by `,`: the account's host first when it has
+one (its relay serves the mailbox, 04 §5.3), then a relay. A place is a URL,
+percent-encoded where it holds `@`, `,` or `#`; written without a scheme,
+`host[:port][/path]` means `wss://`, or `ws://` for `localhost`, `127.0.0.1`
+and `[::1]`, and a plugin claims any other scheme. A joiner asks the places
+named (at most three) and its own relays. Places are not in the pin: like
+`relays` in a long link, anyone passing the link on can change them, which
+can only point the joiner at a mailbox that withholds (#20).
+
+A fetch reads every page of the topic, up to the relay's 64 blobs, not the
+eight pages `mailbox.fetch` reads today: with 12,000-character blobs, 32 of
+them would hide the real one.
 
 A relay keeps a blob up to 14 days (07 §5) and may forget it on a restart.
 Two things keep it longer, and neither holds `S`:
 
-- **The account.** The inviter's device writes `{ blob, until }` in the
-  account registry (03 §13). Any of the account's devices that is online drops
-  it again when it is gone, only to relays it uses for that space anyway
-  (`sys.relays` or its own, checked with `checkRelays`). Dropping a blob a
-  relay already holds stores nothing new. An app holding the account sees
-  ciphertext, as a relay does.
+- **The account.** The inviter's device writes `{ space, invite?, keyId?,
+blob, until? }` in the account registry (03 §13): the space's id, the
+  invite DID (role links), and the id of the key the blob carries (private
+  spaces). None of them is secret; the invite DID is already in the space.
+  They let any of the account's devices act on the record without `S`. Any
+  that is online drops the blob again when it is gone, only to relays it uses
+  for that space anyway (`sys.relays` or its own, checked with
+  `checkRelays`). An app holding the account sees ciphertext and ids, as a
+  member does.
 - **The host.** Each device keeps these records in step with its carriers'
   carry spaces (06 §4.2), as it does passes. A host's mailbox answers a fetch
   of the topic it computes from each record's blob, while the record is there
   and `until` has not passed. The account never names a topic, so it can't
-  make the host answer for a door, or for someone else's link. The host drops
-  nothing anywhere. At most 64 records an account.
+  make the host answer for a door. The host drops nothing anywhere. It serves
+  an account's 64 most recent records.
 
 The device that made the link keeps `S` sealed under its local key (05 §15),
-so the person can copy the link again. `S` is never written to the registry
-or any space.
+so the person can copy the link again; an app's node keeps it in the app's
+own storage. `S` is never written to the registry or any space.
 
-**Expiry.** Past `until`, devices and hosts stop serving the blob, and relays
-forget it within 14 days. That ends the link for anyone who doesn't already
-hold the blob. Closing the invite in the space (03 §7.2) is what peers
-judge, and an app closes a role invite at `until` once one of the account's
-devices is online. A link with no `until` is served while the record exists:
-right for a community that posts its link and leaves it.
+**What ends a link.** Only two things, and both are in the space:
 
-**Ending.** The record is deleted when the invite is closed, and when the
-space's key changes, since the link's key is then stale.
+- **Closing its invite** (03 §7.2), for a role link: no join counts after.
+- **A key change**, for a private space: the blob's key no longer lets
+  anyone read. When a key changes, a device holding the account closes the
+  role invites of its records whose `keyId` is the old key, then deletes the
+  records. Otherwise a member holding the new key could still join with the
+  old link's secret, with that role.
+
+`until` is weaker: when the account stops serving the blob. Its devices and
+host stop, and the app closes a role invite at `until` once one of the
+account's devices is online. But anyone who holds the blob can drop it again
+anywhere, so `until` is no promise that a leaked link stops working; a
+view-only link to a public space never stops. An app's expiry choice says
+"stop sharing this link", not "this link stops working". A link with no
+`until` is served while the record exists: right for a community that posts
+its link and leaves it.
 
 ### 4. Joining
 
@@ -161,7 +182,9 @@ space's key changes, since the link's key is then stale.
 
 The invite's nodes are kept with the space as its invite relays are, and
 dialled until one answers `4003` (it doesn't hold the space) on reconnects
-over a day. They came from the inviter, as the relays did, so they get the
+over a day. A host behind on a key change answers `4003` too, to a joiner
+holding only the new key; that host is dropped, and the joiner's own
+carriers or the space's keepers take over. They came from the inviter, as the relays did, so they get the
 same trust. Whether a node that the space's own keepers don't name should
 stay longer belongs to #220's keepers plan.
 
@@ -202,12 +225,12 @@ there so the link format doesn't have to change when the others arrive.
 
 ## What a party learns, and can do
 
-| Party       | Today                                  | With short invites                                                                                                                    |
-| ----------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Link holder | The space, its key, the right to join  | The same, and nothing more: it can't change or clear what others get                                                                  |
-| Relay       | Rooms, peers, door mailboxes           | Also: a topic, a blob's size, when and from which address it is fetched. A relay also in the space's room can tie a fetch to the room |
-| Host        | Its spaces, sizes, which account asked | Also: which account keeps which link, until when, and who fetches it                                                                  |
-| Chat app    | The whole invite, if it reads the URL  | The secret, if it reads the fragment; unfurlers don't                                                                                 |
+| Party       | Today                                  | With short invites                                                                                                                                  |
+| ----------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Link holder | The space, its key, the right to join  | The same: a leaked short link is a leaked invite, as a long one is, for as long as anyone serves its blob. It can't change or clear what others get |
+| Relay       | Rooms, peers, door mailboxes           | Also: a topic, a blob's size, when and from which address it is fetched. A relay also in the space's room can tie a fetch to the room               |
+| Host        | Its spaces, sizes, which account asked | Also: which account keeps which link, until when, and who fetches it                                                                                |
+| Chat app    | The whole invite, if it reads the URL  | The secret, if it reads the fragment; unfurlers don't                                                                                               |
 
 What a relay, or a link holder, can do to a link:
 
@@ -216,8 +239,9 @@ What a relay, or a link holder, can do to a link:
 - **Flood the topic** at a relay (64 blobs, 07 §5), so a drop after the
   inviter's blob expires is refused. Blobs a relay holds stay until they
   expire, and the host's copy isn't in the relay's queue. Takes 16 addresses
-  an hour on the reference relay; it joins
-  [#162](https://github.com/leifriksheim/minca/issues/162).
+  an hour on the reference relay, or 8 to fill the pages a fetch reads today
+  (§3); it joins [#162](https://github.com/leifriksheim/minca/issues/162).
+- **Keep it served** past `until`, by dropping the blob again (§3).
 - The nodes and relays the inviter named learn the joiner's address and, for
   a private space, its account (the hello's `member`, 04 §6.3), as a node the
   space names does today.
@@ -235,7 +259,9 @@ What a relay, or a link holder, can do to a link:
   no key hashes to can't be purged; a host's mailbox also answers from
   carry-space records.
 - **08 §4**: the "Invites that name the space's hosts" Planned text goes.
-- **Threat model**: §3.7 Relay and §3.8 Host gain the rows above.
+- **Threat model**: §3.7 Relay and §3.8 Host gain the rows above; §3.1 and
+  §3.3 say a short link is a leaked invite for as long as anyone serves its
+  blob, and that `until` promises nothing.
 
 ## Plan
 
@@ -245,11 +271,14 @@ What a relay, or a link holder, can do to a link:
    `fetch`.
 3. `packages/core/src/node/node.ts`: `spaces.invite` returns the short link
    (`{ long: true }` for the old one, `until` optional); `preview` and `join`
-   accept both; the registry record, dropping again when gone, deleting it on
-   `closeInvite` and on a key change; the copy in carry spaces.
+   accept both; the registry record, dropping again when gone, closing the
+   invite and deleting the record on a key change or at `until`; the copy in
+   carry spaces; `mailbox.fetch` reads every page for invite topics.
 4. `packages/relay/relay.mjs` (an option to answer a topic from elsewhere),
    `packages/cli/src/serve.ts` and `packages/core/src/node/host.ts`: the
-   host's mailbox answers from carry-space records.
+   host's mailbox answers from carry-space records. The relay's duplicate
+   check skips expired copies: today a drop in the 15 s before the sweep
+   answers `dropped` and stores nothing, which 07 §5 doesn't allow.
 5. Spec and docs as above; `packages/core/docs/spaces.md#invites`.
 6. Apps: the shorter link, an expiry choice, a QR code.
 7. Tests:
@@ -261,6 +290,9 @@ What a relay, or a link holder, can do to a link:
      and its record is gone;
    - with every device offline, the host serves the blob past a relay's TTL,
      and stops at `until` and when the record is deleted;
+   - after a key change, a member holding the new key can't join with an
+     old role link: its invite was closed;
+   - 32 large junk blobs under the topic don't hide the real one;
    - an account's record can't make the host answer for a door's topic;
    - a blob that inflates past the limit is refused;
    - the long link still joins.
@@ -270,7 +302,7 @@ What a relay, or a link holder, can do to a link:
 
 ## Adversarial review
 
-Two reviews. Both blockers came from taking more than one blob on trust.
+Three reviews. Both blockers came from taking more than one blob on trust; the third found none.
 
 **First review.**
 
@@ -294,6 +326,16 @@ Two reviews. Both blockers came from taking more than one blob on trust.
 | The keeper rule dropped an editor's host                                                                             | Invite nodes are kept as invite relays are, until the node says it doesn't hold the space                          |
 | A registry record's `mailboxes` steered every device of the account                                                  | No `mailboxes`: devices drop only to relays they use for the space                                                 |
 | Pin collisions; record kept after a key change; `S` at rest; inflating; place format; relay row; closing by link     | Two matching blobs refuse; record deleted on a key change; 05 §15; streaming; URLs with a default; row fixed; §7.6 |
+
+**Third review.** No blockers.
+
+| Finding                                                                                                   | What changed                                                                                                           |
+| --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Joiners never asked the host, so its copy kept nothing alive                                              | The link names the account's host first                                                                                |
+| Only the link's maker could act on `{ blob, until }`; deleting it on a key change left a role invite open | The record names the space, the invite DID and the key id; a key change closes those invites, then deletes the records |
+| `until` was called an end, but anyone holding the blob can keep it served                                 | Said plainly: only closing and a key change end a link                                                                 |
+| 8 addresses could hide the blob past the pages a fetch reads                                              | Invite fetches read every page; the relay's duplicate check skips expired copies                                       |
+| Pin input; place syntax; which 64 records; size; `S` in apps; a host behind on a key change               | `UTF-8(blob)`; `@a,b`, percent-encoded; the 64 most recent; a long link when too big; the app's storage; noted         |
 
 ## Considered and not chosen
 
