@@ -58,6 +58,7 @@ import {
   MAX_LINK_PLACES,
   openInvite,
   parseInviteLink,
+  pinOf,
   relayOfNode,
   sealInvite,
 } from '../space/invite-link.js';
@@ -377,10 +378,10 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     ];
     const inTime = (peer: Promise<string | null>) =>
       Promise.race([peer, new Promise<null>((resolve) => unref(setTimeout(() => resolve(null), 3000)))]);
+    // Not the nodes an invite gave this node: nothing vouches for them, so they are used here and never passed on.
     const peers = await Promise.all(hosts.map((host) => inTime(peerOf(host).catch(() => null))));
-    const found = [...peers, ...((await findRecord(spaceId))?.nodes ?? [])];
     const pinned = [
-      ...new Set(found.filter((peer): peer is string => peer !== null && peer.includes('#did:key:'))),
+      ...new Set(peers.filter((peer): peer is string => peer !== null && peer.includes('#did:key:'))),
     ];
     return pinned.slice(0, MAX_INVITE_NODES);
   }
@@ -1067,12 +1068,16 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     for (const { key, body } of await keptLinks()) {
       if (closed) return;
       const record = await registry.get(body.space);
-      const ended =
-        !record ||
-        (body.until !== undefined && body.until <= Date.now()) ||
-        (body.keyId !== undefined && record.key !== null && record.key.id !== body.keyId);
-      if (ended) {
-        if (record && body.invite) await closeIfOpen(body.space, body.invite).catch(() => {});
+      // Ended only on what this device knows: one behind on a key change, or not holding the space yet,
+      // would otherwise end a link another device of the account just made.
+      if (!record) continue;
+      const moved =
+        body.keyId !== undefined &&
+        record.key !== null &&
+        record.key.id !== body.keyId &&
+        (record.keys ?? []).some((held) => held.id === body.keyId);
+      if (moved || (body.until !== undefined && body.until <= Date.now())) {
+        if (body.invite) await closeIfOpen(body.space, body.invite).catch(() => {});
         await forgetLinks((link) => link.blob === body.blob);
         continue;
       }
@@ -1107,6 +1112,9 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     let found = resolved.get(bare);
     if (!found) {
       found = fetchInvite(bare);
+      // A preview and the join after it ask once; a few links are remembered, not every one ever read.
+      const oldest = resolved.keys().next();
+      if (resolved.size >= 16 && !oldest.done) resolved.delete(oldest.value);
       resolved.set(bare, found);
       found.catch(() => resolved.delete(bare));
     }
@@ -1125,22 +1133,28 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     if (places.length === 0)
       throw new Error('That invite names no place to find it, and this app knows none');
     const blobs = new Set<string>();
-    await Promise.all(
-      places.map((place) =>
-        mailbox.fetch(place, topic, 0, INVITE_PAGES).then(
-          (items) => items.forEach((item) => blobs.add(item.blob)),
-          () => {},
+    // A slow place can't hold the join up for long: what has come back by then is all there is.
+    await Promise.race([
+      new Promise<void>((resolve) => unref(setTimeout(resolve, 20_000))),
+      Promise.all(
+        places.map((place) =>
+          mailbox.fetch(place, topic, 0, INVITE_PAGES).then(
+            (items) => items.forEach((item) => blobs.add(item.blob)),
+            () => {},
+          ),
         ),
       ),
-    );
-    const opened = (await Promise.all([...blobs].map((blob) => openInvite(link, blob)))).filter(
-      (sealed) => sealed !== null,
-    );
-    if (opened.length === 0)
-      throw new Error('That invite was not found. It may have expired, or the places it names may be down.');
+    ]);
+    // Only blobs whose hash is the pin; any other, whoever left it, is never opened.
+    const named: string[] = [];
+    for (const blob of blobs)
+      if ((await pinOf(blob)).every((byte, i) => byte === link.pin[i])) named.push(blob);
     // Only the inviter could make two blobs share a pin, and then neither is trusted.
-    if (opened.length > 1) throw new Error('That invite link names more than one invite, so it is not used');
-    const { invite, until } = opened[0]!;
+    if (named.length > 1) throw new Error('That invite link names more than one invite, so it is not used');
+    const opened = named[0] ? await openInvite(link, named[0]) : null;
+    if (!opened)
+      throw new Error('That invite was not found. It may have expired, or the places it names may be down.');
+    const { invite, until } = opened;
     const { invite: _ignored, ...rest } = invite;
     const long = base64UrlEncode(
       utf8Encode(
@@ -1824,8 +1838,17 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     // Asked only while it is still open: asking would open it again.
     if (!(await kindOf(spaceId)) && runtimes.get(spaceId) === open)
       hosts.push(...(spaceHosts ?? (await namedHosts(spaceId))));
-    // The nodes the invite that brought it here named: the inviter's hosts, reached before the space's own records are.
-    const invited = (await registry.get(spaceId))?.nodes ?? [];
+    // The nodes the invite that brought it here named: the inviter's hosts, reached before the space's own
+    // records are. Once the space names its keepers, only those of them it names: an invite is unauthenticated.
+    const named = (await registry.get(spaceId))?.nodes ?? [];
+    const keepers = new Set(
+      named.length > 0
+        ? ((await (await open).access().catch(() => null))?.keepers ?? []).map((keeper) => keeper.did)
+        : [],
+    );
+    const invited = named.filter(
+      (node) => keepers.size === 0 || keepers.has(decodeURIComponent(node.split('#')[1] ?? '')),
+    );
     const peers = [
       ...new Set(
         [...(await Promise.all(hosts.map(peerOf))), ...invited].filter(

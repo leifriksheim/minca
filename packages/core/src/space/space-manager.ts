@@ -436,7 +436,8 @@ export async function encodeSpaceInvite(
     ...(options.secret ? { invite: base64UrlEncode(options.secret) } : {}),
     ...(options.secret && options.role ? { role: options.role } : {}),
     ...((options.relays ?? record.relays)?.length ? { relays: [...(options.relays ?? record.relays)!] } : {}),
-    ...((options.nodes ?? record.nodes)?.length ? { nodes: [...(options.nodes ?? record.nodes)!] } : {}),
+    // Only nodes the caller vouches for: those an invite gave this node are not passed on.
+    ...(options.nodes?.length ? { nodes: [...options.nodes] } : {}),
   };
   return base64UrlEncode(utf8Encode(JSON.stringify(invite)));
 }

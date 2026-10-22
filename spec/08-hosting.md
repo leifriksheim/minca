@@ -231,9 +231,10 @@ Every device of the account then holds a socket to that address for every
 space it holds ([04](04-network.md)), as the host carries all of them through
 the carry space. A device also holds one, for that space, to each host a space
 it holds pays itself (§2), and to each node the invite that brought the space
-here named ([03](03-spaces.md) §7.4): so someone invited reaches the space
-through the inviter's host with nobody else online. An invite names the
-account's hosts, and those the space pays. Example: a host at `https://host.example` that
+here named ([03](03-spaces.md) §7.4), until the space names keepers that
+leave it out: so someone invited reaches the space through the inviter's
+host with nobody else online. An invite names the account's hosts, and
+those the space pays; never the nodes an invite named. Example: a host at `https://host.example` that
 describes `"peer": "/peer"` is reached at `wss://host.example/peer`, and a
 space `b3kq7zp2f4mhx6ydwa5rtc9n1e` at
 `wss://host.example/peer?space=b3kq7zp2f4mhx6ydwa5rtc9n1e#<host DID>`.

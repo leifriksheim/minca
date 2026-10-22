@@ -1289,17 +1289,22 @@ An invite is `base64url( UTF-8( JSON.stringify(SpaceInvite) ) )` — plain
 
 `nodes` lists at most 8 node URLs ([04](04-network.md) §5.2), each pinned
 by a DID in its fragment, no URL twice: the hosts the inviter's account uses,
-and those the space names. A joiner keeps them with the space, as it keeps
-`relays`, and holds a socket to each besides the hosts its own account uses,
-so it reaches the space through the inviter's host with nobody else online.
-A list that breaks any of these rules is ignored whole. A pin means a socket
+and those the space names. A joiner keeps them with the space and holds a
+socket to each besides the hosts its own account uses, so it reaches the
+space through the inviter's host with nobody else online. Once the space's
+history names keepers (§10), it dials only the invite's nodes whose DID is
+one of them. It **MUST NOT** name them in invites of its own: nothing vouches
+for them. A list that breaks any of these rules is ignored whole. A pin means a socket
 reaches only the node named: anything else answering there is refused at
 the handshake.
 
 > **Known defect:** `invitedBy`, `relays` and `nodes` are not authenticated. Neither
 > is in the space's constitution (§1.2), and nothing signs the invite string,
 > so anyone passing the link on can change them. A reader MUST NOT treat them
-> as verified. A fix will authenticate them or drop them from the invite.
+> as verified. A short link is no better (§7.7): whoever holds one can seal
+> an invite of its own under the link's secret and pass on a link with its
+> pin, which joins the same role with names, relays and nodes it chose; the
+> space, its constitution and its key are still checked. A fix will authenticate them or drop them from the invite.
 > Tracked in [#20](https://github.com/leifriksheim/minca/issues/20). The
 > space's name is its constitution's, so changing it changes the id.
 
@@ -1441,7 +1446,8 @@ gives the long form instead.
 **Reading a link.** A reader:
 
 1. fetches the topic from each place the link names and from the relays it
-   uses itself, reading every page a relay holds;
+   uses itself, reading every page a relay holds (a relay keeps at most 64
+   blobs a topic, 07 §5);
 2. **MUST** ignore every blob whose hash does not start with `pin`, unopened;
 3. **MUST** refuse the link if two different blobs match the pin;
 4. opens the one that does, and **MUST** refuse it if it does not decrypt,
@@ -1860,8 +1866,10 @@ deleted) its key is `space:<body.space>`.
 
 The account's devices keep each `sys.link` alive: they leave its blob again
 where the space's members meet while it lasts. Once it is past `until`, or
-the space's key is no longer `keyId`, a device closes its invite (§7.2) if
-it may and deletes the record. A key change must close a role link's invite:
+the device holds the key `keyId` names and a newer one is current, it
+closes its invite (§7.2) if it may and deletes the record. A device that
+doesn't hold the space, or doesn't hold that key yet, leaves the record
+alone: it may be behind, and the link made after it. A key change must close a role link's invite:
 otherwise a member holding the new key could still join with the old link's
 secret, in that role.
 

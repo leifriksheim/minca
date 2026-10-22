@@ -14,7 +14,14 @@ import { bareInvite, parseSpaceInvite } from '../src/space/space-manager.js';
 import { createMailboxClient } from '../src/network/mailbox.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { createFakeHub } from './helpers/fake-transport.js';
-import { person } from './helpers/person.js';
+import { open, person, settle } from './helpers/person.js';
+import { memoryStores } from './helpers/memory-stores.js';
+import { createNode } from '../src/node/node.js';
+import { createIdentityManager } from '../src/identity/identity-manager.js';
+import { createLocalRootSigner } from '../src/identity/root-signer.js';
+import { generateSeed } from '../src/identity/recovery-code.js';
+import { deriveAccountKey } from '../src/identity/account-vault.js';
+import { deriveAccountRegistry } from '../src/space/account-registry.js';
 import { joined } from './helpers/joined.js';
 import { portOf } from './helpers/net.js';
 import { until } from './helpers/until.js';
@@ -304,6 +311,73 @@ describe('short links between nodes', () => {
       5000,
       "the old link's invite to close",
     );
+  });
+
+  test('a device behind on a key change leaves a link made with the new key alone', async () => {
+    const seed = generateSeed();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const apart = createFakeHub({ latencyMs: 1 });
+    const blocked = new Set<string>();
+    /** A device of the account; a space in `blocked` it can't reach */
+    const device = async (stores = memoryStores()) => {
+      const manager = createIdentityManager();
+      const me = await manager.fromSeed(seed);
+      const node = await createNode({
+        signer: createLocalRootSigner(me, manager.getProvider()),
+        stores,
+        accountKey: await deriveAccountKey(seed),
+        watchIntervalMs: 0,
+        network: {
+          relays: [relay.url],
+          transports: (spaceId: string, did: string) => [
+            (blocked.has(spaceId) ? apart : hub).transport(did, spaceId),
+          ],
+        },
+      });
+      open.push(node);
+      return { node, did: me.did };
+    };
+    const { node: laptop, did } = await device();
+    const phoneStores = memoryStores();
+    const phone = (await device(phoneStores)).node;
+    const space = await laptop.spaces.create({ name: 'Club', ...team, visibility: 'private' });
+    await laptop.records.put(space.id, 'note', { text: 'hi' });
+    await until(async () => (await phone.records.list(space.id)).length === 1, 5000, 'the phone to hold it');
+    await settle(500);
+
+    // Away from the phone, the key changes and the laptop makes a link with the new one.
+    await phone.close();
+    blocked.add(space.id);
+    await laptop.spaces.changeKey(space.id);
+    await settle();
+    await laptop.spaces.invite(space.id, { role: 'editor', short: true });
+    const registry = (await deriveAccountRegistry(await deriveAccountKey(seed), did)).space.id;
+    const kept = async () => (await laptop.records.list(registry, { collection: 'sys.link' })).length;
+    await until(async () => (await kept()) === 1, 3000, 'the laptop to keep its link');
+
+    // The phone comes back: the registry reaches it, the space and its new key not yet.
+    await device(phoneStores);
+    await settle(3000);
+    assert.equal(await kept(), 1);
+  });
+
+  test("nodes an invite named are this joiner's to dial, and never passed on", async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const alice = (await person(hub, { accountKey: true })).node;
+    const space = await alice.spaces.create({ name: 'Club', ...team, visibility: 'private' });
+    await alice.records.put(space.id, 'note', { text: 'hi' });
+    // Whoever passes an invite on can add a node of their own: nothing signs the list.
+    const invite = parseSpaceInvite(await alice.spaces.invite(space.id, { role: 'editor' }));
+    const mallory = 'wss://mallory.example/peer#did:key:zDnaerDaTF5BXEavCrfRZEk316dpbLsfPDZ3WJ5hRTPFU2169';
+    const tampered = base64UrlEncode(
+      new TextEncoder().encode(JSON.stringify({ ...invite, nodes: [mallory] })),
+    );
+    const bob = (await person(hub, { accountKey: true })).node;
+    await bob.spaces.join(tampered);
+    await joined(bob, space.id);
+    await until(async () => (await bob.records.list(space.id)).length === 1, 5000, 'the note to reach Bob');
+    assert.equal(parseSpaceInvite(await bob.spaces.invite(space.id, { write: false })).nodes, undefined);
+    assert.equal(parseSpaceInvite(await bob.spaces.invite(space.id, { role: 'editor' })).nodes, undefined);
   });
 
   test('a link whose invite is nowhere says so', async () => {

@@ -60,7 +60,7 @@ reference implementation, or any implementation, honestly.
   - It cannot forge a version, a note or an invite (02 §3, 01 §7, 03 §7).
     Holding a short link, it can seal other blobs under its secret and leave
     them under its topic, but a joiner takes only the blob whose hash is the
-    link's pin, so it can't change what a link gives anyone, nor clear it:
+    link's pin, so it can't change what a given link gives anyone, nor clear it:
     no key hashes to a link's topic (03 §7.7; `invite-link.test.ts`, "a link
     holder's own blob…", "nobody can clear it…").
   - It cannot give someone's note a second id, nor make one of its own count
@@ -80,7 +80,17 @@ reference implementation, or any implementation, honestly.
   - A leaked role invite lets it join, as often as it likes ([#170](https://github.com/leifriksheim/minca/issues/170)).
     A short link is as good as a long one for as long as anyone who holds its
     sealed invite leaves it in a mailbox: its `until` stops only the
-    account's own copies (03 §7.7).
+    account's own copies (03 §7.7). Whoever passes a link on can make a new
+    one under the same secret, joining the same role, whose name, relays and
+    nodes it chose ([#20](https://github.com/leifriksheim/minca/issues/20)).
+  - The nodes an invite names are dialled by whoever joins with it, so a
+    node added by whoever passed it on learns the joiner's address and when
+    it is online, until the space names keepers that leave it out. They are
+    never passed on in the joiner's own invites (03 §7.4).
+  - A role link's invite is closed after a key change only once a device of
+    the inviter's account that may close it comes online; meanwhile someone
+    removed who kept the link can join with it again
+    ([#170](https://github.com/leifriksheim/minca/issues/170)).
   - What it sends must be checked, stored or refused, with few limits
     ([#33](https://github.com/leifriksheim/minca/issues/33)). That includes knocks on doors and contact requests (07),
     whose mailbox can be flooded ([#162](https://github.com/leifriksheim/minca/issues/162)).

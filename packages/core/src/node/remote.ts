@@ -9,8 +9,7 @@
  * What a node returns is plain data already (see `node/types`), so it crosses
  * unchanged. The exceptions: events and `records.watch` become messages.
  * `delegation()` and `network.status()` answer at once, so this side keeps
- * the last value the node reported. `spaces.preview` only reads the invite,
- * so it runs here. Validators and typed collection references go as the JSON
+ * the last value the node reported. Validators and typed collection references go as the JSON
  * Schema and name they stand for, because functions can't be cloned.
  */
 import type { MeshStatus } from '../network/mesh.js';
