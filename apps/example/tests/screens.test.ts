@@ -307,6 +307,17 @@ describe('screens', () => {
       assert.equal(shown.value, null);
       assert.equal((await call('file', listing.key, 'not-a-file-of-its')).ok, false);
 
+      // The whole file comes as a Blob of the type the record gives, however large, and only one its record refers to.
+      const whole = (await call('blob', wall.key, { hash: poster.hash, mime: 'text/html' })).value;
+      assert.ok(whole instanceof Blob);
+      assert.equal(whole.type, 'image/png');
+      assert.equal(whole.size, 300 * 1024);
+      const pdf = (await call('blob', listing.key, manual)).value;
+      assert.ok(pdf instanceof Blob);
+      assert.deepEqual([...new Uint8Array(await pdf.arrayBuffer())], [4, 5]);
+      assert.equal((await call('blob', listing.key, poster)).ok, false, 'not a file the record refers to');
+      assert.equal((await call('blob', 'nope', photo)).ok, false);
+
       assert.equal((await call('link', 'javascript:alert(1)')).ok, false);
       assert.equal((await call('link', 'https://example.com/a')).ok, true);
       assert.equal((await call('save', '../evil.sh', 'x')).ok, false);

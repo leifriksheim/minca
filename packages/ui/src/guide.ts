@@ -20,6 +20,7 @@ ui has:
   usePeople()                       [{ did, name }], kept current
   useName(did)                      their name here, "You" for the person looking
   useFile(key, ref)                 a picture the record \`key\` refers to, as a URL for <img>; null until here
+  useBlob(key, ref)                 the whole file, as a URL for <img>, <video> or <audio>; null until here
   <\${Avatar} did size? round? />   someone's face: their picture, or the shape their account gives. Always use it for a person
   <\${Person} did size? name? face? />   face and name (face={false}: the name alone); a click opens their card in the app
   <\${Comments} about=\${record} />   the comments on a record and a box to add one, with @mentions (needs "std.comment" in collections)

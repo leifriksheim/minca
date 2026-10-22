@@ -54,6 +54,7 @@ export interface Minca {
   picture(did: string): Promise<string | null>;
   open(target: { person: string } | { record: string }): Promise<null>;
   file(key: string, ref: string): Promise<string | null>;
+  blob(key: string, ref: string): Promise<Blob>;
   addFile(
     bytes: Uint8Array,
     about: { name?: string; mime?: string },
