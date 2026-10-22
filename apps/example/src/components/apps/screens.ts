@@ -139,6 +139,11 @@ Inside it, window.minca is:
   await minca.remember(key, value)  keeps something small (8 KB) on this device for this app; null forgets it
   await minca.recall(key)           what was remembered, or null
   minca.onChange(callback)          called whenever records in the space change, here or on another device; returns a function to stop
+  await minca.live.send(data, { to? })   sends any JSON (at most 64 KB) to everyone in the space who has this app open now, or only to
+                                    to's devices (a did, or a device): kept nowhere, so whoever opens it later misses it. For cursors,
+                                    typing, who is here, games. About 15 a second at most: → false when one was dropped for going faster
+  minca.live.on(callback)           callback({ from, device, data, viaAgent }) for each one sent here: from is the sender's did, device
+                                    the sending device (for "to" when replying); returns a function to stop. Not what this device sent; your other devices' yes
 
 Calls may also take one object instead: minca.list({ collection, where }), minca.put({ collection, body, links, key }),
 minca.update({ key, body, links }), minca.remove({ key }). Records answer to id / data as well as key / body.
@@ -159,6 +164,7 @@ export const SCREEN_CLIENT = `(() => {
   const port = given.port;
   const pending = new Map();
   const listeners = new Set();
+  const hearing = new Set();
   let next = 0;
   const call = (method, ...args) =>
     new Promise((resolve, reject) => {
@@ -168,6 +174,12 @@ export const SCREEN_CLIENT = `(() => {
     });
   port.onmessage = (event) => {
     const message = event.data || {};
+    if (message.live) {
+      for (const listener of hearing) {
+        try { listener(message.live); } catch (error) { console.error(error); }
+      }
+      return;
+    }
     if (message.change) {
       for (const listener of listeners) {
         try { listener(); } catch (error) { console.error(error); }
@@ -238,6 +250,13 @@ export const SCREEN_CLIENT = `(() => {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
+    live: Object.freeze({
+      send: (data, options) => call('liveSend', data, options || {}),
+      on: (listener) => {
+        hearing.add(listener);
+        return () => hearing.delete(listener);
+      },
+    }),
   });
 })();`;
 
@@ -350,6 +369,16 @@ const MAX_SAVE = 1024 * 1024;
 /** The largest file a screen may add to the space */
 const MAX_ADD = 25 * 1024 * 1024;
 const MAX_KEPT = 8 * 1024;
+/**
+ * How fast one screen may send live messages: a burst, then so many a second.
+ * Under what a peer takes from another across everything (60, then 20), so a
+ * busy screen leaves room for calls and the rest of the app.
+ */
+const LIVE_BURST = 30;
+const LIVE_PER_SECOND = 15;
+
+/** A live message of one app's screens, as it goes between nodes */
+const SCREEN_LIVE = 'screen.live';
 
 /** The file a record's body refers to with this hash, if it does */
 function fileIn(body: unknown, hash: string): FileRef | null {
@@ -420,11 +449,13 @@ export function createScreenBridge(params: {
   readonly node: P2PNode;
   readonly spaceId: string;
   readonly collections: ReadonlyArray<string>;
+  /** The app's key: its screens hear only each other's live messages */
+  readonly app: string;
   readonly port: MessagePort;
   /** What the page around the screen does for it; without one, the screen can only read and write */
   readonly host?: ScreenHost;
 }): ScreenBridge {
-  const { node, spaceId, port } = params;
+  const { node, spaceId, port, app } = params;
   const allowed = new Set(params.collections.filter((name) => !offLimits(name)));
   let closed = false;
 
@@ -461,6 +492,18 @@ export function createScreenBridge(params: {
     if (typeof key !== 'string' || !key || key.length > 100)
       throw new Error('Name what is remembered as text, like minca.remember("near", value)');
     return key;
+  };
+
+  let tokens = LIVE_BURST;
+  let filled = Date.now();
+  /** Whether one more live message fits in this screen's allowance, taking it if so */
+  const mayGoLive = () => {
+    const now = Date.now();
+    tokens = Math.min(LIVE_BURST, tokens + ((now - filled) / 1000) * LIVE_PER_SECOND);
+    filled = now;
+    if (tokens < 1) return false;
+    tokens -= 1;
+    return true;
   };
 
   /** A screen's `where`, as a query takes it; anything else is a mistake to tell the screen about */
@@ -598,6 +641,16 @@ export function createScreenBridge(params: {
       hosted().save(name.replace(/[/\\]/g, '_'), await node.records.readFile(spaceId, file), file.mime);
       return null;
     },
+    liveSend: async (...args) => {
+      const [data, options] = args;
+      const to = fieldOf(options, 'to');
+      if (to !== undefined && (typeof to !== 'string' || !to.startsWith('did:')))
+        throw new Error('minca.live.send sends to everyone, or { to: did } of a person or a device');
+      const message = { type: SCREEN_LIVE, app, data: plain(data, 'A live message') };
+      if (!mayGoLive()) return false;
+      await node.spaces.send(spaceId, message, to);
+      return true;
+    },
     searchPlaces: async (...args) => {
       const [text, near] = args;
       if (typeof text !== 'string' || text.length > 200)
@@ -674,6 +727,13 @@ export function createScreenBridge(params: {
   };
   const stop = node.subscribe((event) => {
     if (event.type === 'records' && event.space === spaceId) changed();
+    // Only another app's screen, or a peer with no account, is not passed on.
+    if (event.type !== 'message' || event.space !== spaceId || closed || !event.from) return;
+    const { message } = event;
+    if (!isObject(message) || message.type !== SCREEN_LIVE || message.app !== app) return;
+    port.postMessage({
+      live: { from: event.from, device: event.peer, data: message.data ?? null, viaAgent: event.recordsOnly },
+    });
   });
 
   return {

@@ -93,6 +93,7 @@ export function ScreenFrame({
         node,
         spaceId,
         collections: list,
+        app: appKey,
         port: channel.port1,
         host: screenHost(`minca.screen:${node.did}:${spaceId}:${appKey}:`, (open) =>
           'record' in open ? opens.current(open.record) : setPerson(open.person),

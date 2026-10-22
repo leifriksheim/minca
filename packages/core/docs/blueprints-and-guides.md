@@ -172,7 +172,31 @@ after checking the request: it searches for places and asks where the person
 is (`places`), opens http and https pages (`link`), saves text files
 (`save`), keeps a few kilobytes per app on the device (`remember`, `recall`),
 and reads a picture that one of the app's own records refers to (`file`),
-taking its type from the record rather than from the screen. In front of every screen the example app also writes `@minca/ui`
+or the whole file (`blob`), taking its type from the record rather than from
+the screen.
+
+A screen also sends live messages, kept nowhere, to the other devices that
+have the same app open in the space (`live.send`, `live.on`): for cursors,
+typing, who is here, or a game. Each goes as a live message of the space
+([node](node.md#live-messages-and-status)) whose payload names the app by its
+`launcher.app` key, and a screen hears only those naming its own app:
+
+```json
+{
+  "type": "screen.live",
+  "app": "aj5pakqf52uftpgarut33aqxq4.ctzz2xssv7y3alqlcepfmkdks4",
+  "data": { "x": 120, "y": 48 }
+}
+```
+
+A screen is handed `{ from, device, data, viaAgent }`, `from` being the
+sender's account as the node proved it; a message from a peer with no account
+is not passed on. One screen may send a burst of 30, then 15 a second, below
+what a peer takes from another across everything, so a busy screen leaves
+room for calls and the rest. An edited copy of an app is another
+`launcher.app` record, so its screens don't hear the original's.
+
+In front of every screen the example app also writes `@minca/ui`
 (`packages/ui`): Preact with htm, hooks that keep records current, people's
 faces, and Minca's look, so a screen is mostly what it is about. It isn't
 part of the screen, so it doesn't count toward the 48 KB a screen may be.
@@ -182,7 +206,7 @@ defines its collections and writes a copy of it, naming where it came from
 (`template: "kanban"`), and from then on the space changes its copy like any
 other app.
 
-_Source: `apps/example/src/components/apps/launcher.ts` (`addTemplate`), `apps/example/src/components/apps/screens.ts`, `apps/example/src/components/apps/ScreenFrame.tsx`, `apps/example/src/components/apps/templates/`, `apps/example/public/screen.html`, `packages/ui/src/frame/`, `packages/ui/src/guide.ts`. Tests: `apps/example/tests/launcher.test.ts` ("adding a ready-made app copies it into the space once, with its collections and first records"), `apps/example/tests/screens.test.ts` ("a screen checks, shows faces and opens things only within its app and its space", "what the page does for a screen, it does only as asked properly")._
+_Source: `apps/example/src/components/apps/launcher.ts` (`addTemplate`), `apps/example/src/components/apps/screens.ts`, `apps/example/src/components/apps/ScreenFrame.tsx`, `apps/example/src/components/apps/templates/`, `apps/example/public/screen.html`, `packages/ui/src/frame/`, `packages/ui/src/guide.ts`. Tests: `apps/example/tests/launcher.test.ts` ("adding a ready-made app copies it into the space once, with its collections and first records"), `apps/example/tests/screens.test.ts` ("a screen checks, shows faces and opens things only within its app and its space", "what the page does for a screen, it does only as asked properly", "a screen hears the same app's screens on other devices, as who sent it, and no other app's")._
 
 ## Describing a collection
 
