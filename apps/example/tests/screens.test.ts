@@ -296,6 +296,15 @@ describe('screens', () => {
         'data:image/webp;base64,AQID',
       );
       assert.equal((await call('file', listing.key, manual)).value, null, 'only pictures');
+      // A picture too large to hand over whole is made smaller, or, where it can't be drawn, not shown.
+      const poster = await alice.node.records.addFile(space, new Uint8Array(300 * 1024), {
+        mime: 'image/png',
+      });
+      const wall = await alice.node.records.put(space, 'app.market.listing', { images: [poster] });
+      await waitFor(async () => (await bob.node.records.get(space, wall.key)) !== null, 'the poster');
+      const shown = await call('file', wall.key, poster);
+      assert.equal(shown.ok, true, 'not too large an answer');
+      assert.equal(shown.value, null);
       assert.equal((await call('file', listing.key, 'not-a-file-of-its')).ok, false);
 
       assert.equal((await call('link', 'javascript:alert(1)')).ok, false);

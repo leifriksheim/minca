@@ -11,6 +11,7 @@
     "./round": "./src/round.ts",
     "./time": "./src/time.ts",
     "./size": "./src/size.ts",
+    "./image": "./src/image.ts",
     "./guide": "./src/guide.ts",
     "./bundle": "./src/bundle.ts"
   },

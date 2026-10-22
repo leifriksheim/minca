@@ -26,6 +26,7 @@ import {
 import type { FoundPlace } from '@minca/app-shared/places';
 import { accent, radius } from '@minca/ui/tokens';
 import { UI_GUIDE } from '@minca/ui/guide';
+import { shrinkImage } from '../../files';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -124,7 +125,8 @@ Inside it, window.minca is:
   await minca.can(action, collection)   whether the person looking may "create", "edit" or "delete" there
   await minca.picture(did)          the picture someone in the space chose, as a data: URL, or null
   await minca.open({ record: key }) or minca.open({ person: did })   shows it in the app around the screen
-  await minca.file(key, ref)        a picture one of these records refers to ({ hash, mime, … } in its body), as a data: URL
+  await minca.file(key, ref)        a picture one of these records refers to ({ hash, mime, … } in its body), as a data: URL,
+                                    made smaller when it is large; null if it isn't a picture or can't be shown
   await minca.addFile(bytes, { name?, mime? })   keeps a file (a Uint8Array, at most 25 MB) in the space: → { hash, size, mime, … },
                                     to put in a record's body, like std.attachment's "blob"
   await minca.download(key, ref)    saves a file one of these records refers to on the person's device
@@ -380,6 +382,25 @@ function dataUrl(bytes: Uint8Array, mime: string): string {
   return `data:${mime};base64,${btoa(text)}`;
 }
 
+/** The longest data: URL a picture is handed to a screen as, under the 256 KB an answer may be */
+const MAX_PICTURE = 200 * 1024;
+
+/** A picture as a data: URL a screen can be handed, made smaller if it must be; null if it can't be */
+async function picture(bytes: Uint8Array, mime: string): Promise<string | null> {
+  const whole = dataUrl(bytes, mime);
+  if (whole.length <= MAX_PICTURE) return whole;
+  if (typeof createImageBitmap !== 'function') return null;
+  const blob = new Blob([bytes.slice()], { type: mime });
+  for (const side of [1600, 1024, 512, 256]) {
+    // An image the browser can't draw, like an SVG or a broken file, isn't shown.
+    const small = await shrinkImage(blob, side).catch(() => null);
+    if (!small) return null;
+    const url = dataUrl(small.bytes, small.mime);
+    if (url.length <= MAX_PICTURE) return url;
+  }
+  return null;
+}
+
 export interface ScreenBridge {
   /** Tell the screen that records changed */
   changed(): void;
@@ -536,7 +557,7 @@ export function createScreenBridge(params: {
       const file = fileIn((await ownRecord(key)).body, hash);
       if (!file) throw new Error(`Record ${String(key)} refers to no such file`);
       if (!file.mime.startsWith('image/')) return null;
-      return dataUrl(await node.records.readFile(spaceId, file), file.mime);
+      return picture(await node.records.readFile(spaceId, file), file.mime);
     },
     // A file's bytes, kept in the space as the person looking; a record of the app's then refers to it.
     addFile: async (...args) => {
