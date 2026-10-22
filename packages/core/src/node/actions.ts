@@ -223,11 +223,12 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
     run: async (node, input) => ({
       invite: await node.spaces.invite(
         str(input, 'space'),
+        // A short link, for a person to paste: it falls back to the long form where no mailbox takes it.
         input.viewOnly === true
-          ? { write: false }
+          ? { write: false, short: true }
           : typeof input.role === 'string'
-            ? { role: input.role }
-            : {},
+            ? { role: input.role, short: true }
+            : { short: true },
       ),
     }),
   },

@@ -144,14 +144,40 @@ _Source: `packages/core/src/node/node.ts` (`spaces.succeed`), `packages/core/src
 - Each role invite gets its own fresh secret and its own `sys.invite` record,
   so one can be closed without the others.
 - The invite names the space's relays, or the inviter's own when the space
-  names none.
+  names none, and the always-on nodes that hold it: the account's hosts and
+  the space's own, at most 8, each pinned by its DID. A host that can't be
+  described within three seconds is left out rather than hold the invite up.
+- `short: true` makes a short link (spec 03 §7.7), about 85 characters: the
+  invite is sealed and left in the mailbox of the account's first host and of
+  the first relay that takes it, and the link names those two. Where no
+  mailbox takes it, or the space's constitution is too large for one, the
+  long invite is returned instead; it works the same. `until` (ms) says when
+  to stop sharing it.
 
-`node.spaces.preview(invite)` decodes an invite without storing anything:
+**Short links the account keeps.** Each short link's sealed invite is kept in
+the account registry (`sys.link`), never its secret, and copied to every
+carrier's carry space, so the account's host serves it while every device is
+away. Every hour, and whenever the registry or a space's key changes, a
+device holding the account key drops each one again where the space's members
+meet. One past its `until`, or carrying a key the space has moved on from, is
+ended: its role invite is closed and the record deleted. `closeInvite` by a
+short link closes its invite and forgets the record. The device that made a
+link holds its secret nowhere: copy the link when it is made.
+
+`node.spaces.preview(invite)` reads an invite without storing anything, and
+for a short link fetches it first, which is why it is async:
 
 ```
 { space: { id, name, visibility, founders, createdAt, succeeds? }, invitedBy,
-  carriesKey, carriesWrite, role }      // role is null for a view-only invite
+  carriesKey, carriesWrite, role,       // role is null for a view-only invite
+  until? }                              // a short link's, when given
 ```
+
+A short link is fetched once and remembered by the node, so a preview and the
+join after it ask the mailboxes once. A link whose invite is nowhere fails
+with "That invite was not found"; it may have expired or its places be down.
+Invite nodes are dialled for the space alongside the hosts the account uses,
+and kept like its invite relays.
 
 On `join`, relays carried by the invite are a hint: the node uses them only
 when they pass `checkRelays` and it holds no relay list for the space yet.
@@ -159,7 +185,7 @@ While the invite's record has not reached this device, the space is held with
 `joining: true` and the node tries again as records arrive
 ([spec 06 §1.3](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
 
-_Source: `packages/core/src/node/node.ts` (`spaces.invite`, `preview`, `join`), `packages/core/src/space/space-manager.ts` (`previewInvite`, `join`). Tests: `packages/core/tests/space.test.ts` ("invites"), `packages/core/tests/roles.test.ts` ("invites")._
+_Source: `packages/core/src/node/node.ts` (`spaces.invite`, `preview`, `join`, `nodesOf`, `shortInvite`, `resolveInvite`, `keepLinks`), `packages/core/src/space/space-manager.ts` (`previewInvite`, `join`), `packages/core/src/space/invite-link.ts`. Tests: `packages/core/tests/space.test.ts` ("invites"), `packages/core/tests/roles.test.ts` ("invites"), `packages/core/tests/invite-link.test.ts`, `packages/cli/tests/host.test.ts` ("someone invited reaches the space through the inviter’s host…", "a short link: the host keeps it…")._
 
 ## Keeping a space's keys and relays
 

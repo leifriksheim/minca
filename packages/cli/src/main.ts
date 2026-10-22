@@ -521,7 +521,7 @@ async function joinFirstSpace(node: P2PNode, name: string, invite?: string): Pro
       message: 'Paste the invite',
       placeholder: 'https://…#invite=…',
     }));
-  const preview = node.spaces.preview(link);
+  const preview = await node.spaces.preview(link);
   if (
     !(await ask.confirm(`Join “${preview.space.name}”${preview.role ? ` as ${preview.role}` : ''}?`, {
       otherwise: true,
@@ -1151,7 +1151,7 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
     const input = await completeInput(node, action, inputFromFlags(action, found.rest));
     const preview =
       action.name === 'spaces_join' && typeof input.invite === 'string'
-        ? node.spaces.preview(input.invite)
+        ? await node.spaces.preview(input.invite)
         : null;
     // With nobody to ask, it runs, as it always has: an agent or a script said so.
     const question = preview

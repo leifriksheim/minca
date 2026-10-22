@@ -1285,11 +1285,26 @@ An invite is `base64url( UTF-8( JSON.stringify(SpaceInvite) ) )` — plain
 | `invite`    | base64url of the 32-byte secret      | role invites only                                                 |
 | `role`      | string                               | role invites only; for display — the invite record is what counts |
 | `relays`    | string[]                             | when known: the space's relays (§10), else the inviter's own      |
+| `nodes`     | string[]                             | when known: always-on nodes that hold the space (below)           |
 
-> **Known defect:** `invitedBy` and `relays` are not authenticated. Neither
+`nodes` lists at most 8 node URLs ([04](04-network.md) §5.2), each pinned
+by a DID in its fragment, no URL twice: the hosts the inviter's account uses,
+and those the space names. A joiner keeps them with the space and holds a
+socket to each besides the hosts its own account uses, so it reaches the
+space through the inviter's host with nobody else online. Once the space's
+history names keepers (§10), it dials only the invite's nodes whose DID is
+one of them. It **MUST NOT** name them in invites of its own: nothing vouches
+for them. A list that breaks any of these rules is ignored whole. A pin means a socket
+reaches only the node named: anything else answering there is refused at
+the handshake.
+
+> **Known defect:** `invitedBy`, `relays` and `nodes` are not authenticated. Neither
 > is in the space's constitution (§1.2), and nothing signs the invite string,
 > so anyone passing the link on can change them. A reader MUST NOT treat them
-> as verified. A fix will authenticate them or drop them from the invite.
+> as verified. A short link is no better (§7.7): whoever holds one can seal
+> an invite of its own under the link's secret and pass on a link with its
+> pin, which joins the same role with names, relays and nodes it chose; the
+> space, its constitution and its key are still checked. A fix will authenticate them or drop them from the invite.
 > Tracked in [#20](https://github.com/leifriksheim/minca/issues/20). The
 > space's name is its constitution's, so changing it changes the id.
 
@@ -1372,10 +1387,101 @@ a key the history names or one that opens nothing. It is not checked against
 `encryptionKeyId` (it may be a later key). Relays from the invite are used
 only if they pass `checkRelays` (§10).
 
+A short link (§7.7) is accepted wherever an invite is: the reader fetches
+and opens the invite it names, then goes on as above.
+
 Closing an invite by its link: derive the invite DID from the link's secret
-(§7.1) and close that record.
+(§7.1; for a short link, from the invite secret §7.7 derives) and close that
+record.
 
 _Source: `packages/core/src/space/space-access.ts` (`generateInviteSecret`, `deriveInviteKey`, `signInvite`, `verifyInvite`), `packages/core/src/space/space-manager.ts` (`encodeSpaceInvite`, `parseSpaceInvite`, `join`), `packages/core/src/node/space-runtime.ts` (`openInvite`, `closeInvite`, `join`), `packages/core/src/node/node.ts` (`spaces.invite`, `preview`, `join`, `closeInvite`, `bareInvite`). Tests: `packages/core/tests/space-access.test.ts` ("the keys", "invites"), `packages/core/tests/space.test.ts` ("invites"), `packages/core/tests/roles.test.ts` ("invites")._
+
+### 7.7 Short links
+
+A **short link** carries a secret and the hash of one sealed invite, and
+names the mailboxes ([07](07-doors.md) §5) the sealed invite is kept in.
+What the long form (§7.4) carries is in that sealed invite instead, so the
+link stays short however large the constitution is.
+
+```
+code  = base64url( S ‖ pin )                                   — 43 characters
+link  = code [ "@" place [ "," place ] ]
+```
+
+- `S` is 16 random bytes.
+- `pin` is the first 16 bytes of `SHA-256(UTF-8(blob))`, where `blob` is the
+  sealed invite's base64url text exactly as kept: the same hash a relay files
+  it under (07 §5).
+- A **place** is a mailbox URL. Written without a scheme,
+  `host[:port][/path]` means `wss://`, or `ws://` when the host is
+  `localhost`, `127.0.0.1` or `[::1]`; `%`, `@`, `,`, `#`, `&` and whitespace
+  in it are percent-encoded. A reader reads at most two, and ignores one
+  that fails `checkRelays` (§10).
+
+From `S` and `pin`:
+
+```
+invite secret = HKDF-SHA256(S, salt = empty, info = "minca/invite-link/v1|secret", L = 32)
+seal key      = HKDF-SHA256(S, salt = empty, info = "minca/invite-link/v1|seal",   L = 32)
+topic         = base64url( SHA-256( UTF-8("minca/invite-topic/v1|" + base64url(pin)) ) )
+```
+
+- The **invite secret** is the 32-byte secret of §7.1: a role link's invite
+  record is opened with it, and joining and closing are unchanged.
+- The **topic** is the mailbox topic the sealed invite is left under. No
+  key hashes to it, so no purge (07 §5) can clear it.
+
+**The sealed invite.**
+
+```
+blob = base64url( nonce(12) ‖ AES-256-GCM(seal key, nonce, deflate(UTF-8(JSON.stringify(body)))) )
+body = { "v": 1, "invite": <the long invite's object without "invite">, "until"?: <ms> }
+```
+
+`deflate` is zlib (RFC 1950), as `CompressionStream("deflate")` writes it.
+`until` is when the inviter stops serving it; nothing a peer checks. A blob
+longer than a mailbox takes (12,000 characters) is not made: the inviter
+gives the long form instead.
+
+**Reading a link.** A reader:
+
+1. fetches the topic from each place the link names and from the relays it
+   uses itself, reading every page a relay holds (a relay keeps at most 64
+   blobs a topic, 07 §5);
+2. **MUST** ignore every blob whose hash does not start with `pin`, unopened;
+3. **MUST** refuse the link if two different blobs match the pin;
+4. opens the one that does, and **MUST** refuse it if it does not decrypt,
+   inflates past 64 KiB (stopping as it inflates), or is not a `body` as
+   above;
+5. adds `invite` (the invite secret, base64url) when the body's invite names
+   a `role`, and goes on as for a long invite (§7.6).
+
+> Rationale: anyone holding the link holds `S`, and can seal other blobs
+> under it and leave them under the topic. Only the inviter's blob hashes
+> to the pin, so a link is fixed when it is made: nobody, the inviter
+> included, can change what a joiner gets from it, and nobody can clear it.
+> A sealed invite is never sealed again, after a key change or for any
+> other reason, since its pin would no longer match.
+
+**What ends one.** Closing its invite (§7.2) ends a role link. A key change
+(§9) ends any link to a private space: the key it carries no longer lets
+anyone read. `until` ends nothing: anyone who holds the blob can leave it in
+a mailbox again.
+
+Example: `S` = `00 01 … 0f`, `pin` = `f0 f1 … ff`:
+
+```
+code          AAECAwQFBgcICQoLDA0OD_Dx8vP09fb3-Pn6-_z9_v8
+invite secret -VeKPkDHj10Sod96XjdaMmYrdj2qD0hAugTgfzBceX4
+seal key      vh2bIf3PYkKDDgSCyeY-s-HPP4xgGk6pTj_YhCd-Gt8
+topic         ex_E83cHgNjstsHBJeImIx_l0G71b0ivofu6MOcfu6I
+link          AAECAwQFBgcICQoLDA0OD_Dx8vP09fb3-Pn6-_z9_v8@host.example,relay.example/minca
+```
+
+Where the inviter keeps a link, and how its host serves it, is in §13.2 and
+[06](06-nodes-and-sessions.md) §4.2.
+
+_Source: `packages/core/src/space/invite-link.ts` (`encodeInviteLink`, `parseInviteLink`, `inviteLinkKeys`, `linkTopic`, `pinOf`, `sealInvite`, `openInvite`, `checkInviteNodes`), `packages/core/src/node/node.ts` (`shortInvite`, `resolveInvite`, `fetchInvite`). Tests: `packages/core/tests/invite-link.test.ts` ("the link", "the sealed invite", "short links between nodes")._
 
 ---
 
@@ -1747,15 +1853,25 @@ account is ignored by readers), and nothing written under a note without
 
 ### 13.2 What the registry records
 
-| Collection       | Record key                               | Body                                   | Meaning                                                                                                                          |
-| ---------------- | ---------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `sys.joined`     | `space:<spaceId>`                        | `{ space: spaceId, invite }`           | The account belongs to the space. `invite` is a **view-only** invite (§7.5) — secrets are never kept. Deleted: the account left. |
-| `sys.carrier`    | `carrier:<hex40(carrySpaceId)>`          | `{ did, name, since, gen?, removed? }` | A carrier the account uses, or used until `removed` (§14).                                                                       |
-| `sys.automation` | `automation:<base32 of 10 random bytes>` | An automation, in the library's format | One of the account's own automations, from which its wakes are made (§15).                                                       |
-| `sys.hosting`    | —                                        | —                                      | Hosting; see [08](08-hosting.md).                                                                                                |
+| Collection       | Record key                               | Body                                       | Meaning                                                                                                                                             |
+| ---------------- | ---------------------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sys.joined`     | `space:<spaceId>`                        | `{ space: spaceId, invite }`               | The account belongs to the space. `invite` is a **view-only** invite (§7.5) — secrets are never kept. Deleted: the account left.                    |
+| `sys.carrier`    | `carrier:<hex40(carrySpaceId)>`          | `{ did, name, since, gen?, removed? }`     | A carrier the account uses, or used until `removed` (§14).                                                                                          |
+| `sys.automation` | `automation:<base32 of 10 random bytes>` | An automation, in the library's format     | One of the account's own automations, from which its wakes are made (§15).                                                                          |
+| `sys.hosting`    | —                                        | —                                          | Hosting; see [08](08-hosting.md).                                                                                                                   |
+| `sys.link`       | `link:<hex of the pin>`                  | `{ space, blob, invite?, keyId?, until? }` | A short link the account keeps (§7.7): its sealed invite, the space, the invite DID of a role link, the id of the key it carries. Never its secret. |
 
 A membership counts only if it verifies, its root is the account, and (unless
 deleted) its key is `space:<body.space>`.
+
+The account's devices keep each `sys.link` alive: they leave its blob again
+where the space's members meet while it lasts. Once it is past `until`, or
+the device holds the key `keyId` names and a newer one is current, it
+closes its invite (§7.2) if it may and deletes the record. A device that
+doesn't hold the space, or doesn't hold that key yet, leaves the record
+alone: it may be behind, and the link made after it. A key change must close a role link's invite:
+otherwise a member holding the new key could still join with the old link's
+secret, in that role.
 
 A device of the account **SHOULD** follow the registry, holding the spaces it
 lists and no others, and **SHOULD** keep each membership's invite carrying the
@@ -1769,7 +1885,7 @@ counts only the account's own. It is a system collection so that
 nothing defines it: no key of the account can redefine it to keep the person
 from pausing or removing one.
 
-_Source: `packages/core/src/space/account-registry.ts`, `packages/core/src/node/node.ts` (`memberships`, `remember`, `forget`, `reconcileOnce`, `ownName`). Tests: `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/account-vault.test.ts` ("the account key, and the spaces derived from it, match the spec's examples"), `packages/core/tests/account.test.ts` ("the account name"), `packages/core/tests/space-access.test.ts` ("invite secrets are never kept…")._
+_Source: `packages/core/src/space/account-registry.ts` (`LINK_COLLECTION`, `isKeptLink`), `packages/core/src/node/node.ts` (`memberships`, `remember`, `forget`, `reconcileOnce`, `ownName`, `keepLink`, `keepLinks`). Tests: `packages/core/tests/invite-link.test.ts` ("past its until, the account closes its invite", "a key change ends a role link…"), `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/account-vault.test.ts` ("the account key, and the spaces derived from it, match the spec's examples"), `packages/core/tests/account.test.ts` ("the account name"), `packages/core/tests/space-access.test.ts` ("invite secrets are never kept…")._
 
 ---
 

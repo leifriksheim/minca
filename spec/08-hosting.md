@@ -230,7 +230,11 @@ It MUST NOT use an address that is not `wss://`, except `ws://` on
 Every device of the account then holds a socket to that address for every
 space it holds ([04](04-network.md)), as the host carries all of them through
 the carry space. A device also holds one, for that space, to each host a space
-it holds pays itself (§2). Example: a host at `https://host.example` that
+it holds pays itself (§2), and to each node the invite that brought the space
+here named ([03](03-spaces.md) §7.4), until the space names keepers that
+leave it out: so someone invited reaches the space through the inviter's
+host with nobody else online. An invite names the account's hosts, and
+those the space pays; never the nodes an invite named. Example: a host at `https://host.example` that
 describes `"peer": "/peer"` is reached at `wss://host.example/peer`, and a
 space `b3kq7zp2f4mhx6ydwa5rtc9n1e` at
 `wss://host.example/peer?space=b3kq7zp2f4mhx6ydwa5rtc9n1e#<host DID>`.
@@ -778,14 +782,6 @@ _Source: `packages/cli/src/host-connect.ts` (`createBotConnect`: `start`, `finis
 > on the host (or in the extension); and a grant shared by device and host
 > disconnects both when revoked at the provider, unless the host gets its own
 > consent.
->
-> **Invites that name the space's hosts.** A joining device finds a space's
-> own hosts (§2) only once it holds the space's records, so with no other
-> member online it cannot join through the host that holds the space. An
-> invite will name the `peer` addresses of the hosts the space uses, as it
-> names relays, and the joining device holds a socket to them until the
-> space's records take over. Tracked in
-> [#220](https://github.com/leifriksheim/minca/issues/220).
 >
 > **Stopping a host a space pays.** A space that stops using a host (§2)
 > can only act on its own side: it removes the host's bots and changes its

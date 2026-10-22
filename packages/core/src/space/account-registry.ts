@@ -17,6 +17,7 @@ import type { CryptoProvider, Space } from '../types.js';
 import type { SpaceRecord } from './space-manager.js';
 import { spaceKeyFromRaw } from '../privacy/space-encryption.js';
 import { base64UrlEncode } from '../utils/encoding.js';
+import { isObject } from '../utils/guards.js';
 import { createP256Provider } from '../identity/crypto-p256.js';
 import { deriveReadKey, expandSecret } from './space-access.js';
 import { CONSTITUTION, spaceIdOf, type Constitution } from './constitution.js';
@@ -75,6 +76,41 @@ export function isAvatarRef(value: unknown): value is AvatarRef {
 export interface Membership {
   readonly space: string;
   readonly invite: string;
+}
+
+/**
+ * Short invite links the account keeps (spec 03 §13.2), one record each, key
+ * `link:<hex of the pin>`. The sealed invite and what it is for, never the
+ * link's secret: a device drops the blob again, and closes the invite when
+ * it ends; a host serves it from the copy in its carry space.
+ */
+export const LINK_COLLECTION = 'sys.link';
+
+/** A kept link's body */
+export interface KeptLink {
+  /** The space it is to */
+  readonly space: string;
+  /** The sealed invite, exactly as the link's pin names it */
+  readonly blob: string;
+  /** The invite's DID, for a role link: closed when the link ends */
+  readonly invite?: string;
+  /** The id of the space key the blob carries: a key change ends the link */
+  readonly keyId?: string;
+  /** When to stop serving it, ms */
+  readonly until?: number;
+}
+
+/** Whether a body is a kept link's */
+export function isKeptLink(body: unknown): body is KeptLink {
+  return (
+    isObject(body) &&
+    typeof body.space === 'string' &&
+    typeof body.blob === 'string' &&
+    body.blob.length <= 12_000 &&
+    (body.invite === undefined || typeof body.invite === 'string') &&
+    (body.keyId === undefined || typeof body.keyId === 'string') &&
+    (body.until === undefined || (typeof body.until === 'number' && Number.isFinite(body.until)))
+  );
 }
 
 /**

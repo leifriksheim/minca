@@ -8,6 +8,9 @@ import { inviteLink } from '@minca/core/react';
  * in, which they don't have yet.
  */
 export async function createInviteLink(node: P2PNode, spaceId: string, role: string | null): Promise<string> {
-  const invite = await node.spaces.invite(spaceId, role ? { role } : { write: false });
+  const invite = await node.spaces.invite(
+    spaceId,
+    role ? { role, short: true } : { write: false, short: true },
+  );
   return inviteLink(invite, `${globalThis.location.origin}/`);
 }

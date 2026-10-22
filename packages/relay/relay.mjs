@@ -94,6 +94,7 @@ export function turnFromEnv(env) {
  *   turn?: { secret: string, urls: string[], ttlSeconds: number },
  *   log?: (message: string) => void,
  *   mailbox?: Partial<typeof MAILBOX_LIMITS>,
+ *   mailboxFrom?: (topic: string) => ReadonlyArray<string>,
  * }} [options]
  */
 export function createRelay(options = {}) {
@@ -297,6 +298,13 @@ export function createRelay(options = {}) {
       const items = [];
       let chars = 0;
       let more = false;
+      // What a host keeps under the topic for its accounts comes first, on the first page, as sequence 0.
+      if (after === 0)
+        for (const blob of options.mailboxFrom?.(topic) ?? []) {
+          const id = createHash('sha256').update(blob).digest('base64url');
+          items.push({ seq: 0, id, at: now, blob });
+          chars += blob.length;
+        }
       for (const item of mailbox.get(topic) ?? []) {
         if (item.seq <= after || item.expires <= now) continue;
         if (items.length >= MAX_PAGE_ITEMS || chars + item.blob.length > MAX_PAGE_CHARS) {
@@ -324,12 +332,14 @@ export function createRelay(options = {}) {
     }
     const id = createHash('sha256').update(blob).digest('base64url');
     const held = mailbox.get(topic) ?? [];
-    // The same knock twice is one knock: a sender retrying costs nothing.
-    if (held.some((item) => item.id === id)) {
+    const now = Date.now();
+    // The same knock twice is one knock: a sender retrying costs nothing. An
+    // expired copy the sweep has not taken yet is no longer held, so it is
+    // dropped again rather than answered for.
+    if (held.some((item) => item.id === id && item.expires > now)) {
       send(client, JSON.stringify({ type: 'dropped', topic, id }));
       return;
     }
-    const now = Date.now();
     const network = networkOf(client.ip);
     const here = countOf(`${network}|${topic}`, now);
     const everywhere = countOf(network, now);

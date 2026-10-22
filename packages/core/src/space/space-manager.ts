@@ -24,6 +24,7 @@ import {
 import type { InvitePreview } from '../node/types.js';
 import { solo } from './presets.js';
 import { checkRelays, STRONG_REMOVE } from './roles.js';
+import { checkInviteNodes } from './invite-link.js';
 import { isRecord } from '../utils/guards.js';
 
 /** A space plus the secrets this node holds for it */
@@ -47,6 +48,11 @@ export interface SpaceRecord {
    * that brought it here, then from the space itself (`sys.relays`).
    */
   readonly relays?: ReadonlyArray<string>;
+  /**
+   * Always-on nodes that hold the space, from the invite that brought it
+   * here: node URLs pinned by DID, dialled besides the hosts the account uses.
+   */
+  readonly nodes?: ReadonlyArray<string>;
   /**
    * An invite link's secret, held until this account's member record is
    * written with it — which needs the invite's own record to have arrived.
@@ -106,6 +112,8 @@ export interface SpaceInvite {
   readonly invitedBy: string;
   /** Where the space's members meet — a hint for reaching it before its own list has synced */
   readonly relays?: ReadonlyArray<string>;
+  /** Always-on nodes that hold the space, pinned by DID — so a joiner reaches one with nobody else online */
+  readonly nodes?: ReadonlyArray<string>;
 }
 
 export interface InviteLinkOptions {
@@ -114,6 +122,8 @@ export interface InviteLinkOptions {
   readonly role?: string;
   /** Relays to name in it. Default: the ones this node holds for the space. */
   readonly relays?: ReadonlyArray<string>;
+  /** Nodes to name in it. Default: the ones this node holds for the space. */
+  readonly nodes?: ReadonlyArray<string>;
 }
 
 export interface SpaceManager {
@@ -150,6 +160,7 @@ const INVITE_PREFIX = 'spaceinvite:';
 const ROLE_PREFIX = 'spacerole:';
 const MEMBER_KEY_PREFIX = 'spacememberkey:';
 const RELAYS_PREFIX = 'spacerelays:';
+const NODES_PREFIX = 'spacenodes:';
 
 /** How a space's keys are kept: every one held, and which is current */
 interface StoredKeyring {
@@ -234,6 +245,7 @@ export function createSpaceManager(
     const invite = await readText(INVITE_PREFIX, spaceId);
     const memberKey = await readText(MEMBER_KEY_PREFIX, spaceId);
     const relays = await readText(RELAYS_PREFIX, spaceId);
+    const nodes = await readText(NODES_PREFIX, spaceId);
     const { key, keys } = await readKeyring(spaceId);
     return {
       space,
@@ -244,6 +256,8 @@ export function createSpaceManager(
       ...(memberKey ? { memberKey: base64UrlDecode(memberKey) } : {}),
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- stored only after checkRelays passed it
       ...(relays ? { relays: JSON.parse(relays) as string[] } : {}),
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- stored only after checkInviteNodes passed it
+      ...(nodes ? { nodes: JSON.parse(nodes) as string[] } : {}),
     };
   }
 
@@ -315,6 +329,7 @@ export function createSpaceManager(
         ROLE_PREFIX,
         MEMBER_KEY_PREFIX,
         RELAYS_PREFIX,
+        NODES_PREFIX,
       ])
         await adapter.delete(`${prefix}${spaceId}`);
     },
@@ -363,6 +378,10 @@ export function createSpaceManager(
       ) {
         await adapter.put(`${RELAYS_PREFIX}${space.id}`, utf8Encode(JSON.stringify(parsed.relays)));
       }
+      // Hints too, each pinned by its DID: a node that isn't the one named is refused at the handshake.
+      const nodes = checkInviteNodes(parsed.nodes);
+      if (nodes && nodes.length > 0 && !(await readText(NODES_PREFIX, space.id)))
+        await adapter.put(`${NODES_PREFIX}${space.id}`, utf8Encode(JSON.stringify(nodes)));
 
       return (await load(space.id))!;
     },
@@ -417,6 +436,8 @@ export async function encodeSpaceInvite(
     ...(options.secret ? { invite: base64UrlEncode(options.secret) } : {}),
     ...(options.secret && options.role ? { role: options.role } : {}),
     ...((options.relays ?? record.relays)?.length ? { relays: [...(options.relays ?? record.relays)!] } : {}),
+    // Only nodes the caller vouches for: those an invite gave this node are not passed on.
+    ...(options.nodes?.length ? { nodes: [...options.nodes] } : {}),
   };
   return base64UrlEncode(utf8Encode(JSON.stringify(invite)));
 }

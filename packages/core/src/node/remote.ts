@@ -9,8 +9,7 @@
  * What a node returns is plain data already (see `node/types`), so it crosses
  * unchanged. The exceptions: events and `records.watch` become messages.
  * `delegation()` and `network.status()` answer at once, so this side keeps
- * the last value the node reported. `spaces.preview` only reads the invite,
- * so it runs here. Validators and typed collection references go as the JSON
+ * the last value the node reported. Validators and typed collection references go as the JSON
  * Schema and name they stand for, because functions can't be cloned.
  */
 import type { MeshStatus } from '../network/mesh.js';
@@ -20,7 +19,6 @@ import type { Query } from '../query/types.js';
 import { plainQuery, type CollectionRef, type IncludeMap, type ResultFor } from '../query/types.js';
 import { toJsonSchema } from '../schema/collection-def.js';
 import { storedComputed, storedContract } from '../records/contract-builder.js';
-import { previewInvite } from '../space/space-manager.js';
 import { isRecord } from '../utils/guards.js';
 import { SESSION_COMMAND } from './node.js';
 import type { MessagePortLike } from '../utils/port.js';
@@ -297,7 +295,6 @@ export async function remoteNode(port: MessagePortLike): Promise<P2PNode> {
   // Every method is asked of the other end, except these.
   const here: { readonly [N in Namespace]?: Partial<P2PNode[N]> } = {
     spaces: {
-      preview: previewInvite,
       async hold(spaceId: string) {
         const held = await ask<number>('hold', [spaceId]);
         return () => ask<void>('release', [held]);

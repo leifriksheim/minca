@@ -657,6 +657,8 @@ export async function createHostNode(config: HostConfig) {
 
   return Object.freeze({
     did: core.did,
+    /** The short links its accounts keep, under a mailbox topic: what its relay answers besides drops */
+    linksAt: core.linksAt,
     subscribe,
     get: read,
     list,

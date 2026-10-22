@@ -4394,8 +4394,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       );
     },
 
-    async openInvite(role: string) {
-      const secret = generateInviteSecret();
+    /** Opens an invite to a role, with its own fresh secret unless a short link's gives it one */
+    async openInvite(role: string, secret: Uint8Array = generateInviteSecret()) {
       const pair = await deriveInviteKey(secret, provider);
       await upsert(INVITE_COLLECTION, await inviteRecordKey(pair.did), { key: pair.did, role, open: true });
       return { secret, key: pair.did };

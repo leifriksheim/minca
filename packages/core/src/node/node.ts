@@ -47,8 +47,23 @@ import {
 import { createServerAuth } from '../network/peer-auth.js';
 import { DEFAULT_ICE_SERVERS } from '../network/rtc-transport.js';
 import { deriveInviteKey } from '../space/space-access.js';
+import {
+  encodeInviteLink,
+  generateLinkSecret,
+  inviteLinkKeys,
+  isShortInvite,
+  linkInviteSecret,
+  linkTopic,
+  MAX_INVITE_NODES,
+  MAX_LINK_PLACES,
+  openInvite,
+  parseInviteLink,
+  pinOf,
+  relayOfNode,
+  sealInvite,
+} from '../space/invite-link.js';
 import { foundersOf, soleFounder } from '../space/constitution.js';
-import { base64UrlDecode, base64UrlEncode } from '../utils/encoding.js';
+import { base64UrlDecode, base64UrlEncode, bytesToHex, hexToBytes, utf8Encode } from '../utils/encoding.js';
 import { isRecord, unref } from '../utils/guards.js';
 import { createListeners } from '../utils/events.js';
 import { serial } from '../utils/serial.js';
@@ -94,6 +109,9 @@ import { createMailboxClient } from '../network/mailbox.js';
 import { team } from '../space/presets.js';
 import {
   CARRIER_COLLECTION,
+  isKeptLink,
+  LINK_COLLECTION,
+  type KeptLink,
   deriveAccountRegistry,
   deriveCarrySpace,
   deriveContactsSpace,
@@ -338,10 +356,34 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   async function inviteTo(spaceId: string, options: InviteLinkOptions = {}): Promise<string> {
     const named = (await findRecord(spaceId))?.relays ?? [];
     const own = usableRelays(config.network).slice(0, MAX_RELAYS);
+    const nodes = await nodesOf(spaceId);
     return registry.createInvite(spaceId, config.signer.did, {
       ...options,
       ...(named.length ? {} : own.length ? { relays: own } : {}),
+      ...(nodes.length ? { nodes } : {}),
     });
+  }
+
+  /**
+   * The always-on nodes an invite names, so a joiner reaches one with nobody
+   * else online: the account's hosts, the space's own, and those the invite
+   * that brought this node here named. A host that can't be described in a
+   * few seconds is left out rather than holding the invite up.
+   */
+  async function nodesOf(spaceId: string): Promise<ReadonlyArray<string>> {
+    if (!config.network) return [];
+    const hosts = [
+      ...(await hostingRecords()),
+      ...((await kindOf(spaceId)) ? [] : await namedHosts(spaceId).catch(() => [])),
+    ];
+    const inTime = (peer: Promise<string | null>) =>
+      Promise.race([peer, new Promise<null>((resolve) => unref(setTimeout(() => resolve(null), 3000)))]);
+    // Not the nodes an invite gave this node: nothing vouches for them, so they are used here and never passed on.
+    const peers = await Promise.all(hosts.map((host) => inTime(peerOf(host).catch(() => null))));
+    const pinned = [
+      ...new Set(peers.filter((peer): peer is string => peer !== null && peer.includes('#did:key:'))),
+    ];
+    return pinned.slice(0, MAX_INVITE_NODES);
   }
 
   async function findRecord(spaceId: string): Promise<SpaceRecord | null> {
@@ -758,6 +800,10 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     if (!(await liveCarriers()).some((live) => live.key === carrier.key)) return;
     const carry = await runtime(carrier.carry.space.id);
     await writeExactly(carry, PASS_COLLECTION, passes, (key) => key.startsWith('pass:'));
+    // The links the account keeps, for the carrier to serve while every device is away.
+    const links = new Map<string, unknown>();
+    for (const link of await keptLinks()) links.set(link.key, link.body);
+    await writeExactly(carry, LINK_COLLECTION, links, (key) => key.startsWith('link:'));
     const wakes = new Map<string, unknown>();
     for (const own of owned) {
       const wake = await wakeFor(own, spaces, config.signer.did);
@@ -903,9 +949,230 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     return run;
   };
 
+  const mailbox = config.mailbox ?? createMailboxClient();
+
+  // ── Short invite links (spec 03 §7.7) ──
+  //
+  // The link holds a secret and the hash of one sealed invite; the invite
+  // sits in mailboxes: the account's host's first, which keeps it while every
+  // device is away, then the relays where the space's members meet.
+
+  /** Where a link's sealed invite is left: its nodes' relays, then the space's or this node's */
+  async function linkPlaces(spaceId: string, nodes: ReadonlyArray<string>): Promise<ReadonlyArray<string>> {
+    const named = (await findRecord(spaceId))?.relays ?? [];
+    const relays = named.length ? named : usableRelays(config.network).slice(0, MAX_RELAYS);
+    return [...new Set([...nodes.map(relayOfNode), ...relays])];
+  }
+
+  /**
+   * A short link to a space: the invite `inviteTo` would give, sealed under a
+   * fresh secret and left in mailboxes. Where none takes it, or it is too large
+   * for one, the long invite is given instead: it works the same.
+   */
+  async function shortInvite(
+    spaceId: string,
+    secret: Uint8Array,
+    options: InviteLinkOptions,
+    until: number | undefined,
+  ): Promise<string> {
+    const long = await inviteTo(spaceId, options);
+    const { invite: _secret, ...invite } = parseSpaceInvite(long);
+    let sealed: { readonly blob: string; readonly pin: Uint8Array };
+    try {
+      sealed = await sealInvite(secret, { invite, ...(until !== undefined ? { until } : {}) });
+    } catch {
+      return long;
+    }
+    const topic = await linkTopic(sealed.pin);
+    const ttl = until !== undefined ? Math.max(60, Math.ceil((until - Date.now()) / 1000)) : undefined;
+    const hosts = new Set((invite.nodes ?? []).map(relayOfNode));
+    const places = await linkPlaces(spaceId, invite.nodes ?? []);
+    const kept = (
+      await Promise.all(
+        places.map((place) =>
+          mailbox.drop(place, topic, sealed.blob, ttl).then(
+            () => place,
+            () => null,
+          ),
+        ),
+      )
+    ).filter((place): place is string => place !== null);
+    if (kept.length === 0) return long;
+    await keepLink(spaceId, sealed, options, until);
+    // A host first, which keeps it; then a relay, so one going away leaves the other.
+    const host = kept.find((place) => hosts.has(place));
+    const relay = kept.find((place) => !hosts.has(place));
+    const named = [host, relay].filter((place): place is string => place !== undefined);
+    return encodeInviteLink({ secret, pin: sealed.pin, places: named.slice(0, MAX_LINK_PLACES) });
+  }
+
+  /** The links the account keeps, as its registry holds them */
+  async function keptLinks(): Promise<ReadonlyArray<{ readonly key: string; readonly body: KeptLink }>> {
+    if (!accountSpaceId || narrowNote) return [];
+    const records = await ownRecords<KeptLink>(
+      await runtime(accountSpaceId),
+      { collection: LINK_COLLECTION },
+      (record) => record.key.startsWith('link:') && isKeptLink(record.body),
+    );
+    return records.map((record) => ({ key: record.key, body: record.body! }));
+  }
+
+  /**
+   * Keeps a short link's sealed invite in the account registry: what it is
+   * for, never its secret. Every device then drops it again while it lasts,
+   * and closes its invite when it ends; carriers serve it meanwhile.
+   */
+  async function keepLink(
+    spaceId: string,
+    sealed: { readonly blob: string; readonly pin: Uint8Array },
+    options: InviteLinkOptions,
+    until: number | undefined,
+  ): Promise<void> {
+    if (!accountSpaceId || narrowNote) return;
+    const record = await findRecord(spaceId);
+    const body: KeptLink = {
+      space: spaceId,
+      blob: sealed.blob,
+      ...(options.secret ? { invite: (await deriveInviteKey(options.secret, provider)).did } : {}),
+      ...(record?.key ? { keyId: record.key.id } : {}),
+      ...(until !== undefined ? { until } : {}),
+    };
+    await (
+      await runtime(accountSpaceId)
+    ).upsertSystem(LINK_COLLECTION, `link:${bytesToHex(sealed.pin)}`, body);
+    void passAll().catch(() => {});
+  }
+
+  /** Stops keeping the links `which` picks */
+  async function forgetLinks(which: (link: KeptLink) => boolean): Promise<void> {
+    if (!accountSpaceId || narrowNote) return;
+    const registryRt = await runtime(accountSpaceId);
+    let forgot = false;
+    for (const { key, body } of await keptLinks())
+      if (which(body)) {
+        await registryRt.removeSystem(key);
+        forgot = true;
+      }
+    if (forgot) void passAll().catch(() => {});
+  }
+
+  /**
+   * Looks after every link the account keeps. One past its `until`, for a
+   * space this device no longer holds, or carrying a key the space has moved
+   * on from, has ended: its role invite is closed, so nobody holding the
+   * space's current key can still join with it, and it is forgotten. The
+   * rest are dropped again where the space's members meet; a relay already
+   * holding one stores nothing new.
+   */
+  const keepLinks = serial(async () => {
+    for (const { key, body } of await keptLinks()) {
+      if (closed) return;
+      const record = await registry.get(body.space);
+      // Ended only on what this device knows: one behind on a key change, or not holding the space yet,
+      // would otherwise end a link another device of the account just made.
+      if (!record) continue;
+      const moved =
+        body.keyId !== undefined &&
+        record.key !== null &&
+        record.key.id !== body.keyId &&
+        (record.keys ?? []).some((held) => held.id === body.keyId);
+      if (moved || (body.until !== undefined && body.until <= Date.now())) {
+        if (body.invite) await closeIfOpen(body.space, body.invite).catch(() => {});
+        await forgetLinks((link) => link.blob === body.blob);
+        continue;
+      }
+      const topic = await linkTopic(hexToBytes(key.slice('link:'.length)));
+      const ttl = body.until !== undefined ? Math.ceil((body.until - Date.now()) / 1000) : undefined;
+      for (const place of await linkPlaces(body.space, []))
+        void mailbox.drop(place, topic, body.blob, ttl).catch(() => {});
+    }
+  });
+
+  /** Closes an invite unless it is closed already, or this account may not */
+  async function closeIfOpen(spaceId: string, inviteDid: string): Promise<void> {
+    const rt = await runtime(spaceId);
+    const invite = (await rt.access()).invites.find((held) => held.key === inviteDid);
+    if (invite?.open) await rt.closeInvite(inviteDid);
+  }
+
+  // Relays forget after two weeks or a restart: every hour, whatever is gone goes back.
+  const linkTimer = setInterval(() => void keepLinks().catch(() => {}), 60 * 60 * 1000);
+  unref(linkTimer);
+
+  /** Pages of a topic read for a short link: a relay holds 64 blobs, at least four a page */
+  const INVITE_PAGES = 16;
+
+  /** A short link's invite, fetched once and kept: a preview and the join that follows ask once */
+  const resolved = new Map<string, Promise<{ readonly long: string; readonly until?: number }>>();
+
+  /** The long invite a text holds or a short link names, and when its inviter stops sharing it */
+  function resolveInvite(text: string): Promise<{ readonly long: string; readonly until?: number }> {
+    const bare = bareInvite(text);
+    if (!isShortInvite(bare)) return Promise.resolve({ long: bare });
+    let found = resolved.get(bare);
+    if (!found) {
+      found = fetchInvite(bare);
+      // A preview and the join after it ask once; a few links are remembered, not every one ever read.
+      const oldest = resolved.keys().next();
+      if (resolved.size >= 16 && !oldest.done) resolved.delete(oldest.value);
+      resolved.set(bare, found);
+      found.catch(() => resolved.delete(bare));
+    }
+    return found;
+  }
+
+  /**
+   * Asks every place the link names, and this node's relays, for its topic.
+   * Of what comes back, only the blob that hashes to the pin is taken — any
+   * other, whoever left it, is ignored unopened.
+   */
+  async function fetchInvite(bare: string): Promise<{ readonly long: string; readonly until?: number }> {
+    const link = parseInviteLink(bare);
+    const { topic, inviteSecret } = await inviteLinkKeys(link.secret, link.pin);
+    const places = [...new Set([...link.places, ...usableRelays(config.network)])];
+    if (places.length === 0)
+      throw new Error('That invite names no place to find it, and this app knows none');
+    const blobs = new Set<string>();
+    // A slow place can't hold the join up for long: what has come back by then is all there is.
+    await Promise.race([
+      new Promise<void>((resolve) => unref(setTimeout(resolve, 20_000))),
+      Promise.all(
+        places.map((place) =>
+          mailbox.fetch(place, topic, 0, INVITE_PAGES).then(
+            (items) => items.forEach((item) => blobs.add(item.blob)),
+            () => {},
+          ),
+        ),
+      ),
+    ]);
+    // Only blobs whose hash is the pin; any other, whoever left it, is never opened.
+    const named: string[] = [];
+    for (const blob of blobs)
+      if ((await pinOf(blob)).every((byte, i) => byte === link.pin[i])) named.push(blob);
+    // Only the inviter could make two blobs share a pin, and then neither is trusted.
+    if (named.length > 1) throw new Error('That invite link names more than one invite, so it is not used');
+    const opened = named[0] ? await openInvite(link, named[0]) : null;
+    if (!opened)
+      throw new Error('That invite was not found. It may have expired, or the places it names may be down.');
+    const { invite, until } = opened;
+    const { invite: _ignored, ...rest } = invite;
+    const long = base64UrlEncode(
+      utf8Encode(
+        JSON.stringify({
+          ...rest,
+          ...(typeof rest.role === 'string' ? { invite: base64UrlEncode(inviteSecret) } : {}),
+        }),
+      ),
+    );
+    parseSpaceInvite(long);
+    return { long, ...(until !== undefined ? { until } : {}) };
+  }
+
   /** Every carrier the account uses gets its passes and wakes as they are now, one run at a time */
   const passAll = serial(() =>
     inCarryTurn(async () => {
+      // First: a key change that ends a link is seen here, before its record would be copied on.
+      await keepLinks().catch(() => {});
       for (const carrier of await liveCarriers()) {
         if (closed) return;
         // Only a device that may write in the carry space can do this; others leave it to one that can.
@@ -950,7 +1217,11 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     },
 
     async invite(spaceId, options = {}) {
-      if (options.write === false) return inviteTo(spaceId);
+      // A short link's secret comes first: a role invite's own secret is derived from it.
+      const link = options.short ? generateLinkSecret() : null;
+      const share = (opened: InviteLinkOptions = {}) =>
+        link ? shortInvite(spaceId, link, opened, options.until) : inviteTo(spaceId, opened);
+      if (options.write === false) return share();
       const open = await runtime(spaceId);
       const { roles, founder, mine } = await open.access();
       const member = founder || mine.length > 0;
@@ -966,16 +1237,19 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
               ? `There is no role "${options.role}"`
               : 'You hold no role here, so you can only share it to view',
           );
-        return inviteTo(spaceId);
+        return share();
       }
-      const { secret } = await open.openInvite(role);
-      return inviteTo(spaceId, { secret, role });
+      const { secret } = await open.openInvite(role, link ? await linkInviteSecret(link) : undefined);
+      return share({ secret, role });
     },
 
-    preview: previewInvite,
+    async preview(invite) {
+      const { long, until } = await resolveInvite(invite);
+      return { ...previewInvite(long), ...(until !== undefined ? { until } : {}) };
+    },
 
     async join(invite, options = {}) {
-      const record = await joinRegistry(bareInvite(invite));
+      const record = await joinRegistry((await resolveInvite(invite)).long);
       if (options.memberKey) await registry.setMemberKey(record.space.id, options.memberKey);
       // A runtime opened before the key arrived would still be unable to read.
       await closeRuntime(record.space.id);
@@ -1057,7 +1331,11 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     async closeInvite(spaceId, keyOrLink) {
       let key = keyOrLink;
       // The link itself will do: its secret names the invite.
-      if (!keyOrLink.startsWith('did:key:')) {
+      if (!keyOrLink.startsWith('did:key:') && isShortInvite(bareInvite(keyOrLink))) {
+        // A short link's invite secret is derived from its own; a view-only one has no record to close.
+        const secret = await linkInviteSecret(parseInviteLink(bareInvite(keyOrLink)).secret);
+        key = (await deriveInviteKey(secret, provider)).did;
+      } else if (!keyOrLink.startsWith('did:key:')) {
         const secret = parseSpaceInvite(bareInvite(keyOrLink)).invite;
         if (!secret)
           throw new Error(
@@ -1066,6 +1344,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         key = (await deriveInviteKey(base64UrlDecode(secret), provider)).did;
       }
       await (await runtime(spaceId)).closeInvite(key);
+      // Its link, if the account keeps one, is no longer served.
+      await forgetLinks((link) => link.space === spaceId && link.invite === key);
     },
 
     revoke: perSpace((rt, key: string, options?: RevokeOptions) => rt.revoke(key, options)),
@@ -1558,8 +1838,23 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     // Asked only while it is still open: asking would open it again.
     if (!(await kindOf(spaceId)) && runtimes.get(spaceId) === open)
       hosts.push(...(spaceHosts ?? (await namedHosts(spaceId))));
+    // The nodes the invite that brought it here named: the inviter's hosts, reached before the space's own
+    // records are. Once the space names its keepers, only those of them it names: an invite is unauthenticated.
+    const named = (await registry.get(spaceId))?.nodes ?? [];
+    const keepers = new Set(
+      named.length > 0
+        ? ((await (await open).access().catch(() => null))?.keepers ?? []).map((keeper) => keeper.did)
+        : [],
+    );
+    const invited = named.filter(
+      (node) => keepers.size === 0 || keepers.has(decodeURIComponent(node.split('#')[1] ?? '')),
+    );
     const peers = [
-      ...new Set((await Promise.all(hosts.map(peerOf))).filter((peer): peer is string => peer !== null)),
+      ...new Set(
+        [...(await Promise.all(hosts.map(peerOf))), ...invited].filter(
+          (peer): peer is string => peer !== null,
+        ),
+      ),
     ].sort();
     const said = peers.join(' ');
     if (reaching.get(spaceId) === said || runtimes.get(spaceId) !== open) return;
@@ -1979,7 +2274,6 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   // there has landed; until then the contact carries the door's id.
   // See `packages/core/src/doors/doors.ts`.
 
-  const mailbox = config.mailbox ?? createMailboxClient();
   /** Knocks seen at this node's doors, by id: opened (null when they didn't check out), and until when to keep them */
   const knockCache = new Map<
     string,
@@ -2702,6 +2996,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       closed = true;
       stopWatchingNetwork?.();
       if (renewTimer) clearTimeout(renewTimer);
+      clearInterval(linkTimer);
       const open = [...runtimes.keys()];
       await Promise.all(open.map((spaceId) => closeRuntime(spaceId)));
       // Let go of the registry too: an open database connection blocks the

@@ -145,6 +145,8 @@ export interface InvitePreview {
   readonly carriesWrite: boolean;
   /** The role it is for, as the link says. The space's own invite record is what counts. */
   readonly role: string | null;
+  /** For a short link: when its inviter stops sharing it, ms. Nothing a peer enforces */
+  readonly until?: number;
 }
 
 export interface InviteOptions {
@@ -152,6 +154,14 @@ export interface InviteOptions {
   readonly role?: string;
   /** False for a view-only invite: the key to read a private space, and no role */
   readonly write?: boolean;
+  /**
+   * A short link (spec 03 §7.7): about 85 characters, the rest of the invite
+   * kept sealed in mailboxes. Falls back to the long form when no mailbox
+   * takes it, or the space is too large for one.
+   */
+  readonly short?: boolean;
+  /** For a short link: when to stop sharing it, ms. Closing the invite is what ends it */
+  readonly until?: number;
 }
 
 /** Who holds what in a space, now */
@@ -462,7 +472,8 @@ export interface NodeSpaces {
   create(params: NewSpace): Promise<SpaceSummary>;
   /** An invite string, shown once. For a private space it carries the key, so treat it as a secret */
   invite(spaceId: string, options?: InviteOptions): Promise<string>;
-  preview(invite: string): InvitePreview;
+  /** What an invite or link is for; a short link is fetched from its mailboxes first */
+  preview(invite: string): Promise<InvitePreview>;
   /** Joins a space from an invite. `memberKey`, for a node without the account key, lets a new key of the space reach it */
   join(invite: string, options?: { readonly memberKey?: Uint8Array }): Promise<SpaceSummary>;
   /** Gives up the account's place in a space (its own removal record), then forgets it on this node with its key */
