@@ -11,13 +11,15 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, u
 import { positionBetween } from '@minca/core/schemas';
 import { ago } from '../time';
 import * as when from '../when';
-import { Attachments, attach } from './attachments';
+import { Attachments, Playable, attach, useSeen } from './attachments';
+import { sizeOf } from '../size';
 import { Comments } from './comments';
-import { useBlob, useCan, useFile, usePeople, useRecords } from './hooks';
+import { useBlob, useCan, useFile, usePeople, useRecords, useShown } from './hooks';
 import { useLive, usePresence } from './live';
 import { html } from './html';
 import { MentionInput, MentionText, mentionsIn } from './mentions';
 import { Modal } from './modal';
+import { Record } from './record';
 import { Avatar, Person, useName } from './people';
 import {
   MapLink,
@@ -73,6 +75,7 @@ Object.defineProperty(globalThis, 'ui', {
     useCan,
     useFile,
     useBlob,
+    useShown,
     useLive,
     usePresence,
     useName,
@@ -83,8 +86,12 @@ Object.defineProperty(globalThis, 'ui', {
     MentionText,
     mentionsIn,
     Attachments,
+    Playable,
     attach,
+    useSeen,
+    sizeOf,
     Modal,
+    Record,
     Shape,
     Cover,
     PlaceField,

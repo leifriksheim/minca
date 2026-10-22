@@ -110,10 +110,10 @@ describe('topic tags, worked out', () => {
   test('the spec’s examples (02 §8.3)', async () => {
     const key = await topicKey({ spaceId: 'bimjoifogypbqrtuich3e375d67y43znkjsjnp4q4qhe7gwf7u74a' });
     assert.equal(await topicTag(key, 'app.chat.message', 'channel', 'design'), 'Hh5Cwzt8mQlIfYWE_cPjkA');
-    const [linked] = await tagsFor(key, 'std.message', ['link:channel'], { text: 'hi' }, [
-      { rel: 'channel', to: 'mfrggzdfmztwq2lknnwg23tpoa' },
+    const [linked] = await tagsFor(key, 'std.message', ['link:in'], { text: 'hi' }, [
+      { rel: 'in', to: 'mfrggzdfmztwq2lknnwg23tpoa' },
     ]);
-    assert.equal(linked, 'pL1YV0BFW4cn-RZUn8-VZQ');
+    assert.equal(linked, 'FfavMdkS1rv7FcKY9sNSoA');
   });
 
   test('a public space’s tags come from its id: anyone can work them out, and they differ per space', async () => {
@@ -340,18 +340,18 @@ describe('topic tags on links', () => {
       space,
       message.name,
       { text: 'mockups?' },
-      { links: [{ rel: 'channel', to: design.key }] },
+      { links: [{ rel: 'in', to: design.key }] },
     );
     const inRoom = await alice.node.records.put(space, message.name, { text: 'hello all' });
     const stored = await createStorageProvider(await alice.stores(`spaces/${space}`)).getCurrent(
       inDesign.key,
     );
     assert.deepEqual(stored?.tags, [
-      await alice.node.collections.tag(space, message.name, 'link:channel', design.key),
+      await alice.node.collections.tag(space, message.name, 'link:in', design.key),
     ]);
     const since = new Date(Date.now() - 1000).toISOString();
     const inChannel = [inDesign, inRoom].filter((record) =>
-      matchesRecord(own(message.name, { 'link:channel': design.key }, since), record, 'did:key:zDnaeBob'),
+      matchesRecord(own(message.name, { 'link:in': design.key }, since), record, 'did:key:zDnaeBob'),
     );
     assert.deepEqual(
       inChannel.map((r) => r.key),
@@ -449,14 +449,14 @@ describe('a standard message’s topics', () => {
   test('an app that needs std.message gets its topics, and one without them is not the standard message', () => {
     const needs = standardCollections(['std.message']);
     assert.ok(Array.isArray(needs) && isRecord(needs[0]));
-    assert.deepEqual(needs[0].topics, ['link:channel', 'mentions', 'replyingTo']);
+    assert.deepEqual(needs[0].topics, ['link:in', 'mentions', 'replyingTo']);
     const { topics: _topics, ...without } = { ...message, schema: toJsonSchema(message.schema) };
     assert.throws(() => standardCollections([without]), /different shape/);
   });
 
   test('every standard collection that names people has them as topics, so a keeper can tell them', () => {
     const expected: Record<string, ReadonlyArray<string>> = {
-      'std.message': ['link:channel', 'mentions', 'replyingTo'],
+      'std.message': ['link:in', 'mentions', 'replyingTo'],
       'std.comment': ['mentions', 'replyingTo', 'respondingTo'],
       'std.post': ['mentions', 'replyingTo'],
       'std.article': ['mentions'],
@@ -467,7 +467,6 @@ describe('a standard message’s topics', () => {
       'std.repost': ['respondingTo'],
       'std.claim': ['respondingTo'],
       'std.rsvp': ['respondingTo'],
-      'std.booking': ['respondingTo'],
       'std.vote': ['respondingTo'],
       'std.ballot': ['respondingTo'],
       'std.pledge': ['respondingTo'],

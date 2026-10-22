@@ -24,7 +24,7 @@ who made it:
   "when": {
     "query": {
       "collection": "std.channel",
-      "include": { "messages": { "rel": "channel", "from": "std.message", "count": true } }
+      "include": { "messages": { "rel": "in", "from": "std.message", "count": true } }
     },
     "holds": { "include:messages": { "$gte": 100 } }
   },
@@ -32,7 +32,7 @@ who made it:
     "kind": "add",
     "collection": "std.message",
     "text": "#{title} just passed {messages} messages",
-    "links": [{ "rel": "channel", "to": "$it" }]
+    "links": [{ "rel": "in", "to": "$it" }]
   },
   "since": "2026-09-29T12:00:00Z"
 }

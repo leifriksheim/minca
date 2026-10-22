@@ -26,6 +26,7 @@ import {
 import { blueprint, type Blueprint } from '../schemas/library/collections.js';
 import { guidesOf } from '../schemas/guides.js';
 import { standardDefinition, standardGroups } from '../schemas/standard.js';
+import { CHOOSING, lookalikes } from '../schemas/choosing.js';
 import { toJsonSchema } from '../schema/collection-def.js';
 import { ACTIVITY_STATES, setActivity } from '../schemas/automations.js';
 import { describeCollection } from '../records/describe.js';
@@ -414,9 +415,10 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   {
     name: 'collections_standard',
     description:
-      'The standard library: collections most apps can share — lists, events and RSVPs, notes, documents, photos, ' +
+      'The standard library: collections most apps can share — files, lists, events and RSVPs, notes, documents, ' +
       "places, expenses, polls, reactions, comments and more — so apps that use them read each other's records. " +
-      'Without names, lists every one by area with a line on what it is; with names, gives their full definitions ' +
+      'Without names, gives "choose", a short map of which collection holds what (read it first), and every one by ' +
+      'area with a line on what it is; with names, gives their full definitions ' +
       'and what each allows. Use one wherever it fits before making your own: in collections_propose, pass its name ' +
       '("std.event") as one of the collections.',
     input: {
@@ -433,10 +435,13 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
     run: async (_node, input) => {
       const names = strings(input.names);
       if (!names.length) {
-        return Object.entries(standardGroups).map(([area, definitions]) => ({
-          area,
-          collections: definitions.map(({ name, title, description }) => ({ name, title, description })),
-        }));
+        return {
+          choose: CHOOSING,
+          areas: Object.entries(standardGroups).map(([area, definitions]) => ({
+            area,
+            collections: definitions.map(({ name, title, description }) => ({ name, title, description })),
+          })),
+        };
       }
       return names.map((name) => {
         const definition = standardDefinition(name);
@@ -584,21 +589,24 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
         key: record.key,
       });
       const breaks = body.updates ? [] : review.collections.filter((one) => one.usedBy.length);
+      const warnings = [
+        ...breaks.map(
+          (one) =>
+            `This changes ${one.definition.name}, which ${one.usedBy.join(' and ')} uses as it is. ` +
+            'If this is a new version of that blueprint, propose it again with its key as "updates"; otherwise use the ' +
+            'collection as it is, or give yours a name of its own.',
+        ),
+        // A twin of a standard collection splits the space's records between apps that can't read each other's.
+        ...body.collections.flatMap(lookalikes),
+      ];
       return {
         key: record.key,
         proposed: true,
         applied: false,
-        next: 'Someone in the space who may define collections applies it.',
-        ...(breaks.length
-          ? {
-              warnings: breaks.map(
-                (one) =>
-                  `This changes ${one.definition.name}, which ${one.usedBy.join(' and ')} uses as it is. ` +
-                  'If this is a new version of that blueprint, propose it again with its key as "updates"; otherwise use the ' +
-                  'collection as it is, or give yours a name of its own.',
-              ),
-            }
-          : {}),
+        next: warnings.length
+          ? 'Read the warnings, and propose it again if they change your mind. Otherwise, someone in the space who may define collections applies it.'
+          : 'Someone in the space who may define collections applies it.',
+        ...(warnings.length ? { warnings } : {}),
         collections: review.collections.map(reviewLine),
       };
     },

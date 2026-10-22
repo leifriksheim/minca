@@ -52,7 +52,7 @@ export interface Minca {
   people(): Promise<Someone[]>;
   can(action: string, collection: string): Promise<boolean>;
   picture(did: string): Promise<string | null>;
-  open(target: { person: string } | { record: string }): Promise<null>;
+  open(target: { person: string } | { record: string; link?: string }): Promise<null>;
   file(key: string, ref: string): Promise<string | null>;
   blob(key: string, ref: string): Promise<Blob>;
   addFile(
@@ -68,6 +68,8 @@ export interface Minca {
   recall(key: string): Promise<unknown>;
   remember(key: string, value: unknown): Promise<null>;
   onChange(listener: () => void): () => void;
+  shown(): string | null;
+  onShow(listener: (key: string) => void): () => void;
   readonly live: {
     send(data: unknown, options?: { to?: string }): Promise<boolean>;
     on(listener: (heard: Heard) => void): () => void;

@@ -40,7 +40,8 @@ export type Poll = BodyOf<typeof poll>;
 export const vote = define({
   name: 'std.vote',
   title: 'Vote',
-  description: 'A vote on a poll: one per person, changed by voting again.',
+  description:
+    'One person’s vote on a std.poll, changed by voting again. To vote on a std.proposal, use std.ballot: it is final and counts toward a decision.',
   schema: {
     type: 'object',
     properties: {
@@ -56,18 +57,19 @@ export const vote = define({
     required: ['choice'],
   },
   links: {
-    about: { to: ['std.poll', 'std.proposal'], cardinality: 'one', description: 'The poll voted on' },
+    about: one(['std.poll'], 'The poll voted on'),
   },
   rules: { onePer: ['@author', 'link:about'] },
   topics: ['respondingTo'],
 });
 export type Vote = BodyOf<typeof vote>;
 
-/** Something put to the group to decide, voted on with `std.vote` over its options. */
+/** Something put to the group to decide, by a `std.ballot` on one of its options each. */
 export const proposal = define({
   name: 'std.proposal',
   title: 'Proposal',
-  description: 'Something put to the group to decide by a vote.',
+  description:
+    'Something put to the group to decide: people cast a std.ballot on its options, and a std.decision proves the outcome. For a quick question, use std.poll.',
   schema: {
     type: 'object',
     properties: {
@@ -106,7 +108,8 @@ const citesWhatItIsAbout = (path: string, collection: string) =>
 export const ballot = define({
   name: 'std.ballot',
   title: 'Ballot',
-  description: 'A final vote on a proposal: one per person, not changed once cast.',
+  description:
+    'One person’s final vote on a std.proposal: it can’t be changed, so a std.decision can count it. For a poll, use std.vote.',
   schema: {
     type: 'object',
     properties: {

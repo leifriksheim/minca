@@ -27,7 +27,8 @@ import type { BodyOf } from '../../query/types.js';
 export const expense = define({
   name: 'std.expense',
   title: 'Expense',
-  description: 'Something one person paid for a group, and how it is split.',
+  description:
+    'Something one person paid for a group, to split and settle up. Your own bank records are std.transaction.',
   schema: {
     type: 'object',
     properties: {
@@ -82,8 +83,8 @@ export type Settlement = BodyOf<typeof settlement>;
 /** A bank account, a card, a wallet: what transactions are `in`. */
 export const moneyAccount = define({
   name: 'std.money-account',
-  title: 'Account',
-  description: 'A bank account, card or wallet that transactions are in.',
+  title: 'Money account',
+  description: 'A bank account, card or wallet that std.transactions are in. Not a person’s account.',
   schema: {
     type: 'object',
     properties: {
@@ -100,7 +101,7 @@ export type MoneyAccount = BodyOf<typeof moneyAccount>;
 export const transaction = define({
   name: 'std.transaction',
   title: 'Transaction',
-  description: 'Money in or out of an account.',
+  description: 'Money in or out of a std.money-account. To split a cost with others, use std.expense.',
   schema: {
     type: 'object',
     properties: {

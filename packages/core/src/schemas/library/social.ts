@@ -59,7 +59,8 @@ const labelled = <const P extends object, const R extends keyof P>(value: P, req
 export const card = define({
   name: 'std.card',
   title: 'Contact card',
-  description: 'A person’s name, emails, phones and addresses, as an address book keeps them.',
+  description:
+    'An address-book entry for anyone, on Minca or not. Your own public self is std.profile; a Minca account you can message is std.contact.',
   schema: {
     type: 'object',
     properties: {

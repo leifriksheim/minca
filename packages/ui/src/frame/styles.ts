@@ -75,6 +75,12 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--m
 .attachment { justify-content: flex-start; max-width: 280px; min-height: 36px; border-radius: var(--minca-radius-md); font-weight: 400; }
 .attachment.picture { padding: 0; overflow: hidden; border: 1px solid var(--minca-line); }
 .attachment.picture img { display: block; max-width: 280px; max-height: 220px; object-fit: cover; }
+.attachment.playable { display: block; padding: 6px; border: 1px solid var(--minca-line); background: var(--minca-sunken); }
+.attachment.playable.video { padding: 0; overflow: hidden; background: #000; }
+.attachment.playable video { display: block; width: 280px; max-height: 220px; }
+.attachment.playable audio { display: block; width: 268px; }
+.record { justify-content: flex-start; gap: 8px; max-width: 100%; min-height: 36px; padding: 4px 10px 4px 6px; border-radius: var(--minca-radius-md); font-weight: 400; text-align: left; }
+.record-face { flex-shrink: 0; width: 24px; height: 24px; display: grid; place-items: center; object-fit: cover; border-radius: var(--minca-radius-sm); }
 .lightbox { display: block; max-width: 100%; max-height: 75vh; margin: 0 auto; object-fit: contain; border-radius: var(--minca-radius-md); }
 .comment-text { white-space: pre-wrap; word-break: break-word; }
 .mention { padding: 0 2px; border-radius: var(--minca-radius-sm); background: var(--minca-accent-soft); color: var(--minca-accent); }

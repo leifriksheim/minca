@@ -1363,9 +1363,9 @@ Examples, in the public space
 
 - collection `app.chat.message`, field `channel`, value `"design"` →
   `Hh5Cwzt8mQlIfYWE_cPjkA`;
-- collection `std.message`, topic `link:channel`, a link
-  `{ "rel": "channel", "to": "mfrggzdfmztwq2lknnwg23tpoa" }` →
-  `pL1YV0BFW4cn-RZUn8-VZQ`.
+- collection `std.message`, topic `link:in`, a link
+  `{ "rel": "in", "to": "mfrggzdfmztwq2lknnwg23tpoa" }` →
+  `FfavMdkS1rv7FcKY9sNSoA`.
 
 ### 8.4 Checking
 

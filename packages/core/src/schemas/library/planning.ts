@@ -91,7 +91,7 @@ export type Rsvp = BodyOf<typeof rsvp>;
 export const slot = define({
   name: 'std.slot',
   title: 'Slot',
-  description: 'A time that one person can book.',
+  description: 'A time one person can book, by a std.claim about it.',
   schema: {
     type: 'object',
     properties: { start: when(), end: when(), tz: timeZone(), note: text(1000) },
@@ -101,29 +101,12 @@ export const slot = define({
 });
 export type Slot = BodyOf<typeof slot>;
 
-/** A booked slot. One per slot, so it can't be booked twice: whoever books first has it. */
-export const booking = define({
-  name: 'std.booking',
-  title: 'Booking',
-  description: 'A booked slot: one booking per slot, first come.',
-  schema: {
-    type: 'object',
-    properties: {
-      respondingTo: person('Whose record it responds to, so they can be told'),
-      note: text(1000),
-    },
-  },
-  links: { about: one(['std.slot'], 'The slot booked') },
-  rules: { onePer: ['link:about'] },
-  topics: ['respondingTo'],
-});
-export type Booking = BodyOf<typeof booking>;
-
 /** A column on a board — To do, Doing, Done — in the order it sits. */
 export const column = define({
   name: 'std.column',
   title: 'Column',
-  description: 'A column on a board, holding tasks.',
+  description:
+    'A column on a task board (To do, Doing, Done), in a std.project or on its own; tasks sit in it.',
   schema: {
     type: 'object',
     properties: {
@@ -132,21 +115,24 @@ export const column = define({
     },
     required: ['name'],
   },
+  links: { in: one(['std.project'], 'The project whose board it is on') },
 });
 export type Column = BodyOf<typeof column>;
 
 const TASK_STATUS = ['todo', 'doing', 'done', 'cancelled'] as const;
 
 /**
- * A task: in a column of a board, under a parent task, in a project. `status`
- * is for lists without columns; a board's column says where the task is.
+ * A task: `in` a column of a board, or in a project with no columns, and
+ * under a parent task. `status` is for lists without columns; a board's
+ * column says where the task is.
  * `assignees` is its topic, so "assigned to me" can be asked of a keeper that
  * can't read it.
  */
 export const task = define({
   name: 'std.task',
   title: 'Task',
-  description: 'A task, placed in a column.',
+  description:
+    'A thing to do: a to-do, an issue, a card on a board. `status` for plain lists; on a board it sits in a std.column. Something to be reminded of about an existing record is a std.reminder.',
   schema: {
     type: 'object',
     properties: {
@@ -167,9 +153,11 @@ export const task = define({
   },
   topics: ['assignees'],
   links: {
-    column: { to: ['std.column'], cardinality: 'one', description: 'The column it sits in' },
+    in: one(
+      ['std.column', 'std.project'],
+      'The board column it sits in, or the project when it has no columns',
+    ),
     parent: one(['std.task'], 'The task it is part of'),
-    project: one(['std.project'], 'The project it belongs to'),
   },
 });
 export type Task = BodyOf<typeof task>;
@@ -178,7 +166,7 @@ export type Task = BodyOf<typeof task>;
 export const project = define({
   name: 'std.project',
   title: 'Project',
-  description: 'A project that tasks belong to.',
+  description: 'A project that tasks and board columns are in.',
   schema: {
     type: 'object',
     properties: {
@@ -210,7 +198,8 @@ export type TimeEntry = BodyOf<typeof timeEntry>;
 export const reminder = define({
   name: 'std.reminder',
   title: 'Reminder',
-  description: 'Something to be reminded of at a time.',
+  description:
+    'A nudge at a time about an existing record (about), for its author. A thing to do is a std.task with `due`.',
   schema: {
     type: 'object',
     properties: { at: when(), note: text(1000), done: { type: 'boolean' } },
@@ -261,7 +250,6 @@ export const planningGroups = {
     event,
     rsvp,
     slot,
-    booking,
     column,
     task,
     project,

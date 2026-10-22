@@ -6,7 +6,6 @@ import {
   about,
   blob,
   count,
-  many,
   one,
   person,
   placeRef,
@@ -26,7 +25,8 @@ import type { BodyOf } from '../../query/types.js';
 export const list = define({
   name: 'std.list',
   title: 'List',
-  description: 'A list of things; its items are std.list-item records linked in it.',
+  description:
+    'A named, ordered group of anything that exists while empty: a checklist, a folder, an album, a playlist, a category (`kind`). Each member is a std.list-item in it, about the record it stands for. For loose labels, use std.tag.',
   schema: {
     type: 'object',
     properties: {
@@ -61,85 +61,41 @@ export const listItem = define({
 });
 export type ListItem = BodyOf<typeof listItem>;
 
-/** A folder of files, inside another or at the top. */
-export const folder = define({
-  name: 'std.folder',
-  title: 'Folder',
-  description: 'A folder of files.',
-  schema: { type: 'object', properties: { name: words(255) }, required: ['name'] },
-  links: { parent: one(['std.folder'], 'The folder it is in') },
-});
-export type Folder = BodyOf<typeof folder>;
-
-/** A file, in a folder or at the top. */
+/**
+ * A file kept in the space, or one kept elsewhere at `url`: the one record for
+ * every file, whatever app shares it. A photo, a video or a song's audio is a
+ * file with the fields that suit it. `about` is the record it was shared on or
+ * attached to, like a message or a task; a file shared on its own has none.
+ * Groups of files (folders, albums, categories) are `std.list`s with an item
+ * about each file, so one file can be in many.
+ */
 export const file = define({
   name: 'std.file',
   title: 'File',
-  description: 'A file, in a folder.',
-  schema: {
-    type: 'object',
-    properties: { name: words(255), blob: blob('Its bytes') },
-    required: ['name', 'blob'],
-  },
-  links: { parent: one(['std.folder'], 'The folder it is in') },
-});
-export type FileEntry = BodyOf<typeof file>;
-
-/** A photo, in any number of albums. */
-export const photo = define({
-  name: 'std.photo',
-  title: 'Photo',
-  description: 'A photo, with where and when it was taken.',
+  description:
+    'Any file people share: a document, photo, video or recording, on its own or attached to a record (about). The only collection for files: a photo or video is a std.file too. For a folder, album or category of files, use std.list with a std.list-item about each file.',
   schema: {
     type: 'object',
     properties: {
-      blob: blob(),
+      name: words(255),
+      mime: { type: 'string', minLength: 1, maxLength: 255 },
+      size: count(0),
+      blob: blob('Its bytes, kept in the space'),
+      url: url('Where it is, when it is kept elsewhere'),
       alt: text(2000, 'What it shows'),
       width: count(1),
       height: count(1),
-      takenAt: when(),
+      duration: { type: 'number', minimum: 0, description: 'Seconds, for a video or a sound' },
+      takenAt: when('When it was taken or recorded'),
       place: placeRef('Where it was taken'),
-    },
-    required: ['blob'],
-  },
-  links: { in: many(['std.album'], 'The albums it is in') },
-});
-export type Photo = BodyOf<typeof photo>;
-
-/** An album of photos and videos. */
-export const album = define({
-  name: 'std.album',
-  title: 'Album',
-  description: 'An album of photos and videos.',
-  schema: {
-    type: 'object',
-    properties: { title: words(200), description: text(2000) },
-    required: ['title'],
-  },
-  links: { cover: one(['std.photo'], 'The photo on its cover') },
-});
-export type Album = BodyOf<typeof album>;
-
-/** A video, with a still to show before it plays and captions. */
-export const video = define({
-  name: 'std.video',
-  title: 'Video',
-  description: 'A video, with a thumbnail and captions.',
-  schema: {
-    type: 'object',
-    properties: {
-      blob: blob(),
-      thumbnail: blob(),
-      duration: { type: 'number', minimum: 0, description: 'Seconds' },
+      thumbnail: blob('A still to show before a video plays'),
       captions: blob('WebVTT'),
-      alt: text(2000, 'What it shows'),
-      title: text(300),
     },
-    required: ['blob'],
+    required: ['name', 'mime'],
   },
-  links: { in: many('*', 'Albums, lists or channels it is in') },
+  links: { about: about('The record it was shared on or attached to') },
 });
-export type Video = BodyOf<typeof video>;
+export type FileRecord = BodyOf<typeof file>;
 
 const trackFields = {
   title: words(300),
@@ -150,13 +106,14 @@ const trackFields = {
   mbid: text(36, 'MusicBrainz recording id'),
 } as const;
 
-/** A piece of music, known by its ids; `blob` when the space holds the audio. */
+/** A piece of music, known by its ids; `file` when the space holds the audio. */
 export const track = define({
   name: 'std.track',
   title: 'Track',
-  description: 'A piece of music, by title, artists and ids.',
-  schema: { type: 'object', properties: { ...trackFields, blob: blob() }, required: ['title'] },
-  links: { in: many(['std.list'], 'Playlists it is on') },
+  description:
+    'A piece of music, by title, artists and ids. Its audio, when the space holds it, is a std.file it links to. A playlist is a std.list.',
+  schema: { type: 'object', properties: { ...trackFields }, required: ['title'] },
+  links: { file: one(['std.file'], 'The audio') },
 });
 export type Track = BodyOf<typeof track>;
 
@@ -164,17 +121,18 @@ export type Track = BodyOf<typeof track>;
 export const play = define({
   name: 'std.play',
   title: 'Play',
-  description: 'A track someone listened to, and when.',
+  description: 'A track someone listened to, and when: about the std.track when the space has it.',
   schema: {
     type: 'object',
     properties: { ...trackFields, playedAt: when() },
     required: ['title', 'playedAt'],
   },
+  links: { about: one(['std.track'], 'The track, when the space has it') },
 });
 export type Play = BodyOf<typeof play>;
 
 /** This file's part of `standardGroups` */
 export const mediaGroups = {
   Lists: [list, listItem],
-  'Files and media': [folder, file, photo, album, video, track, play],
+  'Files and media': [file, track, play],
 };

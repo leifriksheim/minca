@@ -51,7 +51,7 @@ const busyChannels = (n: number, since: string): Automation => ({
   when: {
     query: {
       collection: channel.name,
-      include: { messages: { rel: 'channel', from: message.name, count: true } },
+      include: { messages: { rel: 'in', from: message.name, count: true } },
     },
     holds: { 'include:messages': { $gt: n } },
   },
@@ -59,7 +59,7 @@ const busyChannels = (n: number, since: string): Automation => ({
     kind: 'add',
     collection: message.name,
     text: '#{title} has {messages} messages',
-    links: [{ rel: 'channel', to: IT }],
+    links: [{ rel: 'in', to: IT }],
   },
   since,
 });
@@ -88,7 +88,7 @@ describe('automations', () => {
     assert.match(
       checkAutomation({
         ...busyChannels(10, since),
-        then: { kind: 'add', collection: message.name, text: 'x', links: [{ rel: 'channel' }] },
+        then: { kind: 'add', collection: message.name, text: 'x', links: [{ rel: 'in' }] },
       })!,
       /then.links/,
     );
@@ -115,7 +115,7 @@ describe('automations', () => {
     const design = await node.records.put(space, channel.name, { name: 'design' });
     const quiet = await node.records.put(space, channel.name, { name: 'quiet' });
     const say = (text: string, to: string) =>
-      node.records.put(space, message.name, { text }, { links: [{ rel: 'channel', to }] });
+      node.records.put(space, message.name, { text }, { links: [{ rel: 'in', to }] });
     for (const text of ['a', 'b', 'c']) await say(text, design.key);
     await say('hello', quiet.key);
 
@@ -132,7 +132,7 @@ describe('automations', () => {
     await runAutomations(node, space, did);
     await runAutomations(node, space, did);
     const posted = (
-      await node.records.query(space, { collection: message, where: { 'link:channel': design.key } })
+      await node.records.query(space, { collection: message, where: { 'link:in': design.key } })
     ).records.filter((m) => m.body.text.startsWith('#design'));
     assert.deepEqual(
       posted.map((m) => m.body.text),
@@ -152,8 +152,8 @@ describe('automations', () => {
     const design = await node.records.put(space, channel.name, { name: 'design' });
     const quiet = await node.records.put(space, channel.name, { name: 'quiet' });
     const say = (text: string, to: string) =>
-      node.records.put(space, message.name, { text }, { links: [{ rel: 'channel', to }] });
-    const when = { query: { collection: message.name, where: { 'link:channel': design.key } } };
+      node.records.put(space, message.name, { text }, { links: [{ rel: 'in', to }] });
+    const when = { query: { collection: message.name, where: { 'link:in': design.key } } };
     assert.equal(
       checkAutomation({
         name: 'Design',
@@ -176,7 +176,7 @@ describe('automations', () => {
     const { node, did, space } = await alone();
     const design = await node.records.put(space, channel.name, { name: 'design' });
     for (const text of ['a', 'b']) {
-      await node.records.put(space, message.name, { text }, { links: [{ rel: 'channel', to: design.key }] });
+      await node.records.put(space, message.name, { text }, { links: [{ rel: 'in', to: design.key }] });
     }
     await new Promise((resolve) => setTimeout(resolve, 5));
     await node.records.put(space, automation.name, busyChannels(1, new Date().toISOString()));
@@ -187,12 +187,7 @@ describe('automations', () => {
   test('only its maker runs an automation', async () => {
     const { node, space } = await alone();
     const design = await node.records.put(space, channel.name, { name: 'design' });
-    await node.records.put(
-      space,
-      message.name,
-      { text: 'a' },
-      { links: [{ rel: 'channel', to: design.key }] },
-    );
+    await node.records.put(space, message.name, { text: 'a' }, { links: [{ rel: 'in', to: design.key }] });
     await node.records.put(space, automation.name, busyChannels(0, new Date(0).toISOString()));
     await runAutomations(node, space, 'did:key:zDnaeSomeoneElse');
     assert.equal((await node.records.list(space, { collection: automationRun.name })).length, 0);

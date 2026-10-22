@@ -38,6 +38,39 @@ hold rather than by name is [compatible definitions](blueprints-and-guides.md#co
 
 _Source: `packages/core/src/schemas/blueprints.ts` (`standardCollections`), `packages/core/src/schemas/standard.ts` (`standardDefinition`, `standardGroups`), `packages/core/src/node/actions.ts` (`collections_standard`, `collections_propose`). Tests: `packages/core/tests/records-only.test.ts` ("a standard collection by name is exactly the library’s; a look-alike std.\* is refused", "collections_standard lists the library by area, and gives definitions in full")._
 
+## How the library is shaped
+
+People start with a few apps, then change them, add views, and build new
+apps over the same records, often by asking an agent. That only works if
+every app reaches for the same collection for the same thing. These rules
+keep the library small enough to choose from, and each choice obvious:
+
+1. **One collection per kind of thing.** Variants are optional fields, not
+   collections of their own: a photo, a video and a PDF are each a
+   `std.file`, with `width`, `duration` or none. Two collections an agent
+   could reasonably pick for the same thing is a bug in the library.
+2. **A group is a relation, never a field on what is in it.** There are two
+   ways to group, and only two: `std.tag` for loose labels, any number on a
+   record, and `std.list` with a `std.list-item` per member for a named,
+   ordered group that exists while empty: a folder, an album, a playlist, a
+   category, an itinerary (`kind`). Because the group is a record of its
+   own, one file can be in a chat, a category and an album, and each app
+   arranges it without touching the file. A single facet that nearly every
+   app filters by, like an event's or a transaction's `category`, may stay a
+   field.
+3. **What an app adds to a standard record is a record of its own about
+   it.** A definition here is exact (`collections_propose` refuses a
+   look-alike), so an app that needs more on a `std.file`, say, defines
+   `recipes.photo-note` with an `about` link to the file and
+   `onePer: [link:about]`. Every other app still reads the file; only the
+   recipes app reads the note. Never a parallel `recipes.photo` collection.
+4. **Links use one vocabulary**, below. A link that says where a record
+   sits is `in`, whether that is a channel, a board column or a list.
+5. **A description says when not to use it.** Agents choose by reading
+   descriptions, so where a neighbour could be mistaken for it, the
+   description names the neighbour: "To vote on a std.proposal, use
+   std.ballot."
+
 ## Conventions
 
 - What several people edit is several records, not an array in one body,
@@ -92,20 +125,17 @@ anything, and only moderators and admins write in the collections in
 
 **Annotations**
 
-| Name             | Body                                                                                                                                      | Links                                              | Rules                                  |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | -------------------------------------- |
-| `std.reaction`   | **`emoji`** string 1–16; `respondingTo` DID; topic `respondingTo`                                                                         | `about` → `*`, one                                 | `onePer: [@author, link:about, emoji]` |
-| `std.comment`    | **`text`** string 1–10000; `mentions` DID[] (≤ 64); `replyingTo` DID; `respondingTo` DID; topics `mentions`, `replyingTo`, `respondingTo` | `about` → `*`, one; `replyTo` → `std.comment`, one | —                                      |
-| `std.tag`        | **`label`** string 1–100                                                                                                                  | `about` → `*`, many                                | —                                      |
-| `std.attachment` | **`name`** string ≥ 1; **`mime`** string ≥ 1; `size` integer ≥ 0; `url` string; `blob` blob                                               | `about` → `*`, one                                 | —                                      |
-| `std.reference`  | `note` string                                                                                                                             | `about` → `*`, one; `to` → `*`, one                | —                                      |
-| `std.bookmark`   | `title` string ≤ 500; `url` string 1–2048; `note` string ≤ 2000                                                                           | `about` → `*`, one                                 | —                                      |
-| `std.rating`     | **`score`** integer 1–5; `review` string ≤ 10000                                                                                          | `about` → `*`, one                                 | `onePer: [@author, link:about]`        |
-| `std.highlight`  | **`quote`** string 1–10000; `prefix` string ≤ 500; `suffix` string ≤ 500; `note` string ≤ 10000                                           | `about` → `*`, one                                 | —                                      |
-| `std.pin`        | `note` string ≤ 500                                                                                                                       | `about` → `*`, one                                 | `onePer: [link:about]`                 |
-| `std.report`     | **`reason`** `spam`/`abuse`/`sexual`/`misleading`/`illegal`/`other`; `note` string ≤ 2000                                                 | `about` → `*`, one                                 | `onePer: [@author, link:about]`        |
-| `std.label`      | **`value`** string 1–64                                                                                                                   | `about` → `*`, one                                 | `onePer: [link:about, value]`          |
-| `std.claim`      | `note` string ≤ 500; `respondingTo` DID; topic `respondingTo`                                                                             | `about` → `*`, one                                 | `onePer: [link:about]`                 |
+| Name            | Body                                                                                                                                      | Links                                              | Rules                                  |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | -------------------------------------- |
+| `std.reaction`  | **`emoji`** string 1–16; `respondingTo` DID; topic `respondingTo`                                                                         | `about` → `*`, one                                 | `onePer: [@author, link:about, emoji]` |
+| `std.comment`   | **`text`** string 1–10000; `mentions` DID[] (≤ 64); `replyingTo` DID; `respondingTo` DID; topics `mentions`, `replyingTo`, `respondingTo` | `about` → `*`, one; `replyTo` → `std.comment`, one | —                                      |
+| `std.tag`       | **`label`** string 1–100                                                                                                                  | `about` → `*`, one                                 | `onePer: [@author, link:about, label]` |
+| `std.rating`    | **`score`** integer 1–5; `review` string ≤ 10000                                                                                          | `about` → `*`, one                                 | `onePer: [@author, link:about]`        |
+| `std.highlight` | **`quote`** string 1–10000; `prefix` string ≤ 500; `suffix` string ≤ 500; `note` string ≤ 10000                                           | `about` → `*`, one                                 | —                                      |
+| `std.pin`       | `note` string ≤ 500                                                                                                                       | `about` → `*`, one                                 | `onePer: [link:about]`                 |
+| `std.report`    | **`reason`** `spam`/`abuse`/`sexual`/`misleading`/`illegal`/`other`; `note` string ≤ 2000                                                 | `about` → `*`, one                                 | `onePer: [@author, link:about]`        |
+| `std.label`     | **`value`** string 1–64                                                                                                                   | `about` → `*`, one                                 | `onePer: [link:about, value]`          |
+| `std.claim`     | `note` string ≤ 500; `respondingTo` DID; topic `respondingTo`                                                                             | `about` → `*`, one                                 | `onePer: [link:about]`                 |
 
 **People**
 
@@ -120,20 +150,20 @@ anything, and only moderators and admins write in the collections in
 
 **Messaging and publishing**
 
-| Name              | Body                                                                                                                                                                                                                                                                     | Links                                                                               | Rules                           |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- | ------------------------------- |
-| `std.message`     | **`text`** string 1–10000; `mentions` DID[] (≤ 64); `replyingTo` DID; topics `link:channel`, `mentions`, `replyingTo`                                                                                                                                                    | `channel` → `std.channel`, one; `replyTo` → `std.message`, one; `shares` → `*`, one | —                               |
-| `std.channel`     | **`name`** string 1–100; `topic` string ≤ 500; `position` string 1–200                                                                                                                                                                                                   | —                                                                                   | —                               |
-| `std.direct`      | **`to`** DID[] (1–16); **`data`** string ≤ 60000; **`boxes`** `{to, sealed}`[] (≤ 17); topic `to`                                                                                                                                                                        | —                                                                                   | —                               |
-| `std.post`        | `text` string ≤ 10000; `images` image[] (≤ 8); `langs` string 2–35[] (≤ 3); `mentions` DID[] (≤ 64); `replyingTo` DID; topics `mentions`, `replyingTo`                                                                                                                   | `replyTo` → `std.post`, one; `root` → `std.post`, one; `shares` → `*`, one          | —                               |
-| `std.repost`      | `respondingTo` DID; topic `respondingTo`                                                                                                                                                                                                                                 | `about` → `*`, one                                                                  | `onePer: [@author, link:about]` |
-| `std.article`     | **`title`** string 1–300; `summary` string ≤ 1000; `content` string ≤ 200000; `cover` blob; `slug` string 1–200; `publishedAt` when; `draft` boolean; `mentions` DID[] (≤ 64); topic `mentions`                                                                          | `in` → `std.publication`, one                                                       | —                               |
-| `std.publication` | **`title`** string 1–200; `description` string ≤ 2000; `icon` blob                                                                                                                                                                                                       | —                                                                                   | —                               |
-| `std.doc`         | **`title`** string 1–500                                                                                                                                                                                                                                                 | —                                                                                   | —                               |
-| `std.doc-block`   | **`type`** `paragraph`/`heading1`/`heading2`/`heading3`/`bullet`/`numbered`/`todo`/`quote`/`code`/`image`/`divider`; `text` string ≤ 20000; `checked` boolean; `language` string ≤ 32; `image` image; `position` string 1–200; `mentions` DID[] (≤ 64); topic `mentions` | `in` → `std.doc`, one; `parent` → `std.doc-block`, one                              | —                               |
-| `std.wiki-page`   | **`slug`** string 1–200; **`title`** string 1–300; `content` string ≤ 200000                                                                                                                                                                                             | —                                                                                   | `onePer: [slug]`; history `all` |
-| `std.note`        | `title` string ≤ 500; `content` string ≤ 200000; `pinned` boolean; `color` string ≤ 32; `mentions` DID[] (≤ 64); topic `mentions`                                                                                                                                        | —                                                                                   | —                               |
-| `std.call`        | **`status`** `missed`/`ended`; `to` string ≤ 256; **`startedAt`** string ≤ 64; `endedAt` string ≤ 64; `people` string ≤ 256[] (≤ 64); topics `to`, `people`                                                                                                              | —                                                                                   | —                               |
+| Name              | Body                                                                                                                                                                                                                                                                     | Links                                                                          | Rules                           |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ | ------------------------------- |
+| `std.message`     | **`text`** string 1–10000; `mentions` DID[] (≤ 64); `replyingTo` DID; topics `link:in`, `mentions`, `replyingTo`                                                                                                                                                         | `in` → `std.channel`, one; `replyTo` → `std.message`, one; `shares` → `*`, one | —                               |
+| `std.channel`     | **`name`** string 1–100; `topic` string ≤ 500; `position` string 1–200                                                                                                                                                                                                   | —                                                                              | —                               |
+| `std.direct`      | **`to`** DID[] (1–16); **`data`** string ≤ 60000; **`boxes`** `{to, sealed}`[] (≤ 17); topic `to`                                                                                                                                                                        | —                                                                              | —                               |
+| `std.post`        | `text` string ≤ 10000; `images` image[] (≤ 8); `langs` string 2–35[] (≤ 3); `mentions` DID[] (≤ 64); `replyingTo` DID; topics `mentions`, `replyingTo`                                                                                                                   | `replyTo` → `std.post`, one; `root` → `std.post`, one; `shares` → `*`, one     | —                               |
+| `std.repost`      | `respondingTo` DID; topic `respondingTo`                                                                                                                                                                                                                                 | `about` → `*`, one                                                             | `onePer: [@author, link:about]` |
+| `std.article`     | **`title`** string 1–300; `summary` string ≤ 1000; `content` string ≤ 200000; `cover` blob; `slug` string 1–200; `publishedAt` when; `draft` boolean; `mentions` DID[] (≤ 64); topic `mentions`                                                                          | `in` → `std.publication`, one                                                  | —                               |
+| `std.publication` | **`title`** string 1–200; `description` string ≤ 2000; `icon` blob                                                                                                                                                                                                       | —                                                                              | —                               |
+| `std.doc`         | **`title`** string 1–500                                                                                                                                                                                                                                                 | —                                                                              | —                               |
+| `std.doc-block`   | **`type`** `paragraph`/`heading1`/`heading2`/`heading3`/`bullet`/`numbered`/`todo`/`quote`/`code`/`image`/`divider`; `text` string ≤ 20000; `checked` boolean; `language` string ≤ 32; `image` image; `position` string 1–200; `mentions` DID[] (≤ 64); topic `mentions` | `in` → `std.doc`, one; `parent` → `std.doc-block`, one                         | —                               |
+| `std.wiki-page`   | **`slug`** string 1–200; **`title`** string 1–300; `content` string ≤ 200000                                                                                                                                                                                             | —                                                                              | `onePer: [slug]`; history `all` |
+| `std.note`        | `title` string ≤ 500; `content` string ≤ 200000; `pinned` boolean; `color` string ≤ 32; `mentions` DID[] (≤ 64); topic `mentions`                                                                                                                                        | —                                                                              | —                               |
+| `std.call`        | **`status`** `missed`/`ended`; `to` string ≤ 256; **`startedAt`** string ≤ 64; `endedAt` string ≤ 64; `people` string ≤ 256[] (≤ 64); topics `to`, `people`                                                                                                              | —                                                                              | —                               |
 
 **Lists**
 
@@ -144,32 +174,27 @@ anything, and only moderators and admins write in the collections in
 
 **Files and media**
 
-| Name         | Body                                                                                                                                                                | Links                        | Rules |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- | ----- |
-| `std.folder` | **`name`** string 1–255                                                                                                                                             | `parent` → `std.folder`, one | —     |
-| `std.file`   | **`name`** string 1–255; **`blob`** blob                                                                                                                            | `parent` → `std.folder`, one | —     |
-| `std.photo`  | **`blob`** blob; `alt` string ≤ 2000; `width` integer ≥ 1; `height` integer ≥ 1; `takenAt` when; `place` place                                                      | `in` → `std.album`, many     | —     |
-| `std.album`  | **`title`** string 1–200; `description` string ≤ 2000                                                                                                               | `cover` → `std.photo`, one   | —     |
-| `std.video`  | **`blob`** blob; `thumbnail` blob; `duration` number ≥ 0; `captions` blob; `alt` string ≤ 2000; `title` string ≤ 300                                                | `in` → `*`, many             | —     |
-| `std.track`  | **`title`** string 1–300; `artists` string 1–200[] (≤ 20); `album` string ≤ 300; `duration` number ≥ 0; `isrc` string ≤ 12; `mbid` string ≤ 36; `blob` blob         | `in` → `std.list`, many      | —     |
-| `std.play`   | **`title`** string 1–300; `artists` string 1–200[] (≤ 20); `album` string ≤ 300; `duration` number ≥ 0; `isrc` string ≤ 12; `mbid` string ≤ 36; **`playedAt`** when | —                            | —     |
+| Name        | Body                                                                                                                                                                                                                                                            | Links                      | Rules |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- | ----- |
+| `std.file`  | **`name`** string 1–255; **`mime`** string 1–255; `size` integer ≥ 0; `blob` blob; `url` string 1–2048; `alt` string ≤ 2000; `width` integer ≥ 1; `height` integer ≥ 1; `duration` number ≥ 0; `takenAt` when; `place` place; `thumbnail` blob; `captions` blob | `about` → `*`, one         | —     |
+| `std.track` | **`title`** string 1–300; `artists` string 1–200[] (≤ 20); `album` string ≤ 300; `duration` number ≥ 0; `isrc` string ≤ 12; `mbid` string ≤ 36                                                                                                                  | `file` → `std.file`, one   | —     |
+| `std.play`  | **`title`** string 1–300; `artists` string 1–200[] (≤ 20); `album` string ≤ 300; `duration` number ≥ 0; `isrc` string ≤ 12; `mbid` string ≤ 36; **`playedAt`** when                                                                                             | `about` → `std.track`, one | —     |
 
 **Time and planning**
 
-| Name             | Body                                                                                                                                                                                                                                                                            | Links                                                                                    | Rules                                 |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------- |
-| `std.calendar`   | **`name`** string 1–200; `color` string ≤ 32                                                                                                                                                                                                                                    | —                                                                                        | —                                     |
-| `std.event`      | **`title`** string 1–500; `description` string ≤ 10000; `category` string ≤ 100; **`start`** when; `end` when; `tz` string 1–64; `allDay` boolean; `place` place; `url` string 1–2048; `rrule` string 1–1000; `status` `confirmed`/`tentative`/`cancelled`; topic `place.cells` | `in` → `std.calendar`, one                                                               | —                                     |
-| `std.rsvp`       | **`status`** `going`/`maybe`/`no`; `guests` integer 0–100; `note` string ≤ 500; `respondingTo` DID; topic `respondingTo`                                                                                                                                                        | `about` → `std.event`, one                                                               | `onePer: [@author, link:about]`       |
-| `std.slot`       | **`start`** when; **`end`** when; `tz` string 1–64; `note` string ≤ 1000                                                                                                                                                                                                        | `in` → `std.calendar`, one                                                               | —                                     |
-| `std.booking`    | `note` string ≤ 1000; `respondingTo` DID; topic `respondingTo`                                                                                                                                                                                                                  | `about` → `std.slot`, one                                                                | `onePer: [link:about]`                |
-| `std.column`     | **`name`** string 1–200; `position` string 1–200                                                                                                                                                                                                                                | —                                                                                        | —                                     |
-| `std.task`       | **`title`** string 1–500; `notes` string ≤ 10000; `position` string 1–200; `due` when; `status` `todo`/`doing`/`done`/`cancelled`; `assignees` DID[] (≤ 20); `priority` integer 0–4; topic `assignees`                                                                          | `column` → `std.column`, one; `parent` → `std.task`, one; `project` → `std.project`, one | —                                     |
-| `std.project`    | **`name`** string 1–200; `description` string ≤ 10000; `status` `planned`/`active`/`paused`/`done`/`cancelled`; `due` when                                                                                                                                                      | —                                                                                        | —                                     |
-| `std.time-entry` | **`start`** when; `end` when; `note` string ≤ 1000                                                                                                                                                                                                                              | `about` → `*`, one                                                                       | —                                     |
-| `std.reminder`   | **`at`** when; `note` string ≤ 1000; `done` boolean                                                                                                                                                                                                                             | `about` → `*`, one                                                                       | —                                     |
-| `std.habit`      | **`name`** string 1–200; `schedule` string ≤ 1000; `target` number ≥ 0; `unit` string ≤ 32; `position` string 1–200                                                                                                                                                             | —                                                                                        | —                                     |
-| `std.checkin`    | **`date`** day; `value` number; `note` string ≤ 1000                                                                                                                                                                                                                            | `about` → `std.habit`, one                                                               | `onePer: [@author, link:about, date]` |
+| Name             | Body                                                                                                                                                                                                                                                                            | Links                                                               | Rules                                 |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------- |
+| `std.calendar`   | **`name`** string 1–200; `color` string ≤ 32                                                                                                                                                                                                                                    | —                                                                   | —                                     |
+| `std.event`      | **`title`** string 1–500; `description` string ≤ 10000; `category` string ≤ 100; **`start`** when; `end` when; `tz` string 1–64; `allDay` boolean; `place` place; `url` string 1–2048; `rrule` string 1–1000; `status` `confirmed`/`tentative`/`cancelled`; topic `place.cells` | `in` → `std.calendar`, one                                          | —                                     |
+| `std.rsvp`       | **`status`** `going`/`maybe`/`no`; `guests` integer 0–100; `note` string ≤ 500; `respondingTo` DID; topic `respondingTo`                                                                                                                                                        | `about` → `std.event`, one                                          | `onePer: [@author, link:about]`       |
+| `std.slot`       | **`start`** when; **`end`** when; `tz` string 1–64; `note` string ≤ 1000                                                                                                                                                                                                        | `in` → `std.calendar`, one                                          | —                                     |
+| `std.column`     | **`name`** string 1–200; `position` string 1–200                                                                                                                                                                                                                                | `in` → `std.project`, one                                           | —                                     |
+| `std.task`       | **`title`** string 1–500; `notes` string ≤ 10000; `position` string 1–200; `due` when; `status` `todo`/`doing`/`done`/`cancelled`; `assignees` DID[] (≤ 20); `priority` integer 0–4; topic `assignees`                                                                          | `in` → `std.column`, `std.project`, one; `parent` → `std.task`, one | —                                     |
+| `std.project`    | **`name`** string 1–200; `description` string ≤ 10000; `status` `planned`/`active`/`paused`/`done`/`cancelled`; `due` when                                                                                                                                                      | —                                                                   | —                                     |
+| `std.time-entry` | **`start`** when; `end` when; `note` string ≤ 1000                                                                                                                                                                                                                              | `about` → `*`, one                                                  | —                                     |
+| `std.reminder`   | **`at`** when; `note` string ≤ 1000; `done` boolean                                                                                                                                                                                                                             | `about` → `*`, one                                                  | —                                     |
+| `std.habit`      | **`name`** string 1–200; `schedule` string ≤ 1000; `target` number ≥ 0; `unit` string ≤ 32; `position` string 1–200                                                                                                                                                             | —                                                                   | —                                     |
+| `std.checkin`    | **`date`** day; `value` number; `note` string ≤ 1000                                                                                                                                                                                                                            | `about` → `std.habit`, one                                          | `onePer: [@author, link:about, date]` |
 
 **Places and travel**
 
@@ -206,19 +231,19 @@ anything, and only moderators and admins write in the collections in
 
 **Community and governance**
 
-| Name               | Body                                                                                                                                                                             | Links                                     | Rules                                              |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | -------------------------------------------------- |
-| `std.poll`         | **`question`** string 1–500; **`options`** string 1–200[]; `closed` boolean                                                                                                      | —                                         | `fixed: [options]`                                 |
-| `std.vote`         | **`choice`** integer ≥ 0; `choices` integer ≥ 0[] (≤ 100); `respondingTo` DID; topic `respondingTo`                                                                              | `about` → `std.poll`, `std.proposal`, one | `onePer: [@author, link:about]`                    |
-| `std.proposal`     | **`title`** string 1–300; `body` string ≤ 20000; **`options`** string 1–200[] (1–20); `closesAt` when; `status` `open`/`passed`/`rejected`/`withdrawn`; `quorum` integer 1–10000 | —                                         | `fixed: [options]`                                 |
-| `std.ballot`       | **`choice`** integer ≥ 0; `respondingTo` DID; topic `respondingTo`                                                                                                               | `about` → `std.proposal`, one             | `onePer: [@author, link:about]`; `fixed: [choice]` |
-| `std.decision`     | **`outcome`** integer ≥ 0; **`proposal`** string 1–128 (a version id); **`ballots`** string 1–128[] (≤ 256)                                                                      | `about` → `std.proposal`, one             | `onePer: [link:about]`; `check` (below)            |
-| `std.goal`         | **`title`** string 1–300; `body` string ≤ 20000; **`target`** integer 1–10⁹; **`unit`** string 1–50; `closesAt` when                                                             | —                                         | `fixed: [target, unit]`                            |
-| `std.pledge`       | **`amount`** integer 1–10⁹; `note` string ≤ 1000; `respondingTo` DID; topic `respondingTo`                                                                                       | `about` → `std.goal`, one                 | `onePer: [@author, link:about]`; `fixed: [amount]` |
-| `std.goal-reached` | **`goal`** string 1–128 (a version id); **`pledges`** string 1–128[] (≤ 256)                                                                                                     | `about` → `std.goal`, one                 | `onePer: [link:about]`; `check` (below)            |
-| `std.announcement` | **`title`** string 1–300; `text` string ≤ 20000                                                                                                                                  | —                                         | —                                                  |
-| `std.badge`        | **`name`** string 1–100; `description` string ≤ 1000; `image` blob                                                                                                               | —                                         | —                                                  |
-| `std.award`        | **`did`** DID; `note` string ≤ 1000; topic `did`                                                                                                                                 | `about` → `std.badge`, one                | `onePer: [link:about, did]`                        |
+| Name               | Body                                                                                                                                                                             | Links                         | Rules                                              |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | -------------------------------------------------- |
+| `std.poll`         | **`question`** string 1–500; **`options`** string 1–200[]; `closed` boolean                                                                                                      | —                             | `fixed: [options]`                                 |
+| `std.vote`         | **`choice`** integer ≥ 0; `choices` integer ≥ 0[] (≤ 100); `respondingTo` DID; topic `respondingTo`                                                                              | `about` → `std.poll`, one     | `onePer: [@author, link:about]`                    |
+| `std.proposal`     | **`title`** string 1–300; `body` string ≤ 20000; **`options`** string 1–200[] (1–20); `closesAt` when; `status` `open`/`passed`/`rejected`/`withdrawn`; `quorum` integer 1–10000 | —                             | `fixed: [options]`                                 |
+| `std.ballot`       | **`choice`** integer ≥ 0; `respondingTo` DID; topic `respondingTo`                                                                                                               | `about` → `std.proposal`, one | `onePer: [@author, link:about]`; `fixed: [choice]` |
+| `std.decision`     | **`outcome`** integer ≥ 0; **`proposal`** string 1–128 (a version id); **`ballots`** string 1–128[] (≤ 256)                                                                      | `about` → `std.proposal`, one | `onePer: [link:about]`; `check` (below)            |
+| `std.goal`         | **`title`** string 1–300; `body` string ≤ 20000; **`target`** integer 1–10⁹; **`unit`** string 1–50; `closesAt` when                                                             | —                             | `fixed: [target, unit]`                            |
+| `std.pledge`       | **`amount`** integer 1–10⁹; `note` string ≤ 1000; `respondingTo` DID; topic `respondingTo`                                                                                       | `about` → `std.goal`, one     | `onePer: [@author, link:about]`; `fixed: [amount]` |
+| `std.goal-reached` | **`goal`** string 1–128 (a version id); **`pledges`** string 1–128[] (≤ 256)                                                                                                     | `about` → `std.goal`, one     | `onePer: [link:about]`; `check` (below)            |
+| `std.announcement` | **`title`** string 1–300; `text` string ≤ 20000                                                                                                                                  | —                             | —                                                  |
+| `std.badge`        | **`name`** string 1–100; `description` string ≤ 1000; `image` blob                                                                                                               | —                             | —                                                  |
+| `std.award`        | **`did`** DID; `note` string ≤ 1000; topic `did`                                                                                                                                 | `about` → `std.badge`, one    | `onePer: [link:about, did]`                        |
 
 **Proven outcomes.** A `std.decision` and a `std.goal-reached` are not
 declared by anyone: each cites the records that prove it, by version id, and
@@ -356,8 +381,8 @@ _Source: `packages/core/src/schemas/library/publishing.ts` (`message`, `post`), 
 
 **Responses.** A record written in answer to someone's record names them in
 `respondingTo`: a `std.reaction`, `std.comment` or `std.repost` the author of
-what it is about, a `std.rsvp` the event's, a `std.booking` the slot's, a
-`std.vote` or `std.ballot` the poll's or proposal's, a `std.pledge` the
+what it is about, a `std.rsvp` the event's, a
+`std.vote` the poll's, a `std.ballot` the proposal's, a `std.pledge` the
 goal's, a `std.claim` the claimed record's, a `std.order` the listing's, and a
 `std.order-update` the order's. It is their topic, so "someone reacted to,
 commented on, or answered what I wrote" is `where: { "respondingTo":
@@ -387,10 +412,10 @@ most 63 so that with `paidBy` every one is tagged: a record carries at most
 _Source: `packages/core/src/schemas/library/annotations.ts`, `packages/core/src/schemas/library/publishing.ts`, `packages/core/src/schemas/library/planning.ts`, `packages/core/src/schemas/library/community.ts`, `packages/core/src/schemas/library/money.ts`, `packages/core/src/schemas/library/social.ts`, `packages/core/src/schemas/library/media.ts`; `apps/example/src/derive/people.ts` (`respondingTo`), `apps/example/src/components/std/Reactions.tsx`, `apps/example/src/components/std/Comments.tsx`, `apps/example/src/components/apps/Polls.tsx`, `apps/example/src/components/apps/Decisions.tsx`, `apps/example/src/components/apps/Events.tsx`, `apps/example/src/components/apps/Marketplace.tsx`. Tests: `packages/core/tests/topics.test.ts` ("every standard collection that names people has them as topics…", "a report names nobody…", "a std.reaction is tagged for the person in its respondingTo…" and the rest of that list)._
 
 **Channels.** A space with more than one conversation lists `std.channel`
-records, by `position` then name, and a message links its channel as
-`channel`: `where: { 'link:channel': key }` finds a channel's messages, and
-`include: { messages: { rel: 'channel', from: 'std.message', count: true } }`
-counts them. A message with no `channel` link is in the space's own room,
+records, by `position` then name, and a message is `in` its channel:
+`where: { 'link:in': key }` finds a channel's messages, and
+`include: { messages: { rel: 'in', from: 'std.message', count: true } }`
+counts them. A message in no channel is in the space's own room,
 which a chat shows first, as "general". In the `community` template only
 moderators and admins make or rename a channel. A channel is a label, not a boundary: every member reads
 every channel. Something only some members may read is a space of its own, or
@@ -405,18 +430,19 @@ keeper can match unread.
 
 _Source: `packages/core/src/schemas/library/publishing.ts` (`channel`, `direct`), `packages/core/src/privacy/direct.ts`, `apps/example/src/components/apps/Chat.tsx`. Tests: `packages/core/tests/direct.test.ts`._
 
-**Changes to earlier definitions.** `std.attachment`, `std.task`,
-`std.message`, `std.vote` and `std.proposal` existed before the library grew. Each gained
-only optional fields and link roles: `std.attachment` a `blob`; `std.task`
-`due`, `status`, `assignees`, `priority` and the `parent` and `project` links;
-`std.message` a `channel`, the `root` link, `mentions`, `replyingTo`, and its
-first topics ([spec 02 §8](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)); `std.vote` `choices` (every
-choice, most preferred first, with `choice` the first of them); `std.proposal`
-`quorum`, for `std.decision`. A space that
-holds an earlier definition keeps it until someone applies a blueprint that
-carries the new one, which its review shows as a change. One of them is not additive in the sense of
-[spec 02 §6.5](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md): `std.vote`'s `about` may now also point at a `std.proposal`, so an app
-that reads votes may meet one on something that is not a poll.
+**Changes to earlier definitions.** Before v1 the library is reshaped
+without migrations, to keep to the rules above. The last such change merged
+`std.attachment`, `std.photo`, `std.video`, `std.folder` and `std.album` into
+one `std.file` (groups of files are `std.list`s); removed `std.booking` (a
+booking is a `std.claim` about a `std.slot`), `std.reference` (any link
+refers) and `std.bookmark` (a saved thing is a `std.list-item`); renamed
+`std.message`'s `channel` link and `std.task`'s `column` link to `in`, and
+dropped the task's `project` link (a task is `in` a project when it has no
+column, and a column is `in` its project); made `std.tag` one record per
+person, record and label; gave `std.track` a `file` link and `std.play` an
+`about` link to its track; and narrowed `std.vote` to polls, since a proposal
+is decided by `std.ballot`s. A space that holds an earlier definition keeps
+it until someone applies a blueprint that carries the new one.
 
 Since then ([#105](https://github.com/leifriksheim/minca/issues/105)), `std.comment` and `std.post` gained the same optional
 `mentions` and `replyingTo` as a message, and `std.note`, `std.doc-block` and

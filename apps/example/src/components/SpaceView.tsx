@@ -116,8 +116,11 @@ export interface SpaceScreen {
   /** Go to another part of this space */
   readonly go: (to: SpacePath) => void;
   readonly openApp: (id: string) => void;
-  /** Open a record in the panel beside whatever is open */
+  /** Open a record: in the app that shows its collection, else in the panel beside whatever is open */
   readonly openRecord: (record: NodeRecord) => void;
+  /** The record the open app was asked to show, until it has been handed over */
+  readonly shown: string | undefined;
+  readonly clearShown: () => void;
   /** Ask an agent to make an app, or make one by hand */
   readonly startCreating: () => void;
 }
@@ -176,7 +179,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
   // Where in the space you are, and the record open beside it: the address holds both.
   const leaf = useRouterState({ select: (state) => state.matches.at(-1)?.routeId });
   const openId = useParams({ strict: false }).appId;
-  const { record } = useSearch({ from: '/spaces/$spaceId' });
+  const { record, at } = useSearch({ from: '/spaces/$spaceId' });
   const onApps = leaf === APPS_ROUTE;
   const onApp = leaf === APP_ROUTE;
   const hood = HOOD.find((h) => h.to === leaf);
@@ -231,15 +234,27 @@ function SpaceView({ space }: { space: SpaceSummary }) {
   const go = (to: SpacePath) => void navigate({ to, params });
   const openApp = (appId: string) =>
     void navigate({ to: '/spaces/$spaceId/apps/$appId', params: { spaceId: space.id, appId } });
-  // In Data, a record opens in its own collection; anywhere else, beside what is open.
-  const openRecord = (r: NodeRecord) =>
-    void (hood?.id === 'data'
-      ? navigate({
-          to: '/spaces/$spaceId/data',
-          params,
-          search: { collection: r.collection, record: r.key },
-        })
-      : navigate({ to: '.', search: (was) => ({ ...was, record: r.key }) }));
+  // In Data, a record opens in its own collection. Elsewhere it opens in the app that shows its
+  // collection, the one open first, so a message opens in the chat; with none, beside what is open.
+  const openRecord = (r: NodeRecord) => {
+    if (hood?.id === 'data')
+      return void navigate({
+        to: '/spaces/$spaceId/data',
+        params,
+        search: { collection: r.collection, record: r.key },
+      });
+    const shows = (app: AppEntry) => app.record.body?.shows?.includes(r.collection) === true;
+    const app = open && shows(open) ? open : apps.ready.find(shows);
+    if (app)
+      return void navigate({
+        to: '/spaces/$spaceId/apps/$appId',
+        params: { spaceId: space.id, appId: app.id },
+        search: (was) => ({ ...was, record: undefined, at: r.key }),
+      });
+    void navigate({ to: '.', search: (was) => ({ ...was, record: r.key }) });
+  };
+  const clearShown = () =>
+    void navigate({ to: '.', search: (was) => ({ ...was, at: undefined }), replace: true });
   const closeRecord = () => void navigate({ to: '.', search: (was) => ({ ...was, record: undefined }) });
 
   // An open app is looked at, as long as the page is: what arrives while it is counts as seen.
@@ -323,6 +338,8 @@ function SpaceView({ space }: { space: SpaceSummary }) {
     go,
     openApp,
     openRecord,
+    shown: at,
+    clearShown,
     startCreating: () => setCreating(true),
   };
 
@@ -645,8 +662,17 @@ function SpaceView({ space }: { space: SpaceSummary }) {
 
 /** An open app: its screen, or its records as lists */
 export function OpenApp({ app }: { app: AppEntry }) {
-  const { space, collections, openRecord } = useSpaceScreen();
-  return <MadeAppScreen space={space} record={app.record} collections={collections} onOpen={openRecord} />;
+  const { space, collections, openRecord, shown, clearShown } = useSpaceScreen();
+  return (
+    <MadeAppScreen
+      space={space}
+      record={app.record}
+      collections={collections}
+      onOpen={openRecord}
+      shown={shown}
+      onShown={clearShown}
+    />
+  );
 }
 
 /** Who can read the space, in a word */

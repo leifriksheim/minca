@@ -49,11 +49,12 @@ export const visit = define({
 });
 export type Visit = BodyOf<typeof visit>;
 
-/** A trip; its events, bookings and places link `in` it. */
+/** A trip; its plan is a `std.list` of kind "itinerary" with items about its events and places. */
 export const trip = define({
   name: 'std.trip',
   title: 'Trip',
-  description: 'A trip, with dates.',
+  description:
+    'A trip, with dates. Its plan is a std.list of kind "itinerary", with items about its events and places.',
   schema: {
     type: 'object',
     properties: { title: words(200), start: day(), end: day(), note: markdown(10000) },

@@ -167,13 +167,30 @@ A screen reaches the page around it only through `window.minca`, and only for
 its app's collections and the people in its space: it lists and writes
 records as the person looking, asks what they may do (`can`), gets someone's
 picture (`picture`), and asks the page to show a record or a person
-(`open`). What a sealed frame can't do, the page does for it when it asks,
+(`open`), or the record one of its own links to (`open` with `link`: the
+message a file was shared on). Following a link is the one way past its collections. The bridge answers the same whether or not the record is there, and never opens the space's own records (`sys.*`, `launcher.app`); but the page visibly opens a record that is there, for the person, who can see it anyway, so a screen that already knows a key could notice, from outside, that it exists. What a sealed frame can't do, the page does for it when it asks,
 after checking the request: it searches for places and asks where the person
 is (`places`), opens http and https pages (`link`), saves text files
 (`save`), keeps a few kilobytes per app on the device (`remember`, `recall`),
 and reads a picture that one of the app's own records refers to (`file`),
 or the whole file (`blob`), taking its type from the record rather than from
 the screen.
+
+**Opening a record where it belongs.** A `launcher.app` may name, among its
+`collections`, the ones it `shows`: the ones whose records it is the place
+to open (`shows: ["std.message"]` for a chat). Whatever asks the example app
+to open a record, a screen's `open` or a link beside a record, goes to the
+app that shows that record's collection, the one open first, and that app's
+screen is handed the record's key (`minca.shown`, `minca.onShow`, the kit's
+`useShown`) to scroll to or open, but only of a collection it shows, which
+it could list anyway. That app does learn which of those records the person
+opens from elsewhere, which is why only someone who may define collections
+adds an app. With no app that shows it, the record
+opens beside whatever is open. So the Files app opens a file's message in
+the chat, and a chat's file in Files, without either knowing the other. An
+app that names a collection in `shows` must do something with what it is
+handed. The kit's `<Record>` draws any standard record as one line the same
+way in every app, and opens it this way when clicked.
 
 A screen also sends live messages, kept nowhere, to the other devices that
 have the same app open in the space (`live.send`, `live.on`): for cursors,

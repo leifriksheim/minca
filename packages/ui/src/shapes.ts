@@ -161,6 +161,7 @@ export const APP_SHAPES: Readonly<Record<string, { kind: ShapeKind; colour: Shap
   kanban: { kind: 'checker', colour: 'lilac' },
   marketplace: { kind: 'leaf', colour: 'cobalt' },
   calls: { kind: 'arch', colour: 'coral' },
+  files: { kind: 'stack', colour: 'sage' },
 };
 
 const CYCLE: readonly ShapeColour[] = ['cobalt', 'coral', 'peach', 'sage', 'lilac'];

@@ -21,6 +21,9 @@ export function ScreenFrame({
   network,
   title,
   onOpen,
+  shows = [],
+  shown,
+  onShown,
 }: {
   spaceId: string;
   /** The app's launcher record, which carries the screen */
@@ -31,6 +34,12 @@ export function ScreenFrame({
   title: string;
   /** Shows a record the screen asked to open (`minca.open`) */
   onOpen: (record: NodeRecord) => void;
+  /** The collections whose records it is the place to open (`launcher.app`'s `shows`) */
+  shows?: ReadonlyArray<string> | undefined;
+  /** A record of a collection this app shows that it was asked to show (`minca.onShow`) */
+  shown?: string | undefined;
+  /** Called once `shown` is handed to the screen */
+  onShown?: (() => void) | undefined;
 }) {
   const node = useNode();
   const account = useAccount();
@@ -42,6 +51,31 @@ export function ScreenFrame({
   useEffect(() => {
     opens.current = onOpen;
   }, [onOpen]);
+  // The bridge of the running screen, and a record to show once there is one.
+  const live = useRef<ScreenBridge | null>(null);
+  const pending = useRef<string | undefined>(undefined);
+  const handed = useRef(onShown);
+  useEffect(() => {
+    handed.current = onShown;
+  }, [onShown]);
+  // Only a record of a collection it shows: the address is anyone's to write, and a screen
+  // handed any key would learn which records exist and which the person opens.
+  const showing = shows.join('|');
+  useEffect(() => {
+    if (!shown) return;
+    let current = true;
+    void node.records.get(spaceId, shown).then((record) => {
+      if (!current) return;
+      if (!record || !showing.split('|').includes(record.collection)) return void handed.current?.();
+      if (live.current) {
+        live.current.show(shown);
+        handed.current?.();
+      } else pending.current = shown;
+    });
+    return () => {
+      current = false;
+    };
+  }, [node, spaceId, shown, showing]);
   // A new screen, or a new app, starts a new frame.
   const [generation, setGeneration] = useState(0);
   const origins = [...network].sort().join(' ');
@@ -84,6 +118,7 @@ export function ScreenFrame({
         // Only the page we loaded says ready, and only once. Anything after that navigated the frame.
         bridge?.close();
         bridge = null;
+        live.current = null;
         setStoppedRun(run);
         return;
       }
@@ -110,11 +145,18 @@ export function ScreenFrame({
         '*',
         [channel.port2],
       );
+      live.current = bridge;
+      if (pending.current) {
+        bridge.show(pending.current);
+        pending.current = undefined;
+        handed.current?.();
+      }
     };
     globalThis.addEventListener('message', onMessage);
     return () => {
       globalThis.removeEventListener('message', onMessage);
       bridge?.close();
+      live.current = null;
     };
   }, [node, spaceId, appKey, screen, names, account.name, generation, answer, allowed, run]);
 

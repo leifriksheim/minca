@@ -16,6 +16,14 @@ import {
   type ScreenHost,
 } from '../src/components/apps/screens';
 import type { P2PNode } from '@minca/core';
+import {
+  file as fileCollection,
+  list,
+  listItem,
+  message,
+  useSchemas as addSchemas,
+} from '@minca/core/schemas';
+import { checkLauncherApp } from '../src/components/apps/launcher';
 import { setup, waitFor } from './helpers';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -395,6 +403,151 @@ function fakeHost() {
   return { host, asked };
 }
 
+describe('the Files app', () => {
+  test("a file kept about nothing is a file of the space, and anyone may put anyone's file in a category", async () => {
+    const { alice, bob, space } = await setup();
+    const FILES = [fileCollection.name, list.name, listItem.name];
+    await addSchemas(alice.node, space, [fileCollection, list, listItem]);
+    const mine = bridgeFor(alice.node, space, FILES);
+    const theirs = bridgeFor(bob.node, space, FILES);
+    try {
+      // Uploaded in Files, not shared anywhere: a file with no about
+      const bytes = z
+        .looseObject({ hash: z.string(), size: z.number(), mime: z.string() })
+        .parse(
+          (await mine.call('addFile', new Uint8Array([1, 2]), { name: 'plan.txt', mime: 'text/plain' }))
+            .value,
+        );
+      const put = await mine.call('put', fileCollection.name, {
+        name: 'plan.txt',
+        mime: 'text/plain',
+        size: 2,
+        blob: bytes,
+      });
+      assert.equal(put.ok, true, put.error ?? '');
+      const file = z.object({ key: z.string() }).parse(put.value);
+
+      // A category is a list that exists while empty; a file is in it by an item about it.
+      const made = await mine.call('put', list.name, { title: 'Plans', kind: 'category' });
+      const category = z.object({ key: z.string() }).parse(made.value);
+      await waitFor(async () => (await bob.node.records.get(space, category.key)) !== null, 'the category');
+      const item = await theirs.call(
+        'put',
+        listItem.name,
+        {},
+        {
+          links: [
+            { rel: 'in', to: category.key },
+            { rel: 'about', to: file.key },
+          ],
+        },
+      );
+      assert.equal(item.ok, true, item.error ?? '');
+      const inIt = await theirs.call('list', listItem.name, { where: { 'link:in': category.key } });
+      const Items = z.array(z.object({ links: z.array(z.object({ rel: z.string(), to: z.string() })) }));
+      assert.deepEqual(
+        Items.parse(inIt.value).map((one) => one.links.find((l) => l.rel === 'about')?.to),
+        [file.key],
+      );
+      // The bytes follow the record; once here, Bob's screen gets them whole.
+      await waitFor(async () => (await theirs.call('blob', file.key, bytes.hash)).ok, 'the bytes');
+    } finally {
+      mine.close();
+      theirs.close();
+    }
+  });
+
+  test('a file opens the message it was shared on, though the app holds no messages', async () => {
+    const { alice, space } = await setup();
+    await addSchemas(alice.node, space, [fileCollection, message]);
+    const said = await alice.node.records.put(space, message.name, { text: 'The plan' });
+    const shared = await alice.node.records.put(
+      space,
+      fileCollection.name,
+      { name: 'plan.txt', mime: 'text/plain' },
+      { links: [{ rel: 'about', to: said.key }] },
+    );
+    const { host, asked } = fakeHost();
+    const { call, close, show, showed } = bridgeFor(alice.node, space, [fileCollection.name], host);
+    try {
+      // The page asks the screen to show a file, opened from the chat, say.
+      show(shared.key);
+      await waitFor(async () => showed.includes(shared.key), 'the file handed over');
+      assert.equal((await call('open', { record: shared.key, link: 'about' })).ok, true);
+      const opened = asked.find(([what]) => what === 'open')?.[1];
+      assert.ok(isRecord(opened) && isRecord(opened.record) && opened.record.key === said.key);
+      assert.equal((await call('open', { record: said.key })).ok, false, 'not a record of its own');
+    } finally {
+      close();
+    }
+  });
+
+  test('a link a screen points anywhere tells it nothing, and never opens the space’s own records', async () => {
+    const { alice, space } = await setup();
+    await addSchemas(alice.node, space, [fileCollection]);
+    const secret = await alice.node.records.put(space, 'app.secret', { pin: 1234 });
+    const { host, asked } = fakeHost();
+    const { call, close } = bridgeFor(alice.node, space, [fileCollection.name], host);
+    // A record of its own, pointed wherever the screen likes, then followed
+    const follow = async (to: string) => {
+      const own = await call(
+        'put',
+        fileCollection.name,
+        { name: 'x', mime: 'text/plain' },
+        {
+          links: [{ rel: 'about', to }],
+        },
+      );
+      const { key } = z.object({ key: z.string() }).parse(own.value);
+      return call('open', { record: key, link: 'about' });
+    };
+    try {
+      const here = await follow(secret.key);
+      const missing = await follow(`${secret.key.split('.')[0]}.aaaaaaaaaaaaaaaaaaaaaaaaaa`);
+      const own = await follow(`collection:${fileCollection.name}`);
+      // The same answer whether or not the record is here, or is the space's own: no way to probe for keys.
+      assert.deepEqual([here, missing, own], [here, here, here]);
+      assert.equal(here.ok, true);
+      // The page shows the person a record they can see anyway; the space's own records it never opens.
+      const opened = asked.filter(([what]) => what === 'open').map(([, target]) => target);
+      assert.equal(opened.length, 1);
+      assert.ok(isRecord(opened[0]) && isRecord(opened[0].record) && opened[0].record.key === secret.key);
+    } finally {
+      close();
+    }
+  });
+});
+
+describe('a record opened from elsewhere', () => {
+  test('the bridge hands the screen the key, and the script in front of it keeps it and calls back', () => {
+    const port: { postMessage: () => void; onmessage: ((event: unknown) => void) | null } = {
+      postMessage: () => {},
+      onmessage: null,
+    };
+    const window: Record<string, unknown> = {
+      __minca: { port, me: { did: 'did:key:zMe', name: 'Anna' }, collections: [] },
+    };
+    runScreenClient(window, () => {}, {});
+    const minca = window.minca;
+    assert.ok(isRecord(minca) && typeof minca.shown === 'function' && typeof minca.onShow === 'function');
+    assert.equal(Reflect.apply(minca.shown, undefined, []), null);
+    const told: unknown[] = [];
+    Reflect.apply(minca.onShow, undefined, [(key: unknown) => told.push(key)]);
+    port.onmessage?.({ data: { show: 'message-1' } });
+    assert.equal(Reflect.apply(minca.shown, undefined, []), 'message-1');
+    assert.deepEqual(told, ['message-1']);
+  });
+
+  test('an app may only show collections it has', () => {
+    const app = { title: 'Chat', collections: ['std.message'], shows: ['std.message'] };
+    assert.equal(checkLauncherApp(app), null);
+    assert.match(
+      checkLauncherApp({ ...app, shows: ['std.file'] }) ?? '',
+      /std\.file is not one of its collections/,
+    );
+  });
+});
+
 describe('live messages between screens', () => {
   test("a screen hears the same app's screens on other devices, as who sent it, and no other app's", async () => {
     const { alice, bob, space } = await setup();
@@ -446,10 +599,12 @@ function bridgeFor(
     port: channel.port1,
     ...(host ? { host } : {}),
   });
-  // The live messages handed to the screen
+  // The live messages, and the records to show, handed to the screen
   const heard: unknown[] = [];
+  const showed: unknown[] = [];
   channel.port2.addEventListener('message', (event: MessageEvent<unknown>) => {
     if (isRecord(event.data) && 'live' in event.data) heard.push(event.data.live);
+    if (isRecord(event.data) && 'show' in event.data) showed.push(event.data.show);
   });
   channel.port2.start();
   let next = 0;
@@ -468,6 +623,8 @@ function bridgeFor(
   return {
     call,
     heard,
+    showed,
+    show: (key: string) => bridge.show(key),
     close: () => {
       bridge.close();
       channel.port2.close();
