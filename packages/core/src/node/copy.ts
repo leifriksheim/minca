@@ -16,11 +16,13 @@ import { createSpaceManager } from '../space/space-manager.js';
 import { deriveAccountRegistry, deriveContactsSpace } from '../space/account-registry.js';
 import { createStorageProvider, type StorageProvider } from '../storage/storage-provider.js';
 import { createMirror } from '../storage/mirror.js';
+import { createP256Provider } from '../identity/crypto-p256.js';
+import { didOf } from '../identity/did.js';
 
 export interface CopyAccountParams {
   readonly from: StoreFactory;
   readonly to: StoreFactory;
-  /** The account's DID — invites between the two registries are issued as it */
+  /** The account's DID */
   readonly did: string;
   /** Also copy the account registry space, which neither registry lists */
   readonly accountKey?: Uint8Array;
@@ -64,8 +66,11 @@ async function folderOf(stores: StoreFactory, spaceId: string, storage: StorageP
 export async function copyAccountData(params: CopyAccountParams): Promise<CopyResult> {
   const fromRegistryStore = await params.from('registry', { seal: true });
   const toRegistryStore = await params.to('registry', { seal: true });
-  const fromRegistry = createSpaceManager(fromRegistryStore);
-  const toRegistry = createSpaceManager(toRegistryStore);
+  const provider = createP256Provider();
+  const fromRegistry = createSpaceManager(fromRegistryStore, provider);
+  const toRegistry = createSpaceManager(toRegistryStore, provider);
+  const made = await provider.generateKeyPair();
+  const copier = { did: await didOf(made.publicKey, provider), key: made.privateKey };
 
   // The contacts space is copied like any other, but it is not one the person counts as theirs.
   const contacts = params.accountKey
@@ -81,8 +86,9 @@ export async function copyAccountData(params: CopyAccountParams): Promise<CopyRe
   for (const { space } of listed) {
     spaceIds.push(space.id);
     if (await toRegistry.get(space.id)) continue;
-    // An invite carries exactly what a registry needs: the space, and its key.
-    await toRegistry.join(await fromRegistry.createInvite(space.id, params.did));
+    // An invite carries exactly what a registry needs: the space, and its key. Signed by a key
+    // made for it, which vouches for nothing: no relays or nodes ride along.
+    await toRegistry.join(await fromRegistry.createInvite(space.id, copier));
     if (space.id !== contacts) spacesAdded++;
   }
   if (params.accountKey) spaceIds.push((await deriveAccountRegistry(params.accountKey, params.did)).space.id);

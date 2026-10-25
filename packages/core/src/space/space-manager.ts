@@ -25,6 +25,9 @@ import type { InvitePreview } from '../node/types.js';
 import { solo } from './presets.js';
 import { checkRelays, STRONG_REMOVE } from './roles.js';
 import { checkInviteNodes } from './invite-link.js';
+import { checkInvitation, encodeInvitation, invitedByOf, readInvitation } from './invitation.js';
+import type { LooseSigner } from '../records/loose.js';
+import type { Version } from '../types.js';
 import { isRecord } from '../utils/guards.js';
 
 /** A space plus the secrets this node holds for it */
@@ -109,11 +112,14 @@ export interface SpaceInvite {
   readonly invite?: string;
   /** The role the invite is for, for showing before joining. The space's own record is what counts. */
   readonly role?: string;
+  /** The account that signed it: checked when joining, not when reading */
   readonly invitedBy: string;
   /** Where the space's members meet — a hint for reaching it before its own list has synced */
   readonly relays?: ReadonlyArray<string>;
   /** Always-on nodes that hold the space, pinned by DID — so a joiner reaches one with nobody else online */
   readonly nodes?: ReadonlyArray<string>;
+  /** The signed invitation all of the above but the secret was read from (spec 03 §7.4) */
+  readonly signed: Version;
 }
 
 export interface InviteLinkOptions {
@@ -131,8 +137,8 @@ export interface SpaceManager {
   get(spaceId: string): Promise<SpaceRecord | null>;
   list(): Promise<ReadonlyArray<SpaceRecord>>;
   remove(spaceId: string): Promise<void>;
-  /** Encodes a space, its key if private, and an invite's secret if given, as a shareable string */
-  createInvite(spaceId: string, invitedBy: string, options?: InviteLinkOptions): Promise<string>;
+  /** Signs an invitation to a space, with its key if private, and writes it with an invite's secret if given */
+  createInvite(spaceId: string, signer: LooseSigner, options?: InviteLinkOptions): Promise<string>;
   /**
    * Stores a space received as an invite, so it can be opened and synced.
    * Refuses a space whose id does not match what it says about itself, and
@@ -334,14 +340,22 @@ export function createSpaceManager(
         await adapter.delete(`${prefix}${spaceId}`);
     },
 
-    async createInvite(spaceId: string, invitedBy: string, options: InviteLinkOptions = {}): Promise<string> {
+    async createInvite(
+      spaceId: string,
+      signer: LooseSigner,
+      options: InviteLinkOptions = {},
+    ): Promise<string> {
       const record = await load(spaceId);
       if (!record) throw new Error(`Unknown space: ${spaceId}`);
-      return encodeSpaceInvite(record, invitedBy, options);
+      return encodeSpaceInvite(record, signer, provider, options);
     },
 
     async join(invite: string): Promise<SpaceRecord> {
       const parsed = parseSpaceInvite(invite);
+
+      // Signed by the account it names, with a note that lets it invite there: so are its relays and nodes.
+      const unsigned = await checkInvitation(parsed.signed, provider);
+      if (unsigned) throw new Error(`That invite doesn't check out: ${unsigned}.`);
 
       // Whoever made the invite could have edited it. The space must hash to
       // its id, and its key must be the one the space names.
@@ -419,41 +433,48 @@ export function createSpaceManager(
 }
 
 /**
- * Encodes a space, its key if private, and an invite's secret if given, as a
- * shareable string — for a space this node holds, or one it derived.
+ * Signs an invitation to a space, with its key if private, and writes it with
+ * an invite's secret if given, as a shareable string (spec 03 §7.4) — for a
+ * space this node holds, or one it derived.
  */
 export async function encodeSpaceInvite(
   record: SpaceRecord,
-  invitedBy: string,
+  signer: LooseSigner,
+  provider: CryptoProvider,
   options: InviteLinkOptions = {},
 ): Promise<string> {
   // The key rides along for private spaces — which is why an invite is a
   // secret, and why it belongs in a URL fragment rather than a path.
-  const invite: SpaceInvite = {
-    space: record.space,
-    invitedBy,
-    ...(record.key ? { key: exportKey(record.key).raw } : {}),
-    ...(options.secret ? { invite: base64UrlEncode(options.secret) } : {}),
-    ...(options.secret && options.role ? { role: options.role } : {}),
-    ...((options.relays ?? record.relays)?.length ? { relays: [...(options.relays ?? record.relays)!] } : {}),
-    // Only nodes the caller vouches for: those an invite gave this node are not passed on.
-    ...(options.nodes?.length ? { nodes: [...options.nodes] } : {}),
-  };
-  return base64UrlEncode(utf8Encode(JSON.stringify(invite)));
+  const relays = options.relays ?? record.relays;
+  return encodeInvitation(
+    signer,
+    {
+      space: record.space,
+      ...(record.key ? { key: exportKey(record.key).raw } : {}),
+      ...(options.secret && options.role ? { role: options.role } : {}),
+      ...(relays?.length ? { relays: [...relays] } : {}),
+      // Only nodes the caller vouches for: those an invite gave this node are not passed on.
+      ...(options.nodes?.length ? { nodes: [...options.nodes] } : {}),
+    },
+    provider,
+    options.secret,
+  );
 }
 
-/** Decodes an invite without touching storage. */
+/** Reads an invite without touching storage or checking its signature: joining does that. */
 export function parseSpaceInvite(invite: string): SpaceInvite {
-  try {
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- only the space's id and name are checked here; joining checks the rest
-    const parsed = JSON.parse(utf8Decode(base64UrlDecode(invite.trim()))) as SpaceInvite;
-    if (!parsed?.space?.id || !parsed.space.name) {
-      throw new Error('missing space');
-    }
-    return parsed;
-  } catch {
-    throw new Error('That invite could not be read — it may be truncated or from another app.');
-  }
+  const { version, secret } = readInvitation(invite);
+  const body = version.body;
+  return {
+    space: body.space,
+    invitedBy: invitedByOf(version),
+    ...(typeof body.key === 'string' ? { key: body.key } : {}),
+    ...(secret !== undefined ? { invite: secret } : {}),
+    ...(secret !== undefined && typeof body.role === 'string' ? { role: body.role } : {}),
+    ...(Array.isArray(body.relays) ? { relays: body.relays } : {}),
+    ...(Array.isArray(body.nodes) ? { nodes: body.nodes } : {}),
+    signed: version,
+  };
 }
 
 /** Accepts a bare invite or a whole share link carrying one (`…#invite=…`). */

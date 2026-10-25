@@ -12,6 +12,8 @@ export interface CreateVersionParams<T> {
   readonly createdAt?: string;
   /** Space this version belongs to */
   readonly space?: string;
+  /** A loose version's recipient key (02 §3.5) */
+  readonly to?: string;
   /** The note authorizing this author, when signing with a delegated key */
   readonly proof?: Delegation;
   /**
@@ -77,6 +79,7 @@ export function createVersion<T>(params: CreateVersionParams<T>): UnsignedVersio
     body: params.body,
     createdAt: params.createdAt ?? new Date().toISOString(),
     ...(params.space ? { space: params.space } : {}),
+    ...(params.to ? { to: params.to } : {}),
     ...(params.proof ? { proof: params.proof } : {}),
     key: params.version?.key ?? base32Encode(globalThis.crypto.getRandomValues(new Uint8Array(16))),
     seq: params.version?.seq ?? 0,

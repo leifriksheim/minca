@@ -62,8 +62,10 @@ import {
   relayOfNode,
   sealInvite,
 } from '../space/invite-link.js';
+import { readInvitation, writeInvitation } from '../space/invitation.js';
+import type { LooseSigner } from '../records/loose.js';
 import { foundersOf, soleFounder } from '../space/constitution.js';
-import { base64UrlDecode, base64UrlEncode, bytesToHex, hexToBytes, utf8Encode } from '../utils/encoding.js';
+import { base64UrlDecode, base64UrlEncode, bytesToHex, hexToBytes } from '../utils/encoding.js';
 import { isRecord, unref } from '../utils/guards.js';
 import { createListeners } from '../utils/events.js';
 import { serial } from '../utils/serial.js';
@@ -299,6 +301,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
    * name, no doors. Every peer would ignore those (spec 01 §8).
    */
   const narrowNote = !actsForAccount(current);
+  /** What signs this node's loose versions — invitations, knocks: the session key, under the note as it is now */
+  const looseSigner = (): LooseSigner => ({ did: session.did, key: session.key, proof: current });
 
   // ─── Events ────────────────────────────────────────────────────────
 
@@ -336,7 +340,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   const contactsSpaceId = contactsRecord?.space.id ?? config.contactsSpace ?? null;
   // Kept in the node's own list like a joined space, so it can be shared with an app like one.
   if (contactsRecord && !(await registry.get(contactsRecord.space.id))) {
-    await joinRegistry(await encodeSpaceInvite(contactsRecord, config.signer.did));
+    await joinRegistry(await encodeSpaceInvite(contactsRecord, looseSigner(), provider));
   }
   /** Which of the account's own spaces this is, or null for one it uses */
   async function kindOf(spaceId: string): Promise<'registry' | 'contacts' | 'carry' | null> {
@@ -357,7 +361,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     const named = (await findRecord(spaceId))?.relays ?? [];
     const own = usableRelays(config.network).slice(0, MAX_RELAYS);
     const nodes = await nodesOf(spaceId);
-    return registry.createInvite(spaceId, config.signer.did, {
+    return registry.createInvite(spaceId, looseSigner(), {
       ...options,
       ...(named.length ? {} : own.length ? { relays: own } : {}),
       ...(nodes.length ? { nodes } : {}),
@@ -976,10 +980,11 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     until: number | undefined,
   ): Promise<string> {
     const long = await inviteTo(spaceId, options);
-    const { invite: _secret, ...invite } = parseSpaceInvite(long);
+    // The invitation as signed: its secret is the link's to give.
+    const invite = parseSpaceInvite(long);
     let sealed: { readonly blob: string; readonly pin: Uint8Array };
     try {
-      sealed = await sealInvite(secret, { invite, ...(until !== undefined ? { until } : {}) });
+      sealed = await sealInvite(secret, { invite: invite.signed, ...(until !== undefined ? { until } : {}) });
     } catch {
       return long;
     }
@@ -1155,16 +1160,9 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     if (!opened)
       throw new Error('That invite was not found. It may have expired, or the places it names may be down.');
     const { invite, until } = opened;
-    const { invite: _ignored, ...rest } = invite;
-    const long = base64UrlEncode(
-      utf8Encode(
-        JSON.stringify({
-          ...rest,
-          ...(typeof rest.role === 'string' ? { invite: base64UrlEncode(inviteSecret) } : {}),
-        }),
-      ),
-    );
-    parseSpaceInvite(long);
+    // The invitation as its inviter signed it, and beside it the secret the link's own gives a role link.
+    const signed = readInvitation(writeInvitation(invite)).version;
+    const long = writeInvitation(signed, typeof signed.body.role === 'string' ? inviteSecret : undefined);
     return { long, ...(until !== undefined ? { until } : {}) };
   }
 
@@ -1473,7 +1471,10 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         // Not in turn behind a refill: nothing removes a carrier that is only now being added.
         await syncPasses(entry);
       }
-      return { space: entry.carry.space.id, invite: await encodeSpaceInvite(entry.carry, config.signer.did) };
+      return {
+        space: entry.carry.space.id,
+        invite: await encodeSpaceInvite(entry.carry, looseSigner(), provider),
+      };
     },
 
     settled: (waitMs) => within(passAll.done(), waitMs),

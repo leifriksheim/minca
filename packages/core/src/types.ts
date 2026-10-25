@@ -92,6 +92,8 @@ export interface UnsignedVersion<T = unknown> {
   readonly collection: string; // Collection name (e.g., 'app.bsky.feed.post')
   /** Space this belongs to — signed, so it cannot be replayed into another space. Omitted for unscoped data. */
   readonly space?: string;
+  /** For a loose version (no space), the public key it is sealed to: signed, so it can't be re-sealed to another (02 §3.5) */
+  readonly to?: string;
   readonly createdAt: string; // ISO 8601 timestamp
   /**
    * The content: signed through {@link Envelope.bodyHash}, not itself. Absent

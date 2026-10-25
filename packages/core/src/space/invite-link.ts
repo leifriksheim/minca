@@ -18,6 +18,7 @@ import { sha256 } from '../utils/hash.js';
 import { expandSecret } from './space-access.js';
 import { checkRelays } from './roles.js';
 import { nodeAddress } from '../network/ws-transport.js';
+import type { Version } from '../types.js';
 
 /** The secret's length: 128 bits, out of reach of offline guessing */
 const LINK_SECRET_BYTES = 16;
@@ -49,9 +50,9 @@ export interface InviteLinkKeys {
   readonly topic: string;
 }
 
-/** What a sealed invite holds: a long invite, without its secret or who sent it */
+/** What a sealed invite holds: the signed invitation (spec 03 §7.4), whose secret the link gives */
 export interface SealedInvite {
-  readonly invite: Readonly<Record<string, unknown>>;
+  readonly invite: Version;
   /** When the inviter stops serving it, ms; nothing a peer enforces */
   readonly until?: number;
 }
@@ -213,7 +214,7 @@ export async function sealInvite(
   secret: Uint8Array,
   sealed: SealedInvite,
 ): Promise<{ readonly blob: string; readonly pin: Uint8Array }> {
-  const json = utf8Encode(JSON.stringify({ v: 1, ...sealed }));
+  const json = utf8Encode(JSON.stringify({ v: 2, ...sealed }));
   if (json.length > MAX_SEALED_INVITE_BYTES) throw new Error('That invite is too large for a short link');
   const plain = await pipe(json, new CompressionStream('deflate'), MAX_SEALED_INVITE_BYTES);
   const nonce = globalThis.crypto.getRandomValues(new Uint8Array(12));
@@ -253,7 +254,8 @@ export async function openInvite(link: InviteLink, blob: string): Promise<Sealed
   } catch {
     return null;
   }
-  if (!isRecord(json) || json.v !== 1 || !isRecord(json.invite)) return null;
+  if (!isRecord(json) || json.v !== 2 || !isRecord(json.invite)) return null;
   const until = typeof json.until === 'number' && Number.isFinite(json.until) ? json.until : undefined;
-  return { invite: json.invite, ...(until !== undefined ? { until } : {}) };
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- an object; whoever joins with it reads it as an invitation and checks its signature
+  return { invite: json.invite as unknown as Version, ...(until !== undefined ? { until } : {}) };
 }

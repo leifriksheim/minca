@@ -7,7 +7,6 @@
 import { test, describe } from 'node:test';
 import { newRecordKey } from '../src/records/key.js';
 import assert from 'node:assert/strict';
-import { isRecord } from '../src/utils/guards.js';
 
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
@@ -30,13 +29,14 @@ import {
 } from '../src/space/space-access.js';
 import { community, team } from '../src/space/presets.js';
 import { checkSpace } from '../src/space/constitution.js';
-import { base64UrlDecode, base64UrlEncode, utf8Decode, utf8Encode } from '../src/utils/encoding.js';
+import { base64UrlEncode } from '../src/utils/encoding.js';
 import { createFakeHub } from './helpers/fake-transport.js';
 import { createMemoryAdapter } from './helpers/memory-adapter.js';
 import { joined } from './helpers/joined.js';
 import { hold, letGo } from './helpers/hold.js';
 import { stored } from './helpers/stored.js';
 import { until } from './helpers/until.js';
+import { resign } from './helpers/invitation.js';
 import { forge as forgeVersion, person, type Person } from './helpers/person.js';
 
 const provider = createP256Provider();
@@ -45,18 +45,8 @@ const provider = createP256Provider();
 const forge = (who: Person, space: string, body: unknown, seen: ReadonlyArray<string> = []) =>
   forgeVersion(who, space, { collection: 'app.note', body, seen }, { keep: false });
 
-/** Rewrites an invite, as whoever passes it along could */
-function tamper(
-  invite: string,
-  change: (parsed: Record<string, unknown> & { space: Record<string, unknown> }) => void,
-): string {
-  const parsed: unknown = JSON.parse(utf8Decode(base64UrlDecode(invite)));
-  assert.ok(isRecord(parsed));
-  const { space } = parsed;
-  assert.ok(isRecord(space));
-  change(Object.assign(parsed, { space }));
-  return base64UrlEncode(utf8Encode(JSON.stringify(parsed)));
-}
+/** Rewrites an invite and signs it again with a key of one's own, as whoever passes it along could */
+const tamper = resign;
 
 /** What an account is in a space, as its own node sees it: `founder`, its first role, or null */
 async function place(node: Person['node'], space: string): Promise<string | null> {
@@ -155,12 +145,12 @@ describe('space access: the space vouches for itself', () => {
     const invite = await alice.node.spaces.invite(space);
 
     await assert.rejects(
-      bob.node.spaces.join(tamper(invite, (p) => (p.space.top = { founders: [bob.node.did] }))),
+      bob.node.spaces.join(await tamper(invite, (p) => (p.space.top = { founders: [bob.node.did] }))),
       /does not describe a real space/,
     );
     await assert.rejects(
       bob.node.spaces.join(
-        tamper(invite, (p) => (p.space.roles = [{ name: 'editor', grants: [{ cmd: '/', pol: [] }] }])),
+        await tamper(invite, (p) => (p.space.roles = [{ name: 'editor', grants: [{ cmd: '/', pol: [] }] }])),
       ),
       /does not describe a real space/,
     );
@@ -176,7 +166,7 @@ describe('space access: the space vouches for itself', () => {
     const invite = await alice.node.spaces.invite(space, { write: false });
 
     await bob.node.spaces.join(
-      tamper(invite, (p) => (p.key = base64UrlEncode(crypto.getRandomValues(new Uint8Array(32))))),
+      await tamper(invite, (p) => (p.key = base64UrlEncode(crypto.getRandomValues(new Uint8Array(32))))),
     );
     await hold(alice.node, space);
     await hold(bob.node, space);
@@ -241,7 +231,7 @@ describe('space access: who may write', () => {
 
     // The blind node holds the space as anyone could be handed it: no key, no role.
     await blind.node.spaces.join(
-      tamper(await alice.node.spaces.invite(space, { write: false }), (p) => delete p.key),
+      await tamper(await alice.node.spaces.invite(space, { write: false }), (p) => delete p.key),
     );
     await hold(blind.node, space);
     await until(
@@ -254,7 +244,7 @@ describe('space access: who may write', () => {
 
     // A stranger's record, sealed-looking, reaches it — and is refused, as the member refuses it.
     await mallory.node.spaces.join(
-      tamper(await alice.node.spaces.invite(space, { write: false }), (p) => delete p.key),
+      await tamper(await alice.node.spaces.invite(space, { write: false }), (p) => delete p.key),
     );
     await letGo(mallory.node, space);
     const stranger = await forge(mallory, space, { ciphertext: 'x', iv: 'y' });

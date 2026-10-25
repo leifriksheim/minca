@@ -29,6 +29,7 @@ import { memoryStores } from './helpers/memory-stores.js';
 import { createMemoryAdapter } from './helpers/memory-adapter.js';
 import { createMemoryDirectory } from './helpers/memory-directory.js';
 import { until } from './helpers/until.js';
+import { selfSigner } from './helpers/invitation.js';
 
 const provider = createP256Provider();
 const open: Array<{ close(): Promise<void> }> = [];
@@ -106,7 +107,9 @@ describe('passes', () => {
     const pass = await makePass(record);
 
     assert.equal(
-      JSON.stringify(pass).includes(parseSpaceInvite(await registry.createInvite(record.space.id, 'x')).key!),
+      JSON.stringify(pass).includes(
+        parseSpaceInvite(await registry.createInvite(record.space.id, await selfSigner())).key!,
+      ),
       false,
     );
     const opened = await openPass(pass, provider);
@@ -390,7 +393,9 @@ describe('a carrier', () => {
     // Neither has heard of the other's when it adds its own.
     const onLaptop = await laptop.carriers.add({ did, name: 'host.example' });
     const onPhone = await offline.carriers.add({ did, name: 'Chrome' });
-    assert.deepEqual(onPhone, onLaptop);
+    // One carry space, whichever device signed the invite to it.
+    assert.equal(onPhone.space, onLaptop.space);
+    assert.equal(parseSpaceInvite(onPhone.invite).space.id, parseSpaceInvite(onLaptop.invite).space.id);
     await offline.close();
     const phone = await device(me, hub, phoneStores);
     // The carrier holds the phone's answer.
@@ -528,7 +533,8 @@ describe('a carrier', () => {
     });
 
     const again = await home.carriers.add({ did, name: 'Chrome' });
-    assert.deepEqual(again, first);
+    assert.equal(again.space, first.space);
+    assert.equal(parseSpaceInvite(again.invite).space.id, first.space);
     assert.equal((await home.carriers.list()).length, 1);
     assert.equal(await home.carriers.reached(again.space, 5000), true);
     assert.equal(closed, false);
