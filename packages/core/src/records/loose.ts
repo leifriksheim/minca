@@ -61,7 +61,7 @@ export async function signLoose<T>(
 }
 
 /** Why a value is not shaped as a loose version, or null */
-export function looseShapeProblem(value: unknown): string | null {
+function looseShapeProblem(value: unknown): string | null {
   if (!isRecord(value)) return 'It is not a version';
   for (const member of IN_A_SPACE) if (member in value) return `A loose version has no ${member}`;
   if (value.seq !== 0) return 'A loose version is a first version';

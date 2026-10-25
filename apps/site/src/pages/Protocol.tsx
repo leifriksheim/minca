@@ -414,36 +414,36 @@ const PARTS: ReadonlyArray<Part> = [
     ],
   },
   {
-    kicker: '07 — Doors',
+    kicker: '07 — Inbox',
     title: 'Reachable, but only on purpose.',
-    lead: 'Your name is on everything you sign, so knowing it shouldn’t be enough to reach you. A door is an address you hand out, and can close.',
-    file: '07-doors.md',
+    lead: 'Your name is on everything you sign, so knowing it shouldn’t be enough to reach you. Your inbox is an address you hand out, and can replace.',
+    file: '07-inbox.md',
     builtOn: [
       { name: 'Nostr outbox (NIP-65)', href: nip('65'), for: 'an address that names its own relays' },
       { name: 'SimpleX', href: 'https://simplex.chat', for: 'an address that is a queue, not an identity' },
       {
         name: 'AT Protocol handles',
         href: 'https://atproto.com/specs/handle',
-        for: 'a name that leads to a door',
+        for: 'a name that leads to an inbox',
       },
-      { name: 'HPKE (RFC 9180)', href: HPKE, for: 'knocks only the door can open' },
+      { name: 'HPKE (RFC 9180)', href: HPKE, for: 'knocks only your inbox can open' },
     ],
     points: [
       {
         title: 'The code doesn’t say who you are',
-        body: 'A door code holds two keys made for that door and up to three relays. Your account isn’t in it, and no relay learns it.',
+        body: 'An inbox code holds two keys made for it and up to three relays, signed by one of them. Your account isn’t in it, and no relay learns it.',
       },
       {
         title: 'Knocks are sealed and signed',
-        body: 'Someone with the code leaves a knock in the relays’ mailboxes: an invite to a new space for two, sealed to your door. The relay keeps it for up to two weeks and can’t read it or fake it.',
+        body: 'Someone with the code leaves a knock in the relays’ mailboxes: a signed invite to a new space for two, sealed to your inbox. The relay keeps it for up to two weeks and can’t read it or fake it.',
       },
       {
-        title: 'Answering proves it’s you',
-        body: 'Accepting joins the space and answers there, signed with the door’s key. Only then does the knocker learn whose door it was.',
+        title: 'Joining is the answer',
+        body: 'Accepting joins the space. Only you could open the invite, so whoever joins is you, and only then does the knocker learn whose inbox it was.',
       },
       {
         title: 'Hard to shut',
-        body: 'A door names its own relays, like Nostr’s outbox model, and it’s a queue you can close rather than an identity, like SimpleX. As long as one of its relays is up, it works.',
+        body: 'An inbox names its own relays, like Nostr’s outbox model, and it’s a queue you can replace rather than an identity, like SimpleX. As long as one of its relays is up, it works.',
       },
     ],
   },
@@ -657,7 +657,7 @@ export function Protocol() {
         intro={
           <p>
             Reading narrower than a space, files synced by hash, Web Push for closed apps, references to other
-            spaces, handles like @you.bsky.social that lead to a door, and more.
+            spaces, handles like @you.bsky.social that lead to an inbox, and more.
           </p>
         }
       >

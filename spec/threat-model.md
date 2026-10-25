@@ -39,7 +39,7 @@ and metadata through relays and hosts (§3.7, §3.8).
 | **Key thief**        | One of an account's delegated keys (session, writer or app key), with its note                                     |
 | **Root thief**       | The account's seed or recovery code                                                                                |
 | **App or program**   | A grant from the account, by popup or by code: a note, and perhaps the account, contact or member keys (06 §2, §3) |
-| **Relay**            | The signaling traffic of the rooms it serves, and the door mailbox it keeps                                        |
+| **Relay**            | The signaling traffic of the rooms it serves, and the mailbox it keeps for inboxes and short links                 |
 | **Host or carrier**  | Every version of the spaces it keeps and their envelopes, a pass's read seed, a connection to members              |
 | **Network attacker** | Can watch, delay, drop and replay traffic between peers                                                            |
 
@@ -58,6 +58,23 @@ reference implementation, or any implementation, honestly.
     of its `seen` (03 §5.2), and its access changes are never applied (03 §4.4,
     §4.5).
   - It cannot forge a version, a note or an invite (02 §3, 01 §7, 03 §7).
+    Passing an invite on, it can't change who invited, nor the relays and
+    nodes it names: an invitation is signed by the inviter's key under a note
+    that lets it invite to that space, and one edited, or signed again by a
+    key of its own, doesn't check out or names it as the inviter (03 §7.4;
+    `packages/core/tests/invitation.test.ts`, "relays and nodes changed by
+    whoever passed it on are refused when joining", "a key whose note is
+    about another space may not invite to this one").
+  - It can't knock as an account, nor leave a knock in a space as one: a
+    knock is signed under a note that grants `/account/write` for the whole
+    account, and a `sys.mail` stands only from such a key (07 §6, 03 §16;
+    `packages/core/tests/inbox.test.ts`, "needs a note that grants
+    /account/write…"; `packages/core/tests/contacts.test.ts`, "a knock left
+    in a space stands only from a note that may write for the whole
+    account…"). A knock it copies into a record of its own opens as nothing
+    (`packages/core/tests/attacks.test.ts`, "a knock re-posted by someone
+    else…"), and one sealed to one inbox doesn't open when re-sealed to
+    another (`inbox.test.ts`, "sealed to one key, naming another…").
     Holding a short link, it can seal other blobs under its secret and leave
     them under its topic, but a joiner takes only the blob whose hash is the
     link's pin, so it can't change what a given link gives anyone, nor clear it:
@@ -81,19 +98,27 @@ reference implementation, or any implementation, honestly.
     A short link is as good as a long one for as long as anyone who holds its
     sealed invite leaves it in a mailbox: its `until` stops only the
     account's own copies (03 §7.7). Whoever passes a link on can make a new
-    one under the same secret, joining the same role, whose name, relays and
-    nodes it chose ([#20](https://github.com/leifriksheim/minca/issues/20)).
+    one under the same secret, joining the same role, with relays and nodes
+    it chose, but only in an invitation it signed itself, which names it as
+    the inviter (03 §7.4).
   - The nodes an invite names are dialled by whoever joins with it, so a
-    node added by whoever passed it on learns the joiner's address and when
-    it is online, until the space names keepers that leave it out. They are
+    node named by whoever signed it learns the joiner's address and when it
+    is online, until the space names keepers that leave it out. They are
     never passed on in the joiner's own invites (03 §7.4).
+  - A knock's invite that reaches anyone but the person it was for, passed
+    on by them, or taken from a device of theirs before they accept, lets
+    whoever joins first be taken for them: joining is the answer, and the
+    knocker closes the invite only once it sees someone join (07 §8). The
+    door answer, signed with a key only the door's owner held, ruled this out;
+    it went with doors. Accepted: only the person the knock was for could
+    pass it on, and they could as well forward the knock.
   - A role link's invite is closed after a key change only once a device of
     the inviter's account that may close it comes online; meanwhile someone
     removed who kept the link can join with it again
     ([#170](https://github.com/leifriksheim/minca/issues/170)).
   - What it sends must be checked, stored or refused, with few limits
-    ([#33](https://github.com/leifriksheim/minca/issues/33)). That includes knocks on doors and contact requests (07),
-    whose mailbox can be flooded ([#162](https://github.com/leifriksheim/minca/issues/162)).
+    ([#33](https://github.com/leifriksheim/minca/issues/33)). That includes knocks, in an inbox or a shared
+    space (07), and an inbox's mailbox can be flooded ([#162](https://github.com/leifriksheim/minca/issues/162)).
   - It can squat a session DID in a relay room, or fill a room ([#162](https://github.com/leifriksheim/minca/issues/162)).
   - Text it writes on GitHub, an issue on a public repository a connected bot
     reads, reaches the model in a run that may write on GitHub. It is marked
@@ -708,6 +733,14 @@ line. That is relied on, by members (§3.2) and former members (§3.3).
     revoked from another device, which needs a list of the account's session
     keys. A revocation does not reach spaces created after it
     ([#165](https://github.com/leifriksheim/minca/issues/165)).
+  - An invitation is judged by the time it says it was signed, and no space's
+    history is consulted (03 §7.4), so a stolen key whose note let it invite
+    can go on signing invitations dated while the note was good, after it ran
+    out or was revoked. With a space's constitution, and its key for a private
+    one, it can hand out invites that name the account as the inviter and
+    relays and nodes of its choosing, which joiners then dial. It can't open a
+    role: that needs an invite record in the space, which a revoked key can't
+    write ([#165](https://github.com/leifriksheim/minca/issues/165)).
 
 _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/writer-logs.test.ts`, `packages/core/tests/space-access.test.ts` ("a revoked note…", "a key cannot pass its note on: a two-link proof counts for no peer"), `packages/core/tests/validation.test.ts` ("a note is one link…"), `packages/core/tests/roles.test.ts` ("a revoked key: what it signed stands up to the cutoff"), `packages/core/tests/access-attacks.test.ts` ("a revoke or a fork proof undoes a thief’s change to who may do what…")._
 
@@ -753,8 +786,8 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
   - Given some spaces, or records only, it never changes the account's own
     place in any space: every peer ignores its account joining, leaving,
     being assigned or unassigned a role, stepping down, or publishing a
-    member key or profile, and its revoke of any key but its own. Nor does it write the account's own spaces or open
-    its doors: those need a note about the whole account (01 §8;
+    member key or profile, and its revoke of any key but its own. Nor does it write the account's own spaces, open
+    its inbox or knock: those need a note about the whole account (01 §8;
     `packages/core/tests/records-only.test.ts`, "an app given a space never
     changes the account's own place there…"; `connect.test.ts`, "it lists
     them and opens requests sent to the account…").
@@ -869,7 +902,7 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     there. Only the account's own keys and apps can; apps should choose names
     that include their collection (02 §4.1). By design.
 
-_Source: 01 §7.5, §8, §11; 06 §2, §3; 05 §14, §15; 02 §4.1. Tests: `packages/core/tests/live.test.ts` ("a records-only key cannot shed its label by passing its note on"), `packages/core/tests/doors.test.ts` ("opens only with its door…"), `packages/core/tests/record-keys.test.ts` ("a key in another collection"), `packages/core/tests/connect.test.ts` ("an app can only ask for a key it holds, and none the home already uses for something else", "a request with a field it does not know is refused…"), `packages/core/tests/records-only.test.ts`, `packages/core/tests/connect-code.test.ts`, `packages/core/tests/ucan.test.ts`, `packages/core/tests/account-vault.test.ts` ("the account key does not open the registry store's sealed entries", "a wrap from another account does not open as this one", "a passphrase wrap edited to fewer rounds, another salt or another id does not open")._
+_Source: 01 §7.5, §8, §11; 06 §2, §3; 05 §14, §15; 02 §4.1. Tests: `packages/core/tests/live.test.ts` ("a records-only key cannot shed its label by passing its note on"), `packages/core/tests/inbox.test.ts` ("opens only with its inbox…"), `packages/core/tests/record-keys.test.ts` ("a key in another collection"), `packages/core/tests/connect.test.ts` ("an app can only ask for a key it holds, and none the home already uses for something else", "a request with a field it does not know is refused…"), `packages/core/tests/records-only.test.ts`, `packages/core/tests/connect-code.test.ts`, `packages/core/tests/ucan.test.ts`, `packages/core/tests/account-vault.test.ts` ("the account key does not open the registry store's sealed entries", "a wrap from another account does not open as this one", "a passphrase wrap edited to fewer rounds, another salt or another id does not open")._
 
 ### 3.7 Relay
 
@@ -898,7 +931,7 @@ _Source: 01 §7.5, §8, §11; 06 §2, §3; 05 §14, §15; 02 §4.1. Tests: `pack
     ([#162](https://github.com/leifriksheim/minca/issues/162)).
   - Joiners don't prove they hold their DID's key, so anyone can take a
     victim's place in a room ([#162](https://github.com/leifriksheim/minca/issues/162)).
-  - Its door mailbox can be flooded ([#162](https://github.com/leifriksheim/minca/issues/162)).
+  - An inbox's mailbox can be flooded ([#162](https://github.com/leifriksheim/minca/issues/162)).
     So can a short link's topic: 64 blobs fill it, and a drop of the link's
     blob after its copy expired is then refused. Joiners read every page, so
     junk can't hide a copy that is there, and a host's copy is not in the

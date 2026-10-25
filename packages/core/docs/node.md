@@ -3,7 +3,7 @@
 `createNode` and what it returns: configuration, root signers and notes, renewing
 the session note, stores, holding spaces, following the account, events, live
 messages, the rest of its surface, the network, acting as an agent, the
-app-side client, carriers and hosting, doors, and the React and element
+app-side client, carriers and hosting, the inbox, and the React and element
 conveniences.
 
 > Not protocol. This page describes the reference library, and another
@@ -18,7 +18,7 @@ conveniences.
 | ------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `signer`            | `RootSigner`                | Who the node acts for. Asked only for session notes ([spec 06 §1.2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).                                                                                                                                                                  |
 | `accountKey`        | bytes, optional             | The account key (`deriveAccountKey(seed)`). Enables the account registry and the contacts space ([spec 06 §1.3](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).                                                                                                                      |
-| `contactKey`        | bytes, optional             | The contact key's secret. Opens contact requests; published on profiles.                                                                                                                                                                                                                                              |
+| `contactKey`        | bytes, optional             | The contact key's secret. Opens knocks, in shared spaces and, through the keys derived from it, in the inbox; published on profiles.                                                                                                                                                                                  |
 | `contactsSpace`     | string, optional            | The contacts space's id, for a node given it without the account key (an app granted `contacts`, [spec 06 §2.5](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).                                                                                                                      |
 | `stores`            | `StoreFactory`              | Where the registry and each space's store live ([stores](#stores)).                                                                                                                                                                                                                                                   |
 | `provider`          | `CryptoProvider`, optional  | Default: P-256 over WebCrypto.                                                                                                                                                                                                                                                                                        |
@@ -29,7 +29,7 @@ conveniences.
 | `writerKey`         | `WriterKeySource`, optional | Keep a signing key across runs, so this device keeps one log in each space ([writer keys](#writer-keys)). Ignored with `sessionKey`.                                                                                                                                                                                  |
 | `watchIntervalMs`   | number, optional            | How often to look for writes another app, device or process made: a data folder's segments, a store file another process shares. `0` disables. Default `2000`. _Implementation detail._                                                                                                                               |
 | `cache`             | `CacheConfig`, optional     | Hold only the collections used, in spaces that name a keeper ([holding part of a space](#holding-part-of-a-space)).                                                                                                                                                                                                   |
-| `mailbox`           | `MailboxClient`, optional   | How doors reach relays' mailboxes ([07](https://github.com/leifriksheim/minca/blob/main/spec/07-doors.md)). Default: a WebSocket to each relay.                                                                                                                                                                       |
+| `mailbox`           | `MailboxClient`, optional   | How the inbox and short links reach mailboxes ([07](https://github.com/leifriksheim/minca/blob/main/spec/07-inbox.md)). Default: a WebSocket to each relay.                                                                                                                                                           |
 
 _Source: `packages/core/src/node/types.ts` (`NodeConfig`, `NodeNetworkConfig`, `CacheConfig`). Tests: `packages/core/tests/node.test.ts`, `packages/core/tests/caches.test.ts`._
 
@@ -612,7 +612,7 @@ successors, mine, heads, key, relays, keepers, copies, forks, flagged }`
   account (whole-account access).
 - `node.direct` — [direct-messages.md](direct-messages.md): `reachable`, `send`
   and `list`. Needs the account's member key for the space.
-- `node.doors` — [doors.md](doors.md), [07](https://github.com/leifriksheim/minca/blob/main/spec/07-doors.md). Needs the contact key; knocking and
+- `node.inbox` — [inbox.md](inbox.md), [07](https://github.com/leifriksheim/minca/blob/main/spec/07-inbox.md). Needs the contact key; knocking and
   accepting also need whole-account access.
 - `node.carriers`, `node.hosting`, `node.notifications` — [carriers and hosting](#carriers-hosting-and-notifications), [spec 06 §4](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md).
 - `node.iceServers()` — the configured ICE servers plus TURN servers a relay
@@ -708,7 +708,7 @@ throws unless the note verifies, grants records only (its command is under
   or deleting collections; live messages (`send`, which a person's devices
   would take as theirs); renaming or revoking at the account level; adding or
   removing carriers; notifications; hosting; changing, blocking, asking or
-  accepting contacts; everything about doors (its list of doors is empty);
+  accepting contacts; everything about the inbox (it has none);
   `delegate`; `asAgent`;
 - sees the contact list only if the contacts space is within its note.
 
@@ -719,8 +719,8 @@ an agent is started on the node itself.
 An agent granted `scope: account` gets a records-only note for every space
 (`/record`, about the whole account) and the account key in its
 grant ([spec 06 §2.8](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)), so the contact list is within its note to read. A home never
-gives a records-only key the contact key: with it, it could open contact
-requests and knocks on the account's doors ([doors.md](doors.md)).
+gives a records-only key the contact key: with it, it could open the
+account's knocks, in shared spaces and in its inbox ([inbox.md](inbox.md)).
 
 Which of these each method of the node is — passed through, held to the note's spaces, or refused — is one table, `API` in `packages/core/src/node/api.ts`; a new method does not type-check until it is decided there. The same table lists what `remoteNode` forwards.
 
@@ -888,6 +888,18 @@ for the carrier is not left with nobody (spec 06 §4.3). `node.carriers.remove(c
 writes `carry:closed` and marks the record removed; the node keeps the carry
 space open until it closes, so the carrier hears it.
 
+**A space made just now.** Until a carrier opens it from its pass and syncs
+it, a new space is only on the device that made it: an invite handed out and
+the device closed can't be used. `node.spaces.carried(spaceId, { waitMs? })`
+names the account's carriers keepers, writes their passes now, and waits up
+to `waitMs` (default 30 s) until one is level with this node in the space, so
+it holds the genesis and any invite opened before the call. It says whether
+one was: false at once when the account has no carrier or the node no
+network. `contacts.ask` and `inbox.knock` wait on it before the knock goes
+out, and pass what it said on as `carried`, for the app to tell the person.
+
+_Source: `packages/core/src/node/node.ts` (`spaces.carried`, `makePair`). Tests: `packages/core/tests/carrier.test.ts` ("a space made just now, carried before its invite goes out…", "carried is false at once with no carrier…")._
+
 **The account's own automations.** `node.automations` (needs the account
 key) lists, adds, updates (`name`, `paused`) and removes the account's own
 automations, kept in its registry ([automations](automations.md#the-accounts-own)),
@@ -996,21 +1008,21 @@ paid, and what is in the fund stays there
 
 _Source: `packages/core/src/node/node.ts` (`keepSpaceHosts`, `askSpaceHost`, `hosting.space`), `packages/core/src/session/hosting.ts` (`describeHost`, `HostError`). Tests: `packages/cli/tests/host.test.ts` ("a space paying for itself", "an address that is not a host, or one that is down", "bots a host runs": the two on stopping a space's host)._
 
-## Doors
+## The inbox
 
-`node.doors` ([doors.md](doors.md), [spec 07](https://github.com/leifriksheim/minca/blob/main/spec/07-doors.md)):
+`node.inbox` ([inbox.md](inbox.md), [spec 07](https://github.com/leifriksheim/minca/blob/main/spec/07-inbox.md)):
 
-| Call                               | Does                                                                                                                                                                                                                                                                                                               |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `list()`                           | Your open doors: `{ id, label?, name?, key, sign, relays, code, createdAt }`                                                                                                                                                                                                                                       |
-| `open({ relays?, name?, label? })` | Opens a door. Relays default to this node's relays (up to 3); name to the account's name                                                                                                                                                                                                                           |
-| `close(id)`                        | Deletes the `std.door`                                                                                                                                                                                                                                                                                             |
-| `clear(id)`                        | Purges every knock at the door, from every relay it names                                                                                                                                                                                                                                                          |
-| `knock(code, { note? })`           | [the exchange](doors.md#the-exchange), returns `{ space }`                                                                                                                                                                                                                                                         |
-| `knocks()`                         | Fetches every open door's topic from every relay it names, opens and checks ([spec 07 §6](https://github.com/leifriksheim/minca/blob/main/spec/07-doors.md); opened results are cached by id), settles sent knocks and writes owed answers; returns `{ id, door, from, name, note?, pairSpace, at }`, newest first |
-| `sent()`                           | Your unanswered knocks: `{ space, name, at }`                                                                                                                                                                                                                                                                      |
-| `accept(id)`                       | [the exchange](doors.md#the-exchange), returns the new `ContactView`                                                                                                                                                                                                                                               |
-| `dismiss(id)`                      | Purges one knock                                                                                                                                                                                                                                                                                                   |
+| Call                       | Does                                                                                                                                                                                                                                                                             |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get()`                    | Your inbox, or null until opened: `{ gen, name?, key, sign, places, code, updatedAt }`. `code` is signed afresh each time; what it says stays the same                                                                                                                           |
+| `open({ places?, name? })` | Opens your inbox, or changes where its knocks wait and the name it gives. Places default to the current ones, else this node's relays (up to 3); name to the current one, else the account's                                                                                     |
+| `rotate()`                 | Clears the inbox and replaces it with `gen + 1`: the old code leads nowhere                                                                                                                                                                                                      |
+| `clear()`                  | Purges every knock waiting, from every mailbox it names                                                                                                                                                                                                                          |
+| `knock(code, { note? })`   | [the exchange](inbox.md#the-exchange), returns `{ space, carried }`                                                                                                                                                                                                              |
+| `knocks()`                 | Fetches the inbox's topic from every mailbox it names, opens and checks ([spec 07 §6](https://github.com/leifriksheim/minca/blob/main/spec/07-inbox.md); opened results are cached by id), settles sent knocks; returns `{ id, from, name, note?, pairSpace, at }`, newest first |
+| `sent()`                   | Your knocks nobody has joined yet: `{ space, name, at }`                                                                                                                                                                                                                         |
+| `accept(id)`               | [the exchange](inbox.md#the-exchange), returns the new `ContactView`                                                                                                                                                                                                             |
+| `dismiss(id)`              | Purges one knock                                                                                                                                                                                                                                                                 |
 
 ## Client conveniences
 

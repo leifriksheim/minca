@@ -131,32 +131,6 @@ export async function signWithScalar(secret: Uint8Array, data: Uint8Array): Prom
   );
 }
 
-/** Checks what `signWithScalar` signed, against a compressed public key (base64url) */
-export async function verifyWithPoint(
-  publicKey: string,
-  data: Uint8Array,
-  signature: string,
-): Promise<boolean> {
-  try {
-    const point = p256.Point.fromBytes(base64UrlDecode(publicKey)).toBytes(false);
-    const key = await globalThis.crypto.subtle.importKey(
-      'raw',
-      bufferSource(point),
-      { name: 'ECDSA', namedCurve: 'P-256' },
-      false,
-      ['verify'],
-    );
-    return await globalThis.crypto.subtle.verify(
-      { name: 'ECDSA', hash: 'SHA-256' },
-      key,
-      bufferSource(base64UrlDecode(signature)),
-      bufferSource(data),
-    );
-  } catch {
-    return false;
-  }
-}
-
 /** The public half, from the private scalar */
 export function contactPublicKey(secret: Uint8Array): string {
   return base64UrlEncode(p256.getPublicKey(secret, true));
