@@ -25,8 +25,8 @@ import { hkdf } from './hkdf.js';
 /** Domain separation for the contact key. Changing it changes every account's contact key. */
 const CONTACT_KEY_INFO = 'minca/p256-contact-key/v1';
 const MEMBER_KEY_INFO = 'minca/p256-member-key/v1';
-const DOOR_KEY_INFO = 'minca/p256-door-key/v1';
-const DOOR_SIGN_KEY_INFO = 'minca/p256-door-sign-key/v1';
+const INBOX_KEY_INFO = 'minca/p256-inbox-key/v1';
+const INBOX_SIGN_KEY_INFO = 'minca/p256-inbox-sign-key/v1';
 
 /** 48 bytes reduce to a P-256 scalar without bias, as for the root key (`crypto-p256.ts`) */
 const P256_SEED_BYTES = 48;
@@ -89,33 +89,38 @@ export async function deriveMemberKeyBytes(accountKey: Uint8Array, spaceId: stri
 }
 
 /**
- * A **door key**: the key a door's knocks are sealed to (`doors/doors.ts`).
- * Derived from the contact key and the door's id, so every device and app
- * holding the contact key opens the same doors, and a new door is a new id.
+ * An **inbox key**: the key knocks on the account's inbox are sealed to
+ * (`inbox/inbox.ts`, spec 07 §1). Derived from the contact key and the
+ * inbox's generation, so every device and app holding the contact key opens
+ * the same inbox, and a new inbox is a new `gen`.
  *
  * Not the contact key itself: that one's public half is on your profile in
- * every space you write in, and a door is handed to people who may not know
- * who you are yet. A door key says nothing about the account behind it.
+ * every space you write in, and an inbox is handed to people who may not know
+ * who you are yet. An inbox key says nothing about the account behind it.
  * @param contactKey The contact key's private scalar (`deriveContactKeyBytes`)
- * @param doorId The door's id, as its `std.door` record names it
  */
-export async function deriveDoorKeyBytes(contactKey: Uint8Array, doorId: string): Promise<Uint8Array> {
-  return deriveScalar(contactKey, `${DOOR_KEY_INFO}|${doorId}`);
+export async function deriveInboxKeyBytes(contactKey: Uint8Array, gen: number): Promise<Uint8Array> {
+  return deriveScalar(contactKey, `${INBOX_KEY_INFO}|${gen}`);
 }
 
 /**
- * A door's **signing key**: what proves you own a door, without saying whose
- * it is — to a relay, when clearing the door's mailbox, and to someone who
- * knocked, when you answer. Separate from the door key, which only opens
- * knocks: one key should not both sign and decrypt.
+ * An inbox's **signing key**: what signs the inbox, and proves to a relay
+ * clearing its mailbox that it is the owner, without saying whose it is.
+ * Separate from the inbox key, which only opens knocks: one key should not
+ * both sign and decrypt.
  */
-export async function deriveDoorSignKeyBytes(contactKey: Uint8Array, doorId: string): Promise<Uint8Array> {
-  return deriveScalar(contactKey, `${DOOR_SIGN_KEY_INFO}|${doorId}`);
+export async function deriveInboxSignKeyBytes(contactKey: Uint8Array, gen: number): Promise<Uint8Array> {
+  return deriveScalar(contactKey, `${INBOX_SIGN_KEY_INFO}|${gen}`);
+}
+
+/** A private scalar as a key to sign with (ECDSA), for what an inbox's signing key signs as a version */
+export function signingKeyOf(secret: Uint8Array): Promise<CryptoKey> {
+  return importScalar(secret, 'ECDSA', ['sign']);
 }
 
 /**
  * Signs with a P-256 private scalar: ECDSA over SHA-256, 64 bytes r ‖ s,
- * base64url — for door signing keys.
+ * base64url — for an inbox's signing key.
  */
 export async function signWithScalar(secret: Uint8Array, data: Uint8Array): Promise<string> {
   const key = await importScalar(secret, 'ECDSA', ['sign']);

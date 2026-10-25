@@ -1,9 +1,10 @@
 /**
- * Doors (`node.doors`, `src/doors/`): a code that says where to knock and
- * nothing about who you are; a relay mailbox that holds sealed knocks, learns
- * nothing from them, can't be filled by one address, and lets only a door's
- * owner clear it; knocks that prove who knocked, with authority to, when; and
- * two people who shared no space becoming contacts through one.
+ * The inbox (`node.inbox`, `src/inbox/`): a code that says where to knock and
+ * nothing about who you are, signed by its own key; a relay mailbox that
+ * holds sealed knocks, learns nothing from them, can't be filled by one
+ * address, and lets only the inbox's owner clear it; knocks that prove who
+ * knocked, with authority to, when; and two people who shared no space
+ * becoming contacts through one.
  */
 import { team } from '../src/space/presets.js';
 import { test, describe, before, after } from 'node:test';
@@ -22,8 +23,8 @@ import { deriveAccountKey } from '../src/identity/account-vault.js';
 import {
   contactPublicKey,
   deriveContactKeyBytes,
-  deriveDoorKeyBytes,
-  deriveDoorSignKeyBytes,
+  deriveInboxKeyBytes,
+  deriveInboxSignKeyBytes,
 } from '../src/identity/contact-key.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
@@ -31,19 +32,24 @@ import type { NoteTerms } from '../src/identity/abilities.js';
 import { issueDelegation, type Delegation } from '../src/identity/ucan.js';
 import {
   clip,
-  doorTopic,
-  encodeDoorCode,
+  encodeInbox,
+  inboxTopic,
   knockId,
   openKnock,
-  parseDoorCode,
+  readInbox,
   sealKnock,
   signPurge,
-} from '../src/doors/doors.js';
+} from '../src/inbox/inbox.js';
+import { parseSpaceInvite } from '../src/space/space-manager.js';
+import { decodeLoose, encodeLoose, signLoose } from '../src/records/loose.js';
+import { inboxAuthor } from '../src/inbox/inbox.js';
+import { signingKeyOf } from '../src/identity/contact-key.js';
+import { sealValueTo } from '../src/identity/hpke.js';
+import { base64UrlDecode, base64UrlEncode, utf8Encode } from '../src/utils/encoding.js';
 import { createMailboxClient } from '../src/network/mailbox.js';
 import { grantSigner } from '../src/session/connect.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { memoryStores } from './helpers/memory-stores.js';
-import { joined } from './helpers/joined.js';
 import { portOf } from './helpers/net.js';
 import { isRecord } from '../src/utils/guards.js';
 import { patience } from './helpers/until.js';
@@ -93,55 +99,89 @@ async function until<T>(
   }
 }
 
-/** A door's keys, as its owner holds them */
-async function someDoor(id = 'test-door-0000000', contactKey?: Uint8Array) {
+/** An inbox's keys, as its owner holds them */
+async function someInbox(gen = 0, contactKey?: Uint8Array) {
   const contact = contactKey ?? (await deriveContactKeyBytes(generateSeed()));
-  const key = await deriveDoorKeyBytes(contact, id);
-  const sign = await deriveDoorSignKeyBytes(contact, id);
+  const key = await deriveInboxKeyBytes(contact, gen);
+  const sign = await deriveInboxSignKeyBytes(contact, gen);
   const signPublic = contactPublicKey(sign);
-  return { key, sign, publicKey: contactPublicKey(key), signPublic, topic: await doorTopic(signPublic) };
+  return { key, sign, publicKey: contactPublicKey(key), signPublic, topic: await inboxTopic(signPublic) };
 }
+
+const provider = createP256Provider();
 
 // ─── Codes ──────────────────────────────────────────────────────────
 
-describe('a door code', () => {
-  test('carries two keys, 1–3 relays and a name, and reads back from a bare code or a link', async () => {
-    const { publicKey: key, signPublic: sign } = await someDoor();
-    const code = encodeDoorCode({ key, sign, relays: ['wss://a.example', 'wss://b.example'], name: 'Anna' });
-    assert.deepEqual(parseDoorCode(code), {
-      v: 1,
+describe('an inbox code', () => {
+  test('carries two keys, its gen, 1–3 mailboxes and a name, and reads back from a bare code or a link', async () => {
+    const { sign, publicKey: key, signPublic } = await someInbox();
+    const body = {
       key,
-      sign,
-      relays: ['wss://a.example', 'wss://b.example'],
+      sign: signPublic,
+      gen: 0,
+      places: ['wss://a.example', 'wss://b.example'],
       name: 'Anna',
-    });
-    assert.equal(parseDoorCode(`https://chat.example/#door=${code}`).key, key);
-    assert.equal(parseDoorCode(`  ${code}\n`).key, key);
+    };
+    const code = await encodeInbox(sign, body, provider);
+    assert.deepEqual(await readInbox(code, provider), body);
+    assert.equal((await readInbox(`https://chat.example/#inbox=${code}`, provider)).key, key);
+    assert.equal((await readInbox(`  ${code}\n`, provider)).key, key);
   });
 
   test('refuses what could not be knocked on', async () => {
-    const { publicKey: key, signPublic: sign } = await someDoor();
-    assert.throws(() => encodeDoorCode({ key, sign, relays: [] }), /1–3 relays/);
-    assert.throws(
-      () => encodeDoorCode({ key, sign, relays: ['wss://a', 'wss://b', 'wss://c', 'wss://d'] }),
-      /1–3 relays/,
+    const { sign, publicKey: key, signPublic } = await someInbox();
+    const body = { key, sign: signPublic, gen: 0, places: ['wss://a.example'] };
+    await assert.rejects(encodeInbox(sign, { ...body, places: [] }, provider), /1–3 mailboxes/);
+    await assert.rejects(
+      encodeInbox(sign, { ...body, places: ['wss://a', 'wss://b', 'wss://c', 'wss://d'] }, provider),
+      /1–3 mailboxes/,
     );
-    assert.throws(() => encodeDoorCode({ key, sign, relays: ['ws://relay.example'] }), /not a wss/);
-    assert.throws(() => encodeDoorCode({ key: 'not-a-point', sign, relays: ['wss://a.example'] }), /P-256/);
-    assert.throws(() => encodeDoorCode({ key, sign: key, relays: ['wss://a.example'] }), /signing key/);
-    assert.throws(() => parseDoorCode('hello'), /not a door code/);
+    await assert.rejects(
+      encodeInbox(sign, { ...body, places: ['ws://relay.example'] }, provider),
+      /not a wss/,
+    );
+    await assert.rejects(encodeInbox(sign, { ...body, key: 'not-a-point' }, provider), /P-256/);
+    await assert.rejects(encodeInbox(sign, { ...body, sign: key }, provider), /signing key/);
+    await assert.rejects(readInbox('hello', provider), /not an inbox code/);
   });
 
-  test("says nothing about the account: neither key is the contact key, and each door's differ", async () => {
+  test('is signed by its own signing key: one signed by another key, or edited, is refused', async () => {
+    const { sign, publicKey: key, signPublic } = await someInbox();
+    const other = await someInbox();
+    const body = { key, sign: signPublic, gen: 0, places: ['wss://a.example'] };
+    // Signed with another inbox's key, as someone handing out a code for an inbox not theirs would.
+    await assert.rejects(encodeInbox(other.sign, body, provider), /its own signing key/);
+    const forged = encodeLoose(
+      await signLoose(
+        { did: inboxAuthor(other.signPublic), key: await signingKeyOf(other.sign) },
+        'sys.inbox',
+        body,
+        provider,
+      ),
+    );
+    await assert.rejects(readInbox(forged, provider), /not signed by its own key/);
+    // The right key, and the mailboxes changed after.
+    const version = decodeLoose(await encodeInbox(sign, body, provider));
+    assert.ok(isRecord(version) && isRecord(version.body));
+    const edited = base64UrlEncode(
+      utf8Encode(
+        JSON.stringify({ ...version, body: { ...version.body, places: ['wss://mallory.example'] } }),
+      ),
+    );
+    await assert.rejects(readInbox(edited, provider), /not signed by its own key/);
+  });
+
+  test("says nothing about the account: neither key is the contact key, and each gen's differ", async () => {
     const contactKey = await deriveContactKeyBytes(generateSeed());
-    const one = await someDoor('door-one-00000000', contactKey);
-    const two = await someDoor('door-two-00000000', contactKey);
+    const one = await someInbox(0, contactKey);
+    const two = await someInbox(1, contactKey);
     assert.notEqual(one.publicKey, contactPublicKey(contactKey));
     assert.notEqual(one.signPublic, contactPublicKey(contactKey));
     assert.notEqual(one.publicKey, one.signPublic);
     assert.notEqual(one.publicKey, two.publicKey);
+    assert.notEqual(one.topic, two.topic);
     // …and the same on every device that holds the contact key.
-    assert.equal(one.publicKey, (await someDoor('door-one-00000000', contactKey)).publicKey);
+    assert.equal(one.publicKey, (await someInbox(0, contactKey)).publicKey);
   });
 
   test('names are cut to length without splitting a character', () => {
@@ -156,7 +196,7 @@ describe("the relay's mailbox", () => {
   const mailbox = createMailboxClient();
 
   test('holds a blob under a topic for whoever fetches it, once however often it is dropped', async () => {
-    const { topic } = await someDoor();
+    const { topic } = await someInbox();
     const id = await mailbox.drop(relayUrl, topic, 'c2VhbGVk');
     assert.equal(id, await knockId('c2VhbGVk'));
     assert.equal(await mailbox.drop(relayUrl, topic, 'c2VhbGVk'), id);
@@ -168,7 +208,7 @@ describe("the relay's mailbox", () => {
   });
 
   test('refuses what is not a sealed blob, and topics that are not a hash', async () => {
-    const { topic } = await someDoor();
+    const { topic } = await someInbox();
     await assert.rejects(mailbox.drop(relayUrl, topic, 'not base64url!'), /refused/);
     await assert.rejects(mailbox.drop(relayUrl, topic, 'a'.repeat(12_001)), /refused/);
     // A malformed topic gets no answer at all.
@@ -178,20 +218,19 @@ describe("the relay's mailbox", () => {
     );
   });
 
-  test('takes only a few knocks on one door from one address an hour', async () => {
-    const { topic } = await someDoor();
+  test('takes only a few knocks on one inbox from one address an hour', async () => {
+    const { topic } = await someInbox();
     for (let i = 0; i < 4; i++) await mailbox.drop(relayUrl, topic, `a${i}`);
-    await assert.rejects(mailbox.drop(relayUrl, topic, 'a4'), /Too many knocks on this door/);
+    await assert.rejects(mailbox.drop(relayUrl, topic, 'a4'), /Too many knocks on this inbox/);
     assert.equal((await mailbox.fetch(relayUrl, topic)).length, 4);
   });
 
   test('takes only so many knocks from one address in all, whatever the topics', async () => {
     const own = await startRelay({ dropsPerNetwork: 5 });
     try {
-      for (let i = 0; i < 5; i++)
-        await mailbox.drop(own.url, (await someDoor(`many-topics-${i}-00000`)).topic, `b${i}`);
+      for (let i = 0; i < 5; i++) await mailbox.drop(own.url, (await someInbox(i)).topic, `b${i}`);
       await assert.rejects(
-        mailbox.drop(own.url, (await someDoor('many-topics-6-00000')).topic, 'b6'),
+        mailbox.drop(own.url, (await someInbox()).topic, 'b6'),
         /Too many knocks from here/,
       );
     } finally {
@@ -199,11 +238,11 @@ describe("the relay's mailbox", () => {
     }
   });
 
-  test('when full, still takes a knock or two on a door that holds fewer', async () => {
+  test('when full, still takes a knock or two on an inbox that holds fewer', async () => {
     const own = await startRelay({ maxChars: 100, reserveChars: 100 });
     try {
-      const busy = (await someDoor('busy-door-00000000')).topic;
-      const quiet = (await someDoor('quiet-door-0000000')).topic;
+      const busy = (await someInbox()).topic;
+      const quiet = (await someInbox()).topic;
       const blob = (n: number) => `${n}`.padEnd(40, 'x');
       await mailbox.drop(own.url, busy, blob(1));
       await mailbox.drop(own.url, busy, blob(2));
@@ -215,7 +254,7 @@ describe("the relay's mailbox", () => {
   });
 
   test('lets knocks go when their time is up', async () => {
-    const { topic } = await someDoor();
+    const { topic } = await someInbox();
     await mailbox.drop(relayUrl, topic, 'ZXhwaXJlcw', 1);
     assert.equal((await mailbox.fetch(relayUrl, topic)).length, 1);
     await new Promise((resolve) => setTimeout(resolve, 1100));
@@ -223,7 +262,7 @@ describe("the relay's mailbox", () => {
   });
 
   test('tells a watcher about a knock as it arrives', async () => {
-    const { topic } = await someDoor();
+    const { topic } = await someInbox();
     const ws = new WebSocket(relayUrl);
     await new Promise((resolve) => (ws.onopen = resolve));
     const heard: string[] = [];
@@ -243,9 +282,9 @@ describe("the relay's mailbox", () => {
     ws.close();
   });
 
-  test("is cleared only by the door's owner: the key that hashes to the topic, signing this socket's challenge", async () => {
-    const door = await someDoor('purged-door-000000');
-    const stranger = await someDoor('someone-else-00000');
+  test("is cleared only by the inbox's owner: the key that hashes to the topic, signing this socket's challenge", async () => {
+    const door = await someInbox();
+    const stranger = await someInbox();
     const ids = [
       await mailbox.drop(relayUrl, door.topic, 'b25l'),
       await mailbox.drop(relayUrl, door.topic, 'dHdv'),
@@ -257,7 +296,7 @@ describe("the relay's mailbox", () => {
       mailbox.purge(relayUrl, door.topic, stranger.signPublic, null, (nonce) =>
         signPurge(stranger.sign, door.topic, nonce, null),
       ),
-      /not this door/,
+      /not this inbox/,
     );
     await assert.rejects(
       mailbox.purge(relayUrl, door.topic, door.signPublic, null, (nonce) =>
@@ -288,7 +327,7 @@ describe("the relay's mailbox", () => {
   });
 
   test('a challenge is good for one purge', async () => {
-    const door = await someDoor('replayed-door-0000');
+    const door = await someInbox();
     await mailbox.drop(relayUrl, door.topic, 'cmVwbGF5');
     const ws = new WebSocket(relayUrl);
     await new Promise((resolve) => (ws.onopen = resolve));
@@ -329,7 +368,6 @@ describe('a knock', () => {
   async function leifWith(hub: FakeHub, terms: NoteTerms = { command: '/' }, expiresIn = 3600) {
     const seed = generateSeed();
     const leif = await person(hub, 'Leif', seed);
-    const provider = createP256Provider();
     const manager = createIdentityManager();
     const root = createLocalRootSigner(await manager.fromSeed(seed), manager.getProvider());
     const keys = await provider.generateKeyPair();
@@ -339,68 +377,78 @@ describe('a knock', () => {
       ...terms,
       expiration: Math.floor(Date.now() / 1000) + expiresIn,
     });
-    const pair = await leif.spaces.create({ name: 'Leif & Anna', visibility: 'private' });
-    const invite = await leif.spaces.invite(pair.id);
+    const pair = await leif.spaces.create({ name: 'Leif & Anna', ...team, visibility: 'private' });
+    const invite = await leif.spaces.invite(pair.id, { role: 'editor' });
     return {
       leif,
-      provider,
       invite,
       pair,
       session: { did: sessionDid, key: keys.privateKey, proof: token },
     };
   }
 
-  test('opens only with its door, and only as from the account whose note signed it', async () => {
+  /** What a knock carries, from an invite string */
+  const carrying = (invite: string, name = 'Leif', note?: string) => {
+    const parsed = parseSpaceInvite(invite);
+    return {
+      invite: parsed.signed,
+      secret: base64UrlDecode(parsed.invite ?? 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'),
+      name,
+      ...(note ? { note } : {}),
+    };
+  };
+
+  test('opens only with its inbox, and only as from the account whose note signed it', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
-    const { leif, provider, invite, pair, session } = await leifWith(hub);
+    const { leif, invite, pair, session } = await leifWith(hub);
     const anna = await person(hub, 'Anna');
-    const door = await someDoor('door-aaaaaaaaaaaa');
-    const other = await someDoor('door-bbbbbbbbbbbb');
+    const inbox = await someInbox();
+    const other = await someInbox();
 
     const blob = await sealKnock(
-      door.publicKey,
-      { from: leif.did, name: 'Leif', invite, note: 'hi from the gig' },
+      inbox.publicKey,
+      carrying(invite, 'Leif', 'hi from the gig'),
       session,
       provider,
     );
-    const opened = await openKnock(door.key, blob, Date.now(), provider);
+    const opened = await openKnock([inbox.key], blob, Date.now(), provider);
     assert.equal(opened?.from, leif.did);
     assert.equal(opened?.name, 'Leif');
     assert.equal(opened?.note, 'hi from the gig');
     assert.equal(opened?.pairSpace, pair.id);
 
-    // Another door's key can't open it.
-    assert.equal(await openKnock(other.key, blob, Date.now(), provider), null);
-    // Claiming to be Anna under Leif's note doesn't check out.
-    const forged = await sealKnock(
-      door.publicKey,
-      { from: anna.did, name: 'Anna', invite },
-      session,
-      provider,
-    );
-    assert.equal(await openKnock(door.key, forged, Date.now(), provider), null);
-    // Nor does inviting to a space someone else made.
-    const annas = await anna.spaces.create({ name: 'Not Leif’s', visibility: 'private' });
+    // Another inbox's key can't open it, and a knock sealed to one key but naming another doesn't count.
+    assert.equal(await openKnock([other.key], blob, Date.now(), provider), null);
+    // Inviting to a space someone else made, or signed by someone else, doesn't check out.
+    const annas = await anna.spaces.create({ name: 'Not Leif’s', ...team, visibility: 'private' });
     const stolen = await sealKnock(
-      door.publicKey,
-      { from: leif.did, name: 'Leif', invite: await anna.spaces.invite(annas.id) },
+      inbox.publicKey,
+      carrying(await anna.spaces.invite(annas.id, { role: 'editor' })),
       session,
       provider,
     );
-    assert.equal(await openKnock(door.key, stolen, Date.now(), provider), null);
+    assert.equal(await openKnock([inbox.key], stolen, Date.now(), provider), null);
     // Nor to a space he founded with someone else, or one that assigns anyone a role: it is not his alone.
     for (const shared of [
-      await leif.spaces.create({ name: 'Ours', visibility: 'private', cofounders: [anna.did] }),
+      await leif.spaces.create({ name: 'Ours', ...team, visibility: 'private', cofounders: [anna.did] }),
       await leif.spaces.create({ name: 'Ours', visibility: 'private', ...team, creatorRoles: ['editor'] }),
     ]) {
       const knock = await sealKnock(
-        door.publicKey,
-        { from: leif.did, name: 'Leif', invite: await leif.spaces.invite(shared.id, { write: false }) },
+        inbox.publicKey,
+        carrying(await leif.spaces.invite(shared.id, { role: 'editor' })),
         session,
         provider,
       );
-      assert.equal(await openKnock(door.key, knock, Date.now(), provider), null);
+      assert.equal(await openKnock([inbox.key], knock, Date.now(), provider), null);
     }
+    // Nor one that only shares the space to view: there is no role to join with.
+    const view = await sealKnock(
+      inbox.publicKey,
+      carrying(await leif.spaces.invite(pair.id, { write: false })),
+      session,
+      provider,
+    );
+    assert.equal(await openKnock([inbox.key], view, Date.now(), provider), null);
     // A note the session passes on is no note: alone, it is not from the account…
     const deeper = await provider.generateKeyPair();
     const deeperDid = publicKeyToDid(await provider.exportPublicKey(deeper.publicKey), P256_MULTICODEC);
@@ -414,27 +462,49 @@ describe('a knock', () => {
       provider,
     );
     const leafOnly = await sealKnock(
-      door.publicKey,
-      { from: leif.did, name: 'Leif', invite },
+      inbox.publicKey,
+      carrying(invite),
       { did: deeperDid, key: deeper.privateKey, proof: passedOn },
       provider,
     );
-    assert.equal(await openKnock(door.key, leafOnly, Date.now(), provider), null);
+    assert.equal(await openKnock([inbox.key], leafOnly, Date.now(), provider), null);
     // …and behind the session's own note, as a chain, it is refused too: a proof is one link.
     const chain = [session.proof, passedOn];
     const relayed = await sealKnock(
-      door.publicKey,
-      { from: leif.did, name: 'Leif', invite },
+      inbox.publicKey,
+      carrying(invite),
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- a chain, which the type rules out, as a peer may send one
       { did: deeperDid, key: deeper.privateKey, proof: chain as unknown as Delegation },
       provider,
     );
-    assert.equal(await openKnock(door.key, relayed, Date.now(), provider), null);
+    assert.equal(await openKnock([inbox.key], relayed, Date.now(), provider), null);
+  });
+
+  test('sealed to one key, naming another, is refused: nobody re-seals a knock as if sent elsewhere', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const { invite, session } = await leifWith(hub);
+    const inbox = await someInbox();
+    const other = await someInbox();
+    // Signed for one inbox, sealed by hand to another, as whoever opened it could.
+    const { signed, invite: secret } = parseSpaceInvite(invite);
+    const version = await signLoose(
+      session,
+      'sys.knock',
+      { invite: signed, secret, name: 'Leif' },
+      provider,
+      {
+        to: inbox.publicKey,
+      },
+    );
+    const resealed = await sealValueTo(other.publicKey, 'minca/mail/v1', { to: other.publicKey }, version);
+    assert.equal(await openKnock([other.key], resealed, Date.now(), provider), null);
+    const proper = await sealValueTo(inbox.publicKey, 'minca/mail/v1', { to: inbox.publicKey }, version);
+    assert.notEqual(await openKnock([inbox.key], proper, Date.now(), provider), null);
   });
 
   test('needs a note that grants /account/write: an app given one space or several, a key given records only, or one only to read, cannot knock', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
-    const door = await someDoor('door-cccccccccccc');
+    const inbox = await someInbox();
     for (const terms of [
       { command: '/', subject: 'space:bafyonespace' },
       {
@@ -452,29 +522,23 @@ describe('a knock', () => {
       { command: '/record' },
       { command: '/record/read' },
     ]) {
-      const { leif, provider, invite, session } = await leifWith(hub, terms);
-      const blob = await sealKnock(
-        door.publicKey,
-        { from: leif.did, name: 'Leif', invite },
-        session,
-        provider,
-      );
-      assert.equal(await openKnock(door.key, blob, Date.now(), provider), null, JSON.stringify(terms));
+      const { invite, session } = await leifWith(hub, terms);
+      const blob = await sealKnock(inbox.publicKey, carrying(invite), session, provider);
+      assert.equal(await openKnock([inbox.key], blob, Date.now(), provider), null, JSON.stringify(terms));
     }
   });
 
   test('is judged by when the relay took it: a note that ran out cannot be used by dating a knock back', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
-    const door = await someDoor('door-dddddddddddd');
+    const inbox = await someInbox();
     const seed = generateSeed();
     const leif = await person(hub, 'Leif', seed);
-    const provider = createP256Provider();
     const manager = createIdentityManager();
     const root = createLocalRootSigner(await manager.fromSeed(seed), manager.getProvider());
     const keys = await provider.generateKeyPair();
     const sessionDid = publicKeyToDid(await provider.exportPublicKey(keys.publicKey), P256_MULTICODEC);
-    const pair = await leif.spaces.create({ name: 'Leif & Anna', visibility: 'private' });
-    const invite = await leif.spaces.invite(pair.id);
+    const pair = await leif.spaces.create({ name: 'Leif & Anna', ...team, visibility: 'private' });
+    const invite = await leif.spaces.invite(pair.id, { role: 'editor' });
     const realNow = Date.now;
     // An hour ago, Leif's session had a note good for half an hour, and signed a knock with it.
     Date.now = () => realNow() - 3600_000;
@@ -486,8 +550,8 @@ describe('a knock', () => {
         expiration: Math.floor(Date.now() / 1000) + 1800,
       });
       blob = await sealKnock(
-        door.publicKey,
-        { from: leif.did, name: 'Leif', invite },
+        inbox.publicKey,
+        carrying(invite),
         { did: sessionDid, key: keys.privateKey, proof: token },
         provider,
       );
@@ -495,42 +559,41 @@ describe('a knock', () => {
       Date.now = realNow;
     }
     // Dropped then, it was a knock. Dropped now, with the note long gone, it isn't.
-    assert.equal((await openKnock(door.key, blob, Date.now() - 3600_000, provider))?.from, leif.did);
-    assert.equal(await openKnock(door.key, blob, Date.now(), provider), null);
+    assert.equal((await openKnock([inbox.key], blob, Date.now() - 3600_000, provider))?.from, leif.did);
+    assert.equal(await openKnock([inbox.key], blob, Date.now(), provider), null);
   });
 });
 
 // ─── Two strangers ──────────────────────────────────────────────────
 
-describe('node.doors', () => {
-  /** Anna's knocks, read until `ok` — each read also writes answers she owes */
+describe('node.inbox', () => {
+  /** Anna's knocks, read until `ok` */
   const annaSees = (anna: P2PNode, ok: (count: number) => boolean, what: string, ms?: number) =>
     until(
-      () => anna.doors.knocks(),
+      () => anna.inbox.knocks(),
       (knocks) => ok(knocks.length),
       what,
       ms,
     );
 
-  test('two people who share no space become contacts through a door code', async () => {
+  test('two people who share no space become contacts through an inbox code', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const anna = await person(hub, 'Anna');
     const leif = await person(hub, 'Leif');
 
-    const door = await anna.doors.open({ label: 'bio' });
-    assert.equal(door.name, 'Anna');
-    assert.deepEqual(door.relays, [relayUrl]);
-    assert.deepEqual(
-      (await anna.doors.list()).map((d) => d.id),
-      [door.id],
-    );
+    assert.equal(await anna.inbox.get(), null);
+    const inbox = await anna.inbox.open();
+    assert.equal(inbox.name, 'Anna');
+    assert.equal(inbox.gen, 0);
+    assert.deepEqual(inbox.places, [relayUrl]);
+    assert.equal((await readInbox((await anna.inbox.get())!.code, provider)).key, inbox.key);
 
     // Anna posts the code somewhere; Leif pastes it.
-    const { space } = await leif.doors.knock(`https://chat.example/#door=${door.code}`, {
+    const { space } = await leif.inbox.knock(`https://chat.example/#inbox=${inbox.code}`, {
       note: 'We met at the gig',
     });
     assert.deepEqual(
-      (await leif.doors.sent()).map((k) => [k.space, k.name]),
+      (await leif.inbox.sent()).map((k) => [k.space, k.name]),
       [[space, 'Anna']],
     );
 
@@ -539,204 +602,191 @@ describe('node.doors', () => {
     assert.equal(knock!.name, 'Leif');
     assert.equal(knock!.note, 'We met at the gig');
     assert.equal(knock!.pairSpace, space);
-    assert.equal(knock!.door, door.id);
 
-    const contact = await anna.doors.accept(knock!.id);
+    const contact = await anna.inbox.accept(knock!.id);
     assert.equal(contact.did, leif.did);
     assert.equal(contact.space, space);
     // Accepted: it is no longer waiting, and it's gone from the relay.
-    assert.deepEqual(await anna.doors.knocks(), []);
+    assert.deepEqual(await anna.inbox.knocks(), []);
 
-    // Leif's side becomes a contact once Anna's signed answer reaches him.
+    // Leif's side becomes a contact once he sees Anna joined: joining is the answer.
     await leif.spaces.hold(space);
     await anna.spaces.hold(space);
     await until(
-      async () => {
-        await anna.doors.knocks();
-        return leif.doors.sent();
-      },
+      () => leif.inbox.sent(),
       (sent) => sent.length === 0,
-      'Anna to answer and Leif to see it',
+      'Leif to see Anna joined',
     );
     const annaForLeif = await leif.contacts.get(anna.did);
     assert.equal(annaForLeif?.space, space);
     assert.equal(annaForLeif?.name, 'Anna');
   });
 
-  test("whoever else the invite reached is not taken for the person behind the door, and can't join after", async () => {
+  test('whoever joins first is the contact; the invite is closed behind them, and nobody joins after', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const annaSeed = generateSeed();
     const anna = await person(hub, 'Anna', annaSeed);
     const leif = await person(hub, 'Leif');
-    const carol = await person(hub, 'Carol');
     const dave = await person(hub, 'Dave');
-    const door = await anna.doors.open();
-    const { space } = await leif.doors.knock(door.code);
+    const inbox = await anna.inbox.open();
+    const { space } = await leif.inbox.knock(inbox.code);
     await leif.spaces.hold(space);
 
-    // Carol gets hold of the invite (say, from Anna's lost laptop) and joins first.
-    const keys = await someDoor(door.id, await deriveContactKeyBytes(annaSeed));
+    // The invite as it went out: whoever gets hold of it later (from Anna's lost laptop, say) holds it too.
+    const keys = await someInbox(0, await deriveContactKeyBytes(annaSeed));
     const [item] = await until(
       () => createMailboxClient().fetch(relayUrl, keys.topic),
       (items) => items.length === 1,
       'the knock',
     );
-    const invite = (await openKnock(keys.key, item!.blob, item!.at, createP256Provider()))!.invite;
-    await carol.spaces.join(invite);
-    await joined(carol, space);
-    await leif.doors.sent();
-    assert.equal(await leif.contacts.get(carol.did), null, 'joining is not answering');
+    const invite = (await openKnock([keys.key], item!.blob, item!.at, provider))!.invite;
 
-    // Anna answers: she is the contact, and the invite is closed behind her.
     const [knock] = await annaSees(anna, (n) => n === 1, 'the knock');
-    await anna.doors.accept(knock!.id);
+    await anna.inbox.accept(knock!.id);
     await anna.spaces.hold(space);
     await until(
-      async () => {
-        await anna.doors.knocks();
-        return leif.doors.sent();
-      },
+      () => leif.inbox.sent(),
       (sent) => sent.length === 0,
-      'the answer',
+      'Leif to settle',
     );
     assert.equal((await leif.contacts.get(anna.did))?.space, space);
-    assert.equal(await leif.contacts.get(carol.did), null);
+    assert.ok(
+      (await leif.spaces.access(space)).invites.every((open) => !open.open),
+      'the invite is closed',
+    );
     // Anyone else it reached is refused now: the space's members don't count them in.
     await dave.spaces.join(invite);
-    await until(
-      async () => {
-        const { founder, mine } = await dave.spaces.access(space);
-        return founder || mine.length > 0;
-      },
-      (holds) => !holds,
-      'Dave to be refused',
-      3000,
-    );
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    for (const member of [leif, anna]) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    for (const member of [leif, anna])
       assert.equal(
         (await member.spaces.access(space)).members.some((m) => m.did === dave.did),
         false,
       );
-    }
   });
 
-  test('a knock can be dismissed without blocking, and a flooded door cleared without closing it', async () => {
+  test('a knock can be dismissed without blocking, and a flooded inbox cleared without closing it', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const anna = await person(hub, 'Anna');
     const leif = await person(hub, 'Leif');
     const carol = await person(hub, 'Carol');
-    const door = await anna.doors.open();
+    const inbox = await anna.inbox.open();
 
-    await leif.doors.knock(door.code);
+    await leif.inbox.knock(inbox.code);
     const [first] = await annaSees(anna, (n) => n === 1, 'Leif’s knock');
-    await anna.doors.dismiss(first!.id);
-    assert.deepEqual(await anna.doors.knocks(), []);
+    await anna.inbox.dismiss(first!.id);
+    assert.deepEqual(await anna.inbox.knocks(), []);
     assert.equal(await anna.contacts.get(leif.did), null, 'not blocked, not a contact');
 
-    await carol.doors.knock(door.code);
-    await leif.doors.knock(door.code);
+    await carol.inbox.knock(inbox.code);
+    await leif.inbox.knock(inbox.code);
     await annaSees(anna, (n) => n === 2, 'two more knocks');
-    await anna.doors.clear(door.id);
-    assert.deepEqual(await anna.doors.knocks(), []);
+    await anna.inbox.clear();
+    assert.deepEqual(await anna.inbox.knocks(), []);
     // Still open: the code everyone has keeps working.
-    await carol.doors.knock(door.code);
+    await carol.inbox.knock(inbox.code);
     await annaSees(anna, (n) => n === 1, 'a knock after clearing');
   });
 
-  test('a knock nobody answers is let go after its time, space and all', async () => {
+  test('a replaced inbox reads no more knocks on the old code, and knocks from blocked people stay hidden', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const anna = await person(hub, 'Anna');
     const leif = await person(hub, 'Leif');
-    const door = await anna.doors.open();
-    const { space } = await leif.doors.knock(door.code);
-    assert.equal((await leif.doors.sent()).length, 1);
+    const carol = await person(hub, 'Carol');
+
+    const inbox = await anna.inbox.open();
+    await leif.inbox.knock(inbox.code);
+    await carol.inbox.knock(inbox.code);
+    await annaSees(anna, (n) => n === 2, 'both knocks');
+
+    await anna.contacts.block(carol.did);
+    assert.deepEqual(
+      (await anna.inbox.knocks()).map((k) => k.from),
+      [leif.did],
+    );
+
+    const next = await anna.inbox.rotate();
+    assert.equal(next.gen, 1);
+    assert.notEqual(next.key, inbox.key);
+    assert.deepEqual(await anna.inbox.knocks(), []);
+    // The old code still reads, but what is left there is never opened.
+    await leif.inbox.knock(inbox.code);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.deepEqual(await anna.inbox.knocks(), []);
+    await leif.inbox.knock(next.code);
+    await annaSees(anna, (n) => n === 1, 'a knock on the new inbox');
+  });
+
+  test('a knock nobody joins is let go after its time, space and all', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const anna = await person(hub, 'Anna');
+    const leif = await person(hub, 'Leif');
+    const inbox = await anna.inbox.open();
+    const { space } = await leif.inbox.knock(inbox.code);
+    assert.equal((await leif.inbox.sent()).length, 1);
     const realNow = Date.now;
     Date.now = () => realNow() + 16 * 24 * 3600_000;
     try {
-      assert.deepEqual(await leif.doors.sent(), []);
+      assert.deepEqual(await leif.inbox.sent(), []);
     } finally {
       Date.now = realNow;
     }
     assert.equal(await leif.spaces.get(space), null);
   });
 
-  test('one relay of a door being down does not stop a knock', async () => {
+  test('one mailbox of an inbox being down does not stop a knock', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const anna = await person(hub, 'Anna');
     const leif = await person(hub, 'Leif');
-    const door = await anna.doors.open({ relays: ['ws://127.0.0.1:1', relayUrl] });
-    await leif.doors.knock(door.code);
+    const inbox = await anna.inbox.open({ places: ['ws://127.0.0.1:1', relayUrl] });
+    await leif.inbox.knock(inbox.code);
     await annaSees(anna, (n) => n === 1, 'the knock through the working relay', 15_000);
   });
 
-  test('a knock fails, and leaves nothing behind, when no relay of the door takes it', async () => {
+  test('a knock fails, and leaves nothing behind, when no mailbox of the inbox takes it', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const anna = await person(hub, 'Anna');
     const leif = await person(hub, 'Leif');
-    const door = await anna.doors.open({ relays: ['ws://127.0.0.1:1'] });
-    await assert.rejects(leif.doors.knock(door.code), /None of their door's relays took the knock/);
-    assert.deepEqual(await leif.doors.sent(), []);
+    const inbox = await anna.inbox.open({ places: ['ws://127.0.0.1:1'] });
+    await assert.rejects(leif.inbox.knock(inbox.code), /None of their inbox's mailboxes took the knock/);
+    assert.deepEqual(await leif.inbox.sent(), []);
     assert.deepEqual(await leif.spaces.list(), []);
   });
 
-  test('a closed door reads no more knocks, and knocks from blocked people stay hidden', async () => {
+  test('you cannot knock on your own inbox', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const anna = await person(hub, 'Anna');
-    const leif = await person(hub, 'Leif');
-    const carol = await person(hub, 'Carol');
-
-    const door = await anna.doors.open();
-    await leif.doors.knock(door.code);
-    await carol.doors.knock(door.code);
-    await annaSees(anna, (n) => n === 2, 'both knocks');
-
-    await anna.contacts.block(carol.did);
-    assert.deepEqual(
-      (await anna.doors.knocks()).map((k) => k.from),
-      [leif.did],
-    );
-
-    await anna.doors.close(door.id);
-    assert.deepEqual(await anna.doors.list(), []);
-    assert.deepEqual(await anna.doors.knocks(), []);
+    const inbox = await anna.inbox.open();
+    await assert.rejects(anna.inbox.knock(inbox.code), /your own inbox/);
   });
 
-  test('you cannot knock on your own door', async () => {
-    const hub = createFakeHub({ latencyMs: 1 });
-    const anna = await person(hub, 'Anna');
-    const door = await anna.doors.open();
-    await assert.rejects(anna.doors.knock(door.code), /your own doors/);
-  });
-
-  test('every device of the account opens the same doors', async () => {
+  test('every device of the account opens the same inbox', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const seed = generateSeed();
     const phone = await person(hub, 'Anna', seed);
     const laptop = await person(hub, 'Anna', seed);
     const leif = await person(hub, 'Leif');
-    const door = await phone.doors.open();
-    await leif.doors.knock(door.code);
+    const inbox = await phone.inbox.open();
+    await leif.inbox.knock(inbox.code);
     const [onLaptop] = await annaSees(
       laptop,
       (n) => n === 1,
-      'the laptop to see the door and its knock',
+      'the laptop to see the inbox and its knock',
       10_000,
     );
     assert.equal(onLaptop!.from, leif.did);
+    assert.equal((await laptop.inbox.get())?.key, inbox.key);
   });
 
-  test("a key given records only has no doors and can't knock, even when it was given the contact key", async () => {
+  test("a key given records only has no inbox and can't knock, even when it was given the contact key", async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const seed = generateSeed();
     const anna = await person(hub, 'Anna');
-    const door = await anna.doors.open();
+    const inbox = await anna.inbox.open();
 
     const manager = createIdentityManager();
-    const provider = manager.getProvider();
     const keys = await provider.generateKeyPair();
     const did = publicKeyToDid(await provider.exportPublicKey(keys.publicKey), P256_MULTICODEC);
-    const note = await createLocalRootSigner(await manager.fromSeed(seed), provider).delegate({
+    const note = await createLocalRootSigner(await manager.fromSeed(seed), manager.getProvider()).delegate({
       audience: did,
       // What it may do is what the note grants, whatever holds the key.
       command: '/record',
@@ -765,9 +815,9 @@ describe('node.doors', () => {
       },
     });
     open.push(agent);
-    assert.deepEqual(await agent.doors.list(), []);
-    await assert.rejects(agent.doors.open(), /doesn't let it use doors/);
-    await assert.rejects(agent.doors.knock(door.code), /doesn't let it use doors/);
-    await assert.rejects(agent.doors.knocks(), /doesn't let it use doors/);
+    assert.equal(await agent.inbox.get(), null);
+    await assert.rejects(agent.inbox.open(), /doesn't let it use your inbox/);
+    await assert.rejects(agent.inbox.knock(inbox.code), /doesn't let it use your inbox/);
+    await assert.rejects(agent.inbox.knocks(), /doesn't let it use your inbox/);
   });
 });

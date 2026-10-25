@@ -223,7 +223,7 @@ describe('asking to be added', () => {
     assert.deepEqual(await anna.node.contacts.others(leif.node.did), []);
   });
 
-  test('a request is opened only from a note that may write for the whole account, as a knock needs', async () => {
+  test('a knock left in a space stands only from a note that may write for the whole account: peers refuse the rest', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const leif = await person(hub, 'Leif');
     const anna = await person(hub, 'Anna');
@@ -239,23 +239,24 @@ describe('asking to be added', () => {
       "Leif to see Anna's contact key",
     );
     const asked = await leif.node.contacts.ask(club, anna.node.did);
-    const real = (await leif.node.records.list(club, { collection: 'std.contact-request' }))[0]!;
-    // The same request again, signed by a key whose note covers this one space only.
+    const real = (await leif.node.records.list(club, { collection: 'sys.mail' }))[0]!;
+    // The same knock again, left by a key whose note covers this one space only.
+    const refused: string[] = [];
+    anna.node.subscribe((event) => {
+      if (event.type === 'rejected') refused.push(event.reason);
+    });
     await letGo(leif.node, club);
     await forge(
       leif,
       club,
-      {
-        collection: 'std.contact-request',
-        body: real.body,
-      },
+      { collection: 'sys.mail', body: real.body, version: { key: 'mail:forged', seq: 0 } },
       { app: true },
     );
     await hold(leif.node, club);
-    await until(
-      async () => (await anna.node.records.list(club, { collection: 'std.contact-request' })).length === 2,
-      5000,
-      'both requests to reach Anna',
+    await until(async () => refused.length > 0, 5000, 'Anna to refuse the copy');
+    assert.deepEqual(
+      (await anna.node.records.list(club, { collection: 'sys.mail' })).map((record) => record.key),
+      [real.key],
     );
     const requests = await anna.node.contacts.requests(club);
     assert.deepEqual(
@@ -269,7 +270,7 @@ describe('asking to be added', () => {
     const { leif, anna, carol, club } = await bookClub();
     await leif.node.contacts.ask(club, anna.node.did);
     await until(
-      async () => (await carol.node.records.list(club, { collection: 'std.contact-request' })).length === 1,
+      async () => (await carol.node.records.list(club, { collection: 'sys.mail' })).length === 1,
       5000,
       'the request to reach Carol',
     );

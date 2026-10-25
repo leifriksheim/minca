@@ -75,8 +75,8 @@ export type {
   DirectMessage,
   ContactView,
   ContactRequest,
-  NodeDoors,
-  DoorView,
+  NodeInbox,
+  InboxView,
   KnockView,
   SentKnockView,
 } from './types.js';

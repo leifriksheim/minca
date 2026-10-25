@@ -77,7 +77,7 @@ export function createVersion<T>(params: CreateVersionParams<T>): UnsignedVersio
     author: params.author,
     collection: params.collection,
     body: params.body,
-    createdAt: params.createdAt ?? new Date().toISOString(),
+    createdAt: params.createdAt ?? new Date(Date.now()).toISOString(),
     ...(params.space ? { space: params.space } : {}),
     ...(params.to ? { to: params.to } : {}),
     ...(params.proof ? { proof: params.proof } : {}),

@@ -1,14 +1,14 @@
 /**
- * Contacts, as two standard collections — the protocol knows neither.
+ * Contacts, as standard collections — the protocol knows none of them.
  *
  * A contact is someone you share a private space for two with. Your list of
  * them is `std.contact` records in your contacts space, which only your
- * account can find (`deriveContactsSpace`). Asking someone to add you, inside
- * a space you both belong to, is a `std.contact-request` there: the invite to a
- * new space for two, sealed with their contact key so only they can read it.
+ * account can find (`deriveContactsSpace`). Your inbox's settings, and the
+ * knocks you left on other people's, are kept there too, so every device of
+ * the account reads the same ones.
  *
- * `node.contacts` does the work with both; these are here so apps can read
- * and query the records like any other.
+ * `node.contacts` and `node.inbox` do the work with them; these are here so
+ * apps can read and query the records like any other.
  */
 import { define } from './fragments.js';
 import type { BodyOf } from '../query/types.js';
@@ -25,13 +25,7 @@ export const contact = define({
       name: { type: 'string', maxLength: 200, description: 'What you call them' },
       space: { type: 'string', maxLength: 256, description: 'The id of your space for two' },
       note: { type: 'string', maxLength: 2000 },
-      blocked: { type: 'boolean', description: 'Their contact requests are hidden, in every space' },
-      door: {
-        type: 'string',
-        maxLength: 64,
-        description:
-          'The door they knocked on, while your answer is still to be written in your space for two',
-      },
+      blocked: { type: 'boolean', description: 'Their knocks are hidden, in every space and in your inbox' },
     },
     required: ['did', 'name'],
   },
@@ -39,112 +33,55 @@ export const contact = define({
 });
 export type Contact = BodyOf<typeof contact>;
 
-/** An invite to a space for two, sealed so only the person it is for can read it. */
-export const contactRequest = define({
-  name: 'std.contact-request',
-  title: 'Contact request',
-  description: 'An invite to a space for two, sealed so only one person can read it.',
-  schema: {
-    type: 'object',
-    properties: {
-      to: { type: 'string', maxLength: 256, description: 'The account it is for' },
-      sealed: {
-        type: 'string',
-        maxLength: 16000,
-        description: 'The invite and a note, sealed with their contact key',
-      },
-    },
-    required: ['to', 'sealed'],
-  },
-});
-export type ContactRequestRecord = BodyOf<typeof contactRequest>;
-
 /**
- * A door of yours: a way in for people you share no space with (`node.doors`).
- * Kept in your contacts space, so every device of the account opens the same
- * doors. Its key is derived from the contact key and `id`; closing the door
- * is deleting the record.
+ * Your inbox (`node.inbox`): which one it is and where its knocks wait. Its
+ * keys are derived from the contact key and `gen`; a new `gen` is a new inbox,
+ * and codes for the old one stop working. The newest record is the inbox.
  */
-export const door = define({
-  name: 'std.door',
-  title: 'Door',
-  description: 'A way for people you share no space with to ask to become your contact.',
+export const inbox = define({
+  name: 'std.inbox',
+  title: 'Inbox',
+  description: 'Where people you share no space with can ask to become your contact.',
   schema: {
     type: 'object',
     properties: {
-      id: {
-        type: 'string',
-        minLength: 16,
-        maxLength: 64,
-        description: 'Random; the door key is derived from it',
-      },
-      label: { type: 'string', maxLength: 64, description: 'What you call this door — only you see it' },
-      name: {
-        type: 'string',
-        maxLength: 64,
-        description: 'The name its code gives, shown to whoever knocks',
-      },
-      relays: {
+      gen: { type: 'integer', minimum: 0, description: 'Which inbox: its keys are derived from it' },
+      places: {
         type: 'array',
         items: { type: 'string', maxLength: 200 },
         minItems: 1,
         maxItems: 3,
         description: 'Whose mailboxes hold its knocks',
       },
+      name: {
+        type: 'string',
+        maxLength: 64,
+        description: 'The name its code gives, shown to whoever knocks',
+      },
     },
-    required: ['id', 'relays'],
+    required: ['gen', 'places'],
   },
-  rules: { onePer: ['id'] },
 });
-export type Door = BodyOf<typeof door>;
+export type Inbox = BodyOf<typeof inbox>;
 
 /**
- * A knock you left on someone's door, waiting for them to open it. You don't
- * know who they are until they join the space for two; then it becomes a
+ * A knock you left on someone's inbox, waiting for them to join the space for
+ * two. You don't know who they are until they do; then it becomes a
  * `std.contact`, and this goes.
  */
 export const knock = define({
   name: 'std.knock',
   title: 'Knock',
-  description: 'A knock left on a door, waiting for an answer.',
+  description: 'A knock left on an inbox, waiting for them to join.',
   schema: {
     type: 'object',
     properties: {
       space: { type: 'string', maxLength: 256, description: 'The space for two it invites them to' },
-      name: { type: 'string', maxLength: 64, description: 'The name their door code gave' },
-      door: { type: 'string', maxLength: 64, description: 'The door key knocked on' },
-      sign: {
-        type: 'string',
-        maxLength: 64,
-        description: "The door's signing key, which their answer must be signed with",
-      },
-      invite: { type: 'string', maxLength: 8000, description: 'The invite sent, to close once they answer' },
+      name: { type: 'string', maxLength: 64, description: 'The name their inbox code gave' },
+      invite: { type: 'string', maxLength: 12000, description: 'The invite sent, to close once they join' },
     },
-    required: ['space', 'name', 'door', 'sign', 'invite'],
+    required: ['space', 'name', 'invite'],
   },
   rules: { onePer: ['space'] },
 });
 export type Knock = BodyOf<typeof knock>;
-
-/**
- * The answer to a knock, in the space for two: the door's owner, signing with
- * the door's signing key that the account writing this is theirs. It is how
- * the knocker tells the person behind the door from anyone the invite reached.
- */
-export const knockAnswer = define({
-  name: 'std.knock-answer',
-  title: 'Knock answer',
-  description: 'Proof that the account which joined is the one behind the door knocked on.',
-  schema: {
-    type: 'object',
-    properties: {
-      sig: {
-        type: 'string',
-        maxLength: 200,
-        description: 'The door signing key over "minca/knock-answer/v1|<space>|<account>"',
-      },
-    },
-    required: ['sig'],
-  },
-});
-export type KnockAnswer = BodyOf<typeof knockAnswer>;

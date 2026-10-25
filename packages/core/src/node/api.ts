@@ -16,7 +16,7 @@ export type Namespace =
   | 'automations'
   | 'contacts'
   | 'direct'
-  | 'doors'
+  | 'inbox'
   | 'network';
 
 /**
@@ -123,22 +123,22 @@ export const API = Object.freeze({
     remove: 'change contacts',
     block: 'block anyone',
     ask: 'ask anyone to be a contact',
-    requests: 'open contact requests',
-    accept: 'accept contact requests',
+    requests: 'read knocks',
+    accept: 'accept knocks',
     others: "look inside a contact's space",
   },
   // Direct messages are sealed to the person's member key, which an agent isn't given.
   direct: { reachable: 'own', send: 'send direct messages', list: 'read direct messages' },
-  // Doors are the person's: an agent has none and knocks on none.
-  doors: {
-    list: 'own',
-    open: 'open a door',
-    close: 'close a door',
-    knock: "knock on anyone's door",
-    clear: 'clear a door',
+  // The inbox is the person's: an agent has none and knocks on none.
+  inbox: {
+    get: 'own',
+    open: 'open your inbox',
+    rotate: 'replace your inbox',
+    clear: 'clear your inbox',
+    knock: "knock on anyone's inbox",
     knocks: 'read knocks',
     sent: 'look at knocks',
-    accept: 'open the door to anyone',
+    accept: 'accept knocks',
     dismiss: 'dismiss a knock',
   },
   network: { status: 'pass', reconnect: 'pass' },

@@ -3,7 +3,7 @@
  * own by `signaling-server.mjs`, and inside every always-on node
  * (`packages/cli/src/serve.ts`), so both are the same relay. What it does is
  * specified in spec/04-network.md §1 (rooms, messages, limits, TURN passwords,
- * §1.1–1.7) and its mailbox for doors in spec/07-doors.md §5.
+ * §1.1–1.7) and its mailbox for inboxes and short links in spec/07-inbox.md §5.
  *
  * It is public, so it assumes nobody is polite: every socket gets a size cap,
  * a message budget and a heartbeat, and each IP, room and the process as a
@@ -48,12 +48,12 @@ export const MAILBOX_LIMITS = Object.freeze({
   maxChars: 64 * 1024 * 1024,
   /**
    * Past `maxChars`, a reserve only topics holding fewer than two knocks may
-   * use: a mailbox someone filled still takes a knock or two on every door.
+   * use: a mailbox someone filled still takes a knock or two on every inbox.
    */
   reserveChars: 8 * 1024 * 1024,
   /** How long a knock is kept. A client may ask for less, never more. */
   ttlSeconds: 14 * 24 * 3600,
-  /** Drops one address may make into one topic per hour: filling a door takes many addresses */
+  /** Drops one address may make into one topic per hour: filling an inbox takes many addresses */
   dropsPerNetworkPerTopic: 4,
   /** Drops one address may make in all, per hour: filling the mailbox takes very many */
   dropsPerNetwork: 30,
@@ -344,9 +344,9 @@ export function createRelay(options = {}) {
     const here = countOf(`${network}|${topic}`, now);
     const everywhere = countOf(network, now);
     if (here >= limits.dropsPerNetworkPerTopic)
-      return refuse('Too many knocks on this door from here; try later');
+      return refuse('Too many knocks on this inbox from here; try later');
     if (everywhere >= limits.dropsPerNetwork) return refuse('Too many knocks from here; try later');
-    if (held.length >= MAX_MAIL_PER_TOPIC) return refuse('This door is full');
+    if (held.length >= MAX_MAIL_PER_TOPIC) return refuse('This inbox is full');
     if (!mailbox.has(topic) && mailbox.size >= limits.maxTopics) return refuse('The mailbox is full');
     const room = held.length < RESERVED_PER_TOPIC ? limits.maxChars + limits.reserveChars : limits.maxChars;
     if (mailChars + blob.length > room) return refuse('The mailbox is full');
@@ -384,7 +384,7 @@ export function createRelay(options = {}) {
 
   /**
    * Clears a topic's knocks, all or some, for whoever proves they own the
-   * door: the signing key they show hashes to the topic, and they signed this
+   * inbox: the signing key they show hashes to the topic, and they signed this
    * socket's challenge with it. The challenge is used up either way.
    */
   function purge(client, message) {
@@ -409,8 +409,8 @@ export function createRelay(options = {}) {
     ) {
       return refuse('Not a purge');
     }
-    if (createHash('sha256').update(`minca/door-topic/v1|${sign}`).digest('base64url') !== topic)
-      return refuse('That key is not this door’s');
+    if (createHash('sha256').update(`minca/inbox-topic/v1|${sign}`).digest('base64url') !== topic)
+      return refuse('That key is not this inbox’s');
     let good = false;
     try {
       const key = createPublicKey({
@@ -418,7 +418,7 @@ export function createRelay(options = {}) {
         format: 'der',
         type: 'spki',
       });
-      const signed = `minca/door-purge/v1|${topic}|${nonce}|${ids ? [...ids].sort().join(',') : '*'}`;
+      const signed = `minca/inbox-purge/v1|${topic}|${nonce}|${ids ? [...ids].sort().join(',') : '*'}`;
       good = verify(
         'sha256',
         Buffer.from(signed),

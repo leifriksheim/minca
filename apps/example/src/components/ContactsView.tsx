@@ -2,14 +2,23 @@ import { useCallback, useEffect, useState } from 'react';
 import type {
   ContactRequest,
   ContactView,
-  DoorView,
+  InboxView,
   KnockView,
   SentKnockView,
   SpaceSummary,
 } from '@minca/core';
-import { parseDoorCode } from '@minca/core/doors';
+import { readInbox } from '@minca/core/inbox';
+import { createP256Provider } from '@minca/core';
 import { useAccount, useNode } from '@minca/core/react';
-import { clearDoorFromUrl, doorLink, readDoorFromUrl, takeBack, useContacts, useStanding } from '../contacts';
+import {
+  clearInboxFromUrl,
+  inboxLink,
+  NOT_CARRIED,
+  readInboxFromUrl,
+  takeBack,
+  useContacts,
+  useStanding,
+} from '../contacts';
 import { nameOf, peopleFrom } from '../derive/people';
 import { ago } from '@minca/ui/time';
 import { Avatar } from '@minca/app-shared/Avatar';
@@ -19,13 +28,16 @@ import { message, useAction, useCopy } from '@minca/app-shared/action';
 import { Loader } from '@minca/app-shared/Loader';
 import { ask } from '@minca/app-shared/Ask';
 
-/** How often to look in the doors' mailboxes: knocks wait on relays, which tell nobody */
+/** How often to look in the inbox's mailboxes: knocks wait on relays, which tell nobody */
 const KNOCK_POLL_MS = 30_000;
+
+/** Checks inbox codes as they are typed */
+const provider = createP256Provider();
 
 /** Nobody's profile: names here come from the contact list, or the tail of an identity */
 const nobody = peopleFrom([]);
 
-/** People: your contacts (each a private space for two), who is asking to be one, and your doors. */
+/** People: your contacts (each a private space for two), who is asking to be one, and your inbox. */
 export function ContactsView({
   spaces,
   onOpen,
@@ -38,7 +50,8 @@ export function ContactsView({
   const [requests, setRequests] = useState<ReadonlyArray<ContactRequest>>([]);
   const [knocks, setKnocks] = useState<ReadonlyArray<KnockView>>([]);
   const [sent, setSent] = useState<ReadonlyArray<SentKnockView>>([]);
-  const [doors, setDoors] = useState<ReadonlyArray<DoorView>>([]);
+  const [inbox, setInbox] = useState<InboxView | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const { run, error } = useAction();
   const [tick, setTick] = useState(0);
   const reload = useCallback(() => setTick((n) => n + 1), []);
@@ -81,17 +94,17 @@ export function ContactsView({
     };
   }, [node, sharedIds, reload]);
 
-  // Doors, and the knocks at them. Reading knocks also turns answered knocks of yours into contacts.
+  // The inbox, and the knocks in it. Reading knocks also turns knocks of yours someone joined into contacts.
   useEffect(() => {
     let stopped = false;
     const load = async () => {
       const [open, waiting, left] = await Promise.all([
-        node.doors.list().catch(() => []),
-        node.doors.knocks().catch(() => []),
-        node.doors.sent().catch(() => []),
+        node.inbox.get().catch(() => null),
+        node.inbox.knocks().catch(() => []),
+        node.inbox.sent().catch(() => []),
       ]);
       if (stopped) return;
-      setDoors(open);
+      setInbox(open);
       setKnocks(waiting);
       setSent(left);
     };
@@ -109,6 +122,11 @@ export function ContactsView({
   const listed = (contacts ?? []).filter((contact) => !contact.blocked);
   const blocked = (contacts ?? []).filter((contact) => contact.blocked);
   const asking = requests.length + knocks.length;
+  const knock = async (code: string, note: string) => {
+    setNotice(null);
+    const made = await node.inbox.knock(code, note ? { note } : {});
+    if (!made.carried) setNotice(NOT_CARRIED);
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -118,7 +136,9 @@ export function ContactsView({
         </div>
       )}
 
-      <KnockFromLink onKnock={(code, note) => act(() => node.doors.knock(code, note ? { note } : {}))} />
+      {notice && <p style={styles.todoMeta}>{notice}</p>}
+
+      <KnockFromLink onKnock={(code, note) => act(() => knock(code, note))} />
 
       {asking > 0 && (
         <section
@@ -150,7 +170,7 @@ export function ContactsView({
                   onClick={() => void act(() => node.contacts.block(request.from))}
                   data-variant="ghost"
                   style={styles.linkButton}
-                  title="Hide their requests, in every space"
+                  title="Hide their knocks, in every space"
                 >
                   Block
                 </button>
@@ -167,22 +187,22 @@ export function ContactsView({
                     </span>
                   </p>
                   <p style={styles.todoMeta}>
-                    Knocked on {doorName(doors.find((door) => door.id === knock.door))} · {ago(knock.at)} ·
-                    the name is theirs to choose; the code after it is who they are
+                    Knocked on your inbox · {ago(knock.at)} · the name is theirs to choose; the code after it
+                    is who they are
                   </p>
                   {knock.note && (
                     <p style={{ ...styles.todoMeta, color: palette.ink.body }}>“{knock.note}”</p>
                   )}
                 </div>
                 <button
-                  onClick={() => void act(() => node.doors.accept(knock.id))}
+                  onClick={() => void act(() => node.inbox.accept(knock.id))}
                   data-variant="primary"
                   style={{ ...styles.addButton, height: 32 }}
                 >
                   Accept
                 </button>
                 <button
-                  onClick={() => void act(() => node.doors.dismiss(knock.id))}
+                  onClick={() => void act(() => node.inbox.dismiss(knock.id))}
                   data-variant="ghost"
                   style={styles.linkButton}
                   title="Let this knock go; they can knock again"
@@ -211,8 +231,8 @@ export function ContactsView({
           </p>
         ) : listed.length === 0 ? (
           <div style={styles.emptyState}>
-            No contacts yet. Add someone from a space you share — their name under People — or give them a
-            link to one of your doors below.
+            No contacts yet. Add someone from a space you share — their name under People — or give them your
+            inbox link below.
           </div>
         ) : (
           <ul style={styles.todoList}>
@@ -230,8 +250,8 @@ export function ContactsView({
                 </span>
                 <span style={{ flex: 1 }}>
                   Waiting for{' '}
-                  <strong style={{ color: palette.ink.strong, fontWeight: 500 }}>{knock.name}</strong> to open
-                  their door · knocked {ago(knock.at)}
+                  <strong style={{ color: palette.ink.strong, fontWeight: 500 }}>{knock.name}</strong> to join
+                  · knocked {ago(knock.at)}
                 </span>
               </li>
             ))}
@@ -239,7 +259,7 @@ export function ContactsView({
         )}
       </section>
 
-      <Doors doors={doors} act={act} />
+      <Inbox inbox={inbox} act={act} onKnock={knock} />
 
       {blocked.length > 0 && (
         <details style={{ marginTop: 16 }}>
@@ -266,12 +286,6 @@ export function ContactsView({
       )}
     </div>
   );
-}
-
-/** A door by what you call it, or the name its code gives */
-function doorName(door: DoorView | undefined): string {
-  if (!door) return 'a door of yours';
-  return door.label ? `“${door.label}”` : door.name ? `your door as ${door.name}` : 'your door';
 }
 
 /**
@@ -409,149 +423,96 @@ function ContactRow({
 }
 
 /**
- * Your doors: links anyone can use to ask to become your contact, without
- * sharing a space with you first. Each has its own link, so one that gets
- * around too far can be closed without the others.
+ * Your inbox: one link anyone can use to ask to become your contact, without
+ * sharing a space with you first. Replace it and the old link leads nowhere,
+ * and nothing ties the new one to it.
  */
-function Doors({
-  doors,
+function Inbox({
+  inbox,
   act,
+  onKnock,
 }: {
-  doors: ReadonlyArray<DoorView>;
+  inbox: InboxView | null;
   act: (action: () => Promise<unknown>) => Promise<void>;
+  onKnock: (code: string, note: string) => Promise<void>;
 }) {
   const node = useNode();
-  const [opening, setOpening] = useState(false);
   const [knocking, setKnocking] = useState(false);
-  const { copied, copy: copyText } = useCopy();
-  const [last, setLast] = useState<string | null>(null);
-  const copy = (door: DoorView) => {
-    setLast(door.id);
-    copyText(doorLink(door.code));
-  };
+  const { copied, copy } = useCopy();
 
   return (
-    <section style={{ ...styles.panelSection, marginTop: 24 }} aria-label="Your doors">
-      <h2 style={styles.sectionTitle}>Your doors</h2>
+    <section style={{ ...styles.panelSection, marginTop: 24 }} aria-label="Your inbox">
+      <h2 style={styles.sectionTitle}>Your inbox</h2>
       <p style={{ ...styles.todoMeta, marginTop: 0 }}>
-        A door link lets someone you share no space with ask to become your contact. It says nothing about who
-        you are; close it and it leads nowhere, while your contacts stay.
+        Your inbox link lets someone you share no space with ask to become your contact. It says nothing about
+        who you are; replace it and the old link leads nowhere, while your contacts stay.
       </p>
-      {doors.length > 0 && (
+      {inbox && (
         <ul style={styles.todoList}>
-          {doors.map((door) => (
-            <li key={door.id} style={styles.row}>
-              <div style={styles.todoContent}>
-                <p style={styles.todoText}>{door.label ?? door.name ?? 'A door'}</p>
-                <p style={styles.todoMeta}>
-                  {door.name ? `Shows “${door.name}” to whoever knocks` : 'Shows no name'} · opened{' '}
-                  {ago(door.createdAt)}
-                </p>
-              </div>
-              <button onClick={() => copy(door)} data-variant="quiet" style={styles.smallButton}>
-                {copied && last === door.id ? 'Copied' : 'Copy link'}
-              </button>
-              <button
-                onClick={() => void act(() => node.doors.clear(door.id))}
-                data-variant="ghost"
-                style={styles.linkButton}
-                title="Clear every knock waiting here, for a door someone is flooding"
-              >
-                Clear knocks
-              </button>
-              <button
-                onClick={() =>
-                  void ask('Its link stops working everywhere it was shared.', {
-                    title: 'Close this door?',
-                    yes: 'Close it',
-                    danger: true,
-                  }).then(async (sure) => {
-                    if (sure) await act(() => node.doors.close(door.id));
-                  })
-                }
-                data-variant="ghost"
-                style={{ ...styles.linkButton, color: palette.accent.danger }}
-              >
-                Close
-              </button>
-            </li>
-          ))}
+          <li style={styles.row}>
+            <div style={styles.todoContent}>
+              <p style={styles.todoText}>
+                {inbox.name ? `Shows “${inbox.name}” to whoever knocks` : 'Shows no name'}
+              </p>
+              <p style={styles.todoMeta}>Since {ago(inbox.updatedAt)}</p>
+            </div>
+            <button
+              onClick={() => copy(inboxLink(inbox.code))}
+              data-variant="quiet"
+              style={styles.smallButton}
+            >
+              {copied ? 'Copied' : 'Copy link'}
+            </button>
+            <button
+              onClick={() => void act(() => node.inbox.clear())}
+              data-variant="ghost"
+              style={styles.linkButton}
+              title="Clear every knock waiting, for an inbox someone is flooding"
+            >
+              Clear knocks
+            </button>
+            <button
+              onClick={() =>
+                void ask('The link you shared stops working everywhere. You get a new one.', {
+                  title: 'Replace your inbox?',
+                  yes: 'Replace it',
+                  danger: true,
+                }).then(async (sure) => {
+                  if (sure) await act(() => node.inbox.rotate());
+                })
+              }
+              data-variant="ghost"
+              style={{ ...styles.linkButton, color: palette.accent.danger }}
+            >
+              Replace
+            </button>
+          </li>
         </ul>
       )}
       <div style={styles.linkRow}>
-        <button onClick={() => setOpening(true)} data-variant="quiet" style={styles.smallButton}>
-          Open a door
-        </button>
+        {!inbox && (
+          <button
+            onClick={() => void act(() => node.inbox.open())}
+            data-variant="quiet"
+            style={styles.smallButton}
+          >
+            Open your inbox
+          </button>
+        )}
         <button onClick={() => setKnocking(true)} data-variant="ghost" style={styles.linkButton}>
-          Knock on someone's door
+          Knock on someone's inbox
         </button>
       </div>
-      {opening && (
-        <OpenDoor
-          onClose={() => setOpening(false)}
-          onOpen={(label, name) => {
-            setOpening(false);
-            void act(() => node.doors.open({ ...(label ? { label } : {}), ...(name ? { name } : {}) }));
-          }}
-        />
-      )}
       {knocking && (
         <KnockDialog
           onClose={() => setKnocking(false)}
           onKnock={(code, note) => {
             setKnocking(false);
-            void act(() => node.doors.knock(code, note ? { note } : {}));
+            void act(() => onKnock(code, note));
           }}
         />
       )}
     </section>
-  );
-}
-
-function OpenDoor({
-  onClose,
-  onOpen,
-}: {
-  onClose: () => void;
-  onOpen: (label: string, name: string) => void;
-}) {
-  const [label, setLabel] = useState('');
-  const [name, setName] = useState('');
-  return (
-    <Modal title="Open a door" onClose={onClose}>
-      <form
-        style={styles.form}
-        onSubmit={(event) => {
-          event.preventDefault();
-          onOpen(label.trim(), name.trim());
-        }}
-      >
-        <label style={styles.fieldLabel} htmlFor="door-label">
-          What you call it — only you see this
-        </label>
-        <input
-          id="door-label"
-          value={label}
-          onChange={(event) => setLabel(event.target.value)}
-          maxLength={64}
-          placeholder="On my website"
-          style={styles.input}
-        />
-        <label style={{ ...styles.fieldLabel, marginTop: 8 }} htmlFor="door-name">
-          The name it shows whoever knocks — leave empty for your account's name
-        </label>
-        <input
-          id="door-name"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          maxLength={64}
-          style={styles.input}
-        />
-        <button type="submit" data-variant="primary" style={{ ...styles.addButton, marginTop: 12 }}>
-          Open door
-        </button>
-      </form>
-    </Modal>
   );
 }
 
@@ -566,17 +527,27 @@ function KnockDialog({
 }) {
   const [code, setCode] = useState(initial);
   const [note, setNote] = useState('');
-  let problem: string | null = null;
-  let name: string | null = null;
-  if (code.trim()) {
-    try {
-      name = parseDoorCode(code).name ?? null;
-    } catch (caught) {
-      problem = message(caught);
-    }
-  }
+  const [read, setRead] = useState<{ code: string; name: string | null; problem: string | null } | null>(
+    null,
+  );
+  // An inbox code is signed: checked as it is typed.
+  useEffect(() => {
+    let stopped = false;
+    const text = code.trim();
+    if (!text) return;
+    readInbox(text, provider).then(
+      (inbox) => !stopped && setRead({ code: text, name: inbox.name ?? null, problem: null }),
+      (caught: unknown) => !stopped && setRead({ code: text, name: null, problem: message(caught) }),
+    );
+    return () => {
+      stopped = true;
+    };
+  }, [code]);
+  const current = read?.code === code.trim() ? read : null;
+  const name = current?.name ?? null;
+  const problem = current?.problem ?? null;
   return (
-    <Modal title={name ? `Knock on ${name}'s door` : "Knock on someone's door"} onClose={onClose}>
+    <Modal title={name ? `Knock on ${name}'s inbox` : "Knock on someone's inbox"} onClose={onClose}>
       <form
         style={styles.form}
         onSubmit={(event) => {
@@ -586,11 +557,11 @@ function KnockDialog({
       >
         {!initial && (
           <>
-            <label style={styles.fieldLabel} htmlFor="door-code">
-              Their door link or code
+            <label style={styles.fieldLabel} htmlFor="inbox-code">
+              Their inbox link or code
             </label>
             <input
-              id="door-code"
+              id="inbox-code"
               value={code}
               onChange={(event) => setCode(event.target.value)}
               style={styles.input}
@@ -610,13 +581,13 @@ function KnockDialog({
           style={styles.textarea}
         />
         <p style={styles.todoMeta}>
-          This makes a private space for the two of you and leaves its invite at their door. They see your
-          account and the name you go by. The name a door shows is the owner's to choose, so be sure the link
-          came from them.
+          This makes a private space for the two of you and leaves its invite in their inbox. They see your
+          account and the name you go by. The name an inbox shows is the owner's to choose, so be sure the
+          link came from them.
         </p>
         <button
           type="submit"
-          disabled={!code.trim() || !!problem}
+          disabled={!code.trim() || !current || !!problem}
           data-variant="primary"
           style={{ ...styles.addButton, marginTop: 12 }}
         >
@@ -627,13 +598,13 @@ function KnockDialog({
   );
 }
 
-/** Offered when the page was opened from a door link: knock, or not now. */
+/** Offered when the page was opened from an inbox link: knock, or not now. */
 function KnockFromLink({ onKnock }: { onKnock: (code: string, note: string) => Promise<void> }) {
-  const [code, setCode] = useState(readDoorFromUrl);
+  const [code, setCode] = useState(readInboxFromUrl);
   if (!code) return null;
   const done = () => {
     setCode(null);
-    clearDoorFromUrl();
+    clearInboxFromUrl();
   };
   return (
     <KnockDialog

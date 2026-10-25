@@ -193,6 +193,7 @@ import {
   type AvatarRef,
 } from '../space/account-registry.js';
 import { PASS_COLLECTION } from '../space/pass.js';
+import { MAIL_COLLECTION } from '../inbox/inbox.js';
 import { base32Encode, cidOfDigest, hashedKey, sha256 } from '../utils/hash.js';
 import { sameTags, tagsFor, topicKey, topicTag } from '../records/topics.js';
 import { base64UrlDecode, base64UrlEncode, utf8Decode, utf8Encode } from '../utils/encoding.js';
@@ -325,13 +326,14 @@ const NOT_ACCOUNT = "This key's note doesn't let it change the account itself. A
 /**
  * Whether a version is about the account that signs it: its own place in the
  * space (taking or giving up a role, leaving, stepping down), what others
- * seal to it or see of it, or another of its keys. Only a key acting as the
+ * seal to it or see of it, a knock it leaves, or another of its keys. Only a key acting as the
  * account itself writes one (spec 01 §8), so an app given a space never
  * changes the account's standing there.
  */
 function aboutItself(collection: string, body: unknown, root: string, author: string): boolean {
   if (collection === STEPDOWN_COLLECTION || collection === MEMBER_KEY_COLLECTION) return true;
-  if (collection === PROFILE_COLLECTION) return true;
+  // Leaving a knock asks someone into a space the account made: as knocking anywhere does.
+  if (collection === PROFILE_COLLECTION || collection === MAIL_COLLECTION) return true;
   if (!isRecord(body)) return false;
   if (collection === ASSIGN_COLLECTION || collection === REMOVE_COLLECTION) return body.did === root;
   return collection === REVOKE_COLLECTION && body.key !== author;

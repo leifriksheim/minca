@@ -78,8 +78,8 @@ export {
 } from './identity/account-vault.js';
 export {
   deriveContactKeyBytes,
-  deriveDoorKeyBytes,
-  deriveDoorSignKeyBytes,
+  deriveInboxKeyBytes,
+  deriveInboxSignKeyBytes,
   contactKeyPair,
   contactPublicKey,
   isContactPublicKey,
@@ -444,8 +444,8 @@ export type {
   DirectMessage,
   ContactView,
   ContactRequest,
-  NodeDoors,
-  DoorView,
+  NodeInbox,
+  InboxView,
   KnockView,
   SentKnockView,
   CarrierConfig,

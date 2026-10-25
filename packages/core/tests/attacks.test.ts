@@ -24,7 +24,6 @@ import { stored } from './helpers/stored.js';
 import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { contactPublicKey, deriveContactKeyBytes } from '../src/identity/contact-key.js';
 import { profileKey } from '../src/node/space-runtime.js';
-import { contactRequest } from '../src/schemas/contacts.js';
 import { until } from './helpers/until.js';
 import type { Version } from '../src/types.js';
 import { seenBy } from './helpers/as-member.js';
@@ -345,46 +344,36 @@ describe('attacks on contacts', () => {
     assert.equal(seen?.contactKey, annasKey);
   });
 
-  test('a request re-posted by someone else, or copied into another space, does not open', async () => {
+  test('a knock re-posted by someone else does not open as theirs, nor as anyone’s', async () => {
     const { leif, anna, carol, space } = await threeIn('private');
     await leif.node.contacts.ask(space, anna.node.did);
     await until(
-      async () => (await carol.node.records.list(space, { collection: 'std.contact-request' })).length === 1,
+      async () => (await carol.node.records.list(space, { collection: 'sys.mail' })).length === 1,
       5000,
-      'the request',
+      'the knock',
     );
     const [original] = await carol.node.records.list<{ to: string; sealed: string }>(space, {
-      collection: 'std.contact-request',
+      collection: 'sys.mail',
     });
 
-    // Carol posts Leif's sealed invite as her own.
-    await carol.node.records.put(space, 'std.contact-request', original!.body!);
-    // Leif posts the same sealed invite in another space Anna is in.
-    const { id: other } = await leif.node.spaces.create({ name: 'Other', ...team, visibility: 'private' });
-    await anna.node.spaces.join(await leif.node.spaces.invite(other, { role: 'editor' }));
-    await joined(anna.node, other);
-    await leif.node.collections.define(other, contactRequest);
-    await leif.node.records.put(other, 'std.contact-request', original!.body!);
-    await hold(anna.node, other);
-    await hold(leif.node, other);
-
+    // Carol leaves Leif's sealed knock as her own.
+    await letGo(carol.node, space);
+    await forge(carol, space, {
+      collection: 'sys.mail',
+      body: original!.body!,
+      version: { key: 'mail:copied', seq: 0 },
+    });
+    await hold(carol.node, space);
     await until(
-      async () => (await anna.node.records.list(space, { collection: 'std.contact-request' })).length === 2,
+      async () => (await anna.node.records.list(space, { collection: 'sys.mail' })).length === 2,
       5000,
       'Carol’s copy',
     );
-    await until(
-      async () => (await anna.node.records.list(other, { collection: 'std.contact-request' })).length === 1,
-      5000,
-      'Leif’s copy',
-    );
-    const here = await anna.node.contacts.requests(space);
     assert.deepEqual(
-      here.map((request) => request.from),
-      [leif.node.did],
+      (await anna.node.contacts.requests(space)).map((request) => [request.key, request.from]),
+      [[original!.key, leif.node.did]],
       'only the original, from Leif',
     );
-    assert.deepEqual(await anna.node.contacts.requests(other), []);
   });
 });
 

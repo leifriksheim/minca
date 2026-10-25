@@ -1,20 +1,24 @@
-/** Contacts (`node.contacts`) and doors (`node.doors`), for the screens that show them. */
+/** Contacts (`node.contacts`) and the inbox (`node.inbox`), for the screens that show them. */
 import { useEffect, useState } from 'react';
 import type { ContactView, P2PNode } from '@minca/core';
 import { useLive, useNode } from '@minca/core/react';
 
-/** A link that knocks on a door: this app's contacts, with the code after `#door=` */
-export function doorLink(code: string): string {
-  return `${globalThis.location.origin}/contacts#door=${code}`;
+/** What a new space for two means when no carrier holds it yet (`spaces.carried`) */
+export const NOT_CARRIED =
+  'Sent. Nothing of yours keeps your space for two online yet, so they can join only while this device is.';
+
+/** A link that knocks on an inbox: this app's contacts, with the code after `#inbox=` */
+export function inboxLink(code: string): string {
+  return `${globalThis.location.origin}/contacts#inbox=${code}`;
 }
 
-/** The door code in this page's URL, if someone opened a door link */
-export function readDoorFromUrl(): string | null {
-  return /[#&]door=([A-Za-z0-9_-]+)/.exec(globalThis.location.hash)?.[1] ?? null;
+/** The inbox code in this page's URL, if someone opened an inbox link */
+export function readInboxFromUrl(): string | null {
+  return /[#&]inbox=([A-Za-z0-9_-]+)/.exec(globalThis.location.hash)?.[1] ?? null;
 }
 
-/** Drops the door code from the address bar once it has been dealt with */
-export function clearDoorFromUrl(): void {
+/** Drops the inbox code from the address bar once it has been dealt with */
+export function clearInboxFromUrl(): void {
   globalThis.history.replaceState(null, '', globalThis.location.pathname + globalThis.location.search);
 }
 
@@ -69,9 +73,10 @@ export function useStanding(contact: ContactView | undefined): Standing | undefi
 }
 
 /**
- * Takes back a request to become someone's contact: deletes the ones you left
- * for them in the given spaces, so they can't accept into a space you are no
- * longer in, then removes them, which leaves the space for two.
+ * Takes back a request to become someone's contact: deletes the knocks you
+ * left for them in the given spaces, sealed to the contact key on their
+ * profile there, so they can't accept into a space you are no longer in,
+ * then removes them, which leaves the space for two.
  */
 export async function takeBack(
   node: P2PNode,
@@ -80,11 +85,15 @@ export async function takeBack(
   did: string,
 ): Promise<void> {
   for (const spaceId of spaceIds) {
+    const theirs = (await node.spaces.profiles(spaceId).catch(() => [])).find(
+      (p) => p.did === did,
+    )?.contactKey;
+    if (!theirs) continue;
     const asked = await node.records
-      .list<{ to?: string }>(spaceId, { collection: 'std.contact-request' })
+      .list<{ to?: string }>(spaceId, { collection: 'sys.mail' })
       .catch(() => []);
     for (const record of asked) {
-      if (record.root === me && record.body?.to === did)
+      if (record.root === me && record.body?.to === theirs)
         await node.records.delete(spaceId, record.key).catch(() => {});
     }
   }
