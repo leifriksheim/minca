@@ -317,14 +317,20 @@ left as `sys.mail` has none.
 6. `invite` checks out as an invitation (03 §7.4), and speaks for the same
    account as the knock; its space is private and it carries the space key;
    its space's constitution names that account as its one founder and
-   assigns no roles ([03](03-spaces.md) §1.1), so that account is its only
-   member; it names a `role`; and the space checks out (its id is the hash of
+   assigns no roles ([03](03-spaces.md) §1.1); it names a `role`; and the space checks out (its id is the hash of
    its constitution).
 
 A mailbox knock's **id** is `base64url(SHA-256(UTF-8(blob)))`, the same on
 every relay. A client MUST de-duplicate by it, computing it itself rather
-than trusting a relay's `id`. Where relays disagree about `receivedAt`, the
-earliest is used.
+than trusting a relay's `id`. Each relay's copy is judged by the `receivedAt`
+that relay gives, and the knock counts when any copy passes: one relay that
+lies about when it took a knock can't hide it while another tells the truth.
+The cost is that one relay willing to give a `receivedAt` as old as a
+backdated knock's `createdAt` lets a note that ran out knock (§8).
+
+The constitution's checks say only that the knocker founded the space alone
+and assigned nobody a role in it; its history may since have given others
+places. Who else holds one shows once the recipient has joined.
 
 Which of the knocks that pass these checks a client offers the person
 (leaving out blocked accounts, for one) is up to it; see
@@ -395,7 +401,10 @@ grants records only ([06 §2.8](06-nodes-and-sessions.md)).
   weaker than that today (see the known defect in §5).
 - **Authority.** Only a proof that grants `/account/write` for the whole
   account can knock (§6). A note that ran out can't be used by backdating
-  (§6). _Known limitation:_ a note that was **revoked** but hasn't run out yet
+  unless a relay the inbox names gives a `receivedAt` as old as the backdated
+  knock: copies are judged one relay at a time (§6), so one relay can't hide
+  a knock, but one that colludes with whoever holds the expired note can let
+  it through. _Known limitation:_ a note that was **revoked** but hasn't run out yet
   (an app disconnected at the home, whose note lasts up to its grant's days)
   can still knock, because the owner can't see the knocker's revocations.
   Revoking a session's note when it ends is planned in
@@ -406,12 +415,15 @@ grants records only ([06 §2.8](06-nodes-and-sessions.md)).
   answer, signed with the door's key, that told the person behind the door
   from anyone else the invite reached; the inbox has none. Only the inbox key
   opens the knock, so someone else joins first only if the recipient's key or
-  device leaked, or the recipient passed the invite on. The knocker sees
-  whoever joined under their own account, never under the recipient's.
+  device leaked, the recipient passed the invite on, or an app the recipient
+  gave the contact key to (06 §2.8) joined first: the inbox keys are derived
+  from it. The knocker sees whoever joined under their own account, never
+  under the recipient's, though they may give the recipient's name.
 - **Replays.** A knock re-dropped by anyone is the same blob (same id).
   Dropped again later, it fails the time check (§6, 4).
 - **Losing a relay.** An inbox names up to three places, and knocks go to all
-  of them. A relay can drop knocks but can't read, forge or alter them.
+  of them. A relay can drop knocks but can't read, forge or alter them, nor
+  hide one that another relay the inbox names holds (§6).
 
 ## 9. Planned: names
 

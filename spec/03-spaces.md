@@ -1311,7 +1311,8 @@ unless:
    present, is a string of at most 64 characters; `relays` and `nodes`, when
    present, are lists of strings;
 3. when it carries a note, that note lets its key invite to that space
-   ([01](01-identity.md) §8): for a role invite, `/access/change` in the
+   ([01](01-identity.md) §8): for a role invite, one that names a `role` or
+   comes with a secret beside it, whatever its body says, `/access/change` in the
    space with arguments `{ collection: "sys.invite", space }`; for a
    view-only one, `/record/read` in the space with arguments `{ space }`.
    With no note, its author is the account and may.
@@ -2062,7 +2063,9 @@ sys.mail at mail:<random>
 ```
 
 - Any member may write one, like `sys.profile`: no collection needs
-  defining first.
+  defining first. A later version (a change, or a delete) stands only from
+  the account that wrote its first version: a peer MUST refuse anyone
+  else's, so no other member can take back or replace a knock left there.
 - It stands only when signed by the account itself or under a note that
   grants `/account/write` for the whole account ([01](01-identity.md) §8), as
   a knock needs. A peer MUST refuse one under a narrower note: an app given

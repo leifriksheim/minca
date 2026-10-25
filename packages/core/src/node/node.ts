@@ -2284,6 +2284,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
   /** Knocks seen in this node's inbox, by id: opened (null when they didn't check out), and until when to keep them */
   const knockCache = new Map<string, { readonly opened: OpenedKnock | null; readonly until: number }>();
+  /** Copies of knocks that didn't check out, by id and the time their mailbox gave: not opened again */
+  const failedAt = new Set<string>();
   const DAY_MS = 24 * 3600 * 1000;
 
   /** The inbox is the account's own, in its contacts space: only a key acting as the account opens one, as every peer checks */
@@ -2418,28 +2420,32 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     // Every mailbox, in full: an inbox holds 64 knocks at most, and a knock
     // cleared from another device should go from here too. What was opened
     // once is not opened again.
-    const held = new Map<string, { blob: string; at: number }>();
+    const held = new Map<string, { blob: string; ats: Set<number> }>();
     for (const result of await Promise.allSettled(places.map((place) => mailbox.fetch(place, keys.topic)))) {
       if (result.status !== 'fulfilled') continue;
       for (const item of result.value) {
         // A relay's id is only its word: file the knock under the hash of what it is.
         const id = await knockId(item.blob);
-        const seen = held.get(id);
-        if (!seen || item.at < seen.at) held.set(id, { blob: item.blob, at: item.at });
+        const seen = held.get(id) ?? held.set(id, { blob: item.blob, ats: new Set() }).get(id)!;
+        seen.ats.add(item.at);
       }
     }
     const found: { id: string; opened: OpenedKnock }[] = [];
     for (const [id, item] of held) {
-      let cached = knockCache.get(id);
-      if (!cached) {
-        cached = {
-          opened: await openKnock([keys.key], item.blob, item.at, provider),
-          until: item.at + KNOCK_TTL_SECONDS * 1000,
-        };
-        knockCache.set(id, cached);
+      let opened = knockCache.get(id)?.opened ?? null;
+      // Each mailbox's copy is judged by the time that mailbox gives: one that
+      // lies about when it took a knock can't hide it while another tells the truth.
+      for (const at of item.ats) {
+        if (opened || failedAt.has(`${id}|${at}`)) continue;
+        opened = await openKnock([keys.key], item.blob, at, provider);
+        if (opened) knockCache.set(id, { opened, until: at + KNOCK_TTL_SECONDS * 1000 });
+        else failedAt.add(`${id}|${at}`);
       }
-      if (cached.opened) found.push({ id, opened: cached.opened });
+      if (opened) found.push({ id, opened });
     }
+    // What no mailbox holds any more needn't be remembered.
+    for (const failed of failedAt)
+      if (!held.has(failed.slice(0, failed.indexOf('|')))) failedAt.delete(failed);
     return found;
   }
 
@@ -2538,6 +2544,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       // What waits in the old one goes with it.
       await purgeInbox(current.body!, null).catch(() => 0);
       knockCache.clear();
+      failedAt.clear();
       return writeInbox({ ...current.body!, gen: current.body!.gen + 1 }, current);
     },
 
@@ -2548,6 +2555,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       if ((await purgeInbox(current.body!, null)) === 0)
         throw new Error("None of your inbox's mailboxes could be reached to clear it.");
       knockCache.clear();
+      failedAt.clear();
     },
 
     async knock(code, options = {}) {

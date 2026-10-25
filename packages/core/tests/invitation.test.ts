@@ -150,6 +150,12 @@ describe('invitations', () => {
       await checkInvitation(readInvitation(await resign(view, () => {}, reader)).version, provider),
       null,
     );
+    // Leaving `role` out of a role link it re-signs needs no less: the secret beside it opens the role.
+    const dropped = await resign(role, (body) => Reflect.deleteProperty(body, 'role'), reader);
+    const { version, secret } = readInvitation(dropped);
+    assert.match((await checkInvitation(version, provider, secret)) ?? '', /doesn't let it invite/);
+    const bob = await person();
+    await assert.rejects(bob.node.spaces.join(dropped), /doesn't check out/);
   });
 
   test('a body with a member it should not have, or a key that is not one, is refused', async () => {

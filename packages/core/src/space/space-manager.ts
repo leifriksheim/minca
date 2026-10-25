@@ -354,7 +354,7 @@ export function createSpaceManager(
       const parsed = parseSpaceInvite(invite);
 
       // Signed by the account it names, with a note that lets it invite there: so are its relays and nodes.
-      const unsigned = await checkInvitation(parsed.signed, provider);
+      const unsigned = await checkInvitation(parsed.signed, provider, parsed.invite);
       if (unsigned) throw new Error(`That invite doesn't check out: ${unsigned}.`);
 
       // Whoever made the invite could have edited it. The space must hash to

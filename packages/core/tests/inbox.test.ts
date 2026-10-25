@@ -11,6 +11,7 @@ import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { WebSocketServer } from 'ws';
+import { createHash } from 'node:crypto';
 import * as z from 'zod';
 
 import { createRelay, MAX_MESSAGE_BYTES, type MailboxLimits } from '../../relay/relay.mjs';
@@ -740,6 +741,40 @@ describe('node.inbox', () => {
     const inbox = await anna.inbox.open({ places: ['ws://127.0.0.1:1', relayUrl] });
     await leif.inbox.knock(inbox.code);
     await annaSees(anna, (n) => n === 1, 'the knock through the working relay', 15_000);
+  });
+
+  test("a mailbox that lies about when it took a knock can't hide it while another tells the truth", async () => {
+    // A mailbox that keeps what is dropped, and says it took it an hour earlier.
+    const held = new Map<string, Array<{ seq: number; id: string; at: number; blob: string }>>();
+    const liar = new WebSocketServer({ port: 0, host: '127.0.0.1' });
+    liar.on('connection', (ws) =>
+      ws.on('message', (raw: Buffer) => {
+        const message = z.object({ type: z.string(), topic: z.string(), blob: z.string().optional() });
+        const m = message.parse(JSON.parse(raw.toString()));
+        const list = held.get(m.topic) ?? [];
+        if (m.type === 'drop' && m.blob) {
+          const id = createHash('sha256').update(m.blob).digest('base64url');
+          list.push({ seq: list.length + 1, id, at: Date.now() - 3_600_000, blob: m.blob });
+          held.set(m.topic, list);
+          ws.send(JSON.stringify({ type: 'dropped', topic: m.topic, id }));
+        }
+        if (m.type === 'fetch')
+          ws.send(JSON.stringify({ type: 'mail', topic: m.topic, items: list, more: false }));
+      }),
+    );
+    await new Promise<void>((resolve) => liar.on('listening', () => resolve()));
+    const address = liar.address();
+    const liarUrl = `ws://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}`;
+    try {
+      const hub = createFakeHub({ latencyMs: 1 });
+      const anna = await person(hub, 'Anna');
+      const leif = await person(hub, 'Leif');
+      const inbox = await anna.inbox.open({ places: [liarUrl, relayUrl] });
+      await leif.inbox.knock(inbox.code);
+      await annaSees(anna, (n) => n === 1, 'the knock, by the honest mailbox');
+    } finally {
+      liar.close();
+    }
   });
 
   test('a knock fails, and leaves nothing behind, when no mailbox of the inbox takes it', async () => {

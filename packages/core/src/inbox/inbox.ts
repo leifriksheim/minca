@@ -293,7 +293,8 @@ export async function openKnock(
   if (typeof body.secret !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(body.secret)) return null;
 
   // An invitation from the same account, to a private space it alone founded, with its key and a role.
-  if ((await checkInvitation(body.invite, provider)) !== null || !isRecord(body.invite)) return null;
+  if ((await checkInvitation(body.invite, provider, body.secret)) !== null || !isRecord(body.invite))
+    return null;
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- checkInvitation checked it through
   const invite = body.invite as unknown as Version & { readonly body: InvitationBody };
   const { space, key, role } = invite.body;

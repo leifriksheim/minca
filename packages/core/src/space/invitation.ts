@@ -100,9 +100,14 @@ export function invitedByOf(version: Version): string {
  * Why an invitation is not one its account signed, or null when it is: a
  * loose version in `sys.invitation`, its body well formed, and its note one
  * that lets the key act in that space: to change who may do what there when
- * it opens a role, to read there when it only shares it.
+ * it opens a role (it names one, or a `secret` comes with it), to read there
+ * when it only shares it.
  */
-export async function checkInvitation(version: unknown, provider: CryptoProvider): Promise<string | null> {
+export async function checkInvitation(
+  version: unknown,
+  provider: CryptoProvider,
+  secret?: string,
+): Promise<string | null> {
   const checked = await checkLoose(version, INVITATION_COLLECTION, provider);
   if (!checked) return 'it is not signed by the account it names';
   const body = checked.version.body;
@@ -119,8 +124,9 @@ export async function checkInvitation(version: unknown, provider: CryptoProvider
       return 'its relays and nodes are lists of addresses';
   if (checked.note) {
     const space = body.space.id;
+    // A secret beside it opens a role whatever the body says: the signer can't leave `role` out to need less.
     const required =
-      body.role !== undefined
+      body.role !== undefined || secret !== undefined
         ? { space, cmd: ACCESS_COMMAND, args: { collection: INVITE_COLLECTION, space } }
         : { space, cmd: READ_COMMAND, args: { space } };
     if (!noteCovers(checked.note, required)) return "its key's note doesn't let it invite to that space";

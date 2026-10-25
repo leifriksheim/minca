@@ -106,12 +106,14 @@ reference implementation, or any implementation, honestly.
     is online, until the space names keepers that leave it out. They are
     never passed on in the joiner's own invites (03 §7.4).
   - A knock's invite that reaches anyone but the person it was for, passed
-    on by them, or taken from a device of theirs before they accept, lets
-    whoever joins first be taken for them: joining is the answer, and the
-    knocker closes the invite only once it sees someone join (07 §8). The
-    door answer, signed with a key only the door's owner held, ruled this out;
-    it went with doors. Accepted: only the person the knock was for could
-    pass it on, and they could as well forward the knock.
+    on by them, taken from a device of theirs, or opened by an app they gave
+    the contact key to, lets whoever joins first be taken for them: joining
+    is the answer, and the knocker closes the invite only once it sees
+    someone join (07 §8). The door answer had to be signed with a key derived
+    from the contact key, so it stopped a passed-on invite but not a holder
+    of that key. Accepted for a passed-on invite, which the person could as
+    well forward the knock; the app case is
+    [#313](https://github.com/leifriksheim/minca/issues/313) (§3.6).
   - A role link's invite is closed after a key change only once a device of
     the inviter's account that may close it comes online; meanwhile someone
     removed who kept the link can join with it again
@@ -248,6 +250,11 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
 ### 3.2 Member
 
 - **Holds.**
+  - It can't take back or replace a knock someone else left in the space: a
+    later version of a `sys.mail` stands only from the account that wrote
+    the first, whatever the member's roles (03 §16;
+    `packages/core/tests/contacts.test.ts`, "another member cannot delete or
+    replace a knock left for someone else…").
   - An ordinary record it writes counts only if a role it held granted it, as
     of what the version says it saw. Claiming to have seen less does not
     escape a removal of it it had not seen, nor the loss of any of its roles:
@@ -786,8 +793,10 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
   - Given some spaces, or records only, it never changes the account's own
     place in any space: every peer ignores its account joining, leaving,
     being assigned or unassigned a role, stepping down, or publishing a
-    member key or profile, and its revoke of any key but its own. Nor does it write the account's own spaces, open
-    its inbox or knock: those need a note about the whole account (01 §8;
+    member key or profile, and its revoke of any key but its own. Nor does it write the account's own spaces or
+    knock as the account: those need a note about the whole account, which
+    every peer checks (01 §8; what it can do with the contact key, if it was
+    given it, is below;
     `packages/core/tests/records-only.test.ts`, "an app given a space never
     changes the account's own place there…"; `connect.test.ts`, "it lists
     them and opens requests sent to the account…").
@@ -851,6 +860,13 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     at a key of a `onePer` key's form outside a `onePer` that gives it
     (02 §4.1).
 - **Does not hold yet.**
+  - Given the contacts under a grant for some spaces, it holds the contact
+    key, and with it the inbox keys (06 §2.8, 07 §1): it can open every
+    knock on the account's inbox, join a space for two first under its
+    operator's own account and be taken for the account, clear the inbox,
+    and sign a code for it naming mailboxes of its own. The library refuses
+    those calls on such a node; no peer can tell
+    ([#313](https://github.com/leifriksheim/minca/issues/313)).
   - An app or site the person opens their pod in reads the vault, and can
     guess its password offline; a weak one makes it the root thief (§3.5,
     By design).
@@ -907,6 +923,10 @@ _Source: 01 §7.5, §8, §11; 06 §2, §3; 05 §14, §15; 02 §4.1. Tests: `pack
 ### 3.7 Relay
 
 - **Holds.** It can always drop and delay. Beyond that:
+  - One relay an inbox names can't hide a knock another one holds: each
+    relay's copy is judged by the time that relay gives (07 §6;
+    `packages/core/tests/inbox.test.ts`, "a mailbox that lies about when it
+    took a knock can't hide it while another tells the truth").
   - It can't read or change what two sides say on a channel, pairing or
     connecting by code: each direction has its own key from the secret and an
     ephemeral exchange, and each message is bound to its type and place, so
@@ -932,6 +952,11 @@ _Source: 01 §7.5, §8, §11; 06 §2, §3; 05 §14, §15; 02 §4.1. Tests: `pack
   - Joiners don't prove they hold their DID's key, so anyone can take a
     victim's place in a room ([#162](https://github.com/leifriksheim/minca/issues/162)).
   - An inbox's mailbox can be flooded ([#162](https://github.com/leifriksheim/minca/issues/162)).
+  - Colluding with whoever holds a session note that ran out, a relay the
+    inbox names can give a knock signed back when the note was good an old
+    enough `receivedAt` for it to pass the time check (07 §6, §8). The price
+    of judging each relay's copy alone, so that no one relay can hide a
+    knock.
     So can a short link's topic: 64 blobs fill it, and a drop of the link's
     blob after its copy expired is then refused. Joiners read every page, so
     junk can't hide a copy that is there, and a host's copy is not in the

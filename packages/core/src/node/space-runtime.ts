@@ -1321,6 +1321,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       };
 
     const root = verdict.root;
+    // A knock left in the space is its sender's alone to change or take back (03 §16).
+    if (version.collection === MAIL_COLLECTION && version.seq > 0 && (await judge(first)).root !== root)
+      return { ok: false, reason: 'Only the account that left this mail may change or delete it' };
     const found = await rulesAt(state, version.collection);
     const rules = found?.rules;
     const needs = await needsOf(version, first, root);
