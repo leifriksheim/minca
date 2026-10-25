@@ -12,8 +12,8 @@ seed (16 bytes)
  ├─ HKDF "minca/p256-identity-key/v1" ─▶ root key (P-256, ECDSA) ─▶ account DID (did:key:zDn…)
  │                                         └─ signs notes ─▶ session / app keys ─▶ sign records
  ├─ HKDF "minca/p256-contact-key/v1"  ─▶ contact key (P-256, ECDH)
- │                                         ├─ HKDF "minca/p256-door-key/v1|<door>"      ─▶ door key per door (ECDH)
- │                                         └─ HKDF "minca/p256-door-sign-key/v1|<door>" ─▶ door signing key per door (ECDSA)
+ │                                         ├─ HKDF "minca/p256-inbox-key/v1|<gen>"      ─▶ inbox key per gen (ECDH)
+ │                                         └─ HKDF "minca/p256-inbox-sign-key/v1|<gen>" ─▶ inbox signing key per gen (ECDSA)
  ├─ HKDF "minca/local-key/v1"        ─▶ local key (AES-256): seals this device's storage; never handed out
  └─ HKDF "minca/account-key/v1"      ─▶ account key (32 bytes): what an app given the whole account holds
                                            ├─ HKDF "minca/p256-member-key/v1|<space>" ─▶ member key per space
@@ -250,9 +250,9 @@ this one own the use; this table is the registry.
 | `minca/p256-identity-key/v1`             | HKDF, L=48 → `ScalarFrom`                 | seed; or any `ikm` in §3.2's table                                                               | P-256 scalar               | Root key; second stage of invite and read keys                          | `identity/crypto-p256.ts:11`        | 01     |
 | `minca/p256-contact-key/v1`              | HKDF, L=48 → `ScalarFrom`                 | seed                                                                                             | P-256 scalar (ECDH)        | Contact key                                                             | `identity/contact-key.ts:26`        | 01     |
 | `minca/p256-member-key/v1\|<spaceId>`    | HKDF, L=48 → `ScalarFrom`                 | account key                                                                                      | P-256 scalar (ECDH)        | Member key for one space                                                | `identity/contact-key.ts:27`        | 01, 03 |
-| `minca/p256-door-key/v1\|<doorId>`       | HKDF, L=48 → `ScalarFrom`                 | contact key's 32-byte private scalar                                                             | P-256 scalar (ECDH)        | Door key (knocks are sealed to it)                                      | `identity/contact-key.ts:28`        | 01, 07 |
-| `minca/p256-door-sign-key/v1\|<doorId>`  | HKDF, L=48 → `ScalarFrom`                 | contact key's 32-byte private scalar                                                             | P-256 scalar (ECDSA)       | Door signing key (proves ownership of a door)                           | `identity/contact-key.ts:29`        | 01, 07 |
-| `minca/door-topic/v1\|<signKey>`         | SHA-256, base64url                        | —                                                                                                | mailbox topic              | A door's mailbox topic on a relay: a hash of its signing key            | `doors/doors.ts` (`doorTopic`)      | 07     |
+| `minca/p256-inbox-key/v1\|<gen>`         | HKDF, L=48 → `ScalarFrom`                 | contact key's 32-byte private scalar                                                             | P-256 scalar (ECDH)        | Inbox key (knocks are sealed to it)                                     | `identity/contact-key.ts:28`        | 01, 07 |
+| `minca/p256-inbox-sign-key/v1\|<gen>`    | HKDF, L=48 → `ScalarFrom`                 | contact key's 32-byte private scalar                                                             | P-256 scalar (ECDSA)       | Inbox signing key (signs the inbox, clears its mailbox)                 | `identity/contact-key.ts:29`        | 01, 07 |
+| `minca/inbox-topic/v1\|<signKey>`        | SHA-256, base64url                        | —                                                                                                | mailbox topic              | An inbox's mailbox topic on a relay: a hash of its signing key          | `inbox/inbox.ts:194`                | 07     |
 | `minca/local-key/v1`                     | HKDF, L=32                                | seed                                                                                             | AES-256-GCM key            | Local key: this device's storage (§11.1)                                | `identity/account-vault.ts:29`      | 01, 05 |
 | `minca/account-key/v1`                   | HKDF, L=32                                | seed                                                                                             | 32 bytes                   | Account key: root of member keys and account spaces (§11.1)             | `identity/account-vault.ts:30`      | 01, 06 |
 | `minca/pairing-room/v1`                  | CID of prefix ‖ secret (no separator)     | 16-byte pairing secret                                                                           | room id                    | Pairing room                                                            | `identity/channel.ts:39`            | 01     |
@@ -284,21 +284,20 @@ with the fields of its `bound`. _docs_ marks a label used by a convention
 built on the protocol (`packages/core/docs/`), not by it; _CLI_ one only the
 CLI's own node reads:
 
-| Label                      | Primitive | `bound`                                                    | Defined in                           | Part   |
-| -------------------------- | --------- | ---------------------------------------------------------- | ------------------------------------ | ------ |
-| `minca/record-body/v1`     | envelope  | `space`, `collection`, `key`, `keyId`                      | `privacy/space-encryption.ts:20`     | 03     |
-| `minca/earlier-keys/v1`    | envelope  | `space`, `keyId`                                           | `privacy/space-encryption.ts:22`     | 03     |
-| `minca/membership/v1`      | envelope  | `space`                                                    | `privacy/space-encryption.ts:24`     | 03, 04 |
-| `minca/space-key-box/v1`   | HPKE      | `space`, `keyId`, `to`                                     | `space/space-access.ts:139`          | 03     |
-| `minca/vault-wrap/v1`      | envelope  | `did`, `id`, `kind`; and `salt`, `iterations` (passphrase) | `identity/account-vault.ts:32`       | 01     |
-| `minca/at-rest/v1`         | envelope  | `entry`                                                    | `storage/encrypted-adapter.ts:25`    | 05     |
-| `minca/pairing/v1`         | envelope  | `type`, `seq`                                              | `identity/channel.ts:41`             | 01     |
-| `minca/code/v1`            | envelope  | `type`, `seq`                                              | `identity/channel.ts:48`             | 06     |
-| `minca/knock/v1`           | HPKE      | `door`                                                     | `doors/doors.ts:235`                 | 07     |
-| `minca/contact-request/v1` | HPKE      | `space`, `from`, `to`                                      | `node/node.ts:1986`                  | docs   |
-| `minca/direct-text/v1`     | envelope  | `space`, `from`, `to`                                      | `privacy/direct.ts:37`               | docs   |
-| `minca/direct-box/v1`      | HPKE      | `space`, `from`, `to`, `reader`                            | `privacy/direct.ts:39`               | docs   |
-| `minca/writer-key/v1`      | envelope  | `did`, `slot`                                              | `packages/cli/src/writer-keys.ts:27` | CLI    |
+| Label                    | Primitive | `bound`                                                    | Defined in                           | Part   |
+| ------------------------ | --------- | ---------------------------------------------------------- | ------------------------------------ | ------ |
+| `minca/record-body/v1`   | envelope  | `space`, `collection`, `key`, `keyId`                      | `privacy/space-encryption.ts:20`     | 03     |
+| `minca/earlier-keys/v1`  | envelope  | `space`, `keyId`                                           | `privacy/space-encryption.ts:22`     | 03     |
+| `minca/membership/v1`    | envelope  | `space`                                                    | `privacy/space-encryption.ts:24`     | 03, 04 |
+| `minca/space-key-box/v1` | HPKE      | `space`, `keyId`, `to`                                     | `space/space-access.ts:139`          | 03     |
+| `minca/vault-wrap/v1`    | envelope  | `did`, `id`, `kind`; and `salt`, `iterations` (passphrase) | `identity/account-vault.ts:32`       | 01     |
+| `minca/at-rest/v1`       | envelope  | `entry`                                                    | `storage/encrypted-adapter.ts:25`    | 05     |
+| `minca/pairing/v1`       | envelope  | `type`, `seq`                                              | `identity/channel.ts:41`             | 01     |
+| `minca/code/v1`          | envelope  | `type`, `seq`                                              | `identity/channel.ts:48`             | 06     |
+| `minca/mail/v1`          | HPKE      | `to`                                                       | `inbox/inbox.ts:72`                  | 07, 03 |
+| `minca/direct-text/v1`   | envelope  | `space`, `from`, `to`                                      | `privacy/direct.ts:37`               | docs   |
+| `minca/direct-box/v1`    | HPKE      | `space`, `from`, `to`, `reader`                            | `privacy/direct.ts:39`               | docs   |
+| `minca/writer-key/v1`    | envelope  | `did`, `slot`                                              | `packages/cli/src/writer-keys.ts:27` | CLI    |
 
 A short link's sealed invite (03 §7.7) is AES-256-GCM under its own seal
 key with no envelope or `bound`: one key seals one invite, and the link names
@@ -307,15 +306,14 @@ it by its hash, so it can't be taken for anything else.
 Strings that separate _signed messages_ rather than derive keys, listed so
 new labels do not collide with them:
 
-| String                                                 | Kind                                                   | Defined in                                                    | Part |
-| ------------------------------------------------------ | ------------------------------------------------------ | ------------------------------------------------------------- | ---- |
-| `minca/space-invite/v1\|<spaceId>\|<did>`              | Message signed by an invite key                        | `space/space-access.ts:143`                                   | 03   |
-| `{"audience":…,"proof":"minca/connect-key/v1",…}`      | Canonical JSON signed by a key a connect request names | `session/connect.ts:282` (`keyStatement`)                     | 06   |
-| `minca/door-purge/v1\|<topic>\|<nonce>\|<ids>`         | Signed by a door signing key, checked by a relay       | `doors/doors.ts` (`purgeMessage`), `packages/relay/relay.mjs` | 07   |
-| `minca/knock-answer/v1\|<space>\|<account>`            | Signed by a door signing key                           | `doors/doors.ts` (`signAnswer`)                               | docs |
-| `minca-peer/v3\|client\|…`, `minca-peer/v3\|server\|…` | Signed peer-auth messages                              | `network/peer-auth.ts:198,200`                                | 04   |
-| `minca-mesh/v1\|…`                                     | Signed mesh proof                                      | `network/peer-auth.ts:310`                                    | 04   |
-| `minca-host/v1\n…`, `minca-host-status/v1\n…`          | Signed host requests and statuses                      | `session/hosting.ts:78,340`                                   | 08   |
+| String                                                 | Kind                                                   | Defined in                                                 | Part |
+| ------------------------------------------------------ | ------------------------------------------------------ | ---------------------------------------------------------- | ---- |
+| `minca/space-invite/v1\|<spaceId>\|<did>`              | Message signed by an invite key                        | `space/space-access.ts:143`                                | 03   |
+| `{"audience":…,"proof":"minca/connect-key/v1",…}`      | Canonical JSON signed by a key a connect request names | `session/connect.ts:282` (`keyStatement`)                  | 06   |
+| `minca/inbox-purge/v1\|<topic>\|<nonce>\|<ids>`        | Signed by an inbox signing key, checked by a relay     | `inbox/inbox.ts:202`, `packages/relay/relay.mjs` (`purge`) | 07   |
+| `minca-peer/v3\|client\|…`, `minca-peer/v3\|server\|…` | Signed peer-auth messages                              | `network/peer-auth.ts:198,200`                             | 04   |
+| `minca-mesh/v1\|…`                                     | Signed mesh proof                                      | `network/peer-auth.ts:310`                                 | 04   |
+| `minca-host/v1\n…`, `minca-host-status/v1\n…`          | Signed host requests and statuses                      | `session/hosting.ts:78,340`                                | 08   |
 
 Notes:
 
@@ -333,15 +331,15 @@ Notes:
 
 ## 6. Keys and signers
 
-| Key                  | How made                                                        | Lifetime                                     | Signs                                   |
-| -------------------- | --------------------------------------------------------------- | -------------------------------------------- | --------------------------------------- |
-| **Root key**         | `P256KeyFrom(seed)`                                             | The account's                                | Notes only (§7)                         |
-| **Session key**      | A lasting P-256 key claimed under a lock, else fresh (02 §4.10) | While the device keeps it, else one node run | Records, peer-auth messages             |
-| **App key**          | Fresh random P-256 key pair kept by an app or other program     | Until the program forgets it                 | Records, under a grant                  |
-| **Contact key**      | `ScalarFrom(HKDF(seed, contact label, 48))`                     | The account's                                | Nothing; ECDH only (§10)                |
-| **Member key**       | `ScalarFrom(HKDF(accountKey, member label, 48))`                | The account's                                | Nothing; ECDH only (§10)                |
-| **Door key**         | `ScalarFrom(HKDF(contactKey, door label, 48))`                  | Until the door is closed                     | Nothing; ECDH only (§10)                |
-| **Door signing key** | `ScalarFrom(HKDF(contactKey, door sign label, 48))`             | Until the door is closed                     | Purge challenges and knock answers (07) |
+| Key                   | How made                                                        | Lifetime                                     | Signs                                 |
+| --------------------- | --------------------------------------------------------------- | -------------------------------------------- | ------------------------------------- |
+| **Root key**          | `P256KeyFrom(seed)`                                             | The account's                                | Notes only (§7)                       |
+| **Session key**       | A lasting P-256 key claimed under a lock, else fresh (02 §4.10) | While the device keeps it, else one node run | Records, peer-auth messages           |
+| **App key**           | Fresh random P-256 key pair kept by an app or other program     | Until the program forgets it                 | Records, under a grant                |
+| **Contact key**       | `ScalarFrom(HKDF(seed, contact label, 48))`                     | The account's                                | Nothing; ECDH only (§10)              |
+| **Member key**        | `ScalarFrom(HKDF(accountKey, member label, 48))`                | The account's                                | Nothing; ECDH only (§10)              |
+| **Inbox key**         | `ScalarFrom(HKDF(contactKey, inbox label, 48))`                 | Until the inbox is replaced (a new `gen`)    | Nothing; ECDH only (§10)              |
+| **Inbox signing key** | `ScalarFrom(HKDF(contactKey, inbox sign label, 48))`            | Until the inbox is replaced (a new `gen`)    | The inbox code, purge challenges (07) |
 
 The root key signs exactly one kind of thing: a note (§7) delegating to another key.
 It MUST NOT be used to sign records directly in normal operation. (A record
@@ -464,15 +462,15 @@ two spellings fold to the same command. As a pattern:
 itself and every command under it, by whole segments: `/record` covers
 `/record/write` but not `/recordings`, and `/` covers everything.
 
-| Command              | What it permits                                                                                                                             |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/`                  | Everything below                                                                                                                            |
-| `/record`            | Every `/record/…` command: records, and nothing more                                                                                        |
-| `/record/write`      | Write records (every version in a space needs it)                                                                                           |
-| `/record/read`       | Nothing a peer checks: a note for an app given read access, which writes nothing                                                            |
-| `/collection/define` | Define, change or remove a space's collections (`sys.collection`, [02](02-records.md) §6)                                                   |
-| `/access/change`     | Every other change to a space's access history: role definitions, assignments, removals, invites, revocations, keys, relays, keepers, forks |
-| `/account/write`     | Write in the account's own spaces, and open doors and knock ([07](07-doors.md))                                                             |
+| Command              | What it permits                                                                                                                                           |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                  | Everything below                                                                                                                                          |
+| `/record`            | Every `/record/…` command: records, and nothing more                                                                                                      |
+| `/record/write`      | Write records (every version in a space needs it)                                                                                                         |
+| `/record/read`       | Reading, for an app given read access, which writes nothing; a peer checks it only on an invitation that shares a space to view ([03](03-spaces.md) §7.4) |
+| `/collection/define` | Define, change or remove a space's collections (`sys.collection`, [02](02-records.md) §6)                                                                 |
+| `/access/change`     | Every other change to a space's access history: role definitions, assignments, removals, invites, revocations, keys, relays, keepers, forks               |
+| `/account/write`     | Write in the account's own spaces, open its inbox and knock ([07](07-inbox.md))                                                                           |
 
 What each command permits in a space is specified in
 [02 — Records](02-records.md), [03 — Spaces](03-spaces.md) and
@@ -540,7 +538,7 @@ reference passes UCAN's published policy fixtures.
 
 What a key does carries its **proof**: one note, a token issued by the
 account's root key to that key. A record carries it in `proof`
-([02](02-records.md) §3.1); a knock ([07](07-doors.md)) and a peer's proof
+([02](02-records.md) §3.1); a knock ([07](07-inbox.md)) and a peer's proof
 ([04](04-network.md)) carry it the same way. It is a single JSON object,
 never a list.
 
@@ -663,7 +661,7 @@ account's own spaces (its registry, its contacts space, its carry spaces;
 - a `sys.revoke` of a key other than its own author: another of the
   account's keys.
 
-So is a knock ([07 — Doors](07-doors.md)). Each requires `/account/write`
+So is a knock ([07 — Inbox](07-inbox.md)). Each requires `/account/write`
 for the account as a whole, with arguments `{}`: only a note about the
 account grants it, and a policy that limits it to some spaces does not hold
 there.
@@ -710,7 +708,7 @@ command, and wants less, names the collections it may change.
 
 > Rationale: one rule, not a command per act. Whether a key may act as the
 > account is what a note about the whole account already says, so the same
-> check guards the account's own spaces, its doors and its place in every
+> check guards the account's own spaces, its inbox and its place in every
 > space, and a home tells a device from an app by the note it gives.
 
 A note carries no fact a peer reads. A peer MUST NOT judge a version, a live
@@ -729,8 +727,8 @@ what the proof grants.
 > several. So one token per version, and one requirement checked against it,
 > keep everything notes granted before.
 
-_Source:_ `packages/core/src/identity/abilities.ts` (`writeRequirement`, `accessRequirement`, `ACCOUNT_REQUIREMENT`, `actsForAccount`, `noteGrants`, `noteTerms`), `packages/core/src/node/space-runtime.ts` (`aboutItself`, `buildEvent`, `judgeStanding`, `write`), `packages/core/src/doors/doors.ts` (`openKnock`), `packages/core/src/session/connect.ts` (`grantTerms`).
-_Tests:_ `packages/core/tests/records-only.test.ts` ("what counts is what the note grants", "a note's policy is checked by every peer", "a definition signed by hand under a records-only note is ignored by every peer", "taking someone out of the space, under a records-only note, is ignored too", "an app given a space never changes the account's own place there: every peer ignores it", "the same change under a note about the whole account counts: that key is one of the account’s devices", "in the account's own spaces, a version under a records-only note does not stand"), `packages/core/tests/connect.test.ts` ("it lists them and opens requests sent to the account, and sees no other space"), `packages/core/tests/doors.test.ts` ("needs a note that grants /account/write: …").
+_Source:_ `packages/core/src/identity/abilities.ts` (`writeRequirement`, `accessRequirement`, `ACCOUNT_REQUIREMENT`, `actsForAccount`, `noteGrants`, `noteTerms`), `packages/core/src/node/space-runtime.ts` (`aboutItself`, `buildEvent`, `judgeStanding`, `write`), `packages/core/src/inbox/inbox.ts` (`openKnock`), `packages/core/src/session/connect.ts` (`grantTerms`).
+_Tests:_ `packages/core/tests/records-only.test.ts` ("what counts is what the note grants", "a note's policy is checked by every peer", "a definition signed by hand under a records-only note is ignored by every peer", "taking someone out of the space, under a records-only note, is ignored too", "an app given a space never changes the account's own place there: every peer ignores it", "the same change under a note about the whole account counts: that key is one of the account’s devices", "in the account's own spaces, a version under a records-only note does not stand"), `packages/core/tests/connect.test.ts` ("it lists them and opens requests sent to the account, and sees no other space"), `packages/core/tests/inbox.test.ts` ("needs a note that grants /account/write: …"), `packages/core/tests/contacts.test.ts` ("a knock left in a space stands only from a note that may write for the whole account…").
 
 ---
 
@@ -789,7 +787,7 @@ Example (`packages/core/tests/envelope.test.ts`, "opens the fixed vector"):
 
 ### 9.2 Sealing to a key (HPKE)
 
-To a P-256 public key (a contact, member or door key, §10), with HPKE
+To a P-256 public key (a contact, member or inbox key, §10), with HPKE
 ([RFC 9180](https://www.rfc-editor.org/rfc/rfc9180)) in base mode, single-shot:
 
 | Parameter | Value                               |
@@ -828,15 +826,14 @@ and for the same suite with AES-128-GCM (RFC 9180 Appendix A.3), in
 | Earlier keys in `sys.key`            | envelope | the new space key's seal key                | `minca/earlier-keys/v1`  | `space`, `keyId` (the new key's)                           | [03 §9.3](03-spaces.md)           |
 | A reader's note, proving it may read | envelope | the seal key behind the read key it proves  | `minca/membership/v1`    | `space`                                                    | [04 §6.3](04-network.md)          |
 | A space key boxed to a member        | HPKE     | the recipient's member key                  | `minca/space-key-box/v1` | `space`, `keyId`, `to` (account DID)                       | [03 §9.4](03-spaces.md)           |
-| A knock                              | HPKE     | the door key                                | `minca/knock/v1`         | `door` (the door key)                                      | [07 §6](07-doors.md)              |
+| A knock                              | HPKE     | an inbox key, or the contact key            | `minca/mail/v1`          | `to` (the key it is sealed to)                             | [07 §6](07-inbox.md)              |
 | A wrap of the seed                   | envelope | a device key, or a passphrase's PBKDF2 key  | `minca/vault-wrap/v1`    | `did`, `id`, `kind`; and `salt`, `iterations` (passphrase) | §11.3                             |
 | A registry value at rest             | envelope | the local key                               | `minca/at-rest/v1`       | `entry` (the storage key)                                  | [05 §15](05-sync-and-storage.md)  |
 | A pairing message                    | envelope | the pairing key of the direction it travels | `minca/pairing/v1`       | `type`, `seq`                                              | §15.2                             |
 | A connect-by-code message            | envelope | the code key of the direction it travels    | `minca/code/v1`          | `type`, `seq`                                              | [06 §3](06-nodes-and-sessions.md) |
 
 Conventions built on the protocol use the same two primitives: direct
-messages (`minca/direct-text/v1`, `minca/direct-box/v1`), contact requests
-(`minca/contact-request/v1`), and the CLI's writer keys on disk
+messages (`minca/direct-text/v1`, `minca/direct-box/v1`) and the CLI's writer keys on disk
 (`minca/writer-key/v1`); see `packages/core/docs/`.
 
 _Source:_ `packages/core/src/identity/envelope.ts` (`sealEnvelope`, `openEnvelope`, `boundContext`), `packages/core/src/identity/hpke.ts` (`hpkeSeal`, `hpkeOpen`, `sealTo`, `openFrom`).
@@ -844,7 +841,7 @@ _Tests:_ `packages/core/tests/envelope.test.ts`.
 
 ---
 
-## 10. Contact keys, member keys and door keys
+## 10. Contact keys, member keys and inbox keys
 
 P-256 key-agreement keys that others seal to with HPKE (§9.2).
 
@@ -888,28 +885,29 @@ account home can give an app the member keys for exactly the spaces it grants.
 Example: seed of §3.3, `spaceId = "bexample"` → scalar
 `692597e89fbbfd804d1b090c1a02219cc869a4151860a427c724b5e397c1121a`.
 
-### 10.3 Door keys
+### 10.3 Inbox keys
 
-One key-agreement key per **door** (an address the account hands out so that
-strangers can ask to become a contact; [07 — Doors](07-doors.md)):
+One key-agreement key per **inbox** generation (the address the account hands
+out so that strangers can ask to become a contact; [07 — Inbox](07-inbox.md)):
 
 ```
-d_door = ScalarFrom(HKDF(d_contact_bytes, "minca/p256-door-key/v1|" ‖ doorId, 48))
+d_inbox = ScalarFrom(HKDF(d_contact_bytes, "minca/p256-inbox-key/v1|" ‖ gen, 48))
 ```
 
 where `d_contact_bytes` is the contact key's 32-byte big-endian private scalar
-(§10.1). Beside it, each door has a **signing key**, used only for ECDSA:
+(§10.1) and `gen` is a whole number from 0 written in decimal ASCII. Beside
+it, each inbox has a **signing key**, used only for ECDSA:
 
 ```
-d_door_sign = ScalarFrom(HKDF(d_contact_bytes, "minca/p256-door-sign-key/v1|" ‖ doorId, 48))
+d_inbox_sign = ScalarFrom(HKDF(d_contact_bytes, "minca/p256-inbox-sign-key/v1|" ‖ gen, 48))
 ```
 
-Every device and app holding the contact key derives the same door keys.
+Every device and app holding the contact key derives the same inbox keys.
 Their public halves (same encoding as the contact key) say nothing about the
-account behind them.
+account behind them, and a new `gen` gives keys nothing ties to the old ones.
 
 _Source:_ `packages/core/src/identity/contact-key.ts`.
-_Tests:_ `packages/core/tests/contacts.test.ts` ("the contact key"), `packages/core/tests/key-change.test.ts`, `packages/core/tests/doors.test.ts`, `packages/core/tests/account-vault.test.ts` ("the account key, and the spaces derived from it, match the spec's examples").
+_Tests:_ `packages/core/tests/contacts.test.ts` ("the contact key"), `packages/core/tests/key-change.test.ts`, `packages/core/tests/inbox.test.ts` ("an inbox code"), `packages/core/tests/account-vault.test.ts` ("the account key, and the spaces derived from it, match the spec's examples").
 
 ---
 

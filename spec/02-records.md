@@ -132,6 +132,7 @@ list unless a list is meant (an absent member and a present one hash differently
 | `author`     | string   | yes        | The `did:key` of the P-256 key that signed ([01 — Identity](01-identity.md)).                                                                                                                                                                     |
 | `collection` | string   | yes        | The collection the record is in, e.g. `app.todo.item`.                                                                                                                                                                                            |
 | `space`      | string   | in a space | Id of the space it belongs to. Signed, so it cannot be replayed into another space. A peer MUST refuse a version whose `space` is not the space it arrived for.                                                                                   |
+| `to`         | string   | loose only | A loose version's recipient: the public key it is sealed to (§3.5). Signed, so it can't be sealed again to another key. At most 128 characters.                                                                                                   |
 | `createdAt`  | string   | yes        | ISO 8601 time the writer's clock gave, e.g. `2026-09-26T12:00:00.000Z`. Decides no ordering (§4.3) and no standing (§9.3); for display, and as a sync hint ([05](05-sync-and-storage.md)).                                                        |
 | `body`       | any JSON | whole      | The content. Not itself signed: signed through `bodyHash`. Absent on a **stub** (§4.5). `null` or absent on a delete. In a private space, a sealed body `{ "sealed", "keyId" }` ([03 — Spaces](03-spaces.md) §8.3).                               |
 | `bodyHash`   | string   | not delete | Content id (§2) of the canonical body. Absent on a delete.                                                                                                                                                                                        |
@@ -257,6 +258,68 @@ irrelevant. The id is reproducible from the canonical text above; the
 signature is not (ECDSA uses a fresh nonce), but any valid signature verifies.
 
 _Source: `packages/core/src/types.ts` (`Version`, `UnsignedVersion`, `Envelope`, `Link`), `packages/core/src/schema/version.ts` (`createVersion`, `bodyHashOf`, `envelopeOf`, `signedPart`, `bodyProblem`, `getVersionId`), `packages/core/src/schema/signer.ts`, `packages/core/src/validation/crypto-gate.ts`, `packages/core/src/node/space-runtime.ts` (`admit`). Tests: `packages/core/tests/validation.test.ts` ("crypto gate"), `packages/core/tests/identity.test.ts` ("versions signed by an identity verify against its DID"), `packages/core/tests/links.test.ts` ("links are signed…"), `packages/core/tests/versions.test.ts` ("the example in 02 §3.4…", "the body is signed through its hash…"), `packages/core/tests/sync.test.ts` ("drops a forged version…"), `packages/core/tests/attacks.test.ts` ("a stranger sending a mangled copy first…")._
+
+### 3.5 Loose versions
+
+A **loose version** is a version with no `space`. It belongs to no space: it
+is never stored in one or synced, but handed over, in a link, a QR code, a
+relay mailbox, or sealed inside a record. Its collection says what it is:
+`sys.invitation` ([03](03-spaces.md) §7.4), `sys.inbox` and `sys.knock`
+([07](07-inbox.md) §3, §6). A new kind is a new collection name, checked the
+same way.
+
+A reader MUST refuse a loose version unless all of these hold:
+
+1. `space`, `log`, `seen`, `prev`, `genesis`, `deleted`, `retain`, `links`
+   and `tags` are absent, and `seq` is 0. `key` is any key §4.1 allows
+   (the writer picks one at random).
+2. `collection` is the one the reader expects, 1–128 characters; `body` is
+   present; `createdAt` is a time; `to`, if present, is a string of at most
+   128 characters.
+3. It passes §4.6 and §3.3: its id, body and signature check out.
+4. `createdAt` is no more than 5 minutes after now.
+5. If it carries a `proof`, the note is valid at `createdAt`
+   ([01](01-identity.md) §7.5, §7.6) and its audience is `author`. The
+   account it speaks for is the note's issuer; with no `proof`, its author
+   is the account.
+
+What a valid loose version counts as is its collection's to say, and what a
+note must grant for it. No space's access history or rules are consulted.
+
+`to` is the one member only a loose version uses: the public key it is
+sealed to, signed with the rest, so whoever opens it can't seal it again to
+another key and pass it off as sent there.
+
+Example: an invitation (03 §7.4), decoded. Its note and body are cut short
+here, so its id and signature do not check out against what is shown:
+
+```json
+{
+  "id": "baukm3j4ougqgrjtpgesyzsofphynyryn2gzz6cxxmfveafnuvnxq",
+  "author": "did:key:zDnaeg6p1ZY7SPhzjhtvySyPiCwi8QXRFYWw4JhXpPhctG2sB",
+  "collection": "sys.invitation",
+  "createdAt": "2026-10-25T18:15:44.884Z",
+  "key": "lsshlqgq7ahwsxlpivjrqatywa",
+  "seq": 0,
+  "proof": {
+    "type": "minca/ucan/dlg@1",
+    "payload": {
+      "iss": "did:key:zDnaeWRAnyC34Y15w24g2wkm7MQpbMQy82vbAfpfcEmsG9XWW",
+      "aud": "did:key:zDnaeg6p1ZY7SPhzjhtvySyPiCwi8QXRFYWw4JhXpPhctG2sB",
+      "…": "…"
+    },
+    "sig": "…"
+  },
+  "bodyHash": "bkkq3mqvfcu2ueznkjyqxe3yrtqvxzqb44gmcahdugin36rt3axkq",
+  "body": {
+    "space": { "id": "boiwjjnfryvubvgullnghhk77mnzng7s53nvmivl342475jymqklq", "…": "…" },
+    "key": "…"
+  },
+  "signature": "fZTgiAhhaqEFYdvW2eBxmhgMFRLyde6Tjtv2rrj64iJNj9BFlNAhAdLxjF2qJsi0pC0Nbp9QlYpO9Zt1o5mGug"
+}
+```
+
+_Source: `packages/core/src/records/loose.ts` (`signLoose`, `looseShapeProblem`, `checkLoose`, `encodeLoose`, `decodeLoose`), `packages/core/src/schema/version.ts` (`createVersion`). Tests: `packages/core/tests/invitation.test.ts` ("loose versions")._
 
 ---
 
@@ -1010,9 +1073,13 @@ library does with it: [collections](../packages/core/docs/collections.md#version
   `sys.profile`, `sys.joined` — in [03 — Spaces](03-spaces.md); carriers,
   passes and automations — `sys.carrier`, `sys.pass`, `sys.automation`,
   `sys.wake` — in [03](03-spaces.md) §13–15, and how a node uses them
-  in [06 — Nodes, sessions and apps](06-nodes-and-sessions.md) §4; hosting —
+  in [06 — Nodes, sessions and apps](06-nodes-and-sessions.md) §4; knocks
+  left in a space — `sys.mail` — in [03](03-spaces.md) §16; hosting —
   `sys.hosting` — in [08 — Hosting](08-hosting.md)
   (`sys.relays` and `sys.keepers` also in [05](05-sync-and-storage.md)).
+- Loose versions (§3.5) are in `sys.*` too: `sys.invitation` in
+  [03](03-spaces.md) §7.4, `sys.inbox` and `sys.knock` in
+  [07 — Inbox](07-inbox.md). None of them is ever stored in a space.
 - **`std.*`** is **not reserved**: it names the optional
   [standard library](../packages/core/docs/standard-library.md), a
   convention. (Planned to change: §6.5.)

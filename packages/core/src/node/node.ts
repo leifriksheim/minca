@@ -1991,11 +1991,10 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   // ─── Contacts ──────────────────────────────────────────────────────
   //
   // One `std.contact` per person in the contacts space, keyed by their DID, so
-  // there is one per person on every device. Asking someone is a
-  // `std.contact-request` in a space you share: the invite to a new space for
-  // two, sealed with their contact key, bound to the space it was posted in and
-  // to who asked whom — so it opens only for them, only there, and only as
-  // coming from the account that wrote it.
+  // there is one per person on every device. Asking someone is a knock left
+  // as `sys.mail` in a space you share: the signed invite to a new space for
+  // two, sealed to their contact key, so it opens only for them, and only as
+  // coming from the account that left it.
 
   // The key `onePer: ['did']` derives, so the record for someone is the same one on every device.
   const contactRecordKey = async (did: string) =>

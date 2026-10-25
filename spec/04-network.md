@@ -11,7 +11,7 @@ What travels _inside_ an authenticated connection — the sync protocol — is
 in [05 — Sync and storage](05-sync-and-storage.md). Keys, DIDs and notes
 (delegations) are in [01 — Identity](01-identity.md). Read keys, space
 keys, roles and the access log are in [03 — Spaces](03-spaces.md). The relay
-mailbox used by doors is in [07 — Doors](07-doors.md).
+mailbox the inbox and short links use is in [07 — Inbox](07-inbox.md).
 
 ```
                  ┌──────────── relay (WebSocket, JSON text frames) ────────────┐
