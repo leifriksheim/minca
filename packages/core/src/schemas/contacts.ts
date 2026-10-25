@@ -33,6 +33,22 @@ export const contact = define({
 });
 export type Contact = BodyOf<typeof contact>;
 
+/** A knock left in a space both belong to: sealed to their contact key, so only they open it. */
+export const contactRequest = define({
+  name: 'std.contact-request',
+  title: 'Contact request',
+  description: 'A knock left for someone in a space you share, sealed so only they can open it.',
+  schema: {
+    type: 'object',
+    properties: {
+      to: { type: 'string', maxLength: 64, description: 'Their contact key, as on their profile here' },
+      sealed: { type: 'string', maxLength: 16000, description: 'The knock, sealed to it (spec 07 §6)' },
+    },
+    required: ['to', 'sealed'],
+  },
+});
+export type ContactRequestRecord = BodyOf<typeof contactRequest>;
+
 /**
  * Your inbox (`node.inbox`): which one it is and where its knocks wait. Its
  * keys are derived from the contact key and `gen`; a new `gen` is a new inbox,

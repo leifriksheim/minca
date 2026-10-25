@@ -9,12 +9,15 @@ import {
   type OwnAutomationView,
 } from '@minca/core';
 import { accountHomeLink } from '@minca/core/session';
-import type { AppAutomation } from '@minca/core/schemas';
+import { notifyOn, type AppAutomation } from '@minca/core/schemas';
 import { TEMPLATES } from './components/apps/templates';
 import { isForMe, madeNotify } from './components/apps/entries';
 import { launcherApp, sortLauncher, type LauncherApp } from './components/apps/launcher';
 import { message } from '@minca/app-shared/action';
 import { addAlert } from './alerts';
+
+/** Offered whatever apps a space has */
+const CONTACTS: AutomationProposal = notifyOn('Someone asks to be your contact', 'std.contact-request');
 
 const supported = () => typeof globalThis.Notification === 'function';
 
@@ -164,7 +167,7 @@ function useEverything(): ReadonlyArray<AutomationProposal> {
 
 /** Contact requests, the ready-made apps and those in the spaces, once each, as many as one request may carry */
 function gather(made: ReadonlyArray<LauncherApp>): ReadonlyArray<AutomationProposal> {
-  const all = [...TEMPLATES.flatMap(({ app }) => madeNotify(app)), ...made.flatMap(madeNotify)];
+  const all = [CONTACTS, ...TEMPLATES.flatMap(({ app }) => madeNotify(app)), ...made.flatMap(madeNotify)];
   const once = new Map(all.map((offer) => [lookingFor(offer), offer]));
   return [...once.values()].slice(0, MAX_PROPOSALS);
 }

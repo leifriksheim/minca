@@ -17,7 +17,8 @@
  * makes a private space for the two of them and leaves a **`sys.knock`**,
  * signed under their account's note and carrying the signed invitation to
  * that space, sealed to the inbox key. The same knock, sealed to the contact
- * key instead, goes in a `sys.mail` record in a space both already belong to.
+ * key instead, goes in a `std.contact-request` in a space both belong to
+ * (`packages/core/docs/contacts.md`).
  * Joining the space is the answer: only the holder of the key could open it.
  *
  * ```
@@ -51,8 +52,6 @@ import { base64UrlDecode, base64UrlEncode, utf8Encode } from '../utils/encoding.
 export const INBOX_COLLECTION = 'sys.inbox';
 /** The collection a knock is a loose version in */
 export const KNOCK_COLLECTION = 'sys.knock';
-/** Where a knock is left in a space both already belong to (spec 03 §16) */
-export const MAIL_COLLECTION = 'sys.mail';
 
 /** An inbox names at most this many mailboxes: enough that one going away doesn't matter */
 export const MAX_INBOX_PLACES = 3;
@@ -220,7 +219,7 @@ export async function knockId(blob: string): Promise<string> {
  * Makes a knock: signed by the session key under its account's note, and
  * sealed to `to`, an inbox key or a contact key.
  * @param invite The signed invitation to the space for two, and its secret
- * @returns The sealed blob, for a mailbox or a `sys.mail` record
+ * @returns The sealed blob, for a mailbox or a contact request
  */
 export async function sealKnock(
   to: string,
@@ -251,7 +250,7 @@ export async function sealKnock(
  * invitation from the same account to a private space that account alone
  * founded.
  * @param keys The private scalars it may be sealed to: the inbox keys, or the contact key
- * @param receivedAt For a mailbox, when the relay took it, ms; null for a `sys.mail` record
+ * @param receivedAt For a mailbox, when the relay took it, ms; null for a contact request
  * @returns The knock, or null when it is anything less
  */
 export async function openKnock(

@@ -5,13 +5,12 @@ keeps its list of them in its contacts space, and asks someone to become a
 contact by leaving a knock for them: in a space both belong to, or in their
 inbox.
 
-The list is a convention built on the protocol, not part of it. Peers that
-have never heard of `std.contact` sync, store and judge it like any other
-record. The knock is protocol: how it is signed and sealed, and what the
-person it is for checks, is
-[spec 07 §6](https://github.com/leifriksheim/minca/blob/main/spec/07-inbox.md);
-the `sys.mail` record that carries one in a shared space is
-[spec 03 §16](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md).
+The list and the request are conventions built on the protocol, not part of
+it. Peers that have never heard of `std.contact` or `std.contact-request`
+sync, store and judge them like any other record. The knock they carry is
+protocol: how it is signed and sealed, and what the person it is for checks,
+is [spec 07 §6](https://github.com/leifriksheim/minca/blob/main/spec/07-inbox.md),
+the same however it is handed over.
 Asking someone you share **no** space with goes through their inbox
 ([inbox.md](inbox.md)).
 
@@ -46,15 +45,18 @@ only when it was given it (`config.contactKey`); an agent never is.
 
 ## Asking in a shared space
 
-`ask` leaves a `sys.mail { to, sealed }` in the space: `to` is the askee's
-contact key, and `sealed` a knock sealed to it (spec 07 §6), whose invite is
-to a new space for two. `sys.mail` is the protocol's own, so no collection
-needs defining first, and any member may leave one; it stands only when the
-account wrote it, or a key whose note grants `/account/write` for the whole
-account. In a private space the body is sealed with the space key too, so
-other members see that someone left mail, not for whom.
+```
+std.contact-request  (no rules; who may write one is the space's grants)
+{ to: <the askee's contact key, as on their profile here, ≤64>, sealed: string ≤16000 }
+```
 
-The receiver opens a `sys.mail` only when `to` is its own contact key, the
+`ask` leaves one in the space: `sealed` is a knock sealed to `to` (spec 07
+§6), whose invite is to a new space for two. It defines the collection first
+if the space lacks it, which needs `/collection/define`. In a private space
+the body is sealed with the space key too, so other members see that someone
+asked, not whom.
+
+The receiver opens a request only when `to` is its own contact key, the
 knock checks out (spec 07 §6), and the knock's account is the record's root
 and not its own. A knock copied into another record by someone else is not
 theirs to leave, and opens as nothing.
@@ -70,7 +72,7 @@ theirs to leave, and opens as nothing.
   space named `"<my name> & <their name>"`, opens an `editor` invite to it,
   waits up to 30 seconds for a carrier to hold it (`spaces.carried`), writes a
   `std.contact` for them with that space, then leaves the knock as
-  `sys.mail`. It returns the space for two, the record's key, and `carried`:
+  `std.contact-request`. It returns the space for two, the record's key, and `carried`:
   false when no carrier held the space in time, so the askee can join only
   while one of the asker's devices is online.
 - `requests(space)` lists the knocks left there that open for this account,
@@ -92,7 +94,7 @@ whole account, as a knock does. An app granted `contacts` sees the list and
 requests, but may not ask or accept
 ([spec 06 §2.5](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
 
-_Source: `packages/core/src/schemas/contacts.ts` (`contact`), `packages/core/src/identity/contact-key.ts` (`deriveContactKeyBytes`), `packages/core/src/inbox/inbox.ts` (`sealKnock`, `openKnock`, `MAIL_COLLECTION`), `packages/core/src/node/node.ts` (contacts section: `openMail`, `makePair`, `contacts`), `packages/core/src/node/types.ts` (`NodeContacts`), `packages/core/src/space/account-registry.ts` (`deriveContactsSpace`). Tests: `packages/core/tests/contacts.test.ts`, `packages/core/tests/attacks.test.ts` ("a knock re-posted by someone else…")._
+_Source: `packages/core/src/schemas/contacts.ts` (`contact`), `packages/core/src/identity/contact-key.ts` (`deriveContactKeyBytes`), `packages/core/src/inbox/inbox.ts` (`sealKnock`, `openKnock`), `packages/core/src/node/node.ts` (contacts section: `openMail`, `makePair`, `contacts`), `packages/core/src/schemas/contacts.ts` (`contactRequest`), `packages/core/src/node/types.ts` (`NodeContacts`), `packages/core/src/space/account-registry.ts` (`deriveContactsSpace`). Tests: `packages/core/tests/contacts.test.ts`, `packages/core/tests/attacks.test.ts` ("a knock re-posted by someone else…")._
 
 ## Planned: requests that can be taken back
 
@@ -103,8 +105,8 @@ it, into a space nobody holds. And `spaces.leave` on a space for two leaves the
 `std.contact` naming it.
 
 - `std.contact` gains `asked?: { space: string ≤256, key: string ≤256 }`, the
-  space and record key of the `sys.mail`. `ask` writes it.
-- `remove(did)` and `block(did)` delete the `sys.mail` at `asked` when the
+  space and record key of the request. `ask` writes it.
+- `remove(did)` and `block(did)` delete the request at `asked` when the
   space is still held and the record still stands, before leaving the space
   for two.
 - `spaces.leave(id)` on a space a `std.contact` names does what `remove` does

@@ -348,24 +348,18 @@ describe('attacks on contacts', () => {
     const { leif, anna, carol, space } = await threeIn('private');
     await leif.node.contacts.ask(space, anna.node.did);
     await until(
-      async () => (await carol.node.records.list(space, { collection: 'sys.mail' })).length === 1,
+      async () => (await carol.node.records.list(space, { collection: 'std.contact-request' })).length === 1,
       5000,
       'the knock',
     );
     const [original] = await carol.node.records.list<{ to: string; sealed: string }>(space, {
-      collection: 'sys.mail',
+      collection: 'std.contact-request',
     });
 
     // Carol leaves Leif's sealed knock as her own.
-    await letGo(carol.node, space);
-    await forge(carol, space, {
-      collection: 'sys.mail',
-      body: original!.body!,
-      version: { key: 'mail:copied', seq: 0 },
-    });
-    await hold(carol.node, space);
+    await carol.node.records.put(space, 'std.contact-request', original!.body!);
     await until(
-      async () => (await anna.node.records.list(space, { collection: 'sys.mail' })).length === 2,
+      async () => (await anna.node.records.list(space, { collection: 'std.contact-request' })).length === 2,
       5000,
       'Carol’s copy',
     );

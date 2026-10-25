@@ -1073,8 +1073,7 @@ library does with it: [collections](../packages/core/docs/collections.md#version
   `sys.profile`, `sys.joined` — in [03 — Spaces](03-spaces.md); carriers,
   passes and automations — `sys.carrier`, `sys.pass`, `sys.automation`,
   `sys.wake` — in [03](03-spaces.md) §13–15, and how a node uses them
-  in [06 — Nodes, sessions and apps](06-nodes-and-sessions.md) §4; knocks
-  left in a space — `sys.mail` — in [03](03-spaces.md) §16; hosting —
+  in [06 — Nodes, sessions and apps](06-nodes-and-sessions.md) §4; hosting —
   `sys.hosting` — in [08 — Hosting](08-hosting.md)
   (`sys.relays` and `sys.keepers` also in [05](05-sync-and-storage.md)).
 - Loose versions (§3.5) are in `sys.*` too: `sys.invitation` in

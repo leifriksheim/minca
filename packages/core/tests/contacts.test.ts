@@ -18,9 +18,7 @@ import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { memoryStores } from './helpers/memory-stores.js';
 import { team } from '../src/space/presets.js';
 import { until } from './helpers/until.js';
-import { forge, open, person as somebody } from './helpers/person.js';
-import { hold, letGo } from './helpers/hold.js';
-import { createStorageProvider } from '../src/storage/storage-provider.js';
+import { open, person as somebody } from './helpers/person.js';
 
 /** A device of an account: the seed's own node, with its account key and contact key */
 const device = async (hub: FakeHub, seed: Uint8Array, name: string) =>
@@ -224,105 +222,11 @@ describe('asking to be added', () => {
     assert.deepEqual(await anna.node.contacts.others(leif.node.did), []);
   });
 
-  test('a knock left in a space stands only from a note that may write for the whole account: peers refuse the rest', async () => {
-    const hub = createFakeHub({ latencyMs: 1 });
-    const leif = await person(hub, 'Leif');
-    const anna = await person(hub, 'Anna');
-    const { id: club } = await leif.node.spaces.create({ name: 'Open club', ...team, visibility: 'public' });
-    await anna.node.spaces.join(await leif.node.spaces.invite(club, { role: 'editor' }));
-    await joined(anna.node, club);
-    await hold(leif.node, club);
-    await anna.node.spaces.hold(club);
-    await until(
-      async () =>
-        (await leif.node.spaces.profiles(club)).some((p) => p.did === anna.node.did && p.contactKey),
-      5000,
-      "Leif to see Anna's contact key",
-    );
-    const asked = await leif.node.contacts.ask(club, anna.node.did);
-    const real = (await leif.node.records.list(club, { collection: 'sys.mail' }))[0]!;
-    // The same knock again, left by a key whose note covers this one space only.
-    const refused: string[] = [];
-    anna.node.subscribe((event) => {
-      if (event.type === 'rejected') refused.push(event.reason);
-    });
-    await letGo(leif.node, club);
-    await forge(
-      leif,
-      club,
-      { collection: 'sys.mail', body: real.body, version: { key: 'mail:forged', seq: 0 } },
-      { app: true },
-    );
-    await hold(leif.node, club);
-    await until(async () => refused.length > 0, 5000, 'Anna to refuse the copy');
-    assert.deepEqual(
-      (await anna.node.records.list(club, { collection: 'sys.mail' })).map((record) => record.key),
-      [real.key],
-    );
-    const requests = await anna.node.contacts.requests(club);
-    assert.deepEqual(
-      requests.map((request) => request.key),
-      [real.key],
-    );
-    assert.equal(requests[0]?.pairSpace, asked.space);
-  });
-
-  test('another member cannot delete or replace a knock left for someone else: peers refuse it', async () => {
-    const hub = createFakeHub({ latencyMs: 1 });
-    const [leif, anna, carol] = [
-      await person(hub, 'Leif'),
-      await person(hub, 'Anna'),
-      await person(hub, 'Carol'),
-    ];
-    const { id: club } = await leif.node.spaces.create({ name: 'Club', ...team, visibility: 'public' });
-    for (const other of [anna, carol]) {
-      await other.node.spaces.join(await leif.node.spaces.invite(club, { role: 'editor' }));
-      await joined(other.node, club);
-    }
-    for (const who of [leif, anna, carol]) await hold(who.node, club);
-    await until(
-      async () =>
-        (await leif.node.spaces.profiles(club)).some((p) => p.did === anna.node.did && p.contactKey),
-      5000,
-      "Leif to see Anna's contact key",
-    );
-    await letGo(carol.node, club);
-    await letGo(anna.node, club);
-    await leif.node.contacts.ask(club, anna.node.did);
-    const [mail] = await leif.node.records.list(club, { collection: 'sys.mail' });
-    assert.ok(mail);
-    await hold(carol.node, club);
-    await until(
-      async () => (await carol.node.records.list(club, { collection: 'sys.mail' })).length === 1,
-      5000,
-      'Carol to hold the knock',
-    );
-    const current = await createStorageProvider(await carol.stores(`spaces/${club}`)).getCurrent(mail.key);
-    assert.ok(current);
-    // Carol, an ordinary member, writes a delete of the knock Leif left.
-    await letGo(carol.node, club);
-    await forge(carol, club, {
-      collection: 'sys.mail',
-      body: undefined,
-      deleted: true,
-      version: { key: current.key, seq: 1, prev: current.id, genesis: current.id },
-    });
-    await hold(carol.node, club);
-    // Given the time it takes to stand where peers take it: here none does.
-    for (let waited = 0; waited < 8000; waited += 200) {
-      if ((await leif.node.records.list(club, { collection: 'sys.mail' })).length === 0) break;
-      await new Promise((resolve) => setTimeout(resolve, 200));
-    }
-    assert.equal((await leif.node.records.list(club, { collection: 'sys.mail' })).length, 1);
-    await hold(anna.node, club);
-    await until(async () => (await anna.node.contacts.requests(club)).length === 1, 5000, 'Anna to see it');
-  });
-
   test('another member of the space cannot open a request meant for someone else', async () => {
     const { leif, anna, carol, club } = await bookClub();
     await leif.node.contacts.ask(club, anna.node.did);
     await until(
-      async () => (await carol.node.records.list(club, { collection: 'sys.mail' })).length === 1,
+      async () => (await carol.node.records.list(club, { collection: 'std.contact-request' })).length === 1,
       5000,
       'the request to reach Carol',
     );

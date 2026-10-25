@@ -6,6 +6,29 @@ the wire, what is stored, what is signed and what every peer must check;
 describes the library built on it. Read the part of the spec, or the page of
 the docs, a change touches before changing the code.
 
+## Keep it small
+
+Minca is a protocol, not a platform. Every rule in it is something a second
+implementation must get exactly right, forever. A change should leave less to
+implement and less to get wrong, not more.
+
+- **One way to do a thing.** Before adding a format, a record type, a label, a
+  reserved collection or a code path, find the existing one it can be. A new
+  kind of thing replaces an old one; it does not sit beside it.
+- **Protocol only when a peer can't work without it.** A new `sys.*`
+  collection, peer check or label is protocol for good. If a convention in
+  `packages/core/docs/` would do, it is a convention.
+- **A guard that needs a guard means the design is wrong.** When a review
+  finding is fixed by a new rule, and the next review breaks that rule, stop
+  adding rules: remove or rethink the feature they protect.
+- **Show the size.** A change meant to simplify shows
+  `git diff --shortstat main...HEAD -- packages/core/src spec` in its PR, and
+  that number goes down. Where it goes up, the PR says why, addition by
+  addition.
+- **Defaults over options, one path over special cases.** An option or a
+  branch for a rare case costs every reader; leave it out until someone needs
+  it.
+
 ## Layout
 
 | Folder                                        |                                                                                                |

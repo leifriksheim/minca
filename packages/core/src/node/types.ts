@@ -908,7 +908,7 @@ export interface NodeContacts {
   /**
    * Asks someone in a space you share to add you: a space for two, and a
    * knock carrying its invite, sealed to their contact key and left there as
-   * `sys.mail`. `carried` is whether a carrier held the space for two before
+   * a `std.contact-request`. `carried` is whether a carrier held the space for two before
    * it went out (`spaces.carried`): when false, they can join only while one
    * of your devices is online.
    */

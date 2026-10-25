@@ -81,9 +81,11 @@ import { direct as directSchema } from '../schemas/library/publishing.js';
 import { openDirect, sealDirect, type DirectBody } from '../privacy/direct.js';
 import {
   contact as contactSchema,
+  contactRequest as contactRequestSchema,
   inbox as inboxSchema,
   knock as knockSchema,
   type Contact,
+  type ContactRequestRecord,
   type Inbox,
   type Knock,
 } from '../schemas/contacts.js';
@@ -93,7 +95,6 @@ import {
   inboxTopic,
   KNOCK_TTL_SECONDS,
   knockId,
-  MAIL_COLLECTION,
   MAX_INBOX_PLACES,
   openKnock,
   readInbox as readInboxCode,
@@ -1992,7 +1993,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   //
   // One `std.contact` per person in the contacts space, keyed by their DID, so
   // there is one per person on every device. Asking someone is a knock left
-  // as `sys.mail` in a space you share: the signed invite to a new space for
+  // as a `std.contact-request` in a space you share: the signed invite to a new space for
   // two, sealed to their contact key, so it opens only for them, and only as
   // coming from the account that left it.
 
@@ -2088,11 +2089,16 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   }
 
   /**
-   * A knock left in a space as `sys.mail`, opened — or null when it isn't one
-   * sealed to this account's contact key, by the account that wrote it there.
+   * A knock left in a space as a contact request, opened — or null when it
+   * isn't one sealed to this account's contact key, by the account that wrote it.
    */
   async function openMail(record: NodeRecord<unknown> | null): Promise<OpenedKnock | null> {
-    if (!config.contactKey || !contactKeys || !record?.verified || record.collection !== MAIL_COLLECTION)
+    if (
+      !config.contactKey ||
+      !contactKeys ||
+      !record?.verified ||
+      record.collection !== contactRequestSchema.name
+    )
       return null;
     const body = record.body;
     if (!isRecord(body) || body.to !== contactKeys.publicKey || typeof body.sealed !== 'string') return null;
@@ -2208,11 +2214,13 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         (await ownName()) ?? profiles.find((profile) => profile.did === config.signer.did)?.name ?? 'Me';
       const note = options.note?.trim().slice(0, 2000);
       const made = await makePair(theirs.contactKey, { mine, theirs: theirs.name }, note);
+      await ensureDefined(shared, contactRequestSchema);
       await writeContact({ did, name: theirs.name, space: made.space });
-      // A protocol record any member may leave, so no collection needs defining first.
-      const key = `mail:${base32Encode(globalThis.crypto.getRandomValues(new Uint8Array(16)))}`;
-      await shared.upsertSystem(MAIL_COLLECTION, key, { to: theirs.contactKey, sealed: made.sealed });
-      return { space: made.space, request: key, carried: made.carried };
+      const request = await shared.put<ContactRequestRecord>(contactRequestSchema.name, {
+        to: theirs.contactKey,
+        sealed: made.sealed,
+      });
+      return { space: made.space, request: request.key, carried: made.carried };
     },
 
     async requests(spaceId) {
@@ -2221,7 +2229,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       const blocked = await blockedDids();
       const names = new Map((await shared.profiles()).map((profile) => [profile.did, profile.name]));
       const found: ContactRequest[] = [];
-      for (const record of await shared.list<unknown>({ collection: MAIL_COLLECTION })) {
+      for (const record of await shared.list<unknown>({ collection: contactRequestSchema.name })) {
         const opened = await openMail(record);
         if (!opened || blocked.has(opened.from)) continue;
         // Already accepted, here or on another device.
@@ -2284,8 +2292,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
   /** Knocks seen in this node's inbox, by id: opened (null when they didn't check out), and until when to keep them */
   const knockCache = new Map<string, { readonly opened: OpenedKnock | null; readonly until: number }>();
-  /** Copies of knocks that didn't check out, by id and the time their mailbox gave: not opened again */
-  const failedAt = new Set<string>();
+  /** Copies of knocks that didn't check out, by id and mailbox: not opened again */
+  const failed = new Set<string>();
   const DAY_MS = 24 * 3600 * 1000;
 
   /** The inbox is the account's own, in its contacts space: only a key acting as the account opens one, as every peer checks */
@@ -2420,32 +2428,32 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     // Every mailbox, in full: an inbox holds 64 knocks at most, and a knock
     // cleared from another device should go from here too. What was opened
     // once is not opened again.
-    const held = new Map<string, { blob: string; ats: Set<number> }>();
-    for (const result of await Promise.allSettled(places.map((place) => mailbox.fetch(place, keys.topic)))) {
+    // One copy per mailbox, at the earliest time that mailbox gives for it.
+    const held = new Map<string, { blob: string; at: Map<string, number> }>();
+    const fetched = await Promise.allSettled(places.map((place) => mailbox.fetch(place, keys.topic)));
+    for (const [index, result] of fetched.entries()) {
       if (result.status !== 'fulfilled') continue;
+      const place = places[index]!;
       for (const item of result.value) {
         // A relay's id is only its word: file the knock under the hash of what it is.
         const id = await knockId(item.blob);
-        const seen = held.get(id) ?? held.set(id, { blob: item.blob, ats: new Set() }).get(id)!;
-        seen.ats.add(item.at);
+        const copy = held.get(id) ?? held.set(id, { blob: item.blob, at: new Map() }).get(id)!;
+        copy.at.set(place, Math.min(copy.at.get(place) ?? item.at, item.at));
       }
     }
     const found: { id: string; opened: OpenedKnock }[] = [];
-    for (const [id, item] of held) {
+    for (const [id, copy] of held) {
+      // Each mailbox's copy is judged once, by its own time: one that lies about
+      // when it took a knock can't hide it while another tells the truth.
       let opened = knockCache.get(id)?.opened ?? null;
-      // Each mailbox's copy is judged by the time that mailbox gives: one that
-      // lies about when it took a knock can't hide it while another tells the truth.
-      for (const at of item.ats) {
-        if (opened || failedAt.has(`${id}|${at}`)) continue;
-        opened = await openKnock([keys.key], item.blob, at, provider);
+      for (const [place, at] of copy.at) {
+        if (opened || failed.has(`${id}|${place}`)) continue;
+        opened = await openKnock([keys.key], copy.blob, at, provider);
         if (opened) knockCache.set(id, { opened, until: at + KNOCK_TTL_SECONDS * 1000 });
-        else failedAt.add(`${id}|${at}`);
+        else failed.add(`${id}|${place}`);
       }
       if (opened) found.push({ id, opened });
     }
-    // What no mailbox holds any more needn't be remembered.
-    for (const failed of failedAt)
-      if (!held.has(failed.slice(0, failed.indexOf('|')))) failedAt.delete(failed);
     return found;
   }
 
@@ -2544,7 +2552,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       // What waits in the old one goes with it.
       await purgeInbox(current.body!, null).catch(() => 0);
       knockCache.clear();
-      failedAt.clear();
+      failed.clear();
       return writeInbox({ ...current.body!, gen: current.body!.gen + 1 }, current);
     },
 
@@ -2555,7 +2563,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       if ((await purgeInbox(current.body!, null)) === 0)
         throw new Error("None of your inbox's mailboxes could be reached to clear it.");
       knockCache.clear();
-      failedAt.clear();
+      failed.clear();
     },
 
     async knock(code, options = {}) {

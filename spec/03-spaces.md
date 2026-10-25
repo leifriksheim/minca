@@ -2039,46 +2039,14 @@ _Source: `packages/core/src/space/own-automations.ts` (`readWake`, `wakes`, `wak
 
 ## 16. Contacts
 
-What a contact is, the contact list (`std.contact` in the contacts space,
-§13.1) and how a knock becomes a contact are not protocol. They are in the
-library's docs, [contacts](../packages/core/docs/contacts.md) and
-[inbox](../packages/core/docs/inbox.md). Two things are protocol: the
-contact key, and the record a knock is left in inside a space both people
-belong to.
-
-### 16.1 The contact key
-
-The contact key is [01 §10.1](01-identity.md); its public half is published on
-the profile (§11).
-
-### 16.2 `sys.mail`: a knock left in a space
-
-Someone who shares a space with the person they ask leaves a **knock**
-([07](07-inbox.md) §6) sealed to the contact key on that person's profile
-there, as a `sys.mail` record:
-
-```
-sys.mail at mail:<random>
-{ to: <the recipient's contact key, as on their profile>, sealed: <the knock sealed to it> }
-```
-
-- Any member may write one, like `sys.profile`: no collection needs
-  defining first. A later version (a change, or a delete) stands only from
-  the account that wrote its first version: a peer MUST refuse anyone
-  else's, so no other member can take back or replace a knock left there.
-- It stands only when signed by the account itself or under a note that
-  grants `/account/write` for the whole account ([01](01-identity.md) §8), as
-  a knock needs. A peer MUST refuse one under a narrower note: an app given
-  one space, or a key given records only, can't ask anyone as the account.
-- In a private space its body is encrypted with the space key like any
-  other (§8.2), so other members see neither `to` nor the knock; in a public
-  space they see whose contact key it is sealed to, never what it says.
-- The recipient opens `sealed` with its contact key and checks it as 07 §6
-  says, with no mailbox time. It MUST ignore one whose knock speaks for
-  another account than the record's root: a knock re-posted by someone else
-  is not theirs to leave.
-
-_Source: `packages/core/src/node/space-runtime.ts` (`aboutItself`), `packages/core/src/inbox/inbox.ts` (`MAIL_COLLECTION`, `sealKnock`, `openKnock`), `packages/core/src/node/node.ts` (`openMail`, `contacts.ask`, `contacts.requests`). Tests: `packages/core/tests/contacts.test.ts` ("asking to be added", "a knock left in a space stands only from a note that may write for the whole account: peers refuse the rest"), `packages/core/tests/attacks.test.ts` ("a knock re-posted by someone else does not open as theirs, nor as anyone’s")._
+Contacts are not protocol: the contact list (`std.contact` in the contacts
+space, §13.1), asking someone in a space you share (`std.contact-request`)
+and how a knock becomes a contact are in the library's docs,
+[contacts](../packages/core/docs/contacts.md) and
+[inbox](../packages/core/docs/inbox.md). A peer that has never heard of them
+syncs and judges them like any other record. What they rest on is protocol:
+the contact key ([01 §10.1](01-identity.md), on the profile, §11) and the
+knock ([07](07-inbox.md) §6).
 
 ---
 

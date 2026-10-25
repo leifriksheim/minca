@@ -87,8 +87,8 @@ change without touching this spec:
   ([blueprints and guides](../packages/core/docs/blueprints-and-guides.md#apps-with-a-screen-of-their-own);
   the example app's launcher, `apps/example/src/components/apps/launcher.ts`).
 - **Contacts**: the contact list, and asking someone in a space you share
-  ([contacts](../packages/core/docs/contacts.md)); the `sys.mail` record a
-  knock is left in there is in [03](03-spaces.md) §16.
+  ([contacts](../packages/core/docs/contacts.md)); the knock itself is
+  [07](07-inbox.md) §6.
 - **Direct messages**, sealed to members' keys ([direct messages](../packages/core/docs/direct-messages.md)).
 - **The inbox's settings kept as a record**, and how a knock becomes a
   contact; the inbox code, the relay mailbox and the knock itself are in

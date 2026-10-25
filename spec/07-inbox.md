@@ -298,10 +298,10 @@ A knocker drops a knock as soon as it signs it.
 
 A recipient MUST treat a blob as a knock only if all of these hold, and
 otherwise ignore it. `receivedAt` is the relay's `at` for the blob; a knock
-left as `sys.mail` has none.
+handed over another way, as in a record in a space both share, has none.
 
 1. It opens with one of the recipient's keys (an inbox key it holds, or its
-   contact key for `sys.mail`), label `minca/mail/v1`, bound
+   contact key), label `minca/mail/v1`, bound
    `{ "to": <that key's public half> }`; and the knock's `to` is that key.
 2. It is a valid loose version in `sys.knock` (02 §3.5): its signature checks
    out, and its note, when it carries one, is valid at its `createdAt`.
@@ -325,8 +325,9 @@ every relay. A client MUST de-duplicate by it, computing it itself rather
 than trusting a relay's `id`. Each relay's copy is judged by the `receivedAt`
 that relay gives, and the knock counts when any copy passes: one relay that
 lies about when it took a knock can't hide it while another tells the truth.
-The cost is that one relay willing to give a `receivedAt` as old as a
-backdated knock's `createdAt` lets a note that ran out knock (§8).
+A relay willing to give a `receivedAt` as old as a backdated knock's
+`createdAt` still lets a note that ran out knock (§8): that comes of trusting
+a relay's time at all.
 
 The constitution's checks say only that the knocker founded the space alone
 and assigned nobody a role in it; its history may since have given others
@@ -351,8 +352,8 @@ Which of the knocks that pass these checks a client offers the person
 >   read days later, long after an hour-long session note ran out. But
 >   `createdAt` is the signer's word. Tying it to when the relay took the
 >   knock, a time the inbox's owner picked the keeper of, means a note that ran
->   out can't be used by dating a knock back to when it was good. A `sys.mail`
->   knock has no such time; its record is judged in its space like any other.
+>   out can't be used by dating a knock back to when it was good. A knock with
+>   no mailbox time is judged only against the 14 days.
 
 _Source: `packages/core/src/inbox/inbox.ts` (`sealKnock`, `openKnock`, `knockId`), `packages/core/src/space/invitation.ts` (`checkInvitation`), `packages/core/src/identity/abilities.ts`. Tests: `packages/core/tests/inbox.test.ts` ("a knock")._
 
@@ -402,9 +403,7 @@ grants records only ([06 §2.8](06-nodes-and-sessions.md)).
 - **Authority.** Only a proof that grants `/account/write` for the whole
   account can knock (§6). A note that ran out can't be used by backdating
   unless a relay the inbox names gives a `receivedAt` as old as the backdated
-  knock: copies are judged one relay at a time (§6), so one relay can't hide
-  a knock, but one that colludes with whoever holds the expired note can let
-  it through. _Known limitation:_ a note that was **revoked** but hasn't run out yet
+  knock, colluding with whoever holds the expired note. _Known limitation:_ a note that was **revoked** but hasn't run out yet
   (an app disconnected at the home, whose note lasts up to its grant's days)
   can still knock, because the owner can't see the knocker's revocations.
   Revoking a session's note when it ends is planned in
@@ -417,7 +416,7 @@ grants records only ([06 §2.8](06-nodes-and-sessions.md)).
   opens the knock, so someone else joins first only if the recipient's key or
   device leaked, the recipient passed the invite on, or an app the recipient
   gave the contact key to (06 §2.8) joined first: the inbox keys are derived
-  from it. The knocker sees whoever joined under their own account, never
+  from it ([#313](https://github.com/leifriksheim/minca/issues/313)). The knocker sees whoever joined under their own account, never
   under the recipient's, though they may give the recipient's name.
 - **Replays.** A knock re-dropped by anyone is the same blob (same id).
   Dropped again later, it fails the time check (§6, 4).

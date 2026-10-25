@@ -118,8 +118,8 @@ export async function useSchemas(
   }
 }
 
-export { contact, inbox, knock } from './contacts.js';
-export type { Contact, Inbox, Knock } from './contacts.js';
+export { contact, contactRequest, inbox, knock } from './contacts.js';
+export type { Contact, ContactRequestRecord, Inbox, Knock } from './contacts.js';
 export * from './library/collections.js';
 export {
   checkBlueprint,

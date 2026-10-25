@@ -90,7 +90,7 @@ export async function takeBack(
     )?.contactKey;
     if (!theirs) continue;
     const asked = await node.records
-      .list<{ to?: string }>(spaceId, { collection: 'sys.mail' })
+      .list<{ to?: string }>(spaceId, { collection: 'std.contact-request' })
       .catch(() => []);
     for (const record of asked) {
       if (record.root === me && record.body?.to === theirs)

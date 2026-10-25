@@ -65,13 +65,10 @@ reference implementation, or any implementation, honestly.
     `packages/core/tests/invitation.test.ts`, "relays and nodes changed by
     whoever passed it on are refused when joining", "a key whose note is
     about another space may not invite to this one").
-  - It can't knock as an account, nor leave a knock in a space as one: a
-    knock is signed under a note that grants `/account/write` for the whole
-    account, and a `sys.mail` stands only from such a key (07 §6, 03 §16;
+  - It can't knock as an account: a knock is signed under a note that grants
+    `/account/write` for the whole account, wherever it is left (07 §6;
     `packages/core/tests/inbox.test.ts`, "needs a note that grants
-    /account/write…"; `packages/core/tests/contacts.test.ts`, "a knock left
-    in a space stands only from a note that may write for the whole
-    account…"). A knock it copies into a record of its own opens as nothing
+    /account/write…"). A knock it copies into a record of its own opens as nothing
     (`packages/core/tests/attacks.test.ts`, "a knock re-posted by someone
     else…"), and one sealed to one inbox doesn't open when re-sealed to
     another (`inbox.test.ts`, "sealed to one key, naming another…").
@@ -250,11 +247,6 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
 ### 3.2 Member
 
 - **Holds.**
-  - It can't take back or replace a knock someone else left in the space: a
-    later version of a `sys.mail` stands only from the account that wrote
-    the first, whatever the member's roles (03 §16;
-    `packages/core/tests/contacts.test.ts`, "another member cannot delete or
-    replace a knock left for someone else…").
   - An ordinary record it writes counts only if a role it held granted it, as
     of what the version says it saw. Claiming to have seen less does not
     escape a removal of it it had not seen, nor the loss of any of its roles:
@@ -952,15 +944,14 @@ _Source: 01 §7.5, §8, §11; 06 §2, §3; 05 §14, §15; 02 §4.1. Tests: `pack
   - Joiners don't prove they hold their DID's key, so anyone can take a
     victim's place in a room ([#162](https://github.com/leifriksheim/minca/issues/162)).
   - An inbox's mailbox can be flooded ([#162](https://github.com/leifriksheim/minca/issues/162)).
-  - Colluding with whoever holds a session note that ran out, a relay the
-    inbox names can give a knock signed back when the note was good an old
-    enough `receivedAt` for it to pass the time check (07 §6, §8). The price
-    of judging each relay's copy alone, so that no one relay can hide a
-    knock.
     So can a short link's topic: 64 blobs fill it, and a drop of the link's
     blob after its copy expired is then refused. Joiners read every page, so
     junk can't hide a copy that is there, and a host's copy is not in the
     relay's queue.
+  - A relay the inbox names that gives a backdated knock an old enough
+    `receivedAt` lets a session note that ran out knock (07 §6, §8). Any
+    rule that trusts a relay's time has this; judging each relay's copy alone
+    neither causes nor fixes it ([#165](https://github.com/leifriksheim/minca/issues/165)).
   - Of a short link it learns the topic, the sealed invite's size, and when
     and from which address it is fetched; a relay also serving the space's
     room can tie a fetch to the room joined a moment later
