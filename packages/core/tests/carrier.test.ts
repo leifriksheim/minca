@@ -495,6 +495,39 @@ describe('a carrier', () => {
     );
   });
 
+  test('a space made just now, carried before its invite goes out, can be joined with the maker gone', async () => {
+    const me = await account();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const laptop = await device(me, hub);
+    const { did, keys } = await carrierKey();
+    const added = await laptop.carriers.add({ did, name: 'host.example' });
+    await carrier(me, added.invite, hub, memoryStores(), keys);
+    assert.equal(await laptop.carriers.reached(added.space, 5000), true);
+
+    // Made, invited to, carried with its invite, and the laptop goes at once.
+    const pair = await laptop.spaces.create({ name: 'Us', ...team, visibility: 'private' });
+    const invite = await laptop.spaces.invite(pair.id, { role: 'editor' });
+    assert.equal(await laptop.spaces.carried(pair.id, { waitMs: 10_000 }), true);
+    await laptop.close();
+
+    // A friend who was never online with the laptop joins through the carrier, and takes the role.
+    const friend = await device(await account(), hub);
+    await friend.spaces.join(invite);
+    await joined(friend, pair.id);
+    await until(async () => friend.spaces.holdsRole(pair.id, 'editor'), 5000, 'the friend to hold the role');
+  });
+
+  test('carried is false at once with no carrier, and false when none comes in time', async () => {
+    const me = await account();
+    const home = await device(me, createFakeHub({ latencyMs: 1 }));
+    const space = await home.spaces.create({ name: 'Notes', visibility: 'private' });
+    const started = Date.now();
+    assert.equal(await home.spaces.carried(space.id), false);
+    assert.ok(Date.now() - started < 1000, `took ${Date.now() - started} ms`);
+    await home.carriers.add({ did: (await carrierKey()).did, name: 'Chrome' });
+    assert.equal(await home.spaces.carried(space.id, { waitMs: 300 }), false);
+  });
+
   test('reached is true at once for a carrier already level', async () => {
     const me = await account();
     const hub = createFakeHub({ latencyMs: 1 });

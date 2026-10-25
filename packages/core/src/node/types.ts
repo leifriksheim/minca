@@ -532,6 +532,14 @@ export interface NodeSpaces {
   /** A live message to the peers connected now, kept nowhere, at most 64 KB; `to` an account or a session DID. Arrives as a `message` event */
   send(spaceId: string, message: unknown, to?: string): Promise<void>;
   status(spaceId: string): Promise<SpaceStatus>;
+  /**
+   * Waits up to `waitMs` (default 30 s) for one of the account's carriers to
+   * hold everything this node does of a space, so an invite to it works with
+   * every device of the account away. False at once when the account has no
+   * carrier, and false when none caught up in time: then the space can be
+   * joined only while one of its devices is online.
+   */
+  carried(spaceId: string, options?: { readonly waitMs?: number }): Promise<boolean>;
   /** How a node serving this space checks connecting peers and signs its welcome; null for a space it does not hold */
   authenticator(spaceId: string): Promise<ServerAuth | null>;
   /** The name each person gave in this space, by identity; yours is published from the account's name */

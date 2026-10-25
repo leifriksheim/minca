@@ -200,6 +200,8 @@ interface CarrierEntry {
 
 /** How long leaving waits for a peer to take the account's removal before forgetting the space anyway */
 const LEAVE_WAIT_MS = 5000;
+/** How long `spaces.carried` waits for a carrier, by default: a new space reaches one through its pass first */
+const CARRIED_WAIT_MS = 30_000;
 
 function summarize(record: SpaceRecord): SpaceSummary {
   const { space, key } = record;
@@ -1304,6 +1306,23 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         own: status.peers.filter((peer) => inRegistry.has(peer) && !carrierKeys.has(peer)),
         carriers: status.peers.filter((peer) => carrierKeys.has(peer)),
       };
+    },
+
+    async carried(spaceId, options = {}) {
+      if (!accountSpaceId || narrowNote || !config.network) return false;
+      if ((await liveCarriers()).length === 0) return false;
+      const deadline = Date.now() + (options.waitMs ?? CARRIED_WAIT_MS);
+      const open = await runtime(spaceId);
+      // Named a keeper, and given its pass now rather than whenever the next round comes.
+      await nameKeepers(spaceId, open).catch(() => {});
+      void passAll().catch(() => {});
+      while (!closed && Date.now() < deadline) {
+        // Level with a carrier: it holds the genesis, and any invite opened since.
+        for (const peer of (await spaces.status(spaceId)).carriers)
+          if (await open.syncedWith(peer, Math.max(0, Math.min(2000, deadline - Date.now())))) return true;
+        await new Promise((resolve) => unref(setTimeout(resolve, 250)));
+      }
+      return false;
     },
 
     profiles: perSpace((rt) => rt.profiles()),

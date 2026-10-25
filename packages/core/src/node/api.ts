@@ -56,6 +56,7 @@ export const API = Object.freeze({
     // It would arrive as the person: a live message carries no note of its own to say "via agent".
     send: 'send live messages',
     status: 'scoped',
+    carried: 'scoped',
     authenticator: 'own',
     profiles: 'scoped',
   },
