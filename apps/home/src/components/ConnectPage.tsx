@@ -313,9 +313,29 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
 
   // Proof given on the way here lasts a few minutes: after that, it asks again.
   const [proving, setProving] = useState(false);
+  // A program keeps its note only once the person gives it the check code: this page then waits for that.
+  const [sent, setSent] = useState(false);
   const grant = () =>
-    run(async () => incoming.approve(await auth.grant({ origin, request, spaceIds: [...chosen] })));
+    run(async () => {
+      incoming.approve(await auth.grant({ origin, request, spaceIds: [...chosen] }));
+      if (incoming.check) setSent(true);
+    });
   const allow = () => (auth.mayGrant() ? grant() : setProving(true));
+
+  if (sent && incoming.check)
+    return (
+      <Frame>
+        <h1 style={styles.title}>Now give it the code</h1>
+        <p style={styles.subtitle}>
+          Type this into the terminal where you started it, or tell your AI. It works only once it has the
+          code.
+        </p>
+        <CheckCode check={incoming.check} />
+        <p style={styles.hint}>
+          <Loader label="Waiting for the program" showLabel />
+        </p>
+      </Frame>
+    );
 
   return (
     <Frame>
@@ -341,6 +361,14 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
       )}
 
       <WhichAccount label={byCode ? 'The account it will work in' : 'The account it will use'} busy={busy} />
+
+      {incoming.check && (
+        <Note title="Its code" below={20}>
+          After you allow it, give this code to the program where you started it: in its terminal, or tell
+          your AI. If nothing you started asks for a code, don’t allow it.
+          <CheckCode check={incoming.check} />
+        </Note>
+      )}
 
       {recordsOnly && writes && (
         <>
@@ -813,6 +841,25 @@ function constitution(space: NewSpace, me: string): string {
           ? 'You found it'
           : 'Just you';
   return roles.length ? `${top} · ${roles.join(', ')}` : top;
+}
+
+/** The six digits a program connected by code needs, in two groups: "482 913" */
+function CheckCode({ check }: { check: string }) {
+  return (
+    <span
+      style={{
+        display: 'block',
+        margin: '12px 0 4px',
+        fontFamily: palette.mono,
+        fontSize: 28,
+        fontWeight: 600,
+        letterSpacing: '0.12em',
+        color: palette.ink.strong,
+      }}
+    >
+      {check.slice(0, 3)} {check.slice(3)}
+    </span>
+  );
 }
 
 /** "7 days", "1 year" */

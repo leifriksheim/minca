@@ -741,6 +741,8 @@ export interface IncomingRequest {
   readonly request: ConnectRequest | ProposeRequest;
   /** Where it came from, as the browser reports it — the only name to trust */
   readonly origin: string;
+  /** For a program connected by code: the six digits the person gives the program, which keeps its note only then */
+  readonly check?: string;
   /**
    * Sends the answer back to that origin, and closes the window — once
    * `closeAfter` settles, when given: what this window's node wrote for the

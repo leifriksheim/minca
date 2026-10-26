@@ -36,7 +36,9 @@ npx @minca/cli connect
 ```
 
 It makes a key for this computer's agent and opens the person's account home
-in the browser, where they sign in, or make an account, and allow it. Then it
+in the browser, where they sign in, or make an account, and allow it. The
+home then shows six digits, which the person types into the terminal: the
+agent keeps its note only once they match. Then it
 adds `minca mcp` to the agents it finds (Claude Code, Claude Desktop, Cursor,
 VS Code, Windsurf, Zed, Codex and more). The agent is then a node of its own:
 it follows the account's spaces and keeps working with every tab closed.
@@ -44,7 +46,8 @@ it follows the account's spaces and keeps working with every tab closed.
 An agent can also start `minca mcp` before it is connected, from settings
 added by hand. Until it is, the server offers one tool, which opens the
 account home the same way, and gives the model the link only when no
-browser opened
+browser opened. The model asks the person for the six digits the home shows
+and gives them back to the same tool
 ([the CLI's README](https://github.com/leifriksheim/minca/blob/main/packages/cli/README.md#agents)). Once the
 person has allowed it, every tool arrives (`notifications/tools/list_changed`)
 without a restart.
@@ -63,14 +66,16 @@ The library's two sides are `connectWithCode` (the program) and
 
 - `newConnectCode()` makes a code, and `connectCodeUrl(home, code)` the link
   to open: `https://home.minca.social/connect#mc_…`.
-- `connectWithCode({ code, key, name, network, onWaiting? })` waits in the
-  code's room, signs the proof once it learns the home's origin
+- `connectWithCode({ home, code, key, name, network, check, onWaiting? })`
+  waits in the code's room, signs the proof once it learns the home's origin
   (`keyProof(key, { via: 'code', recordsOnly: true, origin })`), tells
   `onWaiting({ origin })` when the home has heard, and keeps only a
-  records-only note made out to its key.
+  records-only note made out to its key, once `check(matches)` has had the
+  person give the six digits the home showed.
 - `receiveConnectCode({ code, relays, onAnswered? })`, on the home's connect
   page, answers the program and gives back the same `IncomingRequest` an
-  app's popup does: records only, in the whole account, for 30 days.
+  app's popup does: records only, in the whole account, for 30 days, with
+  `check`, the six digits to show.
   `connectCodeIn(location.hash)` finds the code. `answerConnectCode` is the
   same exchange without the request around it.
 

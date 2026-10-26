@@ -189,9 +189,14 @@ export const CONNECT = 'agent_connect';
 export interface Waiting {
   /** Why, and what to do: the server's instructions, and what any other tool says */
   readonly why: string;
-  readonly tool: { readonly name: string; readonly description: string; readonly destructive: boolean };
-  /** What calling the tool does: starts the agent here, or says in words what happens next */
-  readonly call: () => Promise<P2PNode | string>;
+  readonly tool: {
+    readonly name: string;
+    readonly description: string;
+    readonly destructive: boolean;
+    readonly inputSchema?: Record<string, unknown>;
+  };
+  /** What calling the tool does, with its arguments: starts the agent here, or says in words what happens next */
+  readonly call: (args: Record<string, unknown>) => Promise<P2PNode | string>;
   /** Starts the agent here once it can, or gives null meanwhile */
   readonly tryStart: () => Promise<P2PNode | null>;
   /** The node once the agent runs here, if it can change after it starts: a reconnect starts it again */
@@ -222,45 +227,92 @@ export function busyWaiting(params: {
         'which brings every Minca tool to this session. The other one loses Minca. Ask the user first.',
       destructive: true,
     },
-    call: params.takeOver,
+    call: () => params.takeOver(),
     tryStart: params.tryStart,
     ...(params.current ? { current: params.current } : {}),
   };
 }
 
-/** This computer's agent isn't connected: offer {@link CONNECT}, which opens the person's account home */
+/** How many check codes the model may give before connecting starts again */
+const CHECK_TRIES = 5;
+
+/**
+ * This computer's agent isn't connected: offer {@link CONNECT}, which opens
+ * the person's account home, then takes the check code it shows from them.
+ */
 export function connectWaiting(params: {
   /** The account home it opens: the person's choice, never the model's */
   readonly accountHome: string;
   /**
-   * Starts connecting, and says whether the browser opened. The link carries
-   * the code, so it is given only when it didn't: whoever else holds it could
-   * answer as the home.
+   * Starts connecting, asking for the check code through `check`, and says
+   * whether the browser opened. The link carries the code, so it is given
+   * only when it didn't: whoever else holds it could answer as the home.
    */
-  readonly connect: () => Promise<{ readonly opened: boolean; readonly url: string }>;
+  readonly connect: (
+    check: (matches: (typed: string) => boolean) => Promise<void>,
+  ) => Promise<{ readonly opened: boolean; readonly url: string }>;
   readonly tryStart: () => Promise<P2PNode | null>;
   readonly current?: () => P2PNode | null;
   /** Whose account it joined, once it has: `name` is only what the home said, `did` is the account */
   readonly account: () => { readonly name: string; readonly did: string } | null;
 }): Waiting {
+  /** The connection waiting for the person's check code, once the home has their question */
+  let asking: {
+    readonly matches: (typed: string) => boolean;
+    readonly done: () => void;
+    readonly fail: (error: Error) => void;
+    tries: number;
+  } | null = null;
+  const check = (matches: (typed: string) => boolean) =>
+    new Promise<void>((done, fail) => (asking = { matches, done, fail, tries: 0 }));
+
+  const giveCode = (typed: string): string => {
+    const now = asking;
+    if (!now)
+      return (
+        "Their account home hasn't heard from Minca yet, so it shows no code. Ask them to open it and sign in, " +
+        `then call ${CONNECT} with the code it shows.`
+      );
+    if (now.matches(typed)) {
+      asking = null;
+      now.done();
+      return "That's the code. Minca's tools arrive here in a moment.";
+    }
+    now.tries += 1;
+    if (now.tries >= CHECK_TRIES) {
+      asking = null;
+      now.fail(new Error('Too many wrong codes.'));
+      return `Too many wrong codes, so connecting stopped. Call ${CONNECT} again to start over.`;
+    }
+    return "That isn't the code their account home shows. Ask them to read it again, from the page that opened.";
+  };
+
   return {
     why:
       "Minca isn't connected to the user's account on this computer yet. " +
       `Call ${CONNECT} when they want to use Minca: it opens their account home in the browser, ` +
-      'where they sign in, or make an account, and allow this agent. Every Minca tool arrives once they have.',
+      'where they sign in, or make an account, and allow this agent. Their home then shows a six-digit code; ' +
+      `ask them for it and call ${CONNECT} again with it. Every Minca tool arrives once the code matches.`,
     tool: {
       name: CONNECT,
       description:
         `Connect Minca to the user's account: opens their Minca account home (${params.accountHome}) in the ` +
-        'browser to allow this agent. To use another home, they run `minca connect` in a terminal.',
+        'browser to allow this agent. Call it again with `code`, the six digits that page shows once they ' +
+        'allow it; only the user can give it. To use another home, they run `minca connect` in a terminal.',
       destructive: false,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          code: { type: 'string', description: 'The six-digit code the user read on their account home' },
+        },
+      },
     },
-    call: async () => {
-      const { opened, url } = await params.connect();
+    call: async (args) => {
+      if (typeof args.code === 'string' && args.code.trim()) return giveCode(args.code);
+      const { opened, url } = await params.connect(check);
       const there =
-        "There they sign in or make an account, and allow this agent. Once they have, Minca's tools arrive here " +
-        `by themselves; when they say they are done, call ${CONNECT} again to hear which account it joined, ` +
-        'and tell them.';
+        'There they sign in or make an account, and allow this agent. The page then shows a six-digit code: ' +
+        `ask them for it, and call ${CONNECT} with it.`;
       return opened
         ? `Opened the user's Minca account home (${params.accountHome}) in their browser. ${there}`
         : `No browser opened on this computer. Give the user this link to open, and nobody else: ${url} ${there}`;
@@ -317,7 +369,7 @@ export function waitingMcp(
   const tool = {
     name: waiting.tool.name,
     description: waiting.tool.description,
-    inputSchema: { type: 'object', properties: {} },
+    inputSchema: waiting.tool.inputSchema ?? { type: 'object', properties: {} },
     annotations: {
       readOnlyHint: false,
       destructiveHint: waiting.tool.destructive,
@@ -360,7 +412,8 @@ export function waitingMcp(
       case 'tools/call': {
         if (message.params?.name === tool.name) {
           try {
-            const result = await exclusive(waiting.call);
+            const args = message.params?.arguments;
+            const result = await exclusive(() => waiting.call(isRecord(args) ? args : {}));
             return typeof result === 'string'
               ? text(result, false)
               : text(`Done: Minca runs in this session now, with ${mcpTools(options).length} tools.`, false);

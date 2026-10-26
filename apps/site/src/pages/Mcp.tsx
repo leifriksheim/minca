@@ -59,7 +59,12 @@ const STEPS: ReadonlyArray<{ colour: string; shape: ShapeKind; title: string; bo
     colour: 'c-sage',
     shape: 'clover',
     title: 'Say yes',
-    body: <>Your account home opens in the browser. Sign in, or make an account, and allow it.</>,
+    body: (
+      <>
+        Your account home opens in the browser. Sign in, or make an account, and allow it. Then type the
+        six-digit code it shows into your terminal.
+      </>
+    ),
   },
   {
     colour: 'c-lilac',
@@ -151,7 +156,8 @@ export function Mcp() {
           </div>
           <div>
             <p>
-              Added Minca to your AI by hand? Ask it to connect, and it opens your account home the same way.
+              Added Minca to your AI by hand? Ask it to connect. It opens your account home the same way, and
+              asks you for the code.
             </p>
             <p>
               Run your own account home? Type its address when the command asks. Everyone else just presses

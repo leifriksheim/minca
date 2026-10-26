@@ -74,9 +74,9 @@ export function ConnectAgent({
 
         <AgentStep n={2} title="Allow it at your account home" at={at}>
           <p style={stepText}>
-            It opens in your browser. Your agent may read the spaces in your account and write records in
-            them, marked “via agent”. It can’t add apps, change who may do what, or open your contact
-            requests.
+            It opens in your browser. Allow it there, then type the six-digit code it shows into the terminal.
+            Your agent may read the spaces in your account and write records in them, marked “via agent”. It
+            can’t add apps, change who may do what, or open your contact requests.
           </p>
         </AgentStep>
 

@@ -566,14 +566,19 @@ describe('MCP', () => {
     }
   });
 
-  test('not connected yet, it offers agent_connect, which opens the account home and gives the link only when no browser opened', async () => {
+  test('not connected yet, agent_connect opens the account home, takes the code it shows from the user, then serves the tools', async () => {
     const node = await aNode(10);
     let browser = true;
+    const person: { given?: Promise<void> } = {};
     let allowed = false;
     const server = waitingMcp(
       connectWaiting({
         accountHome: 'home.minca.social',
-        connect: async () => ({ opened: browser, url: 'https://home.minca.social/connect#mc_secret' }),
+        connect: async (check) => {
+          // The home has the program's question, and shows 482 913.
+          person.given = check((typed) => typed.replace(/\D/g, '') === '482913');
+          return { opened: browser, url: 'https://home.minca.social/connect#mc_secret' };
+        },
         tryStart: async () => (allowed ? node : null),
         account: () => (allowed ? { name: 'Ada', did: 'did:key:zAda' } : null),
       }),
@@ -581,6 +586,15 @@ describe('MCP', () => {
       { agent: true },
       () => {},
     );
+    const call = (args: Record<string, unknown> = {}) =>
+      server.handle({
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: { name: CONNECT, arguments: args },
+      });
+    const said = async (args: Record<string, unknown> = {}) =>
+      String(at(await call(args), 'result', 'content', 0, 'text'));
     try {
       const init = await server.handle({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
       assert.match(String(at(init, 'result', 'instructions')), /isn't connected/);
@@ -590,21 +604,22 @@ describe('MCP', () => {
         'tools',
       );
       assert.deepEqual(Array.isArray(listed) && listed.map((tool: unknown) => at(tool, 'name')), [CONNECT]);
-      // The model can't point it at another home: the tool takes nothing.
-      assert.deepEqual(Array.isArray(listed) && at(listed[0], 'inputSchema', 'properties'), {});
+      // The model can't point it at another home: it takes only the code.
+      const properties: unknown = Array.isArray(listed) && at(listed[0], 'inputSchema', 'properties');
+      assert.deepEqual(typeof properties === 'object' && properties !== null ? Object.keys(properties) : [], [
+        'code',
+      ]);
 
-      const call = () =>
-        server.handle({
-          jsonrpc: '2.0',
-          id: 3,
-          method: 'tools/call',
-          params: { name: CONNECT, arguments: {} },
-        });
-      const opened = String(at(await call(), 'result', 'content', 0, 'text'));
+      assert.match(await said({ code: '482913' }), /hasn't heard/, 'no code before it has asked');
+      const opened = await said();
       assert.match(opened, /home\.minca\.social/);
-      assert.doesNotMatch(opened, /mc_secret/, 'the code stays out of the model while the browser opened');
+      assert.doesNotMatch(opened, /mc_secret/, 'the link stays out of the model while the browser opened');
+      assert.match(await said({ code: '111 111' }), /isn't the code/);
+      assert.match(await said({ code: '482 913' }), /That's the code/);
+      await person.given;
+
       browser = false;
-      assert.match(String(at(await call(), 'result', 'content', 0, 'text')), /mc_secret/);
+      assert.match(await said(), /mc_secret/, 'given only when no browser opened');
 
       allowed = true;
       const tools = at(
@@ -615,7 +630,7 @@ describe('MCP', () => {
       assert.ok(Array.isArray(tools) && tools.length > 1);
       assert.equal(server.node(), node);
       // Asked again, it says whose account it joined, for the person to check.
-      assert.match(String(at(await call(), 'result', 'content', 0, 'text')), /“Ada” \(did:key:zAda\)/);
+      assert.match(await said(), /“Ada” \(did:key:zAda\)/);
     } finally {
       server.stop();
     }

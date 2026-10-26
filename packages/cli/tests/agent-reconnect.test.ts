@@ -75,6 +75,7 @@ const connectHere = (home: string, connect: typeof connectWithCode) =>
     name: 'Agent on test',
     log: () => {},
     onLink: () => {},
+    check: async () => {},
     connect,
   });
 

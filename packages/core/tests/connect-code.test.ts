@@ -29,6 +29,7 @@ import {
 } from '../src/session/connect-code.js';
 import { base64UrlDecode, base64UrlEncode, utf8Encode } from '../src/utils/encoding.js';
 import { isObject } from '../src/utils/guards.js';
+import { sha256 } from '../src/utils/hash.js';
 import type { PeerTransport } from '../src/network/transport.js';
 import type { NetworkMessage } from '../src/types.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
@@ -114,7 +115,13 @@ async function allowing(
     if (stage.kind === 'asking') void grant(stage).then((g) => stage.allow(g));
   });
   open.push({ close: async () => answering.stop() });
-  return { code, stages, kinds: () => stages.map((stage) => stage.kind) };
+  /** The person reading the home's code and typing it into the program */
+  const typed = async (matches: (typed: string) => boolean) => {
+    await until(async () => stages.some((stage) => stage.kind === 'asking'), 2000, 'the home showing a code');
+    const asking = stages.find((stage) => stage.kind === 'asking');
+    assert.ok(asking?.kind === 'asking' && matches(`${asking.check.slice(0, 3)} ${asking.check.slice(3)}`));
+  };
+  return { code, stages, typed, kinds: () => stages.map((stage) => stage.kind) };
 }
 
 describe('the code channel', () => {
@@ -182,6 +189,8 @@ async function impostor(
   const asks: unknown[] = [];
   const handle = async (message: NetworkMessage) => {
     if (message.type === 'code:hello' && !channel) {
+      meeting.send(message.from, 'code:key', { key: base64UrlEncode(mine.point) });
+    } else if (message.type === 'code:point' && !channel) {
       const join = bytesField(message, 'key');
       if (!join) return;
       channel = await deriveChannel({
@@ -192,7 +201,6 @@ async function impostor(
         join,
         side: 'offer',
       });
-      meeting.send(message.from, 'code:key', { key: base64UrlEncode(mine.point) });
       await meeting.seal(message.from, 'code:home', channel, { origin });
     } else if (message.type === 'code:ask' && channel) {
       const ask = await meeting.open(message, channel);
@@ -236,7 +244,15 @@ describe('connecting a program by code', () => {
 
     // A program with a different code, in the same place, gets nowhere.
     await assert.rejects(
-      connectWithCode({ home: ORIGIN, code: newConnectCode(), key, name: 'x', network, findTimeoutMs: 300 }),
+      connectWithCode({
+        home: ORIGIN,
+        code: newConnectCode(),
+        check: async () => {},
+        key,
+        name: 'x',
+        network,
+        findTimeoutMs: 300,
+      }),
       /not opened in time/,
     );
 
@@ -244,6 +260,7 @@ describe('connecting a program by code', () => {
     const grant = await connectWithCode({
       home: ORIGIN,
       code: home.code,
+      check: home.typed,
       key,
       name: 'Agent on laptop',
       network,
@@ -262,7 +279,7 @@ describe('connecting a program by code', () => {
     const key = await programKey(who);
     const { network, seen } = room(hub);
     const home = await allowing(network, async (stage) => grantFor(who, stage.asking.did));
-    await connectWithCode({ home: ORIGIN, code: home.code, key, name: 'n', network });
+    await connectWithCode({ home: ORIGIN, code: home.code, check: home.typed, key, name: 'n', network });
 
     const point = (type: string) => {
       const payload = seen.find((m) => m.type === type)?.payload;
@@ -274,7 +291,7 @@ describe('connecting a program by code', () => {
     assert.ok(!JSON.stringify(seen).includes(who.me.did));
     assert.ok(!JSON.stringify(seen).includes(ORIGIN));
     const secret = readConnectCode(home.code);
-    const points = { kind: CODE_CHANNEL, offer: point('code:key'), join: point('code:hello') };
+    const points = { kind: CODE_CHANNEL, offer: point('code:key'), join: point('code:point') };
     for (const side of ['offer', 'join'] as const) {
       const eve = await channelKeyPair();
       const guess = await deriveChannel({ secret, privateKey: eve.privateKey, ...points, side });
@@ -291,13 +308,20 @@ describe('connecting a program by code', () => {
     const { network } = room(hub, (message, send) => {
       send(message);
       // Each sealed message again, and once more as every other type.
-      if (message.type === 'code:hello' || message.type === 'code:key') return;
+      if (['code:hello', 'code:key', 'code:point'].includes(message.type)) return;
       send(message);
       for (const type of ['code:home', 'code:ask', 'code:heard', 'code:answer', 'code:done'])
         if (type !== message.type) send({ ...message, type });
     });
     const home = await allowing(network, async (stage) => grantFor(who, stage.asking.did));
-    const grant = await connectWithCode({ home: ORIGIN, code: home.code, key, name: 'n', network });
+    const grant = await connectWithCode({
+      home: ORIGIN,
+      code: home.code,
+      check: home.typed,
+      key,
+      name: 'n',
+      network,
+    });
     assert.equal(grant.note.payload.aud, key.did);
     await until(async () => home.kinds().includes('connected'), 2000, 'the home hearing it worked');
     assert.deepEqual(home.kinds(), ['waiting', 'asking', 'connected']);
@@ -316,6 +340,7 @@ describe('connecting a program by code', () => {
     const first = connectWithCode({
       home: ORIGIN,
       code: home.code,
+      check: home.typed,
       key: await programKey(who),
       name: 'first',
       network,
@@ -326,6 +351,7 @@ describe('connecting a program by code', () => {
       connectWithCode({
         home: ORIGIN,
         code: home.code,
+        check: home.typed,
         key: await programKey(who),
         name: 'second',
         network,
@@ -357,7 +383,10 @@ describe('connecting a program by code', () => {
       })();
     });
     open.push({ close: async () => answering.stop() });
-    await assert.rejects(() => connectWithCode({ home: ORIGIN, code, key, name: 'n', network }), /Not today/);
+    await assert.rejects(
+      () => connectWithCode({ home: ORIGIN, code, check: async () => {}, key, name: 'n', network }),
+      /Not today/,
+    );
     assert.equal(refusals.length, 2);
     // And should a home send one anyway, the program refuses it too.
     await assert.rejects(
@@ -379,13 +408,21 @@ describe('connecting a program by code', () => {
     const code = newConnectCode();
     const elsewhere = await impostor(code, network, (did) => grantFor(eve, did));
     await assert.rejects(
-      connectWithCode({ home: ORIGIN, code, key, name: 'n', network, findTimeoutMs: 300 }),
+      connectWithCode({
+        home: ORIGIN,
+        code,
+        check: async () => {},
+        key,
+        name: 'n',
+        network,
+        findTimeoutMs: 300,
+      }),
       /not opened in time/,
     );
     assert.equal(elsewhere.asks.length, 0);
 
-    // Saying she is Ada's home gets her the program, with a note from her own account; what
-    // stops that is the link staying secret. The program keeps the home it opened, not hers.
+    // Saying she is Ada's home, she can hand it a note from her own account; but Ada never sees
+    // a code at her own home, so she gives the program none, and it keeps nothing.
     // In a room of its own: the fake hub puts every code's peers in one.
     const second = room(createFakeHub({ latencyMs: 1 })).network;
     const again = newConnectCode();
@@ -398,9 +435,64 @@ describe('connecting a program by code', () => {
       }),
       ORIGIN,
     );
-    const grant = await connectWithCode({ home: ORIGIN, code: again, key, name: 'n', network: second });
-    assert.equal(grant.did, eve.me.did);
-    assert.equal(grant.home, `${ORIGIN}/connect`);
-    assert.equal(posing.asks.length, 1);
+    await assert.rejects(
+      connectWithCode({
+        home: ORIGIN,
+        code: again,
+        check: () => new Promise(() => {}),
+        key,
+        name: 'n',
+        network: second,
+        decideTimeoutMs: 300,
+      }),
+      /Nobody answered/,
+    );
+    assert.equal(posing.asks.length, 1, 'it did ask her, and kept nothing');
+  });
+
+  test('the program keeps its note only once the person gives the code the home shows; a point that breaks its commitment is ignored', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const who = await person(hub);
+    const key = await programKey(who);
+    const { network } = room(hub);
+    const home = await allowing(network, async (stage) => grantFor(who, stage.asking.did));
+    const tried: boolean[] = [];
+    const grant = await connectWithCode({
+      home: ORIGIN,
+      code: home.code,
+      key,
+      name: 'n',
+      network,
+      check: async (matches) => {
+        await until(async () => home.kinds().includes('asking'), 2000, 'the home showing a code');
+        const asking = home.stages.find((stage) => stage.kind === 'asking');
+        assert.ok(asking?.kind === 'asking');
+        const wrong = String((Number(asking.check) + 1) % 1_000_000).padStart(6, '0');
+        tried.push(matches(wrong), matches(asking.check));
+      },
+    });
+    assert.deepEqual(tried, [false, true]);
+    assert.equal(grant.note.payload.aud, key.did);
+
+    // A peer whose point isn't the one it committed to gets no exchange.
+    const other = await allowing(network, async (stage) => grantFor(who, stage.asking.did));
+    const meeting = await meetOnChannel(CODE_CHANNEL, network, readConnectCode(other.code));
+    const mine = await channelKeyPair();
+    const decoy = await channelKeyPair();
+    const said: string[] = [];
+    meeting.net.on('message', (message: NetworkMessage) => {
+      said.push(message.type);
+      if (message.type === 'code:key')
+        meeting.send(message.from, 'code:point', { key: base64UrlEncode(decoy.point) });
+    });
+    const commit = base64UrlEncode(await sha256(mine.point));
+    meeting.net.on('peer-connected', (peer: { did: string }) =>
+      meeting.send(peer.did, 'code:hello', { commit }),
+    );
+    await meeting.net.connect();
+    open.push({ close: async () => meeting.net.disconnect() });
+    await until(async () => said.includes('code:key'), 2000, 'the home answering the hello');
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.ok(!said.includes('code:home'), 'no exchange for a point it did not commit to');
   });
 });

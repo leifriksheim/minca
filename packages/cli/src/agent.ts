@@ -151,6 +151,8 @@ export async function connectAgent(params: {
   readonly name: string;
   readonly log: (line: string) => void;
   readonly onLink: (url: string) => void;
+  /** Asks the person for the check code their home shows, until it matches (`connectWithCode`) */
+  readonly check: (matches: (typed: string) => boolean) => Promise<void>;
   /** How the code is traded: the home's exchange, or a stand-in for tests */
   readonly connect?: typeof connectWithCode;
 }): Promise<Grant> {
@@ -162,6 +164,7 @@ export async function connectAgent(params: {
   params.onLink(connectCodeUrl(params.accountHome, code));
   const grant = await connect({
     home: params.accountHome,
+    check: params.check,
     code,
     key: { keys: key.keys, did: key.did },
     name: params.name,

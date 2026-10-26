@@ -12,6 +12,7 @@
 import type { PeerTransport } from '../network/transport.js';
 import { channelKeyPair, CODE_CHANNEL, deriveChannel, type Channel } from '../identity/channel.js';
 import { base64UrlDecode, base64UrlEncode } from '../utils/encoding.js';
+import { sha256 } from '../utils/hash.js';
 import { isObject } from '../utils/guards.js';
 import type { NetworkMessage, PeerInfo } from '../types.js';
 import { grantsRecordsOnly } from '../identity/abilities.js';
@@ -26,6 +27,7 @@ const CODE_CHARS = Math.ceil((SECRET_BYTES * 4) / 3);
 /** Messages on the channel: the key exchange in the clear, the rest sealed */
 const HELLO = 'code:hello';
 const KEY = 'code:key';
+const POINT = 'code:point';
 const HOME = 'code:home';
 const ASK = 'code:ask';
 const HEARD = 'code:heard';
@@ -61,6 +63,21 @@ interface CodeNetwork {
 }
 
 // ─── The code ────────────────────────────────────────────────────────
+
+/** What the program says first: a hash of its point, so neither side can pick a key to steer the check code */
+const commitTo = async (point: Uint8Array) => base64UrlEncode(await sha256(point));
+
+const CHECK_LABEL = 'minca/code-check/v1';
+
+/**
+ * The six digits the home shows and the person gives the program, from the
+ * exchange's channel: only the two ends of one exchange share them.
+ */
+async function connectCheck(channel: Channel): Promise<string> {
+  const bytes = await channel.derive(CHECK_LABEL, 4);
+  const value = new DataView(bytes.buffer, bytes.byteOffset, 4).getUint32(0) % 1_000_000;
+  return String(value).padStart(6, '0');
+}
 
 /** A new code: `mc_` and 128 random bits */
 export function newConnectCode(): string {
@@ -118,10 +135,14 @@ function readAsk(value: unknown): CodeAsking | null {
 
 export type ConnectCodeStage =
   | { readonly kind: 'waiting' }
-  /** The program is there. Sign it a records-only note and `allow` it, or `deny`. */
+  /**
+   * The program is there. Show `check`, for the person to give the program,
+   * then sign it a records-only note and `allow` it, or `deny`.
+   */
   | {
       readonly kind: 'asking';
       readonly asking: CodeAsking;
+      readonly check: string;
       allow(grant: Grant): Promise<void>;
       deny(reason?: string): void;
     }
@@ -155,7 +176,8 @@ export async function answerConnectCode(
   const room = await meetOnChannel(CODE_CHANNEL, options, secret);
   const mine = await channelKeyPair();
 
-  /** An exchange with each peer that said hello, until one asks */
+  /** What each peer that said hello committed to, then its exchange once it showed the point, until one asks */
+  const commits = new Map<string, string>();
   const channels = new Map<string, Channel>();
   let asked: { readonly peer: string; readonly channel: Channel; readonly asking: CodeAsking } | null = null;
   let settled = false;
@@ -170,9 +192,16 @@ export async function answerConnectCode(
   const handle = async (message: NetworkMessage): Promise<void> => {
     if (settled) return;
     if (message.type === HELLO && !asked) {
-      if (channels.has(message.from) || channels.size >= MAX_TRIED) return;
+      if (commits.has(message.from) || commits.size >= MAX_TRIED) return;
+      const commit = bytesField(message, 'commit');
+      if (!commit) return;
+      commits.set(message.from, base64UrlEncode(commit));
+      // Its point comes only after this one: it committed to it before seeing it.
+      room.send(message.from, KEY, { key: base64UrlEncode(mine.point) });
+    } else if (message.type === POINT && !asked) {
+      if (channels.has(message.from)) return;
       const point = bytesField(message, 'key');
-      if (!point) return;
+      if (!point || (await commitTo(point)) !== commits.get(message.from)) return;
       const channel = await deriveChannel({
         kind: CODE_CHANNEL,
         secret,
@@ -183,7 +212,6 @@ export async function answerConnectCode(
       }).catch(() => null);
       if (!channel) return;
       channels.set(message.from, channel);
-      room.send(message.from, KEY, { key: base64UrlEncode(mine.point) });
       // Where the home lives: the program's proof names it, so the proof is no use anywhere else.
       await room.seal(message.from, HOME, channel, { origin });
     } else if (message.type === ASK && !asked) {
@@ -201,6 +229,7 @@ export async function answerConnectCode(
       onStage({
         kind: 'asking',
         asking,
+        check: await connectCheck(channel),
         allow: async (grant) => {
           if (grant.note.payload.aud !== asking.did) throw new Error('That note is for a different key.');
           if (!grantsRecordsOnly(grant.note))
@@ -270,9 +299,10 @@ export function receiveConnectCode(
       }
       if (stage.kind !== 'asking') return;
       asked = true;
-      const { asking } = stage;
+      const { asking, check } = stage;
       resolve({
         origin,
+        check,
         request: {
           v: 1,
           audience: asking.did,
@@ -317,6 +347,12 @@ export async function connectWithCode(params: {
   readonly name: string;
   readonly network: CodeNetwork;
   readonly onWaiting?: (home: { readonly origin: string }) => void;
+  /**
+   * Asks the person for the check code the home shows, until `matches` says
+   * it does; rejecting gives up. The note is kept only once it matches: so a
+   * home the person never saw can't connect it.
+   */
+  readonly check: (matches: (typed: string) => boolean) => Promise<void>;
   /** How long to wait for the home to open at all. Default 10 minutes: the person may make an account first. */
   readonly findTimeoutMs?: number;
   /** How long the person has to decide once it has. Default 30 minutes. */
@@ -326,9 +362,11 @@ export async function connectWithCode(params: {
   const opened = new URL('/connect', params.home);
   const room = await meetOnChannel(CODE_CHANNEL, params.network, secret);
   const mine = await channelKeyPair();
-  const hello = { key: base64UrlEncode(mine.point) };
+  const hello = { commit: await commitTo(mine.point) };
 
   return new Promise<Grant>((resolve, reject) => {
+    /** The person giving the check code: started once the home has heard */
+    let checked: Promise<void> | null = null;
     const channels = new Map<string, Channel>();
     /** Where each peer that holds the code says its home lives, once it has said */
     const origins = new Map<string, string>();
@@ -368,6 +406,7 @@ export async function connectWithCode(params: {
         }).catch(() => null);
         if (!channel) return;
         channels.set(message.from, channel);
+        room.send(message.from, POINT, { key: base64UrlEncode(mine.point) });
       } else if (message.type === HOME && !home) {
         const channel = channels.get(message.from);
         if (!channel || origins.has(message.from)) return;
@@ -389,6 +428,9 @@ export async function connectWithCode(params: {
         if (!channel || !origin || !(await room.open(message, channel))) return;
         home = { peer: message.from, channel, origin };
         params.onWaiting?.({ origin });
+        const expected = await connectCheck(channel);
+        checked = params.check((typed) => typed.replace(/\D/g, '') === expected);
+        checked.catch((error: unknown) => fail(error instanceof Error ? error.message : String(error)));
         // Once the home has the question, the person gets longer to answer it.
         wait(params.decideTimeoutMs ?? 30 * 60_000, 'Nobody answered at the account home. Try again.');
       } else if (message.type === ANSWER && home && message.from === home.peer) {
@@ -402,6 +444,8 @@ export async function connectWithCode(params: {
           // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- checkGrant checks it
           const grant = answer.grant as Grant;
           await checkGrant(grant, params.key.did, { recordsOnly: true });
+          // Kept only once the person gave the code their own home showed.
+          await checked;
           await room.seal(message.from, DONE, home.channel, {});
           // Where to connect again is the home it opened, never one the answer names.
           settle(() => resolve({ ...grant, home: opened.href }));

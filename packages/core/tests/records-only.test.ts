@@ -1050,6 +1050,7 @@ describe('a program connected by code, through the account home', () => {
     const grant = await connectWithCode({
       home: origin,
       code,
+      check: async () => {},
       key: program,
       name: 'Agent on laptop',
       network,
@@ -1098,6 +1099,7 @@ describe('a program connected by code, through the account home', () => {
     const code = newConnectCode();
     const key = await testAppKey('did:key:zPageProgram');
     const answers: boolean[] = [];
+    let shown = '';
     void receiveConnectCode({
       code,
       relays: [],
@@ -1105,7 +1107,8 @@ describe('a program connected by code, through the account home', () => {
       origin,
       onAnswered: ({ allowed }) => answers.push(allowed),
     }).then(async (incoming) => {
-      assert.ok(incoming && !isProposeRequest(incoming.request));
+      assert.ok(incoming && !isProposeRequest(incoming.request) && incoming.check);
+      shown = incoming.check;
       incoming.approve(await auth.grant({ origin, request: incoming.request, spaceIds: [] }));
     });
     const grant = await connectWithCode({
@@ -1115,6 +1118,11 @@ describe('a program connected by code, through the account home', () => {
       name: 'Agent',
       network: { relays: [], transport },
       decideTimeoutMs: 4000,
+      // The person reads the code off the page and types it in.
+      check: async (matches) => {
+        await until(async () => shown !== '', 2000, 'the page showing the code');
+        assert.ok(matches(shown));
+      },
     });
     assert.equal(grant.note.payload.aud, key.did);
     await until(async () => answers.length > 0, 2000, 'the page hearing it worked');

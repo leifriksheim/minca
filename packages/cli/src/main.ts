@@ -257,11 +257,17 @@ async function chooseAccountHome(home: string, given?: string): Promise<string> 
 function connectHere(
   home: string,
   accountHome: string,
-  options: { name?: string; relays?: string[]; onLink?: (url: string) => void } = {},
+  options: {
+    name?: string;
+    relays?: string[];
+    onLink?: (url: string) => void;
+    check?: (matches: (typed: string) => boolean) => Promise<void>;
+  } = {},
 ) {
   return connectAgent({
     home,
     accountHome,
+    check: options.check ?? typeCheck,
     name: options.name ?? defaultAgentName(),
     relays: [...new Set([...(options.relays ?? []), ...configuredRelays()])],
     log: stderr,
@@ -276,6 +282,20 @@ function connectHere(
               : `Open this link to allow it, on any device. Keep it to yourself:\n  ${url}`,
           ),
         )),
+  });
+}
+
+/** The check code the account home shows, typed here: the agent keeps its note only once it matches */
+async function typeCheck(matches: (typed: string) => boolean): Promise<void> {
+  if (!ask.interactive())
+    throw new Error(
+      'Connecting needs a terminal to type the code your account home shows. Run it in one, or connect from your AI.',
+    );
+  await ask.text({
+    flag: 'check',
+    message: 'The code your account home shows',
+    placeholder: '482 913',
+    validate: (typed) => (matches(typed) ? undefined : 'That isn’t the code your account home shows.'),
   });
 }
 
@@ -1017,9 +1037,10 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
       await runWaitingMcpStdio(
         connectWaiting({
           accountHome,
-          connect: () =>
+          connect: (check) =>
             (link ??= new Promise((resolve, reject) => {
               connectHere(home, homeAddress(accountHome), {
+                check,
                 onLink: (url) => void openInBrowser(url).then((opened) => resolve({ opened, url })),
               }).then(
                 (grant) => stderr(`minca mcp: connected to ${grant.name}'s account (${grant.did})`),

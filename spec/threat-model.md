@@ -143,11 +143,11 @@ reference implementation, or any implementation, honestly.
     and ask for a records-only note, in the whole account (every private
     space included), for a key it holds, under any name. Where an app shows
     its real origin, a program shows only a name it chose. The home says a
-    program on a computer opened it and to allow it only if the person
-    started one just now; that is the only defence. This is weaker than a
-    device-code sign-in (`gh auth login`), where the person types a code the
-    tool showed: a check code like pairing's would close it
-    ([#318](https://github.com/leifriksheim/minca/issues/318)).
+    program on a computer opened it, and to allow it only if something they
+    started just now asks for its code; that is the only defence. The check
+    doesn't help here, since the page asks for it itself. By design, as with
+    a device-code sign-in (`gh auth login`), where a page that asks the
+    person for the code gets one.
   - A page that takes over an app's tab while the account home waits for the
     app's request (up to 10 minutes in the reference home) can send its own
     request, in the window the person opened from the app. The home shows
@@ -973,6 +973,13 @@ the same sealed blobs.
     opens nothing (01 §15.2).
   - On the home's side a connect code serves one program: once one has
     asked, the home answers nobody else (06 §3).
+  - Someone else who holds the code can answer the program first, saying they
+    are the home it opened, with a note from their own account; but the
+    program keeps a note only once the person gives it the check their own
+    home showed, which only that exchange gives, so it keeps nothing. Nobody
+    between the two can steer both exchanges to one check: each side's point
+    is fixed before it sees the other's (06 §3). The program also keeps the
+    home it opened, whatever an answer names.
   - A connect code travels from the program to the browser it opens, in the
     link's fragment, so the relay never sees it, and no request to the
     home's server carries it. It can stay in the browser's history, and the
@@ -1036,22 +1043,8 @@ the same sealed blobs.
   - Someone else who holds the code can also ask before the program does,
     posing as it. The person sees only the name it gives itself, and may
     allow a note for its key; the real program is then never answered.
-  - Someone else who holds the code can answer the program first, saying they
-    are the home it opened, and connect it to their own account: what the
-    person then asks their AI to save goes into the other account's spaces,
-    and it reads what they put there. Only the code staying secret prevents
-    it. The reference CLI opens the link in the browser and shows it, or
-    hands it to the model, only when no browser opens: on a server or over
-    SSH, where the person copies it. The CLI then prints the account's DID,
-    and an AI is told it when it asks again; the person's own home, while
-    still open, says the link was used
-    ([#318](https://github.com/leifriksheim/minca/issues/318)). The program keeps
-    the home it opened, so one such answer doesn't decide where it connects
-    next time (06 §3; `packages/core/tests/connect-code.test.ts`, "the
-    program asks only the home it opened, and keeps that home, whatever the
-    answer names").
 
-_Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6; 01 §15.2; 06 §3. Tests: `packages/core/tests/rendezvous.test.ts`, `packages/core/tests/relay-nostr.test.ts`, `packages/core/tests/relay-socket.test.ts`, `packages/core/tests/pairing.test.ts` ("a message sent back to the side that sealed it does not open there", "someone who learns the secret later cannot open a recording of the exchange"), `packages/core/tests/connect-code.test.ts` ("a relay that relabels or repeats messages changes nothing", "a recording of the room, and the code learned later, open nothing", "a code works for one program: a second with the same code is not answered", "the program asks only the home it opened, and keeps that home, whatever the answer names")._
+_Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6; 01 §15.2; 06 §3. Tests: `packages/core/tests/rendezvous.test.ts`, `packages/core/tests/relay-nostr.test.ts`, `packages/core/tests/relay-socket.test.ts`, `packages/core/tests/pairing.test.ts` ("a message sent back to the side that sealed it does not open there", "someone who learns the secret later cannot open a recording of the exchange"), `packages/core/tests/connect-code.test.ts` ("a relay that relabels or repeats messages changes nothing", "a recording of the room, and the code learned later, open nothing", "a code works for one program: a second with the same code is not answered", "the program asks only the home it opened, and keeps that home, whatever the answer names", "the program keeps its note only once the person gives the code the home shows; a point that breaks its commitment is ignored")._
 
 ### 3.8 Host or carrier
 

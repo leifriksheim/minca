@@ -667,43 +667,61 @@ under a throwaway `did:key`, and talk over the resulting peer connection.
 For the secret `eYV4XGMvhkky6OWpPfqfRQ` (base64url), the room is
 `bihn55ne2az53tlealtmk3ervpyk6xa6364ii25ogc7xv54zkjszq`.
 
-**Messages.** Network messages `{ type, from, payload }`. The first two carry
-a point in the clear; the rest are sealed (`payload` is the base64url
-envelope of the UTF-8 JSON body).
+**Messages.** Network messages `{ type, from, payload }`. The first three
+are in the clear; the rest are sealed (`payload` is the base64url envelope of
+the UTF-8 JSON body).
 
-| `type`        | From    | Payload                                                                                                                                    |
-| ------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `code:hello`  | program | `{ "key": base64url(J) }`, to each peer that connects, until a `code:heard` opens                                                          |
-| `code:key`    | home    | `{ "key": base64url(O) }`, to each peer that said hello, until one asks                                                                    |
-| `code:home`   | home    | sealed `{ "origin": "<the home's origin>" }`, right after `code:key`; `origin` ≤ 200, a serialized origin such as `https://home.example`   |
-| `code:ask`    | program | sealed `{ "did": "<its key>", "proof": "<keyProof, via code, origin>", "name": "…" }`; `did` starts `did:key:`, `name` ≤ 80, `proof` ≤ 200 |
-| `code:heard`  | home    | sealed `{}`                                                                                                                                |
-| `code:answer` | home    | sealed `{ "grant": <Grant> }` or `{ "denied": "<reason>" }`                                                                                |
-| `code:done`   | program | sealed `{}`                                                                                                                                |
+| `type`        | From    | Payload                                                                                                                                                 |
+| ------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `code:hello`  | program | `{ "commit": base64url(SHA-256(J)) }`, to each peer that connects, until a `code:heard` opens                                                           |
+| `code:key`    | home    | `{ "key": base64url(O) }`, to each peer that said hello, until one asks                                                                                 |
+| `code:point`  | program | `{ "key": base64url(J) }`, to each peer that sent `code:key`                                                                                            |
+| `code:home`   | home    | sealed `{ "origin": "<the home's origin>" }`, once the point matches the commitment; `origin` ≤ 200, a serialized origin such as `https://home.example` |
+| `code:ask`    | program | sealed `{ "did": "<its key>", "proof": "<keyProof, via code, origin>", "name": "…" }`; `did` starts `did:key:`, `name` ≤ 80, `proof` ≤ 200              |
+| `code:heard`  | home    | sealed `{}`                                                                                                                                             |
+| `code:answer` | home    | sealed `{ "grant": <Grant> }` or `{ "denied": "<reason>" }`                                                                                             |
+| `code:done`   | program | sealed `{}`                                                                                                                                             |
+
+**The check.** Both ends derive six digits from the exchange, as pairing's
+code ([01](01-identity.md) §15.2) but under their own label:
+
+```
+check = uint32_be(HKDF(ikm, "minca/code-check/v1" ‖ transcript, 4)) mod 1000000,
+        as 6 decimal digits, zero-padded
+```
+
+The home shows it to the person; the person gives it to the program, typed
+in its terminal or told to the AI that runs it. Only the two ends of one
+exchange share it.
 
 ```
 Home                                                  Program
                                                       makes mc_…, joins room,
   opened at /connect#mc_…, joins room                 opens the home with it
             ◀─────────────── peer connected ───────────────▶
-                          ◀── code:hello   { key: J }
+                          ◀── code:hello   { commit: H(J) }
   code:key { key: O } ──▶
+                          ◀── code:point   { key: J }
+  checks H(J)
   code:home sealed { origin } ──▶
                           ◀── code:ask     sealed { did, proof, name }
   code:heard sealed {} ──▶
-  the person signs in and allows it;
-  the home signs a records-only note for did
+  shows the check; the person signs in,
+  allows it, and gives the program the check
   code:answer sealed { grant } ──▶
-                                                      checks the grant
+                                                      checks the grant, and
+                                                      waits for the check
                           ◀── code:done    sealed {}
 ```
 
-- **The home** answers each `code:hello` with `code:key` and `code:home`, and
-  runs an exchange with that peer (at most a few dozen), until one `code:ask`
-  opens and reads as above. That program is the one asked about, and the code is spent: the
+- **The home** answers each `code:hello` with `code:key`, and a
+  `code:point` whose point hashes to that peer's commitment with
+  `code:home`; it MUST ignore one that does not. It runs an exchange with
+  each such peer (at most a few dozen), until one `code:ask` opens and reads
+  as above. That program is the one asked about, and the code is spent: the
   home MUST NOT answer another hello or ask, and MUST ignore `code:done` from
   any other peer. It sends `code:heard` at once, and MUST show the person the
-  name the program gives, as a name only.
+  name the program gives, as a name only, and the check.
 - **What it gets** is a note that grants records only, in the whole account
   (§2.8), for as long as the home decides. The home makes the
   `ConnectRequest` (§2.4) itself, with `audience` = the ask's `did`, `proof`
@@ -711,15 +729,18 @@ Home                                                  Program
   `scope: "account"`, and grants it as §2.5 says, checking the proof against
   its own origin. It MUST NOT grant a program by code anything but records,
   and MUST NOT send a grant made out to another key.
-- **The program** answers a `code:home` only when its `origin` is the origin
-  of the home it opened, with `code:ask` on that exchange, its proof naming
+- **The program** sends its commitment before it sees any `code:key`, and its
+  point only after. It answers a `code:home` only when its `origin` is the
+  origin of the home it opened, with `code:ask` on that exchange, its proof naming
   that origin, and takes the first peer whose `code:heard` opens as the home,
   ignoring every other from then on. It MUST check a grant as an app does
   (§2.6): `v` is 2; the note verifies; `aud` is its own key; `iss` is
-  `grant.did`; and the note's command is under `/record`. Then it sends
-  `code:done` and keeps the grant, with `home` the connect page it opened,
-  never the one the grant names. It SHOULD show the person `grant.did`
-  beside `grant.name`, which is only what the answer says.
+  `grant.did`; and the note's command is under `/record`. It MUST NOT keep
+  the grant, nor send `code:done`, until the person has given it the check
+  and it matches its own. Then it sends `code:done` and keeps the grant, with
+  `home` the connect page it opened, never the one the grant names. It
+  SHOULD show the person `grant.did` beside `grant.name`, which is only what
+  the answer says.
 
 What the reference home shows, the program's timeouts, how the CLI picks the
 home and keeps its key and grant, and the MCP server's `agent_connect` are in
@@ -733,12 +754,17 @@ home and keeps its key and grant, and the MCP server's `agent_connect` are in
 > room can turn one side's message into the other's, relabel it or repeat
 > it. A peer that says hello without the code costs the home one exchange,
 > and spends nothing. The code travels from the program to the browser it
-> opens, in the fragment, so no server sees it. Someone else who holds it
-> could answer first, saying they are that home, and connect the program to
-> their own account: the account is not in the code, since the program does
-> not know it until the person has signed in. Keeping the code secret is the
-> defence; keeping the home it opened means one such answer doesn't decide
-> where it connects next time.
+> opens, in the fragment, so no server sees it. The account is not in the
+> code, since the program does not know it until the person has signed in;
+> so someone else who holds the code could answer first, saying they are
+> that home, and hand the program a note from their own account. The check
+> stops that: the person's own home shows nothing for an exchange it isn't
+> in, so the person has no check to give, and the program keeps nothing. The
+> program commits to its point before it sees the home's, and the home sends
+> its point before it sees the program's, so nobody between them can pick a
+> key to make two exchanges show the same check; one guess in a million is
+> left. Keeping the home it opened means no answer decides where it connects
+> next time.
 
 _Source: `packages/core/src/session/connect-code.ts` (`newConnectCode`, `connectCodeUrl`, `connectCodeIn`, `readConnectCode`, `answerConnectCode`, `receiveConnectCode`, `connectWithCode`), `packages/core/src/identity/channel.ts` (`CODE_CHANNEL`), `packages/core/src/session/connect.ts` (`checkGrant`, `keyProof`), `packages/core/src/session/auth.ts` (`grant`), `apps/home/src/components/ConnectPage.tsx`. Tests: `packages/core/tests/connect-code.test.ts` ("the room for a code, and the link that carries it", "the code alone does not open a recorded exchange", "a recording of the room, and the code learned later, open nothing", "a relay that relabels or repeats messages changes nothing", "a code works for one program: a second with the same code is not answered", "saying no reaches the program; a note for another key, or for more than records, is refused", "the program asks only the home it opened, and keeps that home, whatever the answer names", "a home opened at a link nobody waits on any more says so"), `packages/core/tests/records-only.test.ts` ("a program connected by code, through the account home": "over a code: the program learns the home’s origin, and its proof is refused at any other"), `packages/core/tests/connect.test.ts` ("an app can only ask for a key it holds, and none the home already uses for something else", "a request with a field it does not know is refused…")._
 
