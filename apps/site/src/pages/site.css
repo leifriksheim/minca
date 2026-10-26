@@ -627,6 +627,38 @@
   font-size: 18px;
   color: var(--muted);
 }
+.site .chat-mock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  border: var(--edge);
+  border-radius: var(--r-xl);
+  background: var(--card);
+  font-size: 14.5px;
+  line-height: 1.45;
+}
+.site .chat-line {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: var(--r-lg);
+  color: var(--ink);
+}
+.site .chat-you {
+  align-self: flex-end;
+  background: var(--accent);
+  color: #fff;
+}
+.site .chat-ai {
+  align-self: flex-start;
+  background: var(--sunken);
+}
+.site .chat-via {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--faint);
+}
 .site .browser {
   position: relative;
   padding-bottom: 96px;

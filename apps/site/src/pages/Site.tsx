@@ -34,7 +34,7 @@ export const EXTERNAL = { target: '_blank', rel: 'noreferrer' } as const;
 /** The app, a site of its own (`apps/example`), which every "Open Minca" opens */
 export const APP = import.meta.env.VITE_MINCA_APP ?? 'https://app.minca.social';
 
-type PageName = 'home' | 'developers' | 'protocol' | 'extension' | 'download';
+type PageName = 'home' | 'developers' | 'protocol' | 'extension' | 'download' | 'mcp';
 
 /** GitHub's mark, in the colour of the text beside it */
 function GitHubMark() {
@@ -99,11 +99,12 @@ function MenuMark() {
 
 /** The links in the bar: the same ones whether they sit in it or, on a phone, drop from the menu */
 const NAV_LINKS: ReadonlyArray<{
-  readonly to: '/developers' | '/download';
+  readonly to: '/developers' | '/mcp' | '/download';
   readonly page: PageName;
   readonly label: string;
 }> = [
   { to: '/developers', page: 'developers', label: 'For nerds' },
+  { to: '/mcp', page: 'mcp', label: 'MCP' },
   { to: '/download', page: 'download', label: 'Download' },
 ];
 
@@ -161,6 +162,7 @@ function Footer() {
           <Link to="/">Communities</Link>
           <Link to="/developers">For nerds</Link>
           <Link to="/protocol">Protocol</Link>
+          <Link to="/mcp">MCP</Link>
           <Link to="/download">Download</Link>
           <Link to="/extension">Chrome extension</Link>
           <a href={SPEC} {...EXTERNAL}>
