@@ -315,8 +315,8 @@ describe('connecting an app to an account home', () => {
       ask('https://evil.test', { v: 1, audience: node.sessionDid, proof: 'x', access: 'write' }),
       /holds the key|this home’s own/,
     );
-    // A program's proof, handed to an app over a connect code, can't ask for the app's own
-    // connection, nor for more than the records only it asked for.
+    // A program's proof, handed to a home over a connect code, can't ask for an app's
+    // connection, nor for more than records.
     const programKey = await testAppKey('program');
     const programAsk = await asked(
       { v: 1, audience: programKey.did, access: 'write', via: 'code', recordsOnly: true } as const,
@@ -325,11 +325,17 @@ describe('connecting an app to an account home', () => {
     );
     const { via: _via, ...asOwn } = programAsk;
     await assert.rejects(ask('https://evil.test', asOwn), /holds the key/);
-    await assert.rejects(ask('https://evil.test', { ...programAsk, recordsOnly: false }), /holds the key/);
+    await assert.rejects(
+      ask('https://evil.test', { ...programAsk, recordsOnly: false }),
+      /holds the key|records only/,
+    );
     // An app's own proof can't be passed off as a program's either.
-    const ownAsk = await asked({ v: 1, audience: programKey.did, access: 'write' } as const, programKey);
+    const ownAsk = await asked(
+      { v: 1, audience: programKey.did, access: 'write', recordsOnly: true } as const,
+      programKey,
+    );
     await assert.rejects(ask('https://evil.test', { ...ownAsk, via: 'code' }), /holds the key/);
-    // A program's proof names the app it went through: from any other origin it is refused.
+    // A program's proof names the home it was handed to: at any other origin it is refused.
     await assert.rejects(ask('https://other.test', programAsk), /holds the key/);
     // Nor a key another app was given.
     await ask('https://good.test', await asked({ v: 1, audience: theirs.did, access: 'write' }, theirs));
@@ -1564,7 +1570,8 @@ describe('the home receiving a request', () => {
       { v: 2, kind: 'propose', automations: [notifyOn('New', 'app.chat.message')], extra: true },
       // There is no kind of key to name, only what it may do.
       await asked({ v: 1, audience: 'did:key:zOld', access: 'write', agent: true }),
-      // Records only goes with no contacts, no spaces made for it and no carrying; a program by code carries nothing.
+      // Records only goes with no contacts, no spaces made for it and no carrying; and a program's
+      // key comes to the home over a code, never from an app.
       await asked({ v: 1, audience: 'did:key:zNarrow', access: 'write', recordsOnly: true, contacts: true }),
       await asked({
         v: 1,
@@ -1575,7 +1582,7 @@ describe('the home receiving a request', () => {
       }),
       await asked({ v: 1, audience: 'did:key:zNarrow', access: 'carry', recordsOnly: true }),
       await asked(
-        { v: 1, audience: 'did:key:zByCode', access: 'carry', via: 'code' },
+        { v: 1, audience: 'did:key:zByCode', access: 'write', via: 'code', recordsOnly: true },
         undefined,
         'https://x.test',
       ),

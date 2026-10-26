@@ -339,9 +339,9 @@ minca records query --space <id> \\
 # available, and relays for your devices
 minca run
 
-# Connect an agent (Claude Code, Cursor, VS Code, …) with the
-# code from "Connect an agent" in an app; it then serves MCP by itself
-minca connect mc_…
+# Connect an agent (Claude Code, Cursor, VS Code, …): opens your
+# account home to allow it; it then serves MCP by itself
+minca connect
 `;
 
 const PROTOCOLS = ['Minca', 'AT Protocol (Bluesky)', 'Nostr', 'Solid'] as const;

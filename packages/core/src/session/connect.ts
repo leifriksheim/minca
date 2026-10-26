@@ -83,9 +83,10 @@ export interface ConnectRequest {
    */
   readonly recordsOnly?: boolean;
   /**
-   * `code`: the key is not the app's own but a program's, which reached the
-   * app over a connect code (`connect-code.ts`). The home keeps its
-   * connection by its key, apart from the app's own. Absent: the app's own key.
+   * `code`: the key is a program's, which reached the home itself over a
+   * connect code (`connect-code.ts`); the home makes such a request, an app
+   * never sends one. The home keeps its connection by its key. Absent: an
+   * app's own key.
    */
   readonly via?: 'code';
   /** How many days the note should last, 1–365. The home decides; default 7. */
@@ -264,20 +265,20 @@ export function grantTerms(
 const KEY_PROOF = 'minca/connect-key/v1';
 
 /**
- * What a key agrees to in a connect request: how it reached the app, how much
- * it asks for, and, for a program's key handed over a code, the app it went
- * through.
+ * What a key agrees to in a connect request: how it reached the home, how
+ * much it asks for, and, for a program's key handed over a code, the home it
+ * was handed to.
  */
 export type KeyTerms =
-  /** The app's own key */
+  /** An app's own key */
   | { readonly via: 'popup'; readonly recordsOnly: boolean }
-  /** A program's key, handed to the app at `origin` over a connect code */
+  /** A program's key, handed to the home at `origin` over a connect code */
   | { readonly via: 'code'; readonly recordsOnly: boolean; readonly origin: string };
 
 /**
- * The statement, terms included: a proof a program hands an app over a code
- * can't ask for the app's own connection, nor for more than records when it
- * asked for records only, nor be used from another app's origin.
+ * The statement, terms included: a proof a program hands a home over a code
+ * can't ask for an app's connection, nor for more than records, nor be used
+ * at another home.
  */
 const keyStatement = (audience: string, terms: KeyTerms) =>
   utf8Encode(
@@ -360,13 +361,6 @@ export interface ConnectOptions {
   readonly key?: AppKey | Promise<AppKey>;
   /** Which of this app's keys to use when `key` is not given. Default `default`. */
   readonly keyName?: string;
-  /**
-   * Ask for a note made out to this key instead of one of the app's own: a
-   * program's that reached the app over a connect code (`offerConnectCode`).
-   */
-  readonly audience?: string;
-  /** With `audience`: that key's {@link keyProof} with `via: code` and this app's origin, which only its holder can make */
-  readonly audienceProof?: string;
   /** How long to wait for the person. Default 10 minutes. */
   readonly timeoutMs?: number;
 }
@@ -382,23 +376,10 @@ export async function connectToHome(options: ConnectOptions): Promise<Grant> {
   const homeUrl = new URL(options.home, globalThis.location.href);
   // Opened before anything is awaited, so it still counts as the click's.
   const popup = openHome(homeUrl);
-  if (options.audience !== undefined && !options.audienceProof) {
-    popup.close();
-    throw new Error('Asking for another key needs its proof (keyProof).');
-  }
-  const byCode = options.audience !== undefined;
   const request = (async (): Promise<ConnectRequest> => {
-    let audience: string;
-    let proof: string;
-    if (options.audience !== undefined && options.audienceProof) {
-      audience = options.audience;
-      proof = options.audienceProof;
-    } else {
-      const key = (await options.key) ?? (await appKey(options.keyName));
-      audience = key.did;
-      proof = await keyProof(key, { via: 'popup', recordsOnly: options.request.recordsOnly === true });
-    }
-    return { v: 1, audience, proof, ...options.request, ...(byCode ? { via: 'code' as const } : {}) };
+    const key = (await options.key) ?? (await appKey(options.keyName));
+    const proof = await keyProof(key, { via: 'popup', recordsOnly: options.request.recordsOnly === true });
+    return { v: 1, audience: key.did, proof, ...options.request };
   })();
   const grant = await askHome<Grant>(popup, homeUrl.origin, request, options.timeoutMs);
   const { audience } = await request;
@@ -896,7 +877,8 @@ function isRequest(value: unknown, origin: string): value is ConnectRequest | Pr
         Number.isInteger(request.days) &&
         request.days >= 1 &&
         request.days <= MAX_GRANT_DAYS)) &&
-    (request.via === undefined || (request.via === 'code' && request.access !== 'carry')) &&
+    // A program's key comes to the home over a code (`connect-code.ts`), never from an app.
+    request.via === undefined &&
     // Records only: in spaces that exist, none made for it, no contacts and no carrying.
     (request.recordsOnly === undefined ||
       request.recordsOnly === false ||

@@ -15,7 +15,7 @@ import { openFsDirectory } from '../src/fs-directory.js';
 import { openHome, createAccount, unlock, chooseAccount, localPath, nodeFor } from '../src/home.js';
 import { startDaemon, type Daemon } from '../src/daemon.js';
 import { enableWebRTC, holdEverySpace } from '../src/agent.js';
-import { handleMcpMessage, TAKE_OVER, waitingMcp } from '../src/mcp.js';
+import { busyWaiting, CONNECT, connectWaiting, handleMcpMessage, TAKE_OVER, waitingMcp } from '../src/mcp.js';
 import { aNode, tempDir } from './helpers/nodes.js';
 import { loadModelSetting } from '../src/guide.js';
 import { createNode } from '../../core/src/node/node.js';
@@ -512,14 +512,14 @@ describe('MCP', () => {
     const sent: unknown[] = [];
     let otherRunning = true;
     const server = waitingMcp(
-      {
+      busyWaiting({
         holder: '`minca mcp` (pid 42), started by a Claude Code session',
         tryStart: async () => (otherRunning ? null : node),
         takeOver: async () => {
           otherRunning = false;
           return node;
         },
-      },
+      }),
       info,
       { agent: true },
       (message) => sent.push(message),
@@ -566,15 +566,70 @@ describe('MCP', () => {
     }
   });
 
+  test('not connected yet, it offers agent_connect, which opens the account home asked for, then serves the tools', async () => {
+    const node = await aNode(10);
+    const opened: string[] = [];
+    let allowed = false;
+    const server = waitingMcp(
+      connectWaiting({
+        accountHome: 'home.minca.social',
+        connect: async (accountHome) => {
+          opened.push(accountHome);
+          return `https://${accountHome}/connect#mc_x`;
+        },
+        tryStart: async () => (allowed ? node : null),
+      }),
+      info,
+      { agent: true },
+      () => {},
+    );
+    try {
+      const init = await server.handle({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
+      assert.match(String(at(init, 'result', 'instructions')), /isn't connected/);
+      const listed = at(
+        await server.handle({ jsonrpc: '2.0', id: 2, method: 'tools/list' }),
+        'result',
+        'tools',
+      );
+      assert.deepEqual(Array.isArray(listed) && listed.map((tool: unknown) => at(tool, 'name')), [CONNECT]);
+
+      const usual = await server.handle({
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: { name: CONNECT, arguments: {} },
+      });
+      assert.match(String(at(usual, 'result', 'content', 0, 'text')), /home\.minca\.social\/connect/);
+      await server.handle({
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'tools/call',
+        params: { name: CONNECT, arguments: { account_home: 'home.example.org' } },
+      });
+      assert.deepEqual(opened, ['home.minca.social', 'home.example.org']);
+
+      allowed = true;
+      const tools = at(
+        await server.handle({ jsonrpc: '2.0', id: 5, method: 'tools/list' }),
+        'result',
+        'tools',
+      );
+      assert.ok(Array.isArray(tools) && tools.length > 1);
+      assert.equal(server.node(), node);
+    } finally {
+      server.stop();
+    }
+  });
+
   test('a waiting server starts by itself once the other process stops', async () => {
     const node = await aNode(6);
     let otherRunning = true;
     const server = waitingMcp(
-      {
+      busyWaiting({
         holder: 'pid 42',
         tryStart: async () => (otherRunning ? null : node),
         takeOver: () => Promise.reject(new Error('not asked')),
-      },
+      }),
       info,
       { agent: true },
       () => {},
@@ -598,12 +653,12 @@ describe('MCP', () => {
     const second = await aNode(8);
     let current = first;
     const server = waitingMcp(
-      {
+      busyWaiting({
         holder: 'pid 42',
         tryStart: async () => first,
         takeOver: () => Promise.reject(new Error('not asked')),
         current: () => current,
-      },
+      }),
       info,
       { agent: true },
       () => {},

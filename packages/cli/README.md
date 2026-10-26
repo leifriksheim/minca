@@ -4,7 +4,7 @@ One program, three jobs:
 
 - **Manage your spaces** — every command the Node API has, as `minca spaces …` and `minca records …`
 - **Run an always-on node** — `minca run` keeps every space syncing, serves sockets browsers dial into, and is a relay too
-- **Connect an agent** — `minca connect <code>`, then Claude Code, Claude Desktop, Cursor, VS Code or another MCP client starts `minca mcp` by itself, or `minca agent` runs it on its own
+- **Connect an agent** — `minca connect`, allowed at your account home, then Claude Code, Claude Desktop, Cursor, VS Code or another MCP client starts `minca mcp` by itself, or `minca agent` runs it on its own
 
 It uses the same data folder layout a browser does. Point `--home` at the folder
 you picked in Chrome and the CLI, the daemon and the browser all share one
@@ -288,24 +288,30 @@ rules): it needs the account unlocked on the server, a host never does.
 
 ## Agents
 
-In an app, choose **Connect an agent** in the account menu. It shows one
-command:
-
 ```bash
-npx @minca/cli connect mc_…      # in this repo: npm run minca -- connect mc_…
+npx @minca/cli connect      # in this repo: npm run minca -- connect
 ```
 
-It makes a key for this computer's agent (it never leaves `~/.minca/agent/`),
-meets the app on a channel only that code opens (introduced by a relay, sealed
-end to end), and waits while you allow it at your account home, which signs a
-records-only note (`/record`) for every space in your account, for as long as
-you chose. The agent is a program connected by code, not a kind of account:
+It asks which account home is yours, with home.minca.social (or the one you
+used last) filled in, so Enter takes it; `--account-home` or
+`MINCA_ACCOUNT_HOME` answers ahead. It makes a key for this computer's agent
+(it never leaves `~/.minca/agent/`) and a one-time code, and opens your
+account home at `/connect#mc_…`, showing the link too in case no browser
+opens. There you sign in, or make an account, and allow it. The two meet on a
+channel only that code opens (introduced by a relay, sealed end to end), and
+the home signs a records-only note (`/record`) for every space in your
+account, for 30 days. The agent is a program connected by code, not a kind of account:
 nothing in the note marks it as an agent except that it grants records only. Then it adds `minca` to Claude Code (`claude mcp add`) and every other
 agent [add-mcp](https://github.com/neon-solutions/add-mcp) knows — Claude
 Desktop, Cursor, VS Code, Windsurf, Zed, Codex, Gemini CLI and more — where
 it finds them. `--no-configure` prints the config instead,
 `--name` changes what you see ("Agent on leifs-macbook"), and `--relay` adds
-one the app uses (`$MINCA_RELAYS` sets the defaults).
+one your account home uses (`$MINCA_RELAYS` sets the defaults).
+
+An agent given `minca mcp` by hand, before connecting, gets one tool until
+it is: `agent_connect`, which opens your account home the same way (it takes
+`account_home` for one that isn't home.minca.social). Once you allow it there,
+every tool arrives without a restart.
 
 From then on the agent starts `minca mcp` itself. It's a node of its own: it
 follows your account's list of spaces, meets your other devices over WebRTC,
@@ -321,7 +327,7 @@ added it to (an entry you added by hand stays); disconnecting it in your
 account home stops its note working everywhere.
 
 To connect it again, after a disconnect or when its time runs out, run
-`minca connect` with a new code. Each connect makes a new key, since a
+`minca connect` again. Each connect makes a new key, since a
 revoked key never writes again, and a `minca mcp` already running takes the
 new connection up by itself, so the agent's session needs no restart. Until
 then, a tool that fails says the agent was disconnected.
@@ -347,7 +353,7 @@ from `ANTHROPIC_API_KEY`, or asked for once and kept in
 `~/.minca/agent/anthropic-key`, readable only by you.
 
 ```bash
-npx @minca/cli connect mc_…      # once
+npx @minca/cli connect          # once
 npx @minca/cli agent             # in this repo: npm run minca -- agent
 ```
 
@@ -385,8 +391,8 @@ Fly (the commands are at the top of the toml):
 
 1. Deploy it with your model's key as a secret (`ANTHROPIC_API_KEY`, or
    `OPENAI_API_KEY` with `--provider openai …` in `MINCA_AGENT_ARGS`).
-2. In an app, choose **Connect an agent**, and run the command it shows over
-   `fly ssh console`, with `--no-configure`. Allow it at your account home.
+2. Run `minca connect --no-configure` over `fly ssh console`, and open the
+   link it shows on any device to allow it at your account home.
 3. It starts within half a minute, and after every restart.
 
 `MINCA_HOSTS=https://<host>` lets it find your spaces through the host your

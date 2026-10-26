@@ -1,7 +1,7 @@
 /**
- * The terminal as an agent: `minca connect <code>` trades the app's code for
- * a records-only note from the account home, signed to a key made here that
- * never leaves (`packages/core/src/session/connect-code.ts`). Then `minca mcp`
+ * The terminal as an agent: `minca connect` opens the account home with a
+ * one-time code and gets a records-only note from it there, signed to a key
+ * made here that never leaves (`packages/core/src/session/connect-code.ts`). Then `minca mcp`
  * and `minca agent` run a node of their own as the agent, under that note.
  * Kept in `<home>/agent/`, readable only by this user: `key.json`,
  * `grant.json`, `data/`, and `minca agent`'s model keys and `spend.json`.
@@ -29,7 +29,9 @@ import {
 import { profile } from '@minca/core/schemas';
 import {
   checkGrant,
+  connectCodeUrl,
   connectWithCode,
+  newConnectCode,
   GRANT_VERSION,
   grantSigner,
   joinGranted,
@@ -114,7 +116,7 @@ async function readAgentKey(home: string): Promise<Stored | null> {
 }
 
 /** The grant this computer's agent was given, or null before `minca connect` */
-async function loadAgentGrant(home: string): Promise<Grant | null> {
+export async function loadAgentGrant(home: string): Promise<Grant | null> {
   try {
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- written by connectAgent; startAgentNode checks it with checkGrant before use
     return JSON.parse(await readFile(path.join(agentDir(home), 'grant.json'), 'utf8')) as Grant;
@@ -133,16 +135,22 @@ export function defaultAgentName(): string {
   return `Agent on ${os.hostname().replace(/\.local$/, '')}`;
 }
 
+/** Where the person allows an agent, unless they name another */
+export const ACCOUNT_HOME = 'home.minca.social';
+
 /**
- * Trades a code from the app for a records-only note, and keeps it.
+ * Opens the account home at a new code, and keeps the records-only note the
+ * person allows there.
+ * @param params.onLink Given the link to open, before it waits: `open` it, show it, or both
  * @returns The grant, checked
  */
 export async function connectAgent(params: {
   readonly home: string;
-  readonly code: string;
+  readonly accountHome: string;
   readonly relays: ReadonlyArray<string>;
   readonly name: string;
   readonly log: (line: string) => void;
+  readonly onLink: (url: string) => void;
   /** How the code is traded: the home's exchange, or a stand-in for tests */
   readonly connect?: typeof connectWithCode;
 }): Promise<Grant> {
@@ -150,15 +158,14 @@ export async function connectAgent(params: {
   if (!params.connect) await enableWebRTC();
   // A new key each time: one the home revoked can't write again, whatever note it is given.
   const key = await makeAgentKey();
-  params.log('Looking for the app…');
+  const code = newConnectCode();
+  params.onLink(connectCodeUrl(params.accountHome, code));
   const grant = await connect({
-    code: params.code,
+    code,
     key: { keys: key.keys, did: key.did },
     name: params.name,
-    recordsOnly: true,
     network: { relays: params.relays },
-    onWaiting: ({ origin }) =>
-      params.log(`Found ${origin}. Allow the agent there — it opens your account home.`),
+    onWaiting: ({ origin }) => params.log(`Your account home at ${origin} has it. Allow it there.`),
   });
 
   // Another account's spaces don't belong next to this one's.
@@ -197,6 +204,22 @@ export class AgentBusy extends Error {
 export const agentRunning = (home: string): Promise<number | null> => lockHolder(agentLock(home));
 
 const run = promisify(execFile);
+
+/** Opens a link in the person's browser, if this computer has one; false when it couldn't */
+export async function openInBrowser(url: string): Promise<boolean> {
+  const [command, ...args] =
+    process.platform === 'darwin'
+      ? ['open', url]
+      : process.platform === 'win32'
+        ? ['cmd', '/c', 'start', '""', url]
+        : ['xdg-open', url];
+  try {
+    await run(command, args);
+    return true;
+  } catch {
+    return false;
+  }
+}
 const psField = async (pid: number, field: string) =>
   (await run('ps', ['-o', `${field}=`, '-p', String(pid)])).stdout.trim();
 

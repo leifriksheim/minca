@@ -3,7 +3,9 @@ import { ConfirmItsYou } from './ConfirmItsYou';
 import { SignIn } from './SignIn';
 import type { NewSpace, SpaceSummary } from '@minca/core';
 import {
+  connectCodeIn,
   isProposeRequest,
+  receiveConnectCode,
   receiveConnectRequest,
   type ConnectRequest,
   type IncomingRequest,
@@ -18,6 +20,7 @@ import { shapeFor } from '@minca/ui/shapes';
 import { useAction } from '@minca/app-shared/action';
 import { styles, palette } from '../styles';
 import { Loader } from '@minca/app-shared/Loader';
+import { relayUrls } from '@minca/app-shared/relay';
 
 /** Back to choosing an account, from the page that says what an app gets */
 const ChooseAgain = createContext<() => void>(() => {});
@@ -28,9 +31,14 @@ const ChooseAgain = createContext<() => void>(() => {});
  * Google goes. The account signs a note for the app's own key; the seed never
  * leaves this page. The app's address is what is trusted, as the browser
  * reports it, not what it calls itself.
+ *
+ * Or a program on a computer (`minca connect`, an AI's `minca mcp`) opened it
+ * at `/connect#mc_…`: the same steps, for records in the whole account.
  */
 export function ConnectPage() {
+  const [code] = useState(() => connectCodeIn(location.hash));
   const [incoming, setIncoming] = useState<IncomingRequest | null | undefined>(undefined);
+  const [answered, setAnswered] = useState<{ allowed: boolean } | null>(null);
   const { state } = useMinca();
   const { auth } = useAuth();
   // The account the person chose in this window, or `other` for one this browser doesn't list.
@@ -39,18 +47,47 @@ export function ConnectPage() {
   const [, setProved] = useState(0);
 
   useEffect(() => {
-    void receiveConnectRequest().then(setIncoming);
-  }, []);
+    // The code stays out of the address bar, history and anything shared from it.
+    if (code) history.replaceState(null, '', location.pathname);
+    void (
+      code
+        ? receiveConnectCode({ code, relays: relayUrls(), onAnswered: setAnswered })
+        : receiveConnectRequest()
+    ).then(setIncoming);
+  }, [code]);
+
+  if (answered)
+    return (
+      <Frame>
+        <h1 style={styles.title}>{answered.allowed ? 'Connected' : 'Not connected'}</h1>
+        <p style={styles.hint}>
+          {answered.allowed
+            ? 'You can close this tab and go back to your AI. It can use Minca now.'
+            : 'Nothing was shared. You can close this tab.'}
+        </p>
+      </Frame>
+    );
 
   if (incoming === undefined)
     return (
       <Frame>
         <p style={styles.hint}>
-          <Loader label="Waiting for the app" showLabel />
+          <Loader label={code ? 'Finding the program' : 'Waiting for the app'} showLabel />
         </p>
-        <SlowApp />
+        {code ? null : <SlowApp />}
       </Frame>
     );
+
+  if (incoming === null && code) {
+    return (
+      <Frame>
+        <h1 style={styles.title}>This link has run out</h1>
+        <p style={styles.hint}>
+          The program that opened it isn’t waiting any more. Ask it to connect again for a new link.
+        </p>
+      </Frame>
+    );
+  }
 
   if (incoming === null) {
     return (
@@ -225,7 +262,11 @@ function Asking({ incoming, step = 'Sign in' }: { incoming: IncomingRequest; ste
         borderRadius: palette.radius.md,
       }}
     >
-      <strong style={{ color: palette.ink.strong }}>{asker(incoming.origin)}</strong>{' '}
+      <strong style={{ color: palette.ink.strong }}>
+        {!isProposeRequest(incoming.request) && incoming.request.via === 'code'
+          ? (incoming.request.name ?? 'A program')
+          : asker(incoming.origin)}
+      </strong>{' '}
       {isProposeRequest(incoming.request)
         ? 'suggests what to notify you about.'
         : 'wants to use your Minca account.'}{' '}
@@ -280,10 +321,10 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
         <>
           <h1 style={styles.title}>Connect “{request.name ?? 'a program'}”</h1>
           <p style={styles.subtitle}>
-            A program you started with a code from {host} — on your computer or a server — wants to{' '}
+            A program on your computer or a server, such as your AI, opened this page. It wants to{' '}
             {writes ? 'read and change' : 'read'} {whole ? 'everything in' : 'spaces in'} your account,{' '}
-            <strong style={{ color: palette.ink.strong }}>{session.account.name}</strong>. It keeps working
-            when no app is open.
+            <strong style={{ color: palette.ink.strong }}>{session.account.name}</strong>. Allow it only if
+            you started it just now.
           </p>
         </>
       ) : (
@@ -298,16 +339,6 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
       )}
 
       <WhichAccount label={byCode ? 'The account it will work in' : 'The account it will use'} busy={busy} />
-
-      {byCode && !recordsOnly && (
-        <Note title="More than records" warn>
-          {host} asks for more than records for this program. It could{' '}
-          {writes ? 'add apps and collections, change who may do what, ' : ''}
-          {whole || request.contacts ? 'open contact requests sent to you, ' : ''}
-          and work in your account as fully as an app you use here. Allow it only if you trust {host} and the
-          program both.
-        </Note>
-      )}
 
       {recordsOnly && writes && (
         <>
