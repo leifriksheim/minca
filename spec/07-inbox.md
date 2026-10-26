@@ -142,7 +142,7 @@ signature varies; any valid one verifies):
 > Rationale: a code in a URL goes in the fragment, like an invite, so it isn't
 > sent to the server that serves the page.
 
-_Source: `packages/core/src/inbox/inbox.ts` (`encodeInbox`, `readInbox`, `inboxProblem`, `inboxAuthor`), `packages/core/src/records/loose.ts` (`checkLoose`). Tests: `packages/core/tests/inbox.test.ts` ("an inbox code")._
+_Source: `packages/core/src/inbox/inbox.ts` (`encodeInbox`, `readInbox`, `inboxProblem`, `inboxAuthor`), `packages/core/src/records/loose.ts` (`checkLoose`). Tests: `packages/core/tests/inbox.test.ts` ("an inbox code"), `packages/core/tests/inbox-example.test.ts` (the example's values)._
 
 ## 4. Topics
 
@@ -385,8 +385,11 @@ grants records only ([06 §2.8](06-nodes-and-sessions.md)).
   account's knocks everywhere. Relay budgets are in §5, and weaker than they
   should be (the known defect there). A knock only shows as a request.
 - **Authority.** Only a note that grants `/account/write` for the whole
-  account can knock (§6). A note that ran out can't knock by backdating,
-  unless a relay the inbox names colludes by giving an old `receivedAt`. A
+  account can knock (§6). A note that ran out can't knock through a mailbox
+  by backdating, unless a relay the inbox names colludes by giving an old
+  `receivedAt`. A knock handed over another way, as one left in a space both
+  share, has no relay time: one signed while the note was good counts for 14
+  days. A
   note that was revoked but hasn't run out yet still can, since the owner
   can't see the knocker's revocations
   ([#165](https://github.com/leifriksheim/minca/issues/165)).

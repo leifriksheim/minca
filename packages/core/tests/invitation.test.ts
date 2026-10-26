@@ -158,6 +158,18 @@ describe('invitations', () => {
     await assert.rejects(bob.node.spaces.join(dropped), /doesn't check out/);
   });
 
+  test('a preview refuses an invitation re-labelled as someone else, as joining does', async () => {
+    const alice = await person();
+    const mallory = await person();
+    const bob = await person();
+    const own = await mallory.node.spaces.create({ name: 'Mine', ...team, visibility: 'private' });
+    const { version, secret } = readInvitation(await mallory.node.spaces.invite(own.id, { role: 'editor' }));
+    const { proof: _proof, ...rest } = version;
+    const forged = writeInvitation({ ...rest, author: alice.node.did }, base64UrlDecode(secret!));
+    await assert.rejects(bob.node.spaces.preview(forged), /doesn't check out/);
+    await assert.rejects(bob.node.spaces.join(forged), /doesn't check out/);
+  });
+
   test('a body with a member it should not have, or a key that is not one, is refused', async () => {
     const registry = createSpaceManager(createMemoryAdapter());
     const made = await registry.create({

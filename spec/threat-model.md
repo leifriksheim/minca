@@ -723,7 +723,10 @@ line. That is relied on, by members (§3.2) and former members (§3.3).
     the others standing.
   - Records are judged with no time, so what it signs counts until the owner
     revokes the key, however long ago its note ran out; only live use (knocks,
-    live messages, connecting) ends with the note (01 §7.6). Signing out
+    live messages, connecting) ends with the note (01 §7.6). A knock it leaves
+    in a space the account shares with someone, signed back while the note
+    was good, is bounded only by the knock's 14 days: no relay time anchors
+    it (07 §8, [#165](https://github.com/leifriksheim/minca/issues/165)). Signing out
     writes a revoke of the session key, and the device forgets the key
     before it does. With a peer online it waits briefly for one to take the
     revokes in; otherwise they go when that device next syncs, and never if

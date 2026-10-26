@@ -584,7 +584,8 @@ Which time step 1 uses depends on what the proof is relied on for:
   at what it signed ([03 — Spaces](03-spaces.md) §6.4).
 - **Anything live** (a knock, a live message, a peer's proof when it
   connects, an app checking its grant): the checking node's own clock, or,
-  for a knock, the time it was signed and dropped (07). The note MUST have
+  for a knock, the time it was signed, and when it came through a mailbox,
+  the time it was dropped (07 §6). The note MUST have
   `nbf ≤ at < exp` at that `at`. These are one node's decisions in the moment, not
   verdicts peers share, so a note that has run out stops working there on
   time, with no revoke needed.

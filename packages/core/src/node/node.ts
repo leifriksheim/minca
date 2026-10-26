@@ -62,7 +62,7 @@ import {
   relayOfNode,
   sealInvite,
 } from '../space/invite-link.js';
-import { readInvitation, writeInvitation } from '../space/invitation.js';
+import { checkInvitation, readInvitation, writeInvitation } from '../space/invitation.js';
 import type { LooseSigner } from '../records/loose.js';
 import { foundersOf } from '../space/constitution.js';
 import { base64UrlDecode, base64UrlEncode, bytesToHex, hexToBytes } from '../utils/encoding.js';
@@ -1240,6 +1240,10 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
     async preview(invite) {
       const { long, until } = await resolveInvite(invite);
+      // Who it says invited is shown before joining, so it is checked as joining checks it.
+      const parsed = parseSpaceInvite(long);
+      const unsigned = await checkInvitation(parsed.signed, provider, parsed.invite);
+      if (unsigned) throw new Error(`That invite doesn't check out: ${unsigned}.`);
       return { ...previewInvite(long), ...(until !== undefined ? { until } : {}) };
     },
 

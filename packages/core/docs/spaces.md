@@ -173,9 +173,8 @@ for a short link fetches it first, which is why it is async:
   until? }                              // a short link's, when given
 ```
 
-`invitedBy` is the account the invitation says signed it; a preview reads it
-without checking the signature, and `join` refuses an invite whose signature
-or note doesn't check out ([spec 03 §7.4](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)).
+`invitedBy` is the account that signed the invitation: `preview` and `join`
+both refuse an invite whose signature or note doesn't check out ([spec 03 §7.4](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)).
 A short link is fetched once and remembered by the node, so a preview and the
 join after it ask the mailboxes once. A link whose invite is nowhere fails
 with "That invite was not found"; it may have expired or its places be down.
