@@ -588,13 +588,14 @@ Which time step 1 uses depends on what the proof is relied on for:
   at what it signed ([03 — Spaces](03-spaces.md) §6.4).
 - **Anything live** (a knock, a live message, a peer's proof when it
   connects, an app checking its grant): the checking node's own clock, or,
-  for a knock, the time it was signed, and when it came through a mailbox,
-  the time it was dropped (07 §6). The note MUST have
+  for a knock, the time it says it was signed, within the knock's 14 days
+  (07 §6). The note MUST have
   `nbf ≤ at < exp` at that `at`. These are one node's decisions in the moment, not
   verdicts peers share, so a note that has run out stops working there on
   time, with no revoke needed.
 
-So a leaked key's live use ends when its note runs out, and its records end
+So a leaked key's live use ends when its note runs out, except knocks, which
+it can date back into the note's life for 14 days after; and its records end
 when its key is revoked. Signing out writes a revoke of the session key in every space
 the node writes in, its carry spaces, the contacts space and the account
 registry, with a cutoff at what it wrote, and a device that kept the key

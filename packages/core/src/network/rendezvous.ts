@@ -88,7 +88,7 @@ const SIGNAL_LABEL = 'minca/rendezvous-signal/v1';
 const HELLO_MS = 120_000;
 /** A message older or newer than this is a replay, or a clock too far off to meet */
 const MAX_SKEW_MS = 120_000;
-/** The higher DID says hello back to a peer at most this often */
+/** A node says hello back in a room at most this often */
 const ANSWER_HELLO_MS = 10_000;
 /** Peers a room remembers, as a relay's room held at most 64 */
 const MAX_ROOM_PEERS = 64;
@@ -110,8 +110,10 @@ interface RoomState {
   readonly keys: Promise<{ topic: string; key: CryptoKey }>;
   /** The relays this room is on: the node's, and the room's own */
   urls: ReadonlySet<string>;
-  /** Peers heard in this room: the box to seal to, when last heard, and when last said hello back to */
-  readonly peers: Map<string, { box: string; heard: number; answered: number }>;
+  /** Peers heard in this room: the box to seal to, and when last heard */
+  readonly peers: Map<string, { box: string; heard: number }>;
+  /** When this node last said hello back here */
+  answered: number;
 }
 
 /** Meets peers through every relay given, of whatever kind; kinds this library doesn't speak are passed over */
@@ -143,7 +145,7 @@ export function createRendezvous(urls: ReadonlyArray<string>, did: string): Rend
     for (const [other, at] of state.peers) if (now - at.heard > PEER_SILENT_MS) state.peers.delete(other);
     const held = state.peers.get(peer);
     if (!held && state.peers.size >= MAX_ROOM_PEERS) return false;
-    state.peers.set(peer, { box, heard: now, answered: held?.answered ?? 0 });
+    state.peers.set(peer, { box, heard: now });
     return true;
   };
 
@@ -185,10 +187,10 @@ export function createRendezvous(urls: ReadonlyArray<string>, did: string): Rend
     if (kind === 'hello') {
       if (!remember(state, from, theirs)) return;
       emit('peer-joined', from, room);
-      // The lower DID offers; the higher makes sure the lower has heard of it.
-      const held = state.peers.get(from);
-      if (held && !shouldInitiate(did, from) && Date.now() - held.answered > ANSWER_HELLO_MS) {
-        held.answered = Date.now();
+      // The lower DID offers; the higher makes sure the lower has heard of it, once
+      // a while for the whole room, however many say hello.
+      if (!shouldInitiate(did, from) && Date.now() - state.answered > ANSWER_HELLO_MS) {
+        state.answered = Date.now();
         hello(room);
       }
       return;
@@ -251,7 +253,12 @@ export function createRendezvous(urls: ReadonlyArray<string>, did: string): Rend
 
   const join = (room: string, own: ReadonlyArray<string> = []): void => {
     const held = rooms.get(room);
-    const state: RoomState = held ?? { keys: rendezvousKeys(room), urls: new Set(), peers: new Map() };
+    const state: RoomState = held ?? {
+      keys: rendezvousKeys(room),
+      urls: new Set(),
+      peers: new Map(),
+      answered: 0,
+    };
     const before = state.urls;
     state.urls = new Set([...defaults, ...own.filter((url) => linkFor(url))]);
     rooms.set(room, state);

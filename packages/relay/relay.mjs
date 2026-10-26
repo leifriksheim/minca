@@ -237,16 +237,11 @@ export function createRelay(options = {}) {
       return;
     }
     // Kept by nobody: handed to whoever watches the topic now, and that is all.
-    // Only from a socket watching the topic, and paid for per watcher it reaches beyond the
-    // first: one message must not cost the relay 64 sends for the price of one. One it can't
-    // pay for is dropped, not punished, so a peer in a busy room only waits.
+    // Only from a socket watching the topic, so a sender takes one of its 64 places.
     if (message.ttl === 0) {
       if (!client.watching.has(topic)) return;
-      const others = [...(watchers.get(topic) ?? [])].filter((watcher) => watcher !== client);
-      if (others.length > 1 && client.tokens < others.length - 1) return;
-      client.tokens -= Math.max(0, others.length - 1);
       const news = JSON.stringify({ type: 'mail', topic, items: [{ blob }], more: false });
-      for (const watcher of others) send(watcher, news);
+      for (const watcher of watchers.get(topic) ?? []) if (watcher !== client) send(watcher, news);
       return;
     }
     const id = createHash('sha256').update(blob).digest('base64url');

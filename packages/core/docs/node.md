@@ -649,8 +649,8 @@ as `network.status()`.
 
 **Meeting** (spec 04 §2, §3). A node says hello in each room when it joins,
 on every relay as its socket opens, and every 2 minutes. It remembers the
-last 2048 message ids, and the failed tries of the last 512 peers. The
-greater DID says hello back at most once every 10 s per peer. Each socket
+last 2048 message ids, and the failed tries of the last 512 peers. It
+says hello back in a room at most once every 10 s. Each socket
 sends at most 20 messages a second, in bursts of 40, and queues the rest. A
 connection attempt that times out is retried on the peer's next hello. `requestIce`
 asks every connected relay for TURN. Each WebRTC offer or answer waits for
@@ -659,8 +659,7 @@ ICE gathering to finish, or 2 s, and carries what it found.
 **Kinds of relay** (spec 04 §1.2). `network.relays` may mix kinds:
 `['wss://minca.fly.dev', 'nostr+wss://relay.damus.io']`. A relay of a kind
 this library doesn't speak is left out of `network.status()`. On a Nostr
-relay, each socket signs with a key it makes and forgets, and each mailbox
-call with one of its own.
+relay, each event is signed with a key made for it and forgotten.
 
 **A space's relays** (spec 04 §4). A relay socket opened only for spaces'
 own relays is closed once no room needs it. A node whose account may invoke

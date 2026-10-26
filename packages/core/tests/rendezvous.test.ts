@@ -262,6 +262,28 @@ describe('what a hello can cost', () => {
     assert.equal(rendezvous.relays()[0]?.state, 'open');
   });
 
+  test('a node in 16 rooms of 12 members each keeps its relay', async () => {
+    // Twelve members, each watching all sixteen rooms, as the relay sees them.
+    const topics = await Promise.all(Array.from({ length: 16 }, (_, i) => rendezvousKeys(`busy ${i}`)));
+    const members: WebSocket[] = [];
+    for (let m = 0; m < 12; m++) {
+      const ws = new WebSocket(one.url);
+      await new Promise((resolve) => (ws.onopen = resolve));
+      for (const { topic } of topics) ws.send(JSON.stringify({ type: 'fetch', topic, watch: true }));
+      members.push(ws);
+    }
+    opened.push({ disconnect: () => members.forEach((ws) => ws.close()) });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const rendezvous = createRendezvous([one.url], A);
+    opened.push(rendezvous);
+    const states: string[] = [];
+    rendezvous.on('status', (relays) => states.push(...relays.map((relay) => relay.state)));
+    for (let i = 0; i < 16; i++) rendezvous.join(`busy ${i}`);
+    await rendezvous.connect();
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    assert.ok(!states.includes('waiting'), `the relay let go: ${[...new Set(states)].join(', ')}`);
+  });
+
   test('an offer re-wrapped with another box opens nothing', async () => {
     const watcher = await eavesdrop(one.url);
     const b = await peer(B, [one.url]);

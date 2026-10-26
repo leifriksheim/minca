@@ -2299,8 +2299,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
   /** Knocks seen in this node's inbox, by id: opened (null when they didn't check out), and until when to keep them */
   const knockCache = new Map<string, { readonly opened: OpenedKnock | null; readonly until: number }>();
-  /** Knocks that didn't check out, by id: not opened again */
-  const failed = new Set<string>();
+  /** Knocks that didn't check out, by id, and until when they are not opened again: one dated a little ahead may pass later */
+  const failed = new Map<string, number>();
   const DAY_MS = 24 * 3600 * 1000;
 
   /** The inbox is the account's own, in its contacts space: only a key acting as the account opens one, as every peer checks */
@@ -2445,10 +2445,10 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     const found: { id: string; opened: OpenedKnock }[] = [];
     for (const [id, blob] of held) {
       let opened = knockCache.get(id)?.opened ?? null;
-      if (!opened && !failed.has(id)) {
+      if (!opened && (failed.get(id) ?? 0) <= now) {
         opened = await openKnock([keys.key], blob, provider);
         if (opened) knockCache.set(id, { opened, until: opened.at + KNOCK_TTL_SECONDS * 1000 });
-        else failed.add(id);
+        else failed.set(id, now + 15 * 60_000);
       }
       if (opened) found.push({ id, opened });
     }

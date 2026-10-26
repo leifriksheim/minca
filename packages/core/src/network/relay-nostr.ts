@@ -6,8 +6,9 @@
  *   dropped (kept until it expires)         kind 4733    tags [["x", topic], ["expiration", "<unix s>"]]
  *
  * Nostr wants every event signed by a secp256k1 key. Who a peer is is proven
- * end to end once connected, and a blob is sealed, so the key is a throwaway:
- * one per socket, or per drop. A relay that asks for authentication (NIP-42)
+ * end to end once connected, and a blob is sealed, so the key is a throwaway,
+ * one per event: anyone watching a public relay can't tie one room to another
+ * by it. A relay that asks for authentication (NIP-42)
  * is answered with the same throwaway key.
  *
  * What Nostr has no word for: TURN passwords, and clearing someone else's
@@ -115,6 +116,7 @@ const subscriptionOf = (topic: string) => `m${topic.slice(0, 20)}`;
 /** A socket to a Nostr relay, subscribed to the topics of the rooms this node is in */
 export function createNostrLink(url: string): RelayLink {
   const dial = dialOf(url);
+  // Answers the relay's challenge; each event gets a key of its own, so nothing ties one room's to another's.
   const secret = throwawayKey();
   const topics = new Set<string>();
   const { on, off, emit } = createEmitter<RelayLinkEvents>();
@@ -169,7 +171,10 @@ export function createNostrLink(url: string): RelayLink {
       socket.count(topics.size);
     },
     publish: (topic: string, blob: string) =>
-      socket.send(['EVENT', signNostrEvent(secret, NOSTR_EPHEMERAL_KIND, [[TOPIC_TAG, topic]], blob)]),
+      socket.send([
+        'EVENT',
+        signNostrEvent(throwawayKey(), NOSTR_EPHEMERAL_KIND, [[TOPIC_TAG, topic]], blob),
+      ]),
     // Nostr relays hand out no TURN passwords.
     requestIce: () => {},
     isConnected: socket.isConnected,

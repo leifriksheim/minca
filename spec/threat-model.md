@@ -729,11 +729,13 @@ line. That is relied on, by members (§3.2) and former members (§3.3).
     caught, and a fork proven in one collection leaves the key's writes in
     the others standing.
   - Records are judged with no time, so what it signs counts until the owner
-    revokes the key, however long ago its note ran out; only live use (knocks,
-    live messages, connecting) ends with the note (01 §7.6). A knock it signs
-    while the note is good, left in a mailbox or a space the account shares
-    with someone, counts for the knock's 14 days: no relay's time anchors a
-    knock (07 §6, §8, [#165](https://github.com/leifriksheim/minca/issues/165)). Signing out
+    revokes the key, however long ago its note ran out; only live use (live
+    messages, connecting) ends with the note (01 §7.6). A knock is judged at
+    the time it says it was signed, so whoever has the key, even after its
+    note ran out, can date knocks into the note's life and leave them, in a
+    mailbox or a space the account shares with someone, until 14 days after
+    it ran out: no relay's time anchors a knock (07 §6, §8,
+    [#165](https://github.com/leifriksheim/minca/issues/165)). Signing out
     writes a revoke of the session key, and the device forgets the key
     before it does. With a peer online it waits briefly for one to take the
     revokes in; otherwise they go when that device next syncs, and never if
@@ -928,7 +930,8 @@ A Minca relay, a Nostr relay, or anyone else watching a topic on one: all see
 the same sealed blobs.
 
 - **Holds.** It can always drop and delay. Beyond that:
-  - It learns neither who is in a room nor who meets whom: a room's topic is a
+  - It learns no session DID: neither who is in a room nor who meets whom by
+    name. A room's topic is a
     hash of the room, and every hello, offer and answer is sealed under a key
     derived from the room, which only those who know the room hold (04 §1.3,
     §2; `packages/core/tests/rendezvous.test.ts`, "a relay, or anyone on the
@@ -939,11 +942,13 @@ the same sealed blobs.
     opens nothing (04 §2; "a third peer in the room hears the offer pass but
     cannot open it", "an offer re-wrapped with another box opens nothing").
     Anyone who knows the room can still say hello and be offered to (§2).
-  - Under made-up names it can make a peer dial at most 64 peers a room, and
-    a node in many rooms paces itself below a Minca relay's budget (04 §2,
-    §2.1; "hellos under 90 made-up names start no more than 64
-    connections", "a node in 60 rooms keeps its relay…"). A published blob
-    costs its sender one message per watcher it reaches (04 §1.4).
+  - Under made-up names it can have a peer dialling at most 64 peers a room
+    at a time, and it can't get a peer cut off from a relay by making it say
+    hello back: a node says hello back once a room every 10 s, and paces what
+    it sends below a Minca relay's budget (04 §2, §2.1; "hellos under 90
+    made-up names start no more than 64 connections", "a node in 60 rooms
+    keeps its relay…", "a node in 16 rooms of 12 members each keeps its
+    relay").
   - It can't make a peer act twice on one message, by replaying it or by
     passing it through several relays: each is acted on once, by its `id`,
     and only within 2 minutes of when it was sent (04 §2; "a replayed hello
@@ -972,7 +977,19 @@ the same sealed blobs.
     shows it ([#162](https://github.com/leifriksheim/minca/issues/162)).
   - It learns which addresses watch and publish to which topics, and when:
     enough to tell that some sockets share a room, though not which room
-    ([#162](https://github.com/leifriksheim/minca/issues/162)).
+    ([#162](https://github.com/leifriksheim/minca/issues/162)). On a public
+    Nostr relay anyone at all can watch every topic, and see each blob's
+    size and time, though each event's key is fresh, so it ties no two rooms
+    together.
+  - One socket watching a topic can have a Minca relay send each blob it
+    publishes to the topic's 63 other watchers. Its budget (50 messages a
+    second) and the 32 sockets an address may hold bound it, not the relay's
+    traffic.
+  - Peers meet through relays only if their clocks are within 2 minutes:
+    messages outside that are taken for replays (04 §2).
+  - Someone posing as a peer by hello leaves that peer's next attempts with
+    the backoff its own failed ones built up, up to 5 minutes, after it
+    stops (04 §7.3).
   - Anyone who knows a space's id, a former member or someone who saw an
     invite, can derive its room key and read its hellos: which session DIDs
     are in the room, and when (04 §2).
@@ -987,10 +1004,9 @@ the same sealed blobs.
     and from which address it is fetched; a relay also serving the space's
     room can tie a fetch to the topic watched a moment later
     ([#162](https://github.com/leifriksheim/minca/issues/162)).
-  - It can fill the 32 exchanges an app offering a code runs before the right
-    program arrives, with peers that say hello, so the program is never
-    answered. Denial of service only: none of them holds the code, so none
-    can ask.
+  - Someone who holds a connect code can fill the 32 exchanges the app runs
+    before the right program arrives, so the program is never answered. A
+    relay can't, since it knows only the room's topic, not the room.
   - Someone else who holds the code can also ask before the program does,
     posing as it. The person sees only the name it gives itself, and may
     allow a note for its key; the real program is then never answered.

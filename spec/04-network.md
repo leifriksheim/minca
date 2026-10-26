@@ -149,15 +149,15 @@ in [`packages/relay/README.md`](../packages/relay/README.md).
 A **topic** is 43 base64url characters; a message naming any other is
 ignored. A **blob** is non-empty base64url of at most 12,000 characters.
 
-| Client → relay                                  | Effect                                                                                                                                                                                                                                                                                               |
-| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `{ type: "drop", topic, blob, ttl: 0 }`         | **Publish**: from a socket watching the topic only, the blob goes to every _other_ socket watching it, as `mail` with one item `{ blob }`. Nothing is kept, and the sender gets no answer. It costs the sender one message per watcher it reaches beyond the first; one it can't pay for is dropped. |
-| `{ type: "drop", topic, blob, ttl? }`           | **Drop**: the blob is kept, under `id = base64url(SHA-256(UTF-8(blob)))`, for the relay's own time or `ttl` seconds, whichever is shorter. Answered `dropped` (also for a blob already held under that topic, which stores nothing new) or `refused`. Watchers get it as `mail`.                     |
-| `{ type: "fetch", topic, after?, watch? }`      | **Fetch**: the kept blobs with `seq > after` (default 0), oldest first, a page at a time. With `watch: true` the socket also hears, from now on, every blob published or dropped under the topic, until it closes or sends `unwatch`.                                                                |
-| `{ type: "unwatch", topic }`                    | Stops watching.                                                                                                                                                                                                                                                                                      |
-| `{ type: "challenge" }`, `{ type: "purge", … }` | An inbox's owner clears it ([07](07-inbox.md) §5).                                                                                                                                                                                                                                                   |
-| `{ type: "ice" }`                               | Ask for TURN servers (§1.4, TURN passwords). Ignored from a socket that watches no topic, and by a relay without TURN.                                                                                                                                                                               |
-| `{ type: "ping" }`                              | Ask whether the socket still reaches the relay. A relay SHOULD answer `pong`.                                                                                                                                                                                                                        |
+| Client → relay                                  | Effect                                                                                                                                                                                                                                                                           |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `{ type: "drop", topic, blob, ttl: 0 }`         | **Publish**: from a socket watching the topic only, the blob goes to every _other_ socket watching it, as `mail` with one item `{ blob }`. Nothing is kept, and the sender gets no answer. A socket not watching the topic is ignored.                                           |
+| `{ type: "drop", topic, blob, ttl? }`           | **Drop**: the blob is kept, under `id = base64url(SHA-256(UTF-8(blob)))`, for the relay's own time or `ttl` seconds, whichever is shorter. Answered `dropped` (also for a blob already held under that topic, which stores nothing new) or `refused`. Watchers get it as `mail`. |
+| `{ type: "fetch", topic, after?, watch? }`      | **Fetch**: the kept blobs with `seq > after` (default 0), oldest first, a page at a time. With `watch: true` the socket also hears, from now on, every blob published or dropped under the topic, until it closes or sends `unwatch`.                                            |
+| `{ type: "unwatch", topic }`                    | Stops watching.                                                                                                                                                                                                                                                                  |
+| `{ type: "challenge" }`, `{ type: "purge", … }` | An inbox's owner clears it ([07](07-inbox.md) §5).                                                                                                                                                                                                                               |
+| `{ type: "ice" }`                               | Ask for TURN servers (§1.4, TURN passwords). Ignored from a socket that watches no topic, and by a relay without TURN.                                                                                                                                                           |
+| `{ type: "ping" }`                              | Ask whether the socket still reaches the relay. A relay SHOULD answer `pong`.                                                                                                                                                                                                    |
 
 | Relay → client                                     | Meaning                                                                                                                                   |
 | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
@@ -203,9 +203,8 @@ value. The limits on kept blobs are the mailbox's, in [07](07-inbox.md) §5.
 | Addresses holding a TURN password  | 20 000                        | new addresses get no `ice` until old passwords expire                            |
 
 Every message counts against the rate budget, including binary and malformed
-ones. A published blob costs its sender one message per watcher it reaches
-beyond the first, so it costs the relay no more sends than its sender paid for;
-one the sender can't pay for is dropped, and the socket is not cut off.
+ones. A published blob goes to at most 63 other watchers, so one socket can
+have the relay send up to 63 times what it sends.
 
 #### TURN passwords
 
@@ -239,8 +238,9 @@ the topic in an `x` tag:
 | Drop    | kind **4733**, tags `[["x", topic], ["expiration", "<unix seconds>"]]` (NIP-40)            |
 | Fetch   | `["REQ", <id>, { "kinds": [4733], "#x": [topic], "limit": 500 }]`, read until `EOSE`       |
 
-- Every event is signed as NIP-01 requires, by a **throwaway** secp256k1 key:
-  one per socket for publishing, one per drop or fetch. Who a peer is is
+- Every event is signed as NIP-01 requires, by a **throwaway** secp256k1 key,
+  a fresh one for each event, so nobody watching a public relay can tell by
+  the key that two rooms' events came from one node. Who a peer is is
   proven end to end once connected, and every blob is sealed, so the key
   proves nothing and a receiver need not check it.
 - A drop is done when the relay answers `["OK", <event id>, true, …]`, or
@@ -317,8 +317,8 @@ What it does then:
 
 - **`hello`**: `from` is in the room. If `from` is the greater DID (compared
   as strings) the receiver offers to it (§7.3); otherwise it says hello
-  back, at most once per peer every 10 seconds, so the lesser one hears of
-  it and offers.
+  back, at most once every 10 seconds in that room, so the lesser one hears
+  of it and offers.
 - **`offer`, `answer`**: handed to the mesh as a signal from `from` (§7.3).
 
 A receiver remembers, per room, each peer it heard and the `box` it last
@@ -889,12 +889,12 @@ _Source: `packages/core/src/network/mesh.ts` (`meet`, `offerTo`, `onSignal`, `wa
 
 ### 7.4 Limits
 
-| Limit                               | Value                                                                                         |
-| ----------------------------------- | --------------------------------------------------------------------------------------------- |
-| Peers per room                      | bounded by the relay (64 watchers of a topic in a Minca relay); the mesh sets none of its own |
-| Handshake timeout (`authTimeoutMs`) | 10 s                                                                                          |
-| Peers named per `__peers`           | 64 (`MAX_INTRODUCED`); the rest are ignored                                                   |
-| Relayed-signal hops                 | 3 (`MAX_HOPS`)                                                                                |
+| Limit                               | Value                                                                      |
+| ----------------------------------- | -------------------------------------------------------------------------- |
+| Peers per room                      | 64 remembered at a time (§2); a Minca relay also holds 64 watchers a topic |
+| Handshake timeout (`authTimeoutMs`) | 10 s                                                                       |
+| Peers named per `__peers`           | 64 (`MAX_INTRODUCED`); the rest are ignored                                |
+| Relayed-signal hops                 | 3 (`MAX_HOPS`)                                                             |
 
 The reference node's own timers (how long an idle connection or a connection
 attempt is given, how many relayed-signal ids it remembers) are in

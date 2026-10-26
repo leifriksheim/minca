@@ -355,15 +355,16 @@ grants records only ([06 §2.8](06-nodes-and-sessions.md)).
   account's knocks everywhere. Relay budgets are in §5, and weaker than they
   should be (the known defect there). A knock only shows as a request.
 - **Authority.** Only a note that grants `/account/write` for the whole
-  account can knock (§6). A knock signed while its note was good counts for
-  14 days, wherever it waited, so whoever holds a key while its note is good
-  can sign knocks dated then and leave them later, until the 14 days are up.
+  account can knock (§6). A knock is judged at the time it says it was
+  signed, wherever it waited, so whoever has a key, even after its note ran
+  out, can sign knocks dated into the note's life and leave them until 14
+  days after it ran out.
   A note that was revoked but hasn't run out yet still can, since the owner
   can't see the knocker's revocations
   ([#165](https://github.com/leifriksheim/minca/issues/165)).
 - **Spam on a Nostr relay.** A Nostr relay can't be purged, and a fetch
-  reads its newest 500 blobs: anyone with the code can bury earlier knocks
-  there with 500 drops (§5).
+  reads its newest 500 blobs, newest by the dropper's own word: anyone with
+  the code can bury earlier knocks there with 500 drops, dated ahead (§5).
 - **Leaked invites.** The invite in a knock is multi-use until the knocker
   closes it, and whoever joins first is taken as the contact. Someone else
   joins first only if the recipient passed it on, lost a device, or gave an
