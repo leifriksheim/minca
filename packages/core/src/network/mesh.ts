@@ -28,7 +28,8 @@ import { isObject } from '../utils/guards.js';
 import { createRendezvous, isSignalKind, type SignalKind } from './rendezvous.js';
 import { createRTCTransport, DEFAULT_ICE_SERVERS } from './rtc-transport.js';
 import type { SignalledTransport } from './transport.js';
-import { peerNonce, type MeshAuth } from './peer-auth.js';
+import { peerNonce, signLabel, verifyBy, type MeshAuth } from './peer-auth.js';
+import { createP256Provider } from '../identity/crypto-p256.js';
 import type { NetworkEvents, NetworkManager } from './network-manager.js';
 import {
   PEERS_MESSAGE,
@@ -43,6 +44,7 @@ import {
   shouldInitiate,
   createSeenSignals,
   signalId,
+  introductionLabel,
   type RelayedSignal,
 } from './introductions.js';
 
@@ -130,6 +132,12 @@ const ICE_WAIT_MS = 1500;
  */
 const CONNECT_TIMEOUT_MS = 20_000;
 const MAX_CONNECT_TIMEOUT_MS = 5 * 60_000;
+/** A relayed signal older or newer than this is a replay, or a clock too far off */
+const SIGNAL_WINDOW_MS = 120_000;
+/** Signals from one origin a room acts on within that window: far more than an honest peer sends */
+const MAX_SIGNALS_ACTED = 256;
+/** A relayed description longer than this is not taken: one with its candidates is a few KB */
+const MAX_SDP_CHARS = 32_000;
 /** Peers whose failed tries are remembered, for the wait before the next */
 const MAX_TRIED = 512;
 
@@ -182,6 +190,11 @@ export function createMesh(config: MeshConfig): Mesh {
   /** Failed tries per peer, so each wait is longer; forgotten once a connection opens */
   const tries = new Map<string, number>();
   const seenSignals = createSeenSignals();
+  const provider = createP256Provider();
+  /** When this node last sent a signal over the mesh: each later than the one before */
+  let introducedAt = 0;
+  /** The times of signals acted on from each origin in each room, within the two minutes, by `room origin` */
+  const actedOn = new Map<string, Set<number>>();
   let started: Promise<void> | null = null;
   const changes = new Set<() => void>();
   const changed = (): void => {
@@ -344,17 +357,37 @@ export function createMesh(config: MeshConfig): Mesh {
   // already reach are the best source of the ones you cannot: their data
   // channels carry connection offers just as happily as they carry todos.
 
-  /** Pushes somebody's signaling out across the mesh, skipping where it came from. */
-  const floodSignal = (signal: RelayedSignal, except?: string): void => {
-    for (const peer of links) {
-      if (peer !== except && isAdmitted(peer)) sendFrame(peer, { type: SIGNAL_MESSAGE, payload: signal });
+  /** Pushes somebody's signaling out to the room's other peers, skipping where it came from. */
+  const floodSignal = (name: string, signal: RelayedSignal, except?: string): void => {
+    for (const peer of rooms.get(name)?.peers.keys() ?? []) {
+      if (peer !== except) sendFrame(peer, { room: name, type: SIGNAL_MESSAGE, payload: signal });
     }
   };
 
+  /** Through the room's peers: signed by this node, so nobody passing it on can put another's words in its place */
   const throughMesh =
-    (target: string): Deliver =>
-    (kind, data) =>
-      floodSignal({ id: signalId(), origin: did, target, kind, data, hops: MAX_HOPS });
+    (target: string, name: string): Deliver =>
+    (kind, data) => {
+      if (!isObject(data) || typeof data.sdp !== 'string') return;
+      const at = (introducedAt = Math.max(Date.now(), introducedAt + 1));
+      const { sdp } = data;
+      void signLabel(
+        provider,
+        config.key,
+        introductionLabel(name, { origin: did, target, kind, at, sdp }),
+      ).then((sig) =>
+        floodSignal(name, {
+          id: signalId(),
+          origin: did,
+          target,
+          kind,
+          data: { type: kind, sdp },
+          at,
+          sig,
+          hops: MAX_HOPS,
+        }),
+      );
+    };
   /** Through the relays, in one room: where the peer's hello came, or its offer, and to the box it came with */
   const throughRelay =
     (target: string, room: string, box?: string): Deliver =>
@@ -428,22 +461,43 @@ export function createMesh(config: MeshConfig): Mesh {
       // Both sides are told about each other at the same moment, so without a
       // rule both would offer and there would be two half-open connections to
       // unpick. Comparing identifiers is free and both sides always agree.
-      meet(name, peer, shouldInitiate(did, peer) ? throughMesh(peer) : null);
+      meet(name, peer, shouldInitiate(did, peer) ? throughMesh(peer, name) : null);
     }
   };
 
-  const onRelayedSignal = (from: string, signal: unknown): void => {
-    if (!isObject(signal)) return;
-    const { id, origin, target, kind, hops } = signal;
-    // Flooding means the same signal can arrive by several routes; act once.
-    if (typeof id !== 'string' || id.length > 64 || !seenSignals.accept(id)) return;
-    if (!isPeerDid(origin) || !isPeerDid(target) || !isSignalKind(kind)) return;
+  /** Whether a signal from an origin in a room is new: none from it there was acted on with this time */
+  const isNewSignal = (name: string, origin: string, at: number): boolean => {
+    const times = actedOn.get(`${name} ${origin}`);
+    if (!times) return true;
+    for (const time of times) if (time < Date.now() - SIGNAL_WINDOW_MS) times.delete(time);
+    if (times.size === 0) actedOn.delete(`${name} ${origin}`);
+    return !times.has(at) && times.size < MAX_SIGNALS_ACTED;
+  };
+
+  const onRelayedSignal = async (from: string, name: string, signal: unknown): Promise<void> => {
+    if (!isObject(signal) || !isObject(signal.data)) return;
+    const { id, origin, target, kind, at, sig, hops } = signal;
+    const { sdp } = signal.data;
+    if (typeof id !== 'string' || id.length > 64) return;
+    if (!isPeerDid(origin) || origin === did || !isPeerDid(target) || !isSignalKind(kind)) return;
+    if (signal.data.type !== kind || typeof sdp !== 'string' || sdp.length > MAX_SDP_CHARS) return;
+    if (typeof at !== 'number' || !Number.isSafeInteger(at) || Math.abs(Date.now() - at) > SIGNAL_WINDOW_MS)
+      return;
+    if (target === did && !isNewSignal(name, origin, at)) return;
+    // Signed by its origin, in this room: nobody passes on, or makes, an offer in another's name.
+    if (!(await verifyBy(provider, origin, sig, introductionLabel(name, { origin, target, kind, at, sdp }))))
+      return;
     if (target === did) {
-      void onSignal(origin, kind, signal.data, throughMesh(origin));
-    } else if (typeof hops === 'number' && hops > 0) {
-      // The sender says how far it may go; never further than we would send it.
+      if (!isNewSignal(name, origin, at)) return;
+      const key = `${name} ${origin}`;
+      (actedOn.get(key) ?? actedOn.set(key, new Set()).get(key)!).add(at);
+      void onSignal(origin, kind, { type: kind, sdp }, throughMesh(origin, name));
+    } else if (typeof hops === 'number' && hops > 0 && typeof sig === 'string' && seenSignals.accept(sig)) {
+      // Each passed on once, by its signature, which nobody else can make. The sender says how far
+      // it may go; never further than we would send it.
       floodSignal(
-        { ...signal, id, origin, target, kind, data: signal.data, hops: Math.min(hops, MAX_HOPS) - 1 },
+        name,
+        { id, origin, target, kind, data: { type: kind, sdp }, at, sig, hops: Math.min(hops, MAX_HOPS) - 1 },
         from,
       );
     }
@@ -491,10 +545,10 @@ export function createMesh(config: MeshConfig): Mesh {
       return;
     }
     if (!isAdmitted(peer)) return;
-    if (type === SIGNAL_MESSAGE) return onRelayedSignal(peer, payload);
 
     const room = name ? rooms.get(name) : undefined;
     if (!name || !room?.peers.has(peer)) return;
+    if (type === SIGNAL_MESSAGE) return void onRelayedSignal(peer, name, payload).catch(() => {});
     if (type === PEERS_MESSAGE) return handlePeerList(name, payload);
     if (type === LEAVE_MESSAGE) {
       drop(room, peer);

@@ -964,8 +964,11 @@ the same sealed blobs.
     who knows the room: every hello, offer and answer is signed by the
     session key its `from` names, sealed description included, so nobody can
     pose as a peer there to keep two peers apart or to take the offers meant
-    for one; a peer admitted in a room still can, through introductions,
-    below (04 §2; "an offer whose sealed description someone else put in,
+    for one. Nor through introductions: a signal passed on is signed by its
+    origin and stays in its room (04 §2, §8; "a signal passed on in someone
+    else’s name is ignored, and a genuine one is acted on once", "a signal
+    stays in its room: not taken from a peer who isn’t there, nor passed to
+    one"; "an offer whose sealed description someone else put in,
     under its sender’s signature, is ignored", "a hello naming B but signed by another key is ignored",
     "someone in only a public room cannot pose there as B to keep A and B
     apart in a private one").
@@ -1022,11 +1025,10 @@ the same sealed blobs.
     keeps, reads its hellos like anyone who knows the room: which session
     DIDs are there, when, and from which address
     ([#162](https://github.com/leifriksheim/minca/issues/162)).
-  - Introductions are not signed: a peer admitted with A in any room can
-    pass A a `__signal` offer under B's DID, which replaces A's unproven
-    attempt to reach B and adds to the backoff before A tries B again, up to
-    5 minutes, and reads the plain descriptions of introductions it
-    forwards (04 §8, [#162](https://github.com/leifriksheim/minca/issues/162)).
+  - A member who passes an introduction on reads the descriptions in it, as
+    it could learn those members' addresses by meeting them, and can drop
+    it; where two peers share no relay, a member on every path between them
+    keeps them apart (04 §8, [#162](https://github.com/leifriksheim/minca/issues/162)).
   - A relay that cuts a peer's socket over and over makes it say hello in
     every room each time it reconnects; through three relays a room's peers
     share, that can pass the 256 messages in 2 minutes a receiver acts on

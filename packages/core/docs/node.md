@@ -684,7 +684,7 @@ so the usual sync keeps the two level.
 **The mesh** (spec 04 §7). Admission raises `peer-connected` for the room. A
 newly opened connection that no room takes up within 10 s is closed. A
 connection attempt is given 20 s, doubling with each failed attempt at the
-same peer up to 5 min. The node remembers the last 512 relayed-signal ids.
+same peer up to 5 min. The node remembers the last 512 relayed signals it passed on, by their signatures.
 When a node that must prove read access holds no read key, the handshake
 throws and the room times out.
 
