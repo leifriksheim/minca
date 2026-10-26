@@ -149,15 +149,15 @@ in [`packages/relay/README.md`](../packages/relay/README.md).
 A **topic** is 43 base64url characters; a message naming any other is
 ignored. A **blob** is non-empty base64url of at most 12,000 characters.
 
-| Client → relay                                  | Effect                                                                                                                                                                                                                                                                           |
-| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `{ type: "drop", topic, blob, ttl: 0 }`         | **Publish**: the blob goes to every _other_ socket watching the topic, as `mail` with one item `{ blob }`. Nothing is kept, and the sender gets no answer.                                                                                                                       |
-| `{ type: "drop", topic, blob, ttl? }`           | **Drop**: the blob is kept, under `id = base64url(SHA-256(UTF-8(blob)))`, for the relay's own time or `ttl` seconds, whichever is shorter. Answered `dropped` (also for a blob already held under that topic, which stores nothing new) or `refused`. Watchers get it as `mail`. |
-| `{ type: "fetch", topic, after?, watch? }`      | **Fetch**: the kept blobs with `seq > after` (default 0), oldest first, a page at a time. With `watch: true` the socket also hears, from now on, every blob published or dropped under the topic, until it closes or sends `unwatch`.                                            |
-| `{ type: "unwatch", topic }`                    | Stops watching.                                                                                                                                                                                                                                                                  |
-| `{ type: "challenge" }`, `{ type: "purge", … }` | An inbox's owner clears it ([07](07-inbox.md) §5).                                                                                                                                                                                                                               |
-| `{ type: "ice" }`                               | Ask for TURN servers (§1.4, TURN passwords). Ignored from a socket that watches no topic, and by a relay without TURN.                                                                                                                                                           |
-| `{ type: "ping" }`                              | Ask whether the socket still reaches the relay. A relay SHOULD answer `pong`.                                                                                                                                                                                                    |
+| Client → relay                                  | Effect                                                                                                                                                                                                                                                                                               |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `{ type: "drop", topic, blob, ttl: 0 }`         | **Publish**: from a socket watching the topic only, the blob goes to every _other_ socket watching it, as `mail` with one item `{ blob }`. Nothing is kept, and the sender gets no answer. It costs the sender one message per watcher it reaches beyond the first; one it can't pay for is dropped. |
+| `{ type: "drop", topic, blob, ttl? }`           | **Drop**: the blob is kept, under `id = base64url(SHA-256(UTF-8(blob)))`, for the relay's own time or `ttl` seconds, whichever is shorter. Answered `dropped` (also for a blob already held under that topic, which stores nothing new) or `refused`. Watchers get it as `mail`.                     |
+| `{ type: "fetch", topic, after?, watch? }`      | **Fetch**: the kept blobs with `seq > after` (default 0), oldest first, a page at a time. With `watch: true` the socket also hears, from now on, every blob published or dropped under the topic, until it closes or sends `unwatch`.                                                                |
+| `{ type: "unwatch", topic }`                    | Stops watching.                                                                                                                                                                                                                                                                                      |
+| `{ type: "challenge" }`, `{ type: "purge", … }` | An inbox's owner clears it ([07](07-inbox.md) §5).                                                                                                                                                                                                                                                   |
+| `{ type: "ice" }`                               | Ask for TURN servers (§1.4, TURN passwords). Ignored from a socket that watches no topic, and by a relay without TURN.                                                                                                                                                                               |
+| `{ type: "ping" }`                              | Ask whether the socket still reaches the relay. A relay SHOULD answer `pong`.                                                                                                                                                                                                                        |
 
 | Relay → client                                     | Meaning                                                                                                                                   |
 | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
@@ -203,8 +203,9 @@ value. The limits on kept blobs are the mailbox's, in [07](07-inbox.md) §5.
 | Addresses holding a TURN password  | 20 000                        | new addresses get no `ice` until old passwords expire                            |
 
 Every message counts against the rate budget, including binary and malformed
-ones. A published blob costs its sender one message and the relay one send per
-watcher.
+ones. A published blob costs its sender one message per watcher it reaches
+beyond the first, so it costs the relay no more sends than its sender paid for;
+one the sender can't pay for is dropped, and the socket is not cut off.
 
 #### TURN passwords
 
@@ -246,7 +247,9 @@ the topic in an `x` tag:
   `false` with a reason starting `duplicate:`. A drop's expiration is the
   dropper's time to live, or 14 days.
 - A fetched blob's `id` is `base64url(SHA-256(UTF-8(content)))`, computed by
-  the fetcher. Events past their `expiration` are not taken.
+  the fetcher. Events past their `expiration` are not taken. A fetch reads
+  one page, the newest 500 the relay gives, so more than 500 blobs dropped
+  after it bury the older ones (threat model §3.7).
 - A relay that asks for authentication (NIP-42, `["AUTH", <challenge>]`) is
   answered with a kind 22242 event from the same throwaway key, tagged
   `relay` and `challenge`; what it refused before is sent again.
@@ -283,7 +286,7 @@ blob    = base64url( sealEnvelope( room key, "minca/rendezvous/v1", { topic }, U
 
 message = { "kind": "hello", "id", "at", "from", "box" }
         | { "kind": "offer" | "answer", "id", "at", "from", "box", "to", "sdp" }
-sdp     = sealTo( box of `to`, "minca/rendezvous-signal/v1", { topic, from, to }, UTF-8(JSON(description)) )
+sdp     = sealTo( box of `to`, "minca/rendezvous-signal/v1", { topic, from, to, box }, UTF-8(JSON(description)) )
 ```
 
 `sealEnvelope` is the symmetric envelope and `sealTo` sealing to a key
@@ -307,7 +310,8 @@ A receiver MUST ignore a blob unless all of these hold:
    remembers a bounded number of recent ids), and `at` is within 2 minutes of
    its own clock.
 4. For an offer or answer: `to` is its own DID, and `sdp` opens with its box,
-   label `minca/rendezvous-signal/v1`, bound `{ topic, from, to }`.
+   label `minca/rendezvous-signal/v1`, bound `{ topic, from, to, box }` with
+   the message's own `box`.
 
 What it does then:
 
@@ -316,7 +320,19 @@ What it does then:
   back, at most once per peer every 10 seconds, so the lesser one hears of
   it and offers.
 - **`offer`, `answer`**: handed to the mesh as a signal from `from` (§7.3).
-  An answer goes back sealed to the `box` the offer came with.
+
+A receiver remembers, per room, each peer it heard and the `box` it last
+used there. A room holds at most **64** peers, and a peer not heard from in
+5 minutes is forgotten; a hello or signal from a new peer in a full room
+MUST be ignored. An offer or answer to a peer goes to every room that peer
+is remembered in, each sealed to its box there. The `sdp` seal binds the
+sender's own `box`, so a message re-wrapped with another box opens nothing,
+and an answer goes to the box its offer came with.
+
+> Rationale: a hello costs nothing to send, and anyone who knows the room can
+> say one under any number of made-up names. A relay's room used to hold 64
+> sockets; holding 64 peers keeps that bound, so a flood can fill a room but
+> not make a node dial without end.
 
 A node says hello when it joins a room, on each relay whenever that relay's
 socket (re)opens, and SHOULD say it again every 2 minutes while in the room,
@@ -340,7 +356,7 @@ is gone when its connection is (§5).
 > the same as for introductions (§8), means both sides hearing each other's
 > hello never makes two connections.
 
-_Source: `packages/core/src/network/rendezvous.ts` (`createRendezvous`, `rendezvousKeys`), `packages/core/src/network/mesh.ts` (`meet`), `packages/core/src/network/introductions.ts` (`shouldInitiate`, `createSeenSignals`). Tests: `packages/core/tests/rendezvous.test.ts` ("a relay, or anyone on the topic, sees neither who meets nor their addresses", "a third peer in the room hears the offer pass but cannot open it", "a blob that does not open under the room key, or is stale, or comes again, is ignored", "a replayed hello counts once"), `packages/core/tests/network-manager.test.ts` ("the mesh, through real relays")._
+_Source: `packages/core/src/network/rendezvous.ts` (`createRendezvous`, `rendezvousKeys`, `remember`, `MAX_ROOM_PEERS`), `packages/core/src/network/mesh.ts` (`meet`), `packages/core/src/network/introductions.ts` (`shouldInitiate`, `createSeenSignals`). Tests: `packages/core/tests/rendezvous.test.ts` ("hellos under 90 made-up names start no more than 64 connections", "an offer re-wrapped with another box opens nothing", "a relay, or anyone on the topic, sees neither who meets nor their addresses", "a third peer in the room hears the offer pass but cannot open it", "a blob that does not open under the room key, or is stale, or comes again, is ignored", "a replayed hello counts once"), `packages/core/tests/network-manager.test.ts` ("the mesh, through real relays")._
 
 ### 2.1 Keeping a relay's socket
 
@@ -358,6 +374,10 @@ _Source: `packages/core/src/network/rendezvous.ts` (`createRendezvous`, `rendezv
   before but has sent nothing since the last two.
 - On opening a socket, the client watches every topic it should again: a
   relay forgets everything when a socket closes.
+- A client SHOULD pace what it sends below a relay's message budget, so that
+  watching every room again and saying hello in each doesn't get its socket
+  cut off; the reference client sends at most 20 messages a second, in bursts
+  of 40.
 - A Minca relay's `ice` is kept only if it has the right shape: `servers` an
   array (only the first 4 considered), each with `urls` (string or array) of
   which only strings shorter than 256 characters matching `^turns?:` are
@@ -367,7 +387,7 @@ _Source: `packages/core/src/network/rendezvous.ts` (`createRendezvous`, `rendezv
 How often the reference client redials, and how it reports each relay's
 state, is in [the node's docs](../packages/core/docs/node.md#the-network).
 
-_Source: `packages/core/src/network/relay-socket.ts` (`createRelaySocket`, `iceFrom`), `packages/core/src/network/relay-minca.ts`, `packages/core/src/network/relay-nostr.ts`. Tests: `packages/core/tests/relay-socket.test.ts`._
+_Source: `packages/core/src/network/relay-socket.ts` (`createRelaySocket`, `iceFrom`, `SEND_PER_SECOND`), `packages/core/src/network/relay-minca.ts`, `packages/core/src/network/relay-nostr.ts`. Tests: `packages/core/tests/relay-socket.test.ts`, `packages/core/tests/rendezvous.test.ts` ("a node in 60 rooms keeps its relay…")._
 
 ---
 
@@ -862,9 +882,8 @@ _Source: `packages/core/src/network/mesh.ts` (`greet`, `onHandshake`, `admit`, `
   leaves a connection that neither opens nor fails, and a peer already tried
   is not offered to again, so without a deadline the two stay apart until one
   restarts. A connection started by offering or answering that has not opened
-  within an attempt timeout of the node's choosing is closed and forgotten.
-  The side that offered through a relay offers again in the rooms the peer
-  said hello in; the answering side waits to be offered to.
+  within an attempt timeout of the node's choosing is closed and forgotten,
+  and the next hello from that peer starts again.
 
 _Source: `packages/core/src/network/mesh.ts` (`meet`, `offerTo`, `onSignal`, `watch`, `meetAgain`). Tests: `packages/core/tests/network-manager.test.ts`, `packages/core/tests/relay-socket.test.ts` ("the mesh offers again")._
 

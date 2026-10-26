@@ -307,7 +307,7 @@ describe('the mesh offers again', () => {
   const meshWith = (transport: SignalledTransport) =>
     createMesh({ did: 'did:key:zMe', relays: ['ws://relay.example'], createTransport: () => transport });
 
-  test('when an offer is never answered, while the room is held', async () => {
+  test('when an offer is never answered, it is given up, and made again on the next hello', async () => {
     const fake = silentTransport();
     const mesh = meshWith(fake.transport);
     const room = mesh.join('room-a');
@@ -320,22 +320,27 @@ describe('the mesh offers again', () => {
     assert.deepEqual(fake.offers, ['did:key:zThem']);
     assert.equal(mesh.status().connecting.length, 1);
 
-    // Unanswered, it is given up and made again, rather than waited on for ever.
+    // Unanswered, it is given up rather than waited on for ever, and made
+    // again when the peer next says hello.
     await pass(21_000);
     assert.deepEqual(fake.closed, ['did:key:zThem']);
-    assert.equal(fake.offers.length, 2);
+    assert.equal(fake.offers.length, 1);
+    assert.equal(mesh.status().connecting.length, 0);
+    fromRelay(await helloFrom('did:key:zThem', 'room-a'));
+    await crunch(() => fake.offers.length === 2);
     assert.equal(mesh.status().connecting[0]?.tries, 1);
 
-    // Each wait is longer than the last: nothing more at 30 s, again by 41 s.
+    // Each wait is longer than the last: still open at 30 s, given up by 41 s.
     await pass(30_000);
-    assert.equal(fake.offers.length, 2);
+    assert.equal(fake.closed.length, 1);
     await pass(11_000);
-    assert.equal(fake.offers.length, 3);
+    assert.equal(fake.closed.length, 2);
 
-    // The room let go of: the attempt runs out, and no other is made.
+    // The room let go of: a hello there starts nothing.
     room.disconnect();
-    await pass(5 * 60_000);
-    assert.equal(fake.offers.length, 3);
+    fromRelay(await helloFrom('did:key:zThem', 'room-a'));
+    await pass(1000);
+    assert.equal(fake.offers.length, 2);
     assert.equal(mesh.status().connecting.length, 0);
   });
 

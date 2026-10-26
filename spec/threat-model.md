@@ -118,10 +118,13 @@ reference implementation, or any implementation, honestly.
   - What it sends must be checked, stored or refused, with few limits
     ([#33](https://github.com/leifriksheim/minca/issues/33)). That includes knocks, in an inbox or a shared
     space (07), and an inbox's mailbox can be flooded ([#162](https://github.com/leifriksheim/minca/issues/162)).
-  - Knowing a space's id, it can say hello in its room under someone else's
-    DID, so offers meant for them are sealed to its box and fail the
-    handshake: while it keeps at it, they can't meet through relays, only by
-    introduction. It can also fill a topic's watchers on a Minca relay
+  - Knowing any room a peer is in (from a space id, or a channel's secret),
+    it can say hello there: the peer offers to it and it learns the peer's
+    addresses, as anyone in a room always could. Under someone else's DID it
+    gets the offers meant for them, which then fail the handshake: while it
+    keeps at it, the two can't meet through relays, only by introduction.
+    Under made-up DIDs it can fill the room's 64 places, so nobody new is
+    heard there, and it can fill a topic's watchers on a Minca relay
     ([#162](https://github.com/leifriksheim/minca/issues/162)).
   - Text it writes on GitHub, an issue on a public repository a connected bot
     reads, reaches the model in a run that may write on GitHub. It is marked
@@ -930,22 +933,22 @@ the same sealed blobs.
     derived from the room, which only those who know the room hold (04 §1.3,
     §2; `packages/core/tests/rendezvous.test.ts`, "a relay, or anyone on the
     topic, sees neither who meets nor their addresses").
-  - It can't read a peer's addresses, nor can anyone else in the room: an
-    offer or answer is sealed again to the box of the one peer it is for
-    (04 §2; "a third peer in the room hears the offer pass but cannot open
-    it").
-  - It can't answer in a peer's place: an offer is sealed to a box only that
-    peer holds, and the answer goes to the offerer's, so a relay can neither
-    read the offer nor make an answer that opens. Peers then prove who they
-    are over DTLS channels whose fingerprints both sign (04 §5.1, §6.2).
+  - It can't read a peer's addresses unless it knows the room: an offer or
+    answer is sealed again to the box of the one peer it is for, so others
+    in the room don't read it either, and one re-wrapped with another box
+    opens nothing (04 §2; "a third peer in the room hears the offer pass but
+    cannot open it", "an offer re-wrapped with another box opens nothing").
+    Anyone who knows the room can still say hello and be offered to (§2).
+  - Under made-up names it can make a peer dial at most 64 peers a room, and
+    a node in many rooms paces itself below a Minca relay's budget (04 §2,
+    §2.1; "hellos under 90 made-up names start no more than 64
+    connections", "a node in 60 rooms keeps its relay…"). A published blob
+    costs its sender one message per watcher it reaches (04 §1.4).
   - It can't make a peer act twice on one message, by replaying it or by
     passing it through several relays: each is acted on once, by its `id`,
     and only within 2 minutes of when it was sent (04 §2; "a replayed hello
     counts once", "a blob that does not open under the room key, or is
     stale, or comes again, is ignored").
-  - One relay an inbox names can't hide a knock another one holds: knocks
-    are de-duplicated by the hash of the blob, and no relay's word on time
-    or id is asked for (07 §6).
   - It can't read or change what two sides say on a channel, pairing or
     connecting by code: each direction has its own key from the secret and an
     ephemeral exchange, and each message is bound to its type and place, so
@@ -963,6 +966,10 @@ the same sealed blobs.
     origin they claimed and so works only from there, and denies the program
     its connection.
 - **Does not hold yet.**
+  - That it can't answer in peers' place: they talk over DTLS channels whose
+    fingerprints both sign in the mesh proof (04 §5.1, §6.2), so a relay, or
+    anyone in the room, that answers for one should fail the proof. No test
+    shows it ([#162](https://github.com/leifriksheim/minca/issues/162)).
   - It learns which addresses watch and publish to which topics, and when:
     enough to tell that some sockets share a room, though not which room
     ([#162](https://github.com/leifriksheim/minca/issues/162)).
@@ -973,8 +980,9 @@ the same sealed blobs.
     So can a short link's topic: 64 blobs fill it, and a drop of the link's
     blob after its copy expired is then refused. Joiners read every page, so
     junk can't hide a copy that is there, and a host's copy is not in the
-    relay's queue. A Nostr relay has no such cap and can't be purged: a flood
-    there costs the reader time.
+    relay's queue. A Nostr relay can't be purged, and a fetch reads its
+    newest 500 blobs: 500 drops bury an inbox's earlier knocks there, or a
+    short link's invite (04 §1.5, 07 §5).
   - Of a short link it learns the topic, the sealed invite's size, and when
     and from which address it is fetched; a relay also serving the space's
     room can tie a fetch to the topic watched a moment later

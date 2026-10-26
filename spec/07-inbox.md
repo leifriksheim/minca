@@ -218,9 +218,9 @@ usual ones ([04 — Network](04-network.md) §1.4).
 A full inbox refuses new knocks rather than dropping old ones, so a flood
 can't push out real knocks; a full relay still takes a knock or two on every
 inbox, from the reserve. An owner whose inbox is flooded clears it (purge),
-which keeps its code working. A Nostr relay holds no such cap, so a flood
-there can't push real knocks out; it costs the reader the time to page past
-it.
+which keeps its code working. A Nostr relay can't be purged, and a fetch
+reads only its newest 500 blobs, so 500 junk drops bury the knocks before
+them there: an inbox that names a Nostr relay should name a Minca relay too.
 
 > **Known defect:** both budgets are weaker than this section and §8 promise.
 > One IPv6 /64 counts as one address, so a home /56 (256 of them) can fill the
@@ -361,9 +361,9 @@ grants records only ([06 §2.8](06-nodes-and-sessions.md)).
   A note that was revoked but hasn't run out yet still can, since the owner
   can't see the knocker's revocations
   ([#165](https://github.com/leifriksheim/minca/issues/165)).
-- **Spam on a Nostr relay.** A Nostr relay can't be purged, and keeps what
-  its operator lets it; a flood there costs the owner reading past it, not
-  real knocks (§5).
+- **Spam on a Nostr relay.** A Nostr relay can't be purged, and a fetch
+  reads its newest 500 blobs: anyone with the code can bury earlier knocks
+  there with 500 drops (§5).
 - **Leaked invites.** The invite in a knock is multi-use until the knocker
   closes it, and whoever joins first is taken as the contact. Someone else
   joins first only if the recipient passed it on, lost a device, or gave an

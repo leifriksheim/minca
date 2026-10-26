@@ -10,7 +10,7 @@
  * blob  = sealValue(key, "minca/rendezvous/v1", { topic }, message)
  *
  * message = { kind: "hello", id, at, from, box }
- *         | { kind: "offer" | "answer", id, at, from, box, to, sdp: sealValueTo(theirBox, "minca/rendezvous-signal/v1", { topic, from, to }, description) }
+ *         | { kind: "offer" | "answer", id, at, from, box, to, sdp: sealValueTo(theirBox, "minca/rendezvous-signal/v1", { topic, from, to, box }, description) }
  * ```
  *
  * `box` is a P-256 key this node made for meeting, so an offer or answer is
@@ -19,6 +19,10 @@
  * two minutes; on a hello the lower DID offers, and the higher says hello
  * back so the lower hears of it. Relays are used all at once, so the same
  * message can come through each: it is acted on once, by its `id`.
+ *
+ * A hello costs nothing to send, so a room remembers at most 64 peers, and
+ * forgets one it hasn't heard from in five minutes: someone saying hello
+ * under made-up names can fill a room, not make this node dial without end.
  *
  * A room can name relays of its own: a space says where its members meet
  * (`sys.relays`), so two people whose apps use different relays still find
@@ -65,7 +69,7 @@ export interface Rendezvous {
   /** Enters a room on every relay, and on `relays` as well — joining again with a different list moves to it */
   readonly join: (room: string, relays?: ReadonlyArray<string>) => void;
   readonly leave: (room: string) => void;
-  /** Sends an offer or answer to a peer, in the room it last said hello in */
+  /** Sends an offer or answer to a peer, in every room it was heard in */
   readonly signal: (kind: SignalKind, to: string, payload: unknown) => void;
   /** Asks relays for fresh TURN passwords; they arrive as an `ice` event, from relays that have TURN */
   readonly requestIce: () => void;
@@ -86,8 +90,10 @@ const HELLO_MS = 120_000;
 const MAX_SKEW_MS = 120_000;
 /** The higher DID says hello back to a peer at most this often */
 const ANSWER_HELLO_MS = 10_000;
-/** Peers remembered, with the room and box to answer them in */
-const MAX_PEERS = 512;
+/** Peers a room remembers, as a relay's room held at most 64 */
+const MAX_ROOM_PEERS = 64;
+/** A peer not heard from in this long is forgotten: it would have said hello twice */
+const PEER_SILENT_MS = 5 * 60_000;
 
 /** A room's topic and key, as everyone who knows the room derives them */
 export async function rendezvousKeys(room: string): Promise<{ topic: string; key: CryptoKey }> {
@@ -104,6 +110,8 @@ interface RoomState {
   readonly keys: Promise<{ topic: string; key: CryptoKey }>;
   /** The relays this room is on: the node's, and the room's own */
   urls: ReadonlySet<string>;
+  /** Peers heard in this room: the box to seal to, when last heard, and when last said hello back to */
+  readonly peers: Map<string, { box: string; heard: number; answered: number }>;
 }
 
 /** Meets peers through every relay given, of whatever kind; kinds this library doesn't speak are passed over */
@@ -115,9 +123,6 @@ export function createRendezvous(urls: ReadonlyArray<string>, did: string): Rend
   const rooms = new Map<string, RoomState>();
   /** Rooms by topic, once derived */
   const byTopic = new Map<string, { room: string; key: CryptoKey }>();
-  /** Where to answer each peer: the room it last spoke in, and its box */
-  const peers = new Map<string, { room: string; box: string }>();
-  const answered = new Map<string, number>();
   const seen = createSeenSignals(2048);
   /** TURN servers each relay offered, and when their passwords stop working */
   const turn = new Map<RelayLink, { servers: ReadonlyArray<RTCIceServer>; expiresAt: number }>();
@@ -132,11 +137,14 @@ export function createRendezvous(urls: ReadonlyArray<string>, did: string): Rend
   const connectedCount = () => linkList().filter((link) => link.isConnected()).length;
   const relays = (): ReadonlyArray<RelayStatus> => linkList().map((link) => link.status());
 
-  const remember = (peer: string, at: { room: string; box: string }) => {
-    peers.delete(peer);
-    peers.set(peer, at);
-    // A map iterates in insertion order: the first is the oldest.
-    if (peers.size > MAX_PEERS) peers.delete(peers.keys().next().value ?? peer);
+  /** Remembers a peer heard in a room; false when the room is full of others */
+  const remember = (state: RoomState, peer: string, box: string): boolean => {
+    const now = Date.now();
+    for (const [other, at] of state.peers) if (now - at.heard > PEER_SILENT_MS) state.peers.delete(other);
+    const held = state.peers.get(peer);
+    if (!held && state.peers.size >= MAX_ROOM_PEERS) return false;
+    state.peers.set(peer, { box, heard: now, answered: held?.answered ?? 0 });
+    return true;
   };
 
   /** Seals a message for a room and hands it to its relays: every one, or only `on` */
@@ -172,22 +180,28 @@ export function createRendezvous(urls: ReadonlyArray<string>, did: string): Rend
     if (typeof id !== 'string' || id.length > 64 || typeof at !== 'number') return;
     if (Math.abs(Date.now() - at) > MAX_SKEW_MS || !seen.accept(id)) return;
     const { room } = place;
-    if (!rooms.has(room)) return;
+    const state = rooms.get(room);
+    if (!state) return;
     if (kind === 'hello') {
-      remember(from, { room, box: theirs });
+      if (!remember(state, from, theirs)) return;
       emit('peer-joined', from, room);
       // The lower DID offers; the higher makes sure the lower has heard of it.
-      if (!shouldInitiate(did, from) && Date.now() - (answered.get(from) ?? 0) > ANSWER_HELLO_MS) {
-        answered.set(from, Date.now());
-        if (answered.size > MAX_PEERS) answered.delete(answered.keys().next().value ?? from);
+      const held = state.peers.get(from);
+      if (held && !shouldInitiate(did, from) && Date.now() - held.answered > ANSWER_HELLO_MS) {
+        held.answered = Date.now();
         hello(room);
       }
       return;
     }
     if (!isSignalKind(kind) || message.to !== did) return;
-    const payload = await openValueFrom(await box, SIGNAL_LABEL, { topic, from, to: did }, message.sdp);
-    if (!isObject(payload)) return;
-    remember(from, { room, box: theirs });
+    // The box it came with is bound in: whoever re-wraps it with a box of their own opens nothing.
+    const payload = await openValueFrom(
+      await box,
+      SIGNAL_LABEL,
+      { topic, from, to: did, box: theirs },
+      message.sdp,
+    );
+    if (!isObject(payload) || !remember(state, from, theirs)) return;
     emit('signal', { type: kind, from, payload });
   };
 
@@ -237,7 +251,7 @@ export function createRendezvous(urls: ReadonlyArray<string>, did: string): Rend
 
   const join = (room: string, own: ReadonlyArray<string> = []): void => {
     const held = rooms.get(room);
-    const state: RoomState = held ?? { keys: rendezvousKeys(room), urls: new Set() };
+    const state: RoomState = held ?? { keys: rendezvousKeys(room), urls: new Set(), peers: new Map() };
     const before = state.urls;
     state.urls = new Set([...defaults, ...own.filter((url) => linkFor(url))]);
     rooms.set(room, state);
@@ -255,7 +269,6 @@ export function createRendezvous(urls: ReadonlyArray<string>, did: string): Rend
     const state = rooms.get(room);
     if (!state) return;
     rooms.delete(room);
-    for (const [peer, at] of peers) if (at.room === room) peers.delete(peer);
     void state.keys.then(({ topic }) => {
       byTopic.delete(topic);
       for (const url of state.urls) {
@@ -286,24 +299,24 @@ export function createRendezvous(urls: ReadonlyArray<string>, did: string): Rend
       for (const url of [...byUrl.keys()]) if (!defaults.has(url)) byUrl.delete(url);
       rooms.clear();
       byTopic.clear();
-      peers.clear();
-      answered.clear();
       turn.clear();
     },
 
     join,
     leave,
 
+    // In every room it was heard in, each sealed to the box it said hello with there.
     signal: (kind: SignalKind, to: string, payload: unknown): void => {
-      const at = peers.get(to);
-      if (!at) return;
-      void (async () => {
-        const state = rooms.get(at.room);
-        if (!state) return;
-        const { topic } = await state.keys;
-        const sdp = await sealValueTo(at.box, SIGNAL_LABEL, { topic, from: did, to }, payload);
-        await say(at.room, { kind, to, sdp });
-      })().catch(() => {});
+      for (const [room, state] of rooms) {
+        const theirs = state.peers.get(to)?.box;
+        if (!theirs) continue;
+        void (async () => {
+          const { topic } = await state.keys;
+          const mine = (await box).publicKey;
+          const sdp = await sealValueTo(theirs, SIGNAL_LABEL, { topic, from: did, to, box: mine }, payload);
+          await say(room, { kind, to, sdp });
+        })().catch(() => {});
+      }
     },
 
     requestIce: () => {

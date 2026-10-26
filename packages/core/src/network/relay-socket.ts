@@ -91,6 +91,15 @@ const SLEPT_MS = 30_000;
 const PING_MS = 30_000;
 /** Pings in a row a relay may leave unanswered before its socket is taken for dead */
 const MAX_UNANSWERED = 2;
+/**
+ * Messages a socket sends at most, a second and in a burst: below a Minca
+ * relay's budget (50/s, burst 100), so a node in many rooms is paced rather
+ * than cut off when it watches them all again and says hello in each.
+ */
+const SEND_PER_SECOND = 20;
+const SEND_BURST = 40;
+/** Messages waiting their turn; past this the oldest go, as they would be stale */
+const MAX_QUEUED = 2048;
 
 /**
  * Once connected it stays connected: a socket that closes is opened again,
@@ -124,9 +133,31 @@ export function createRelaySocket(options: RelaySocketOptions): RelaySocket {
     emit('status', status);
   };
 
+  // A token bucket: what can't go now waits, in order, for the next token.
+  let queue: string[] = [];
+  let tokens = SEND_BURST;
+  let refilled = Date.now();
+  let draining: ReturnType<typeof setTimeout> | undefined;
+  const drain = (): void => {
+    draining = undefined;
+    const now = Date.now();
+    tokens = Math.min(SEND_BURST, tokens + ((now - refilled) / 1000) * SEND_PER_SECOND);
+    refilled = now;
+    while (queue.length > 0 && tokens >= 1) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        queue = [];
+        return;
+      }
+      ws.send(queue.shift()!);
+      tokens -= 1;
+    }
+    if (queue.length > 0) draining = setTimeout(drain, 1000 / SEND_PER_SECOND);
+  };
   const send = (message: unknown) => {
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    ws.send(JSON.stringify(message));
+    queue.push(JSON.stringify(message));
+    if (queue.length > MAX_QUEUED) queue.shift();
+    if (draining === undefined) drain();
   };
 
   // A failed open's close schedules the next try.
@@ -218,6 +249,11 @@ export function createRelaySocket(options: RelaySocketOptions): RelaySocket {
       // A socket already replaced or let go of says nothing about the one in use.
       const ended = (event: Partial<CloseEvent> | undefined) => {
         clearInterval(pinging);
+        if (ws === socket) {
+          queue = [];
+          clearTimeout(draining);
+          draining = undefined;
+        }
         if (ws !== socket) return;
         ws = null;
         drop = null;
@@ -285,6 +321,9 @@ export function createRelaySocket(options: RelaySocketOptions): RelaySocket {
       const socket = ws;
       ws = null;
       drop = null;
+      queue = [];
+      clearTimeout(draining);
+      draining = undefined;
       socket?.close();
       topics = 0;
       setStatus({ state: 'stopped', retryAt: null, failures: 0 });

@@ -17,6 +17,8 @@ import { checkRelays } from '../src/space/roles.js';
 import { isObject } from '../src/utils/guards.js';
 import { contactPublicKey } from '../src/identity/contact-key.js';
 import { p256 } from '@noble/curves/nist.js';
+import { createMesh } from '../src/network/mesh.js';
+import { createFakeHub } from './helpers/fake-transport.js';
 import { portOf } from './helpers/net.js';
 import { until } from './helpers/until.js';
 
@@ -202,12 +204,102 @@ describe('meeting through relays', () => {
   });
 });
 
+describe('what a hello can cost', () => {
+  test('hellos under 90 made-up names start no more than 64 connections', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const offered = new Set<string>();
+    const mesh = createMesh({
+      did: A,
+      relays: [one.url],
+      createTransport: () => {
+        const transport = hub.signalled(A, 'flood');
+        return Object.freeze({
+          ...transport,
+          createOffer: (to: string) => {
+            offered.add(to);
+            return transport.createOffer(to);
+          },
+        });
+      },
+    });
+    const net = mesh.join('flooded');
+    opened.push(net);
+    await net.connect();
+    const sender = await eavesdrop(one.url, 'flooded');
+    const { key } = await rendezvousKeys('flooded');
+    const box = contactPublicKey(p256.utils.randomSecretKey());
+    for (let i = 0; i < 90; i++)
+      sender.link.publish(
+        sender.topic,
+        await sealValue(
+          key,
+          'minca/rendezvous/v1',
+          { topic: sender.topic },
+          {
+            kind: 'hello',
+            id: `made-up-${i}`,
+            at: Date.now(),
+            from: `did:key:zZ${'abcdefghijk'[i % 11]}${String(i).replace(/0/g, 'o')}`,
+            box,
+          },
+        ),
+      );
+    // Paced at 20 a second, the 90 take four and a half.
+    await until(() => offered.size >= 64, 10_000, 'the room to fill');
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    assert.equal(offered.size, 64);
+  });
+
+  test('a node in 60 rooms keeps its relay: watching them all again and saying hello in each is paced', async () => {
+    const rendezvous = createRendezvous([one.url], A);
+    opened.push(rendezvous);
+    const states: string[] = [];
+    rendezvous.on('status', (relays) => states.push(...relays.map((relay) => relay.state)));
+    for (let i = 0; i < 60; i++) rendezvous.join(`room ${i}`);
+    await rendezvous.connect();
+    await new Promise((resolve) => setTimeout(resolve, 6000));
+    assert.ok(!states.includes('waiting'), `the relay let go: ${[...new Set(states)].join(', ')}`);
+    assert.equal(rendezvous.relays()[0]?.state, 'open');
+  });
+
+  test('an offer re-wrapped with another box opens nothing', async () => {
+    const watcher = await eavesdrop(one.url);
+    const b = await peer(B, [one.url]);
+    const a = await peer(A, [one.url]);
+    await until(() => a.joined.includes(B), 2000, 'hello');
+    a.rendezvous.signal('offer', B, OFFER);
+    await until(() => b.signals.length === 1, 2000, 'the offer');
+    // Someone who knows the room seals it again, with a box of their own for the answer to go to.
+    const { key, topic } = await rendezvousKeys('room');
+    for (const blob of watcher.blobs) {
+      const message = await openValue(key, 'minca/rendezvous/v1', { topic }, blob);
+      if (!isObject(message) || message.kind !== 'offer') continue;
+      const box = contactPublicKey(p256.utils.randomSecretKey());
+      watcher.link.publish(
+        topic,
+        await sealValue(
+          key,
+          'minca/rendezvous/v1',
+          { topic },
+          { ...message, id: 'rewrapped', at: Date.now(), box },
+        ),
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.equal(b.signals.length, 1);
+  });
+});
+
 describe('the relay keeps nothing dropped with ttl 0', () => {
   test('a watcher gets it, a fetch finds nothing, and the dropper hears nothing back', async () => {
     const watcher = await eavesdrop(one.url, 'ephemeral');
     const answers: unknown[] = [];
     const ws = new WebSocket(one.url);
     await new Promise((resolve) => (ws.onopen = resolve));
+    // Only a socket watching the topic may publish to it.
+    ws.send(JSON.stringify({ type: 'drop', topic: watcher.topic, blob: 'bm90IHdhdGNoaW5n', ttl: 0 }));
+    ws.send(JSON.stringify({ type: 'fetch', topic: watcher.topic, watch: true }));
+    await new Promise((resolve) => setTimeout(resolve, 100));
     ws.onmessage = (event) => answers.push(JSON.parse(String(event.data)));
     ws.send(JSON.stringify({ type: 'drop', topic: watcher.topic, blob: 'aGVsbG8', ttl: 0 }));
     await until(() => watcher.blobs.length === 1, 2000, 'the watcher hears it');

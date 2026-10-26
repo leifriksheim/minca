@@ -120,13 +120,16 @@ const ICE_REFRESH_MS = 10 * 60_000;
 /** How long to wait for them before going ahead with what there is */
 const ICE_WAIT_MS = 1500;
 /**
- * How long a connection has to open before it is given up and offered again.
- * An offer that is never answered leaves a connection that never fails either,
- * and a peer marked as tried is not offered to again, so without this it is
- * lost until one side restarts. Each try waits twice as long, up to the cap.
+ * How long a connection has to open before it is given up. An offer that is
+ * never answered leaves a connection that never fails either, and a peer
+ * marked as tried is not offered to again, so without this it is lost until
+ * one side restarts. Once given up, the peer's next hello brings the next
+ * offer. Each try waits twice as long, up to the cap.
  */
 const CONNECT_TIMEOUT_MS = 20_000;
 const MAX_CONNECT_TIMEOUT_MS = 5 * 60_000;
+/** Peers whose failed tries are remembered, for the wait before the next */
+const MAX_TRIED = 512;
 
 interface Handshake {
   readonly nonce: string;
@@ -173,14 +176,9 @@ export function createMesh(config: MeshConfig): Mesh {
   /** Connections waiting to be put to use in some room, or closed */
   const idle = new Map<string, ReturnType<typeof setTimeout>>();
   /** Connections started and not yet open, each with the timer that gives up on it */
-  const pending = new Map<
-    string,
-    { since: number; tries: number; timer: ReturnType<typeof setTimeout>; again: (() => void) | null }
-  >();
+  const pending = new Map<string, { since: number; tries: number; timer: ReturnType<typeof setTimeout> }>();
   /** Failed tries per peer, so each wait is longer; forgotten once a connection opens */
   const tries = new Map<string, number>();
-  /** The rooms each peer said hello in — the rooms to offer in again */
-  const present = new Map<string, Set<string>>();
   const seenSignals = createSeenSignals();
   let started: Promise<void> | null = null;
   const changes = new Set<() => void>();
@@ -189,23 +187,25 @@ export function createMesh(config: MeshConfig): Mesh {
   };
   signaling.on('status', changed);
 
-  /** Gives an attempt a deadline; past it the connection is closed and, if `again` is given, offered again. */
-  const watch = (peer: string, again: (() => void) | null): void => {
+  /** Gives an attempt a deadline; past it the connection is closed and the peer forgotten until heard of again. */
+  const watch = (peer: string): void => {
     const held = pending.get(peer);
     if (held) clearTimeout(held.timer);
     const tried = tries.get(peer) ?? 0;
     const wait = Math.min(CONNECT_TIMEOUT_MS * 2 ** tried, MAX_CONNECT_TIMEOUT_MS);
     const timer = setTimeout(() => {
-      const attempt = pending.get(peer);
       pending.delete(peer);
       if (links.has(peer)) return;
+      tries.delete(peer);
       tries.set(peer, tried + 1);
+      // A map iterates in insertion order: the first is the oldest.
+      if (tries.size > MAX_TRIED) tries.delete(tries.keys().next().value ?? peer);
       transport.close(peer);
       attempted.delete(peer);
+      expected.delete(peer);
       changed();
-      attempt?.again?.();
     }, wait);
-    pending.set(peer, { since: held?.since ?? Date.now(), tries: tried, timer, again });
+    pending.set(peer, { since: held?.since ?? Date.now(), tries: tried, timer });
     changed();
   };
 
@@ -358,8 +358,8 @@ export function createMesh(config: MeshConfig): Mesh {
     (kind, data) =>
       signaling.signal(kind, target, data);
 
-  const offerTo = async (peer: string, deliver: Deliver, again: (() => void) | null): Promise<void> => {
-    watch(peer, again);
+  const offerTo = async (peer: string, deliver: Deliver): Promise<void> => {
+    watch(peer);
     try {
       deliver('offer', await transport.createOffer(peer));
     } catch (err) {
@@ -375,8 +375,8 @@ export function createMesh(config: MeshConfig): Mesh {
     try {
       if (kind === 'offer') {
         attempted.add(peer);
-        // The side that offered tries again; this side only lets go of what never opened.
-        watch(peer, null);
+        // Either side lets go of what never opened; the next hello starts again.
+        watch(peer);
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- setRemoteDescription checks it and throws into the catch below
         deliver('answer', await transport.handleOffer(peer, data as RTCSessionDescriptionInit));
       } else {
@@ -398,20 +398,14 @@ export function createMesh(config: MeshConfig): Mesh {
     (expected.get(peer) ?? expected.set(peer, new Set()).get(peer)!).add(name);
     if (offer && !attempted.has(peer)) {
       attempted.add(peer);
-      void offerTo(peer, offer, () => meetAgain(peer));
+      void offerTo(peer, offer);
     }
   };
 
-  /** Offers again to a peer whose connection never opened, in the rooms it said hello in. */
-  const meetAgain = (peer: string): void => {
-    for (const name of present.get(peer) ?? []) meet(name, peer, throughRelay(peer));
-  };
-
   // Both sides hear each other's hello, so one rule says who offers: the same as for introductions.
-  signaling.on('peer-joined', (peer, room) => {
-    (present.get(peer) ?? present.set(peer, new Set()).get(peer)!).add(room);
-    meet(room, peer, shouldInitiate(did, peer) ? throughRelay(peer) : null);
-  });
+  signaling.on('peer-joined', (peer, room) =>
+    meet(room, peer, shouldInitiate(did, peer) ? throughRelay(peer) : null),
+  );
   signaling.on(
     'signal',
     (message) => void onSignal(message.from, message.type, message.payload, throughRelay(message.from)),
@@ -587,8 +581,6 @@ export function createMesh(config: MeshConfig): Mesh {
           room.peers.clear();
           rooms.delete(name);
           signaling.leave(name);
-          for (const [peer, named] of present)
-            if (named.delete(name) && named.size === 0) present.delete(peer);
           for (const peer of [...links]) closeIfIdle(peer);
           if (rooms.size === 0) {
             for (const timer of idle.values()) clearTimeout(timer);
@@ -596,7 +588,6 @@ export function createMesh(config: MeshConfig): Mesh {
             for (const { timer } of pending.values()) clearTimeout(timer);
             pending.clear();
             tries.clear();
-            present.clear();
             signaling.disconnect();
             started = null;
           }
