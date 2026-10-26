@@ -16,7 +16,9 @@ import type { NetworkMessage } from '../src/types.js';
 import { createFakeHub } from './helpers/fake-transport.js';
 import { startNostrRelay, type TestNostrRelay } from './helpers/nostr-relay.js';
 import { until } from './helpers/until.js';
+import { sessionsInOrder, type Session } from './helpers/sessions.js';
 
+const [A, B] = await sessionsInOrder(2);
 const TOPIC = 'n'.repeat(43);
 const opened: { disconnect(): void }[] = [];
 afterEach(() => {
@@ -37,30 +39,31 @@ after(() => {
 /** Two peers in one room through `relay` alone, and what B heard */
 async function meet(relay: string, namespace: string) {
   const hub = createFakeHub();
-  const room = (did: string): NetworkManager => {
+  const room = (who: Session): NetworkManager => {
     const net = createMesh({
-      did,
+      did: who.did,
+      key: who.key,
       relays: [relay],
-      createTransport: () => hub.signalled(did, namespace),
+      createTransport: () => hub.signalled(who.did, namespace),
     }).join('nostr room');
     opened.push(net);
     return net;
   };
-  const a = room('did:key:zA');
-  const b = room('did:key:zB');
+  const a = room(A);
+  const b = room(B);
   const heard: NetworkMessage[] = [];
   b.on('message', (message: NetworkMessage) => heard.push(message));
   await b.connect();
   await a.connect();
   await until(() => a.getPeers().length === 1 && b.getPeers().length === 1, 3000, 'the two to meet');
-  a.send('did:key:zB', { type: 'hi', from: 'did:key:zA', payload: 1 });
+  a.send(B.did, { type: 'hi', from: A.did, payload: 1 });
   await until(() => heard.length === 1, 2000, 'a message');
   return heard;
 }
 
 describe('peers meet through a Nostr relay', () => {
   test('alone, with no Minca relay at all', async () => {
-    assert.deepEqual(await meet(open.url, 'open'), [{ type: 'hi', from: 'did:key:zA', payload: 1 }]);
+    assert.deepEqual(await meet(open.url, 'open'), [{ type: 'hi', from: A.did, payload: 1 }]);
     const events = open.taken().filter((event) => event.kind === NOSTR_EPHEMERAL_KIND);
     assert.ok(events.length >= 3, 'hellos, an offer and an answer went through it');
     assert.equal(open.kept().filter((event) => event.kind === NOSTR_EPHEMERAL_KIND).length, 0, 'none kept');

@@ -37,6 +37,7 @@ import { createFakeHub } from '../../core/tests/helpers/fake-transport.js';
 import { createMesh } from '../../core/src/network/mesh.js';
 import { at } from './helpers/json.js';
 import { until } from '../../core/tests/helpers/until.js';
+import { sessionsInOrder, type Session } from '../../core/tests/helpers/sessions.js';
 
 const run = promisify(execFile);
 
@@ -170,13 +171,15 @@ describe('the daemon', () => {
 
   test('is a relay too: peers meet through it, in several spaces over one socket', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
-    const meshOf = (did: string) =>
+    const meshOf = (who: Session) =>
       createMesh({
-        did,
+        did: who.did,
+        key: who.key,
         relays: [`ws://127.0.0.1:${daemon.port}`],
-        createTransport: () => hub.signalled(did, 'daemon-relay'),
+        createTransport: () => hub.signalled(who.did, 'daemon-relay'),
       });
-    const [a, b] = [meshOf('did:key:zA'), meshOf('did:key:zB')];
+    const [first, second] = await sessionsInOrder(2);
+    const [a, b] = [meshOf(first), meshOf(second)];
     const rooms = [a.join('one'), a.join('two'), b.join('one'), b.join('two')];
     const met = rooms.map(() => 0);
     rooms.forEach((room, i) => room.on('peer-connected', () => (met[i] = met[i]! + 1)));

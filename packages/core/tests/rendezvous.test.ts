@@ -16,12 +16,13 @@ import { openValue, sealValue } from '../src/identity/envelope.js';
 import { checkRelays } from '../src/space/roles.js';
 import { isObject } from '../src/utils/guards.js';
 import { contactKeyPair, contactPublicKey } from '../src/identity/contact-key.js';
-import { openValueFrom } from '../src/identity/hpke.js';
+import { openValueFrom, sealValueTo } from '../src/identity/hpke.js';
 import { p256 } from '@noble/curves/nist.js';
 import { createMesh } from '../src/network/mesh.js';
 import { createFakeHub } from './helpers/fake-transport.js';
 import { portOf } from './helpers/net.js';
 import { until } from './helpers/until.js';
+import { sealedSigned, session, sessionsInOrder, signedHello, type Session } from './helpers/sessions.js';
 
 async function startRelay() {
   const relay = createRelay({});
@@ -38,9 +39,8 @@ async function startRelay() {
   };
 }
 
-const A = 'did:key:zA';
-const B = 'did:key:zB';
-const C = 'did:key:zC';
+// Real sessions, since every message is signed: A < B < C, so A offers to B.
+const [A, B, C] = await sessionsInOrder(3);
 const OFFER = { type: 'offer', sdp: 'v=0 a secret address' };
 
 /** Everything a test opened, closed after it whether it passed or not */
@@ -61,8 +61,8 @@ after(() => {
 });
 
 /** A rendezvous, and what it heard */
-async function peer(did: string, relays: string[], room = 'room') {
-  const rendezvous = createRendezvous(relays, did);
+async function peer(who: Session, relays: string[], room = 'room') {
+  const rendezvous = createRendezvous(relays, who);
   opened.push(rendezvous);
   const joined: string[] = [];
   const signals: { type: string; from: string; payload: unknown; room: string; box: string }[] = [];
@@ -90,20 +90,20 @@ describe('meeting through relays', () => {
     // B is there first, so it hears A's hello, and says hello back since A is the one to offer.
     const b = await peer(B, [one.url, two.url]);
     const a = await peer(A, [one.url, two.url]);
-    await until(() => a.joined.includes(B) && b.joined.includes(A), 2000, 'hellos');
+    await until(() => a.joined.includes(B.did) && b.joined.includes(A.did), 2000, 'hellos');
     // Each hello came through both relays; the second copy changes nothing.
     await new Promise((resolve) => setTimeout(resolve, 100));
-    assert.deepEqual(b.joined, [A]);
-    assert.deepEqual(a.joined, [B]);
+    assert.deepEqual(b.joined, [A.did]);
+    assert.deepEqual(a.joined, [B.did]);
     const before = b.joined.length;
 
-    a.rendezvous.signal('offer', B, OFFER, 'room');
+    a.rendezvous.signal('offer', B.did, OFFER, 'room');
     await until(() => b.signals.length > 0, 2000, 'the offer');
     await new Promise((resolve) => setTimeout(resolve, 100));
     assert.equal(b.signals.length, 1, 'one offer, though both relays carried it');
     assert.deepEqual(
       { ...b.signals[0], box: undefined },
-      { type: 'offer', from: A, payload: OFFER, room: 'room', box: undefined },
+      { type: 'offer', from: A.did, payload: OFFER, room: 'room', box: undefined },
     );
     assert.equal(b.joined.length, before);
     a.rendezvous.disconnect();
@@ -114,8 +114,8 @@ describe('meeting through relays', () => {
     const watcher = await eavesdrop(one.url);
     const b = await peer(B, [one.url]);
     const a = await peer(A, [one.url]);
-    await until(() => a.joined.includes(B), 2000, 'hello');
-    a.rendezvous.signal('offer', B, OFFER, 'room');
+    await until(() => a.joined.includes(B.did), 2000, 'hello');
+    a.rendezvous.signal('offer', B.did, OFFER, 'room');
     await until(() => b.signals.length > 0, 2000, 'the offer');
     await until(() => watcher.blobs.length >= 3, 2000, 'blobs on the wire');
     for (const blob of watcher.blobs) {
@@ -132,8 +132,8 @@ describe('meeting through relays', () => {
     const b = await peer(B, [one.url]);
     const c = await peer(C, [one.url]);
     const a = await peer(A, [one.url]);
-    await until(() => a.joined.includes(B) && c.joined.includes(A), 2000, 'hellos');
-    a.rendezvous.signal('offer', B, OFFER, 'room');
+    await until(() => a.joined.includes(B.did) && c.joined.includes(A.did), 2000, 'hellos');
+    a.rendezvous.signal('offer', B.did, OFFER, 'room');
     await until(() => b.signals.length > 0, 2000, 'the offer');
     await new Promise((resolve) => setTimeout(resolve, 100));
     assert.equal(c.signals.length, 0, 'C is not who it was for');
@@ -154,36 +154,132 @@ describe('meeting through relays', () => {
     const sender = await eavesdrop(one.url);
     const { key, topic } = await rendezvousKeys('room');
     const box = contactPublicKey(p256.utils.randomSecretKey());
-    const hello = (at: number, id: string) =>
-      sealValue(key, 'minca/rendezvous/v1', { topic }, { kind: 'hello', id, at, from: A, box });
+    // Each signed by A, so only the sealing or the time is wrong.
+    const hello = (at: number) => signedHello('room', A, box, { at });
     // Not sealed at all, sealed under another room's key, and older than two minutes.
     sender.link.publish(topic, 'bm90IHNlYWxlZA');
     const other = await rendezvousKeys('another room');
-    sender.link.publish(
-      topic,
-      await sealValue(
-        other.key,
-        'minca/rendezvous/v1',
-        { topic },
-        { kind: 'hello', id: 'x', at: Date.now(), from: A, box },
-      ),
-    );
-    sender.link.publish(topic, await hello(Date.now() - 5 * 60_000, 'old'));
+    const signed = await openValue(key, 'minca/rendezvous/v1', { topic }, await hello(Date.now()));
+    sender.link.publish(topic, await sealValue(other.key, 'minca/rendezvous/v1', { topic }, signed));
+    sender.link.publish(topic, await hello(Date.now() - 5 * 60_000));
     await new Promise((resolve) => setTimeout(resolve, 200));
     assert.deepEqual(b.joined, []);
     // The same, sealed under the room's key and fresh, is heard.
-    sender.link.publish(topic, await hello(Date.now(), 'fresh'));
+    sender.link.publish(topic, await hello(Date.now() + 1));
     await until(() => b.joined.length > 0, 2000, 'the good hello');
-    assert.deepEqual(b.joined, [A]);
+    assert.deepEqual(b.joined, [A.did]);
     b.rendezvous.disconnect();
     sender.link.disconnect();
+  });
+
+  test('a replayed offer is not acted on again, however much else was said since', async () => {
+    const watcher = await eavesdrop(one.url);
+    const b = await peer(B, [one.url]);
+    const a = await peer(A, [one.url]);
+    await until(() => a.joined.includes(B.did), 2000, 'hello');
+    a.rendezvous.signal('offer', B.did, OFFER, 'room');
+    await until(() => b.signals.length === 1, 2000, 'the offer');
+    // Others keep talking: nothing B remembers of A is pushed out by them.
+    const others = await Promise.all(Array.from({ length: 20 }, session));
+    const box = contactPublicKey(p256.utils.randomSecretKey());
+    for (const other of others) watcher.link.publish(watcher.topic, await signedHello('room', other, box));
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    for (const blob of watcher.blobs) watcher.link.publish(watcher.topic, blob);
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    assert.equal(b.signals.length, 1);
+  });
+
+  test('a sender’s messages are each acted on, in whatever order they arrive', async () => {
+    const sender = await eavesdrop(one.url);
+    const { key, topic } = await rendezvousKeys('room');
+    let theirBox = '';
+    sender.link.on('blob', (_topic, blob) => {
+      void openValue(key, 'minca/rendezvous/v1', { topic }, blob).then((message) => {
+        if (isObject(message) && message.from === B.did && typeof message.box === 'string')
+          theirBox = message.box;
+      });
+    });
+    const b = await peer(B, [one.url]);
+    await until(() => theirBox !== '', 2000, 'B says hello');
+    const box = await contactKeyPair(p256.utils.randomSecretKey());
+    sender.link.publish(topic, await signedHello('room', A, box.publicKey));
+    await until(() => b.joined.length === 1, 2000, 'B hears A');
+    // An offer, and a hello signed after it: the hello comes first, as through a faster relay,
+    // and the offer right behind it, as on one relay where the hello is quicker to check.
+    const at = Date.now() + 5;
+    const sdp = await sealValueTo(
+      theirBox,
+      'minca/rendezvous-signal/v1',
+      { topic, from: A.did, to: B.did, box: box.publicKey },
+      OFFER,
+    );
+    const offer = await sealedSigned('room', A, {
+      kind: 'offer',
+      at,
+      from: A.did,
+      box: box.publicKey,
+      to: B.did,
+      sdp,
+    });
+    sender.link.publish(topic, await signedHello('room', A, box.publicKey, { at: at + 1 }));
+    sender.link.publish(topic, offer);
+    await until(() => b.signals.length === 1, 2000, 'the offer');
+    assert.deepEqual(b.signals[0]?.payload, OFFER);
+    assert.equal(b.joined.length, 2);
+  });
+
+  test('a replay after leaving the room and joining again is not acted on', async () => {
+    const watcher = await eavesdrop(one.url);
+    const b = await peer(B, [one.url]);
+    const a = await peer(A, [one.url]);
+    await until(() => a.joined.includes(B.did), 2000, 'hello');
+    a.rendezvous.signal('offer', B.did, OFFER, 'room');
+    await until(() => b.signals.length === 1, 2000, 'the offer');
+    b.rendezvous.leave('room');
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    b.rendezvous.join('room');
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    for (const blob of watcher.blobs) watcher.link.publish(watcher.topic, blob);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    assert.equal(b.signals.length, 1);
+  });
+
+  test('a hello replayed from before a peer restarted leaves offers going to its new box', async () => {
+    const sender = await eavesdrop(one.url);
+    const a = await peer(A, [one.url]);
+    const before = await contactKeyPair(p256.utils.randomSecretKey());
+    const now = await contactKeyPair(p256.utils.randomSecretKey());
+    const at = Date.now();
+    const old = await signedHello('room', B, before.publicKey, { at: at - 1000 });
+    sender.link.publish(sender.topic, await signedHello('room', B, now.publicKey, { at }));
+    await until(() => a.joined.includes(B.did), 2000, 'the new hello');
+    sender.link.publish(sender.topic, old);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const offers = sender.blobs.length;
+    a.rendezvous.signal('offer', B.did, OFFER, 'room');
+    await until(() => sender.blobs.length > offers, 2000, 'the offer');
+    const { key, topic } = await rendezvousKeys('room');
+    const message = await openValue(key, 'minca/rendezvous/v1', { topic }, sender.blobs.at(-1));
+    assert.ok(isObject(message) && message.kind === 'offer' && typeof message.box === 'string');
+    const bound = { topic, from: A.did, to: B.did, box: message.box };
+    assert.deepEqual(await openValueFrom(now, 'minca/rendezvous-signal/v1', bound, message.sdp), OFFER);
+  });
+
+  test('two who join within ten seconds of each other both hear back from the peer they offer to', async () => {
+    const c = await peer(C, [one.url]);
+    const a = await peer(A, [one.url]);
+    await until(() => a.joined.includes(C.did), 2000, 'C says hello back to A');
+    const b = await peer(B, [one.url]);
+    // C said hello back to A a moment ago; B hears it once the ten seconds are up, not at the next two-minute hello.
+    await until(() => b.joined.includes(C.did), 3000, 'C says hello back to B');
+    assert.ok(c.joined.includes(B.did));
   });
 
   test('a replayed hello counts once', async () => {
     const watcher = await eavesdrop(one.url);
     const b = await peer(B, [one.url]);
     const a = await peer(A, [one.url]);
-    await until(() => b.joined.includes(A) && watcher.blobs.length > 0, 2000, 'hello');
+    await until(() => b.joined.includes(A.did) && watcher.blobs.length > 0, 2000, 'hello');
     const heard = b.joined.length;
     for (const blob of watcher.blobs) watcher.link.publish(watcher.topic, blob);
     await new Promise((resolve) => setTimeout(resolve, 200));
@@ -214,29 +310,23 @@ describe('signals stay in their room', () => {
     const b = await peer(B, [one.url], 'private');
     b.rendezvous.join('public');
     const a = await peer(A, [one.url], 'private');
-    await until(() => a.joined.includes(B), 2000, 'hello');
+    await until(() => a.joined.includes(B.did), 2000, 'hello');
     const eve = await eavesdrop(one.url, 'public');
     const inPrivate = await eavesdrop(one.url, 'private');
     const secret = p256.utils.randomSecretKey();
     const evesBox = await contactKeyPair(secret);
-    const posing = async (room: string, id: string) => {
-      const { key, topic } = await rendezvousKeys(room);
-      return sealValue(
-        key,
-        'minca/rendezvous/v1',
-        { topic },
-        { kind: 'hello', id, at: Date.now(), from: A, box: evesBox.publicKey },
-      );
-    };
+    const evesKey = await session();
+    // Eve can only sign with her own key, whatever name she gives.
+    const posing = (room: string) => signedHello(room, evesKey, evesBox.publicKey, { from: A.did });
     // Eve says hello as A in the public room, and then in the private one, between A's offer and B's answer.
-    eve.link.publish(eve.topic, await posing('public', 'eve-public'));
+    eve.link.publish(eve.topic, await posing('public'));
     await new Promise((resolve) => setTimeout(resolve, 200));
-    a.rendezvous.signal('offer', B, OFFER, 'private');
+    a.rendezvous.signal('offer', B.did, OFFER, 'private');
     await until(() => b.signals.length === 1, 2000, 'the offer');
-    inPrivate.link.publish(inPrivate.topic, await posing('private', 'eve-private'));
+    inPrivate.link.publish(inPrivate.topic, await posing('private'));
     await new Promise((resolve) => setTimeout(resolve, 200));
     const offer = b.signals[0]!;
-    b.rendezvous.signal('answer', A, { type: 'answer', sdp: 'v=0 B answers' }, offer.room, offer.box);
+    b.rendezvous.signal('answer', A.did, { type: 'answer', sdp: 'v=0 B answers' }, offer.room, offer.box);
     await until(() => a.signals.length === 1, 2000, 'the answer reaches A');
     await new Promise((resolve) => setTimeout(resolve, 200));
     // Nothing either room carried opens with Eve's box.
@@ -257,7 +347,7 @@ describe('signals stay in their room', () => {
         const opened = await openValueFrom(
           evesBox,
           'minca/rendezvous-signal/v1',
-          { topic, from: message.from, to: A, box: message.box },
+          { topic, from: message.from, to: A.did, box: message.box },
           message.sdp,
         );
         assert.equal(opened, null, `Eve opened a ${String(message.kind)} in ${room}`);
@@ -266,15 +356,141 @@ describe('signals stay in their room', () => {
   });
 });
 
+describe('nobody speaks in another’s name', () => {
+  test('an offer whose sealed description someone else put in, under its sender’s signature, is ignored', async () => {
+    // A and B are on different relays; someone who knows the room passes what each says to the
+    // other, and puts a description of its own into A's offer, sealed to B's box, keeping A's signature.
+    const { topic, key } = await rendezvousKeys('room');
+    const onOne = await eavesdrop(one.url);
+    const onTwo = await eavesdrop(two.url);
+    let theirBox = '';
+    onTwo.link.on('blob', (_topic, blob) => {
+      void openValue(key, 'minca/rendezvous/v1', { topic }, blob).then((message) => {
+        if (!isObject(message) || message.from !== B.did || typeof message.box !== 'string') return;
+        theirBox = message.box;
+        onOne.link.publish(topic, blob);
+      });
+    });
+    let genuine = '';
+    onOne.link.on('blob', (_topic, blob) => {
+      void openValue(key, 'minca/rendezvous/v1', { topic }, blob).then(async (message) => {
+        if (!isObject(message) || message.from !== A.did) return;
+        if (message.kind !== 'offer' || typeof message.box !== 'string')
+          return onTwo.link.publish(topic, blob);
+        genuine = blob;
+        const sdp = await sealValueTo(
+          theirBox,
+          'minca/rendezvous-signal/v1',
+          { topic, from: A.did, to: B.did, box: message.box },
+          { type: 'offer', sdp: 'v=0 not what A said' },
+        );
+        onTwo.link.publish(
+          topic,
+          await sealValue(key, 'minca/rendezvous/v1', { topic }, { ...message, sdp }),
+        );
+      });
+    });
+    const b = await peer(B, [two.url]);
+    const a = await peer(A, [one.url]);
+    await until(() => a.joined.includes(B.did), 3000, 'A hears B');
+    a.rendezvous.signal('offer', B.did, OFFER, 'room');
+    await until(() => genuine !== '', 3000, 'the offer');
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.equal(b.signals.length, 0, 'the swapped offer is not taken');
+    // A's own offer, passed on after, is still acted on: the swap took nothing from it.
+    onTwo.link.publish(topic, genuine);
+    await until(() => b.signals.length === 1, 2000, 'the genuine offer');
+    assert.deepEqual(b.signals[0]?.payload, OFFER);
+  });
+
+  test('a hello naming B but signed by another key is ignored', async () => {
+    const a = await peer(A, [one.url]);
+    const sender = await eavesdrop(one.url);
+    const box = contactPublicKey(p256.utils.randomSecretKey());
+    sender.link.publish(sender.topic, await signedHello('room', C, box, { from: B.did }));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.deepEqual(a.joined, [], 'C posing as B was heard');
+    // The same hello, signed by B's own key, is heard.
+    sender.link.publish(sender.topic, await signedHello('room', B, box));
+    await until(() => a.joined.length > 0, 2000, 'the real hello');
+    assert.deepEqual(a.joined, [B.did]);
+  });
+
+  test('someone in only a public room cannot pose there as B to keep A and B apart in a private one', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const meshOf = (who: Session) =>
+      createMesh({
+        did: who.did,
+        key: who.key,
+        relays: [one.url],
+        createTransport: () => hub.signalled(who.did, 'cross-room'),
+      });
+    const meshA = meshOf(A);
+    const [publicA, privateA] = [meshA.join('public'), meshA.join('private')];
+    opened.push(publicA, privateA);
+    const met: string[] = [];
+    privateA.on('peer-connected', (peer: { did: string }) => met.push(peer.did));
+    await privateA.connect();
+    await publicA.connect();
+
+    // Mallory knows the public room alone, and keeps saying hello there as B,
+    // with her own box: were A to take it, A would offer to B there and nowhere else.
+    const mallory = await session();
+    const box = await contactKeyPair(p256.utils.randomSecretKey());
+    const inPublic = await eavesdrop(one.url, 'public');
+    const inPrivate = await eavesdrop(one.url, 'private');
+    const pose = async () =>
+      inPublic.link.publish(
+        inPublic.topic,
+        await signedHello('public', mallory, box.publicKey, { from: B.did }),
+      );
+    await pose();
+    const posing = setInterval(() => void pose(), 1000);
+    opened.push({ disconnect: () => clearInterval(posing) });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    const privateB = meshOf(B).join('private');
+    opened.push(privateB);
+    await privateB.connect();
+    await until(() => met.includes(B.did), 5000, 'A and B to meet in the private room');
+
+    // A offered to B, and no offer in either room opens with Mallory's box.
+    let offers = 0;
+    for (const [room, blobs] of [
+      ['public', inPublic.blobs],
+      ['private', inPrivate.blobs],
+    ] as const) {
+      const { key, topic } = await rendezvousKeys(room);
+      for (const blob of blobs) {
+        const message = await openValue(key, 'minca/rendezvous/v1', { topic }, blob);
+        if (!isObject(message) || message.kind !== 'offer' || message.from !== A.did) continue;
+        if (typeof message.sdp !== 'string' || typeof message.box !== 'string') continue;
+        offers++;
+        const opened = await openValueFrom(
+          box,
+          'minca/rendezvous-signal/v1',
+          { topic, from: A.did, to: B.did, box: message.box },
+          message.sdp,
+        );
+        assert.equal(opened, null, `A's offer in ${room} was sealed to Mallory`);
+      }
+    }
+    assert.ok(offers > 0, 'A made an offer');
+  });
+});
+
 describe('what a hello can cost', () => {
   test('hellos under 90 made-up names start no more than 64 connections', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const offered = new Set<string>();
+    // The lowest of 91 is the victim, so it is the one to offer to each of the other 90.
+    const [victim, ...attackers] = await sessionsInOrder(91);
     const mesh = createMesh({
-      did: A,
+      did: victim.did,
+      key: victim.key,
       relays: [one.url],
       createTransport: () => {
-        const transport = hub.signalled(A, 'flood');
+        const transport = hub.signalled(victim.did, 'flood');
         return Object.freeze({
           ...transport,
           createOffer: (to: string) => {
@@ -288,25 +504,10 @@ describe('what a hello can cost', () => {
     opened.push(net);
     await net.connect();
     const sender = await eavesdrop(one.url, 'flooded');
-    const { key } = await rendezvousKeys('flooded');
     const box = contactPublicKey(p256.utils.randomSecretKey());
-    for (let i = 0; i < 90; i++)
-      sender.link.publish(
-        sender.topic,
-        await sealValue(
-          key,
-          'minca/rendezvous/v1',
-          { topic: sender.topic },
-          {
-            kind: 'hello',
-            id: `made-up-${i}`,
-            at: Date.now(),
-            from: `did:key:zZ${'abcdefghijk'[i % 11]}${String(i).replace(/0/g, 'o')}`,
-            box,
-          },
-        ),
-      );
-    // Paced at 20 a second, the 90 take four and a half.
+    for (const attacker of attackers)
+      sender.link.publish(sender.topic, await signedHello('flooded', attacker, box));
+    // However fast they come, the room holds 64.
     await until(() => offered.size >= 64, 10_000, 'the room to fill');
     await new Promise((resolve) => setTimeout(resolve, 1500));
     assert.equal(offered.size, 64);
@@ -350,10 +551,11 @@ describe('what a hello can cost', () => {
     const watcher = await eavesdrop(one.url);
     const b = await peer(B, [one.url]);
     const a = await peer(A, [one.url]);
-    await until(() => a.joined.includes(B), 2000, 'hello');
-    a.rendezvous.signal('offer', B, OFFER, 'room');
+    await until(() => a.joined.includes(B.did), 2000, 'hello');
+    a.rendezvous.signal('offer', B.did, OFFER, 'room');
     await until(() => b.signals.length === 1, 2000, 'the offer');
-    // Someone who knows the room seals it again, with a box of their own for the answer to go to.
+    // The offer sealed again, with another box for the answer to go to, and
+    // signed afresh by A's own key: still its description opens only with the box it was sealed for.
     const { key, topic } = await rendezvousKeys('room');
     for (const blob of watcher.blobs) {
       const message = await openValue(key, 'minca/rendezvous/v1', { topic }, blob);
@@ -361,12 +563,14 @@ describe('what a hello can cost', () => {
       const box = contactPublicKey(p256.utils.randomSecretKey());
       watcher.link.publish(
         topic,
-        await sealValue(
-          key,
-          'minca/rendezvous/v1',
-          { topic },
-          { ...message, id: 'rewrapped', at: Date.now(), box },
-        ),
+        await sealedSigned('room', A, {
+          kind: 'offer',
+          at: Date.now(),
+          from: A.did,
+          to: B.did,
+          box,
+          sdp: message.sdp,
+        }),
       );
     }
     await new Promise((resolve) => setTimeout(resolve, 300));

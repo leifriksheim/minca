@@ -16,6 +16,7 @@ import {
 import { createRendezvous, rendezvousKeys, type Rendezvous } from '../src/network/rendezvous.js';
 import { isRecord } from '../src/utils/guards.js';
 import { until } from './helpers/until.js';
+import { session } from './helpers/sessions.js';
 
 describe('who opens the connection', () => {
   test('exactly one side of any pair initiates', () => {
@@ -105,8 +106,10 @@ const realWebSocket = global.WebSocket;
  */
 let created: Rendezvous[] = [];
 
-function makeRendezvous(urls: ReadonlyArray<string>, did = 'did:key:zMe'): Rendezvous {
-  const rendezvous = createRendezvous(urls, did);
+const me = await session();
+
+function makeRendezvous(urls: ReadonlyArray<string>): Rendezvous {
+  const rendezvous = createRendezvous(urls, me);
   created.push(rendezvous);
   return rendezvous;
 }
