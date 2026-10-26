@@ -3,7 +3,6 @@ import { ConfirmItsYou } from './ConfirmItsYou';
 import { SignIn } from './SignIn';
 import type { NewSpace, SpaceSummary } from '@minca/core';
 import {
-  connectCodeIn,
   isProposeRequest,
   receiveConnectCode,
   receiveConnectRequest,
@@ -21,6 +20,7 @@ import { useAction } from '@minca/app-shared/action';
 import { styles, palette } from '../styles';
 import { Loader } from '@minca/app-shared/Loader';
 import { relayUrls } from '@minca/app-shared/relay';
+import { connectCode as code } from '../minca';
 
 /** Back to choosing an account, from the page that says what an app gets */
 const ChooseAgain = createContext<() => void>(() => {});
@@ -36,7 +36,6 @@ const ChooseAgain = createContext<() => void>(() => {});
  * at `/connect#mc_…`: the same steps, for records in the whole account.
  */
 export function ConnectPage() {
-  const [code] = useState(() => connectCodeIn(location.hash));
   const [incoming, setIncoming] = useState<IncomingRequest | null | undefined>(undefined);
   const [answered, setAnswered] = useState<{ allowed: boolean } | null>(null);
   const { state } = useMinca();
@@ -47,14 +46,12 @@ export function ConnectPage() {
   const [, setProved] = useState(0);
 
   useEffect(() => {
-    // The code stays out of the address bar, history and anything shared from it.
-    if (code) history.replaceState(null, '', location.pathname);
     void (
       code
         ? receiveConnectCode({ code, relays: relayUrls(), onAnswered: setAnswered })
         : receiveConnectRequest()
     ).then(setIncoming);
-  }, [code]);
+  }, []);
 
   if (answered)
     return (

@@ -4,7 +4,13 @@
  * The home is the one place the seed is ever unlocked. Apps open it to ask for
  * access (`/connect`), and link to it for account settings (`/`).
  */
-import { clearAccountHint, clearPairingTicket, createMincaAuth, readAccountHint } from '@minca/core/session';
+import {
+  clearAccountHint,
+  clearPairingTicket,
+  connectCodeIn,
+  createMincaAuth,
+  readAccountHint,
+} from '@minca/core/session';
 import { CONFIGURED_HOSTS, CONFIGURED_NODES, relayUrls } from '@minca/app-shared/relay';
 
 /** Whether this is the page apps open to ask for access, which closes once they have their answer */
@@ -12,8 +18,11 @@ export const isConnectPage = (globalThis.location.pathname.replace(/\/+$/, '') |
 
 /** The account the app that opened this page acts for (`#account=`), if it said. Only a hint: any page can say any. */
 export const wantedAccount = isConnectPage ? null : readAccountHint();
+/** The code a program opened the connect page at (`#mc_…`), read before the hash is cleared */
+export const connectCode = isConnectPage ? connectCodeIn(globalThis.location.hash) : null;
 clearAccountHint();
-// An app opens the connect page; a pairing link there is someone else's doing.
+// An app opens the connect page; a pairing link there is someone else's doing. This also
+// keeps the connect code out of the address bar, history and anything shared from it.
 if (isConnectPage) clearPairingTicket();
 
 export const auth = createMincaAuth({
