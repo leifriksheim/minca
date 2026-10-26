@@ -11,7 +11,7 @@
  *
  * message = { kind: "hello", id, at, from, box, sig }
  *         | { kind: "offer" | "answer", id, at, from, box, to, sdp: sealValueTo(theirBox, "minca/rendezvous-signal/v1", { topic, from, to, box }, description), sig }
- * sig     = the key `from` names, over UTF-8("minca/rendezvous-sig/v1|" + topic + "|" + kind + "|" + id + "|" + at + "|" + from + "|" + box + "|" + (to ?? ""))
+ * sig     = the key `from` names, over UTF-8("minca/rendezvous-sig/v1|" + topic + "|" + kind + "|" + id + "|" + at + "|" + from + "|" + box + "|" + (to ?? "") + "|" + (sdp ?? ""))
  * ```
  *
  * Every message is signed by the session key its `from` names, so nobody can
@@ -113,13 +113,13 @@ const MAX_ROOM_PEERS = 64;
 /** A peer not heard from in this long is forgotten: it would have said hello twice */
 const PEER_SILENT_MS = 5 * 60_000;
 
-/** What a message's `sig` signs: everything in it but the sealed description, which is bound to its box */
+/** What a message's `sig` signs: every field of it, the sealed description too, so nobody puts their own in under it */
 const signedLabel = (
   topic: string,
-  m: { kind: unknown; id: unknown; at: unknown; from: unknown; box: unknown; to?: unknown },
+  m: { kind: unknown; id: unknown; at: unknown; from: unknown; box: unknown; to?: unknown; sdp?: unknown },
 ) =>
   utf8Encode(
-    `minca/rendezvous-sig/v1|${topic}|${String(m.kind)}|${String(m.id)}|${String(m.at)}|${String(m.from)}|${String(m.box)}|${typeof m.to === 'string' ? m.to : ''}`,
+    `minca/rendezvous-sig/v1|${topic}|${String(m.kind)}|${String(m.id)}|${String(m.at)}|${String(m.from)}|${String(m.box)}|${typeof m.to === 'string' ? m.to : ''}|${typeof m.sdp === 'string' ? m.sdp : ''}`,
   );
 
 /** A room's topic and key, as everyone who knows the room derives them */
@@ -197,7 +197,7 @@ export function createRendezvous(
     const sig = await signLabel(
       provider,
       session.key,
-      signedLabel(topic, { ...full, kind: message.kind, to: message.to }),
+      signedLabel(topic, { ...full, kind: message.kind, to: message.to, sdp: message.sdp }),
     );
     state.seen.accept(full.id);
     const blob = await sealValue(key, ENVELOPE_LABEL, { topic }, { ...full, sig });
@@ -215,17 +215,18 @@ export function createRendezvous(
     if (!place) return;
     const message = await openValue(place.key, ENVELOPE_LABEL, { topic }, blob);
     if (!isObject(message)) return;
-    const { kind, id, at, from, box: theirs } = message;
+    const { kind, id, at, from, box: theirs, to, sdp } = message;
     if (!isPeerDid(from) || from === did || !isContactPublicKey(theirs)) return;
-    if (typeof id !== 'string' || id.length > 64 || typeof at !== 'number') return;
+    if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(id)) return;
+    if (typeof at !== 'number' || !Number.isSafeInteger(at) || at < 0) return;
     if (Math.abs(Date.now() - at) > MAX_SKEW_MS) return;
-    if (message.to !== undefined && typeof message.to !== 'string') return;
-    // Signed by the key it names: nobody says anything here in another's name.
-    const label = signedLabel(topic, { kind, id, at, from, box: theirs, to: message.to });
-    if (!(await verifyBy(provider, from, message.sig, label))) return;
+    if (kind !== 'hello' && (!isSignalKind(kind) || to !== did || typeof sdp !== 'string')) return;
     const { room } = place;
     const state = rooms.get(room);
     if (!state) return;
+    // Signed by the key it names, every field: nobody says anything here in another's name.
+    const label = signedLabel(topic, { kind, id, at, from, box: theirs, to, sdp });
+    if (!(await verifyBy(provider, from, message.sig, label))) return;
     // An id counts as seen only once what it came with passed every check, so junk can't push real ones out.
     if (kind === 'hello') {
       if (!remember(state, from, theirs) || !state.seen.accept(id)) return;

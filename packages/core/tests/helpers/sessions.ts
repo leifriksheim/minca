@@ -45,9 +45,11 @@ export interface RoomMessage {
   readonly [field: string]: unknown;
 }
 
-/** What `sig` covers: everything but the sealed description */
+/** What `sig` covers: every field, the sealed description too */
 const rendezvousSigLabel = (topic: string, m: RoomMessage) =>
-  utf8Encode(`minca/rendezvous-sig/v1|${topic}|${m.kind}|${m.id}|${m.at}|${m.from}|${m.box}|${m.to ?? ''}`);
+  utf8Encode(
+    `minca/rendezvous-sig/v1|${topic}|${m.kind}|${m.id}|${m.at}|${m.from}|${m.box}|${m.to ?? ''}|${typeof m.sdp === 'string' ? m.sdp : ''}`,
+  );
 
 /** `message`, signed by `signer` and sealed under `room`'s key, as a relay carries it */
 export async function sealedSigned(room: string, signer: Session, message: RoomMessage): Promise<string> {

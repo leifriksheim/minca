@@ -16,7 +16,7 @@ import { openValue, sealValue } from '../src/identity/envelope.js';
 import { checkRelays } from '../src/space/roles.js';
 import { isObject } from '../src/utils/guards.js';
 import { contactKeyPair, contactPublicKey } from '../src/identity/contact-key.js';
-import { openValueFrom } from '../src/identity/hpke.js';
+import { openValueFrom, sealValueTo } from '../src/identity/hpke.js';
 import { p256 } from '@noble/curves/nist.js';
 import { createMesh } from '../src/network/mesh.js';
 import { createFakeHub } from './helpers/fake-transport.js';
@@ -255,6 +255,52 @@ describe('signals stay in their room', () => {
 });
 
 describe('nobody speaks in another’s name', () => {
+  test('an offer whose sealed description someone else put in, under its sender’s signature, is ignored', async () => {
+    // A and B are on different relays; someone who knows the room passes what each says to the
+    // other, and puts a description of its own into A's offer, sealed to B's box, keeping A's signature.
+    const { topic, key } = await rendezvousKeys('room');
+    const onOne = await eavesdrop(one.url);
+    const onTwo = await eavesdrop(two.url);
+    let theirBox = '';
+    onTwo.link.on('blob', (_topic, blob) => {
+      void openValue(key, 'minca/rendezvous/v1', { topic }, blob).then((message) => {
+        if (!isObject(message) || message.from !== B.did || typeof message.box !== 'string') return;
+        theirBox = message.box;
+        onOne.link.publish(topic, blob);
+      });
+    });
+    let genuine = '';
+    onOne.link.on('blob', (_topic, blob) => {
+      void openValue(key, 'minca/rendezvous/v1', { topic }, blob).then(async (message) => {
+        if (!isObject(message) || message.from !== A.did) return;
+        if (message.kind !== 'offer' || typeof message.box !== 'string')
+          return onTwo.link.publish(topic, blob);
+        genuine = blob;
+        const sdp = await sealValueTo(
+          theirBox,
+          'minca/rendezvous-signal/v1',
+          { topic, from: A.did, to: B.did, box: message.box },
+          { type: 'offer', sdp: 'v=0 not what A said' },
+        );
+        onTwo.link.publish(
+          topic,
+          await sealValue(key, 'minca/rendezvous/v1', { topic }, { ...message, sdp }),
+        );
+      });
+    });
+    const b = await peer(B, [two.url]);
+    const a = await peer(A, [one.url]);
+    await until(() => a.joined.includes(B.did), 3000, 'A hears B');
+    a.rendezvous.signal('offer', B.did, OFFER, 'room');
+    await until(() => genuine !== '', 3000, 'the offer');
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.equal(b.signals.length, 0, 'the swapped offer is not taken');
+    // A's own offer, passed on after, is still acted on: the swap took nothing from it.
+    onTwo.link.publish(topic, genuine);
+    await until(() => b.signals.length === 1, 2000, 'the genuine offer');
+    assert.deepEqual(b.signals[0]?.payload, OFFER);
+  });
+
   test('a hello naming B but signed by another key is ignored', async () => {
     const a = await peer(A, [one.url]);
     const sender = await eavesdrop(one.url);

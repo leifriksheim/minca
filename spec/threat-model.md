@@ -120,9 +120,9 @@ reference implementation, or any implementation, honestly.
     space (07), and an inbox's mailbox can be flooded ([#162](https://github.com/leifriksheim/minca/issues/162)).
   - Knowing any room a peer is in (from a space id, or a channel's secret),
     it can say hello there: the peer offers to it and it learns the peer's
-    addresses, as anyone in a room always could. It can't say anything under
-    another's DID: every message is signed by the key its `from` names
-    (04 §2). Under DIDs of keys it makes, it can fill the room's 64 places,
+    addresses, as anyone in a room always could. It can't say anything
+    through relays under another's DID: every message is signed, every field
+    of it, by the key its `from` names (04 §2). Under DIDs of keys it makes, it can fill the room's 64 places,
     so nobody new is heard there, and it can fill a topic's watchers on a
     Minca relay ([#162](https://github.com/leifriksheim/minca/issues/162)).
   - Text it writes on GitHub, an issue on a public repository a connected bot
@@ -948,10 +948,12 @@ the same sealed blobs.
     made-up names start no more than 64 connections", "a node in 60 rooms
     keeps its relay…", "a node in 16 rooms of 12 members each keeps its
     relay").
-  - It can't say anything in a peer's name, nor can anyone who knows the
-    room: every hello, offer and answer is signed by the session key its
-    `from` names, so nobody can pose as a peer to keep two peers apart or to
-    take the offers meant for one (04 §2; "a hello naming B but signed by another key is ignored",
+  - It can't say anything through relays in a peer's name, nor can anyone
+    who knows the room: every hello, offer and answer is signed by the
+    session key its `from` names, sealed description included, so nobody can
+    pose as a peer there to keep two peers apart or to take the offers meant
+    for one (04 §2; "an offer whose sealed description someone else put in,
+    under its sender’s signature, is ignored", "a hello naming B but signed by another key is ignored",
     "someone in only a public room cannot pose there as B to keep A and B
     apart in a private one").
   - It can't make a peer act twice on one message, by replaying it or by
@@ -995,6 +997,14 @@ the same sealed blobs.
   - A relay that knows a space's id, as a host's relay does for the spaces it
     keeps, reads its hellos like anyone who knows the room: which session
     DIDs are there, when, and from which address
+    ([#162](https://github.com/leifriksheim/minca/issues/162)).
+  - Introductions are not signed: a peer admitted with A in any room can
+    pass A a `__signal` offer under B's DID, which replaces A's unproven
+    attempt to reach B, and reads the plain descriptions of introductions it
+    forwards (04 §8, [#162](https://github.com/leifriksheim/minca/issues/162)).
+  - A signed hello is proof that can be shown to others: whoever knows a
+    room and logs it holds a session DID's signature over the room's topic
+    and a time, which anyone else who learns the room can check
     ([#162](https://github.com/leifriksheim/minca/issues/162)).
   - Under DIDs of keys it makes, 64 hellos every 5 minutes through any one
     relay fill a room's places on every relay, where it once took 64 sockets
