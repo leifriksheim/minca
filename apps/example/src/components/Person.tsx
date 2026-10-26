@@ -3,7 +3,7 @@ import type { ContactView, SpaceSummary } from '@minca/core';
 import { useNode } from '@minca/core/react';
 import { styles, palette } from '../styles';
 import { isBot, nameOf, type People } from '../derive/people';
-import { takeBack, useContacts, useStanding } from '../contacts';
+import { NOT_CARRIED, takeBack, useContacts, useStanding } from '../contacts';
 import { PersonAvatar } from './std/PersonAvatar';
 import { Modal } from '@minca/app-shared/Modal';
 import { useAction, useCopy } from '@minca/app-shared/action';
@@ -106,7 +106,7 @@ function PersonCard({ did, scope, onClose }: { did: string; scope: PersonScope; 
   const contacts = useContacts();
   const { copied, copy } = useCopy();
   // Asking puts them on the list at once, which would swap the confirmation for "In your contacts".
-  const [asked, setAsked] = useState(false);
+  const [asked, setAsked] = useState<{ readonly carried: boolean } | null>(null);
   const name = nameOf(did, people);
   const profile = people.get(did);
   const contact = contacts?.find((c) => c.did === did);
@@ -140,6 +140,7 @@ function PersonCard({ did, scope, onClose }: { did: string; scope: PersonScope; 
             Asked. {name} is on your contacts now, and will see your request here in {space.name}. Once they
             accept, the two of you share a private space.
           </p>
+          {!asked.carried && <p style={styles.hint}>{NOT_CARRIED}</p>}
           <button onClick={onClose} data-variant="primary" style={styles.addButton}>
             Done
           </button>
@@ -162,7 +163,7 @@ function PersonCard({ did, scope, onClose }: { did: string; scope: PersonScope; 
           You can only read {space.name}, so you can't leave a request for {name} here.
         </p>
       ) : (
-        <AskContact space={space} did={did} name={name} onAsked={() => setAsked(true)} />
+        <AskContact space={space} did={did} name={name} onAsked={setAsked} />
       )}
     </Modal>
   );
@@ -273,15 +274,14 @@ function AskContact({
   space: SpaceSummary;
   did: string;
   name: string;
-  onAsked: () => void;
+  onAsked: (result: { readonly carried: boolean }) => void;
 }) {
   const node = useNode();
   const [note, setNote] = useState('');
   const { run, busy: asking, error } = useAction();
   const ask = () =>
     run(async () => {
-      await node.contacts.ask(space.id, did, note.trim() ? { note: note.trim() } : {});
-      onAsked();
+      onAsked(await node.contacts.ask(space.id, did, note.trim() ? { note: note.trim() } : {}));
     });
   return (
     <form

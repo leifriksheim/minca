@@ -29,6 +29,7 @@ import { memoryStores } from './helpers/memory-stores.js';
 import { createMemoryAdapter } from './helpers/memory-adapter.js';
 import { createMemoryDirectory } from './helpers/memory-directory.js';
 import { until } from './helpers/until.js';
+import { selfSigner } from './helpers/invitation.js';
 
 const provider = createP256Provider();
 const open: Array<{ close(): Promise<void> }> = [];
@@ -106,7 +107,9 @@ describe('passes', () => {
     const pass = await makePass(record);
 
     assert.equal(
-      JSON.stringify(pass).includes(parseSpaceInvite(await registry.createInvite(record.space.id, 'x')).key!),
+      JSON.stringify(pass).includes(
+        parseSpaceInvite(await registry.createInvite(record.space.id, await selfSigner())).key!,
+      ),
       false,
     );
     const opened = await openPass(pass, provider);
@@ -390,7 +393,9 @@ describe('a carrier', () => {
     // Neither has heard of the other's when it adds its own.
     const onLaptop = await laptop.carriers.add({ did, name: 'host.example' });
     const onPhone = await offline.carriers.add({ did, name: 'Chrome' });
-    assert.deepEqual(onPhone, onLaptop);
+    // One carry space, whichever device signed the invite to it.
+    assert.equal(onPhone.space, onLaptop.space);
+    assert.equal(parseSpaceInvite(onPhone.invite).space.id, parseSpaceInvite(onLaptop.invite).space.id);
     await offline.close();
     const phone = await device(me, hub, phoneStores);
     // The carrier holds the phone's answer.
@@ -490,6 +495,40 @@ describe('a carrier', () => {
     );
   });
 
+  test('a space made just now, carried before its invite goes out, can be joined with the maker gone', async () => {
+    const me = await account();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const laptop = await device(me, hub);
+    const { did, keys } = await carrierKey();
+    const added = await laptop.carriers.add({ did, name: 'host.example' });
+    await carrier(me, added.invite, hub, memoryStores(), keys);
+    assert.equal(await laptop.carriers.reached(added.space, 5000), true);
+
+    // Made, invited to, carried with its invite, and the laptop goes at once.
+    const pair = await laptop.spaces.create({ name: 'Us', ...team, visibility: 'private' });
+    const invite = await laptop.spaces.invite(pair.id, { role: 'editor' });
+    assert.equal(await laptop.spaces.carried(pair.id), true);
+    await laptop.close();
+
+    // A friend who was never online with the laptop joins through the carrier, and takes the role.
+    const friend = await device(await account(), hub);
+    await friend.spaces.join(invite);
+    await joined(friend, pair.id);
+    await until(async () => friend.spaces.holdsRole(pair.id, 'editor'), 5000, 'the friend to hold the role');
+  });
+
+  test('carried is false at once with no carrier, or with one that is not online', async () => {
+    const me = await account();
+    const home = await device(me, createFakeHub({ latencyMs: 1 }));
+    const space = await home.spaces.create({ name: 'Notes', visibility: 'private' });
+    for (const step of ['none', 'offline']) {
+      if (step === 'offline') await home.carriers.add({ did: (await carrierKey()).did, name: 'Chrome' });
+      const started = Date.now();
+      assert.equal(await home.spaces.carried(space.id), false);
+      assert.ok(Date.now() - started < 1000, `${step}: took ${Date.now() - started} ms`);
+    }
+  });
+
   test('reached is true at once for a carrier already level', async () => {
     const me = await account();
     const hub = createFakeHub({ latencyMs: 1 });
@@ -528,7 +567,8 @@ describe('a carrier', () => {
     });
 
     const again = await home.carriers.add({ did, name: 'Chrome' });
-    assert.deepEqual(again, first);
+    assert.equal(again.space, first.space);
+    assert.equal(parseSpaceInvite(again.invite).space.id, first.space);
     assert.equal((await home.carriers.list()).length, 1);
     assert.equal(await home.carriers.reached(again.space, 5000), true);
     assert.equal(closed, false);

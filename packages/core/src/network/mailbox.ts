@@ -1,5 +1,5 @@
 /**
- * Talking to a relay's mailbox: leaving a sealed knock under a door's topic,
+ * Talking to a relay's mailbox: leaving a sealed knock under an inbox's topic,
  * and reading what was left under one's own (`packages/relay/relay.mjs`).
  *
  * Each call opens its own short-lived socket, says one thing, waits for the
@@ -34,7 +34,7 @@ export interface MailboxClient {
   /** Everything a relay holds under a topic, after a sequence number, in at most `pages` pages (default 8) */
   fetch(relay: string, topic: string, after?: number, pages?: number): Promise<ReadonlyArray<MailItem>>;
   /**
-   * Clears knocks from a topic — all of them, or those named — as the door's
+   * Clears knocks from a topic — all of them, or those named — as the inbox's
    * owner: shows the signing key and signs the relay's challenge with it.
    */
   purge(
@@ -53,7 +53,7 @@ export interface MailboxOptions {
   readonly WebSocket?: typeof WebSocket;
 }
 
-/** At most this many pages per fetch: 16 knocks each, and a door holds 64 */
+/** At most this many pages per fetch: 16 knocks each, and an inbox holds 64 */
 const MAX_PAGES = 8;
 
 export function createMailboxClient(options: MailboxOptions = {}): MailboxClient {
@@ -172,7 +172,7 @@ export function createMailboxClient(options: MailboxOptions = {}): MailboxClient
           if (answer.topic !== topic) return undefined;
           if (answer.type === 'purged' && typeof answer.count === 'number') return answer.count;
           if (answer.type === 'refused')
-            throw new Error(`${relay} refused to clear the door: ${reasonOf(answer)}`);
+            throw new Error(`${relay} refused to clear the inbox: ${reasonOf(answer)}`);
           return undefined;
         },
       );

@@ -813,9 +813,9 @@ describe('giving an app the contacts', () => {
       people.contacts.accept(club.id, (await people.contacts.requests(club.id))[0]!.key),
       /whole account/,
     );
-    // The list and the doors are the account's own: it reads them, and changes neither.
+    // The list and the inbox are the account's own: it reads them, and changes neither.
     await assert.rejects(people.contacts.put({ did: bob.did, name: 'Someone else' }), /the account itself/);
-    await assert.rejects(people.doors.open(), /doesn't let it use doors/);
+    await assert.rejects(people.inbox.open(), /doesn't let it use your inbox/);
   });
 
   test('an app not given them has no contact key, and cannot open requests', async () => {

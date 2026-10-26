@@ -53,9 +53,9 @@ const home = createRoute({ getParentRoute: () => root, id: 'home', component: Ho
 const spaces = createRoute({
   getParentRoute: () => home,
   path: '/',
-  // A door link is someone asking you to knock, which happens among your contacts.
+  // An inbox link is someone asking you to knock, which happens among your contacts.
   beforeLoad: ({ location }) => {
-    if (/(^|&)door=/.test(location.hash))
+    if (/(^|&)inbox=/.test(location.hash))
       redirect({ to: '/contacts', hash: location.hash, replace: true, throw: true });
   },
   component: SpacesPage,

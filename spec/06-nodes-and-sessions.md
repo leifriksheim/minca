@@ -27,7 +27,7 @@ Material specified elsewhere is linked, not repeated:
 | Spaces, roles and grants, the access log (`sys.role`, `sys.assign`, `sys.remove`, `sys.invite`, `sys.revoke`, `sys.collection`, `sys.key`, `sys.relays`, `sys.keepers`, `sys.fork`, `sys.stepdown`, `sys.succeed`), the constitution, invites, encryption, the account registry (`sys.joined`, `sys.profile`, `sys.carrier`), profiles | [03 — Spaces](03-spaces.md)                     |
 | Relays, rooms, peer authentication, the network message envelope, the `who` note exchange, live messages and their limits, TURN                                                                                                                                                                                                        | [04 — Network](04-network.md)                   |
 | Negentropy, stores, storage adapters, data folders, mirrors, what a node that holds part of a space says it holds                                                                                                                                                                                                                      | [05 — Sync and storage](05-sync-and-storage.md) |
-| Names, doors, the relay mailbox                                                                                                                                                                                                                                                                                                        | [07 — Doors](07-doors.md)                       |
+| Names, the inbox, the relay mailbox                                                                                                                                                                                                                                                                                                    | [07 — Inbox](07-inbox.md)                       |
 
 Terms used here:
 
@@ -61,7 +61,8 @@ the account does on any device (§1.3). Without it, the node holds only the
 spaces it was given or joined itself.
 
 A node MAY hold the **contact key** (`deriveContactKeyBytes(seed)`). With it the
-node opens contact requests sent to the account and publishes the contact key's
+node opens knocks left for the account in shared spaces ([03](03-spaces.md) §16),
+derives its inbox ([07](07-inbox.md)), and publishes the contact key's
 public half on the account's profile in every space it writes in.
 
 _Source: `packages/core/src/node/node.ts`, `packages/core/src/node/types.ts`. Tests: `packages/core/tests/node.test.ts`._
@@ -342,7 +343,7 @@ page it opened):
 | `scope`         | `spaces` \| `account`                |                                                                                                                                                                            |
 | `spaces`        | `{ id, name, invite, memberKey? }[]` | Granted spaces; `memberKey` is base64url.                                                                                                                                  |
 | `accountKey`    | base64url, optional                  | With `scope: account`: the account key (01 §11.1). It opens every private space and the account registry, but cannot sign as the account or open the home's local storage. |
-| `contactKey`    | base64url, optional                  | With `contacts` or `scope: account`: the contact key's secret. Never with `recordsOnly`: it opens contact requests and knocks on the account's doors ([07](07-doors.md)).  |
+| `contactKey`    | base64url, optional                  | With `contacts` or `scope: account`: the contact key's secret. Never with `recordsOnly`: it opens knocks, in shared spaces and in the account's inbox ([07](07-inbox.md)). |
 | `contactsSpace` | string, optional                     | With `contacts` and `scope: spaces`: which of `spaces` is the contacts space.                                                                                              |
 | `relays`        | string[], optional                   | Relays the home uses; the app joins them too, so the two always share one.                                                                                                 |
 | `expiresAt`     | number                               | Unix seconds.                                                                                                                                                              |
@@ -409,14 +410,14 @@ _Source: `packages/core/src/session/connect.ts` (`startConnectedNode`, `nodeOpti
 
 ### 2.8 Scope
 
-|                       | `scope: spaces`                                                                         | `scope: account`                        |
-| --------------------- | --------------------------------------------------------------------------------------- | --------------------------------------- |
-| Note                  | about the one space, or the account with a policy naming them                           | about the account, no policy            |
-| Account key           | no                                                                                      | yes                                     |
-| Sees                  | the granted spaces                                                                      | every space; the account registry       |
-| Makes or joins spaces | the home makes them at grant time                                                       | itself; they land in the account's list |
-| Contacts              | only with `contacts: true`: reads the list and requests, changes neither, opens no door | yes, including `ask`/`accept` and doors |
-| Member keys           | one per granted private space                                                           | derived from the account key            |
+|                       | `scope: spaces`                                                                        | `scope: account`                            |
+| --------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Note                  | about the one space, or the account with a policy naming them                          | about the account, no policy                |
+| Account key           | no                                                                                     | yes                                         |
+| Sees                  | the granted spaces                                                                     | every space; the account registry           |
+| Makes or joins spaces | the home makes them at grant time                                                      | itself; they land in the account's list     |
+| Contacts              | only with `contacts: true`: reads the list and knocks, changes neither, opens no inbox | yes, including `ask`/`accept` and the inbox |
+| Member keys           | one per granted private space                                                          | derived from the account key                |
 
 With `recordsOnly` the note grants `/record` (or `/record/read`) under either
 scope, so every peer refuses from it what a records-only note can't do
@@ -428,8 +429,8 @@ A node whose note can't change access never names relays, seals member keys
 or rotates a space key; in a private space it only learns keys. With
 `scope: account` it still gets the account key, so the contact list is within
 its note to read; a home MUST NOT give it the contact key, with which it could
-open contact requests and knocks on the account's doors ([07](07-doors.md)).
-What the library also ignores from such a key (contact requests, and calls
+open knocks left for the account, in shared spaces and in its inbox
+([07](07-inbox.md)). What the library also ignores from such a key (knocks, and calls
 from a key that writes records here and nothing more) is in
 [contacts](../packages/core/docs/contacts.md) and
 [calls](../packages/core/docs/calls.md#messages).
@@ -885,11 +886,11 @@ the carrier hears it ([the node](../packages/core/docs/node.md#carriers-hosting-
 **Links.** Beside the passes, the device writes each `sys.link` record of
 the account's registry ([03](03-spaces.md) §13.2) into the carry space, same
 key and body, and deletes those the registry no longer holds. A carrier that
-runs a relay (a host) answers a mailbox fetch ([07](07-doors.md) §5) of a
+runs a relay (a host) answers a mailbox fetch ([07](07-inbox.md) §5) of a
 topic with the blob of every such record whose topic, computed from the blob
 itself (03 §7.7), is that topic, until its `until`: first, on the first page,
 with `seq` 0. The account never names a topic, so its records can't make the
-host answer for a door's topic or for another link's. The reference host
+host answer for an inbox's topic or for another link's. The reference host
 serves an account's 64 most recently written. A host leaves nothing in any
 other relay's mailbox.
 

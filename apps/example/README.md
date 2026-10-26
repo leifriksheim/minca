@@ -36,7 +36,7 @@ becomes `any`.
 
 Links from when the app lived at `minca.social/app` still open it: `/app` and
 any other path it doesn't know go to `/`, keeping the fragment that carries an
-invite or a door; a door goes on to `/contacts`. A space this device doesn't
+invite or an inbox; an inbox goes on to `/contacts`. A space this device doesn't
 have says so, with a link to your spaces, and shows itself if it turns up.
 
 ```bash
@@ -203,7 +203,7 @@ VITE_SIGNALING_URL=wss://your-relay.example npm run dev
 | WebMCP                 | Every node operation as a tool an agent in the page can call                                                           |
 | Invites                | Space and key encoded into a fragment-only link                                                                        |
 | Contacts               | A private space for two per person; asking someone in a space you share, sealed so only they can read it               |
-| Doors                  | A link that lets someone you share no space with knock, without your account becoming an address                       |
+| Inbox                  | A link that lets someone you share no space with knock, without your account becoming an address                       |
 
 ### Derived UI
 
@@ -284,7 +284,7 @@ src/
   minca.ts                 # this app's Minca setup: one sign-in flow, and where peers meet
   App.tsx                  # connect, then the workspace; the home screen's layout and pages
   spaces.ts                # invite links
-  contacts.ts              # door links, and the contact list kept current
+  contacts.ts              # inbox links, and the contact list kept current
   webmcp.ts                # node operations as WebMCP tools
   derive/                  # pure helpers: UI from schemas and links, names from profiles
   components/              # spaces, collections, records, security (sign-in is <minca-auth>)
@@ -292,7 +292,7 @@ src/
 
 ## Still to do
 
-- **Contacts.** The Contacts screen warns when someone else is in a space for two; it should offer the choice between starting a group and letting them stay. Door codes as QR codes too, not only links.
+- **Contacts.** The Contacts screen warns when someone else is in a space for two; it should offer the choice between starting a group and letting them stay. Inbox codes as QR codes too, not only links.
 - **Hosting.** An "Always online" mark on spaces a host keeps.
 - **Notifications.** "Notify me when I'm mentioned" in chat; and showing them with the app closed, which needs a service worker and Web Push ([spec 06 §4.4](../../spec/06-nodes-and-sessions.md), planned).
 - **Agents.** A connect dialog left open keeps a relay connection; it should let go.

@@ -1851,7 +1851,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
         scope: whole ? 'account' : 'spaces',
         spaces,
         ...(whole ? { accountKey: base64UrlEncode(await deriveAccountKey(seed)) } : {}),
-        // Never with records only: the contact key opens contact requests and knocks on your doors.
+        // Never with records only: the contact key opens knocks, in your inbox and in shared spaces.
         ...(!recordsOnly && (whole || request.contacts)
           ? { contactKey: base64UrlEncode(await deriveContactKeyBytes(seed)) }
           : {}),

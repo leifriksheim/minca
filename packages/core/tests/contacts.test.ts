@@ -18,8 +18,7 @@ import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { memoryStores } from './helpers/memory-stores.js';
 import { team } from '../src/space/presets.js';
 import { until } from './helpers/until.js';
-import { forge, open, person as somebody } from './helpers/person.js';
-import { hold, letGo } from './helpers/hold.js';
+import { open, person as somebody } from './helpers/person.js';
 
 /** A device of an account: the seed's own node, with its account key and contact key */
 const device = async (hub: FakeHub, seed: Uint8Array, name: string) =>
@@ -221,48 +220,6 @@ describe('asking to be added', () => {
     );
     assert.deepEqual(await leif.node.contacts.others(anna.node.did), []);
     assert.deepEqual(await anna.node.contacts.others(leif.node.did), []);
-  });
-
-  test('a request is opened only from a note that may write for the whole account, as a knock needs', async () => {
-    const hub = createFakeHub({ latencyMs: 1 });
-    const leif = await person(hub, 'Leif');
-    const anna = await person(hub, 'Anna');
-    const { id: club } = await leif.node.spaces.create({ name: 'Open club', ...team, visibility: 'public' });
-    await anna.node.spaces.join(await leif.node.spaces.invite(club, { role: 'editor' }));
-    await joined(anna.node, club);
-    await hold(leif.node, club);
-    await anna.node.spaces.hold(club);
-    await until(
-      async () =>
-        (await leif.node.spaces.profiles(club)).some((p) => p.did === anna.node.did && p.contactKey),
-      5000,
-      "Leif to see Anna's contact key",
-    );
-    const asked = await leif.node.contacts.ask(club, anna.node.did);
-    const real = (await leif.node.records.list(club, { collection: 'std.contact-request' }))[0]!;
-    // The same request again, signed by a key whose note covers this one space only.
-    await letGo(leif.node, club);
-    await forge(
-      leif,
-      club,
-      {
-        collection: 'std.contact-request',
-        body: real.body,
-      },
-      { app: true },
-    );
-    await hold(leif.node, club);
-    await until(
-      async () => (await anna.node.records.list(club, { collection: 'std.contact-request' })).length === 2,
-      5000,
-      'both requests to reach Anna',
-    );
-    const requests = await anna.node.contacts.requests(club);
-    assert.deepEqual(
-      requests.map((request) => request.key),
-      [real.key],
-    );
-    assert.equal(requests[0]?.pairSpace, asked.space);
   });
 
   test('another member of the space cannot open a request meant for someone else', async () => {

@@ -1272,20 +1272,50 @@ before it is a member; its `seen` must include the invite event.
 > accepted before the invite's current state says it is open. Tracked in
 > [#10](https://github.com/leifriksheim/minca/issues/10).
 
-### 7.4 The invite string
+### 7.4 The invitation
 
-An invite is `base64url( UTF-8( JSON.stringify(SpaceInvite) ) )` — plain
-`JSON.stringify`, not canonical:
+An invite is an **invitation**, signed by the inviter, and beside it the
+invite secret (§7.1) when it opens a role:
 
-| Field       | Type                                 | Present                                                           |
-| ----------- | ------------------------------------ | ----------------------------------------------------------------- |
-| `space`     | space object (§1.1)                  | always                                                            |
-| `invitedBy` | string, the inviter's account DID    | always; unauthenticated, for display                              |
-| `key`       | base64url of the raw 32-byte AES key | private spaces (the inviter's current key)                        |
-| `invite`    | base64url of the 32-byte secret      | role invites only                                                 |
-| `role`      | string                               | role invites only; for display — the invite record is what counts |
-| `relays`    | string[]                             | when known: the space's relays (§10), else the inviter's own      |
-| `nodes`     | string[]                             | when known: always-on nodes that hold the space (below)           |
+```
+invite = base64url( UTF-8( canonicalJSON(invitation) ) ) [ "." base64url(secret) ]
+```
+
+The invitation is a loose version ([02](02-records.md) §3.5) in
+`sys.invitation`, signed by the inviter's key under its account's note. Its
+body:
+
+| Field    | Type                                 | Present                                                           |
+| -------- | ------------------------------------ | ----------------------------------------------------------------- |
+| `space`  | space object (§1.1)                  | always                                                            |
+| `key`    | base64url of the raw 32-byte AES key | private spaces (the inviter's current key)                        |
+| `role`   | string ≤64                           | role invites only; for display — the invite record is what counts |
+| `relays` | string[]                             | when known: the space's relays (§10), else the inviter's own      |
+| `nodes`  | string[]                             | when known: always-on nodes that hold the space (below)           |
+
+No other member is allowed. The secret is never in the body: it rides beside
+it, so one invitation serves a long invite and a short link (§7.7), whose
+secret is derived from the link's own.
+
+**Who invited** is the account the invitation speaks for: its note's issuer,
+or its author when it carries no note. It is not a field, so nobody passing
+the invite on can change it, nor the relays and nodes it names.
+
+**Checking an invitation.** A peer MUST refuse to join with an invitation
+unless:
+
+1. it is a valid loose version in `sys.invitation` (02 §3.5), its note valid
+   at its `createdAt`;
+2. its body has `space` and no member outside the table above; `key`, when
+   present, is 43 base64url characters that decode to 32 bytes; `role`, when
+   present, is a string of at most 64 characters; `relays` and `nodes`, when
+   present, are lists of strings;
+3. when it carries a note, that note lets its key invite to that space
+   ([01](01-identity.md) §8): for a role invite, one that names a `role` or
+   comes with a secret beside it, whatever its body says, `/access/change` in the
+   space with arguments `{ collection: "sys.invite", space }`; for a
+   view-only one, `/record/read` in the space with arguments `{ space }`.
+   With no note, its author is the account and may.
 
 `nodes` lists at most 8 node URLs ([04](04-network.md) §5.2), each pinned
 by a DID in its fragment, no URL twice: the hosts the inviter's account uses,
@@ -1293,75 +1323,70 @@ and those the space names. A joiner keeps them with the space and holds a
 socket to each besides the hosts its own account uses, so it reaches the
 space through the inviter's host with nobody else online. Once the space's
 history names keepers (§10), it dials only the invite's nodes whose DID is
-one of them. It **MUST NOT** name them in invites of its own: nothing vouches
-for them. A list that breaks any of these rules is ignored whole. A pin means a socket
-reaches only the node named: anything else answering there is refused at
-the handshake.
+one of them. It **MUST NOT** name them in invites of its own: they are the
+inviter's word, not its own. A list that breaks any of these rules is
+ignored whole. A pin means a socket reaches only the node named: anything
+else answering there is refused at the handshake.
 
-> **Known defect:** `invitedBy`, `relays` and `nodes` are not authenticated. Neither
-> is in the space's constitution (§1.2), and nothing signs the invite string,
-> so anyone passing the link on can change them. A reader MUST NOT treat them
-> as verified. A short link is no better (§7.7): whoever holds one can seal
-> an invite of its own under the link's secret and pass on a link with its
-> pin, which joins the same role with names, relays and nodes it chose; the
-> space, its constitution and its key are still checked. A fix will authenticate them or drop them from the invite.
-> Tracked in [#20](https://github.com/leifriksheim/minca/issues/20). The
-> space's name is its constitution's, so changing it changes the id.
+The space's name is its constitution's, so changing it changes the id.
 
-Example (private space of §1.2, role invite with the secret of §7.1), decoded:
+Example (private space of §1.2, role invite with the secret of §7.1), the
+invitation decoded, its note and signature cut short:
 
 ```json
 {
-  "space": {
-    "id": "bvvz7u7w4jvlzzbkkaqs4em7ahvxmhnsrjqnupq475wlslsl7uqfa",
-    "minca": "constitution/1",
-    "name": "Chess club",
-    "visibility": "private",
-    "resolver": "strong-remove/1",
-    "top": {
-      "founders": ["did:key:zDnaed8DYZ8Hx21hjLc7fE9TXMkDUV65S3ys8HtLrnPC1piwd"]
+  "id": "baukm3j4ougqgrjtpgesyzsofphynyryn2gzz6cxxmfveafnuvnxq",
+  "author": "did:key:zDnaeg6p1ZY7SPhzjhtvySyPiCwi8QXRFYWw4JhXpPhctG2sB",
+  "collection": "sys.invitation",
+  "createdAt": "2026-10-25T18:15:44.884Z",
+  "key": "lsshlqgq7ahwsxlpivjrqatywa",
+  "seq": 0,
+  "proof": {
+    "type": "minca/ucan/dlg@1",
+    "payload": {
+      "iss": "did:key:zDnaed8DYZ8Hx21hjLc7fE9TXMkDUV65S3ys8HtLrnPC1piwd",
+      "aud": "did:key:zDnaeg6p1ZY7SPhzjhtvySyPiCwi8QXRFYWw4JhXpPhctG2sB",
+      "sub": "did:key:zDnaed8DYZ8Hx21hjLc7fE9TXMkDUV65S3ys8HtLrnPC1piwd",
+      "cmd": "/",
+      "pol": [],
+      "…": "…"
     },
-    "roles": [
-      {
-        "name": "editor",
-        "title": "Editor",
-        "grants": [
-          {
-            "cmd": "/record",
-            "pol": []
-          },
-          {
-            "cmd": "/collection/define",
-            "pol": []
-          },
-          {
-            "cmd": "/role/assign",
-            "pol": [["==", ".role", "editor"]]
-          }
-        ]
-      }
-    ],
-    "createdAt": "2026-01-01T00:00:00.000Z",
-    "nonce": "AAECAwQFBgcICQoL",
-    "readKey": "did:key:zDnaes7SHHEzJcR4LfXNL8UjSMWQ3VMFfQiv6vZzoxgkaCNqt",
-    "encryptionKeyId": "bgk-m-Kq-gEGgJCOOEYNYw"
+    "sig": "…"
   },
-  "invitedBy": "did:key:zDnaed8DYZ8Hx21hjLc7fE9TXMkDUV65S3ys8HtLrnPC1piwd",
-  "key": "__79_Pv6-fj39vX08_Lx8O_u7ezr6uno5-bl5OPi4eA",
-  "invite": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
-  "role": "editor",
-  "relays": ["wss://relay.example"]
+  "bodyHash": "…",
+  "body": {
+    "space": {
+      "id": "bvvz7u7w4jvlzzbkkaqs4em7ahvxmhnsrjqnupq475wlslsl7uqfa",
+      "minca": "constitution/1",
+      "name": "Chess club",
+      "visibility": "private",
+      "resolver": "strong-remove/1",
+      "top": { "founders": ["did:key:zDnaed8DYZ8Hx21hjLc7fE9TXMkDUV65S3ys8HtLrnPC1piwd"] },
+      "roles": [{ "name": "editor", "title": "Editor", "grants": ["…"] }],
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "nonce": "AAECAwQFBgcICQoL",
+      "readKey": "did:key:zDnaes7SHHEzJcR4LfXNL8UjSMWQ3VMFfQiv6vZzoxgkaCNqt",
+      "encryptionKeyId": "bgk-m-Kq-gEGgJCOOEYNYw"
+    },
+    "key": "__79_Pv6-fj39vX08_Lx8O_u7ezr6uno5-bl5OPi4eA",
+    "role": "editor",
+    "relays": ["wss://relay.example"]
+  },
+  "signature": "…"
 }
 ```
 
-encoded: `eyJzcGFjZSI6eyJpZCI6ImJ2dno3dTd3NGp2bHp6YmtrYXFzNGVtN2FodnhtaG5zcmpxbnVwcTQ3NXdsc2xzbDd1cWZhIiwi…`
-(the full string is the base64url of the JSON above).
+encoded: `eyJhdXRob3IiOiJkaWQ6a2V5OnpEbmFlZzZw…` `.`
+`AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8` (the invitation's canonical
+JSON in base64url, a `.`, and the secret).
 
 A private-space invite carries the space key, so the whole string is a
 secret. When embedded in a URL it **SHOULD** go in the fragment. A reader
 **MUST** accept either the bare string or a link containing
 `#invite=<string>` (also `?invite=` / `&invite=`), taking the value up to the
 next `&` or whitespace.
+
+_Source: `packages/core/src/space/invitation.ts` (`encodeInvitation`, `writeInvitation`, `readInvitation`, `invitedByOf`, `checkInvitation`), `packages/core/src/space/space-manager.ts` (`encodeSpaceInvite`, `parseSpaceInvite`, `join`), `packages/core/src/space/invite-link.ts` (`checkInviteNodes`). Tests: `packages/core/tests/invitation.test.ts` ("invitations"), `packages/core/tests/invite-link.test.ts` ("nodes an invite named are this joiner's to dial, and never passed on"), `packages/core/tests/space-access.test.ts` ("a forged invite is refused: changed founders, changed roles")._
 
 ### 7.5 View-only and role invites
 
@@ -1377,10 +1402,13 @@ library's defaults are in [its docs](../packages/core/docs/spaces.md#invites).
 
 On `join`, a peer **MUST**:
 
-1. parse the string (reject if it is not base64url JSON with `space.id` and `space.name`);
-2. refuse the space unless `checkSpace` passes (§1.2);
-3. refuse a `key` for a public space;
-4. refuse an `invite` secret that is not 32 bytes.
+1. parse the string (reject if it is not base64url JSON of a
+   `sys.invitation` with `space.id` and `space.name`, and at most one `.`
+   and a 43-character secret after it);
+2. refuse the invitation unless it checks out (§7.4);
+3. refuse the space unless `checkSpace` passes (§1.2);
+4. refuse a `key` for a public space;
+5. refuse an invite secret that is not 32 bytes.
 
 A carried `key` is imported as-is; its id is its hash (§8.1), so it is either
 a key the history names or one that opens nothing. It is not checked against
@@ -1399,7 +1427,7 @@ _Source: `packages/core/src/space/space-access.ts` (`generateInviteSecret`, `der
 ### 7.7 Short links
 
 A **short link** carries a secret and the hash of one sealed invite, and
-names the mailboxes ([07](07-doors.md) §5) the sealed invite is kept in.
+names the mailboxes ([07](07-inbox.md) §5) the sealed invite is kept in.
 What the long form (§7.4) carries is in that sealed invite instead, so the
 link stays short however large the constitution is.
 
@@ -1435,7 +1463,7 @@ topic         = base64url( SHA-256( UTF-8("minca/invite-topic/v1|" + base64url(p
 
 ```
 blob = base64url( nonce(12) ‖ AES-256-GCM(seal key, nonce, deflate(UTF-8(JSON.stringify(body)))) )
-body = { "v": 1, "invite": <the long invite's object without "invite">, "until"?: <ms> }
+body = { "v": 2, "invite": <the invitation (§7.4), as signed>, "until"?: <ms> }
 ```
 
 `deflate` is zlib (RFC 1950), as `CompressionStream("deflate")` writes it.
@@ -1453,8 +1481,9 @@ gives the long form instead.
 4. opens the one that does, and **MUST** refuse it if it does not decrypt,
    inflates past 64 KiB (stopping as it inflates), or is not a `body` as
    above;
-5. adds `invite` (the invite secret, base64url) when the body's invite names
-   a `role`, and goes on as for a long invite (§7.6).
+5. puts the invite secret beside the invitation (§7.4) when its body names a
+   `role`, and goes on as for a long invite (§7.6), checking the invitation
+   there like any other.
 
 > Rationale: anyone holding the link holds `S`, and can seal other blobs
 > under it and leave them under the topic. Only the inviter's blob hashes
@@ -1783,7 +1812,8 @@ sys.profile at profile:<hex40(accountDid)>
 `sys.profile` is reserved for this. It is encrypted in a private space (§8.2).
 `contactKey` is the public half of the account's contact key
 ([01 §10.1](01-identity.md)), to which others seal what only the account may
-open, and by which they find it ([07](07-doors.md)). Other members are the
+open, such as a knock left in the space (§16). It is not the account's inbox
+key ([07](07-inbox.md)): nothing on a profile leads to the inbox. Other members are the
 library's, and peers judge none of them: the account's picture, `avatar`, is
 a file reference ([05](05-sync-and-storage.md) §16.6;
 [spaces](../packages/core/docs/spaces.md)).
@@ -2009,33 +2039,14 @@ _Source: `packages/core/src/space/own-automations.ts` (`readWake`, `wakes`, `wak
 
 ## 16. Contacts
 
-Contacts are not protocol: they are two standard collections, `std.contact`
-in the contacts space (§13.1) and `std.contact-request` in a shared space, and
-a node procedure. A peer that has never heard of them syncs and judges them
-like any other record. They are described in the library's docs,
-[contacts](../packages/core/docs/contacts.md).
-
-### 16.1 The contacts space and `std.contact`
-
-Moved to [contacts](../packages/core/docs/contacts.md). The contacts space itself is §13.1.
-
-### 16.2 The contact key
-
-The contact key is [01 §10.1](01-identity.md); its public half is published on
-the profile (§11).
-
-### 16.3 `std.contact-request`
-
-Moved to [contacts](../packages/core/docs/contacts.md).
-
-### 16.4 How a request is sealed
-
-Moved to [contacts](../packages/core/docs/contacts.md). It is sealed with HPKE, [01 §9.2](01-identity.md).
-
-### 16.5 Asking, accepting and the rest
-
-Moved to [contacts](../packages/core/docs/contacts.md), with its Planned section
-([#40](https://github.com/leifriksheim/minca/issues/40)).
+Contacts are not protocol: the contact list (`std.contact` in the contacts
+space, §13.1), asking someone in a space you share (`std.contact-request`)
+and how a knock becomes a contact are in the library's docs,
+[contacts](../packages/core/docs/contacts.md) and
+[inbox](../packages/core/docs/inbox.md). A peer that has never heard of them
+syncs and judges them like any other record. What they rest on is protocol:
+the contact key ([01 §10.1](01-identity.md), on the profile, §11) and the
+knock ([07](07-inbox.md) §6).
 
 ---
 
@@ -2062,5 +2073,3 @@ Moved to [contacts](../packages/core/docs/contacts.md), with its Planned section
   both ([the plan](drafts/constitution-grants-contracts.md) §7).
 - A way to re-establish a space's key for members who lost every key they held
   other than a fresh role invite.
-- `invitedBy` and `relays` in invites are unauthenticated; no signature over
-  the invite string exists. See the known defect in §7.4.

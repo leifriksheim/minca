@@ -459,10 +459,9 @@ so "mentions me" and "assigned to me" match from then on.
 | Name                  | Body                                                                                    | Rules             | Where                   |
 | --------------------- | --------------------------------------------------------------------------------------- | ----------------- | ----------------------- |
 | `std.contact`         | `did` ≤ 256 and `name` ≤ 200, required; `space` ≤ 256; `note` ≤ 2000; `blocked` boolean | `onePer: [did]`   | [contacts](contacts.md) |
-| `std.contact-request` | `to` ≤ 256 and `sealed` ≤ 16000, required                                               | —                 | [contacts](contacts.md) |
-| `std.door`            | `id` 16–64 and `relays` (1–3, each ≤ 200), required; `name` ≤ 64; `label` ≤ 64          | `onePer: [id]`    | [doors.md](doors.md)    |
-| `std.knock`           | `space` ≤ 256, `name` ≤ 64, `door` ≤ 64, `sign` ≤ 64 and `invite` ≤ 8000, all required  | `onePer: [space]` | [doors.md](doors.md)    |
-| `std.knock-answer`    | `sig` ≤ 200, required                                                                   | —                 | [doors.md](doors.md)    |
+| `std.contact-request` | `to` ≤ 64 and `sealed` ≤ 16000, required                                                | —                 | [contacts](contacts.md) |
+| `std.inbox`           | `gen` ≥ 0 and `places` (1–3, each ≤ 200), required; `name` ≤ 64                         | —                 | [inbox.md](inbox.md)    |
+| `std.knock`           | `space` ≤ 256, `name` ≤ 64 and `invite` ≤ 12000, all required                           | `onePer: [space]` | [inbox.md](inbox.md)    |
 
 **Positions.** `position` is a string that sorts (by plain string comparison)
 where a record goes in a hand-made order. Digits are `0–9a–z`; a position

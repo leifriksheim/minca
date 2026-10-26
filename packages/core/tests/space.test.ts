@@ -19,6 +19,7 @@ import { base32Encode } from '../src/utils/hash.js';
 import { base64UrlDecode, base64UrlEncode } from '../src/utils/encoding.js';
 import { team } from '../src/space/presets.js';
 import { makeKey } from './helpers/person.js';
+import { selfSigner } from './helpers/invitation.js';
 
 /** Any key: sealing binds the body to it, whoever's it is */
 const newRecordKey = () => base32Encode(globalThis.crypto.getRandomValues(new Uint8Array(16)));
@@ -89,7 +90,7 @@ describe('invites', () => {
     const theirs = createSpaceManager(createMemoryAdapter());
 
     const record = await mine.create({ name: 'Move house', ...team, visibility: 'private', creator: OWNER });
-    const invite = await mine.createInvite(record.space.id, OWNER);
+    const invite = await mine.createInvite(record.space.id, await selfSigner());
 
     const preview = parseSpaceInvite(invite);
     assert.equal(preview.space.name, 'Move house');
@@ -109,7 +110,7 @@ describe('invites', () => {
   test('a public space invite carries no key', async () => {
     const spaces = createSpaceManager(createMemoryAdapter());
     const record = await spaces.create({ name: 'Potluck', ...team, visibility: 'public', creator: OWNER });
-    const invite = await spaces.createInvite(record.space.id, OWNER);
+    const invite = await spaces.createInvite(record.space.id, await selfSigner());
 
     assert.equal(parseSpaceInvite(invite).key, undefined);
   });
@@ -121,7 +122,7 @@ describe('invites', () => {
     const record = await mine.create({ name: 'Reading', visibility: 'public', creator: OWNER, ...team });
     const secret = crypto.getRandomValues(new Uint8Array(32));
     const joined = await theirs.join(
-      await mine.createInvite(record.space.id, OWNER, { secret, role: 'editor' }),
+      await mine.createInvite(record.space.id, await selfSigner(), { secret, role: 'editor' }),
     );
 
     assert.deepEqual(joined.space.roles, record.space.roles);

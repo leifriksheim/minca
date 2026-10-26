@@ -38,6 +38,7 @@ import {
 } from '../src/space/account-registry.js';
 import { isProtocolError } from '../src/utils/errors.js';
 import { team } from '../src/space/presets.js';
+import { selfSigner } from './helpers/invitation.js';
 
 const manager = createIdentityManager();
 const didOf = async (seed: Uint8Array) => (await manager.fromSeed(seed)).did;
@@ -379,7 +380,7 @@ describe('encryption at rest', () => {
       creator: 'did:key:zowner',
     });
     await spaces.join(
-      await other.createInvite(made.space.id, 'did:key:zowner', {
+      await other.createInvite(made.space.id, await selfSigner(), {
         secret: crypto.getRandomValues(new Uint8Array(32)),
         role: 'editor',
       }),

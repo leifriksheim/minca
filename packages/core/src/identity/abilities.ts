@@ -13,7 +13,7 @@
  *   invites, revocations, the space's key, relays and keepers;
  * - `/account/write`, about the whole account: anything about the account
  *   itself — its own spaces (its list of spaces, a carrier's passes, its
- *   doors), its own place in any space, and its other keys.
+ *   inbox, its knocks), its own place in any space, and its other keys.
  *
  * So a key is a device or an app by what its note says: a note for `/` about
  * the whole account acts as the account; anything narrower acts in spaces.

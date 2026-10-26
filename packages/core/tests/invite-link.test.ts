@@ -38,7 +38,11 @@ import {
   sealInvite,
 } from '../src/space/invite-link.js';
 import { deriveInviteKey, expandSecret } from '../src/space/space-access.js';
-import { base64UrlEncode } from '../src/utils/encoding.js';
+import { INVITATION_COLLECTION, readInvitation, writeInvitation } from '../src/space/invitation.js';
+import { signLoose } from '../src/records/loose.js';
+import type { Version } from '../src/types.js';
+import { resign, selfSigner } from './helpers/invitation.js';
+import { base64UrlDecode, base64UrlEncode } from '../src/utils/encoding.js';
 import { bufferSource } from '../src/utils/guards.js';
 
 const secret = Uint8Array.from({ length: 16 }, (_, i) => i);
@@ -102,8 +106,15 @@ describe('the link', () => {
   });
 });
 
+/** An invitation signed by a key of its own, to a space named by hand */
+const invitation = async (body: Readonly<Record<string, unknown>>) =>
+  signLoose(await selfSigner(), INVITATION_COLLECTION, body, createP256Provider());
+
 describe('the sealed invite', () => {
-  const invite = { space: { id: 'abc', name: 'Chess club' }, relays: ['wss://relay.example'] };
+  let invite: Version;
+  before(async () => {
+    invite = await invitation({ space: { id: 'abc', name: 'Chess club' }, relays: ['wss://relay.example'] });
+  });
 
   test('opens with the link that names it, and with nothing else', async () => {
     const sealed = await sealInvite(secret, { invite, until: 1_790_000_000_000 });
@@ -112,7 +123,9 @@ describe('the sealed invite', () => {
     assert.deepEqual(await openInvite(link, sealed.blob), { invite, until: 1_790_000_000_000 });
 
     // Another blob sealed under the same secret — by anyone who holds the link — is not this link's.
-    const other = await sealInvite(secret, { invite: { ...invite, relays: ['wss://evil.example'] } });
+    const other = await sealInvite(secret, {
+      invite: await invitation({ space: { id: 'abc', name: 'Chess club' }, relays: ['wss://evil.example'] }),
+    });
     assert.equal(await openInvite(link, other.blob), null);
     // Nor is one under another secret that happens to be filed with it.
     assert.equal(await openInvite({ ...link, secret: new Uint8Array(16) }, sealed.blob), null);
@@ -125,7 +138,7 @@ describe('the sealed invite', () => {
     // Sealed by hand, as only someone holding the secret could: a megabyte of zeros.
     const raw = await expandSecret(secret, 'minca/invite-link/v1|seal');
     const key = await globalThis.crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt']);
-    const json = new TextEncoder().encode(`{"v":1,"invite":{"x":"${'0'.repeat(1 << 20)}"}}`);
+    const json = new TextEncoder().encode(`{"v":2,"invite":{"x":"${'0'.repeat(1 << 20)}"}}`);
     const compressed = new Uint8Array(
       await new Response(
         new Blob([json]).stream().pipeThrough(new CompressionStream('deflate')),
@@ -142,7 +155,7 @@ describe('the sealed invite', () => {
 
   test('one too large for a mailbox is not made', async () => {
     const noise = base64UrlEncode(globalThis.crypto.getRandomValues(new Uint8Array(20_000)));
-    await assert.rejects(sealInvite(secret, { invite: { noise } }), /too large/);
+    await assert.rejects(sealInvite(secret, { invite: await invitation({ noise }) }), /too large/);
   });
 });
 
@@ -168,7 +181,7 @@ describe('short links between nodes', () => {
   }
 
   /** The invite a short link's blob holds, as anyone holding the link can read it */
-  async function sealedOf(link: string): Promise<Readonly<Record<string, unknown>>> {
+  async function sealedOf(link: string): Promise<Version> {
     const parsed = parseInviteLink(bareInvite(link));
     for (const item of await createMailboxClient().fetch(relay.url, await linkTopic(parsed.pin))) {
       const opened = await openInvite(parsed, item.blob);
@@ -201,11 +214,14 @@ describe('short links between nodes', () => {
     // Mallory holds the link, so she can seal what she likes under its secret, and leave it where the link looks.
     const real = await sealedOf(link);
     const junk = await sealInvite(held, {
-      invite: {
-        ...real,
-        key: base64UrlEncode(globalThis.crypto.getRandomValues(new Uint8Array(32))),
-        nodes: ['wss://mallory.example/peer#did:key:zDnaerDaTF5BXEavCrfRZEk316dpbLsfPDZ3WJ5hRTPFU2169'],
-      },
+      invite: readInvitation(
+        await resign(writeInvitation(real), (body) => {
+          body.key = base64UrlEncode(globalThis.crypto.getRandomValues(new Uint8Array(32)));
+          body.nodes = [
+            'wss://mallory.example/peer#did:key:zDnaerDaTF5BXEavCrfRZEk316dpbLsfPDZ3WJ5hRTPFU2169',
+          ];
+        }),
+      ).version,
     });
     const topic = await linkTopic(named);
     for (let i = 0; i < 3; i++) await createMailboxClient().drop(relay.url, topic, `${junk.blob}`);
@@ -342,7 +358,11 @@ describe('short links between nodes', () => {
     const phone = (await device(phoneStores)).node;
     const space = await laptop.spaces.create({ name: 'Club', ...team, visibility: 'private' });
     await laptop.records.put(space.id, 'note', { text: 'hi' });
-    await until(async () => (await phone.records.list(space.id)).length === 1, 5000, 'the phone to hold it');
+    await until(
+      async () => (await phone.records.list(space.id).catch(() => [])).length === 1,
+      5000,
+      'the phone to hold it',
+    );
     await settle(500);
 
     // Away from the phone, the key changes and the laptop makes a link with the new one.
@@ -366,14 +386,22 @@ describe('short links between nodes', () => {
     const alice = (await person(hub, { accountKey: true })).node;
     const space = await alice.spaces.create({ name: 'Club', ...team, visibility: 'private' });
     await alice.records.put(space.id, 'note', { text: 'hi' });
-    // Whoever passes an invite on can add a node of their own: nothing signs the list.
-    const invite = parseSpaceInvite(await alice.spaces.invite(space.id, { role: 'editor' }));
+    const invite = await alice.spaces.invite(space.id, { role: 'editor' });
     const mallory = 'wss://mallory.example/peer#did:key:zDnaerDaTF5BXEavCrfRZEk316dpbLsfPDZ3WJ5hRTPFU2169';
-    const tampered = base64UrlEncode(
-      new TextEncoder().encode(JSON.stringify({ ...invite, nodes: [mallory] })),
-    );
     const bob = (await person(hub, { accountKey: true })).node;
-    await bob.spaces.join(tampered);
+    // The list is signed: one added by whoever passed the invite on doesn't check out…
+    const { version, secret: held } = readInvitation(invite);
+    const edited = writeInvitation(
+      { ...version, body: { ...version.body, nodes: [mallory] } },
+      base64UrlDecode(held!),
+    );
+    await assert.rejects(bob.spaces.join(edited), /doesn't check out/);
+    // …and one signed again by them names them as the inviter, not Alice.
+    assert.notEqual(
+      parseSpaceInvite(await resign(invite, (body) => (body.nodes = [mallory]))).invitedBy,
+      alice.did,
+    );
+    await bob.spaces.join(invite);
     await joined(bob, space.id);
     await until(async () => (await bob.records.list(space.id)).length === 1, 5000, 'the note to reach Bob');
     assert.equal(parseSpaceInvite(await bob.spaces.invite(space.id, { write: false })).nodes, undefined);
@@ -393,7 +421,9 @@ const provider = createP256Provider();
 
 describe('a mailbox that keeps blobs for others', () => {
   test('answers a topic with what it keeps there, first, and with what was dropped', async () => {
-    const kept = await sealInvite(secret, { invite: { space: { id: 'abc', name: 'Kept' } } });
+    const kept = await sealInvite(secret, {
+      invite: await invitation({ space: { id: 'abc', name: 'Kept' } }),
+    });
     const topic = await linkTopic(kept.pin);
     const relay = await startRelay({}, (asked) => (asked === topic ? [kept.blob] : []));
     try {

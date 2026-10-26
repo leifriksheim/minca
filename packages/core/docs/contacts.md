@@ -2,17 +2,17 @@
 
 A contact is someone you share a **private space for two** with. The account
 keeps its list of them in its contacts space, and asks someone to become a
-contact by posting a sealed invite in a space both belong to.
+contact by leaving a knock for them: in a space both belong to, or in their
+inbox.
 
-This is a convention built on the protocol, not part of it. Peers that have
-never heard of `std.contact` or `std.contact-request` sync, store and judge
-them like any other record. Only apps that want to read each other's contact
-lists and requests have to agree on what follows. It uses these protocol
-parts: the contacts space ([spec 03 §13.1](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)),
-profiles (§11), invites (§7), and the contact key and sealing to it with HPKE
-([spec 01 §10.1, §9.2](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md)).
-Asking someone you share **no** space with goes through a door
-([spec 07](https://github.com/leifriksheim/minca/blob/main/spec/07-doors.md)).
+The list and the request are conventions built on the protocol, not part of
+it. Peers that have never heard of `std.contact` or `std.contact-request`
+sync, store and judge them like any other record. The knock they carry is
+protocol: how it is signed and sealed, and what the person it is for checks,
+is [spec 07 §6](https://github.com/leifriksheim/minca/blob/main/spec/07-inbox.md),
+the same however it is handed over.
+Asking someone you share **no** space with goes through their inbox
+([inbox.md](inbox.md)).
 
 ## The list: `std.contact`
 
@@ -22,15 +22,15 @@ The list lives in the account's contacts space (derived with the label
 ```
 std.contact  (rules: onePer ["did"])
 { did: string ≤256, name: string ≤200, space?: string ≤256, note?: string ≤2000,
-  blocked?: boolean, door?: string ≤64 }
+  blocked?: boolean }
 record key = records.onePerKey(contactsSpace, "std.contact", { did })
            = "one:" + hex(HMAC(oneKey, "std.contact\ndid=" + canonical(did))[0..20))
              // a shared key, spec 02 §7.3: onePer without @author
 ```
 
 `name` is what you call them; they never see it. `space` is the id of the
-space for two. `blocked` hides that person's contact requests in every space.
-`door` is set while a knock's answer is still to be written ([spec 07](https://github.com/leifriksheim/minca/blob/main/spec/07-doors.md)).
+space for two. `blocked` hides that person's knocks, in every space and in the
+inbox.
 
 A reader must ignore a record whose key is not the one its `did` derives. It
 also ignores one whose root is not the account, as it does for every record in
@@ -38,52 +38,28 @@ the account's derived spaces (spec 03 §13.1).
 
 ## The contact key
 
-A request is sealed to the askee's contact key: the public half, published as
-`contactKey` on their profile in the space (spec 03 §11). How it is derived is
-in spec 01 §10.1. A node holds the private half only when it was given it
-(`config.contactKey`); an agent never is.
+A knock left in a shared space is sealed to the askee's contact key: the
+public half, published as `contactKey` on their profile in the space (spec 03
+§11). How it is derived is in spec 01 §10.1. A node holds the private half
+only when it was given it (`config.contactKey`); an agent never is.
 
-## `std.contact-request`
-
-```
-std.contact-request  (no rules; who may post one is the space's grants)
-{ to: <askee account DID, ≤256>, sealed: string ≤16000 }
-```
-
-Posted in a space both people belong to. In a private space the body is also
-encrypted with the space key, so other members see that `to` was asked, not
-what.
-
-### Sealing
+## Asking in a shared space
 
 ```
-value  = { invite: <role invite to the space for two>, note?: string ≤2000 }
-bound  = { space: <spaceId>, from: <askerAccountDid>, to: <askeeAccountDid> }
-sealed = HPKE(askee.contactKey, "minca/contact-request/v1", bound, JSON value)
+std.contact-request  (no rules; who may write one is the space's grants)
+{ to: <the askee's contact key, as on their profile here, ≤64>, sealed: string ≤16000 }
 ```
 
-`HPKE` is sealing to a key, spec 01 §9.2. A sealed `{"invite":"x"}` is
-1 + 65 + 14 + 16 = 96 bytes.
+`ask` leaves one in the space: `sealed` is a knock sealed to `to` (spec 07
+§6), whose invite is to a new space for two. It defines the collection first
+if the space lacks it, which needs `/collection/define`. In a private space
+the body is sealed with the space key too, so other members see that someone
+asked, not whom.
 
-Example: in space `bspace`, `did:key:zA` asking `did:key:zB` seals with bound
-`{"from":"did:key:zA","space":"bspace","to":"did:key:zB"}`.
-
-### Opening
-
-The receiver must open a request only when the record verifies and stands, its
-current version was signed by the account itself or under a note that grants
-`/account/write` for the whole account (a note about the account, no policy
-on `.space`), as a knock needs (spec 01 §8;
-not one for some spaces, nor an agent's), is in `std.contact-request`, `to` is the
-receiver's account, and `from` (the record's root) equals the root of the
-record's first version and is not the receiver. It must use the bound built
-from the space the record is in and that `from`. It must then reject the value
-unless `invite` parses as an invite (spec 03 §7.4) to a **private** space whose
-constitution names `from` as its one founder, assigning no roles of its own
-(spec 03 §1), and which carries a `key`.
-
-Binding the seal to the space and to who asked whom means a request copied
-into another space, or re-posted by someone else, does not open.
+The receiver opens a request only when `to` is its own contact key, the
+knock checks out (spec 07 §6), and the knock's account is the record's root
+and not its own. A knock copied into another record by someone else is not
+theirs to leave, and opens as nothing.
 
 ## `node.contacts`
 
@@ -92,13 +68,16 @@ into another space, or re-posted by someone else, does not open.
 - `put({ did, name, space?, note? })`: adds someone, or changes what the list
   says about them.
 - `ask(space, did, { note? })` needs whole-account access and the askee's
-  `contactKey` on their profile in that space. It defines
-  `std.contact-request` in the space if missing (needs `/collection/define`), creates a
-  private `team` space named `"<my name> & <their name>"`, opens an `editor`
-  invite to it, writes a `std.contact` for them with that space, then posts
-  the sealed request. It returns the space for two and the request's key.
-- `requests(space)` lists requests that open for this account, skipping
-  blocked senders and requests whose space for two the account already holds.
+  `contactKey` on their profile in that space. It creates a private `team`
+  space named `"<my name> & <their name>"`, opens an `editor` invite to it,
+  waits up to 3 seconds for a carrier that is online to hold it (`spaces.carried`), writes a
+  `std.contact` for them with that space, then leaves the knock as
+  `std.contact-request`. It returns the space for two, the record's key, and `carried`:
+  false when no carrier held the space in time, so the askee can join only
+  while one of the asker's devices is online.
+- `requests(space)` lists the knocks left there that open for this account,
+  skipping blocked senders and knocks whose space for two the account already
+  holds.
 - `accept(space, requestKey)` joins the invite (spec 03 §7.6) and writes a
   `std.contact` for the asker with the space for two. There is no reply
   record: joining is the answer.
@@ -111,25 +90,25 @@ into another space, or re-posted by someone else, does not open.
   (members, profiles, connected peers).
 
 `ask` and `accept` need a session note that grants `/account/write` for the
-whole account, as a knock does. An app granted
-`contacts` sees the list and requests, but may not ask or accept
+whole account, as a knock does. An app granted `contacts` sees the list and
+requests, but may not ask or accept
 ([spec 06 §2.5](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
 
-_Source: `packages/core/src/schemas/contacts.ts`, `packages/core/src/identity/contact-key.ts` (`deriveContactKeyBytes`), `packages/core/src/identity/hpke.ts` (`sealValueTo`, `openValueFrom`), `packages/core/src/node/node.ts` (contacts section: `REQUEST_LABEL`, `openRequest`, `contacts`), `packages/core/src/node/types.ts` (`NodeContacts`), `packages/core/src/space/account-registry.ts` (`deriveContactsSpace`). Tests: `packages/core/tests/contacts.test.ts`, `packages/core/tests/attacks.test.ts`._
+_Source: `packages/core/src/schemas/contacts.ts` (`contact`), `packages/core/src/identity/contact-key.ts` (`deriveContactKeyBytes`), `packages/core/src/inbox/inbox.ts` (`sealKnock`, `openKnock`), `packages/core/src/node/node.ts` (contacts section: `openMail`, `makePair`, `contacts`), `packages/core/src/schemas/contacts.ts` (`contactRequest`), `packages/core/src/node/types.ts` (`NodeContacts`), `packages/core/src/space/account-registry.ts` (`deriveContactsSpace`). Tests: `packages/core/tests/contacts.test.ts`, `packages/core/tests/attacks.test.ts` ("a knock re-posted by someone else…")._
 
 ## Planned: requests that can be taken back
 
 A list that never names a space the account left, and requests that can be
-taken back. Today the `std.contact` does not record where `ask` posted the
-request, so `remove` and `block` leave it standing: the askee can still accept
+taken back. Today the `std.contact` does not record where `ask` left the
+knock, so `remove` and `block` leave it standing: the askee can still accept
 it, into a space nobody holds. And `spaces.leave` on a space for two leaves the
 `std.contact` naming it.
 
 - `std.contact` gains `asked?: { space: string ≤256, key: string ≤256 }`, the
   space and record key of the request. `ask` writes it.
-- `remove(did)` and `block(did)` delete the `std.contact-request` at `asked`
-  when the space is still held and the record still stands, before leaving the
-  space for two.
+- `remove(did)` and `block(did)` delete the request at `asked` when the
+  space is still held and the record still stands, before leaving the space
+  for two.
 - `spaces.leave(id)` on a space a `std.contact` names does what `remove` does
   for that contact.
 - `ContactView` gains `waiting: boolean`, true while the other account has no

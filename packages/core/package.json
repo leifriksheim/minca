@@ -61,10 +61,10 @@
       "types": "./dist/calls/index.d.ts",
       "import": "./dist/calls/index.js"
     },
-    "./doors": {
-      "@minca/source": "./src/doors/index.ts",
-      "types": "./dist/doors/index.d.ts",
-      "import": "./dist/doors/index.js"
+    "./inbox": {
+      "@minca/source": "./src/inbox/index.ts",
+      "types": "./dist/inbox/index.d.ts",
+      "import": "./dist/inbox/index.js"
     }
   },
   "scripts": {
