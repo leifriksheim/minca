@@ -89,9 +89,8 @@ else who joined too shows up in `contacts.others`.
 
 The invite is multi-use until then, so it must reach nobody else: if the
 owner passes it on, or a device of theirs is lost before they accept, whoever
-joins first is taken for them. The old door answer, signed with a key of the
-door's, ruled that out; it cost a second record and a signing key, and the
-person accepting can as well forward the knock itself.
+joins first is taken for them. That is accepted: the person it was for could
+as well forward the knock itself.
 
 A `std.knock` nobody joined within the knock TTL (14 days) plus a day is let
 go: the knocker leaves the space and deletes the record. One whose space is no

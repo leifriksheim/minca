@@ -200,7 +200,7 @@ export async function hpkeDeriveKeyPair(
 const uncompressed = (publicKey: string) => p256.Point.fromBytes(base64UrlDecode(publicKey)).toBytes(false);
 
 /**
- * Seals bytes to a P-256 key (a contact, member or door key), for one label
+ * Seals bytes to a P-256 key (a contact, member or inbox key), for one label
  * and one place.
  * @param publicKey The compressed point, base64url, as profiles carry it
  * @returns base64url of `0x01 ‖ enc ‖ ct`

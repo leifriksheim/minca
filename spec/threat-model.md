@@ -106,10 +106,8 @@ reference implementation, or any implementation, honestly.
     on by them, taken from a device of theirs, or opened by an app they gave
     the contact key to, lets whoever joins first be taken for them: joining
     is the answer, and the knocker closes the invite only once it sees
-    someone join (07 §8). The door answer had to be signed with a key derived
-    from the contact key, so it stopped a passed-on invite but not a holder
-    of that key. Accepted for a passed-on invite, which the person could as
-    well forward the knock; the app case is
+    someone join (07 §8). Accepted: the person it was for could as well
+    forward the knock. The app case is
     [#313](https://github.com/leifriksheim/minca/issues/313) (§3.6).
   - A role link's invite is closed after a key change only once a device of
     the inviter's account that may close it comes online; meanwhile someone

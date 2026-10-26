@@ -34,7 +34,7 @@ import { styles } from './styles';
  * which space, which part of it, which record is open beside it, and which
  * collection Data shows. What lives longer (your spaces, a call) sits above
  * the routes, in `App`. Every redirect keeps the fragment, where invites and
- * doors travel.
+ * inbox codes travel.
  */
 /** A search param that is some text, or nothing */
 const text = (value: unknown): string | undefined => (typeof value === 'string' && value ? value : undefined);

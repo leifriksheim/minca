@@ -5,10 +5,10 @@ import { APP } from './pages/Site';
 import { router } from './router';
 
 // The app is a site of its own now. A link made when it lived here, at `/app`
-// or with an invite or door in its fragment, goes on to it, with the
+// or with an invite or an inbox code in its fragment, goes on to it, with the
 // fragment (which never reached a server) intact.
 const { pathname, hash } = globalThis.location;
-const appLink = /^\/app(\/|$)/.test(pathname) || /[#&](invite|door)=/.test(hash);
+const appLink = /^\/app(\/|$)/.test(pathname) || /[#&](invite|inbox)=/.test(hash);
 if (appLink) globalThis.location.replace(`${APP}/${hash}`);
 
 // The design system's tokens and base rules; the pages' own styles are in pages/site.css.
