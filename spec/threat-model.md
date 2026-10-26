@@ -967,8 +967,7 @@ the same sealed blobs.
     for one. Nor through introductions: a signal passed on is signed by its
     origin and stays in its room (04 §2, §8; "a signal passed on in someone
     else’s name is ignored, and a genuine one is acted on once", "a signal
-    stays in its room: not taken from a peer who isn’t there, nor passed to
-    one"; "an offer whose sealed description someone else put in,
+    is taken only from a peer admitted in its room"; "an offer whose sealed description someone else put in,
     under its sender’s signature, is ignored", "a hello naming B but signed by another key is ignored",
     "someone in only a public room cannot pose there as B to keep A and B
     apart in a private one").
@@ -1041,7 +1040,17 @@ the same sealed blobs.
   - Under DIDs of keys it makes, 64 hellos every 5 minutes through any one
     relay fill a room's places on every relay, where it once took 64 sockets
     on each ([#162](https://github.com/leifriksheim/minca/issues/162)).
-  - Peers meet through relays only if their clocks are within 2 minutes:
+  - Under DIDs of keys it makes, a member can pass a peer offers through an
+    introduction with no limit of 64 a room: each opens a connection that
+    times out, until the cap on half-open connections lands
+    ([#33](https://github.com/leifriksheim/minca/issues/33)).
+  - A signed introduction is proof that can be shown to others: a member who
+    passes one on holds its origin's signature over the room, the target, a
+    time and the description with its addresses.
+  - A member who is the only path for an offer can hold it back and pass it
+    on after a newer one, which the target then takes in its place, costing
+    the pair a round of backoff ([#162](https://github.com/leifriksheim/minca/issues/162)).
+  - Peers meet through relays, or introductions, only if their clocks are within 2 minutes:
     messages outside that are taken for replays (04 §2,
     [#162](https://github.com/leifriksheim/minca/issues/162)).
   - Anyone who knows a space's id, a former member or someone who saw an

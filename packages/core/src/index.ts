@@ -300,7 +300,6 @@ export {
   isControlMessage,
   shouldInitiate,
   createSeenSignals,
-  signalId,
   MAX_HOPS,
   PEERS_MESSAGE,
   SIGNAL_MESSAGE,

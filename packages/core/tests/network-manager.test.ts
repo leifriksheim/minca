@@ -306,13 +306,12 @@ describe('the mesh, through real relays', () => {
   const relayed = async (
     room: string,
     signer: Session,
-    fields: { origin: string; target: string; at: number; sdp: string; id?: string },
+    fields: { origin: string; target: string; at: number; sdp: string },
   ) => {
     const { origin, target, at, sdp } = fields;
     const label = utf8Encode(`minca/introduction/v1|${room}|${origin}|${target}|offer|${at}|${sdp}`);
     const sig = base64UrlEncode(await createP256Provider().sign(signer.key, label));
-    const id = fields.id ?? 'a1b2c3d4e5f60718';
-    return { id, origin, target, kind: 'offer', data: { type: 'offer', sdp }, at, sig, hops: 1 };
+    return { origin, target, kind: 'offer', data: { type: 'offer', sdp }, at, sig, hops: 1 };
   };
 
   test('a signal passed on in someone else’s name is ignored, and a genuine one is acted on once', async () => {
@@ -344,7 +343,7 @@ describe('the mesh, through real relays', () => {
       sdp: `offer:${C.did}->${A.did}`,
     });
     m.send(A.did, { room: 'signed', type: '__signal', payload: genuine });
-    m.send(A.did, { room: 'signed', type: '__signal', payload: { ...genuine, id: 'another' } });
+    m.send(A.did, { room: 'signed', type: '__signal', payload: genuine });
     await until(() => a.dialled.includes(C.did), 2000, 'A to answer C');
     await new Promise((resolve) => setTimeout(resolve, 300));
     assert.equal(a.dialled.filter((peer) => peer === C.did).length, 1);
@@ -352,7 +351,7 @@ describe('the mesh, through real relays', () => {
     roomM.disconnect();
   });
 
-  test('a signal stays in its room: not taken from a peer who isn’t there, nor passed to one', async () => {
+  test('a signal is taken only from a peer admitted in its room', async () => {
     const [mallory] = await sessionsInOrder(1);
     const a = watched(A, 'room-intro');
     const m = watched(mallory, 'room-intro');

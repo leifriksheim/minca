@@ -962,7 +962,6 @@ whoever made it:
 
 ```json
 { "room": "<room>", "type": "__signal", "from": "<sender>", "payload": {
-  "id": "9f1c2a7b04d3e6aa",
   "origin": "<DID wanting to connect>",
   "target": "<DID it wants>",
   "kind": "offer" | "answer",
@@ -978,8 +977,7 @@ sig = base64url( ECDSA-P256-SHA256( the key `origin` names,
         UTF-8("minca/introduction/v1|" + room + "|" + origin + "|" + target + "|" + kind + "|" + at + "|" + sdp) ) )
 ```
 
-- `id` is 8 random bytes as 16 lowercase hex characters, fresh per signal;
-  it and `hops` only route the signal, and are signed by no one.
+- `hops` only routes the signal, and is signed by no one.
 - `at` is when it was sent, in ms; an origin MUST give each signal it sends
   a greater `at` than the last.
 - The sender sends it to every peer admitted in the room, and nowhere else.
@@ -989,20 +987,25 @@ sig = base64url( ECDSA-P256-SHA256( the key `origin` names,
   32,000 characters, `at` is an integer within 2 minutes of its own clock,
   and `sig` verifies against the key `origin` names.
 - If `target` is itself, it acts on it as a signal from `origin` (§7.3),
-  once for each `at` from that origin in that room (it remembers the times
-  within the 2 minutes, and MAY stop hearing an origin that sent more than
-  256 in them), and replies through the room's peers.
-- Otherwise, if `hops > 0` and it hasn't passed this signal on before (it
-  remembers a bounded number of signatures), it forwards it to every peer
-  admitted in the room except the one it came from, with
+  once for each `at` from that origin in that room, in whatever order they
+  come (it remembers the times within the 2 minutes, and MAY stop hearing an
+  origin that sent more than 256 in them, or a new origin while it holds
+  1,024), and replies through the room's peers.
+- Otherwise, if `hops > 0` and it hasn't passed on a signal with this
+  `origin` and `at` in this room before (it remembers a bounded number, and
+  records one only once its signature checks out), it forwards it to every
+  peer admitted in the room except the one it came from, with
   `hops = min(hops, 3) − 1`.
+- A receiver checks whether it acted on, or passed on, a signal's `origin`
+  and `at` before checking its signature, so a copy arriving again costs it
+  nothing.
 
 > Rationale: a signal stays in its room, so only the room's members ever
 > carry it, and any member could learn another's addresses by meeting it
 > anyway; so the description goes as it is. Signed by its origin, nobody can
 > pass one on in another's name.
 
-_Source: `packages/core/src/network/introductions.ts` (`introductionLabel`), `packages/core/src/network/mesh.ts` (`handlePeerList`, `floodSignal`, `throughMesh`, `onRelayedSignal`, `isNewSignal`). Tests: `packages/core/tests/introductions.test.ts`, `packages/core/tests/network-manager.test.ts` ("a relay connects the first pair, and a peer introduces the rest", "a signal passed on in someone else’s name is ignored, and a genuine one is acted on once", "a signal stays in its room: not taken from a peer who isn’t there, nor passed to one")._
+_Source: `packages/core/src/network/introductions.ts` (`introductionLabel`), `packages/core/src/network/mesh.ts` (`handlePeerList`, `floodSignal`, `throughMesh`, `onRelayedSignal`, `isNewSignal`). Tests: `packages/core/tests/introductions.test.ts`, `packages/core/tests/network-manager.test.ts` ("a relay connects the first pair, and a peer introduces the rest", "a signal passed on in someone else’s name is ignored, and a genuine one is acted on once", "a signal is taken only from a peer admitted in its room")._
 
 ---
 

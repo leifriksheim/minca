@@ -9,7 +9,6 @@ import {
   isControlMessage,
   shouldInitiate,
   createSeenSignals,
-  signalId,
   PEERS_MESSAGE,
   SIGNAL_MESSAGE,
 } from '../src/network/introductions.js';
@@ -17,6 +16,9 @@ import { createRendezvous, rendezvousKeys, type Rendezvous } from '../src/networ
 import { isRecord } from '../src/utils/guards.js';
 import { until } from './helpers/until.js';
 import { session } from './helpers/sessions.js';
+
+/** A fresh id for the seen-set tests */
+const someId = () => crypto.randomUUID();
 
 describe('who opens the connection', () => {
   test('exactly one side of any pair initiates', () => {
@@ -52,29 +54,24 @@ describe('mesh housekeeping', () => {
 
   test('a flooded signal is acted on once', () => {
     const seen = createSeenSignals();
-    const id = signalId();
+    const id = someId();
 
     assert.equal(seen.accept(id), true);
     // The same signal arriving by a second route.
     assert.equal(seen.accept(id), false);
-    assert.equal(seen.accept(signalId()), true);
+    assert.equal(seen.accept(someId()), true);
   });
 
   test('the record of seen signals stays bounded', () => {
     const seen = createSeenSignals(4);
-    const ids = Array.from({ length: 4 }, signalId);
+    const ids = Array.from({ length: 4 }, someId);
     for (const id of ids) seen.accept(id);
 
     // Pushing past the limit forgets the oldest — unbounded memory fed by the
     // network would be a way for a peer to take this tab down.
-    seen.accept(signalId());
+    seen.accept(someId());
     assert.equal(seen.accept(ids[0]!), true, 'the oldest id should have been forgotten');
     assert.equal(seen.accept(ids[3]!), false, 'a recent id should still be remembered');
-  });
-
-  test('ids do not collide', () => {
-    const ids = new Set(Array.from({ length: 500 }, signalId));
-    assert.equal(ids.size, 500);
   });
 });
 
