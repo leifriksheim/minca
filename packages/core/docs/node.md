@@ -648,9 +648,9 @@ last one failed, `stopped`) is readable as `RelayStatus`, and through a node
 as `network.status()`.
 
 **Meeting** (spec 04 §2, §3). A node says hello in each room when it joins,
-on every relay as its socket opens, and every 2 minutes. It remembers the
-last 1024 message ids in each room, and the failed tries of the last 512
-peers. It
+on every relay as its socket opens, and every 2 minutes. It remembers, per
+room, the last time it acted on from each peer, and the failed tries of the
+last 512 peers. It
 says hello back in a room at most once every 10 s. Each socket
 sends at most 20 messages a second, in bursts of 40, and queues the rest. A
 connection attempt that times out is retried on the peer's next hello. `requestIce`

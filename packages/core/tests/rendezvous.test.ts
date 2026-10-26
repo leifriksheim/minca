@@ -155,21 +155,38 @@ describe('meeting through relays', () => {
     const { key, topic } = await rendezvousKeys('room');
     const box = contactPublicKey(p256.utils.randomSecretKey());
     // Each signed by A, so only the sealing or the time is wrong.
-    const hello = (at: number, id: string) => signedHello('room', A, box, { at, id });
+    const hello = (at: number) => signedHello('room', A, box, { at });
     // Not sealed at all, sealed under another room's key, and older than two minutes.
     sender.link.publish(topic, 'bm90IHNlYWxlZA');
     const other = await rendezvousKeys('another room');
-    const signed = await openValue(key, 'minca/rendezvous/v1', { topic }, await hello(Date.now(), 'x'));
+    const signed = await openValue(key, 'minca/rendezvous/v1', { topic }, await hello(Date.now()));
     sender.link.publish(topic, await sealValue(other.key, 'minca/rendezvous/v1', { topic }, signed));
-    sender.link.publish(topic, await hello(Date.now() - 5 * 60_000, 'old'));
+    sender.link.publish(topic, await hello(Date.now() - 5 * 60_000));
     await new Promise((resolve) => setTimeout(resolve, 200));
     assert.deepEqual(b.joined, []);
     // The same, sealed under the room's key and fresh, is heard.
-    sender.link.publish(topic, await hello(Date.now(), 'fresh'));
+    sender.link.publish(topic, await hello(Date.now() + 1));
     await until(() => b.joined.length > 0, 2000, 'the good hello');
     assert.deepEqual(b.joined, [A.did]);
     b.rendezvous.disconnect();
     sender.link.disconnect();
+  });
+
+  test('a replayed offer is not acted on again, however much else was said since', async () => {
+    const watcher = await eavesdrop(one.url);
+    const b = await peer(B, [one.url]);
+    const a = await peer(A, [one.url]);
+    await until(() => a.joined.includes(B.did), 2000, 'hello');
+    a.rendezvous.signal('offer', B.did, OFFER, 'room');
+    await until(() => b.signals.length === 1, 2000, 'the offer');
+    // Others keep talking: nothing B remembers of A is pushed out by them.
+    const others = await Promise.all(Array.from({ length: 20 }, session));
+    const box = contactPublicKey(p256.utils.randomSecretKey());
+    for (const other of others) watcher.link.publish(watcher.topic, await signedHello('room', other, box));
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    for (const blob of watcher.blobs) watcher.link.publish(watcher.topic, blob);
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    assert.equal(b.signals.length, 1);
   });
 
   test('a replayed hello counts once', async () => {
@@ -214,14 +231,13 @@ describe('signals stay in their room', () => {
     const evesBox = await contactKeyPair(secret);
     const evesKey = await session();
     // Eve can only sign with her own key, whatever name she gives.
-    const posing = (room: string, id: string) =>
-      signedHello(room, evesKey, evesBox.publicKey, { id, from: A.did });
+    const posing = (room: string) => signedHello(room, evesKey, evesBox.publicKey, { from: A.did });
     // Eve says hello as A in the public room, and then in the private one, between A's offer and B's answer.
-    eve.link.publish(eve.topic, await posing('public', 'eve-public'));
+    eve.link.publish(eve.topic, await posing('public'));
     await new Promise((resolve) => setTimeout(resolve, 200));
     a.rendezvous.signal('offer', B.did, OFFER, 'private');
     await until(() => b.signals.length === 1, 2000, 'the offer');
-    inPrivate.link.publish(inPrivate.topic, await posing('private', 'eve-private'));
+    inPrivate.link.publish(inPrivate.topic, await posing('private'));
     await new Promise((resolve) => setTimeout(resolve, 200));
     const offer = b.signals[0]!;
     b.rendezvous.signal('answer', A.did, { type: 'answer', sdp: 'v=0 B answers' }, offer.room, offer.box);
@@ -403,8 +419,8 @@ describe('what a hello can cost', () => {
     await net.connect();
     const sender = await eavesdrop(one.url, 'flooded');
     const box = contactPublicKey(p256.utils.randomSecretKey());
-    for (const [i, attacker] of attackers.entries())
-      sender.link.publish(sender.topic, await signedHello('flooded', attacker, box, { id: `made-up-${i}` }));
+    for (const attacker of attackers)
+      sender.link.publish(sender.topic, await signedHello('flooded', attacker, box));
     // However fast they come, the room holds 64.
     await until(() => offered.size >= 64, 10_000, 'the room to fill');
     await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -463,7 +479,6 @@ describe('what a hello can cost', () => {
         topic,
         await sealedSigned('room', A, {
           kind: 'offer',
-          id: 'rewrapped',
           at: Date.now(),
           from: A.did,
           to: B.did,

@@ -9,9 +9,9 @@
  * key   = SHA-256(UTF-8("minca/rendezvous-key/v1|" + room))          AES-256-GCM
  * blob  = sealValue(key, "minca/rendezvous/v1", { topic }, message)
  *
- * message = { kind: "hello", id, at, from, box, sig }
- *         | { kind: "offer" | "answer", id, at, from, box, to, sdp: sealValueTo(theirBox, "minca/rendezvous-signal/v1", { topic, from, to, box }, description), sig }
- * sig     = the key `from` names, over UTF-8("minca/rendezvous-sig/v1|" + topic + "|" + kind + "|" + id + "|" + at + "|" + from + "|" + box + "|" + (to ?? "") + "|" + (sdp ?? ""))
+ * message = { kind: "hello", at, from, box, sig }
+ *         | { kind: "offer" | "answer", at, from, box, to, sdp: sealValueTo(theirBox, "minca/rendezvous-signal/v1", { topic, from, to, box }, description), sig }
+ * sig     = the key `from` names, over UTF-8("minca/rendezvous-sig/v1|" + topic + "|" + kind + "|" + at + "|" + from + "|" + box + "|" + (to ?? "") + "|" + (sdp ?? ""))
  * ```
  *
  * Every message is signed by the session key its `from` names, so nobody can
@@ -22,7 +22,8 @@
  * addresses. A peer says hello on joining, after every reconnect and every
  * two minutes; on a hello the lower DID offers, and the higher says hello
  * back so the lower hears of it. Relays are used all at once, so the same
- * message can come through each: it is acted on once, by its `id`.
+ * message can come through each: a peer acts only on what a sender sent
+ * after the last thing it acted on from that sender in that room.
  *
  * A hello costs nothing to send, so a room remembers at most 64 peers, and
  * forgets one it hasn't heard from in five minutes: someone saying hello
@@ -46,7 +47,7 @@ import type { CryptoProvider } from '../types.js';
 import { createP256Provider } from '../identity/crypto-p256.js';
 import { signLabel, verifyBy } from './peer-auth.js';
 import { createRelayLink, relayKind, type RelayLink } from './relays.js';
-import { createSeenSignals, isPeerDid, shouldInitiate, type SeenSignals } from './introductions.js';
+import { isPeerDid, shouldInitiate } from './introductions.js';
 
 /** What a peer's connection offer or answer is */
 export type SignalKind = 'offer' | 'answer';
@@ -116,10 +117,10 @@ const PEER_SILENT_MS = 5 * 60_000;
 /** What a message's `sig` signs: every field of it, the sealed description too, so nobody puts their own in under it */
 const signedLabel = (
   topic: string,
-  m: { kind: unknown; id: unknown; at: unknown; from: unknown; box: unknown; to?: unknown; sdp?: unknown },
+  m: { kind: unknown; at: unknown; from: unknown; box: unknown; to?: unknown; sdp?: unknown },
 ) =>
   utf8Encode(
-    `minca/rendezvous-sig/v1|${topic}|${String(m.kind)}|${String(m.id)}|${String(m.at)}|${String(m.from)}|${String(m.box)}|${typeof m.to === 'string' ? m.to : ''}|${typeof m.sdp === 'string' ? m.sdp : ''}`,
+    `minca/rendezvous-sig/v1|${topic}|${String(m.kind)}|${String(m.at)}|${String(m.from)}|${String(m.box)}|${typeof m.to === 'string' ? m.to : ''}|${typeof m.sdp === 'string' ? m.sdp : ''}`,
   );
 
 /** A room's topic and key, as everyone who knows the room derives them */
@@ -138,11 +139,9 @@ interface RoomState {
   /** The relays this room is on: the node's, and the room's own */
   urls: ReadonlySet<string>;
   /** Peers heard in this room: the box to seal to, and when last heard */
-  readonly peers: Map<string, { box: string; heard: number }>;
+  readonly peers: Map<string, { box: string; heard: number; last: number }>;
   /** When this node last said hello back here */
   answered: number;
-  /** Ids of messages acted on here, so a copy through another relay, or a replay, is not */
-  readonly seen: SeenSignals;
 }
 
 /** Meets peers through every relay given, of whatever kind; kinds this library doesn't speak are passed over */
@@ -172,15 +171,23 @@ export function createRendezvous(
   const connectedCount = () => linkList().filter((link) => link.isConnected()).length;
   const relays = (): ReadonlyArray<RelayStatus> => linkList().map((link) => link.status());
 
-  /** Remembers a peer heard in a room; false when the room is full of others */
-  const remember = (state: RoomState, peer: string, box: string): boolean => {
+  /**
+   * Whether a message from a peer is new: sent after the last one acted on
+   * from it in this room. A copy through another relay, or a replay, is not;
+   * nor is anything from a newcomer to a room full of others.
+   */
+  const isNew = (state: RoomState, peer: string, at: number): boolean => {
     const now = Date.now();
-    for (const [other, at] of state.peers) if (now - at.heard > PEER_SILENT_MS) state.peers.delete(other);
+    for (const [other, held] of state.peers) if (now - held.heard > PEER_SILENT_MS) state.peers.delete(other);
     const held = state.peers.get(peer);
-    if (!held && state.peers.size >= MAX_ROOM_PEERS) return false;
-    state.peers.set(peer, { box, heard: now });
-    return true;
+    return held ? at > held.last : state.peers.size < MAX_ROOM_PEERS;
   };
+  /** Remembers a peer's message as acted on: its box, and its time */
+  const remember = (state: RoomState, peer: string, box: string, at: number): void => {
+    state.peers.set(peer, { box, heard: Date.now(), last: at });
+  };
+  /** When this node last sent: each message it sends is later than the one before */
+  let sentAt = 0;
 
   /** Seals a message for a room and hands it to its relays: every one, or only `on` */
   const say = async (room: string, message: Record<string, unknown>, on?: RelayLink): Promise<void> => {
@@ -189,8 +196,7 @@ export function createRendezvous(
     const { topic, key } = await state.keys;
     const full = {
       ...message,
-      id: base64UrlEncode(globalThis.crypto.getRandomValues(new Uint8Array(12))),
-      at: Date.now(),
+      at: (sentAt = Math.max(Date.now(), sentAt + 1)),
       from: did,
       box: (await box).publicKey,
     };
@@ -199,7 +205,6 @@ export function createRendezvous(
       session.key,
       signedLabel(topic, { ...full, kind: message.kind, to: message.to, sdp: message.sdp }),
     );
-    state.seen.accept(full.id);
     const blob = await sealValue(key, ENVELOPE_LABEL, { topic }, { ...full, sig });
     for (const url of on ? [on.url] : state.urls) {
       const link = byUrl.get(url);
@@ -215,21 +220,22 @@ export function createRendezvous(
     if (!place) return;
     const message = await openValue(place.key, ENVELOPE_LABEL, { topic }, blob);
     if (!isObject(message)) return;
-    const { kind, id, at, from, box: theirs, to, sdp } = message;
+    const { kind, at, from, box: theirs, to, sdp } = message;
     if (!isPeerDid(from) || from === did || !isContactPublicKey(theirs)) return;
-    if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(id)) return;
     if (typeof at !== 'number' || !Number.isSafeInteger(at) || at < 0) return;
     if (Math.abs(Date.now() - at) > MAX_SKEW_MS) return;
-    if (kind !== 'hello' && (!isSignalKind(kind) || to !== did || typeof sdp !== 'string')) return;
+    if (kind === 'hello' ? to !== undefined || sdp !== undefined : !isSignalKind(kind) || to !== did) return;
+    if (kind !== 'hello' && typeof sdp !== 'string') return;
     const { room } = place;
     const state = rooms.get(room);
-    if (!state) return;
+    if (!state || !isNew(state, from, at)) return;
     // Signed by the key it names, every field: nobody says anything here in another's name.
-    const label = signedLabel(topic, { kind, id, at, from, box: theirs, to, sdp });
+    const label = signedLabel(topic, { kind, at, from, box: theirs, to, sdp });
     if (!(await verifyBy(provider, from, message.sig, label))) return;
-    // An id counts as seen only once what it came with passed every check, so junk can't push real ones out.
+    // Checked again: another message from it may have been acted on while this one was checked.
     if (kind === 'hello') {
-      if (!remember(state, from, theirs) || !state.seen.accept(id)) return;
+      if (!isNew(state, from, at)) return;
+      remember(state, from, theirs, at);
       emit('peer-joined', from, room);
       // The lower DID offers; the higher makes sure the lower has heard of it, once
       // a while for the whole room, however many say hello.
@@ -247,7 +253,8 @@ export function createRendezvous(
       { topic, from, to: did, box: theirs },
       message.sdp,
     );
-    if (!isObject(payload) || !remember(state, from, theirs) || !state.seen.accept(id)) return;
+    if (!isObject(payload) || !isNew(state, from, at)) return;
+    remember(state, from, theirs, at);
     emit('signal', { type: kind, from, payload, room, box: theirs });
   };
 
@@ -302,7 +309,6 @@ export function createRendezvous(
       urls: new Set(),
       peers: new Map(),
       answered: 0,
-      seen: createSeenSignals(1024),
     };
     const before = state.urls;
     state.urls = new Set([...defaults, ...own.filter((url) => linkFor(url))]);

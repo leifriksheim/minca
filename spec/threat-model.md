@@ -957,10 +957,13 @@ the same sealed blobs.
     "someone in only a public room cannot pose there as B to keep A and B
     apart in a private one").
   - It can't make a peer act twice on one message, by replaying it or by
-    passing it through several relays: each is acted on once, by its `id`,
-    and only within 2 minutes of when it was sent (04 §2; "a replayed hello
-    counts once", "a blob that does not open under the room key, or is
-    stale, or comes again, is ignored").
+    passing it through several relays: a peer acts only on what a sender
+    signed later than the last thing it acted on from that sender in that
+    room, and only within 2 minutes of when it was sent; nothing anyone else
+    says pushes that out (04 §2; "a replayed hello counts once", "a replayed
+    offer is not acted on again, however much else was said since", "a blob
+    that does not open under the room key, or is stale, or comes again, is
+    ignored").
   - It can't read or change what two sides say on a channel, pairing or
     connecting by code: each direction has its own key from the secret and an
     ephemeral exchange, and each message is bound to its type and place, so
@@ -1000,7 +1003,8 @@ the same sealed blobs.
     ([#162](https://github.com/leifriksheim/minca/issues/162)).
   - Introductions are not signed: a peer admitted with A in any room can
     pass A a `__signal` offer under B's DID, which replaces A's unproven
-    attempt to reach B, and reads the plain descriptions of introductions it
+    attempt to reach B and adds to the backoff before A tries B again, up to
+    5 minutes, and reads the plain descriptions of introductions it
     forwards (04 §8, [#162](https://github.com/leifriksheim/minca/issues/162)).
   - A signed hello is proof that can be shown to others: whoever knows a
     room and logs it holds a session DID's signature over the room's topic

@@ -284,25 +284,24 @@ room, and publishes there, sealed under the room key:
 ```
 blob    = base64url( sealEnvelope( room key, "minca/rendezvous/v1", { topic }, UTF-8(JSON(message)) ) )
 
-message = { "kind": "hello", "id", "at", "from", "box", "sig" }
-        | { "kind": "offer" | "answer", "id", "at", "from", "box", "to", "sdp", "sig" }
+message = { "kind": "hello", "at", "from", "box", "sig" }
+        | { "kind": "offer" | "answer", "at", "from", "box", "to", "sdp", "sig" }
 sdp     = sealTo( box of `to`, "minca/rendezvous-signal/v1", { topic, from, to, box }, UTF-8(JSON(description)) )
 sig     = base64url( ECDSA-P256-SHA256( the key `from` names,
-            UTF-8("minca/rendezvous-sig/v1|" + topic + "|" + kind + "|" + id + "|" + at + "|" + from + "|" + box + "|" + to + "|" + sdp) ) )
+            UTF-8("minca/rendezvous-sig/v1|" + topic + "|" + kind + "|" + at + "|" + from + "|" + box + "|" + to + "|" + sdp) ) )
 ```
 
 `sealEnvelope` is the symmetric envelope and `sealTo` sealing to a key
 ([01](01-identity.md) §9.1, §9.2).
 
-| Field  | Value                                                                                                                                |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `id`   | 12 random bytes, base64url (1 to 64 base64url characters are taken): what makes copies of one message one                            |
-| `at`   | when it was sent, ms since the epoch: a non-negative integer                                                                         |
-| `from` | the sender's session DID                                                                                                             |
-| `box`  | a P-256 public key the sender made for meeting, compressed, base64url; the private half never leaves it                              |
-| `sig`  | the session key `from` names, signing every field above; `to` and `sdp` are the empty string in a hello, and `at` its decimal digits |
-| `to`   | the DID an offer or answer is for                                                                                                    |
-| `sdp`  | the `RTCSessionDescriptionInit`, with every ICE candidate in it, sealed to the recipient's `box`                                     |
+| Field  | Value                                                                                                                                                      |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `at`   | when it was sent, ms since the epoch: a non-negative integer                                                                                               |
+| `from` | the sender's session DID                                                                                                                                   |
+| `box`  | a P-256 public key the sender made for meeting, compressed, base64url; the private half never leaves it                                                    |
+| `sig`  | the session key `from` names, signing every field above; `to` and `sdp` are the empty string in a hello, which has neither, and `at` is its decimal digits |
+| `to`   | the DID an offer or answer is for                                                                                                                          |
+| `sdp`  | the `RTCSessionDescriptionInit`, with every ICE candidate in it, sealed to the recipient's `box`                                                           |
 
 A receiver MUST ignore a blob unless all of these hold:
 
@@ -310,11 +309,12 @@ A receiver MUST ignore a blob unless all of these hold:
    `{ topic }`, and is a JSON object.
 2. `from` is a `did:key` other than its own, `box` a point on P-256, and
    `sig` verifies against the key `from` names.
-3. `id` is 1 to 64 base64url characters it has not acted on in this
-   room (it remembers a bounded number of recent ids per room, and records
-   one only once its message passed every other check), and `at` is a
-   non-negative integer within 2 minutes of its own clock.
-4. For an offer or answer: `to` is its own DID, and `sdp` opens with its box,
+3. `at` is a non-negative integer within 2 minutes of its own clock, and
+   later than the `at` of the last message it acted on from `from` in this
+   room. A copy through a second relay, or a replay, is not; a sender makes
+   each message it sends later than the one before.
+4. A hello has no `to` and no `sdp`.
+5. For an offer or answer: `to` is its own DID, and `sdp` opens with its box,
    label `minca/rendezvous-signal/v1`, bound `{ topic, from, to, box }` with
    the message's own `box`.
 
@@ -347,7 +347,6 @@ is gone when its connection is (§5).
 ```json
 {
   "kind": "hello",
-  "id": "Hq3pW0x1b7Zc2LkA",
   "at": 1790000000000,
   "from": "did:key:zDnaeV1Sz…",
   "box": "A7Hq0J1xV2bqkZfHkC0Y0n1kQ4p3c3nWm0C0H2Hn3m0f",
@@ -414,7 +413,8 @@ fails only when none does.
 > meet wherever either is looking.
 
 - A message goes to every connected relay the room is on. The same message
-  arriving through several relays is acted on once, by its `id` (§2, rule 3).
+  arriving through several relays is acted on once, by its sender's time
+  (§2, rule 3).
 - **TURN.** `ice` offers are kept per relay; the client's TURN servers are
   the union of all relays' servers, expiring at the earliest `expiresAt`.
   A request for TURN (`ice`) goes to every connected relay that has TURN.
@@ -1069,7 +1069,7 @@ ephemeral events and keeps regular ones.
 
 A compatible **client** MUST: derive rooms, topics and room keys as in §1.3;
 pass over relays of kinds it doesn't speak (§1.2); watch every topic again on
-reconnect; seal and check messages as in §2, acting on each `id` once; run the mesh handshake
+reconnect; seal, sign and check messages as in §2, acting on each sender's messages in the order sent; run the mesh handshake
 of §6.2 in every room before sending anything of it, or the node handshake
 of §6.1 on a node socket; attribute every message to the connection, not to
 `from`; send `who` before `live`; and apply the receive limits of §9.2.

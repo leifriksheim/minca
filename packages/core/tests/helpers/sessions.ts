@@ -37,7 +37,6 @@ export async function sessionsInOrder<N extends number>(n: N): Promise<Sessions<
 
 export interface RoomMessage {
   readonly kind: string;
-  readonly id: string;
   readonly at: number;
   readonly from: string;
   readonly box: string;
@@ -48,7 +47,7 @@ export interface RoomMessage {
 /** What `sig` covers: every field, the sealed description too */
 const rendezvousSigLabel = (topic: string, m: RoomMessage) =>
   utf8Encode(
-    `minca/rendezvous-sig/v1|${topic}|${m.kind}|${m.id}|${m.at}|${m.from}|${m.box}|${m.to ?? ''}|${typeof m.sdp === 'string' ? m.sdp : ''}`,
+    `minca/rendezvous-sig/v1|${topic}|${m.kind}|${m.at}|${m.from}|${m.box}|${m.to ?? ''}|${typeof m.sdp === 'string' ? m.sdp : ''}`,
   );
 
 /** `message`, signed by `signer` and sealed under `room`'s key, as a relay carries it */
@@ -63,11 +62,10 @@ export function signedHello(
   room: string,
   signer: Session,
   box: string,
-  options: { id?: string; at?: number; from?: string } = {},
+  options: { at?: number; from?: string } = {},
 ): Promise<string> {
   return sealedSigned(room, signer, {
     kind: 'hello',
-    id: options.id ?? base64UrlEncode(crypto.getRandomValues(new Uint8Array(12))),
     at: options.at ?? Date.now(),
     from: options.from ?? signer.did,
     box,
