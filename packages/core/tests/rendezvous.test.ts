@@ -265,6 +265,16 @@ describe('meeting through relays', () => {
     assert.deepEqual(await openValueFrom(now, 'minca/rendezvous-signal/v1', bound, message.sdp), OFFER);
   });
 
+  test('two who join within ten seconds of each other both hear back from the peer they offer to', async () => {
+    const c = await peer(C, [one.url]);
+    const a = await peer(A, [one.url]);
+    await until(() => a.joined.includes(C.did), 2000, 'C says hello back to A');
+    const b = await peer(B, [one.url]);
+    // C said hello back to A a moment ago; B hears it once the ten seconds are up, not at the next two-minute hello.
+    await until(() => b.joined.includes(C.did), 3000, 'C says hello back to B');
+    assert.ok(c.joined.includes(B.did));
+  });
+
   test('a replayed hello counts once', async () => {
     const watcher = await eavesdrop(one.url);
     const b = await peer(B, [one.url]);

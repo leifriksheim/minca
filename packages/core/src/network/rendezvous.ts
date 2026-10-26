@@ -144,6 +144,8 @@ interface RoomState {
   readonly peers: Map<string, { box: string; heard: number; at: number }>;
   /** When this node last said hello back here */
   answered: number;
+  /** A hello back due once the last one is 10 s old, so a newcomer within them waits no longer */
+  due: ReturnType<typeof setTimeout> | undefined;
 }
 
 /** Meets peers through every relay given, of whatever kind; kinds this library doesn't speak are passed over */
@@ -233,6 +235,20 @@ export function createRendezvous(
 
   const hello = (room: string, on?: RelayLink) => void say(room, { kind: 'hello' }, on).catch(() => {});
 
+  /** Says hello back in a room: now, or once 10 s have passed since the last time, but once for all who said hello meanwhile */
+  const answer = (room: string, state: RoomState): void => {
+    if (state.due) return;
+    const wait = state.answered + ANSWER_HELLO_MS - Date.now();
+    const go = () => {
+      state.due = undefined;
+      if (rooms.get(room) !== state) return;
+      state.answered = Date.now();
+      hello(room);
+    };
+    if (wait <= 0) return go();
+    state.due = setTimeout(go, wait);
+  };
+
   /** Opens what a relay passed on, and acts on it once */
   const heard = async (topic: string, blob: string): Promise<void> => {
     const place = byTopic.get(topic);
@@ -258,10 +274,7 @@ export function createRendezvous(
       emit('peer-joined', from, room);
       // The lower DID offers; the higher makes sure the lower has heard of it, once
       // a while for the whole room, however many say hello.
-      if (!shouldInitiate(did, from) && Date.now() - state.answered > ANSWER_HELLO_MS) {
-        state.answered = Date.now();
-        hello(room);
-      }
+      if (!shouldInitiate(did, from)) answer(room, state);
       return;
     }
     if (!isSignalKind(kind) || message.to !== did) return;
@@ -328,6 +341,7 @@ export function createRendezvous(
       urls: new Set(),
       peers: new Map(),
       answered: 0,
+      due: undefined,
     };
     const before = state.urls;
     state.urls = new Set([...defaults, ...own.filter((url) => linkFor(url))]);
@@ -346,6 +360,7 @@ export function createRendezvous(
     const state = rooms.get(room);
     if (!state) return;
     rooms.delete(room);
+    clearTimeout(state.due);
     void state.keys.then(({ topic }) => {
       byTopic.delete(topic);
       for (const url of state.urls) {
@@ -380,6 +395,7 @@ export function createRendezvous(
       for (const link of linkList()) link.disconnect();
       // A room's own relays are made again when a room names them.
       for (const url of [...byUrl.keys()]) if (!defaults.has(url)) byUrl.delete(url);
+      for (const state of rooms.values()) clearTimeout(state.due);
       rooms.clear();
       byTopic.clear();
       turn.clear();

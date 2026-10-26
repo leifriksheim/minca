@@ -651,7 +651,8 @@ as `network.status()`.
 on every relay as its socket opens, and every 2 minutes. It remembers, per
 room, the times it acted on from each peer in the last 2 minutes (at most
 256 a peer), and the failed tries of the last 512 peers. It
-says hello back in a room at most once every 10 s. Each socket
+says hello back in a room at most once every 10 s; one due sooner waits
+for the 10 s, once for everyone who said hello meanwhile. Each socket
 sends at most 20 messages a second, in bursts of 40, and queues the rest. A
 connection attempt that times out is retried on the peer's next hello. `requestIce`
 asks every connected relay for TURN. Each WebRTC offer or answer waits for
