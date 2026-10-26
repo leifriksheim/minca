@@ -278,8 +278,8 @@ this one own the use; this table is the registry.
 | `minca/one-per/v1`                       | HKDF → HMAC-SHA256 key                    | the space's first key K₀ (private) or the bytes of `minca/public-one-per/v1\|<spaceId>` (public) | HMAC key                   | `onePer` record keys                                                    | `records/rules.ts:78,81`            | 02     |
 | `minca/record-owner/v1\|<root>`          | SHA-256, first 16 bytes, base32 lowercase | —                                                                                                | owner part (26 characters) | The owner part of an owned record key                                   | `records/key.ts:54`                 | 02     |
 | `minca-room/v1\|<spaceId>`               | SHA-256, first 20 bytes, base32 lowercase | —                                                                                                | relay room name            | A space's room on a relay                                               | `node/space-runtime.ts:291`         | 04     |
-| `minca/rendezvous-topic/v1\|<room>`      | SHA-256, base64url                        | —                                                                                                | topic (43 characters)      | A room's topic on a relay                                               | `network/rendezvous.ts:100`         | 04     |
-| `minca/rendezvous-key/v1\|<room>`        | SHA-256                                   | —                                                                                                | AES-256-GCM key            | What is said in a room, on a relay                                      | `network/rendezvous.ts:101`         | 04     |
+| `minca/rendezvous-topic/v1\|<room>`      | SHA-256, base64url                        | —                                                                                                | topic (43 characters)      | A room's topic on a relay                                               | `network/rendezvous.ts:111`         | 04     |
+| `minca/rendezvous-key/v1\|<room>`        | SHA-256                                   | —                                                                                                | AES-256-GCM key            | What is said in a room, on a relay                                      | `network/rendezvous.ts:112`         | 04     |
 
 Labels of sealed things: every envelope and every HPKE seal (§9) names one,
 with the fields of its `bound`. _docs_ marks a label used by a convention
@@ -296,8 +296,8 @@ CLI's own node reads:
 | `minca/at-rest/v1`           | envelope  | `entry`                                                    | `storage/encrypted-adapter.ts:25`    | 05     |
 | `minca/pairing/v1`           | envelope  | `type`, `seq`                                              | `identity/channel.ts:41`             | 01     |
 | `minca/code/v1`              | envelope  | `type`, `seq`                                              | `identity/channel.ts:48`             | 06     |
-| `minca/rendezvous/v1`        | envelope  | `topic`                                                    | `network/rendezvous.ts:85`           | 04     |
-| `minca/rendezvous-signal/v1` | HPKE      | `topic`, `from`, `to`                                      | `network/rendezvous.ts:86`           | 04     |
+| `minca/rendezvous/v1`        | envelope  | `topic`                                                    | `network/rendezvous.ts:96`           | 04     |
+| `minca/rendezvous-signal/v1` | HPKE      | `topic`, `from`, `to`                                      | `network/rendezvous.ts:97`           | 04     |
 | `minca/mail/v1`              | HPKE      | `to`                                                       | `inbox/inbox.ts:64`                  | 07, 03 |
 | `minca/direct-text/v1`       | envelope  | `space`, `from`, `to`                                      | `privacy/direct.ts:37`               | docs   |
 | `minca/direct-box/v1`        | HPKE      | `space`, `from`, `to`, `reader`                            | `privacy/direct.ts:39`               | docs   |

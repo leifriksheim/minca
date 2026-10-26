@@ -353,10 +353,11 @@ export function createMesh(config: MeshConfig): Mesh {
     (target: string): Deliver =>
     (kind, data) =>
       floodSignal({ id: signalId(), origin: did, target, kind, data, hops: MAX_HOPS });
+  /** Through the relays, in one room: where the peer's hello came, or its offer, and to the box it came with */
   const throughRelay =
-    (target: string): Deliver =>
+    (target: string, room: string, box?: string): Deliver =>
     (kind, data) =>
-      signaling.signal(kind, target, data);
+      signaling.signal(kind, target, data, room, box);
 
   const offerTo = async (peer: string, deliver: Deliver): Promise<void> => {
     watch(peer);
@@ -404,11 +405,17 @@ export function createMesh(config: MeshConfig): Mesh {
 
   // Both sides hear each other's hello, so one rule says who offers: the same as for introductions.
   signaling.on('peer-joined', (peer, room) =>
-    meet(room, peer, shouldInitiate(did, peer) ? throughRelay(peer) : null),
+    meet(room, peer, shouldInitiate(did, peer) ? throughRelay(peer, room) : null),
   );
   signaling.on(
     'signal',
-    (message) => void onSignal(message.from, message.type, message.payload, throughRelay(message.from)),
+    (message) =>
+      void onSignal(
+        message.from,
+        message.type,
+        message.payload,
+        throughRelay(message.from, message.room, message.box),
+      ),
   );
 
   /** Acts on somebody's introduction of the peers in a room. */

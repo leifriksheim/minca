@@ -306,9 +306,10 @@ A receiver MUST ignore a blob unless all of these hold:
 1. It opens under the room key, label `minca/rendezvous/v1`, bound
    `{ topic }`, and is a JSON object.
 2. `from` is a `did:key` other than its own, and `box` a point on P-256.
-3. `id` is a string of at most 64 characters it has not seen before (it
-   remembers a bounded number of recent ids), and `at` is within 2 minutes of
-   its own clock.
+3. `id` is a string of at most 64 characters it has not acted on in this
+   room (it remembers a bounded number of recent ids per room, and records
+   one only once its message passed every other check), and `at` is within
+   2 minutes of its own clock.
 4. For an offer or answer: `to` is its own DID, and `sdp` opens with its box,
    label `minca/rendezvous-signal/v1`, bound `{ topic, from, to, box }` with
    the message's own `box`.
@@ -324,10 +325,10 @@ What it does then:
 A receiver remembers, per room, each peer it heard and the `box` it last
 used there. A room holds at most **64** peers, and a peer not heard from in
 5 minutes is forgotten; a hello or signal from a new peer in a full room
-MUST be ignored. An offer or answer to a peer goes to every room that peer
-is remembered in, each sealed to its box there. The `sdp` seal binds the
-sender's own `box`, so a message re-wrapped with another box opens nothing,
-and an answer goes to the box its offer came with.
+MUST be ignored. An offer goes only to the room whose hello prompted it,
+sealed to the box that hello carried; an answer goes only to the room its
+offer came in, sealed to the box the offer carried. The `sdp` seal binds the
+sender's own `box`, so a message re-wrapped with another box opens nothing.
 
 > Rationale: a hello costs nothing to send, and anyone who knows the room can
 > say one under any number of made-up names. A relay's room used to hold 64

@@ -649,7 +649,8 @@ as `network.status()`.
 
 **Meeting** (spec 04 §2, §3). A node says hello in each room when it joins,
 on every relay as its socket opens, and every 2 minutes. It remembers the
-last 2048 message ids, and the failed tries of the last 512 peers. It
+last 1024 message ids in each room, and the failed tries of the last 512
+peers. It
 says hello back in a room at most once every 10 s. Each socket
 sends at most 20 messages a second, in bursts of 40, and queues the rest. A
 connection attempt that times out is retried on the peer's next hello. `requestIce`

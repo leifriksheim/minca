@@ -39,7 +39,7 @@ import { openValueFrom, sealValueTo } from '../identity/hpke.js';
 import { contactKeyPair, isContactPublicKey } from '../identity/contact-key.js';
 import type { RelayStatus } from './relay-socket.js';
 import { createRelayLink, relayKind, type RelayLink } from './relays.js';
-import { createSeenSignals, isPeerDid, shouldInitiate } from './introductions.js';
+import { createSeenSignals, isPeerDid, shouldInitiate, type SeenSignals } from './introductions.js';
 
 /** What a peer's connection offer or answer is */
 export type SignalKind = 'offer' | 'answer';
@@ -53,7 +53,14 @@ export type RendezvousEvents = {
   /** A peer said hello in a room: it is there now */
   'peer-joined': (did: string, room: string) => void;
   /** An offer or answer from a peer, opened */
-  signal: (message: { readonly type: SignalKind; readonly from: string; readonly payload: unknown }) => void;
+  /** An offer or answer from a peer, opened, with the room it came in and the box to answer to */
+  signal: (message: {
+    readonly type: SignalKind;
+    readonly from: string;
+    readonly payload: unknown;
+    readonly room: string;
+    readonly box: string;
+  }) => void;
   /** TURN servers relays offered, all of them, with the earliest time their passwords stop working */
   ice: (servers: ReadonlyArray<RTCIceServer>, expiresAt: number) => void;
   connected: () => void;
@@ -69,8 +76,12 @@ export interface Rendezvous {
   /** Enters a room on every relay, and on `relays` as well — joining again with a different list moves to it */
   readonly join: (room: string, relays?: ReadonlyArray<string>) => void;
   readonly leave: (room: string) => void;
-  /** Sends an offer or answer to a peer, in every room it was heard in */
-  readonly signal: (kind: SignalKind, to: string, payload: unknown) => void;
+  /**
+   * Sends an offer or answer to a peer in one room: an offer where its hello
+   * was heard, sealed to the box it said hello with; an answer where the
+   * offer came, sealed to the box the offer came with.
+   */
+  readonly signal: (kind: SignalKind, to: string, payload: unknown, room: string, box?: string) => void;
   /** Asks relays for fresh TURN passwords; they arrive as an `ice` event, from relays that have TURN */
   readonly requestIce: () => void;
   /** Tries every relay that is waiting to reconnect, now */
@@ -114,6 +125,8 @@ interface RoomState {
   readonly peers: Map<string, { box: string; heard: number }>;
   /** When this node last said hello back here */
   answered: number;
+  /** Ids of messages acted on here, so a copy through another relay, or a replay, is not */
+  readonly seen: SeenSignals;
 }
 
 /** Meets peers through every relay given, of whatever kind; kinds this library doesn't speak are passed over */
@@ -125,7 +138,6 @@ export function createRendezvous(urls: ReadonlyArray<string>, did: string): Rend
   const rooms = new Map<string, RoomState>();
   /** Rooms by topic, once derived */
   const byTopic = new Map<string, { room: string; key: CryptoKey }>();
-  const seen = createSeenSignals(2048);
   /** TURN servers each relay offered, and when their passwords stop working */
   const turn = new Map<RelayLink, { servers: ReadonlyArray<RTCIceServer>; expiresAt: number }>();
   let connecting = false;
@@ -161,7 +173,7 @@ export function createRendezvous(urls: ReadonlyArray<string>, did: string): Rend
       from: did,
       box: (await box).publicKey,
     };
-    seen.accept(full.id);
+    state.seen.accept(full.id);
     const blob = await sealValue(key, ENVELOPE_LABEL, { topic }, full);
     for (const url of on ? [on.url] : state.urls) {
       const link = byUrl.get(url);
@@ -180,12 +192,13 @@ export function createRendezvous(urls: ReadonlyArray<string>, did: string): Rend
     const { kind, id, at, from, box: theirs } = message;
     if (!isPeerDid(from) || from === did || !isContactPublicKey(theirs)) return;
     if (typeof id !== 'string' || id.length > 64 || typeof at !== 'number') return;
-    if (Math.abs(Date.now() - at) > MAX_SKEW_MS || !seen.accept(id)) return;
+    if (Math.abs(Date.now() - at) > MAX_SKEW_MS) return;
     const { room } = place;
     const state = rooms.get(room);
     if (!state) return;
+    // An id counts as seen only once what it came with passed every check, so junk can't push real ones out.
     if (kind === 'hello') {
-      if (!remember(state, from, theirs)) return;
+      if (!remember(state, from, theirs) || !state.seen.accept(id)) return;
       emit('peer-joined', from, room);
       // The lower DID offers; the higher makes sure the lower has heard of it, once
       // a while for the whole room, however many say hello.
@@ -203,8 +216,8 @@ export function createRendezvous(urls: ReadonlyArray<string>, did: string): Rend
       { topic, from, to: did, box: theirs },
       message.sdp,
     );
-    if (!isObject(payload) || !remember(state, from, theirs)) return;
-    emit('signal', { type: kind, from, payload });
+    if (!isObject(payload) || !remember(state, from, theirs) || !state.seen.accept(id)) return;
+    emit('signal', { type: kind, from, payload, room, box: theirs });
   };
 
   /** A relay's link, made and wired the first time it is needed */
@@ -258,6 +271,7 @@ export function createRendezvous(urls: ReadonlyArray<string>, did: string): Rend
       urls: new Set(),
       peers: new Map(),
       answered: 0,
+      seen: createSeenSignals(1024),
     };
     const before = state.urls;
     state.urls = new Set([...defaults, ...own.filter((url) => linkFor(url))]);
@@ -312,18 +326,16 @@ export function createRendezvous(urls: ReadonlyArray<string>, did: string): Rend
     join,
     leave,
 
-    // In every room it was heard in, each sealed to the box it said hello with there.
-    signal: (kind: SignalKind, to: string, payload: unknown): void => {
-      for (const [room, state] of rooms) {
-        const theirs = state.peers.get(to)?.box;
-        if (!theirs) continue;
-        void (async () => {
-          const { topic } = await state.keys;
-          const mine = (await box).publicKey;
-          const sdp = await sealValueTo(theirs, SIGNAL_LABEL, { topic, from: did, to, box: mine }, payload);
-          await say(room, { kind, to, sdp });
-        })().catch(() => {});
-      }
+    signal: (kind: SignalKind, to: string, payload: unknown, room: string, given?: string): void => {
+      const state = rooms.get(room);
+      const theirs = given ?? state?.peers.get(to)?.box;
+      if (!state || !theirs) return;
+      void (async () => {
+        const { topic } = await state.keys;
+        const mine = (await box).publicKey;
+        const sdp = await sealValueTo(theirs, SIGNAL_LABEL, { topic, from: did, to, box: mine }, payload);
+        await say(room, { kind, to, sdp });
+      })().catch(() => {});
     },
 
     requestIce: () => {

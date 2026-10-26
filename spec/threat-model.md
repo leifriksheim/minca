@@ -984,15 +984,22 @@ the same sealed blobs.
   - One socket watching a topic can have a Minca relay send each blob it
     publishes to the topic's 63 other watchers. Its budget (50 messages a
     second) and the 32 sockets an address may hold bound it, not the relay's
-    traffic.
+    traffic: one address flooding a topic can push its honest watchers past
+    the relay's send buffer, which cuts them off until they redial
+    ([#162](https://github.com/leifriksheim/minca/issues/162)).
   - Peers meet through relays only if their clocks are within 2 minutes:
-    messages outside that are taken for replays (04 §2).
+    messages outside that are taken for replays (04 §2,
+    [#162](https://github.com/leifriksheim/minca/issues/162)).
   - Someone posing as a peer by hello leaves that peer's next attempts with
     the backoff its own failed ones built up, up to 5 minutes, after it
-    stops (04 §7.3).
+    stops (04 §7.3, [#162](https://github.com/leifriksheim/minca/issues/162)).
   - Anyone who knows a space's id, a former member or someone who saw an
     invite, can derive its room key and read its hellos: which session DIDs
-    are in the room, and when (04 §2).
+    are in the room, and when (04 §2,
+    [#162](https://github.com/leifriksheim/minca/issues/162)). An offer or
+    answer stays in its room, so knowing one room shows nothing of another
+    ("someone posing as a peer in another room, or in this one, opens no
+    answer meant for it").
   - An inbox's mailbox can be flooded ([#162](https://github.com/leifriksheim/minca/issues/162)).
     So can a short link's topic: 64 blobs fill it, and a drop of the link's
     blob after its copy expired is then refused. Joiners read every page, so

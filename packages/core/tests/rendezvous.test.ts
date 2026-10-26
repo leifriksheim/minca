@@ -15,7 +15,8 @@ import { createMailboxClient, createRelayLink } from '../src/network/relays.js';
 import { openValue, sealValue } from '../src/identity/envelope.js';
 import { checkRelays } from '../src/space/roles.js';
 import { isObject } from '../src/utils/guards.js';
-import { contactPublicKey } from '../src/identity/contact-key.js';
+import { contactKeyPair, contactPublicKey } from '../src/identity/contact-key.js';
+import { openValueFrom } from '../src/identity/hpke.js';
 import { p256 } from '@noble/curves/nist.js';
 import { createMesh } from '../src/network/mesh.js';
 import { createFakeHub } from './helpers/fake-transport.js';
@@ -64,7 +65,7 @@ async function peer(did: string, relays: string[], room = 'room') {
   const rendezvous = createRendezvous(relays, did);
   opened.push(rendezvous);
   const joined: string[] = [];
-  const signals: { type: string; from: string; payload: unknown }[] = [];
+  const signals: { type: string; from: string; payload: unknown; room: string; box: string }[] = [];
   rendezvous.on('peer-joined', (from) => joined.push(from));
   rendezvous.on('signal', (message) => signals.push(message));
   await rendezvous.connect();
@@ -96,11 +97,14 @@ describe('meeting through relays', () => {
     assert.deepEqual(a.joined, [B]);
     const before = b.joined.length;
 
-    a.rendezvous.signal('offer', B, OFFER);
+    a.rendezvous.signal('offer', B, OFFER, 'room');
     await until(() => b.signals.length > 0, 2000, 'the offer');
     await new Promise((resolve) => setTimeout(resolve, 100));
     assert.equal(b.signals.length, 1, 'one offer, though both relays carried it');
-    assert.deepEqual(b.signals[0], { type: 'offer', from: A, payload: OFFER });
+    assert.deepEqual(
+      { ...b.signals[0], box: undefined },
+      { type: 'offer', from: A, payload: OFFER, room: 'room', box: undefined },
+    );
     assert.equal(b.joined.length, before);
     a.rendezvous.disconnect();
     b.rendezvous.disconnect();
@@ -111,7 +115,7 @@ describe('meeting through relays', () => {
     const b = await peer(B, [one.url]);
     const a = await peer(A, [one.url]);
     await until(() => a.joined.includes(B), 2000, 'hello');
-    a.rendezvous.signal('offer', B, OFFER);
+    a.rendezvous.signal('offer', B, OFFER, 'room');
     await until(() => b.signals.length > 0, 2000, 'the offer');
     await until(() => watcher.blobs.length >= 3, 2000, 'blobs on the wire');
     for (const blob of watcher.blobs) {
@@ -129,7 +133,7 @@ describe('meeting through relays', () => {
     const c = await peer(C, [one.url]);
     const a = await peer(A, [one.url]);
     await until(() => a.joined.includes(B) && c.joined.includes(A), 2000, 'hellos');
-    a.rendezvous.signal('offer', B, OFFER);
+    a.rendezvous.signal('offer', B, OFFER, 'room');
     await until(() => b.signals.length > 0, 2000, 'the offer');
     await new Promise((resolve) => setTimeout(resolve, 100));
     assert.equal(c.signals.length, 0, 'C is not who it was for');
@@ -201,6 +205,64 @@ describe('meeting through relays', () => {
       rendezvous.relays().map((relay) => relay.url),
       [one.url],
     );
+  });
+});
+
+describe('signals stay in their room', () => {
+  test('someone posing as a peer in another room, or in this one, opens no answer meant for it', async () => {
+    // B is in a private room with A, and a public one Eve knows too.
+    const b = await peer(B, [one.url], 'private');
+    b.rendezvous.join('public');
+    const a = await peer(A, [one.url], 'private');
+    await until(() => a.joined.includes(B), 2000, 'hello');
+    const eve = await eavesdrop(one.url, 'public');
+    const inPrivate = await eavesdrop(one.url, 'private');
+    const secret = p256.utils.randomSecretKey();
+    const evesBox = await contactKeyPair(secret);
+    const posing = async (room: string, id: string) => {
+      const { key, topic } = await rendezvousKeys(room);
+      return sealValue(
+        key,
+        'minca/rendezvous/v1',
+        { topic },
+        { kind: 'hello', id, at: Date.now(), from: A, box: evesBox.publicKey },
+      );
+    };
+    // Eve says hello as A in the public room, and then in the private one, between A's offer and B's answer.
+    eve.link.publish(eve.topic, await posing('public', 'eve-public'));
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    a.rendezvous.signal('offer', B, OFFER, 'private');
+    await until(() => b.signals.length === 1, 2000, 'the offer');
+    inPrivate.link.publish(inPrivate.topic, await posing('private', 'eve-private'));
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const offer = b.signals[0]!;
+    b.rendezvous.signal('answer', A, { type: 'answer', sdp: 'v=0 B answers' }, offer.room, offer.box);
+    await until(() => a.signals.length === 1, 2000, 'the answer reaches A');
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    // Nothing either room carried opens with Eve's box.
+    for (const [room, blobs] of [
+      ['public', eve.blobs],
+      ['private', inPrivate.blobs],
+    ] as const) {
+      const { key, topic } = await rendezvousKeys(room);
+      for (const blob of blobs) {
+        const message = await openValue(key, 'minca/rendezvous/v1', { topic }, blob);
+        if (
+          !isObject(message) ||
+          typeof message.sdp !== 'string' ||
+          typeof message.box !== 'string' ||
+          typeof message.from !== 'string'
+        )
+          continue;
+        const opened = await openValueFrom(
+          evesBox,
+          'minca/rendezvous-signal/v1',
+          { topic, from: message.from, to: A, box: message.box },
+          message.sdp,
+        );
+        assert.equal(opened, null, `Eve opened a ${String(message.kind)} in ${room}`);
+      }
+    }
   });
 });
 
@@ -289,7 +351,7 @@ describe('what a hello can cost', () => {
     const b = await peer(B, [one.url]);
     const a = await peer(A, [one.url]);
     await until(() => a.joined.includes(B), 2000, 'hello');
-    a.rendezvous.signal('offer', B, OFFER);
+    a.rendezvous.signal('offer', B, OFFER, 'room');
     await until(() => b.signals.length === 1, 2000, 'the offer');
     // Someone who knows the room seals it again, with a box of their own for the answer to go to.
     const { key, topic } = await rendezvousKeys('room');
