@@ -73,7 +73,6 @@ const connectHere = (home: string, connect: typeof connectWithCode) =>
     accountHome: 'https://home.test',
     relays: [],
     name: 'Agent on test',
-    log: () => {},
     onLink: () => {},
     check: async () => {},
     connect,

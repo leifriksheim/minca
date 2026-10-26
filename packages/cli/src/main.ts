@@ -176,7 +176,7 @@ Unlocking (never as a flag value):
   otherwise you are asked
 `;
 
-const stderr = (line: string) => process.stderr.write(`${line}\n`);
+const stderr = ask.say;
 const logLine = (line: string) => stderr(`[${new Date().toISOString()}] ${line}`);
 
 /** Serves until SIGINT or SIGTERM, then closes what was started and exits. */
@@ -270,7 +270,6 @@ function connectHere(
     check: options.check ?? typeCheck,
     name: options.name ?? defaultAgentName(),
     relays: [...new Set([...(options.relays ?? []), ...configuredRelays()])],
-    log: stderr,
     onLink:
       options.onLink ??
       // The link carries the code: shown only when no browser opens, since whoever else holds it could answer as the home.
@@ -294,7 +293,6 @@ async function typeCheck(matches: (typed: string) => boolean): Promise<void> {
   await ask.text({
     flag: 'check',
     message: 'The code your account home shows',
-    placeholder: '482 913',
     validate: (typed) => (matches(typed) ? undefined : 'That isn’t the code your account home shows.'),
   });
 }

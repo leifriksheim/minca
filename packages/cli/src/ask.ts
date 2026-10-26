@@ -9,10 +9,34 @@
  * an agent reach the same result by different roads.
  *
  * Prompts draw on stderr, so stdout stays what a command printed as data.
+ * Everything else a command says on stderr goes through `say`, so nothing
+ * writes under an open prompt: clack redraws a prompt by moving the cursor
+ * up over the lines it drew, and a line written in between breaks that.
  */
 import * as clack from '@clack/prompts';
 
 const io = { output: process.stderr };
+
+/** Prompts open now, and the lines said while one was, to print once they close */
+let open = 0;
+const held: string[] = [];
+
+/** A line for the person on stderr, held back while a prompt is open */
+export function say(line: string): void {
+  if (open > 0) held.push(line);
+  else process.stderr.write(`${line}\n`);
+}
+
+/** Runs a prompt, then prints what was said while it was open */
+async function prompting<T>(prompt: () => Promise<T>): Promise<T> {
+  open += 1;
+  try {
+    return await prompt();
+  } finally {
+    open -= 1;
+    if (open === 0) for (const line of held.splice(0)) say(line);
+  }
+}
 
 /** Whether someone is there to answer: a terminal on both ends, and not CI */
 export const interactive = (): boolean => !!process.stdin.isTTY && !!process.stderr.isTTY && !clack.isCI();
@@ -47,13 +71,15 @@ export async function text(
   },
 ): Promise<string> {
   if (!interactive()) throw new Missing(ask.flag, ask.hint);
-  const value = await clack.text({
-    ...io,
-    message: ask.message,
-    ...(ask.placeholder ? { placeholder: ask.placeholder } : {}),
-    ...(ask.initialValue ? { initialValue: ask.initialValue } : {}),
-    validate: (value) => (value?.trim() ? ask.validate?.(value.trim()) : 'This one is needed'),
-  });
+  const value = await prompting(() =>
+    clack.text({
+      ...io,
+      message: ask.message,
+      ...(ask.placeholder ? { placeholder: ask.placeholder } : {}),
+      ...(ask.initialValue ? { initialValue: ask.initialValue } : {}),
+      validate: (value) => (value?.trim() ? ask.validate?.(value.trim()) : 'This one is needed'),
+    }),
+  );
   if (clack.isCancel(value)) stop();
   return value.trim();
 }
@@ -66,12 +92,14 @@ export async function select<V extends string>(
   },
 ): Promise<V> {
   if (!interactive()) throw new Missing(ask.flag, ask.hint);
-  const value = await clack.select<string>({
-    ...io,
-    message: ask.message,
-    options: ask.options.map(({ value, label, hint }) => ({ value, label, ...(hint ? { hint } : {}) })),
-    ...(ask.initialValue ? { initialValue: ask.initialValue } : {}),
-  });
+  const value = await prompting(() =>
+    clack.select<string>({
+      ...io,
+      message: ask.message,
+      options: ask.options.map(({ value, label, hint }) => ({ value, label, ...(hint ? { hint } : {}) })),
+      ...(ask.initialValue ? { initialValue: ask.initialValue } : {}),
+    }),
+  );
   if (clack.isCancel(value)) stop();
   const picked = ask.options.find((option) => option.value === value);
   if (!picked) stop();
@@ -88,7 +116,7 @@ export async function confirm(
 ): Promise<boolean> {
   if (options.yes) return true;
   if (!interactive()) return options.otherwise;
-  const value = await clack.confirm({ ...io, message });
+  const value = await prompting(() => clack.confirm({ ...io, message }));
   if (clack.isCancel(value)) stop();
   return value;
 }
@@ -99,11 +127,13 @@ export async function confirm(
  */
 export async function secret(message: string, hint: string): Promise<string> {
   if (!interactive()) throw new Error(`${message} There is no terminal to ask on: ${hint}.`);
-  const value = await clack.password({
-    ...io,
-    message,
-    validate: (value) => (value?.trim() ? undefined : 'This one is needed'),
-  });
+  const value = await prompting(() =>
+    clack.password({
+      ...io,
+      message,
+      validate: (value) => (value?.trim() ? undefined : 'This one is needed'),
+    }),
+  );
   if (clack.isCancel(value)) stop();
   return value.trim();
 }

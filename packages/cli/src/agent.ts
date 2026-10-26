@@ -149,7 +149,6 @@ export async function connectAgent(params: {
   readonly accountHome: string;
   readonly relays: ReadonlyArray<string>;
   readonly name: string;
-  readonly log: (line: string) => void;
   readonly onLink: (url: string) => void;
   /** Asks the person for the check code their home shows, until it matches (`connectWithCode`) */
   readonly check: (matches: (typed: string) => boolean) => Promise<void>;
@@ -169,7 +168,6 @@ export async function connectAgent(params: {
     key: { keys: key.keys, did: key.did },
     name: params.name,
     network: { relays: params.relays },
-    onWaiting: ({ origin }) => params.log(`Your account home at ${origin} has it. Allow it there.`),
   });
 
   // Another account's spaces don't belong next to this one's.
