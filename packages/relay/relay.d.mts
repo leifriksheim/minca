@@ -5,14 +5,12 @@ import type { WebSocketServer } from 'ws';
 
 export declare const MAX_MESSAGE_BYTES: number;
 
-/** One knock the mailbox holds, as `fetch` returns it */
+/** One blob the mailbox keeps, as `fetch` returns it */
 export interface MailItem {
   /** Increases with every drop on this relay; fetch `after` the last one seen */
   readonly seq: number;
   /** base64url SHA-256 of the blob */
   readonly id: string;
-  /** When it was dropped, ms */
-  readonly at: number;
   readonly blob: string;
 }
 
@@ -43,6 +41,5 @@ export declare const MAILBOX_LIMITS: MailboxLimits;
 
 export declare function createRelay(options?: {
   readonly turn?: TurnSettings;
-  readonly log?: (message: string) => void;
   readonly mailbox?: Partial<MailboxLimits>;
 }): Relay;

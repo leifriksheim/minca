@@ -163,45 +163,18 @@ _Source: `packages/core/src/inbox/inbox.ts` (`inboxTopic`)._
 
 ## 5. The relay mailbox
 
-Every relay ([04 — Network](04-network.md)) also runs a mailbox. It speaks JSON
-text frames on the same WebSocket endpoint as signaling. A mailbox socket
-needs no `join` and names no DID.
+An inbox's knocks wait in the mailboxes of the relays its code names: each
+is dropped there and fetched later ([04 — Network](04-network.md) §1.1),
+from a Minca relay (04 §1.4) or a Nostr relay (04 §1.5) alike. A knock is
+dropped with a time to live of 14 days. A fetch reads every page; the same
+blob from several relays is one knock, by its id (§6).
 
-### Messages
+A relay keeps no time a reader trusts: what a knock's time is, is the
+knocker's word, signed (§6).
 
-**drop** — leave a blob under a topic.
-
-```json
-→ { "type": "drop", "topic": "<43 chars>", "blob": "<base64url>", "ttl": 1209600 }
-← { "type": "dropped", "topic": "<topic>", "id": "<base64url SHA-256 of blob>" }
-← { "type": "refused", "topic": "<topic>", "reason": "<plain words>" }
-```
-
-- `blob` MUST be non-empty base64url, at most 12,000 characters.
-- `ttl` is seconds, optional. The relay keeps a blob for its own TTL or the
-  client's, whichever is shorter; a client can't ask for more.
-- The relay files the blob under `id = base64url(SHA-256(UTF-8(blob)))`, and
-  records `at`, when it took it (ms). Dropping a blob already held under that
-  topic MUST answer `dropped` with the same id and store nothing new. A copy
-  past its TTL is not held, even before the relay sweeps it away.
-
-**fetch** — read a topic's blobs.
-
-```json
-→ { "type": "fetch", "topic": "<topic>", "after": 0, "watch": false }
-← { "type": "mail", "topic": "<topic>", "items": [ { "seq": 17, "id": "…", "at": 1790000000000, "blob": "…" } ], "more": false }
-```
-
-- `items` are the unexpired blobs with `seq > after`, oldest first. `seq`
-  increases with every drop on that relay. The relay pages them (the
-  reference relay: at most 16 items or 48 KiB of blobs a page); `more: true`
-  means fetch again after the last `seq`.
-- With `watch: true`, the relay also sends a `mail` message with one item each
-  time a blob is dropped under the topic, until the socket closes or the client
-  sends `{ "type": "unwatch", "topic": "<topic>" }`. A relay may cap the
-  watches on one socket and ignore the rest (see Limits).
-
-**challenge / purge** — the inbox's owner clears knocks.
+**challenge / purge** — the inbox's owner clears knocks, on a Minca relay.
+Nobody can clear what someone else left on a Nostr relay, so knocks there go
+when they expire.
 
 ```json
 → { "type": "challenge" }
@@ -228,24 +201,26 @@ is the relay operator's to set; a client learns of one only from `refused`
 (or, for watches, from silence). The values below are the reference relay's.
 An **address** is an IPv4 address or an IPv6 /64.
 
-| Limit                                  | Value                                                                              | On breach             |
-| -------------------------------------- | ---------------------------------------------------------------------------------- | --------------------- |
-| Blob size                              | 12,000 chars (every relay)                                                         | `refused`             |
-| Blobs per topic                        | 64 (every relay)                                                                   | `refused`             |
-| Drops per topic per address per hour   | 4                                                                                  | `refused`             |
-| Drops per address per hour, all topics | 30                                                                                 | `refused`             |
-| Topics held                            | 50,000                                                                             | `refused`             |
-| Total held                             | 64 Mi chars, plus a reserve of 8 Mi only topics holding fewer than 2 blobs may use | `refused`             |
-| TTL                                    | 14 days                                                                            | capped                |
-| Watches per socket                     | 32                                                                                 | extra watches ignored |
+| Limit                                  | Value                                                                              | On breach |
+| -------------------------------------- | ---------------------------------------------------------------------------------- | --------- |
+| Blob size                              | 12,000 chars (every relay)                                                         | `refused` |
+| Blobs per topic                        | 64 (every relay)                                                                   | `refused` |
+| Drops per topic per address per hour   | 4                                                                                  | `refused` |
+| Drops per address per hour, all topics | 30                                                                                 | `refused` |
+| Topics held                            | 50,000                                                                             | `refused` |
+| Total held                             | 64 Mi chars, plus a reserve of 8 Mi only topics holding fewer than 2 blobs may use | `refused` |
+| TTL                                    | 14 days                                                                            | capped    |
 
-The socket's message budget, size cap and heartbeat are the relay's usual ones
-([04 — Network](04-network.md)).
+These are a Minca relay's; a Nostr relay keeps what its operator lets it.
+The socket's message budget, size cap, heartbeat and watches are the relay's
+usual ones ([04 — Network](04-network.md) §1.4).
 
 A full inbox refuses new knocks rather than dropping old ones, so a flood
 can't push out real knocks; a full relay still takes a knock or two on every
 inbox, from the reserve. An owner whose inbox is flooded clears it (purge),
-which keeps its code working.
+which keeps its code working. A Nostr relay can't be purged, and a fetch
+reads only its newest 500 blobs, so 500 junk drops bury the knocks before
+them there: an inbox that names a Nostr relay should name a Minca relay too.
 
 > **Known defect:** both budgets are weaker than this section and §8 promise.
 > One IPv6 /64 counts as one address, so a home /56 (256 of them) can fill the
@@ -265,7 +240,7 @@ does nothing different. No key hashes to such a topic, so a purge of it always
 fails: nobody can clear it. A host's relay also answers a fetch with the
 links its accounts keep ([06](06-nodes-and-sessions.md) §4.2).
 
-_Source: `packages/relay/relay.mjs` (`handleMail`, `purge`, `sweepMail`, `MAILBOX_LIMITS`, `mailboxFrom`), `packages/core/src/network/mailbox.ts`. Tests: `packages/core/tests/inbox.test.ts` ("the relay's mailbox"), `packages/core/tests/invite-link.test.ts` ("a mailbox that keeps blobs for others", "nobody can clear it…")._
+_Source: `packages/relay/relay.mjs` (`handleMail`, `purge`, `sweepMail`, `MAILBOX_LIMITS`, `mailboxFrom`), `packages/core/src/network/relays.ts` (`createMailboxClient`), `packages/core/src/network/relay-minca.ts` (`createMincaMailbox`), `packages/core/src/network/relay-nostr.ts` (`createNostrMailbox`). Tests: `packages/core/tests/inbox.test.ts` ("the relay's mailbox"), `packages/core/tests/invite-link.test.ts` ("a mailbox that keeps blobs for others", "nobody can clear it…"), `packages/core/tests/relay-nostr.test.ts` ("a Nostr relay as a mailbox")._
 
 ## 6. Knocks
 
@@ -297,8 +272,8 @@ A knocker drops a knock as soon as it signs it.
 ### Opening a knock
 
 A recipient MUST treat a blob as a knock only if all of these hold, and
-otherwise ignore it. `receivedAt` is the relay's `at` for the blob; a knock
-handed over another way, as in a record in a space both share, has none.
+otherwise ignore it, wherever it came from: a mailbox, or a record in a space
+both share.
 
 1. It opens with one of the recipient's keys (an inbox key it holds, or its
    contact key), label `minca/mail/v1`, bound
@@ -309,9 +284,8 @@ handed over another way, as in a record in a space both share, has none.
    the account as a whole, with arguments `{}` ([01](01-identity.md) §8): a
    note to write for the whole account. An app given some spaces, or a key
    given records only, may not knock. With no note its author is the account.
-4. **Time.** `createdAt` is no more than 14 days before now; and, from a
-   mailbox, no more than 5 minutes after `receivedAt` and no more than 10
-   minutes before it.
+4. **Time.** `createdAt` is no more than 14 days before now, and no more
+   than 5 minutes after it.
 5. `name` is a string of at most 64 characters, `note` when present one of at
    most 2000, and `secret` 43 base64url characters.
 6. `invite` checks out as an invitation (03 §7.4), and speaks for the same
@@ -322,12 +296,7 @@ handed over another way, as in a record in a space both share, has none.
 
 A mailbox knock's **id** is `base64url(SHA-256(UTF-8(blob)))`, the same on
 every relay. A client MUST de-duplicate by it, computing it itself rather
-than trusting a relay's `id`. Each relay's copy is judged by the `receivedAt`
-that relay gives, and the knock counts when any copy passes: one relay that
-lies about when it took a knock can't hide it while another tells the truth.
-A relay willing to give a `receivedAt` as old as a backdated knock's
-`createdAt` still lets a note that ran out knock (§8): that comes of trusting
-a relay's time at all.
+than trusting a relay's `id`.
 
 The constitution's checks say only that the knocker founded the space alone
 and assigned nobody a role in it; its history may since have given others
@@ -350,8 +319,9 @@ Which of the knocks that pass these checks a client offers the person
 >   `/account/write` for the whole account.
 > - **Time (4):** knocks are read days later, long after an hour-long session
 >   note ran out, so the note is judged when the knock was signed. That time
->   is the signer's word; tying it to when the relay took the knock stops a
->   note that ran out from knocking by dating it back.
+>   is the signer's word, and no relay's is asked for: one rule wherever a
+>   knock waited, and any relay can hold one. A key stolen while its note was
+>   good can sign knocks dated then and leave them for 14 days (§8).
 
 _Source: `packages/core/src/inbox/inbox.ts` (`sealKnock`, `openKnock`, `knockId`), `packages/core/src/space/invitation.ts` (`checkInvitation`), `packages/core/src/identity/abilities.ts`. Tests: `packages/core/tests/inbox.test.ts` ("a knock")._
 
@@ -385,24 +355,26 @@ grants records only ([06 §2.8](06-nodes-and-sessions.md)).
   account's knocks everywhere. Relay budgets are in §5, and weaker than they
   should be (the known defect there). A knock only shows as a request.
 - **Authority.** Only a note that grants `/account/write` for the whole
-  account can knock (§6). A note that ran out can't knock through a mailbox
-  by backdating, unless a relay the inbox names colludes by giving an old
-  `receivedAt`. A knock handed over another way, as one left in a space both
-  share, has no relay time: one signed while the note was good counts for 14
-  days. A
-  note that was revoked but hasn't run out yet still can, since the owner
+  account can knock (§6). A knock is judged at the time it says it was
+  signed, wherever it waited, so whoever has a key, even after its note ran
+  out, can sign knocks dated into the note's life and leave them until 14
+  days after it ran out.
+  A note that was revoked but hasn't run out yet still can, since the owner
   can't see the knocker's revocations
   ([#165](https://github.com/leifriksheim/minca/issues/165)).
+- **Spam on a Nostr relay.** A Nostr relay can't be purged, and a fetch
+  reads its newest 500 blobs, newest by the dropper's own word: anyone with
+  the code can bury earlier knocks there with 500 drops, dated ahead (§5).
 - **Leaked invites.** The invite in a knock is multi-use until the knocker
   closes it, and whoever joins first is taken as the contact. Someone else
   joins first only if the recipient passed it on, lost a device, or gave an
   app the contact key that the inbox keys are derived from
   ([#313](https://github.com/leifriksheim/minca/issues/313)). They show under
   their own account, though they may give the recipient's name.
-- **Replays and lost relays.** A knock dropped again is the same blob, and
-  later fails the time check (§6). Knocks go to every place an inbox names; a
-  relay can drop them but can't read, forge or alter them, nor hide one
-  another relay holds (§6).
+- **Replays and lost relays.** A knock dropped again is the same blob, the
+  same knock, and fails the time check 14 days after it was signed (§6).
+  Knocks go to every place an inbox names; a relay can drop them but can't
+  read, forge or alter them, nor hide one another relay holds.
 
 ## 9. Planned: names
 

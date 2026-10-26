@@ -16,10 +16,9 @@ export {
   clip,
   INBOX_COLLECTION,
   KNOCK_COLLECTION,
-  KNOCK_DROP_WINDOW_SECONDS,
   MAX_INBOX_PLACES,
   KNOCK_TTL_SECONDS,
 } from './inbox.js';
 export type { InboxBody, KnockBody, OpenedKnock } from './inbox.js';
-export { createMailboxClient } from '../network/mailbox.js';
-export type { MailboxClient, MailboxOptions, MailItem } from '../network/mailbox.js';
+export { createMailboxClient } from '../network/relays.js';
+export type { MailboxClient, MailboxOptions, MailItem } from '../network/relays.js';

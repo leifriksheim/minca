@@ -1,7 +1,8 @@
 # @minca/relay
 
-The signaling relay: a WebSocket server that introduces peers and never sees
-their data. What it must do, and what a client may count on, is
+The Minca relay: a WebSocket mailbox that passes sealed blobs between peers
+by topic, keeps some for inboxes and short links, and never sees what is in
+them. What it must do, and what a client may count on, is
 [spec 04 §1](../../spec/04-network.md); this page is about running this one.
 
 > Not protocol. Another relay may be run and configured differently and still

@@ -23,7 +23,7 @@ conveniences.
 | `stores`            | `StoreFactory`              | Where the registry and each space's store live ([stores](#stores)).                                                                                                                                                                                                                                                   |
 | `provider`          | `CryptoProvider`, optional  | Default: P-256 over WebCrypto.                                                                                                                                                                                                                                                                                        |
 | `collections`       | `CollectionDef[]`, optional | Schemas the node knows, used when a space does not describe a collection itself. Writes are checked against them; reads are flagged `conforms`. Nothing is refused on arrival for its shape ([02](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)).                                               |
-| `network`           | optional                    | `relays` (WebRTC signaling, browsers), `nodes` (always-on nodes to dial, `wss://host/peer#<DID>`; the fragment pins the node, spec 04 §5.2; `ws://` only on this machine), `iceServers`, `transports` (extra transports per space). Omitted: offline.                                                                 |
+| `network`           | optional                    | `relays` (where peers meet: Minca `wss://` and Nostr `nostr+wss://` relays), `nodes` (always-on nodes to dial, `wss://host/peer#<DID>`; the fragment pins the node, spec 04 §5.2; `ws://` only on this machine), `iceServers`, `transports` (extra transports per space). Omitted: offline.                           |
 | `sessionTtlSeconds` | number, optional            | Lifetime of each session note. Default `3600`.                                                                                                                                                                                                                                                                        |
 | `sessionKey`        | `CryptoKeyPair`, optional   | Sign with this key instead of a fresh one. Used when the signer's note names a specific key (an app's key, an agent's key, [spec 06 §2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md), [spec 06 §3](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)). |
 | `writerKey`         | `WriterKeySource`, optional | Keep a signing key across runs, so this device keeps one log in each space ([writer keys](#writer-keys)). Ignored with `sessionKey`.                                                                                                                                                                                  |
@@ -537,17 +537,17 @@ A received live message is emitted as a `message` event,
 
 `spaces.status(id)` returns `SpaceStatus`:
 
-| Field         | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `connection`  | `offline` (no network), `connecting`, `connected` (while any one transport is connected: a relay socket open, or a peer), `error` (the first connect failed and nothing has connected since), `refused` (nothing connected, and every relay refused this node's DID with `4009` because another node with the same key holds it, [spec 04 §1.2](https://github.com/leifriksheim/minca/blob/main/spec/04-network.md)). A space whose relays all drop and whose peers leave is `connecting` again, not `connected`. |
-| `peers`       | Session DIDs connected in the space.                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `own`         | Of `peers`, the account's own other devices and apps: those also connected in the account registry, minus carriers. Empty without an account key.                                                                                                                                                                                                                                                                                                                                                                 |
-| `carriers`    | Of `peers`, the account's carriers, by the keys `sys.carrier` records name.                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `accounts`    | Session DID → account, for each peer that showed a valid note.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `fingerprint` | A fingerprint of every version held; equal on two nodes means identical data ([the store in memory](storage.md#the-store-in-memory)).                                                                                                                                                                                                                                                                                                                                                                             |
-| `rejected`    | How many versions peers sent failed validation.                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `holds`       | `"all"`, or the sorted list of collections held ([holding part of a space](#holding-part-of-a-space)).                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `pending`     | This node's writes still waiting for keepers ([holding part of a space](#holding-part-of-a-space)).                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Field         | Meaning                                                                                                                                                                                                                                                                                   |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `connection`  | `offline` (no network), `connecting`, `connected` (while any one transport is connected: a relay socket open, or a peer), `error` (the first connect failed and nothing has connected since). A space whose relays all drop and whose peers leave is `connecting` again, not `connected`. |
+| `peers`       | Session DIDs connected in the space.                                                                                                                                                                                                                                                      |
+| `own`         | Of `peers`, the account's own other devices and apps: those also connected in the account registry, minus carriers. Empty without an account key.                                                                                                                                         |
+| `carriers`    | Of `peers`, the account's carriers, by the keys `sys.carrier` records name.                                                                                                                                                                                                               |
+| `accounts`    | Session DID → account, for each peer that showed a valid note.                                                                                                                                                                                                                            |
+| `fingerprint` | A fingerprint of every version held; equal on two nodes means identical data ([the store in memory](storage.md#the-store-in-memory)).                                                                                                                                                     |
+| `rejected`    | How many versions peers sent failed validation.                                                                                                                                                                                                                                           |
+| `holds`       | `"all"`, or the sorted list of collections held ([holding part of a space](#holding-part-of-a-space)).                                                                                                                                                                                    |
+| `pending`     | This node's writes still waiting for keepers ([holding part of a space](#holding-part-of-a-space)).                                                                                                                                                                                       |
 
 > Rationale: a peer's key does not say whose it is, but only the account's own
 > devices and apps can read its registry, so a peer there is one of ours.
@@ -633,25 +633,34 @@ How the node uses relays, always-on nodes and WebRTC, where
 leaves it the choice. Another implementation may pick other values and still
 meet this one.
 
-**Redialling a relay** (spec 04 §2). The client waits 1, 2, 4, 8, 16 s and
+**Redialling a relay** (spec 04 §2.1). The client waits 1, 2, 4, 8, 16 s and
 then 30 s between attempts, each ±25% so peers that dropped together do not
-return together, and never stops until `disconnect`. After a `4009` it emits
-`refused` and waits 10 s, doubling with each refusal in a row up to 60 s. It
-tries at once when the page becomes visible again, and when asked
+return together, and never stops until `disconnect`. It tries at once when the page becomes visible again, and when asked
 (`reconnect`). A successful open resets the count. A socket can die without
 closing, and after a sleep it has: so the client looks at the clock every
 5 s, and a look more than 30 s after the last means the device slept; it
 then lets go of its socket and dials again at once, as it does when the
-browser reports `online`. An open socket that has heard nothing for 30 s
-also sends `ping`; once its relay has answered one, two going unanswered end
+browser reports `online`. An open socket to a Minca relay that has heard
+nothing for 30 s also sends `ping`; once its relay has answered one, two going unanswered end
 the socket ("The relay stopped answering.") and it redials. Each relay's state
 (`connecting`, `open`, `waiting` with the time of the next attempt and why the
 last one failed, `stopped`) is readable as `RelayStatus`, and through a node
 as `network.status()`.
 
-**Several relays** (spec 04 §3). The signaling layer raises `peer-joined`
-when a peer's set of relays in a room becomes non-empty, and `peer-left` when
-it empties. `requestIce` asks every connected relay for TURN.
+**Meeting** (spec 04 §2, §3). A node says hello in each room when it joins,
+on every relay as its socket opens, and every 2 minutes. It remembers the
+last 1024 message ids in each room, and the failed tries of the last 512
+peers. It
+says hello back in a room at most once every 10 s. Each socket
+sends at most 20 messages a second, in bursts of 40, and queues the rest. A
+connection attempt that times out is retried on the peer's next hello. `requestIce`
+asks every connected relay for TURN. Each WebRTC offer or answer waits for
+ICE gathering to finish, or 2 s, and carries what it found.
+
+**Kinds of relay** (spec 04 §1.2). `network.relays` may mix kinds:
+`['wss://minca.fly.dev', 'nostr+wss://relay.damus.io']`. A relay of a kind
+this library doesn't speak is left out of `network.status()`. On a Nostr
+relay, each event is signed with a key made for it and forgotten.
 
 **A space's relays** (spec 04 §4). A relay socket opened only for spaces'
 own relays is closed once no room needs it. A node whose account may invoke
@@ -690,7 +699,7 @@ to every connected relay and waits up to 1.5 s for an answer (relays without
 TURN never answer), then returns what it has. A node with no relays returns
 the configured servers.
 
-_Source: `packages/core/src/network/signaling.ts` (`createSignalingClient`, `RelayStatus`), `packages/core/src/network/multi-signaling.ts` (`release`), `packages/core/src/network/ws-transport.ts`, `packages/core/src/network/local-transport.ts` (`createLocalHub`), `packages/core/src/node/carrier.ts` (`carry`), `packages/core/src/network/mesh.ts` (`CONNECT_TIMEOUT_MS`, `closeIfIdle`, `iceServers`, `ICE_REFRESH_MS`, `ICE_WAIT_MS`), `packages/core/src/network/introductions.ts` (`createSeenSignals`), `packages/core/src/network/rtc-transport.ts` (`DEFAULT_ICE_SERVERS`), `packages/core/src/node/space-runtime.ts` (`nameRelays`), `packages/core/src/node/node.ts` (`iceServers`), `packages/cli/src/serve.ts` (`onPeer`). Tests: `packages/core/tests/signaling.test.ts` ("signaling reconnects"), `packages/core/tests/relay-refusal.test.ts`, `packages/core/tests/introductions.test.ts`, `packages/core/tests/space-relays.test.ts`, `packages/core/tests/ws-transport.test.ts`, `packages/core/tests/carrier.test.ts`; the client-side ICE refresh is untested._
+_Source: `packages/core/src/network/relay-socket.ts` (`createRelaySocket`, `RelayStatus`), `packages/core/src/network/rendezvous.ts` (`createRendezvous`, `HELLO_MS`, `release`), `packages/core/src/network/relay-nostr.ts`, `packages/core/src/network/rtc-transport.ts` (`GATHER_MS`), `packages/core/src/network/ws-transport.ts`, `packages/core/src/network/local-transport.ts` (`createLocalHub`), `packages/core/src/node/carrier.ts` (`carry`), `packages/core/src/network/mesh.ts` (`CONNECT_TIMEOUT_MS`, `closeIfIdle`, `iceServers`, `ICE_REFRESH_MS`, `ICE_WAIT_MS`), `packages/core/src/network/introductions.ts` (`createSeenSignals`), `packages/core/src/network/rtc-transport.ts` (`DEFAULT_ICE_SERVERS`), `packages/core/src/node/space-runtime.ts` (`nameRelays`), `packages/core/src/node/node.ts` (`iceServers`), `packages/cli/src/serve.ts` (`onPeer`). Tests: `packages/core/tests/relay-socket.test.ts`, `packages/core/tests/rendezvous.test.ts`, `packages/core/tests/relay-nostr.test.ts`, `packages/core/tests/introductions.test.ts`, `packages/core/tests/space-relays.test.ts`, `packages/core/tests/ws-transport.test.ts`, `packages/core/tests/carrier.test.ts`; the client-side ICE refresh is untested._
 
 ## A node acting as an agent
 

@@ -47,7 +47,7 @@ import { inboxAuthor } from '../src/inbox/inbox.js';
 import { signingKeyOf } from '../src/identity/contact-key.js';
 import { sealValueTo } from '../src/identity/hpke.js';
 import { base64UrlDecode, base64UrlEncode, utf8Encode } from '../src/utils/encoding.js';
-import { createMailboxClient } from '../src/network/mailbox.js';
+import { createMailboxClient } from '../src/network/relays.js';
 import { grantSigner } from '../src/session/connect.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { memoryStores } from './helpers/memory-stores.js';
@@ -412,14 +412,14 @@ describe('a knock', () => {
       session,
       provider,
     );
-    const opened = await openKnock([inbox.key], blob, Date.now(), provider);
+    const opened = await openKnock([inbox.key], blob, provider);
     assert.equal(opened?.from, leif.did);
     assert.equal(opened?.name, 'Leif');
     assert.equal(opened?.note, 'hi from the gig');
     assert.equal(opened?.pairSpace, pair.id);
 
     // Another inbox's key can't open it, and a knock sealed to one key but naming another doesn't count.
-    assert.equal(await openKnock([other.key], blob, Date.now(), provider), null);
+    assert.equal(await openKnock([other.key], blob, provider), null);
     // Inviting to a space someone else made, or signed by someone else, doesn't check out.
     const annas = await anna.spaces.create({ name: 'Not Leif’s', ...team, visibility: 'private' });
     const stolen = await sealKnock(
@@ -428,7 +428,7 @@ describe('a knock', () => {
       session,
       provider,
     );
-    assert.equal(await openKnock([inbox.key], stolen, Date.now(), provider), null);
+    assert.equal(await openKnock([inbox.key], stolen, provider), null);
     // Nor to a space he founded with someone else, or one that assigns anyone a role: it is not his alone.
     for (const shared of [
       await leif.spaces.create({ name: 'Ours', ...team, visibility: 'private', cofounders: [anna.did] }),
@@ -440,7 +440,7 @@ describe('a knock', () => {
         session,
         provider,
       );
-      assert.equal(await openKnock([inbox.key], knock, Date.now(), provider), null);
+      assert.equal(await openKnock([inbox.key], knock, provider), null);
     }
     // Nor one that only shares the space to view: there is no role to join with.
     const view = await sealKnock(
@@ -449,7 +449,7 @@ describe('a knock', () => {
       session,
       provider,
     );
-    assert.equal(await openKnock([inbox.key], view, Date.now(), provider), null);
+    assert.equal(await openKnock([inbox.key], view, provider), null);
     // A note the session passes on is no note: alone, it is not from the account…
     const deeper = await provider.generateKeyPair();
     const deeperDid = publicKeyToDid(await provider.exportPublicKey(deeper.publicKey), P256_MULTICODEC);
@@ -468,7 +468,7 @@ describe('a knock', () => {
       { did: deeperDid, key: deeper.privateKey, proof: passedOn },
       provider,
     );
-    assert.equal(await openKnock([inbox.key], leafOnly, Date.now(), provider), null);
+    assert.equal(await openKnock([inbox.key], leafOnly, provider), null);
     // …and behind the session's own note, as a chain, it is refused too: a proof is one link.
     const chain = [session.proof, passedOn];
     const relayed = await sealKnock(
@@ -478,7 +478,7 @@ describe('a knock', () => {
       { did: deeperDid, key: deeper.privateKey, proof: chain as unknown as Delegation },
       provider,
     );
-    assert.equal(await openKnock([inbox.key], relayed, Date.now(), provider), null);
+    assert.equal(await openKnock([inbox.key], relayed, provider), null);
   });
 
   test('sealed to one key, naming another, is refused: nobody re-seals a knock as if sent elsewhere', async () => {
@@ -498,9 +498,9 @@ describe('a knock', () => {
       },
     );
     const resealed = await sealValueTo(other.publicKey, 'minca/mail/v1', { to: other.publicKey }, version);
-    assert.equal(await openKnock([other.key], resealed, Date.now(), provider), null);
+    assert.equal(await openKnock([other.key], resealed, provider), null);
     const proper = await sealValueTo(inbox.publicKey, 'minca/mail/v1', { to: inbox.publicKey }, version);
-    assert.notEqual(await openKnock([inbox.key], proper, Date.now(), provider), null);
+    assert.notEqual(await openKnock([inbox.key], proper, provider), null);
   });
 
   test('needs a note that grants /account/write: an app given one space or several, a key given records only, or one only to read, cannot knock', async () => {
@@ -525,11 +525,11 @@ describe('a knock', () => {
     ]) {
       const { invite, session } = await leifWith(hub, terms);
       const blob = await sealKnock(inbox.publicKey, carrying(invite), session, provider);
-      assert.equal(await openKnock([inbox.key], blob, Date.now(), provider), null, JSON.stringify(terms));
+      assert.equal(await openKnock([inbox.key], blob, provider), null, JSON.stringify(terms));
     }
   });
 
-  test('is judged by when the relay took it: a note that ran out cannot be used by dating a knock back', async () => {
+  test('is judged by when it was signed: within its life and not in the future, its note as it stood then', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const inbox = await someInbox();
     const seed = generateSeed();
@@ -540,28 +540,31 @@ describe('a knock', () => {
     const sessionDid = publicKeyToDid(await provider.exportPublicKey(keys.publicKey), P256_MULTICODEC);
     const pair = await leif.spaces.create({ name: 'Leif & Anna', ...team, visibility: 'private' });
     const invite = await leif.spaces.invite(pair.id, { role: 'editor' });
-    const realNow = Date.now;
-    // An hour ago, Leif's session had a note good for half an hour, and signed a knock with it.
-    Date.now = () => realNow() - 3600_000;
-    let blob: string;
-    try {
-      const token = await root.delegate({
-        audience: sessionDid,
-        command: '/',
-        expiration: Math.floor(Date.now() / 1000) + 1800,
-      });
-      blob = await sealKnock(
-        inbox.publicKey,
-        carrying(invite),
-        { did: sessionDid, key: keys.privateKey, proof: token },
-        provider,
-      );
-    } finally {
-      Date.now = realNow;
-    }
-    // Dropped then, it was a knock. Dropped now, with the note long gone, it isn't.
-    assert.equal((await openKnock([inbox.key], blob, Date.now() - 3600_000, provider))?.from, leif.did);
-    assert.equal(await openKnock([inbox.key], blob, Date.now(), provider), null);
+    /** A knock signed `ago` ms before now (negative: in the future), under a note good for half an hour then */
+    const knockFrom = async (ago: number): Promise<string> => {
+      const realNow = Date.now;
+      Date.now = () => realNow() - ago;
+      try {
+        const token = await root.delegate({
+          audience: sessionDid,
+          command: '/',
+          expiration: Math.floor(Date.now() / 1000) + 1800,
+        });
+        return await sealKnock(
+          inbox.publicKey,
+          carrying(invite),
+          { did: sessionDid, key: keys.privateKey, proof: token },
+          provider,
+        );
+      } finally {
+        Date.now = realNow;
+      }
+    };
+    // Signed an hour ago, its note long run out since: still a knock, judged when it was signed.
+    assert.equal((await openKnock([inbox.key], await knockFrom(3600_000), provider))?.from, leif.did);
+    // Older than a knock lives, or dated ahead of any clock's skew, it isn't.
+    assert.equal(await openKnock([inbox.key], await knockFrom(15 * 24 * 3600_000), provider), null);
+    assert.equal(await openKnock([inbox.key], await knockFrom(-3600_000), provider), null);
   });
 });
 
@@ -640,7 +643,7 @@ describe('node.inbox', () => {
       (items) => items.length === 1,
       'the knock',
     );
-    const invite = (await openKnock([keys.key], item!.blob, item!.at, provider))!.invite;
+    const invite = (await openKnock([keys.key], item!.blob, provider))!.invite;
 
     const [knock] = await annaSees(anna, (n) => n === 1, 'the knock');
     await anna.inbox.accept(knock!.id);

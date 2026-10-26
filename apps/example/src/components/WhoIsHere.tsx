@@ -45,10 +45,6 @@ export function WhoIsHere({
         reconnecting ? 'reconnecting…' : 'connecting…',
         'Finding the relay and the devices in this space',
       ],
-      elsewhere: [
-        'open in another tab',
-        'This app is connected in another tab or window, and only one of them can be at a time. Close the other one and this one connects within a few seconds.',
-      ],
       alone: [
         'online · no one else here',
         'The relay is reachable, but none of your other devices or the people in this space have it open right now',

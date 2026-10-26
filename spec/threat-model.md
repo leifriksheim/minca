@@ -39,7 +39,7 @@ and metadata through relays and hosts (§3.7, §3.8).
 | **Key thief**        | One of an account's delegated keys (session, writer or app key), with its note                                     |
 | **Root thief**       | The account's seed or recovery code                                                                                |
 | **App or program**   | A grant from the account, by popup or by code: a note, and perhaps the account, contact or member keys (06 §2, §3) |
-| **Relay**            | The signaling traffic of the rooms it serves, and the mailbox it keeps for inboxes and short links                 |
+| **Relay**            | Minca or Nostr: the sealed blobs under the topics it serves, and what it keeps for inboxes and short links         |
 | **Host or carrier**  | Every version of the spaces it keeps and their envelopes, a pass's read seed, a connection to members              |
 | **Network attacker** | Can watch, delay, drop and replay traffic between peers                                                            |
 
@@ -118,7 +118,14 @@ reference implementation, or any implementation, honestly.
   - What it sends must be checked, stored or refused, with few limits
     ([#33](https://github.com/leifriksheim/minca/issues/33)). That includes knocks, in an inbox or a shared
     space (07), and an inbox's mailbox can be flooded ([#162](https://github.com/leifriksheim/minca/issues/162)).
-  - It can squat a session DID in a relay room, or fill a room ([#162](https://github.com/leifriksheim/minca/issues/162)).
+  - Knowing any room a peer is in (from a space id, or a channel's secret),
+    it can say hello there: the peer offers to it and it learns the peer's
+    addresses, as anyone in a room always could. Under someone else's DID it
+    gets the offers meant for them, which then fail the handshake: while it
+    keeps at it, the two can't meet through relays, only by introduction.
+    Under made-up DIDs it can fill the room's 64 places, so nobody new is
+    heard there, and it can fill a topic's watchers on a Minca relay
+    ([#162](https://github.com/leifriksheim/minca/issues/162)).
   - Text it writes on GitHub, an issue on a public repository a connected bot
     reads, reaches the model in a run that may write on GitHub. It is marked
     as data, but only the model keeps to that. Accepted, as for any chat bot
@@ -722,11 +729,13 @@ line. That is relied on, by members (§3.2) and former members (§3.3).
     caught, and a fork proven in one collection leaves the key's writes in
     the others standing.
   - Records are judged with no time, so what it signs counts until the owner
-    revokes the key, however long ago its note ran out; only live use (knocks,
-    live messages, connecting) ends with the note (01 §7.6). A knock it leaves
-    in a space the account shares with someone, signed back while the note
-    was good, is bounded only by the knock's 14 days: no relay time anchors
-    it (07 §8, [#165](https://github.com/leifriksheim/minca/issues/165)). Signing out
+    revokes the key, however long ago its note ran out; only live use (live
+    messages, connecting) ends with the note (01 §7.6). A knock is judged at
+    the time it says it was signed, so whoever has the key, even after its
+    note ran out, can date knocks into the note's life and leave them, in a
+    mailbox or a space the account shares with someone, until 14 days after
+    it ran out: no relay's time anchors a knock (07 §6, §8,
+    [#165](https://github.com/leifriksheim/minca/issues/165)). Signing out
     writes a revoke of the session key, and the device forgets the key
     before it does. With a peer online it waits briefly for one to take the
     revokes in; otherwise they go when that device next syncs, and never if
@@ -917,11 +926,34 @@ _Source: 01 §7.5, §8, §11; 06 §2, §3; 05 §14, §15; 02 §4.1. Tests: `pack
 
 ### 3.7 Relay
 
+A Minca relay, a Nostr relay, or anyone else watching a topic on one: all see
+the same sealed blobs.
+
 - **Holds.** It can always drop and delay. Beyond that:
-  - One relay an inbox names can't hide a knock another one holds: each
-    relay's copy is judged by the time that relay gives (07 §6;
-    `packages/core/tests/inbox.test.ts`, "a mailbox that lies about when it
-    took a knock can't hide it while another tells the truth").
+  - A relay that doesn't know the room learns no session DID: neither who is
+    in a room nor who meets whom by name. A room's topic is a
+    hash of the room, and every hello, offer and answer is sealed under a key
+    derived from the room, which only those who know the room hold (04 §1.3,
+    §2; `packages/core/tests/rendezvous.test.ts`, "a relay, or anyone on the
+    topic, sees neither who meets nor their addresses").
+  - It can't read a peer's addresses unless it knows the room: an offer or
+    answer is sealed again to the box of the one peer it is for, so others
+    in the room don't read it either, and one re-wrapped with another box
+    opens nothing (04 §2; "a third peer in the room hears the offer pass but
+    cannot open it", "an offer re-wrapped with another box opens nothing").
+    Anyone who knows the room can still say hello and be offered to (§2).
+  - Under made-up names it can have a peer dialling at most 64 peers a room
+    at a time, and it can't get a peer cut off from a relay by making it say
+    hello back: a node says hello back once a room every 10 s, and paces what
+    it sends below a Minca relay's budget (04 §2, §2.1; "hellos under 90
+    made-up names start no more than 64 connections", "a node in 60 rooms
+    keeps its relay…", "a node in 16 rooms of 12 members each keeps its
+    relay").
+  - It can't make a peer act twice on one message, by replaying it or by
+    passing it through several relays: each is acted on once, by its `id`,
+    and only within 2 minutes of when it was sent (04 §2; "a replayed hello
+    counts once", "a blob that does not open under the room key, or is
+    stale, or comes again, is ignored").
   - It can't read or change what two sides say on a channel, pairing or
     connecting by code: each direction has its own key from the secret and an
     ephemeral exchange, and each message is bound to its type and place, so
@@ -940,34 +972,65 @@ _Source: 01 §7.5, §8, §11; 06 §2, §3; 05 §14, §15; 02 §4.1. Tests: `pack
     its connection.
 - **Does not hold yet.**
   - That it can't answer in peers' place: they talk over DTLS channels whose
-    fingerprints both sign in the mesh proof (04 §5.1, §6.2), so a relay that
-    answers for one should fail the proof. No test shows it ([#162](https://github.com/leifriksheim/minca/issues/162)).
-  - It learns who meets whom: IP addresses, session DIDs and rooms together
+    fingerprints both sign in the mesh proof (04 §5.1, §6.2), so a relay, or
+    anyone in the room, that answers for one should fail the proof. No test
+    shows it ([#162](https://github.com/leifriksheim/minca/issues/162)).
+  - It learns which addresses watch and publish to which topics, and when:
+    enough to tell that some sockets share a room, though not which room
+    ([#162](https://github.com/leifriksheim/minca/issues/162)). On a public
+    Nostr relay anyone at all can watch every topic, and see each blob's
+    size and time, though each event's key is fresh, so it ties no two rooms
+    together.
+  - One socket watching a topic can have a Minca relay send each blob it
+    publishes to the topic's 63 other watchers. Its budget (50 messages a
+    second) and the 32 sockets an address may hold bound it, not the relay's
+    traffic: one address flooding a topic can push its honest watchers past
+    the relay's send buffer, which cuts them off until they redial
     ([#162](https://github.com/leifriksheim/minca/issues/162)).
-  - Joiners don't prove they hold their DID's key, so anyone can take a
-    victim's place in a room ([#162](https://github.com/leifriksheim/minca/issues/162)).
+  - A relay that knows a space's id, as a host's relay does for the spaces it
+    keeps, reads its hellos like anyone who knows the room: which session
+    DIDs are there, when, and from which address
+    ([#162](https://github.com/leifriksheim/minca/issues/162)).
+  - Hellos are signed by no one, so anyone who knows any room a peer is in
+    can say hello there under another's DID; the last hello wins. Kept up,
+    it keeps the two from meeting through any relay, in every room they
+    share, and reads the offers meant for the other. On `main` the relay kept
+    a DID for whoever came first, per room. Under made-up DIDs, 64 hellos
+    every 5 minutes through any one relay fill a room's places on every
+    relay, where it used to take 64 sockets on each. Signing hellos with the
+    session key would end both ([#162](https://github.com/leifriksheim/minca/issues/162)).
+  - Peers meet through relays only if their clocks are within 2 minutes:
+    messages outside that are taken for replays (04 §2,
+    [#162](https://github.com/leifriksheim/minca/issues/162)).
+  - Someone posing as a peer by hello leaves that peer's next attempts with
+    the backoff its own failed ones built up, up to 5 minutes, after it
+    stops (04 §7.3, [#162](https://github.com/leifriksheim/minca/issues/162)).
+  - Anyone who knows a space's id, a former member or someone who saw an
+    invite, can derive its room key and read its hellos: which session DIDs
+    are in the room, and when (04 §2,
+    [#162](https://github.com/leifriksheim/minca/issues/162)). An offer or
+    answer stays in its room, so knowing one room shows nothing of another
+    ("someone posing as a peer in another room, or in this one, opens no
+    answer meant for it").
   - An inbox's mailbox can be flooded ([#162](https://github.com/leifriksheim/minca/issues/162)).
     So can a short link's topic: 64 blobs fill it, and a drop of the link's
     blob after its copy expired is then refused. Joiners read every page, so
     junk can't hide a copy that is there, and a host's copy is not in the
-    relay's queue.
-  - A relay the inbox names that gives a backdated knock an old enough
-    `receivedAt` lets a session note that ran out knock (07 §6, §8). Any
-    rule that trusts a relay's time has this; judging each relay's copy alone
-    neither causes nor fixes it ([#165](https://github.com/leifriksheim/minca/issues/165)).
+    relay's queue. A Nostr relay can't be purged, and a fetch reads its
+    newest 500 blobs: 500 drops bury an inbox's earlier knocks there, or a
+    short link's invite (04 §1.5, 07 §5).
   - Of a short link it learns the topic, the sealed invite's size, and when
     and from which address it is fetched; a relay also serving the space's
-    room can tie a fetch to the room joined a moment later
+    room can tie a fetch to the topic watched a moment later
     ([#162](https://github.com/leifriksheim/minca/issues/162)).
-  - It can fill the 32 exchanges an app offering a code runs before the right
-    program arrives, with peers that say hello, so the program is never
-    answered. Denial of service only: none of them holds the code, so none
-    can ask.
+  - Someone who holds a connect code can fill the 32 exchanges the app runs
+    before the right program arrives, so the program is never answered. A
+    relay can't, since it knows only the room's topic, not the room.
   - Someone else who holds the code can also ask before the program does,
     posing as it. The person sees only the name it gives itself, and may
     allow a note for its key; the real program is then never answered.
 
-_Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/tests/signaling.test.ts`, `packages/core/tests/relay-refusal.test.ts`, `packages/core/tests/pairing.test.ts` ("a message sent back to the side that sealed it does not open there", "someone who learns the secret later cannot open a recording of the exchange"), `packages/core/tests/connect-code.test.ts` ("a relay that relabels or repeats messages changes nothing", "a recording of the room, and the code learned later, open nothing", "a code works for one program: a second with the same code is not answered", "someone else holding the code who answers first, with a note from their own account, is refused")._
+_Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6; 01 §15.2; 06 §3. Tests: `packages/core/tests/rendezvous.test.ts`, `packages/core/tests/relay-nostr.test.ts`, `packages/core/tests/relay-socket.test.ts`, `packages/core/tests/pairing.test.ts` ("a message sent back to the side that sealed it does not open there", "someone who learns the secret later cannot open a recording of the exchange"), `packages/core/tests/connect-code.test.ts` ("a relay that relabels or repeats messages changes nothing", "a recording of the room, and the code learned later, open nothing", "a code works for one program: a second with the same code is not answered", "someone else holding the code who answers first, with a note from their own account, is refused")._
 
 ### 3.8 Host or carrier
 

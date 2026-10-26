@@ -252,7 +252,7 @@ this one own the use; this table is the registry.
 | `minca/p256-member-key/v1\|<spaceId>`    | HKDF, L=48 → `ScalarFrom`                 | account key                                                                                      | P-256 scalar (ECDH)        | Member key for one space                                                | `identity/contact-key.ts:27`        | 01, 03 |
 | `minca/p256-inbox-key/v1\|<gen>`         | HKDF, L=48 → `ScalarFrom`                 | contact key's 32-byte private scalar                                                             | P-256 scalar (ECDH)        | Inbox key (knocks are sealed to it)                                     | `identity/contact-key.ts:28`        | 01, 07 |
 | `minca/p256-inbox-sign-key/v1\|<gen>`    | HKDF, L=48 → `ScalarFrom`                 | contact key's 32-byte private scalar                                                             | P-256 scalar (ECDSA)       | Inbox signing key (signs the inbox, clears its mailbox)                 | `identity/contact-key.ts:29`        | 01, 07 |
-| `minca/inbox-topic/v1\|<signKey>`        | SHA-256, base64url                        | —                                                                                                | mailbox topic              | An inbox's mailbox topic on a relay: a hash of its signing key          | `inbox/inbox.ts:194`                | 07     |
+| `minca/inbox-topic/v1\|<signKey>`        | SHA-256, base64url                        | —                                                                                                | mailbox topic              | An inbox's mailbox topic on a relay: a hash of its signing key          | `inbox/inbox.ts:186`                | 07     |
 | `minca/local-key/v1`                     | HKDF, L=32                                | seed                                                                                             | AES-256-GCM key            | Local key: this device's storage (§11.1)                                | `identity/account-vault.ts:29`      | 01, 05 |
 | `minca/account-key/v1`                   | HKDF, L=32                                | seed                                                                                             | 32 bytes                   | Account key: root of member keys and account spaces (§11.1)             | `identity/account-vault.ts:30`      | 01, 06 |
 | `minca/pairing-room/v1`                  | CID of prefix ‖ secret (no separator)     | 16-byte pairing secret                                                                           | room id                    | Pairing room                                                            | `identity/channel.ts:39`            | 01     |
@@ -277,27 +277,31 @@ this one own the use; this table is the registry.
 | `minca/topic-tags/v1`                    | HKDF → HMAC-SHA256 key                    | space key K (private) or the bytes of `minca/public-topics/v1\|<spaceId>` (public)               | HMAC key                   | Topic tags                                                              | `records/topics.ts:80,87`           | 02     |
 | `minca/one-per/v1`                       | HKDF → HMAC-SHA256 key                    | the space's first key K₀ (private) or the bytes of `minca/public-one-per/v1\|<spaceId>` (public) | HMAC key                   | `onePer` record keys                                                    | `records/rules.ts:78,81`            | 02     |
 | `minca/record-owner/v1\|<root>`          | SHA-256, first 16 bytes, base32 lowercase | —                                                                                                | owner part (26 characters) | The owner part of an owned record key                                   | `records/key.ts:54`                 | 02     |
-| `minca-room/v1\|<spaceId>`               | SHA-256, first 20 bytes, base32 lowercase | —                                                                                                | relay room name            | A space's room on a relay                                               | `node/space-runtime.ts:304`         | 04     |
+| `minca-room/v1\|<spaceId>`               | SHA-256, first 20 bytes, base32 lowercase | —                                                                                                | relay room name            | A space's room on a relay                                               | `node/space-runtime.ts:291`         | 04     |
+| `minca/rendezvous-topic/v1\|<room>`      | SHA-256, base64url                        | —                                                                                                | topic (43 characters)      | A room's topic on a relay                                               | `network/rendezvous.ts:111`         | 04     |
+| `minca/rendezvous-key/v1\|<room>`        | SHA-256                                   | —                                                                                                | AES-256-GCM key            | What is said in a room, on a relay                                      | `network/rendezvous.ts:112`         | 04     |
 
 Labels of sealed things: every envelope and every HPKE seal (§9) names one,
 with the fields of its `bound`. _docs_ marks a label used by a convention
 built on the protocol (`packages/core/docs/`), not by it; _CLI_ one only the
 CLI's own node reads:
 
-| Label                    | Primitive | `bound`                                                    | Defined in                           | Part   |
-| ------------------------ | --------- | ---------------------------------------------------------- | ------------------------------------ | ------ |
-| `minca/record-body/v1`   | envelope  | `space`, `collection`, `key`, `keyId`                      | `privacy/space-encryption.ts:20`     | 03     |
-| `minca/earlier-keys/v1`  | envelope  | `space`, `keyId`                                           | `privacy/space-encryption.ts:22`     | 03     |
-| `minca/membership/v1`    | envelope  | `space`                                                    | `privacy/space-encryption.ts:24`     | 03, 04 |
-| `minca/space-key-box/v1` | HPKE      | `space`, `keyId`, `to`                                     | `space/space-access.ts:139`          | 03     |
-| `minca/vault-wrap/v1`    | envelope  | `did`, `id`, `kind`; and `salt`, `iterations` (passphrase) | `identity/account-vault.ts:32`       | 01     |
-| `minca/at-rest/v1`       | envelope  | `entry`                                                    | `storage/encrypted-adapter.ts:25`    | 05     |
-| `minca/pairing/v1`       | envelope  | `type`, `seq`                                              | `identity/channel.ts:41`             | 01     |
-| `minca/code/v1`          | envelope  | `type`, `seq`                                              | `identity/channel.ts:48`             | 06     |
-| `minca/mail/v1`          | HPKE      | `to`                                                       | `inbox/inbox.ts:72`                  | 07, 03 |
-| `minca/direct-text/v1`   | envelope  | `space`, `from`, `to`                                      | `privacy/direct.ts:37`               | docs   |
-| `minca/direct-box/v1`    | HPKE      | `space`, `from`, `to`, `reader`                            | `privacy/direct.ts:39`               | docs   |
-| `minca/writer-key/v1`    | envelope  | `did`, `slot`                                              | `packages/cli/src/writer-keys.ts:27` | CLI    |
+| Label                        | Primitive | `bound`                                                    | Defined in                           | Part   |
+| ---------------------------- | --------- | ---------------------------------------------------------- | ------------------------------------ | ------ |
+| `minca/record-body/v1`       | envelope  | `space`, `collection`, `key`, `keyId`                      | `privacy/space-encryption.ts:20`     | 03     |
+| `minca/earlier-keys/v1`      | envelope  | `space`, `keyId`                                           | `privacy/space-encryption.ts:22`     | 03     |
+| `minca/membership/v1`        | envelope  | `space`                                                    | `privacy/space-encryption.ts:24`     | 03, 04 |
+| `minca/space-key-box/v1`     | HPKE      | `space`, `keyId`, `to`                                     | `space/space-access.ts:139`          | 03     |
+| `minca/vault-wrap/v1`        | envelope  | `did`, `id`, `kind`; and `salt`, `iterations` (passphrase) | `identity/account-vault.ts:32`       | 01     |
+| `minca/at-rest/v1`           | envelope  | `entry`                                                    | `storage/encrypted-adapter.ts:25`    | 05     |
+| `minca/pairing/v1`           | envelope  | `type`, `seq`                                              | `identity/channel.ts:41`             | 01     |
+| `minca/code/v1`              | envelope  | `type`, `seq`                                              | `identity/channel.ts:48`             | 06     |
+| `minca/rendezvous/v1`        | envelope  | `topic`                                                    | `network/rendezvous.ts:96`           | 04     |
+| `minca/rendezvous-signal/v1` | HPKE      | `topic`, `from`, `to`, `box`                               | `network/rendezvous.ts:97`           | 04     |
+| `minca/mail/v1`              | HPKE      | `to`                                                       | `inbox/inbox.ts:64`                  | 07, 03 |
+| `minca/direct-text/v1`       | envelope  | `space`, `from`, `to`                                      | `privacy/direct.ts:37`               | docs   |
+| `minca/direct-box/v1`        | HPKE      | `space`, `from`, `to`, `reader`                            | `privacy/direct.ts:39`               | docs   |
+| `minca/writer-key/v1`        | envelope  | `did`, `slot`                                              | `packages/cli/src/writer-keys.ts:27` | CLI    |
 
 A short link's sealed invite (03 §7.7) is AES-256-GCM under its own seal
 key with no envelope or `bound`: one key seals one invite, and the link names
@@ -310,7 +314,7 @@ new labels do not collide with them:
 | ------------------------------------------------------ | ------------------------------------------------------ | ---------------------------------------------------------- | ---- |
 | `minca/space-invite/v1\|<spaceId>\|<did>`              | Message signed by an invite key                        | `space/space-access.ts:143`                                | 03   |
 | `{"audience":…,"proof":"minca/connect-key/v1",…}`      | Canonical JSON signed by a key a connect request names | `session/connect.ts:282` (`keyStatement`)                  | 06   |
-| `minca/inbox-purge/v1\|<topic>\|<nonce>\|<ids>`        | Signed by an inbox signing key, checked by a relay     | `inbox/inbox.ts:202`, `packages/relay/relay.mjs` (`purge`) | 07   |
+| `minca/inbox-purge/v1\|<topic>\|<nonce>\|<ids>`        | Signed by an inbox signing key, checked by a relay     | `inbox/inbox.ts:194`, `packages/relay/relay.mjs` (`purge`) | 07   |
 | `minca-peer/v3\|client\|…`, `minca-peer/v3\|server\|…` | Signed peer-auth messages                              | `network/peer-auth.ts:198,200`                             | 04   |
 | `minca-mesh/v1\|…`                                     | Signed mesh proof                                      | `network/peer-auth.ts:310`                                 | 04   |
 | `minca-host/v1\n…`, `minca-host-status/v1\n…`          | Signed host requests and statuses                      | `session/hosting.ts:78,340`                                | 08   |
@@ -584,13 +588,14 @@ Which time step 1 uses depends on what the proof is relied on for:
   at what it signed ([03 — Spaces](03-spaces.md) §6.4).
 - **Anything live** (a knock, a live message, a peer's proof when it
   connects, an app checking its grant): the checking node's own clock, or,
-  for a knock, the time it was signed, and when it came through a mailbox,
-  the time it was dropped (07 §6). The note MUST have
+  for a knock, the time it says it was signed, within the knock's 14 days
+  (07 §6). The note MUST have
   `nbf ≤ at < exp` at that `at`. These are one node's decisions in the moment, not
   verdicts peers share, so a note that has run out stops working there on
   time, with no revoke needed.
 
-So a leaked key's live use ends when its note runs out, and its records end
+So a leaked key's live use ends when its note runs out, except knocks, which
+it can date back into the note's life for 14 days after; and its records end
 when its key is revoked. Signing out writes a revoke of the session key in every space
 the node writes in, its carry spaces, the contacts space and the account
 registry, with a cutoff at what it wrote, and a device that kept the key

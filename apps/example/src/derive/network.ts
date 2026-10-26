@@ -13,8 +13,6 @@ export type Health =
   | 'alone'
   /** Coming up, or coming back */
   | 'connecting'
-  /** Refused by the relay because this app's key is connected already: another tab or window */
-  | 'elsewhere'
   /** No relay reachable and no peer: nothing leaves this device */
   | 'offline';
 
@@ -22,8 +20,6 @@ export function healthOf(status: SpaceStatus | undefined, network: MeshStatus): 
   if (!status || status.connection === 'offline') return 'offline';
   if (status.peers.length > 0) return 'syncing';
   if (network.relays.some((relay) => relay.state === 'open')) return 'alone';
-  // The relay says this key is connected already: this app in another tab; the one that got there first wins.
-  if (status.connection === 'refused') return 'elsewhere';
   if (status.connection === 'error') return 'offline';
   // Every relay waiting and none open: a retry is coming, but right now nothing gets through.
   if (network.relays.length > 0 && network.relays.every((relay) => relay.state === 'waiting'))

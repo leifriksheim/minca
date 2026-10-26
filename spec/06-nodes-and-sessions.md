@@ -159,12 +159,12 @@ place in them is taken under a lock every tab shares, and read from the
 storage they share. A tab still open on a key the app has since replaced goes
 on signing with it, its own lines, until it starts again.
 
-> **Known defect:** so every tab or window of one app is the same DID on the
-> relays, and only the first gets into a space's room; the others report
-> `refused` in its status until it closes. The fix is a key per tab, each
-> with its own one-link note signed by the account through the home: the
-> app's key can't pass its note on ([01](01-identity.md) §7.5). See
-> [04](04-network.md) §1.2 and
+> **Known defect:** so every tab or window of one app is the same DID in a
+> room, and a peer holds one connection per DID: one tab connects to each
+> peer, and the others don't sync with that peer until it closes.
+> The fix is a key per tab, each with its own one-link note signed by the
+> account through the home: the app's key can't pass its note on
+> ([01](01-identity.md) §7.5). See
 > [#162](https://github.com/leifriksheim/minca/issues/162).
 
 _Source: `packages/core/src/session/connect.ts` (`appKey`, `grantStore`), `packages/core/src/session/connection.ts` (`createMincaConnection`). Tests: `packages/core/tests/connect.test.ts` ("an app connected to several accounts")._

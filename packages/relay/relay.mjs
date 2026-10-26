@@ -1,33 +1,35 @@
 /**
- * The signaling relay: a dumb introducer, no state worth stealing. Run on its
+ * The relay: a mailbox that understands none of what it carries. Run on its
  * own by `signaling-server.mjs`, and inside every always-on node
- * (`packages/cli/src/serve.ts`), so both are the same relay. What it does is
- * specified in spec/04-network.md §1 (rooms, messages, limits, TURN passwords,
- * §1.1–1.7) and its mailbox for inboxes and short links in spec/07-inbox.md §5.
+ * (`packages/cli/src/serve.ts`), so both are the same relay. Blobs dropped
+ * under a topic with `ttl: 0` go to whoever watches it and are kept by
+ * nobody, which is how peers meet; blobs dropped with a ttl are kept for
+ * inboxes and short links. Specified in spec/04-network.md §1.
  *
  * It is public, so it assumes nobody is polite: every socket gets a size cap,
- * a message budget and a heartbeat, and each IP, room and the process as a
+ * a message budget and a heartbeat, and each IP, topic and the process as a
  * whole a ceiling. Framing is the `ws` server the caller brings: this file has
  * no dependencies.
  */
 
 import { createHash, createHmac, createPublicKey, randomBytes, verify } from 'node:crypto';
 
-// Limits. Signaling messages are an SDP blob at most (a few KB), so these are
+// Limits. A peer's message is a sealed offer at most (a few KB), so these are
 // generous for real peers and tight for anyone trying to fill a 256 MB VM.
 /** Give the `ws` server this as its `maxPayload` */
 export const MAX_MESSAGE_BYTES = 64 * 1024;
 const MAX_CONNECTIONS = 5_000;
 const MAX_CONNECTIONS_PER_IP = 32;
-const MAX_ROOMS = 10_000;
-const MAX_ROOMS_PER_SOCKET = 256;
-const MAX_PEERS_PER_ROOM = 64;
-const MAX_ROOM_LENGTH = 128;
-const MAX_DID_LENGTH = 256;
+/** Topics watched at once, across every socket */
+const MAX_WATCHED_TOPICS = 10_000;
+/** Sockets watching one topic: a room's peers */
+const MAX_WATCHERS_PER_TOPIC = 64;
+/** Topics one socket watches: one per room it is in */
+const MAX_WATCHES_PER_SOCKET = 256;
 /** Token bucket per socket: refills this many messages a second, up to the burst. */
 const RATE_PER_SECOND = 50;
 const RATE_BURST = 100;
-/** A peer that misses a ping for this long is gone; its slot and DID are freed. */
+/** A peer that misses a ping for this long is gone; its watches are freed. */
 const HEARTBEAT_MS = 15_000;
 /** A peer that cannot keep up with what it is sent is dropped, not buffered for. */
 const MAX_BUFFERED_BYTES = 1024 * 1024;
@@ -59,17 +61,9 @@ export const MAILBOX_LIMITS = Object.freeze({
   dropsPerNetwork: 30,
 });
 const PURGE_SPKI_PREFIX = Buffer.from('3039301306072a8648ce3d020106082a8648ce3d030107032200', 'hex');
-const MAX_WATCHES_PER_SOCKET = 32;
 /** One `mail` message stays well under what a client will take in one frame */
 const MAX_PAGE_ITEMS = 16;
 const MAX_PAGE_CHARS = 48 * 1024;
-
-/** Only these are passed from one peer to another; join and leave come from us. */
-const ROUTED = new Set(['offer', 'answer', 'candidate']);
-const DID_PATTERN = /^did:key:z[1-9A-HJ-NP-Za-km-z]+$/;
-
-/** A close code a client can tell apart from a network drop. */
-const CLOSE_DID_TAKEN = 4009;
 
 /**
  * TURN settings from the environment, or undefined when there are none.
@@ -92,7 +86,6 @@ export function turnFromEnv(env) {
  *
  * @param {{
  *   turn?: { secret: string, urls: string[], ttlSeconds: number },
- *   log?: (message: string) => void,
  *   mailbox?: Partial<typeof MAILBOX_LIMITS>,
  *   mailboxFrom?: (topic: string) => ReadonlyArray<string>,
  * }} [options]
@@ -100,17 +93,14 @@ export function turnFromEnv(env) {
 export function createRelay(options = {}) {
   const { turn } = options;
   const limits = { ...MAILBOX_LIMITS, ...options.mailbox };
-  const log = options.log ?? (() => {});
 
-  /** room id -> Set of named clients in it */
-  const rooms = new Map();
-  /** Every open socket, named or not */
+  /** Every open socket */
   const clients = new Set();
   /** ip -> number of open sockets */
   const perIp = new Map();
   /** network -> the TURN password its sockets share: { username, credential, expires } */
   const turnByNetwork = new Map();
-  /** topic -> its knocks, oldest first: [{ seq, id, at, expires, blob }] */
+  /** topic -> its blobs, oldest first: [{ seq, id, expires, blob }] */
   const mailbox = new Map();
   /** topic -> sockets watching it */
   const watchers = new Map();
@@ -119,23 +109,11 @@ export function createRelay(options = {}) {
   let mailChars = 0;
   let mailSeq = 0;
 
-  /** Whether a room could take one more peer */
-  function canEnter(room) {
-    if (typeof room !== 'string' || room.length === 0 || room.length > MAX_ROOM_LENGTH) return false;
-    const peers = rooms.get(room);
-    return peers ? peers.size < MAX_PEERS_PER_ROOM : rooms.size < MAX_ROOMS;
-  }
-
-  /**
-   * Admits one socket. It is nameless until its first `join`, which fixes its
-   * DID for the life of the socket.
-   */
+  /** Admits one socket. It never says who it is. */
   function accept(ws, ip) {
     const client = {
       ws,
       ip,
-      did: null,
-      rooms: new Set(),
       watching: new Set(),
       nonce: null,
       alive: true,
@@ -163,7 +141,6 @@ export function createRelay(options = {}) {
       const left = (perIp.get(ip) ?? 1) - 1;
       if (left > 0) perIp.set(ip, left);
       else perIp.delete(ip);
-      for (const room of [...client.rooms]) leave(client, room);
       for (const topic of [...client.watching]) unwatch(client, topic);
     };
 
@@ -173,17 +150,7 @@ export function createRelay(options = {}) {
     ws.on('error', () => ws.terminate());
   }
 
-  /**
-   * Routes one signaling message: `join` and `leave` are announced to the others
-   * in that room, and everything else is delivered to the single peer it names —
-   * if it shares a room with the sender.
-   *
-   * Only existing peers hear about a newcomer, so exactly one side creates the
-   * offer and the two never collide.
-   *
-   * What is forwarded is rebuilt from known fields, and `from` is always the
-   * DID the sender joined with — a peer cannot speak for someone else.
-   */
+  /** One message: the mailbox's, a request for TURN, or a ping. */
   function handleMessage(client, raw) {
     let message;
     try {
@@ -192,77 +159,24 @@ export function createRelay(options = {}) {
       return;
     }
     if (!message || typeof message.type !== 'string') return;
-    const room = message.room;
-
-    if (message.type === 'join') {
-      // A socket wears one name: a changed DID would let it wear two.
-      if (client.did ? message.from !== client.did : !isDid(message.from)) return;
-      if (client.rooms.has(room) || client.rooms.size >= MAX_ROOMS_PER_SOCKET || !canEnter(room)) return;
-
-      // The first socket to claim a DID in a room keeps it. Taking it over
-      // would let anyone who learns a DID receive the offers meant for it.
-      // A peer that reconnects after a silent drop is refused until the
-      // heartbeat reaps its old socket, and its client retries.
-      if (findPeer(room, message.from)) {
-        client.ws.close(CLOSE_DID_TAKEN, 'DID already in room');
-        return;
-      }
-
-      const first = !client.did;
-      client.did = message.from;
-      client.rooms.add(room);
-      if (!rooms.has(room)) rooms.set(room, new Set());
-      rooms.get(room).add(client);
-      announce(client, room, 'join');
-      if (first) offerTurn(client);
-      log(`peer joined room ${short(room)} (${rooms.get(room).size} present)`);
-      return;
-    }
-
-    if (
-      message.type === 'drop' ||
-      message.type === 'fetch' ||
-      message.type === 'unwatch' ||
-      message.type === 'challenge' ||
-      message.type === 'purge'
-    ) {
+    if (['drop', 'fetch', 'unwatch', 'challenge', 'purge'].includes(message.type)) {
       handleMail(client, message);
       return;
     }
-
     // A browser can't see WebSocket pings, so a client asks in a message whether its socket still reaches us.
     if (message.type === 'ping') {
       send(client, '{"type":"pong"}');
       return;
     }
-
-    if (message.type === 'ice') {
-      if (client.did) offerTurn(client);
-      return;
-    }
-
-    if (message.type === 'leave') {
-      if (client.rooms.has(room)) leave(client, room);
-      return;
-    }
-
-    if (!client.did || !ROUTED.has(message.type) || typeof message.to !== 'string') return;
-    for (const shared of client.rooms) {
-      const target = findPeer(shared, message.to);
-      if (target && target !== client) {
-        send(
-          target,
-          JSON.stringify({ type: message.type, from: client.did, to: message.to, payload: message.payload }),
-        );
-        return;
-      }
-    }
+    // TURN is for peers meeting here: sockets that watch a topic.
+    if (message.type === 'ice' && client.watching.size > 0) offerTurn(client);
   }
 
   /**
-   * The mailbox: `drop` leaves a sealed blob under a topic, `fetch` reads a
-   * topic's blobs after a sequence number (and, with `watch`, hears of new
-   * ones as they come), `unwatch` stops that.
+   * The mailbox: `drop` leaves a sealed blob under a topic, kept, or with
+   * `ttl: 0` only handed to whoever watches it; `fetch` reads a topic's kept
+   * blobs after a sequence number (and, with `watch`, hears of new ones as
+   * they come); `unwatch` stops that.
    */
   function handleMail(client, message) {
     if (message.type === 'challenge') {
@@ -285,15 +199,7 @@ export function createRelay(options = {}) {
 
     if (message.type === 'fetch') {
       const after = Number.isSafeInteger(message.after) ? message.after : 0;
-      if (
-        message.watch === true &&
-        !client.watching.has(topic) &&
-        client.watching.size < MAX_WATCHES_PER_SOCKET
-      ) {
-        client.watching.add(topic);
-        if (!watchers.has(topic)) watchers.set(topic, new Set());
-        watchers.get(topic).add(client);
-      }
+      if (message.watch === true) watch(client, topic);
       const now = Date.now();
       const items = [];
       let chars = 0;
@@ -302,7 +208,7 @@ export function createRelay(options = {}) {
       if (after === 0)
         for (const blob of options.mailboxFrom?.(topic) ?? []) {
           const id = createHash('sha256').update(blob).digest('base64url');
-          items.push({ seq: 0, id, at: now, blob });
+          items.push({ seq: 0, id, blob });
           chars += blob.length;
         }
       for (const item of mailbox.get(topic) ?? []) {
@@ -327,7 +233,15 @@ export function createRelay(options = {}) {
       blob.length > MAX_BLOB_LENGTH ||
       !/^[A-Za-z0-9_-]+$/.test(blob)
     ) {
-      refuse('A knock is base64url, at most 12000 characters');
+      refuse('A blob is base64url, at most 12000 characters');
+      return;
+    }
+    // Kept by nobody: handed to whoever watches the topic now, and that is all.
+    // Only from a socket watching the topic, so a sender takes one of its 64 places.
+    if (message.ttl === 0) {
+      if (!client.watching.has(topic)) return;
+      const news = JSON.stringify({ type: 'mail', topic, items: [{ blob }], more: false });
+      for (const watcher of watchers.get(topic) ?? []) if (watcher !== client) send(watcher, news);
       return;
     }
     const id = createHash('sha256').update(blob).digest('base64url');
@@ -355,7 +269,7 @@ export function createRelay(options = {}) {
       Number.isFinite(message.ttl) && message.ttl > 0
         ? Math.min(message.ttl, limits.ttlSeconds)
         : limits.ttlSeconds;
-    const item = { seq: ++mailSeq, id, at: now, expires: now + ttl * 1000, blob };
+    const item = { seq: ++mailSeq, id, expires: now + ttl * 1000, blob };
     held.push(item);
     mailbox.set(topic, held);
     mailChars += blob.length;
@@ -368,7 +282,7 @@ export function createRelay(options = {}) {
     }
   }
 
-  const mailItem = ({ seq, id, at, blob }) => ({ seq, id, at, blob });
+  const mailItem = ({ seq, id, blob }) => ({ seq, id, blob });
 
   /** Drops counted under a key in the current hour */
   function countOf(key, now) {
@@ -438,6 +352,18 @@ export function createRelay(options = {}) {
     send(client, JSON.stringify({ type: 'purged', topic, count: gone.length }));
   }
 
+  /** Hears of what is dropped under a topic from now on; the first watch also offers TURN */
+  function watch(client, topic) {
+    if (client.watching.has(topic) || client.watching.size >= MAX_WATCHES_PER_SOCKET) return;
+    const watching = watchers.get(topic);
+    if (watching ? watching.size >= MAX_WATCHERS_PER_TOPIC : watchers.size >= MAX_WATCHED_TOPICS) return;
+    const first = client.watching.size === 0;
+    client.watching.add(topic);
+    if (!watching) watchers.set(topic, new Set([client]));
+    else watching.add(client);
+    if (first) offerTurn(client);
+  }
+
   function unwatch(client, topic) {
     client.watching.delete(topic);
     const watching = watchers.get(topic);
@@ -487,23 +413,6 @@ export function createRelay(options = {}) {
     );
   }
 
-  function leave(client, room) {
-    client.rooms.delete(room);
-    const peers = rooms.get(room);
-    peers?.delete(client);
-    if (peers?.size === 0) rooms.delete(room);
-    announce(client, room, 'leave');
-    log(`peer left room ${short(room)}`);
-  }
-
-  /** Tells every other peer in a room that someone came or went. */
-  function announce(sender, room, type) {
-    const payload = JSON.stringify({ type, from: sender.did, room });
-    for (const peer of rooms.get(room) ?? []) {
-      if (peer !== sender) send(peer, payload);
-    }
-  }
-
   function send(peer, text) {
     if (peer.ws.readyState !== peer.ws.OPEN) return;
     if (peer.ws.bufferedAmount > MAX_BUFFERED_BYTES) {
@@ -511,13 +420,6 @@ export function createRelay(options = {}) {
       return;
     }
     peer.ws.send(text);
-  }
-
-  function findPeer(room, did) {
-    for (const peer of rooms.get(room) ?? []) {
-      if (peer.did === did) return peer;
-    }
-    return null;
   }
 
   /** Spends one token from the socket's bucket; false once it is empty. */
@@ -531,7 +433,7 @@ export function createRelay(options = {}) {
   }
 
   // Heartbeat: ping everyone, and drop whoever did not answer the last ping.
-  // This also frees rooms and DIDs held by sockets that died without a close.
+  // This also frees watches held by sockets that died without a close.
   const heartbeat = setInterval(() => {
     const now = Date.now() / 1000;
     for (const [network, held] of turnByNetwork) {
@@ -580,9 +482,6 @@ export function createRelay(options = {}) {
   };
 }
 
-const isDid = (value) =>
-  typeof value === 'string' && value.length <= MAX_DID_LENGTH && DID_PATTERN.test(value);
-
 /**
  * Behind Fly's proxy every socket comes from the proxy, and Fly names the real
  * client in a header. Anywhere else that header is whatever the client says,
@@ -612,5 +511,3 @@ function networkOf(ip) {
     .map((group) => group.replace(/^0+(?=.)/, ''))
     .join(':')}::/64`;
 }
-
-const short = (room) => (room.length > 12 ? `${room.slice(0, 12)}…` : room);

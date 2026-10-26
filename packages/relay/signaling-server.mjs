@@ -16,7 +16,7 @@ import { createRelay, turnFromEnv, MAX_MESSAGE_BYTES } from './relay.mjs';
 const PORT = Number(process.argv[2] ?? process.env.PORT ?? 8787);
 const log = (message) => console.log(`[signaling] ${message}`);
 
-const relay = createRelay({ turn: turnFromEnv(process.env), log });
+const relay = createRelay({ turn: turnFromEnv(process.env) });
 
 const server = createServer((req, res) => {
   if (req.url === '/health') {

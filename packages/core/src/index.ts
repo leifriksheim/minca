@@ -291,8 +291,11 @@ export type { RolePreset } from './space/presets.js';
 export type { SpaceKeyPair } from './space/space-access.js';
 
 // Phase 4: P2P Networking
-export { createSignalingClient, CLOSE_DID_TAKEN } from './network/signaling.js';
-export { createMultiSignalingClient } from './network/multi-signaling.js';
+export { createRendezvous, rendezvousKeys } from './network/rendezvous.js';
+export type { Rendezvous, RendezvousEvents, SignalKind } from './network/rendezvous.js';
+export { createRelayLink, relayKind } from './network/relays.js';
+export type { RelayKind, RelayLink, RelayLinkEvents } from './network/relays.js';
+export type { RelayState, RelayStatus } from './network/relay-socket.js';
 export {
   isControlMessage,
   shouldInitiate,
@@ -310,23 +313,11 @@ export { createWebSocketTransport } from './network/ws-transport.js';
 export type { WebSocketTransportConfig } from './network/ws-transport.js';
 export { createClientAuth, createServerAuth, createMeshAuth, peerNonce } from './network/peer-auth.js';
 export type { ClientAuth, ServerAuth } from './network/peer-auth.js';
-export type {
-  PeerTransport,
-  PeerTransportEvents,
-  SignalledTransport,
-  CandidateSink,
-} from './network/transport.js';
+export type { PeerTransport, PeerTransportEvents, SignalledTransport } from './network/transport.js';
 export { createMesh } from './network/mesh.js';
 export type { Mesh, MeshConfig, MeshStatus, PendingConnection } from './network/mesh.js';
 export { createNetworkManager } from './network/network-manager.js';
 export type { NetworkManager, NetworkManagerConfig, NetworkEvents } from './network/network-manager.js';
-export type {
-  SignalingClient,
-  SignalingMessage,
-  SignalKind,
-  RelayState,
-  RelayStatus,
-} from './network/signaling.js';
 
 // Phase 5: Gossip/Sync Protocol
 export { parseSyncMessage, SYNC_PROTOCOL_VERSION } from './sync/sync-messages.js';

@@ -122,7 +122,7 @@ The calls are listed with the rest of the node, in [node.md](node.md#the-inbox).
 `watch`. The default mailbox client opens a fresh WebSocket to a relay for
 each call.
 
-_Source: `packages/core/src/network/mailbox.ts` (`createMailboxClient`)._
+_Source: `packages/core/src/network/relays.ts` (`createMailboxClient`)._
 
 ## Not yet built
 

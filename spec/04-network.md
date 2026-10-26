@@ -1,24 +1,24 @@
 # 04 — Network
 
-How peers find each other and talk: the relay and the signaling protocol
-spoken with it, using several relays at once, the relays a space names for
-itself, the transports (WebRTC data channels, a WebSocket to an always-on
-node), the handshake that proves who is at the other end of a connection, the
-mesh that shares connections between spaces, peers introducing peers, live
-messages, and ICE/TURN.
+How peers find each other and talk: relays, of more than one kind, and the
+sealed messages peers meet with through them; using several relays at once;
+the relays a space names for itself; the transports (WebRTC data channels, a
+WebSocket to an always-on node); the handshake that proves who is at the other
+end of a connection; the mesh that shares connections between spaces; peers
+introducing peers; live messages; and ICE/TURN.
 
 What travels _inside_ an authenticated connection — the sync protocol — is
 in [05 — Sync and storage](05-sync-and-storage.md). Keys, DIDs and notes
 (delegations) are in [01 — Identity](01-identity.md). Read keys, space
-keys, roles and the access log are in [03 — Spaces](03-spaces.md). The relay
-mailbox the inbox and short links use is in [07 — Inbox](07-inbox.md).
+keys, roles and the access log are in [03 — Spaces](03-spaces.md). What an
+inbox and a short link keep in a relay's mailbox is in [07 — Inbox](07-inbox.md).
 
 ```
-                 ┌──────────── relay (WebSocket, JSON text frames) ────────────┐
-                 │  rooms: join / leave notices; offer / answer / candidate;   │
-                 │  TURN passwords (ice)                                        │
-                 └────────▲───────────────────────────────────────▲────────────┘
-                          │ signaling                              │
+        ┌──────── relay: a Minca relay (wss://) or a Nostr relay (nostr+wss://) ────────┐
+        │  blobs under a topic: handed to watchers (ttl 0), or kept to be fetched        │
+        │  it sees topics and sealed bytes, never who meets whom                          │
+        └──────────▲─────────────────────────────────────────────────────▲───────────────┘
+                   │ sealed: hello, offer, answer (§2)                    │
    peer A ── WebRTC data channel "data" (binary frames of UTF-8 JSON) ── peer B
             │ per room: __auth-hello ×2, __auth-proof ×2, then who, sync, live, …
             │ introductions: __peers, __signal (offers for third parties)
@@ -31,35 +31,105 @@ Terms used below:
 
 - **session DID** — the `did:key` of the session key a node signs with
   ([01 — Identity](01-identity.md)). It is a peer's identity on the wire:
-  in rooms, in handshakes and in every message's `from`.
+  in handshakes and in every message's `from`.
 - **account DID** — the root DID behind a session, proven by the session's
   **note**: its proof, one token from the account's root key to the
   session key ([01](01-identity.md) §7.5).
-- **room** — a name on a relay under which peers are introduced.
+- **room** — a name peers meet under, derived from what they share (a space
+  id, a channel's secret).
+- **topic** — what a relay knows a room by: a hash of the room (§1.3).
 - **space id**, **read key**, **space key** — see [03 — Spaces](03-spaces.md).
 
 ---
 
-## 1. The relay
+## 1. Relays
 
-A relay is a public WebSocket server that introduces peers. It holds no data
-of any space, has no authority, and is trusted for nothing but liveness: a
-relay that lies can at worst fail to introduce, or introduce the wrong peer —
-which the peer handshake (§6) catches.
+A relay moves sealed blobs under a topic. It holds no data of any space, has
+no authority, understands nothing it carries, and is trusted for nothing but
+liveness: a relay that lies can at worst fail to pass a blob on, pass on an
+old one, or make one up, all of which the peers catch (§2, §6).
 
-> Rationale: a relay is a phone book, not an authority. Everything a relay
-> could forge (offers, names) is checked end to end by the peers.
+### 1.1 What every relay does
 
-### 1.1 Endpoint
+Every relay, of every kind, does two things:
 
-- A relay accepts a WebSocket upgrade on **any path** (the always-on node
+- **Publish and watch.** A blob published under a topic goes to whoever
+  watches that topic now, and is kept by nobody. Peers meet this way (§2).
+- **Drop and fetch.** A blob dropped under a topic is kept for a while, to be
+  fetched later. Inboxes and short links use this ([07](07-inbox.md),
+  [03](03-spaces.md) §7.7).
+
+> Rationale: a relay is a pipe, not an authority. Asking it for nothing more
+> lets any infrastructure that moves bytes by topic carry Minca, so a space
+> stays reachable when one operator goes away.
+
+### 1.2 Kinds of relay
+
+A relay is named by a URL whose scheme says its kind:
+
+| Scheme                                    | Kind                   |
+| ----------------------------------------- | ---------------------- |
+| `wss://`, or `ws://` on this machine      | a Minca relay (§1.4)   |
+| `nostr+wss://`, or `nostr+ws://` likewise | a Nostr relay (§1.5)   |
+| `<kind>+wss://`, any other kind           | not specified; ignored |
+
+A valid relay URL is a string of at most 200 characters that parses as a URL
+whose scheme is `wss:`, or `<kind>+wss:` with `<kind>` matching
+`^[a-z][a-z0-9-]*$`; or the same with `ws` in place of `wss` when the host is
+`localhost`, `127.0.0.1` or `[::1]`. A client dials the URL with `<kind>+`
+taken off the scheme. A client MUST pass over a relay of a kind it doesn't
+speak, and MUST NOT treat a list naming one as invalid for that, so a space
+can name a new kind before every member's app speaks it.
+
+_Source: `packages/core/src/network/relays.ts` (`relayKind`, `createRelayLink`, `createMailboxClient`), `packages/core/src/network/relay-socket.ts` (`dialOf`), `packages/core/src/space/roles.ts` (`checkRelays`). Tests: `packages/core/tests/rendezvous.test.ts` ("a relay of a kind this library does not speak is passed over")._
+
+### 1.3 Rooms and topics
+
+**A space's room** is derived from its id:
+
+```
+room = lowercase( base32( SHA-256( UTF-8("minca-room/v1|" + spaceId) )[0..20) ) )
+```
+
+`base32` is RFC 4648 (alphabet `A–Z2–7`), no padding, output lowercased. 20
+bytes give exactly 32 characters. Other protocols meet in rooms of their own,
+with names derived elsewhere: the channel's rooms (`channelRoom`,
+[01 — Identity](01-identity.md) §15.2), for device pairing and for connecting
+by code ([06 — Nodes, sessions and apps](06-nodes-and-sessions.md) §3).
+
+A room never goes to a relay. A relay knows it by its **topic**, and what is
+said in it is sealed under its **room key**; both are derived from the room,
+so only those who know the room can find it or read it:
+
+```
+topic    = base64url( SHA-256( UTF-8("minca/rendezvous-topic/v1|" + room) ) )   43 characters
+room key = SHA-256( UTF-8("minca/rendezvous-key/v1|" + room) )                 an AES-256-GCM key
+```
+
+Example: space id `example-space-id` → room
+**`tr3o3btwwyb36pwbt3bcr3za7o5kn76p`** → topic
+**`wXBid3pUqrPtazKRrLpWmkZp2Yo78jdDlSUx_3PweR0`**, room key
+`f77dffde0d511f9b164fdd119414e55ba836574e8810a3d4f1bad1be98643c1e` (hex).
+
+A client MUST use these derivations; two implementations that differ here
+never meet.
+
+_Source: `packages/core/src/node/space-runtime.ts` (`relayRoom`), `packages/core/src/network/rendezvous.ts` (`rendezvousKeys`), `packages/core/src/utils/hash.ts` (`base32Encode`). Tests: `packages/core/tests/space-relays.test.ts`, `packages/core/tests/rendezvous.test.ts`._
+
+### 1.4 A Minca relay
+
+A Minca relay is a public WebSocket server: the reference relay runs on its
+own, and inside every always-on node.
+
+- It accepts a WebSocket upgrade on **any path** (the always-on node
   reserves `/peer` for itself, §5.3, and hands every other path to its relay).
 - `GET /health` answers `200` with `{"ok":true}` (`content-type:
-application/json`). It MUST NOT reveal how many rooms or peers exist.
+application/json`). It MUST NOT reveal how many topics or sockets exist.
 - Any other plain HTTP request answers `426` with a text body.
-- All relay messages are **text frames** carrying one JSON object each.
-  Binary frames are counted against the rate budget (§1.5) and otherwise
+- All messages are **text frames** carrying one JSON object each. Binary
+  frames are counted against the rate budget (§1.4, Limits) and otherwise
   ignored. Text that is not a JSON object with a string `type` is ignored.
+- A socket never says who it is.
 
 Before a socket is opened, the relay MAY refuse the upgrade with a plain HTTP
 response and `Connection: close`:
@@ -71,171 +141,75 @@ response and `Connection: close`:
 
 The client address is the TCP peer address, or the address a proxy the relay
 runs behind reports; anywhere else a header is whatever the client says. How
-the reference relay is told it runs behind one is in
-[`packages/relay/README.md`](../packages/relay/README.md).
+the reference relay is started, configured and told it runs behind a proxy is
+in [`packages/relay/README.md`](../packages/relay/README.md).
 
-_Source: `packages/relay/relay.mjs` (`upgrade`, `clientIp`), `packages/relay/signaling-server.mjs`, `packages/cli/src/serve.ts` (`serve`). Tests: `packages/cli/tests/cli.test.ts` ("answers /health…", "is a relay too…"), `packages/core/tests/network-manager.test.ts` ("the mesh, through real relays")._
+#### Messages
 
-### 1.2 One name per socket
+A **topic** is 43 base64url characters; a message naming any other is
+ignored. A **blob** is non-empty base64url of at most 12,000 characters.
 
-A socket is nameless until its first accepted `join`. That `join`'s `from`
-fixes the socket's DID for the life of the socket.
+| Client → relay                                  | Effect                                                                                                                                                                                                                                                                           |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `{ type: "drop", topic, blob, ttl: 0 }`         | **Publish**: from a socket watching the topic only, the blob goes to every _other_ socket watching it, as `mail` with one item `{ blob }`. Nothing is kept, and the sender gets no answer. A socket not watching the topic is ignored.                                           |
+| `{ type: "drop", topic, blob, ttl? }`           | **Drop**: the blob is kept, under `id = base64url(SHA-256(UTF-8(blob)))`, for the relay's own time or `ttl` seconds, whichever is shorter. Answered `dropped` (also for a blob already held under that topic, which stores nothing new) or `refused`. Watchers get it as `mail`. |
+| `{ type: "fetch", topic, after?, watch? }`      | **Fetch**: the kept blobs with `seq > after` (default 0), oldest first, a page at a time. With `watch: true` the socket also hears, from now on, every blob published or dropped under the topic, until it closes or sends `unwatch`.                                            |
+| `{ type: "unwatch", topic }`                    | Stops watching.                                                                                                                                                                                                                                                                  |
+| `{ type: "challenge" }`, `{ type: "purge", … }` | An inbox's owner clears it ([07](07-inbox.md) §5).                                                                                                                                                                                                                               |
+| `{ type: "ice" }`                               | Ask for TURN servers (§1.4, TURN passwords). Ignored from a socket that watches no topic, and by a relay without TURN.                                                                                                                                                           |
+| `{ type: "ping" }`                              | Ask whether the socket still reaches the relay. A relay SHOULD answer `pong`.                                                                                                                                                                                                    |
 
-- A DID is accepted if it is a string of at most 256 characters matching
-  `^did:key:z[1-9A-HJ-NP-Za-km-z]+$` (a base58btc multibase `did:key`). The
-  relay does not check that it decodes to a key.
-- Every later `join` on that socket MUST carry the same `from`; one that does
-  not is ignored.
-- Everything the relay forwards carries `from` = the socket's DID, whatever
-  the sender wrote. A peer cannot speak for someone else.
-- **The first socket to hold a DID in a room keeps it.** A `join` naming a
-  room in which _another_ socket already holds the same DID makes the relay
-  close the joining socket with WebSocket close code **`4009`** (reason
-  `DID already in room`). The whole socket is closed, not just that join.
+| Relay → client                                     | Meaning                                                                                                                                   |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `{ type: "dropped", topic, id }`                   | The blob is kept.                                                                                                                         |
+| `{ type: "refused", topic, reason }`               | It was not, and why, in plain words.                                                                                                      |
+| `{ type: "mail", topic, items, more }`             | Blobs: `items` of `{ seq, id, blob }` for kept ones, `{ blob }` for a published one. `more: true` means fetch again after the last `seq`. |
+| `{ type: "ice", payload: { servers, expiresAt } }` | TURN servers, and when their passwords stop working (ms since the epoch).                                                                 |
+| `{ type: "pong" }`                                 | The answer to a `ping`.                                                                                                                   |
 
-> Rationale: taking over a DID would let anyone who learns it receive the
-> offers meant for it. A peer that reconnects after a silent drop is refused
-> until the heartbeat (§1.5) reaps its old socket; its client retries (§2).
-> Letting two sockets share a DID is no answer either: signals are routed by
-> `to`, so the relay could not tell which one is meant.
-
-> **Known defect:** two nodes that sign with the same key have the same DID,
-> and only the first gets into a room; the other is refused until it stops.
-> That still happens with the tabs of one app where they don't share a
-> SharedWorker: each signs with the app's key ([06](06-nodes-and-sessions.md)
-> §2.1). (The processes of a program connected by code can't collide any
-> more: only one may hold its key.) The refused tab says so (§2, and `refused` in `spaces.status`), but
-> it cannot sync until the first closes. The fix is a key per tab, each with
-> its own one-link note signed by the account (through the home, or the
-> root signer), since a key can't pass its note on ([01](01-identity.md)
-> §7.5); the library doesn't ask for one yet. Tracked in
-> [#162](https://github.com/leifriksheim/minca/issues/162).
-
-_Source: `packages/relay/relay.mjs` (`handleMessage`, `isDid`, `CLOSE_DID_TAKEN`). Tests: `packages/core/tests/relay-refusal.test.ts` ("one DID per room")._
-
-### 1.3 Rooms
-
-A room is an opaque string of 1 to 128 characters. The relay does not
-interpret it.
-
-**A space's room** is derived from its id so that a relay learns which
-connections belong together but not which space they are:
-
-```
-room = lowercase( base32( SHA-256( UTF-8("minca-room/v1|" + spaceId) )[0..20) ) )
-```
-
-`base32` is RFC 4648 (alphabet `A–Z2–7`), no padding, output lowercased. 20
-bytes give exactly 32 characters.
-
-Example: space id `example-space-id` →
-SHA-256 prefix `9c76ed8676b603bf3ec19ec228ef20fbbaa6ffcf` →
-room **`tr3o3btwwyb36pwbt3bcr3za7o5kn76p`**.
-
-A client MUST use this derivation for a space's room; two implementations
-that differ here never meet.
-
-Other protocols meet in rooms of their own on the same relays, with names
-derived elsewhere: the channel's rooms (`channelRoom`, [01 — Identity](01-identity.md) §15.2),
-for device pairing and for connecting by code ([06 — Nodes, sessions and apps](06-nodes-and-sessions.md) §3).
-The relay treats them all alike.
-
-_Source: `packages/core/src/node/space-runtime.ts` (`relayRoom`), `packages/core/src/utils/hash.ts` (`base32Encode`). Tests: `packages/core/tests/space-relays.test.ts`, `packages/core/tests/network-manager.test.ts`._
-
-### 1.4 Messages
-
-Every message is a JSON object. Fields not listed are ignored by the relay
-and are not forwarded (forwarded messages are rebuilt from known fields).
-
-#### Client → relay
-
-| `type`                         | Fields                         | Effect                                                                                                                                                                                                                                                                        |
-| ------------------------------ | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `join`                         | `from`: DID, `room`: string    | Enter `room` (§1.2 for `from`). On success, every _other_ socket in the room receives a relay `join`. The joiner receives no acknowledgement and no list of who is present. On the socket's first successful join, the relay also sends an `ice` offer if it has TURN (§1.6). |
-| `leave`                        | `room`: string                 | Leave `room`, if in it. Every other socket in the room receives a relay `leave`.                                                                                                                                                                                              |
-| `offer`, `answer`, `candidate` | `to`: DID, `payload`: any JSON | Delivered to the socket holding `to` in the first room it shares with the sender (in the sender's join order), as the relay form below. Dropped if the sender has not joined, or shares no room with `to`, or `to` is the sender itself.                                      |
-| `ice`                          | —                              | Ask for TURN servers (§1.6). Ignored before the socket's first join, and by a relay without TURN.                                                                                                                                                                             |
-| `ping`                         | —                              | Ask whether the socket still reaches the relay. A relay SHOULD answer `pong`, joined or not (§2).                                                                                                                                                                             |
-
-The reference client adds `from` (its DID) to every message it sends,
-including `leave`, `ice` and the signals; the relay reads `from` only on
-`join`.
-
-The relay never replies with an error. A message that fails any check is
-dropped silently (except the `4009` close of §1.2 and the flood cut-off of
-§1.5).
-
-#### Relay → client
-
-| `type`                         | Fields                                                      | Meaning                                                                        |
-| ------------------------------ | ----------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `join`                         | `from`: DID, `room`: string                                 | `from` entered `room`.                                                         |
-| `leave`                        | `from`: DID, `room`: string                                 | `from` left `room` — by `leave`, or because its socket closed or was reaped.   |
-| `offer`, `answer`, `candidate` | `from`: DID (the sender's, as joined), `to`: DID, `payload` | A signal from `from`. The relay does not say which room it was routed through. |
-| `ice`                          | `payload`: `{ servers: RTCIceServer[], expiresAt: number }` | TURN servers and when their passwords stop working (ms since the epoch).       |
-| `pong`                         | —                                                           | The answer to a `ping`.                                                        |
-
-Only peers already in a room hear about a newcomer; the newcomer hears of
-nobody. So exactly one side of each pair learns of the other through the
-relay, and that side makes the offer (§7.3).
-
-`payload` of `offer` / `answer` is an `RTCSessionDescriptionInit`
-(`{ "type": "offer" | "answer", "sdp": string }`); of `candidate`, an
-`RTCIceCandidateInit` (`{ candidate, sdpMid, sdpMLineIndex, usernameFragment }`).
-The relay passes it through untouched.
-
-Examples (DIDs shortened for readability; real ones are full `did:key`s):
+`seq` increases with every blob the relay keeps. A copy past its time is not
+held, even before the relay sweeps it away. A relay need not keep anything
+across a restart (the reference relay keeps it in memory).
 
 ```json
-→ {"type":"join","room":"tr3o3btwwyb36pwbt3bcr3za7o5kn76p","from":"did:key:zDnaeV1Sz…"}
-← {"type":"join","from":"did:key:zDnaebEo…","room":"tr3o3btwwyb36pwbt3bcr3za7o5kn76p"}
-→ {"type":"offer","to":"did:key:zDnaebEo…","payload":{"type":"offer","sdp":"v=0\r\n…"},"from":"did:key:zDnaeV1Sz…"}
-← {"type":"offer","from":"did:key:zDnaeV1Sz…","to":"did:key:zDnaebEo…","payload":{"type":"offer","sdp":"v=0\r\n…"}}
-→ {"type":"candidate","to":"did:key:zDnaeV1Sz…","payload":{"candidate":"candidate:1 1 udp 2122260223 192.168.1.2 54321 typ host","sdpMid":"0","sdpMLineIndex":0},"from":"did:key:zDnaebEo…"}
-→ {"type":"leave","room":"tr3o3btwwyb36pwbt3bcr3za7o5kn76p","from":"did:key:zDnaeV1Sz…"}
-← {"type":"leave","from":"did:key:zDnaeV1Sz…","room":"tr3o3btwwyb36pwbt3bcr3za7o5kn76p"}
-→ {"type":"ping","from":"did:key:zDnaeV1Sz…"}
-← {"type":"pong"}
-→ {"type":"ice","from":"did:key:zDnaeV1Sz…"}
+→ {"type":"fetch","topic":"wXBid3pUqrPtazKRrLpWmkZp2Yo78jdDlSUx_3PweR0","watch":true}
+← {"type":"mail","topic":"wXBid3pUqrPtazKRrLpWmkZp2Yo78jdDlSUx_3PweR0","items":[],"more":false}
 ← {"type":"ice","payload":{"servers":[{"urls":["turn:turn.example.com:3478"],"username":"1790000000:3q2-7wX0aBcD","credential":"n3Jk…="}],"expiresAt":1790000000000}}
+→ {"type":"drop","topic":"wXBid3pUqrPtazKRrLpWmkZp2Yo78jdDlSUx_3PweR0","blob":"AZ3k…","ttl":0}
+← {"type":"mail","topic":"wXBid3pUqrPtazKRrLpWmkZp2Yo78jdDlSUx_3PweR0","items":[{"blob":"AV9q…"}],"more":false}
+→ {"type":"ping"}
+← {"type":"pong"}
 ```
 
-_Source: `packages/relay/relay.mjs` (`handleMessage`, `announce`, `offerTurn`), `packages/core/src/network/signaling.ts`. Tests: `packages/core/tests/network-manager.test.ts` ("the mesh, through real relays"), `packages/core/tests/relay-turn.test.ts`, `packages/core/tests/introductions.test.ts` ("several relays at once"), `packages/core/tests/relay-refusal.test.ts` ("the relay answers a ping")._
-
-### 1.5 Limits
+#### Limits
 
 A relay is open to anyone and MUST bound what one client can cost it. Every
 value below is the reference relay's; a compatible relay MAY choose others,
 and clients MUST tolerate being refused or cut off at any of them. What a
 relay does on exceeding a limit is as the last column says, whatever its
-value. The heartbeat is the exception: a client refused with `4009` waits 10 s
-before trying again (§2), counting on the relay to reap its dead socket within
-two pings, so a relay SHOULD ping every **15 s** or more often.
+value. The limits on kept blobs are the mailbox's, in [07](07-inbox.md) §5.
 
-| Limit                              | Reference value               | On exceeding                                                                                                              |
-| ---------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Message size (`MAX_MESSAGE_BYTES`) | 64 KiB                        | the WebSocket library closes the socket (1009)                                                                            |
-| Open sockets, whole relay          | 5 000                         | upgrade refused `503 Relay full`                                                                                          |
-| Open sockets per client address    | 32                            | upgrade refused `429 Too many connections`                                                                                |
-| Rooms, whole relay                 | 10 000                        | `join` of a new room ignored                                                                                              |
-| Rooms per socket                   | 256                           | `join` ignored                                                                                                            |
-| Peers per room                     | 64                            | `join` ignored                                                                                                            |
-| Room name length                   | 1–128 chars                   | `join` ignored                                                                                                            |
-| DID length                         | ≤ 256 chars                   | `join` ignored                                                                                                            |
-| Message rate per socket            | token bucket: 50/s, burst 100 | socket terminated with no close frame                                                                                     |
-| Heartbeat                          | ping every 15 s               | a socket that did not pong since the last ping is terminated; its rooms are left (with `leave` notices) and its DID freed |
-| Send buffer per recipient          | 1 MiB                         | the _recipient_ is terminated rather than buffered for                                                                    |
-| Addresses holding a TURN password  | 20 000                        | new addresses get no `ice` until old passwords expire                                                                     |
+| Limit                              | Reference value               | On exceeding                                                                     |
+| ---------------------------------- | ----------------------------- | -------------------------------------------------------------------------------- |
+| Message size (`MAX_MESSAGE_BYTES`) | 64 KiB                        | the WebSocket library closes the socket (1009)                                   |
+| Open sockets, whole relay          | 5 000                         | upgrade refused `503 Relay full`                                                 |
+| Open sockets per client address    | 32                            | upgrade refused `429 Too many connections`                                       |
+| Topics watched, whole relay        | 10 000                        | a watch of a new topic is ignored                                                |
+| Sockets watching one topic         | 64                            | the watch is ignored                                                             |
+| Topics one socket watches          | 256                           | the watch is ignored                                                             |
+| Message rate per socket            | token bucket: 50/s, burst 100 | socket terminated with no close frame                                            |
+| Heartbeat                          | ping every 15 s               | a socket that did not pong since the last ping is terminated, and its watches go |
+| Send buffer per recipient          | 1 MiB                         | the _recipient_ is terminated rather than buffered for                           |
+| Addresses holding a TURN password  | 20 000                        | new addresses get no `ice` until old passwords expire                            |
 
 Every message counts against the rate budget, including binary and malformed
-ones.
+ones. A published blob goes to at most 63 other watchers, so one socket can
+have the relay send up to 63 times what it sends.
 
-_Source: `packages/relay/relay.mjs` (constants at the top, `withinBudget`, `send`, heartbeat). Tests: not pinned by tests — see Open questions._
+#### TURN passwords
 
-### 1.6 TURN passwords
-
-A relay MAY hand out TURN credentials for a TURN server (coturn run with
-`use-auth-secret`) that shares a secret with it — the "TURN REST API"
+A Minca relay MAY hand out TURN credentials for a TURN server (coturn run
+with `use-auth-secret`) that shares a secret with it — the "TURN REST API"
 scheme, in which nothing is stored and nothing needs revoking.
 
 ```
@@ -244,117 +218,198 @@ username   = decimal(expires) + ":" + base64url(9 random bytes)      (12 chars a
 credential = base64( HMAC-SHA1( key = secret, message = UTF-8(username) ) )   (standard base64, padded)
 ```
 
-The relay sends
+The relay sends `{"type":"ice","payload":{"servers":[{"urls":[…TURN_URLS],"username":"<username>","credential":"<credential>"}],"expiresAt":<expires × 1000>}}`
+unprompted to a socket when it first watches a topic, and on each `ice` from a
+socket that watches one. A relay MAY hand one username to every socket of one
+network, so that coturn's per-user quota caps a network rather than each
+request; the reference relay does. A relay without TURN never answers `ice`.
+
+_Source: `packages/relay/relay.mjs` (`upgrade`, `clientIp`, `handleMessage`, `handleMail`, `watch`, `offerTurn`, `turnFromEnv`, `networkOf`, `withinBudget`, heartbeat), `packages/relay/signaling-server.mjs`, `packages/cli/src/serve.ts` (`serve`), `packages/core/src/network/relay-minca.ts`. Tests: `packages/core/tests/rendezvous.test.ts` ("the relay keeps nothing dropped with ttl 0"), `packages/core/tests/relay-turn.test.ts`, `packages/core/tests/inbox.test.ts`, `packages/cli/tests/cli.test.ts` ("answers /health…", "is a relay too…")._
+
+### 1.5 A Nostr relay
+
+A Nostr relay speaks NIP-01. Blobs travel as the `content` of events, with
+the topic in an `x` tag:
+
+| What    | Event                                                                                            |
+| ------- | ------------------------------------------------------------------------------------------------ |
+| Publish | kind **24733** (ephemeral: relays pass it on and keep nothing), tags `[["x", topic]]`            |
+| Watch   | `["REQ", <id>, { "kinds": [24733], "#x": [topic], "since": <now − 120, s> }]`; stop with `CLOSE` |
+| Drop    | kind **4733**, tags `[["x", topic], ["expiration", "<unix seconds>"]]` (NIP-40)                  |
+| Fetch   | `["REQ", <id>, { "kinds": [4733], "#x": [topic], "limit": 500 }]`, read until `EOSE`             |
+
+- Every event is signed as NIP-01 requires, by a **throwaway** secp256k1 key,
+  a fresh one for each event, so nobody watching a public relay can tell by
+  the key that two rooms' events came from one node. Who a peer is is
+  proven end to end once connected, and every blob is sealed, so the key
+  proves nothing and a receiver need not check it.
+- A drop is done when the relay answers `["OK", <event id>, true, …]`, or
+  `false` with a reason starting `duplicate:`. A drop's expiration is the
+  dropper's time to live, or 14 days.
+- A fetched blob's `id` is `base64url(SHA-256(UTF-8(content)))`, computed by
+  the fetcher. Events past their `expiration` are not taken. A fetch reads
+  one page, the newest 500 the relay gives, so more than 500 blobs dropped
+  after it bury the older ones (threat model §3.7).
+- A relay that asks for authentication (NIP-42, `["AUTH", <challenge>]`) is
+  answered with a kind 22242 event from the same throwaway key, tagged
+  `relay` and `challenge`; what it refused before is sent again.
+- A Nostr relay hands out no TURN passwords, and nobody can clear events
+  someone else signed, so an inbox kept there can't be purged
+  ([07](07-inbox.md) §5).
 
 ```json
-{"type":"ice","payload":{"servers":[{"urls":[…TURN_URLS],"username":"<username>","credential":"<credential>"}],"expiresAt":<expires × 1000>}}
+[
+  "EVENT",
+  {
+    "id": "5c1e…",
+    "pubkey": "9a41…",
+    "created_at": 1790000000,
+    "kind": 24733,
+    "tags": [["x", "wXBid3pUqrPtazKRrLpWmkZp2Yo78jdDlSUx_3PweR0"]],
+    "content": "AZ3k…",
+    "sig": "e07b…"
+  }
+]
 ```
 
-- unprompted, to a socket on its first successful `join`, and
-- on each `{"type":"ice"}` from a socket that has joined at least once.
-
-A relay MAY hand one username to every socket of one network, so that
-coturn's per-user quota caps a network rather than each request; the
-reference relay does ([`packages/relay/README.md`](../packages/relay/README.md)).
-
-A relay without TURN never answers `ice`.
-
-_Source: `packages/relay/relay.mjs` (`turnFromEnv`, `offerTurn`, `networkOf`). Tests: `packages/core/tests/relay-turn.test.ts`._
-
-### 1.7 Running a relay
-
-Not protocol: how the reference relay is started and configured is in
-[`packages/relay/README.md`](../packages/relay/README.md).
+_Source: `packages/core/src/network/relay-nostr.ts` (`createNostrLink`, `createNostrMailbox`, `signNostrEvent`, `NOSTR_EPHEMERAL_KIND`, `NOSTR_HELD_KIND`). Tests: `packages/core/tests/relay-nostr.test.ts`, against the NIP-01 relay in `packages/core/tests/helpers/nostr-relay.ts`._
 
 ---
 
-## 2. The signaling client
+## 2. Meeting in a room
 
-A client holds **one socket per relay** and joins one room per space (and
-per channel: pairing, or connecting by code) on it.
+A node in a room watches the room's topic on every relay it uses for that
+room, and publishes there, sealed under the room key:
 
-- On open, the client MUST (re)send `join` for every room it is in: a relay
-  forgets everything when a socket closes.
-- `join` for a room already joined is not resent; `leave` is sent only for a
-  room joined.
-- Received `offer` / `answer` / `candidate` are handed up as signals.
-  Received `join` / `leave` without a string `room` are ignored.
-- A received `ice` is kept only if it has the right shape: `servers` an
-  array (only the first 4 considered), each with `urls` (string or array) of
-  which only strings shorter than 256 characters matching `^turns?:` are
-  kept, and string `username` and `credential`; `expiresAt` a finite number.
-  An offer with no usable server is dropped.
+```
+blob    = base64url( sealEnvelope( room key, "minca/rendezvous/v1", { topic }, UTF-8(JSON(message)) ) )
+
+message = { "kind": "hello", "id", "at", "from", "box" }
+        | { "kind": "offer" | "answer", "id", "at", "from", "box", "to", "sdp" }
+sdp     = sealTo( box of `to`, "minca/rendezvous-signal/v1", { topic, from, to, box }, UTF-8(JSON(description)) )
+```
+
+`sealEnvelope` is the symmetric envelope and `sealTo` sealing to a key
+([01](01-identity.md) §9.1, §9.2).
+
+| Field  | Value                                                                                                   |
+| ------ | ------------------------------------------------------------------------------------------------------- |
+| `id`   | 12 random bytes, base64url: what makes copies of one message one                                        |
+| `at`   | when it was sent, ms since the epoch                                                                    |
+| `from` | the sender's session DID                                                                                |
+| `box`  | a P-256 public key the sender made for meeting, compressed, base64url; the private half never leaves it |
+| `to`   | the DID an offer or answer is for                                                                       |
+| `sdp`  | the `RTCSessionDescriptionInit`, with every ICE candidate in it, sealed to the recipient's `box`        |
+
+A receiver MUST ignore a blob unless all of these hold:
+
+1. It opens under the room key, label `minca/rendezvous/v1`, bound
+   `{ topic }`, and is a JSON object.
+2. `from` is a `did:key` other than its own, and `box` a point on P-256.
+3. `id` is a string of at most 64 characters it has not acted on in this
+   room (it remembers a bounded number of recent ids per room, and records
+   one only once its message passed every other check), and `at` is within
+   2 minutes of its own clock.
+4. For an offer or answer: `to` is its own DID, and `sdp` opens with its box,
+   label `minca/rendezvous-signal/v1`, bound `{ topic, from, to, box }` with
+   the message's own `box`.
+
+What it does then:
+
+- **`hello`**: `from` is in the room. If `from` is the greater DID (compared
+  as strings) the receiver offers to it (§7.3); otherwise it says hello
+  back, at most once every 10 seconds in that room, so the lesser one hears
+  of it and offers.
+- **`offer`, `answer`**: handed to the mesh as a signal from `from` (§7.3).
+
+A receiver remembers, per room, each peer it heard and the `box` it last
+used there. A room holds at most **64** peers, and a peer not heard from in
+5 minutes is forgotten; a hello or signal from a new peer in a full room
+MUST be ignored. An offer goes only to the room whose hello prompted it,
+sealed to the box last heard for that peer in that room; an answer goes only
+to the room its offer came in, sealed to the box the offer carried. The `sdp` seal binds the
+sender's own `box`, so a message re-wrapped with another box opens nothing.
+
+> Rationale: a hello costs nothing to send, and anyone who knows the room can
+> say one under any number of made-up names. A relay's room used to hold 64
+> sockets; holding 64 peers keeps that bound, so a flood can fill a room but
+> not make a node dial without end.
+
+A node says hello when it joins a room, on each relay whenever that relay's
+socket (re)opens, and SHOULD say it again every 2 minutes while in the room,
+since relays keep nothing and a hello may be lost. There is no goodbye: a peer
+is gone when its connection is (§5).
+
+```json
+{
+  "kind": "hello",
+  "id": "Hq3pW0x1b7Zc2LkA",
+  "at": 1790000000000,
+  "from": "did:key:zDnaeV1Sz…",
+  "box": "A7Hq0J1xV2bqkZfHkC0Y0n1kQ4p3c3nWm0C0H2Hn3m0f"
+}
+```
+
+> Rationale: a relay that can read who is in a room learns who meets whom,
+> and one that can read an offer learns every peer's addresses. Sealed under
+> the room key, a relay sees a topic; sealed again to one peer's box, others
+> in the room don't see that peer's addresses either. One rule for who offers,
+> the same as for introductions (§8), means both sides hearing each other's
+> hello never makes two connections.
+
+_Source: `packages/core/src/network/rendezvous.ts` (`createRendezvous`, `rendezvousKeys`, `remember`, `MAX_ROOM_PEERS`), `packages/core/src/network/mesh.ts` (`meet`), `packages/core/src/network/introductions.ts` (`shouldInitiate`, `createSeenSignals`). Tests: `packages/core/tests/rendezvous.test.ts` ("hellos under 90 made-up names start no more than 64 connections", "an offer re-wrapped with another box opens nothing", "a relay, or anyone on the topic, sees neither who meets nor their addresses", "a third peer in the room hears the offer pass but cannot open it", "a blob that does not open under the room key, or is stale, or comes again, is ignored", "a replayed hello counts once"), `packages/core/tests/network-manager.test.ts` ("the mesh, through real relays")._
+
+### 2.1 Keeping a relay's socket
 
 - While it is in any room, a client SHOULD keep redialling a relay whose
   socket closed, however many attempts fail. A client that stops is still
   signed in and still looks online, but no peer can find it until it
   restarts, and it has no way to tell.
 - A socket can die without closing: after a sleep or a network change the
-  relay has reaped it (§1.5) and left its rooms, while the client, which
-  never sees WebSocket pings, still holds it open, alone. So a client SHOULD
-  close its sockets and redial when it wakes from a sleep longer than the
-  relay keeps a silent socket (two heartbeats, §1.5), or comes back online.
-  That asks nothing of the relay, so it works with any.
-- A client MAY also send `ping` on an open socket that has heard nothing for
-  a while, and close and redial one whose relay has answered a `ping` before
-  but has sent nothing since the last two. That catches a socket that dies
-  while the device is awake. A relay that has never answered one is not held
-  to it.
-- A socket closed with `4009` (§1.2) means the relay already has this DID
-  in the room: its previous socket, which the relay drops within two
-  heartbeats, or another node signing with the same key. The client MUST NOT
-  count that socket as connected, and SHOULD say it was refused rather than
-  unreachable. It SHOULD keep redialling, but no sooner than 10 s after the
-  close: sooner is refused again, and a node holding the DID lets go only
-  when it stops.
+  relay has let go of it, while the client still holds it open, alone. So a
+  client SHOULD close its sockets and redial when it wakes from a sleep longer
+  than a relay keeps a silent socket (two heartbeats, §1.4), or comes back
+  online. That asks nothing of the relay, so it works with any.
+- A client MAY also `ping` a Minca relay on a socket that has heard nothing
+  for a while, and close and redial one whose relay has answered a `ping`
+  before but has sent nothing since the last two.
+- On opening a socket, the client watches every topic it should again: a
+  relay forgets everything when a socket closes.
+- A client SHOULD pace what it sends below a relay's message budget, so that
+  watching every room again and saying hello in each doesn't get its socket
+  cut off; the reference client sends at most 20 messages a second, in bursts
+  of 40.
+- A Minca relay's `ice` is kept only if it has the right shape: `servers` an
+  array (only the first 4 considered), each with `urls` (string or array) of
+  which only strings shorter than 256 characters matching `^turns?:` are
+  kept, and string `username` and `credential`; `expiresAt` a finite number.
+  An offer with no usable server is dropped.
 
 How often the reference client redials, and how it reports each relay's
 state, is in [the node's docs](../packages/core/docs/node.md#the-network).
 
-_Source: `packages/core/src/network/signaling.ts` (`createSignalingClient`), `packages/core/src/network/multi-signaling.ts` (`relays`). Tests: `packages/core/tests/signaling.test.ts` ("signaling reconnects", among them "waking from a sleep dials again" and "a socket that dies while awake"), `packages/core/tests/relay-refusal.test.ts` ("one DID per room"), `packages/core/tests/introductions.test.ts` ("several relays at once")._
+_Source: `packages/core/src/network/relay-socket.ts` (`createRelaySocket`, `iceFrom`, `SEND_PER_SECOND`), `packages/core/src/network/relay-minca.ts`, `packages/core/src/network/relay-nostr.ts`. Tests: `packages/core/tests/relay-socket.test.ts`, `packages/core/tests/rendezvous.test.ts` ("a node in 60 rooms keeps its relay…")._
 
 ---
 
 ## 3. Several relays at once
 
-A client MAY be configured with several relays. It uses **all of them at
-once**, not in order: it connects to every one and joins every room on every
-one. Connecting succeeds once any relay answers, and fails only when none
-does.
+A client MAY be configured with several relays, of any kinds. It uses **all
+of them at once**, not in order: it connects to every one and watches every
+room's topic on every one. Connecting succeeds once any relay answers, and
+fails only when none does.
 
 > Rationale: failover still strands two people when one is on the first
 > relay and the other on the second. Being present on all of them means they
 > meet wherever either is looking.
 
-Because the same peer is announced by each relay it shares with us, the
-client de-duplicates:
-
-- **Presence** is kept per `(room, peer)` as the set of relays that
-  announced it. The peer is present in the room while the set is non-empty,
-  and has left only when the last relay says it left (or is dropped). A
-  client MUST NOT treat a second relay's `join` for a peer already present in
-  that room as a new peer: both sides would open a second connection.
-- **Routes.** A client remembers which relays a peer has been seen on (by a
-  `join` or a signal from it). Signals to that peer are sent on every
-  _connected_ relay it was seen on; to a peer not seen on any, on every
-  connected relay.
+- A message goes to every connected relay the room is on. The same message
+  arriving through several relays is acted on once, by its `id` (§2, rule 3).
 - **TURN.** `ice` offers are kept per relay; the client's TURN servers are
   the union of all relays' servers, expiring at the earliest `expiresAt`.
-  A request for TURN (`ice`) goes to every connected relay.
+  A request for TURN (`ice`) goes to every connected relay that has TURN.
 
-A peer may therefore receive the same signal once per relay the two share.
-A duplicate signal is meant to have no further effect. Not yet specified: how
-a receiver recognises one (§7.3).
-
-> **Known defect:** with two or more relays in common, an offer is sent on
-> each (`packages/core/src/network/multi-signaling.ts`), and the receiver answers each
-> copy. Answering a later copy can replace the connection the first copy just
-> started (`packages/core/src/network/rtc-transport.ts`, `handleOffer`; `packages/core/src/network/mesh.ts`).
-> Found by reading the code, not reproduced. A fix will drop a duplicate offer.
-> Other implementations SHOULD NOT copy this.
-> Tracked in [#162](https://github.com/leifriksheim/minca/issues/162).
-
-_Source: `packages/core/src/network/multi-signaling.ts`. Tests: `packages/core/tests/introductions.test.ts` ("several relays at once"), `packages/core/tests/network-manager.test.ts` ("a relay connects the first pair…")._
+_Source: `packages/core/src/network/rendezvous.ts`. Tests: `packages/core/tests/rendezvous.test.ts` ("two peers on two shared relays hear each other once, and an offer arrives once, opened"), `packages/core/tests/network-manager.test.ts` ("a relay connects the first pair…")._
 
 ---
 
@@ -368,25 +423,24 @@ are configured with different relays still meet.
   even in a private space. It is part of the access log and only an author
   granted `/space/relays` may change it; see
   [03 — Spaces](03-spaces.md) for how the current value is chosen.
-- A valid list has at most **8** entries, no duplicates, each a string of at
-  most 200 characters that parses as a URL with scheme `wss:` — or `ws:` when
-  the host is `localhost`, `127.0.0.1` or `[::1]`. An invalid list is not
+- A valid list has at most **8** entries, no duplicates, each a valid relay
+  URL (§1.2), of a kind the client speaks or not. An invalid list is not
   applied.
 
 ```json
-{ "relays": ["wss://relay.example", "wss://relay.other.example"] }
+{ "relays": ["wss://relay.example", "nostr+wss://relay.damus.io"] }
 ```
 
 A node joins a space's room on **its configured relays plus the space's
 relays**, the latter for that room only. Until the space names some, it uses
 the relays named by the invite that brought it
-([03 — Spaces](03-spaces.md)). When the list changes, the node joins the room
-on the new relays and leaves it on relays no longer named.
+([03 — Spaces](03-spaces.md)). When the list changes, the node watches the
+room's topic on the new relays and stops on relays no longer named.
 
 How the reference node closes sockets no room needs, and names relays for a
 space it manages, is in [the node's docs](../packages/core/docs/node.md#the-network).
 
-_Source: `packages/core/src/space/roles.ts` (`RELAYS_COLLECTION`, `MAX_RELAYS`, `checkRelays`), `packages/core/src/space/space-access.ts` (`SPACE_RELAYS_RECORD`), `packages/core/src/node/space-runtime.ts` (`useRelays`, `nameRelays`, `setRelays`), `packages/core/src/network/multi-signaling.ts` (`join`, `release`), `packages/core/src/network/mesh.ts` (`useRelays`). Tests: `packages/core/tests/space-relays.test.ts`, `packages/core/tests/network-manager.test.ts` ("a room that names its own relay…")._
+_Source: `packages/core/src/space/roles.ts` (`RELAYS_COLLECTION`, `MAX_RELAYS`, `checkRelays`), `packages/core/src/space/space-access.ts` (`SPACE_RELAYS_RECORD`), `packages/core/src/node/space-runtime.ts` (`useRelays`, `nameRelays`, `setRelays`), `packages/core/src/network/rendezvous.ts` (`join`, `release`), `packages/core/src/network/mesh.ts` (`useRelays`). Tests: `packages/core/tests/space-relays.test.ts`, `packages/core/tests/network-manager.test.ts` ("a room that names its own relay…")._
 
 ---
 
@@ -412,8 +466,9 @@ _Source: `packages/core/src/network/transport.ts`. Tests: `packages/core/tests/n
 - The offerer creates **one data channel labelled `data`**, `ordered: true`
   (reliable, in order). The answerer uses the channel it receives. Messages
   are binary (`binaryType = 'arraybuffer'`); text messages are ignored.
-- ICE candidates are trickled: each local candidate is sent as a separate
-  `candidate` signal as it is found.
+- ICE candidates are not trickled: each side gathers its candidates (the
+  reference node waits for gathering to finish, or 2 s) and sends them inside
+  its offer or answer. A connection takes one message each way.
 - A connection counts as open when the data channel opens, and as gone when
   the channel closes or the connection state becomes `failed` or `closed`.
 - One connection per peer: making or accepting a new one for a peer closes
@@ -812,39 +867,35 @@ _Source: `packages/core/src/network/mesh.ts` (`greet`, `onHandshake`, `admit`, `
 
 ### 7.3 Who connects
 
-- **Through a relay:** a relay `join` names a peer in a room. If a
+- **Through a relay:** a `hello` (§2) names a peer in a room. If a
   connection to it is open, the node greets it there. Otherwise, if no
-  connection with it has been started, the node creates the offer and sends
-  offer and candidates through the relays (§3); it greets once the channel
-  opens. Only existing members of a room hear a `join`, so only they offer.
-- **Through an introduction:** see §8; the side with the lexically smaller
-  DID offers.
+  connection with it has been started and the node's DID is the lesser, it
+  creates the offer and sends it through the relays (§2); it greets once the
+  channel opens. The greater DID waits to be offered to.
+- **Through an introduction:** see §8; the same rule, the side with the
+  lexically smaller DID offers.
 - **Receiving a signal** from a peer already admitted in any room is ignored:
   a proven connection is never replaced by an offer that proved nothing.
   Otherwise an `offer` is answered (replacing any unproven connection with
-  that peer) and the `answer` and candidates go back the way the offer came
-  (relay, or mesh); an `answer` or `candidate` is applied.
+  that peer) and the `answer` goes back the way the offer came (relay, or
+  mesh); an `answer` is applied.
 - **A connection that never opens** is given up: an offer nobody answers
   leaves a connection that neither opens nor fails, and a peer already tried
   is not offered to again, so without a deadline the two stay apart until one
   restarts. A connection started by offering or answering that has not opened
-  within an attempt timeout of the node's choosing is closed and forgotten.
-  The side that offered through a relay offers again while a relay still has
-  the peer in a room; the answering side waits to be offered to.
+  within an attempt timeout of the node's choosing is closed and forgotten,
+  and the next hello from that peer starts again.
 
-Not yet specified: suppression of a duplicate offer that arrives through a
-second shared relay. See the known defect in §3.
-
-_Source: `packages/core/src/network/mesh.ts` (`meet`, `offerTo`, `onSignal`, `watch`, `meetAgain`). Tests: `packages/core/tests/network-manager.test.ts`, `packages/core/tests/signaling.test.ts` ("the mesh offers again")._
+_Source: `packages/core/src/network/mesh.ts` (`meet`, `offerTo`, `onSignal`, `watch`, `meetAgain`). Tests: `packages/core/tests/network-manager.test.ts`, `packages/core/tests/relay-socket.test.ts` ("the mesh offers again")._
 
 ### 7.4 Limits
 
-| Limit                               | Value                                                                           |
-| ----------------------------------- | ------------------------------------------------------------------------------- |
-| Peers per room                      | bounded by the relay (64 in the reference relay); the mesh sets none of its own |
-| Handshake timeout (`authTimeoutMs`) | 10 s                                                                            |
-| Peers named per `__peers`           | 64 (`MAX_INTRODUCED`); the rest are ignored                                     |
-| Relayed-signal hops                 | 3 (`MAX_HOPS`)                                                                  |
+| Limit                               | Value                                                                      |
+| ----------------------------------- | -------------------------------------------------------------------------- |
+| Peers per room                      | 64 remembered at a time (§2); a Minca relay also holds 64 watchers a topic |
+| Handshake timeout (`authTimeoutMs`) | 10 s                                                                       |
+| Peers named per `__peers`           | 64 (`MAX_INTRODUCED`); the rest are ignored                                |
+| Relayed-signal hops                 | 3 (`MAX_HOPS`)                                                             |
 
 The reference node's own timers (how long an idle connection or a connection
 attempt is given, how many relayed-signal ids it remembers) are in
@@ -897,8 +948,8 @@ offer.
   "id": "9f1c2a7b04d3e6aa",
   "origin": "<DID wanting to connect>",
   "target": "<DID it wants>",
-  "kind": "offer" | "answer" | "candidate",
-  "data": <RTCSessionDescriptionInit | RTCIceCandidateInit>,
+  "kind": "offer" | "answer",
+  "data": <RTCSessionDescriptionInit>,
   "hops": 3
 } }
 ```
@@ -907,7 +958,7 @@ offer.
 - The sender floods it to every connected peer admitted in _any_ room.
 - A receiver drops it if `id` is not a string of at most 64 characters or was
   seen before (it remembers a bounded number of recent ids), if `origin` or
-  `target` is not a DID, or if `kind` is not one of the three.
+  `target` is not a DID, or if `kind` is not one of the two.
 - If `target` is itself, it acts on it as a signal from `origin` (§7.3) and
   replies through the mesh with new ids.
 - Otherwise, if `hops > 0`, it forwards to every admitted peer except the one
@@ -988,7 +1039,7 @@ _Source: `packages/core/src/node/space-runtime.ts` (`send`, `onLive`, `withinAll
 
 ## 10. ICE and TURN (client side)
 
-A client MUST use TURN servers a relay offered (§1.6, §3) only while their
+A client MUST use TURN servers a relay offered (§1.4, §3) only while their
 `expiresAt` is in the future. Which other ICE servers it uses, and when it
 asks relays for fresh passwords, is its own choice; the reference node's is in
 [the node's docs](../packages/core/docs/node.md#the-network).
@@ -999,17 +1050,16 @@ _Source: `packages/core/src/network/mesh.ts` (`iceServers`). Tests: `packages/co
 
 ## 11. Conformance summary
 
-A compatible **relay** MUST: accept sockets on any path; fix one
-DID per socket on first `join`; refuse a second socket claiming a DID in a
-room (close `4009`); announce `join`/`leave` with `from` and `room` to the
-_other_ members only; forward `offer`/`answer`/`candidate` only between
-sockets sharing a room, rewriting `from` to the sender's DID; announce `leave`
-for every room of a socket that closes or dies; and bound sizes, rates and
-counts (§1.5). It SHOULD serve `/health`, and MAY hand out TURN passwords
-(§1.6).
+A compatible **Minca relay** MUST: accept sockets on any path; hand a blob
+published with `ttl: 0` to the topic's other watchers and keep nothing of it;
+keep a dropped blob for no longer than its `ttl` and serve it to `fetch`;
+and bound sizes, rates and counts (§1.4). It SHOULD serve `/health`, and MAY
+hand out TURN passwords. A **Nostr relay** is any NIP-01 relay that passes on
+ephemeral events and keeps regular ones.
 
-A compatible **client** MUST: derive rooms as in §1.3; rejoin all rooms on
-reconnect; de-duplicate presence across relays (§3); run the mesh handshake
+A compatible **client** MUST: derive rooms, topics and room keys as in §1.3;
+pass over relays of kinds it doesn't speak (§1.2); watch every topic again on
+reconnect; seal and check messages as in §2, acting on each `id` once; run the mesh handshake
 of §6.2 in every room before sending anything of it, or the node handshake
 of §6.1 on a node socket; attribute every message to the connection, not to
 `from`; send `who` before `live`; and apply the receive limits of §9.2.
@@ -1018,12 +1068,10 @@ of §6.1 on a node socket; attribute every message to the connection, not to
 
 ## Open questions
 
-- **Duplicate signals across relays.** How a receiver recognises and drops a
-  duplicate offer. See the known defect in §3.
 - **Size limits on peer connections.** No maximum WebRTC message size is
   specified or enforced; browsers' SCTP limits apply. A byte rate per peer
   is planned (§7.4).
 - **"64 KB"** for live messages is measured in UTF-16 code units of the JSON
   string, not bytes.
-- **Untested relay behaviour.** The rate limit, the per-address and per-room
+- **Untested relay behaviour.** The rate limit, the per-address and per-topic
   caps and the heartbeat have no tests.

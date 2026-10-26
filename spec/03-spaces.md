@@ -1440,8 +1440,8 @@ link  = code [ "@" place [ "," place ] ]
 - `pin` is the first 16 bytes of `SHA-256(UTF-8(blob))`, where `blob` is the
   sealed invite's base64url text exactly as kept: the same hash a relay files
   it under (07 §5).
-- A **place** is a mailbox URL. Written without a scheme,
-  `host[:port][/path]` means `wss://`, or `ws://` when the host is
+- A **place** is a relay URL ([04](04-network.md) §1.2), of any kind.
+  Written without a scheme, `host[:port][/path]` means `wss://`, or `ws://` when the host is
   `localhost`, `127.0.0.1` or `[::1]`; `%`, `@`, `,`, `#`, `&` and whitespace
   in it are percent-encoded. A reader reads at most two, and ignores one
   that fails `checkRelays` (§10).
@@ -1474,8 +1474,9 @@ gives the long form instead.
 **Reading a link.** A reader:
 
 1. fetches the topic from each place the link names and from the relays it
-   uses itself, reading every page a relay holds (a relay keeps at most 64
-   blobs a topic, 07 §5);
+   uses itself, reading every page a Minca relay holds (it keeps at most 64
+   blobs a topic, 07 §5), or the newest 500 a Nostr relay gives
+   ([04](04-network.md) §1.5);
 2. **MUST** ignore every blob whose hash does not start with `pin`, unopened;
 3. **MUST** refuse the link if two different blobs match the pin;
 4. opens the one that does, and **MUST** refuse it if it does not decrypt,
@@ -1782,8 +1783,10 @@ _Source: `packages/core/src/node/space-runtime.ts` (`learnKeys`, `malformedKeys`
 
 **`sys.relays`** at `relays:space`: `{ relays: string[] }` — where the
 space's members meet. Valid (`checkRelays`) when it is a list of at most 8
-distinct URLs, each at most 200 characters, each `wss://`, or `ws://` only on
-`localhost`, `127.0.0.1` or `[::1]`. Only someone granted `/space/relays` may set it. Until the space
+distinct relay URLs ([04](04-network.md) §1.2): each at most 200 characters,
+`wss://` or `<kind>+wss://` (`nostr+wss://`), or `ws://` likewise only on
+`localhost`, `127.0.0.1` or `[::1]`. A kind a member's app doesn't speak is
+passed over, not refused. Only someone granted `/space/relays` may set it. Until the space
 names some, members meet on relays they learn elsewhere, such as the invite
 that brought them (§7.4).
 

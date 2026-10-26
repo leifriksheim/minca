@@ -19,7 +19,6 @@ import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { promisify } from 'node:util';
 import {
-  CLOSE_DID_TAKEN,
   createNode,
   directoryStores,
   didOf,
@@ -586,24 +585,6 @@ export async function loadModelKey(home: string, provider = 'anthropic'): Promis
 export async function saveModelKey(home: string, key: string, provider = 'anthropic'): Promise<void> {
   await mkdir(agentDir(home), { recursive: true, mode: 0o700 });
   await writeFile(modelKeyFile(home, provider), `${key}\n`, { mode: 0o600 });
-}
-
-/**
- * Calls `onChange(true)` when every relay refused this agent because a socket
- * with the same agent key holds the room — one left from a crash, or a copy of
- * the agent elsewhere — and `onChange(false)` once one lets it in again.
- * Otherwise it would sit there looking connected (#162).
- */
-export function watchRelayRefusal(node: P2PNode, onChange: (refused: boolean) => void): () => void {
-  let refused = false;
-  return node.subscribe((event) => {
-    if (event.type !== 'network') return;
-    const relays = node.network.status().relays;
-    const now = relays.length > 0 && relays.every((relay) => relay.closeCode === CLOSE_DID_TAKEN);
-    if (now === refused) return;
-    refused = now;
-    onChange(now);
-  });
 }
 
 /**

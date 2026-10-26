@@ -198,7 +198,6 @@ import { sameTags, tagsFor, topicKey, topicTag } from '../records/topics.js';
 import { base64UrlDecode, base64UrlEncode, utf8Decode, utf8Encode } from '../utils/encoding.js';
 import { isRecord, unref } from '../utils/guards.js';
 import { serial } from '../utils/serial.js';
-import { CLOSE_DID_TAKEN } from '../network/signaling.js';
 import type {
   CacheConfig,
   ConnectionState,
@@ -2596,8 +2595,6 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   const liveConnection = (): ConnectionState => {
     if (connection === 'offline') return connection;
     if (reachable()) return 'connected';
-    const relays = deps.mesh?.status().relays ?? [];
-    if (relays.length > 0 && relays.every((relay) => relay.closeCode === CLOSE_DID_TAKEN)) return 'refused';
     return connection === 'connected' ? 'connecting' : connection;
   };
   let shown: ConnectionState | null = null;

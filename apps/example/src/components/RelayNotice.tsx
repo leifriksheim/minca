@@ -1,6 +1,5 @@
 import { relayOnlyLocal, relayProblem } from '@minca/app-shared/relay';
 import { useNetwork, useNode } from '@minca/core/react';
-import { CLOSE_DID_TAKEN } from '@minca/core';
 import { duration, nextRetry } from '../derive/network';
 import { styles } from '../styles';
 import { useNow } from './NetworkView';
@@ -30,9 +29,8 @@ export function RelayDown() {
   const network = useNetwork();
   const now = useNow();
   const relays = network.relays.filter((relay) => relay.state !== 'stopped');
-  const elsewhere = relays.length > 0 && relays.every((relay) => relay.closeCode === CLOSE_DID_TAKEN);
   const down = relays.length > 0 && relays.every((relay) => relay.state !== 'open' && relay.failures >= 2);
-  if (!down && !elsewhere) return null;
+  if (!down) return null;
   const retry = nextRetry(network);
   return (
     <div
@@ -48,11 +46,9 @@ export function RelayDown() {
       }}
     >
       <div style={{ flex: 1, minWidth: 200 }}>
-        <p style={styles.error}>{elsewhere ? 'This app is open in another tab' : "Can't reach the relay"}</p>
+        <p style={styles.error}>Can't reach the relay</p>
         <p style={styles.errorHint}>
-          {elsewhere
-            ? 'Only one tab or window of an app can sync at a time. Close the other one and this one takes over.'
-            : "Your changes are saved on this device and go out to your other devices once it's back."}
+          Your changes are saved on this device and go out to your other devices once it&apos;s back.
           {retry?.retryAt ? ` Trying again in ${duration(retry.retryAt - now)}.` : ' Trying again…'}
         </p>
       </div>

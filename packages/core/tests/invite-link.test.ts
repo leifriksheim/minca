@@ -11,7 +11,7 @@ import { createRelay, MAX_MESSAGE_BYTES, type MailboxLimits } from '../../relay/
 import type { InviteOptions } from '../src/node/types.js';
 import { team } from '../src/space/presets.js';
 import { bareInvite, parseSpaceInvite } from '../src/space/space-manager.js';
-import { createMailboxClient } from '../src/network/mailbox.js';
+import { createMailboxClient } from '../src/network/relays.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { createFakeHub } from './helpers/fake-transport.js';
 import { open, person, settle } from './helpers/person.js';

@@ -3,13 +3,13 @@
  * other. A node running in a worker can't count on `RTCPeerConnection` being
  * there (not every browser has it in workers), so the page keeps the
  * connections (`serveTransport`) and the worker's mesh drives them
- * (`remoteTransport`): offers, answers and candidates go one way, frames and
+ * (`remoteTransport`): offers and answers go one way, frames and
  * connection events come back.
  *
  * The ICE servers travel with each offer and answer, because the mesh in the
  * worker is what learns a relay's short-lived TURN passwords.
  */
-import type { CandidateSink, PeerTransportEvents, SignalledTransport } from './transport.js';
+import type { PeerTransportEvents, SignalledTransport } from './transport.js';
 import { createRTCTransport } from './rtc-transport.js';
 import { createEmitter } from '../utils/events.js';
 import { isRecord } from '../utils/guards.js';
@@ -47,11 +47,6 @@ export function serveTransport(
   const post = (message: Record<string, unknown>) => {
     port.postMessage({ [TAG]: true, ...message });
   };
-  const candidates =
-    (peer: string): CandidateSink =>
-    (candidate) =>
-      post({ kind: 'candidate', peer, candidate });
-
   const stop = listen(transport, {
     data: (peer, data) => post({ kind: 'data', peer, data }),
     // The binding is read only once a connection is open, so it goes with the news that it is.
@@ -65,18 +60,15 @@ export function serveTransport(
     if (Array.isArray(message.iceServers)) iceServers = message.iceServers;
     switch (message.kind) {
       case 'offer':
-        return transport.createOffer(peer, candidates(peer));
+        return transport.createOffer(peer);
       case 'answer-offer': {
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- setRemoteDescription checks it and rejects
         const offer = message.description as RTCSessionDescriptionInit;
-        return transport.handleOffer(peer, offer, candidates(peer));
+        return transport.handleOffer(peer, offer);
       }
       case 'answer':
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- setRemoteDescription checks it and rejects
         return transport.handleAnswer(peer, message.description as RTCSessionDescriptionInit);
-      case 'candidate':
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- addIceCandidate checks it and rejects
-        return transport.addIceCandidate(peer, message.candidate as RTCIceCandidateInit);
       default:
         throw new Error(`No such transport call: ${String(message.kind)}`);
     }
@@ -127,7 +119,6 @@ export function remoteTransport(
 ): SignalledTransport {
   const { on, off, emit } = createEmitter<PeerTransportEvents>();
   const pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
-  const sinks = new Map<string, CandidateSink>();
   const bindings = new Map<string, Binding>();
   let nextId = 0;
 
@@ -157,10 +148,6 @@ export function remoteTransport(
         else waiting?.reject(new Error(String(message.message)));
         break;
       }
-      case 'candidate':
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the connection on the other side found it
-        sinks.get(peer)?.(message.candidate as RTCIceCandidateInit);
-        break;
       case 'data':
         if (message.data instanceof Uint8Array) emit('data', peer, message.data);
         break;
@@ -176,7 +163,6 @@ export function remoteTransport(
         emit('connected', peer);
         break;
       case 'disconnected':
-        sinks.delete(peer);
         bindings.delete(peer);
         emit('disconnected', peer);
         break;
@@ -189,31 +175,18 @@ export function remoteTransport(
   port.start?.();
 
   return Object.freeze({
-    createOffer: (peer: string, onCandidate: CandidateSink) => {
-      sinks.set(peer, onCandidate);
-      return ask<RTCSessionDescriptionInit>({ kind: 'offer', peer, iceServers: iceServers() });
-    },
-    handleOffer: (peer: string, description: RTCSessionDescriptionInit, onCandidate: CandidateSink) => {
-      sinks.set(peer, onCandidate);
-      return ask<RTCSessionDescriptionInit>({
-        kind: 'answer-offer',
-        peer,
-        description,
-        iceServers: iceServers(),
-      });
-    },
+    createOffer: (peer: string) =>
+      ask<RTCSessionDescriptionInit>({ kind: 'offer', peer, iceServers: iceServers() }),
+    handleOffer: (peer: string, description: RTCSessionDescriptionInit) =>
+      ask<RTCSessionDescriptionInit>({ kind: 'answer-offer', peer, description, iceServers: iceServers() }),
     handleAnswer: (peer: string, description: RTCSessionDescriptionInit) =>
       ask<void>({ kind: 'answer', peer, description }),
-    addIceCandidate: (peer: string, candidate: RTCIceCandidateInit) =>
-      ask<void>({ kind: 'candidate', peer, candidate }),
     send: (peer: string, data: Uint8Array) => post({ kind: 'send', peer, data }),
     close: (peer: string) => {
-      sinks.delete(peer);
       bindings.delete(peer);
       post({ kind: 'close', peer });
     },
     closeAll: () => {
-      sinks.clear();
       bindings.clear();
       post({ kind: 'close-all' });
     },
@@ -254,13 +227,10 @@ export function createTransportSwitch(): TransportSwitch {
   };
 
   const transport: SignalledTransport = Object.freeze({
-    createOffer: async (peer: string, onCandidate: CandidateSink) => using().createOffer(peer, onCandidate),
-    handleOffer: async (peer: string, offer: RTCSessionDescriptionInit, onCandidate: CandidateSink) =>
-      using().handleOffer(peer, offer, onCandidate),
+    createOffer: async (peer: string) => using().createOffer(peer),
+    handleOffer: async (peer: string, offer: RTCSessionDescriptionInit) => using().handleOffer(peer, offer),
     handleAnswer: async (peer: string, answer: RTCSessionDescriptionInit) =>
       using().handleAnswer(peer, answer),
-    addIceCandidate: async (peer: string, candidate: RTCIceCandidateInit) =>
-      using().addIceCandidate(peer, candidate),
     send: (peer: string, data: Uint8Array) => using().send(peer, data),
     close: (peer: string) => current()?.close(peer),
     closeAll: () => current()?.closeAll(),

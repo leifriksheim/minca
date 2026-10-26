@@ -82,7 +82,6 @@ import {
   startAgentNode,
   startBotNode,
   takeOverAgent,
-  watchRelayRefusal,
   type RunningAgent,
 } from './agent.js';
 import { createAgentChat, DEFAULT_MODEL, fileSpend, priceOf } from './agent-chat.js';
@@ -210,22 +209,6 @@ async function withNode(globals: Globals, work: (node: P2PNode) => Promise<numbe
     await node.close();
   }
 }
-
-/**
- * Says when the relay refuses this node, as a socket with the same key holds
- * the room — left from a process that crashed, or the agent's folder copied to
- * another machine — and when it lets it in. Two agents on one computer can't
- * both run: the agent key is locked to one process.
- */
-const sayRelayRefusal = (node: P2PNode, who: string, meanwhile: string) =>
-  watchRelayRefusal(node, (refused) =>
-    stderr(
-      refused
-        ? `${who}: the relay refused this node: something else is connected with this agent's key — ` +
-            `a process that crashed, until the relay lets go of it, or a copy of this agent's folder elsewhere. ${meanwhile}.`
-        : `${who}: connected to the relay.`,
-    ),
-  );
 
 /** Trades a code from the app for an agent's note, asking for the code when it wasn't given */
 async function connectHere(home: string, code: string, options: { name?: string; relays?: string[] } = {}) {
@@ -582,7 +565,6 @@ async function runAgent(
   options: { model: ModelChoice; dailyCap: number; capEach: number | null; chat: boolean },
 ): Promise<number> {
   const { node } = runner;
-  sayRelayRefusal(node, 'minca agent', 'Stop that one and start this again');
 
   const { model } = options;
   const openai = model.provider === 'openai';
@@ -958,8 +940,6 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
       stderr(
         `minca mcp: an agent for ${running.grant.name} (${running.grant.did}), ${daysLeft(running.grant)} days left`,
       );
-      // A socket left with the agent's key, or a copy of the agent elsewhere, keeps this one out of a relay's rooms.
-      sayRelayRefusal(running.node, 'minca mcp', 'Writes are kept here and sync once that one stops');
       // `minca connect` again, after a disconnect or to renew: take the new key and note up here.
       stopReloading = reloadOnConnect(home, running, (line) => stderr(`minca mcp: ${line}`));
       return running.node;

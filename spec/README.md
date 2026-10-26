@@ -19,7 +19,7 @@ store, and judge every record the same way:
 | [01 — Identity](01-identity.md)                 | Seeds and recovery codes, key derivation, DIDs, root and session signers, delegations (UCAN 1.0, JSON profile), what a note lets a key do, envelopes and HPKE, contact keys, the account vault, device keys, pairing |
 | [02 — Records](02-records.md)                   | Records and their versions, canonical encoding and hashing, signatures, which version wins, links, collection definitions, rules, topics, the validation pipeline                                                    |
 | [03 — Spaces](03-spaces.md)                     | Spaces, roles and grants, the access log and its replay (`strong-remove/1`), invites, encryption and key distribution, the account registry, profiles                                                                |
-| [04 — Network](04-network.md)                   | Relays and the signaling protocol, several relays at once, peer authentication, WebRTC and WebSocket transports, the mesh, introductions, live messages, ICE and TURN                                                |
+| [04 — Network](04-network.md)                   | Relays of every kind and meeting through them, several relays at once, peer authentication, WebRTC and WebSocket transports, the mesh, introductions, live messages, ICE and TURN                                    |
 | [05 — Sync and storage](05-sync-and-storage.md) | Negentropy set reconciliation and its messages, what is stored and how, data folders, sealing at rest, segments, mirrors, blobs                                                                                      |
 
 **Built on the core.** Exchanges between two parties that a peer needs only

@@ -102,7 +102,7 @@ import {
   signPurge,
   type OpenedKnock,
 } from '../inbox/inbox.js';
-import { createMailboxClient } from '../network/mailbox.js';
+import { createMailboxClient } from '../network/relays.js';
 import { team } from '../space/presets.js';
 import {
   CARRIER_COLLECTION,
@@ -2109,7 +2109,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       return null;
     const body = record.body;
     if (!isRecord(body) || body.to !== contactKeys.publicKey || typeof body.sealed !== 'string') return null;
-    const opened = await openKnock([config.contactKey], body.sealed, null, provider);
+    const opened = await openKnock([config.contactKey], body.sealed, provider);
     if (!opened || opened.from !== record.root || opened.from === config.signer.did) return null;
     return opened;
   }
@@ -2299,8 +2299,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
   /** Knocks seen in this node's inbox, by id: opened (null when they didn't check out), and until when to keep them */
   const knockCache = new Map<string, { readonly opened: OpenedKnock | null; readonly until: number }>();
-  /** Copies of knocks that didn't check out, by id and mailbox: not opened again */
-  const failed = new Set<string>();
+  /** Knocks that didn't check out, by id, and until when they are not opened again: one dated a little ahead may pass later */
+  const failed = new Map<string, number>();
   const DAY_MS = 24 * 3600 * 1000;
 
   /** The inbox is the account's own, in its contacts space: only a key acting as the account opens one, as every peer checks */
@@ -2434,30 +2434,21 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     const keys = await inboxKeys(gen);
     // Every mailbox, in full: an inbox holds 64 knocks at most, and a knock
     // cleared from another device should go from here too. What was opened
-    // once is not opened again.
-    // One copy per mailbox, at the earliest time that mailbox gives for it.
-    const held = new Map<string, { blob: string; at: Map<string, number> }>();
+    // once is not opened again, nor what failed to.
+    const held = new Map<string, string>();
     const fetched = await Promise.allSettled(places.map((place) => mailbox.fetch(place, keys.topic)));
-    for (const [index, result] of fetched.entries()) {
+    for (const result of fetched) {
       if (result.status !== 'fulfilled') continue;
-      const place = places[index]!;
-      for (const item of result.value) {
-        // A relay's id is only its word: file the knock under the hash of what it is.
-        const id = await knockId(item.blob);
-        const copy = held.get(id) ?? held.set(id, { blob: item.blob, at: new Map() }).get(id)!;
-        copy.at.set(place, Math.min(copy.at.get(place) ?? item.at, item.at));
-      }
+      // A relay's id is only its word: file the knock under the hash of what it is.
+      for (const item of result.value) held.set(await knockId(item.blob), item.blob);
     }
     const found: { id: string; opened: OpenedKnock }[] = [];
-    for (const [id, copy] of held) {
-      // Each mailbox's copy is judged once, by its own time: one that lies about
-      // when it took a knock can't hide it while another tells the truth.
+    for (const [id, blob] of held) {
       let opened = knockCache.get(id)?.opened ?? null;
-      for (const [place, at] of copy.at) {
-        if (opened || failed.has(`${id}|${place}`)) continue;
-        opened = await openKnock([keys.key], copy.blob, at, provider);
-        if (opened) knockCache.set(id, { opened, until: at + KNOCK_TTL_SECONDS * 1000 });
-        else failed.add(`${id}|${place}`);
+      if (!opened && (failed.get(id) ?? 0) <= now) {
+        opened = await openKnock([keys.key], blob, provider);
+        if (opened) knockCache.set(id, { opened, until: opened.at + KNOCK_TTL_SECONDS * 1000 });
+        else failed.set(id, now + 15 * 60_000);
       }
       if (opened) found.push({ id, opened });
     }
