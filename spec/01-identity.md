@@ -297,7 +297,7 @@ CLI's own node reads:
 | `minca/pairing/v1`           | envelope  | `type`, `seq`                                              | `identity/channel.ts:41`             | 01     |
 | `minca/code/v1`              | envelope  | `type`, `seq`                                              | `identity/channel.ts:48`             | 06     |
 | `minca/rendezvous/v1`        | envelope  | `topic`                                                    | `network/rendezvous.ts:96`           | 04     |
-| `minca/rendezvous-signal/v1` | HPKE      | `topic`, `from`, `to`                                      | `network/rendezvous.ts:97`           | 04     |
+| `minca/rendezvous-signal/v1` | HPKE      | `topic`, `from`, `to`, `box`                               | `network/rendezvous.ts:97`           | 04     |
 | `minca/mail/v1`              | HPKE      | `to`                                                       | `inbox/inbox.ts:64`                  | 07, 03 |
 | `minca/direct-text/v1`       | envelope  | `space`, `from`, `to`                                      | `privacy/direct.ts:37`               | docs   |
 | `minca/direct-box/v1`        | HPKE      | `space`, `from`, `to`, `reader`                            | `privacy/direct.ts:39`               | docs   |

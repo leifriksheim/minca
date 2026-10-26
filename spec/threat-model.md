@@ -930,8 +930,8 @@ A Minca relay, a Nostr relay, or anyone else watching a topic on one: all see
 the same sealed blobs.
 
 - **Holds.** It can always drop and delay. Beyond that:
-  - It learns no session DID: neither who is in a room nor who meets whom by
-    name. A room's topic is a
+  - A relay that doesn't know the room learns no session DID: neither who is
+    in a room nor who meets whom by name. A room's topic is a
     hash of the room, and every hello, offer and answer is sealed under a key
     derived from the room, which only those who know the room hold (04 §1.3,
     §2; `packages/core/tests/rendezvous.test.ts`, "a relay, or anyone on the
@@ -987,6 +987,18 @@ the same sealed blobs.
     traffic: one address flooding a topic can push its honest watchers past
     the relay's send buffer, which cuts them off until they redial
     ([#162](https://github.com/leifriksheim/minca/issues/162)).
+  - A relay that knows a space's id, as a host's relay does for the spaces it
+    keeps, reads its hellos like anyone who knows the room: which session
+    DIDs are there, when, and from which address
+    ([#162](https://github.com/leifriksheim/minca/issues/162)).
+  - Hellos are signed by no one, so anyone who knows any room a peer is in
+    can say hello there under another's DID; the last hello wins. Kept up,
+    it keeps the two from meeting through any relay, in every room they
+    share, and reads the offers meant for the other. On `main` the relay kept
+    a DID for whoever came first, per room. Under made-up DIDs, 64 hellos
+    every 5 minutes through any one relay fill a room's places on every
+    relay, where it used to take 64 sockets on each. Signing hellos with the
+    session key would end both ([#162](https://github.com/leifriksheim/minca/issues/162)).
   - Peers meet through relays only if their clocks are within 2 minutes:
     messages outside that are taken for replays (04 §2,
     [#162](https://github.com/leifriksheim/minca/issues/162)).

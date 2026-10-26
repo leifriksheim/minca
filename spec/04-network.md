@@ -231,12 +231,12 @@ _Source: `packages/relay/relay.mjs` (`upgrade`, `clientIp`, `handleMessage`, `ha
 A Nostr relay speaks NIP-01. Blobs travel as the `content` of events, with
 the topic in an `x` tag:
 
-| What    | Event                                                                                      |
-| ------- | ------------------------------------------------------------------------------------------ |
-| Publish | kind **24733** (ephemeral: relays pass it on and keep nothing), tags `[["x", topic]]`      |
-| Watch   | `["REQ", <id>, { "kinds": [24733], "#x": [topic], "since": <now, s> }]`; stop with `CLOSE` |
-| Drop    | kind **4733**, tags `[["x", topic], ["expiration", "<unix seconds>"]]` (NIP-40)            |
-| Fetch   | `["REQ", <id>, { "kinds": [4733], "#x": [topic], "limit": 500 }]`, read until `EOSE`       |
+| What    | Event                                                                                            |
+| ------- | ------------------------------------------------------------------------------------------------ |
+| Publish | kind **24733** (ephemeral: relays pass it on and keep nothing), tags `[["x", topic]]`            |
+| Watch   | `["REQ", <id>, { "kinds": [24733], "#x": [topic], "since": <now − 120, s> }]`; stop with `CLOSE` |
+| Drop    | kind **4733**, tags `[["x", topic], ["expiration", "<unix seconds>"]]` (NIP-40)                  |
+| Fetch   | `["REQ", <id>, { "kinds": [4733], "#x": [topic], "limit": 500 }]`, read until `EOSE`             |
 
 - Every event is signed as NIP-01 requires, by a **throwaway** secp256k1 key,
   a fresh one for each event, so nobody watching a public relay can tell by
@@ -326,8 +326,8 @@ A receiver remembers, per room, each peer it heard and the `box` it last
 used there. A room holds at most **64** peers, and a peer not heard from in
 5 minutes is forgotten; a hello or signal from a new peer in a full room
 MUST be ignored. An offer goes only to the room whose hello prompted it,
-sealed to the box that hello carried; an answer goes only to the room its
-offer came in, sealed to the box the offer carried. The `sdp` seal binds the
+sealed to the box last heard for that peer in that room; an answer goes only
+to the room its offer came in, sealed to the box the offer carried. The `sdp` seal binds the
 sender's own `box`, so a message re-wrapped with another box opens nothing.
 
 > Rationale: a hello costs nothing to send, and anyone who knows the room can

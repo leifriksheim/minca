@@ -124,7 +124,12 @@ export function createNostrLink(url: string): RelayLink {
     send([
       'REQ',
       subscriptionOf(topic),
-      { kinds: [NOSTR_EPHEMERAL_KIND], [`#${TOPIC_TAG}`]: [topic], since: Math.floor(Date.now() / 1000) },
+      // A little back, for a peer whose clock is behind; a copy seen before is dropped by its id.
+      {
+        kinds: [NOSTR_EPHEMERAL_KIND],
+        [`#${TOPIC_TAG}`]: [topic],
+        since: Math.floor(Date.now() / 1000) - 120,
+      },
     ]);
   const socket = createRelaySocket({
     url,
