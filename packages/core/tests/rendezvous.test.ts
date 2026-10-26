@@ -228,6 +228,43 @@ describe('meeting through relays', () => {
     assert.equal(b.joined.length, 2);
   });
 
+  test('a replay after leaving the room and joining again is not acted on', async () => {
+    const watcher = await eavesdrop(one.url);
+    const b = await peer(B, [one.url]);
+    const a = await peer(A, [one.url]);
+    await until(() => a.joined.includes(B.did), 2000, 'hello');
+    a.rendezvous.signal('offer', B.did, OFFER, 'room');
+    await until(() => b.signals.length === 1, 2000, 'the offer');
+    b.rendezvous.leave('room');
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    b.rendezvous.join('room');
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    for (const blob of watcher.blobs) watcher.link.publish(watcher.topic, blob);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    assert.equal(b.signals.length, 1);
+  });
+
+  test('a hello replayed from before a peer restarted leaves offers going to its new box', async () => {
+    const sender = await eavesdrop(one.url);
+    const a = await peer(A, [one.url]);
+    const before = await contactKeyPair(p256.utils.randomSecretKey());
+    const now = await contactKeyPair(p256.utils.randomSecretKey());
+    const at = Date.now();
+    const old = await signedHello('room', B, before.publicKey, { at: at - 1000 });
+    sender.link.publish(sender.topic, await signedHello('room', B, now.publicKey, { at }));
+    await until(() => a.joined.includes(B.did), 2000, 'the new hello');
+    sender.link.publish(sender.topic, old);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const offers = sender.blobs.length;
+    a.rendezvous.signal('offer', B.did, OFFER, 'room');
+    await until(() => sender.blobs.length > offers, 2000, 'the offer');
+    const { key, topic } = await rendezvousKeys('room');
+    const message = await openValue(key, 'minca/rendezvous/v1', { topic }, sender.blobs.at(-1));
+    assert.ok(isObject(message) && message.kind === 'offer' && typeof message.box === 'string');
+    const bound = { topic, from: A.did, to: B.did, box: message.box };
+    assert.deepEqual(await openValueFrom(now, 'minca/rendezvous-signal/v1', bound, message.sdp), OFFER);
+  });
+
   test('a replayed hello counts once', async () => {
     const watcher = await eavesdrop(one.url);
     const b = await peer(B, [one.url]);

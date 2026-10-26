@@ -952,7 +952,8 @@ the same sealed blobs.
     who knows the room: every hello, offer and answer is signed by the
     session key its `from` names, sealed description included, so nobody can
     pose as a peer there to keep two peers apart or to take the offers meant
-    for one (04 §2; "an offer whose sealed description someone else put in,
+    for one; a peer admitted in a room still can, through introductions,
+    below (04 §2; "an offer whose sealed description someone else put in,
     under its sender’s signature, is ignored", "a hello naming B but signed by another key is ignored",
     "someone in only a public room cannot pose there as B to keep A and B
     apart in a private one").
@@ -1005,6 +1006,11 @@ the same sealed blobs.
     attempt to reach B and adds to the backoff before A tries B again, up to
     5 minutes, and reads the plain descriptions of introductions it
     forwards (04 §8, [#162](https://github.com/leifriksheim/minca/issues/162)).
+  - A relay that cuts a peer's socket over and over makes it say hello in
+    every room each time it reconnects; through three relays a room's peers
+    share, that can pass the 256 messages in 2 minutes a receiver acts on
+    from one peer, and the peer isn't heard there, on any relay, until they
+    age out (04 §2, [#162](https://github.com/leifriksheim/minca/issues/162)).
   - A signed hello is proof that can be shown to others: whoever knows a
     room and logs it holds a session DID's signature over the room's topic
     and a time, which anyone else who learns the room can check

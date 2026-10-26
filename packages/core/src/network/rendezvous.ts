@@ -141,7 +141,7 @@ interface RoomState {
   /** The relays this room is on: the node's, and the room's own */
   urls: ReadonlySet<string>;
   /** Peers heard in this room: the box to seal to, and when last heard */
-  readonly peers: Map<string, { box: string; heard: number; acted: Set<number> }>;
+  readonly peers: Map<string, { box: string; heard: number; at: number }>;
   /** When this node last said hello back here */
   answered: number;
 }
@@ -158,6 +158,12 @@ export function createRendezvous(
 
   const byUrl = new Map<string, RelayLink>();
   const rooms = new Map<string, RoomState>();
+  /**
+   * The times acted on from each peer in each room, by `topic did`, kept as
+   * long as this node's box: leaving a room and joining it again, or a
+   * reconnect, doesn't let a replay through.
+   */
+  const acted = new Map<string, Set<number>>();
   /** Rooms by topic, once derived */
   const byTopic = new Map<string, { room: string; key: CryptoKey }>();
   /** TURN servers each relay offered, and when their passwords stop working */
@@ -179,20 +185,25 @@ export function createRendezvous(
    * not, in whatever order they come; nor is anything from a newcomer to a
    * room full of others, or from a peer that said more than it could have.
    */
-  const isNew = (state: RoomState, peer: string, at: number): boolean => {
+  const isNew = (state: RoomState, topic: string, peer: string, at: number): boolean => {
     const now = Date.now();
     for (const [other, held] of state.peers) if (now - held.heard > PEER_SILENT_MS) state.peers.delete(other);
-    const held = state.peers.get(peer);
-    if (!held) return state.peers.size < MAX_ROOM_PEERS;
+    if (!state.peers.has(peer) && state.peers.size >= MAX_ROOM_PEERS) return false;
     // Times older than the window are refused anyway, so only the window's are kept.
-    for (const time of held.acted) if (time < now - MAX_SKEW_MS) held.acted.delete(time);
-    return !held.acted.has(at) && held.acted.size < MAX_ACTED;
+    const times = acted.get(`${topic} ${peer}`);
+    if (!times) return true;
+    for (const time of times) if (time < now - MAX_SKEW_MS) times.delete(time);
+    return !times.has(at) && times.size < MAX_ACTED;
   };
-  /** Remembers a peer's message as acted on: its box, and its time */
-  const remember = (state: RoomState, peer: string, box: string, at: number): void => {
-    const acted = state.peers.get(peer)?.acted ?? new Set<number>();
-    acted.add(at);
-    state.peers.set(peer, { box, heard: Date.now(), acted });
+  /** Remembers a peer's message as acted on: its time, and its box when it is the newest heard */
+  const remember = (state: RoomState, topic: string, peer: string, box: string, at: number): void => {
+    const key = `${topic} ${peer}`;
+    const times = acted.get(key) ?? acted.set(key, new Set()).get(key)!;
+    times.add(at);
+    const held = state.peers.get(peer);
+    // An older message replayed after a newer one leaves the newer box: the older may have died with a restart.
+    const newest = !held || at > held.at;
+    state.peers.set(peer, { box: newest ? box : held.box, heard: Date.now(), at: newest ? at : held.at });
   };
   /** When this node last sent: each message it sends is later than the one before, so no two share a time */
   let sentAt = 0;
@@ -236,14 +247,14 @@ export function createRendezvous(
     if (kind !== 'hello' && typeof sdp !== 'string') return;
     const { room } = place;
     const state = rooms.get(room);
-    if (!state || !isNew(state, from, at)) return;
+    if (!state || !isNew(state, topic, from, at)) return;
     // Signed by the key it names, every field: nobody says anything here in another's name.
     const label = signedLabel(topic, { kind, at, from, box: theirs, to, sdp });
     if (!(await verifyBy(provider, from, message.sig, label))) return;
     // Checked again: another message from it may have been acted on while this one was checked.
     if (kind === 'hello') {
-      if (!isNew(state, from, at)) return;
-      remember(state, from, theirs, at);
+      if (!isNew(state, topic, from, at)) return;
+      remember(state, topic, from, theirs, at);
       emit('peer-joined', from, room);
       // The lower DID offers; the higher makes sure the lower has heard of it, once
       // a while for the whole room, however many say hello.
@@ -261,8 +272,8 @@ export function createRendezvous(
       { topic, from, to: did, box: theirs },
       message.sdp,
     );
-    if (!isObject(payload) || !isNew(state, from, at)) return;
-    remember(state, from, theirs, at);
+    if (!isObject(payload) || !isNew(state, topic, from, at)) return;
+    remember(state, topic, from, theirs, at);
     emit('signal', { type: kind, from, payload, room, box: theirs });
   };
 
@@ -350,6 +361,12 @@ export function createRendezvous(
       clearInterval(helloTimer);
       helloTimer = setInterval(() => {
         for (const room of rooms.keys()) hello(room);
+        // Times past the window are refused anyway.
+        const old = Date.now() - MAX_SKEW_MS;
+        for (const [key, times] of acted) {
+          for (const time of times) if (time < old) times.delete(time);
+          if (times.size === 0) acted.delete(key);
+        }
       }, HELLO_MS);
       const all = [...byUrl.keys()];
       const results = await Promise.allSettled(linkList().map((link) => link.connect()));

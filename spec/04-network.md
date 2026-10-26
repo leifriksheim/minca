@@ -294,14 +294,14 @@ sig     = base64url( ECDSA-P256-SHA256( the key `from` names,
 `sealEnvelope` is the symmetric envelope and `sealTo` sealing to a key
 ([01](01-identity.md) §9.1, §9.2).
 
-| Field  | Value                                                                                                                                                      |
-| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `at`   | when it was sent, ms since the epoch: a non-negative integer                                                                                               |
-| `from` | the sender's session DID                                                                                                                                   |
-| `box`  | a P-256 public key the sender made for meeting, compressed, base64url; the private half never leaves it                                                    |
-| `sig`  | the session key `from` names, signing every field above; `to` and `sdp` are the empty string in a hello, which has neither, and `at` is its decimal digits |
-| `to`   | the DID an offer or answer is for                                                                                                                          |
-| `sdp`  | the `RTCSessionDescriptionInit`, with every ICE candidate in it, sealed to the recipient's `box`                                                           |
+| Field  | Value                                                                                                                                                                                   |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `at`   | when it was sent, ms since the epoch: a non-negative integer                                                                                                                            |
+| `from` | the sender's session DID                                                                                                                                                                |
+| `box`  | a P-256 public key the sender made for meeting, compressed, base64url; the private half never leaves it                                                                                 |
+| `sig`  | the session key `from` names, signing the label above, which holds every other field; `to` and `sdp` are the empty string in a hello, which has neither, and `at` is its decimal digits |
+| `to`   | the DID an offer or answer is for                                                                                                                                                       |
+| `sdp`  | the `RTCSessionDescriptionInit`, with every ICE candidate in it, sealed to the recipient's `box`                                                                                        |
 
 A receiver MUST ignore a blob unless all of these hold:
 
@@ -312,10 +312,11 @@ A receiver MUST ignore a blob unless all of these hold:
 3. `at` is a non-negative integer within 2 minutes of its own clock, and
    no message from `from` in this room was acted on with that `at`: a copy
    through a second relay, or a replay, in whatever order they come. A
-   sender makes each message it sends later than the one before, so no two
-   share a time. A receiver remembers the times it acted on from each peer
-   within the 2 minutes, and MAY stop hearing a peer that sent more than 256
-   in them.
+   sender MUST give each message it sends a greater `at` than the last. A
+   receiver remembers the times it acted on from each peer in each room,
+   within the 2 minutes, for as long as its box lives (leaving a room and
+   joining it again doesn't forget them), and MAY stop hearing a peer that
+   sent more than 256 in them.
 4. A hello has no `to` and no `sdp`.
 5. For an offer or answer: `to` is its own DID, and `sdp` opens with its box,
    label `minca/rendezvous-signal/v1`, bound `{ topic, from, to, box }` with
@@ -329,8 +330,9 @@ What it does then:
   of it and offers.
 - **`offer`, `answer`**: handed to the mesh as a signal from `from` (§7.3).
 
-A receiver remembers, per room, each peer it heard and the `box` it last
-used there. A room holds at most **64** peers, and a peer not heard from in
+A receiver remembers, per room, each peer it heard and the `box` of the
+newest message it acted on from it there: an older message, replayed after a
+newer one, doesn't change it. A room holds at most **64** peers, and a peer not heard from in
 5 minutes is forgotten; a hello or signal from a new peer in a full room
 MUST be ignored. An offer goes only to the room whose hello prompted it,
 sealed to the box last heard for that peer in that room; an answer goes only
@@ -369,7 +371,7 @@ is gone when its connection is (§5).
 > name, in its room or any other, so nobody can keep two peers apart there
 > by posing as one of them.
 
-_Source: `packages/core/src/network/rendezvous.ts` (`createRendezvous`, `rendezvousKeys`, `signedLabel`, `isNew`, `remember`, `MAX_ROOM_PEERS`, `MAX_ACTED`), `packages/core/src/network/peer-auth.ts` (`signLabel`, `verifyBy`), `packages/core/src/network/mesh.ts` (`meet`), `packages/core/src/network/introductions.ts` (`shouldInitiate`). Tests: `packages/core/tests/rendezvous.test.ts` ("a sender’s messages are each acted on, in whatever order they arrive", "a replayed offer is not acted on again, however much else was said since", "an offer whose sealed description someone else put in, under its sender’s signature, is ignored", "a hello naming B but signed by another key is ignored", "someone in only a public room cannot pose there as B to keep A and B apart in a private one", "hellos under 90 made-up names start no more than 64 connections", "an offer re-wrapped with another box opens nothing", "a relay, or anyone on the topic, sees neither who meets nor their addresses", "a third peer in the room hears the offer pass but cannot open it", "a blob that does not open under the room key, or is stale, or comes again, is ignored", "a replayed hello counts once"), `packages/core/tests/network-manager.test.ts` ("the mesh, through real relays")._
+_Source: `packages/core/src/network/rendezvous.ts` (`createRendezvous`, `rendezvousKeys`, `signedLabel`, `isNew`, `remember`, `MAX_ROOM_PEERS`, `MAX_ACTED`), `packages/core/src/network/peer-auth.ts` (`signLabel`, `verifyBy`), `packages/core/src/network/mesh.ts` (`meet`), `packages/core/src/network/introductions.ts` (`shouldInitiate`). Tests: `packages/core/tests/rendezvous.test.ts` ("a sender’s messages are each acted on, in whatever order they arrive", "a replay after leaving the room and joining again is not acted on", "a hello replayed from before a peer restarted leaves offers going to its new box", "a replayed offer is not acted on again, however much else was said since", "an offer whose sealed description someone else put in, under its sender’s signature, is ignored", "a hello naming B but signed by another key is ignored", "someone in only a public room cannot pose there as B to keep A and B apart in a private one", "hellos under 90 made-up names start no more than 64 connections", "an offer re-wrapped with another box opens nothing", "a relay, or anyone on the topic, sees neither who meets nor their addresses", "a third peer in the room hears the offer pass but cannot open it", "a blob that does not open under the room key, or is stale, or comes again, is ignored", "a replayed hello counts once"), `packages/core/tests/network-manager.test.ts` ("the mesh, through real relays")._
 
 ### 2.1 Keeping a relay's socket
 
@@ -1072,7 +1074,7 @@ ephemeral events and keeps regular ones.
 
 A compatible **client** MUST: derive rooms, topics and room keys as in §1.3;
 pass over relays of kinds it doesn't speak (§1.2); watch every topic again on
-reconnect; seal, sign and check messages as in §2, acting on each sender's messages in the order sent; run the mesh handshake
+reconnect; seal, sign and check messages as in §2, acting once on each time a sender signed, in any order (§2, rule 3); run the mesh handshake
 of §6.2 in every room before sending anything of it, or the node handshake
 of §6.1 on a node socket; attribute every message to the connection, not to
 `from`; send `who` before `live`; and apply the receive limits of §9.2.
