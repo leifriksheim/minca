@@ -196,6 +196,8 @@ export interface Waiting {
   readonly tryStart: () => Promise<P2PNode | null>;
   /** The node once the agent runs here, if it can change after it starts: a reconnect starts it again */
   readonly current?: () => P2PNode | null;
+  /** Once it runs here, what calling the tool again says: whose account it joined */
+  readonly joined?: () => string;
 }
 
 /** Another process runs this computer's agent: say who, and offer {@link TAKE_OVER} */
@@ -238,6 +240,8 @@ export function connectWaiting(params: {
   readonly connect: () => Promise<{ readonly opened: boolean; readonly url: string }>;
   readonly tryStart: () => Promise<P2PNode | null>;
   readonly current?: () => P2PNode | null;
+  /** Whose account it joined, once it has: `name` is only what the home said, `did` is the account */
+  readonly account: () => { readonly name: string; readonly did: string } | null;
 }): Waiting {
   return {
     why:
@@ -255,13 +259,21 @@ export function connectWaiting(params: {
       const { opened, url } = await params.connect();
       const there =
         "There they sign in or make an account, and allow this agent. Once they have, Minca's tools arrive here " +
-        'by themselves; tell them to say when they are done.';
+        `by themselves; when they say they are done, call ${CONNECT} again to hear which account it joined, ` +
+        'and tell them.';
       return opened
         ? `Opened the user's Minca account home (${params.accountHome}) in their browser. ${there}`
         : `No browser opened on this computer. Give the user this link to open, and nobody else: ${url} ${there}`;
     },
     tryStart: params.tryStart,
     ...(params.current ? { current: params.current } : {}),
+    joined: () => {
+      const account = params.account();
+      return account
+        ? `Connected to the Minca account “${account.name}” (${account.did}). Tell the user both, so they can ` +
+            "check it is theirs; if it isn't, they run `minca disconnect` and connect again."
+        : 'Connected.';
+    },
   };
 }
 
@@ -318,12 +330,15 @@ export function waitingMcp(
 
   async function handle(message: JsonRpcRequest): Promise<JsonRpcResponse | null> {
     const running = live();
-    if (running) return handleMcpMessage(running, message, serverInfo, options);
     const id = message.id ?? null;
     const reply = (result: unknown): JsonRpcResponse | null =>
       message.id === undefined ? null : { jsonrpc: '2.0', id, result };
     const text = (said: string, isError: boolean) =>
       reply({ content: [{ type: 'text', text: said }], isError });
+    // Its tool, called again once it runs here, says whose account it joined.
+    if (running && waiting.joined && message.method === 'tools/call' && message.params?.name === tool.name)
+      return text(waiting.joined(), false);
+    if (running) return handleMcpMessage(running, message, serverInfo, options);
 
     switch (message.method) {
       case 'initialize': {

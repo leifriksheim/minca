@@ -9,7 +9,7 @@
 #
 # Your agent: in an app, choose "Connect an agent", copy the mc_… code, and
 #
-#   fly ssh console --config packages/cli/fly.agent.toml -C "minca connect mc_… --no-configure --name 'Agent on Fly'"
+#   fly ssh console --config packages/cli/fly.agent.toml -C "minca connect --no-configure --name 'Agent on Fly'"
 #
 # then allow it at your account home. It starts within half a minute.
 #

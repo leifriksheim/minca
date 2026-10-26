@@ -144,8 +144,10 @@ reference implementation, or any implementation, honestly.
     space included), for a key it holds, under any name. Where an app shows
     its real origin, a program shows only a name it chose. The home says a
     program on a computer opened it and to allow it only if the person
-    started one just now; that is the only defence. By design, as with any
-    command line tool that signs in by opening the browser.
+    started one just now; that is the only defence. This is weaker than a
+    device-code sign-in (`gh auth login`), where the person types a code the
+    tool showed: a check code like pairing's would close it
+    ([#318](https://github.com/leifriksheim/minca/issues/318)).
   - A page that takes over an app's tab while the account home waits for the
     app's request (up to 10 minutes in the reference home) can send its own
     request, in the window the person opened from the app. The home shows
@@ -972,7 +974,9 @@ the same sealed blobs.
   - On the home's side a connect code serves one program: once one has
     asked, the home answers nobody else (06 §3).
   - A connect code travels from the program to the browser it opens, in the
-    link's fragment, so the relay never sees it, nor does the home's server.
+    link's fragment, so the relay never sees it, and no request to the
+    home's server carries it. It can stay in the browser's history, and the
+    link is printed, or handed to the model, when no browser opens.
 - **Does not hold yet.**
   - That it can't answer in peers' place: they talk over DTLS channels whose
     fingerprints both sign in the mesh proof (04 §5.1, §6.2), so a relay, or
@@ -1038,8 +1042,10 @@ the same sealed blobs.
     and it reads what they put there. Only the code staying secret prevents
     it. The reference CLI opens the link in the browser and shows it, or
     hands it to the model, only when no browser opens: on a server or over
-    SSH, where the person copies it. The program then prints the account's
-    DID, and the person's own home says the link was used. The program keeps
+    SSH, where the person copies it. The CLI then prints the account's DID,
+    and an AI is told it when it asks again; the person's own home, while
+    still open, says the link was used
+    ([#318](https://github.com/leifriksheim/minca/issues/318)). The program keeps
     the home it opened, so one such answer doesn't decide where it connects
     next time (06 §3; `packages/core/tests/connect-code.test.ts`, "the
     program asks only the home it opened, and keeps that home, whatever the

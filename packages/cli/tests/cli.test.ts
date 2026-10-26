@@ -575,6 +575,7 @@ describe('MCP', () => {
         accountHome: 'home.minca.social',
         connect: async () => ({ opened: browser, url: 'https://home.minca.social/connect#mc_secret' }),
         tryStart: async () => (allowed ? node : null),
+        account: () => (allowed ? { name: 'Ada', did: 'did:key:zAda' } : null),
       }),
       info,
       { agent: true },
@@ -613,6 +614,8 @@ describe('MCP', () => {
       );
       assert.ok(Array.isArray(tools) && tools.length > 1);
       assert.equal(server.node(), node);
+      // Asked again, it says whose account it joined, for the person to check.
+      assert.match(String(at(await call(), 'result', 'content', 0, 'text')), /“Ada” \(did:key:zAda\)/);
     } finally {
       server.stop();
     }

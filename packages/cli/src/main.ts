@@ -1033,6 +1033,7 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
           tryStart: async () =>
             (await hasConnectedAgent(home)) ? started(await startAgentNode(home, start)) : null,
           current,
+          account: () => here.agent && { name: here.agent.grant.name, did: here.agent.grant.did },
         }),
         info,
         { agent: true, trouble },

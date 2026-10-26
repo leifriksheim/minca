@@ -41,8 +41,13 @@ import {
   type DraftCollection,
 } from '../src/schemas/index.js';
 import { createMincaAuth, type MincaAuth } from '../src/session/auth.js';
-import { grantSigner, nodeOptionsFromGrant, type Grant } from '../src/session/connect.js';
-import { answerConnectCode, connectWithCode, newConnectCode } from '../src/session/connect-code.js';
+import { grantSigner, isProposeRequest, nodeOptionsFromGrant, type Grant } from '../src/session/connect.js';
+import {
+  answerConnectCode,
+  connectWithCode,
+  newConnectCode,
+  receiveConnectCode,
+} from '../src/session/connect-code.js';
 import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { base64UrlDecode, base64UrlEncode } from '../src/utils/encoding.js';
 import { createFolderAccountStore } from '../src/identity/account-store.js';
@@ -1083,6 +1088,37 @@ describe('a program connected by code, through the account home', () => {
         }),
       /records only/,
     );
+  });
+
+  test('the home’s connect page says connected only once the program has its note, and it does', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const auth = await home(hub);
+    const origin = 'https://home.test';
+    const transport = (did: string) => hub.transport(did, 'code');
+    const code = newConnectCode();
+    const key = await testAppKey('did:key:zPageProgram');
+    const answers: boolean[] = [];
+    void receiveConnectCode({
+      code,
+      relays: [],
+      transport,
+      origin,
+      onAnswered: ({ allowed }) => answers.push(allowed),
+    }).then(async (incoming) => {
+      assert.ok(incoming && !isProposeRequest(incoming.request));
+      incoming.approve(await auth.grant({ origin, request: incoming.request, spaceIds: [] }));
+    });
+    const grant = await connectWithCode({
+      home: origin,
+      code,
+      key,
+      name: 'Agent',
+      network: { relays: [], transport },
+      decideTimeoutMs: 4000,
+    });
+    assert.equal(grant.note.payload.aud, key.did);
+    await until(async () => answers.length > 0, 2000, 'the page hearing it worked');
+    assert.deepEqual(answers, [true]);
   });
 
   test('a connection kept in an older shape is dropped, not read as the app’s own', async () => {

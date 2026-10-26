@@ -266,7 +266,7 @@ function Asking({ incoming, step = 'Sign in' }: { incoming: IncomingRequest; ste
     >
       <strong style={{ color: palette.ink.strong }}>
         {!isProposeRequest(incoming.request) && incoming.request.via === 'code'
-          ? (incoming.request.name ?? 'A program')
+          ? `A program calling itself “${incoming.request.name ?? 'a program'}”`
           : asker(incoming.origin)}
       </strong>{' '}
       {isProposeRequest(incoming.request)

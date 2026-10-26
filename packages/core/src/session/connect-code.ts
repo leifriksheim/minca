@@ -245,9 +245,9 @@ const CODE_DAYS = 30;
 /**
  * The account home's connect page, opened at a code: answers the program and
  * hands its ask to the same approval as an app's, as a request for records in
- * the whole account. `approve` sends the note, `deny` says no; either way
- * `onAnswered` says how it went, since this page was opened by a person, not
- * an app, and stays open.
+ * the whole account. `approve` sends the note, `deny` says no. `onAnswered`
+ * says how it went, since this page was opened by a person, not an app, and
+ * stays open: allowed only once the program says it has the note.
  *
  * @returns The program's request, or null when none came
  */
@@ -260,14 +260,16 @@ export function receiveConnectCode(
 ): Promise<IncomingRequest | null> {
   const origin = options.origin ?? globalThis.location?.origin ?? '';
   return new Promise((resolve) => {
-    let answering: { stop(): void } | null = null;
-    const done = (allowed: boolean) => {
-      answering?.stop();
-      options.onAnswered?.({ allowed });
-    };
-    answerConnectCode({ ...options, origin }, (stage) => {
-      if (stage.kind === 'failed') resolve(null);
+    let asked = false;
+    void answerConnectCode({ ...options, origin }, (stage) => {
+      // The room is left by the exchange itself, after a moment for the last message to go.
+      if (stage.kind === 'connected') options.onAnswered?.({ allowed: true });
+      if (stage.kind === 'failed') {
+        if (asked) options.onAnswered?.({ allowed: false });
+        else resolve(null);
+      }
       if (stage.kind !== 'asking') return;
+      asked = true;
       const { asking } = stage;
       resolve({
         origin,
@@ -285,20 +287,13 @@ export function receiveConnectCode(
         },
         approve: (answer) => {
           if (!('note' in answer)) return stage.deny('The home answered with something other than a note.');
-          void stage.allow({ ...answer, home: `${origin}/connect` }).then(
-            () => done(true),
-            () => done(false),
-          );
+          void stage
+            .allow({ ...answer, home: `${origin}/connect` })
+            .catch(() => stage.deny('The home could not send the note.'));
         },
-        deny: (reason) => {
-          stage.deny(reason);
-          options.onAnswered?.({ allowed: false });
-        },
+        deny: (reason) => stage.deny(reason),
       });
-    }).then(
-      (started) => (answering = started),
-      () => resolve(null),
-    );
+    }).catch(() => resolve(null));
   });
 }
 
