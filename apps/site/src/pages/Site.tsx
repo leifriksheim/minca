@@ -282,22 +282,41 @@ function markCalls<P extends ReturnType<typeof parse>>(parsed: P): P {
   return parsed;
 }
 
-function Code({
+/** A button that copies `text`, and says so for a moment */
+export function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () =>
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  return (
+    <button type="button" className="copy" onClick={copy}>
+      {copied ? 'Copied' : 'Copy'}
+    </button>
+  );
+}
+
+export function Code({
   file,
   lang = 'typescript',
+  copy,
   children,
 }: {
   file?: string;
   lang?: keyof typeof LANGUAGES;
+  /** A copy button in the bar, for something to paste */
+  copy?: boolean;
   children: string;
 }) {
   // Our own code snippets, not user input — safe to render as HTML.
   const html = render(markCalls(parse(children.trim(), LANGUAGES[lang])));
   return (
     <div className="code">
-      {file && (
+      {(file || copy) && (
         <div className="bar">
           <span>{file}</span>
+          {copy && <CopyButton text={children.trim()} />}
         </div>
       )}
       <pre>
@@ -430,7 +449,7 @@ function tabTarget(key: string, index: number, last: number): number | null {
  * Tabs and the chosen one's panel: arrow keys, Home and End move between
  * them. The caller keeps which one is chosen.
  */
-function Tabs<
+export function Tabs<
   T extends {
     readonly id: string;
     readonly name: string;

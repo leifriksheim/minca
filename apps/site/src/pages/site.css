@@ -688,6 +688,153 @@
   font-size: 12px;
   color: var(--faint);
 }
+/* The command to paste, with its copy button, in a hero */
+.site .command {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 440px;
+  margin-bottom: 24px;
+  padding: 8px 8px 8px 18px;
+  border-radius: 999px;
+  background: var(--code-bg);
+}
+.site .command code {
+  flex: 1;
+  overflow-x: auto;
+  padding: 0;
+  background: none;
+  font-size: 14px;
+  color: var(--code-ink);
+  white-space: nowrap;
+}
+.site .copy {
+  flex: 0 0 auto;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--code-line);
+  border-radius: 999px;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--code-ink);
+  cursor: pointer;
+}
+.site .copy:hover {
+  background: var(--code-line);
+}
+/* The tools, a group to a row: its shape, name and count, then each tool on a ruled line */
+.site .tool-groups > * + * {
+  margin-top: 56px;
+  padding-top: 56px;
+  border-top: var(--hair);
+}
+.site .tool-group-head .shape {
+  width: 44px;
+  height: 44px;
+  margin-bottom: 16px;
+}
+.site .tool-group-head h3 {
+  font-family: var(--display);
+  font-size: 24px;
+  color: var(--ink);
+}
+.site .tool-group-head h3 span {
+  margin-left: 4px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--faint);
+}
+.site .tool-group-head p {
+  color: var(--muted);
+}
+.site .tool-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.site .tool-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  padding: 14px 0;
+  border-bottom: var(--hair);
+}
+/* Not the split's bulleted list */
+.site .split .tool-list li {
+  margin: 0;
+  padding-left: 0;
+}
+.site .split .tool-list li::before {
+  content: none;
+}
+.site .split .tool-list li:first-child {
+  padding-top: 0;
+}
+.site .tool-list code {
+  justify-self: start;
+  padding: 0;
+  background: none;
+  font-size: 14px;
+  color: var(--ink);
+}
+.site .tool-list p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--body);
+}
+.site .tool-kind {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  background: var(--card);
+  border: var(--hair);
+}
+.site .tool-writes {
+  color: var(--ink);
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+.site .tool-changes {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--coral) 22%, transparent);
+  border-color: transparent;
+}
+/* Questions, each opening to its answer */
+.site .faq {
+  max-width: 760px;
+  border-top: var(--hair);
+}
+.site .faq details {
+  border-bottom: var(--hair);
+}
+.site .faq summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 0;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--ink);
+  list-style: none;
+  cursor: pointer;
+}
+.site .faq summary::-webkit-details-marker {
+  display: none;
+}
+.site .faq summary::after {
+  content: '+';
+  color: var(--faint);
+}
+.site .faq details[open] summary::after {
+  content: '\2212';
+}
+.site .faq details p {
+  margin: 0 0 20px;
+  color: var(--body);
+}
 .site .browser {
   position: relative;
   padding-bottom: 96px;
