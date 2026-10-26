@@ -11,6 +11,9 @@
  */
 import type { PeerTransport } from '../network/transport.js';
 import { channelKeyPair, CODE_CHANNEL, deriveChannel, type Channel } from '../identity/channel.js';
+
+/** One side's ephemeral key for one exchange */
+type ChannelKeys = Awaited<ReturnType<typeof channelKeyPair>>;
 import { base64UrlDecode, base64UrlEncode } from '../utils/encoding.js';
 import { sha256 } from '../utils/hash.js';
 import { isObject } from '../utils/guards.js';
@@ -174,10 +177,13 @@ export async function answerConnectCode(
     throw new Error('Connecting by code needs the home’s origin.');
   const secret = readConnectCode(options.code);
   const room = await meetOnChannel(CODE_CHANNEL, options, secret);
-  const mine = await channelKeyPair();
-
-  /** What each peer that said hello committed to, then its exchange once it showed the point, until one asks */
-  const commits = new Map<string, string>();
+  /**
+   * What each peer that said hello committed to, and the key made for that
+   * exchange alone (one key for every peer would let a peer learn it in one
+   * exchange and steer the check in another), then its exchange once it
+   * showed its point, until one asks
+   */
+  const commits = new Map<string, { readonly commit: string; readonly mine: ChannelKeys }>();
   const channels = new Map<string, Channel>();
   let asked: { readonly peer: string; readonly channel: Channel; readonly asking: CodeAsking } | null = null;
   let settled = false;
@@ -195,18 +201,20 @@ export async function answerConnectCode(
       if (commits.has(message.from) || commits.size >= MAX_TRIED) return;
       const commit = bytesField(message, 'commit');
       if (!commit) return;
-      commits.set(message.from, base64UrlEncode(commit));
+      const mine = await channelKeyPair();
+      commits.set(message.from, { commit: base64UrlEncode(commit), mine });
       // Its point comes only after this one: it committed to it before seeing it.
       room.send(message.from, KEY, { key: base64UrlEncode(mine.point) });
     } else if (message.type === POINT && !asked) {
       if (channels.has(message.from)) return;
       const point = bytesField(message, 'key');
-      if (!point || (await commitTo(point)) !== commits.get(message.from)) return;
+      const said = commits.get(message.from);
+      if (!point || !said || (await commitTo(point)) !== said.commit) return;
       const channel = await deriveChannel({
         kind: CODE_CHANNEL,
         secret,
-        privateKey: mine.privateKey,
-        offer: mine.point,
+        privateKey: said.mine.privateKey,
+        offer: said.mine.point,
         join: point,
         side: 'offer',
       }).catch(() => null);
@@ -361,8 +369,8 @@ export async function connectWithCode(params: {
   const secret = readConnectCode(params.code);
   const opened = new URL('/connect', params.home);
   const room = await meetOnChannel(CODE_CHANNEL, params.network, secret);
-  const mine = await channelKeyPair();
-  const hello = { commit: await commitTo(mine.point) };
+  /** A key for each peer it says hello to, for that exchange alone, as the home makes one for each */
+  const keys = new Map<string, Promise<ChannelKeys>>();
 
   return new Promise<Grant>((resolve, reject) => {
     /** The person giving the check code: started once the home has heard */
@@ -387,15 +395,21 @@ export async function connectWithCode(params: {
     };
 
     room.net.on('peer-connected', (peer: PeerInfo) => {
-      if (!home) room.send(peer.did, HELLO, hello);
+      if (home || keys.has(peer.did) || keys.size >= MAX_TRIED) return;
+      const mine = channelKeyPair();
+      keys.set(peer.did, mine);
+      void mine
+        .then(async ({ point }) => room.send(peer.did, HELLO, { commit: await commitTo(point) }))
+        .catch(() => {});
     });
 
     const handle = async (message: NetworkMessage): Promise<void> => {
       if (settled) return;
       if (message.type === KEY && !home) {
-        if (channels.has(message.from) || channels.size >= MAX_TRIED) return;
+        if (channels.has(message.from)) return;
         const point = bytesField(message, 'key');
-        if (!point) return;
+        const mine = await keys.get(message.from);
+        if (!point || !mine) return;
         const channel = await deriveChannel({
           kind: CODE_CHANNEL,
           secret,
