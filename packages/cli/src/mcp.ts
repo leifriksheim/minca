@@ -189,14 +189,9 @@ export const CONNECT = 'agent_connect';
 export interface Waiting {
   /** Why, and what to do: the server's instructions, and what any other tool says */
   readonly why: string;
-  readonly tool: {
-    readonly name: string;
-    readonly description: string;
-    readonly destructive: boolean;
-    readonly inputSchema?: Record<string, unknown>;
-  };
-  /** What calling the tool does, with its arguments: starts the agent here, or says in words what happens next */
-  readonly call: (args: Record<string, unknown>) => Promise<P2PNode | string>;
+  readonly tool: { readonly name: string; readonly description: string; readonly destructive: boolean };
+  /** What calling the tool does: starts the agent here, or says in words what happens next */
+  readonly call: () => Promise<P2PNode | string>;
   /** Starts the agent here once it can, or gives null meanwhile */
   readonly tryStart: () => Promise<P2PNode | null>;
   /** The node once the agent runs here, if it can change after it starts: a reconnect starts it again */
@@ -225,7 +220,7 @@ export function busyWaiting(params: {
         'which brings every Minca tool to this session. The other one loses Minca. Ask the user first.',
       destructive: true,
     },
-    call: () => params.takeOver(),
+    call: params.takeOver,
     tryStart: params.tryStart,
     ...(params.current ? { current: params.current } : {}),
   };
@@ -233,10 +228,14 @@ export function busyWaiting(params: {
 
 /** This computer's agent isn't connected: offer {@link CONNECT}, which opens the person's account home */
 export function connectWaiting(params: {
-  /** The account home it opens unless the person names another */
+  /** The account home it opens: the person's choice, never the model's */
   readonly accountHome: string;
-  /** Starts connecting at that home, and gives the link the person allows it at */
-  readonly connect: (accountHome: string) => Promise<string>;
+  /**
+   * Starts connecting, and says whether the browser opened. The link carries
+   * the code, so it is given only when it didn't: whoever else holds it could
+   * answer as the home.
+   */
+  readonly connect: () => Promise<{ readonly opened: boolean; readonly url: string }>;
   readonly tryStart: () => Promise<P2PNode | null>;
   readonly current?: () => P2PNode | null;
 }): Waiting {
@@ -248,28 +247,18 @@ export function connectWaiting(params: {
     tool: {
       name: CONNECT,
       description:
-        "Connect Minca to the user's account: opens their Minca account home in the browser to allow this agent. " +
-        `Gives the link too, in case the browser does not open. Their home is ${params.accountHome} unless they ` +
-        'say they use another; then pass its address.',
+        `Connect Minca to the user's account: opens their Minca account home (${params.accountHome}) in the ` +
+        'browser to allow this agent. To use another home, they run `minca connect` in a terminal.',
       destructive: false,
-      inputSchema: {
-        type: 'object',
-        properties: {
-          account_home: {
-            type: 'string',
-            description: `The address of the user's account home, only if it is not ${params.accountHome}`,
-          },
-        },
-      },
     },
-    call: async (args) => {
-      const asked = typeof args.account_home === 'string' && args.account_home.trim();
-      const url = await params.connect(asked || params.accountHome);
-      return (
-        `Opened the user's Minca account home in their browser. If it didn't open, give them this link: ${url} ` +
+    call: async () => {
+      const { opened, url } = await params.connect();
+      const there =
         "There they sign in or make an account, and allow this agent. Once they have, Minca's tools arrive here " +
-        'by themselves; tell them to say when they are done.'
-      );
+        'by themselves; tell them to say when they are done.';
+      return opened
+        ? `Opened the user's Minca account home (${params.accountHome}) in their browser. ${there}`
+        : `No browser opened on this computer. Give the user this link to open, and nobody else: ${url} ${there}`;
     },
     tryStart: params.tryStart,
     ...(params.current ? { current: params.current } : {}),
@@ -316,7 +305,7 @@ export function waitingMcp(
   const tool = {
     name: waiting.tool.name,
     description: waiting.tool.description,
-    inputSchema: waiting.tool.inputSchema ?? { type: 'object', properties: {} },
+    inputSchema: { type: 'object', properties: {} },
     annotations: {
       readOnlyHint: false,
       destructiveHint: waiting.tool.destructive,
@@ -356,8 +345,7 @@ export function waitingMcp(
       case 'tools/call': {
         if (message.params?.name === tool.name) {
           try {
-            const args = message.params?.arguments;
-            const result = await exclusive(() => waiting.call(isRecord(args) ? args : {}));
+            const result = await exclusive(waiting.call);
             return typeof result === 'string'
               ? text(result, false)
               : text(`Done: Minca runs in this session now, with ${mcpTools(options).length} tools.`, false);

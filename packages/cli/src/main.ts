@@ -267,10 +267,15 @@ function connectHere(
     log: stderr,
     onLink:
       options.onLink ??
-      ((url) => {
-        stderr(`Allow it in your browser. If it doesn't open, open this link:\n  ${url}`);
-        void openInBrowser(url);
-      }),
+      // The link carries the code: shown only when no browser opens, since whoever else holds it could answer as the home.
+      ((url) =>
+        void openInBrowser(url).then((opened) =>
+          stderr(
+            opened
+              ? `Opened your account home in the browser. Allow it there.`
+              : `Open this link to allow it, on any device. Keep it to yourself:\n  ${url}`,
+          ),
+        )),
   });
 }
 
@@ -920,7 +925,7 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
     });
     stderr('');
     stderr(
-      `Connected to ${grant.name}'s account, for ${daysLeft(grant)} days. What the agent writes shows "via agent".`,
+      `Connected to ${grant.name}'s account (${grant.did}), for ${daysLeft(grant)} days. What the agent writes shows "via agent".`,
     );
     const server = serverCommand(home);
     if (values['no-configure']) {
@@ -1007,19 +1012,17 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
     if (!connected) {
       // Not connected yet: offer to open the account home, and start once the person has allowed it there.
       stderr(`minca mcp: not connected to an account; offering only ${CONNECT} until it is`);
-      let link: Promise<string> | null = null;
+      let link: Promise<{ opened: boolean; url: string }> | null = null;
+      const accountHome = await usualAccountHome(home);
       await runWaitingMcpStdio(
         connectWaiting({
-          accountHome: await usualAccountHome(home),
-          connect: (accountHome) =>
-            (link ??= new Promise<string>((resolve, reject) => {
+          accountHome,
+          connect: () =>
+            (link ??= new Promise((resolve, reject) => {
               connectHere(home, homeAddress(accountHome), {
-                onLink: (url) => {
-                  void openInBrowser(url);
-                  resolve(url);
-                },
+                onLink: (url) => void openInBrowser(url).then((opened) => resolve({ opened, url })),
               }).then(
-                () => stderr('minca mcp: connected'),
+                (grant) => stderr(`minca mcp: connected to ${grant.name}'s account (${grant.did})`),
                 (error: unknown) => {
                   link = null;
                   stderr(`minca mcp: connecting failed: ${messageOf(error)}`);
@@ -1093,7 +1096,10 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
       ask.intro('Connect an agent to your account');
       ask.note('Your account home opens in your browser. Sign in there and allow it.', 'First');
       const grant = await connectHere(home, await chooseAccountHome(home));
-      ask.note(`Connected to ${grant.name}'s account, for ${daysLeft(grant)} days.`, 'Connected');
+      ask.note(
+        `Connected to ${grant.name}'s account (${grant.did}), for ${daysLeft(grant)} days.`,
+        'Connected',
+      );
     }
     // Flags, then the environment, then what setup kept; at a terminal with none of them, setup asks.
     const told =

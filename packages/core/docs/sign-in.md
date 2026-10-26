@@ -397,17 +397,15 @@ the keys it replaced go in `retired`, for disconnecting to revoke. Nothing
 revokes an app on its own, not even once its time has passed: a revoke keeps
 only what this home has seen of the key, and a home that is seldom open has
 seen little ([spec 06 §2.9](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)). A connection with `via: 'code'` (a
-program connected by code through the app) is keyed by its audience instead,
+program connected by code, at the home's own origin) is keyed by its audience instead,
 so each such program is its own (`connectionKey`). A carrier is kept apart from the app at its
 origin: connecting either replaces only its own kind, and one key is never
 both. `auth.connections()` lists them.
 
-**Disconnecting.** `auth.disconnect(origin, { byCode?, audience? })` removes
-the app's connections (by default the app and every program connected through
-it by code; `byCode: true` only those programs; `audience` only that key),
-revokes the keys of those with `access: write` and every key in their
-`retired`, and, unless only programs
-connected by code go, removes the automations the app proposed. A carrier at
+**Disconnecting.** `auth.disconnect(origin, { audience? })` removes the
+connections made from that origin (`audience`: only that key), revokes the
+keys of those with `access: write` and every key in their `retired`, and
+removes the automations the app proposed. A carrier at
 that origin stays: it goes by its key alone (`audience`), and takes nothing of
 the app's with it. The app hears of it when the revokes reach it,
 from this home or a device that has them: `waitMs` waits up to that long for

@@ -161,6 +161,7 @@ export async function connectAgent(params: {
   const code = newConnectCode();
   params.onLink(connectCodeUrl(params.accountHome, code));
   const grant = await connect({
+    home: params.accountHome,
     code,
     key: { keys: key.keys, did: key.did },
     name: params.name,

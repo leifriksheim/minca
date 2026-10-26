@@ -1042,7 +1042,13 @@ describe('a program connected by code, through the account home', () => {
         .then((grant) => stage.allow({ ...grant, home: 'https://home.test/connect' }));
     });
     open.push({ close: async () => answering.stop() });
-    const grant = await connectWithCode({ code, key: program, name: 'Agent on laptop', network });
+    const grant = await connectWithCode({
+      home: origin,
+      code,
+      key: program,
+      name: 'Agent on laptop',
+      network,
+    });
     assert.equal(grant.note.payload.cmd, '/record');
     assert.equal(grant.note.payload.sub, grant.did, 'about the whole account');
     assert.equal(grant.contactKey, undefined);

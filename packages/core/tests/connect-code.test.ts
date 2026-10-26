@@ -173,6 +173,7 @@ async function impostor(
   code: string,
   network: ReturnType<typeof room>['network'],
   grant: (did: string) => Promise<Grant>,
+  origin = 'https://impostor.test',
 ) {
   const secret = readConnectCode(code);
   const meeting = await meetOnChannel(CODE_CHANNEL, network, secret);
@@ -192,7 +193,7 @@ async function impostor(
         side: 'offer',
       });
       meeting.send(message.from, 'code:key', { key: base64UrlEncode(mine.point) });
-      await meeting.seal(message.from, 'code:home', channel, { origin: 'https://impostor.test' });
+      await meeting.seal(message.from, 'code:home', channel, { origin });
     } else if (message.type === 'code:ask' && channel) {
       const ask = await meeting.open(message, channel);
       if (!isObject(ask) || typeof ask.did !== 'string') return;
@@ -211,6 +212,18 @@ async function impostor(
 }
 
 describe('connecting a program by code', () => {
+  test('a home opened at a link nobody waits on any more says so', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const { network } = room(hub);
+    const stages: ConnectCodeStage[] = [];
+    const answering = await answerConnectCode(
+      { ...network, code: newConnectCode(), origin: ORIGIN, findTimeoutMs: 200 },
+      (stage) => stages.push(stage),
+    );
+    open.push({ close: async () => answering.stop() });
+    await until(async () => stages.some((stage) => stage.kind === 'failed'), 2000, 'the home giving up');
+  });
+
   test('the home asks the person, and the program gets a checked records-only note for its key', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const who = await person(hub);
@@ -223,12 +236,13 @@ describe('connecting a program by code', () => {
 
     // A program with a different code, in the same place, gets nowhere.
     await assert.rejects(
-      connectWithCode({ code: newConnectCode(), key, name: 'x', network, findTimeoutMs: 300 }),
+      connectWithCode({ home: ORIGIN, code: newConnectCode(), key, name: 'x', network, findTimeoutMs: 300 }),
       /not opened in time/,
     );
 
     let found = '';
     const grant = await connectWithCode({
+      home: ORIGIN,
       code: home.code,
       key,
       name: 'Agent on laptop',
@@ -248,7 +262,7 @@ describe('connecting a program by code', () => {
     const key = await programKey(who);
     const { network, seen } = room(hub);
     const home = await allowing(network, async (stage) => grantFor(who, stage.asking.did));
-    await connectWithCode({ code: home.code, key, name: 'n', network });
+    await connectWithCode({ home: ORIGIN, code: home.code, key, name: 'n', network });
 
     const point = (type: string) => {
       const payload = seen.find((m) => m.type === type)?.payload;
@@ -283,7 +297,7 @@ describe('connecting a program by code', () => {
         if (type !== message.type) send({ ...message, type });
     });
     const home = await allowing(network, async (stage) => grantFor(who, stage.asking.did));
-    const grant = await connectWithCode({ code: home.code, key, name: 'n', network });
+    const grant = await connectWithCode({ home: ORIGIN, code: home.code, key, name: 'n', network });
     assert.equal(grant.note.payload.aud, key.did);
     await until(async () => home.kinds().includes('connected'), 2000, 'the home hearing it worked');
     assert.deepEqual(home.kinds(), ['waiting', 'asking', 'connected']);
@@ -299,11 +313,18 @@ describe('connecting a program by code', () => {
       await decided;
       return grantFor(who, stage.asking.did);
     });
-    const first = connectWithCode({ code: home.code, key: await programKey(who), name: 'first', network });
+    const first = connectWithCode({
+      home: ORIGIN,
+      code: home.code,
+      key: await programKey(who),
+      name: 'first',
+      network,
+    });
     await until(async () => home.kinds().includes('asking'), 2000, 'the first program asking');
 
     await assert.rejects(
       connectWithCode({
+        home: ORIGIN,
         code: home.code,
         key: await programKey(who),
         name: 'second',
@@ -336,7 +357,7 @@ describe('connecting a program by code', () => {
       })();
     });
     open.push({ close: async () => answering.stop() });
-    await assert.rejects(() => connectWithCode({ code, key, name: 'n', network }), /Not today/);
+    await assert.rejects(() => connectWithCode({ home: ORIGIN, code, key, name: 'n', network }), /Not today/);
     assert.equal(refusals.length, 2);
     // And should a home send one anyway, the program refuses it too.
     await assert.rejects(
@@ -348,18 +369,38 @@ describe('connecting a program by code', () => {
     assert.throws(() => readConnectCode('mc_eYV4XGMvhkky6OWpPfqfRTkMD-CZuZbG'), /not a connect code/);
   });
 
-  test('someone else holding the code who answers first connects the program to their own account, and it learns whose', async () => {
+  test('the program asks only the home it opened, and keeps that home, whatever the answer names', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const who = await person(hub);
     const eve = await person(hub);
     const key = await programKey(who);
     const { network } = room(hub);
-    // Ada's program opened her home at this link; Eve saw the link and answers first.
+    // Eve saw the link, and answers as a home of her own: the program never asks her.
     const code = newConnectCode();
-    const posing = await impostor(code, network, (did) => grantFor(eve, did));
-    const grant = await connectWithCode({ code, key, name: 'n', network });
-    // What stops this is the code staying secret. The program says whose account it joined.
+    const elsewhere = await impostor(code, network, (did) => grantFor(eve, did));
+    await assert.rejects(
+      connectWithCode({ home: ORIGIN, code, key, name: 'n', network, findTimeoutMs: 300 }),
+      /not opened in time/,
+    );
+    assert.equal(elsewhere.asks.length, 0);
+
+    // Saying she is Ada's home gets her the program, with a note from her own account; what
+    // stops that is the link staying secret. The program keeps the home it opened, not hers.
+    // In a room of its own: the fake hub puts every code's peers in one.
+    const second = room(createFakeHub({ latencyMs: 1 })).network;
+    const again = newConnectCode();
+    const posing = await impostor(
+      again,
+      second,
+      async (did) => ({
+        ...(await grantFor(eve, did)),
+        home: 'https://evil.test/connect',
+      }),
+      ORIGIN,
+    );
+    const grant = await connectWithCode({ home: ORIGIN, code: again, key, name: 'n', network: second });
     assert.equal(grant.did, eve.me.did);
+    assert.equal(grant.home, `${ORIGIN}/connect`);
     assert.equal(posing.asks.length, 1);
   });
 });

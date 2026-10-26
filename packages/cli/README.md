@@ -296,8 +296,9 @@ It asks which account home is yours, with home.minca.social (or the one you
 used last) filled in, so Enter takes it; `--account-home` or
 `MINCA_ACCOUNT_HOME` answers ahead. It makes a key for this computer's agent
 (it never leaves `~/.minca/agent/`) and a one-time code, and opens your
-account home at `/connect#mc_…`, showing the link too in case no browser
-opens. There you sign in, or make an account, and allow it. The two meet on a
+account home at `/connect#mc_…`, and shows the link only when no browser
+opens: keep it to yourself, since whoever else opens it first could connect
+the agent to their own account. There you sign in, or make an account, and allow it. The two meet on a
 channel only that code opens (introduced by a relay, sealed end to end), and
 the home signs a records-only note (`/record`) for every space in your
 account, for 30 days. The agent is a program connected by code, not a kind of account:
@@ -309,9 +310,10 @@ it finds them. `--no-configure` prints the config instead,
 one your account home uses (`$MINCA_RELAYS` sets the defaults).
 
 An agent given `minca mcp` by hand, before connecting, gets one tool until
-it is: `agent_connect`, which opens your account home the same way (it takes
-`account_home` for one that isn't home.minca.social). Once you allow it there,
-every tool arrives without a restart.
+it is: `agent_connect`, which opens your usual account home the same way. It
+gives the model the link only when no browser opened, and takes no home of
+the model's choosing. Once you allow it there, every tool arrives without a
+restart.
 
 From then on the agent starts `minca mcp` itself. It's a node of its own: it
 follows your account's list of spaces, meets your other devices over WebRTC,

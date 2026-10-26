@@ -138,7 +138,12 @@ export type ConnectCodeStage =
  * @returns A way to stop listening; the code stops working
  */
 export async function answerConnectCode(
-  options: CodeNetwork & { readonly code: string; readonly origin?: string },
+  options: CodeNetwork & {
+    readonly code: string;
+    readonly origin?: string;
+    /** How long to wait for the program to ask. Default 60 s: it is waiting when its link opens, unless it has gone or another home answered it. */
+    readonly findTimeoutMs?: number;
+  },
   onStage: (stage: ConnectCodeStage) => void,
 ): Promise<{ stop(): void }> {
   if (options.relays.length === 0 && !options.transport)
@@ -157,6 +162,7 @@ export async function answerConnectCode(
   const finish = (stage?: ConnectCodeStage) => {
     if (settled) return;
     settled = true;
+    globalThis.clearTimeout(timer);
     room.leave();
     if (stage) onStage(stage);
   };
@@ -189,6 +195,7 @@ export async function answerConnectCode(
       const peer = message.from;
       // The code is spent: nobody after this program is answered.
       asked = { peer, channel, asking };
+      globalThis.clearTimeout(timer);
       // So the program knows it was right, and the person is deciding.
       await room.seal(peer, HEARD, channel, {});
       onStage({
@@ -217,6 +224,12 @@ export async function answerConnectCode(
   });
 
   onStage({ kind: 'waiting' });
+  // Declared last: everything above that clears it runs only once the room is joined.
+  const timer = globalThis.setTimeout(
+    () =>
+      finish({ kind: 'failed', reason: 'The program that opened this link isn’t waiting for it any more.' }),
+    options.findTimeoutMs ?? 60_000,
+  );
   await room.net.connect();
   return {
     stop: () => {
@@ -295,14 +308,16 @@ export function receiveConnectCode(
  * Connects this program with a code it made ({@link newConnectCode}): open
  * {@link connectCodeUrl} for the person, then wait here for their home.
  *
+ * @param params.home The account home it opened: only a peer saying it is that home is asked, and the grant keeps it
  * @param params.key This program's key — the note will be made out to it, and it signs the proof for the home's origin
  * @param params.name What the person sees, e.g. "Agent on leifs-macbook"
  * @param params.onWaiting Told once the home has heard, and the person is deciding, with where the home lives
- * @returns The grant, checked: a records-only note for this key
+ * @returns The grant, checked: a records-only note for this key, with `home` the one it opened
  * @throws When the person says no, or nothing answers in time
  */
 export async function connectWithCode(params: {
   readonly code: string;
+  readonly home: string;
   readonly key: AppKey;
   readonly name: string;
   readonly network: CodeNetwork;
@@ -313,6 +328,7 @@ export async function connectWithCode(params: {
   readonly decideTimeoutMs?: number;
 }): Promise<Grant> {
   const secret = readConnectCode(params.code);
+  const opened = new URL('/connect', params.home);
   const room = await meetOnChannel(CODE_CHANNEL, params.network, secret);
   const mine = await channelKeyPair();
   const hello = { key: base64UrlEncode(mine.point) };
@@ -361,7 +377,8 @@ export async function connectWithCode(params: {
         const channel = channels.get(message.from);
         if (!channel || origins.has(message.from)) return;
         const origin = readOrigin(await room.open(message, channel));
-        if (!origin) return;
+        // Only the home it opened: the proof names it, and so does the grant it keeps.
+        if (origin !== opened.origin) return;
         origins.set(message.from, origin);
         // The proof names the home's origin: any other home refuses it.
         const proof = await keyProof(params.key, { via: 'code', recordsOnly: true, origin });
@@ -391,7 +408,8 @@ export async function connectWithCode(params: {
           const grant = answer.grant as Grant;
           await checkGrant(grant, params.key.did, { recordsOnly: true });
           await room.seal(message.from, DONE, home.channel, {});
-          settle(() => resolve(grant));
+          // Where to connect again is the home it opened, never one the answer names.
+          settle(() => resolve({ ...grant, home: opened.href }));
         } catch (error) {
           settle(() => reject(error instanceof Error ? error : new Error(String(error))));
         }

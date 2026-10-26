@@ -566,17 +566,14 @@ describe('MCP', () => {
     }
   });
 
-  test('not connected yet, it offers agent_connect, which opens the account home asked for, then serves the tools', async () => {
+  test('not connected yet, it offers agent_connect, which opens the account home and gives the link only when no browser opened', async () => {
     const node = await aNode(10);
-    const opened: string[] = [];
+    let browser = true;
     let allowed = false;
     const server = waitingMcp(
       connectWaiting({
         accountHome: 'home.minca.social',
-        connect: async (accountHome) => {
-          opened.push(accountHome);
-          return `https://${accountHome}/connect#mc_x`;
-        },
+        connect: async () => ({ opened: browser, url: 'https://home.minca.social/connect#mc_secret' }),
         tryStart: async () => (allowed ? node : null),
       }),
       info,
@@ -592,21 +589,21 @@ describe('MCP', () => {
         'tools',
       );
       assert.deepEqual(Array.isArray(listed) && listed.map((tool: unknown) => at(tool, 'name')), [CONNECT]);
+      // The model can't point it at another home: the tool takes nothing.
+      assert.deepEqual(Array.isArray(listed) && at(listed[0], 'inputSchema', 'properties'), {});
 
-      const usual = await server.handle({
-        jsonrpc: '2.0',
-        id: 3,
-        method: 'tools/call',
-        params: { name: CONNECT, arguments: {} },
-      });
-      assert.match(String(at(usual, 'result', 'content', 0, 'text')), /home\.minca\.social\/connect/);
-      await server.handle({
-        jsonrpc: '2.0',
-        id: 4,
-        method: 'tools/call',
-        params: { name: CONNECT, arguments: { account_home: 'home.example.org' } },
-      });
-      assert.deepEqual(opened, ['home.minca.social', 'home.example.org']);
+      const call = () =>
+        server.handle({
+          jsonrpc: '2.0',
+          id: 3,
+          method: 'tools/call',
+          params: { name: CONNECT, arguments: {} },
+        });
+      const opened = String(at(await call(), 'result', 'content', 0, 'text'));
+      assert.match(opened, /home\.minca\.social/);
+      assert.doesNotMatch(opened, /mc_secret/, 'the code stays out of the model while the browser opened');
+      browser = false;
+      assert.match(String(at(await call(), 'result', 'content', 0, 'text')), /mc_secret/);
 
       allowed = true;
       const tools = at(

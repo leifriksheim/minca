@@ -81,9 +81,11 @@ export function ConnectPage() {
   if (incoming === null && code) {
     return (
       <Frame>
-        <h1 style={styles.title}>This link has run out</h1>
+        <h1 style={styles.title}>This link was used, or has run out</h1>
         <p style={styles.hint}>
-          The program that opened it isn’t waiting any more. Ask it to connect again for a new link.
+          The program that opened it isn’t waiting for it any more. Ask it to connect again for a new link. If
+          it says it connected and you didn’t allow it here, it joined someone else’s account: disconnect it
+          there with <code>minca disconnect</code>.
         </p>
       </Frame>
     );

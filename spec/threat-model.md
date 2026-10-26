@@ -140,11 +140,12 @@ reference implementation, or any implementation, honestly.
     organisation who opens it connects the bot to their own repositories: the
     link is a bearer link for ten minutes, as most such links are (08 §3.1).
   - Any page can open the account home at a connect link it made (06 §3),
-    and ask for a records-only note, in the whole account, for a key it
-    holds, under any name. The home says a program on a computer opened it
-    and to allow it only if the person started one just now; that is the
-    only defence. By design, as with any command line tool that signs in by
-    opening the browser.
+    and ask for a records-only note, in the whole account (every private
+    space included), for a key it holds, under any name. Where an app shows
+    its real origin, a program shows only a name it chose. The home says a
+    program on a computer opened it and to allow it only if the person
+    started one just now; that is the only defence. By design, as with any
+    command line tool that signs in by opening the browser.
   - A page that takes over an app's tab while the account home waits for the
     app's request (up to 10 minutes in the reference home) can send its own
     request, in the window the person opened from the app. The home shows
@@ -851,7 +852,9 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     them yet, which only a peer can then bring.
   - A program connected by code gets records only, in the whole account,
     never more: the home makes its request itself and grants nothing else,
-    and no app can send a request for a program's key. Its proof can't be
+    and no app can send a request for a program's key. The whole account
+    includes the account key, so it reads every private space, and the
+    person can't narrow it to some spaces. Its proof can't be
     used for an app's connection, nor for more than records, nor at another
     home; and an app's own proof can't be passed off as a program's (06
     §2.4, §3). A request with `recordsOnly` never gets the contact key (06
@@ -1029,14 +1032,20 @@ the same sealed blobs.
   - Someone else who holds the code can also ask before the program does,
     posing as it. The person sees only the name it gives itself, and may
     allow a note for its key; the real program is then never answered.
-  - Someone else who holds the code can answer the program first, posing as
-    the home, and connect it to their own account: what the person then asks
-    their AI to do goes into the other account's spaces. The program says
-    whose account it joined, and the person's own home finds the code spent.
-    Only the code staying secret prevents it; it is shown only when the
-    browser does not open (06 §3).
+  - Someone else who holds the code can answer the program first, saying they
+    are the home it opened, and connect it to their own account: what the
+    person then asks their AI to save goes into the other account's spaces,
+    and it reads what they put there. Only the code staying secret prevents
+    it. The reference CLI opens the link in the browser and shows it, or
+    hands it to the model, only when no browser opens: on a server or over
+    SSH, where the person copies it. The program then prints the account's
+    DID, and the person's own home says the link was used. The program keeps
+    the home it opened, so one such answer doesn't decide where it connects
+    next time (06 §3; `packages/core/tests/connect-code.test.ts`, "the
+    program asks only the home it opened, and keeps that home, whatever the
+    answer names").
 
-_Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6; 01 §15.2; 06 §3. Tests: `packages/core/tests/rendezvous.test.ts`, `packages/core/tests/relay-nostr.test.ts`, `packages/core/tests/relay-socket.test.ts`, `packages/core/tests/pairing.test.ts` ("a message sent back to the side that sealed it does not open there", "someone who learns the secret later cannot open a recording of the exchange"), `packages/core/tests/connect-code.test.ts` ("a relay that relabels or repeats messages changes nothing", "a recording of the room, and the code learned later, open nothing", "a code works for one program: a second with the same code is not answered", "someone else holding the code who answers first connects the program to their own account, and it learns whose")._
+_Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6; 01 §15.2; 06 §3. Tests: `packages/core/tests/rendezvous.test.ts`, `packages/core/tests/relay-nostr.test.ts`, `packages/core/tests/relay-socket.test.ts`, `packages/core/tests/pairing.test.ts` ("a message sent back to the side that sealed it does not open there", "someone who learns the secret later cannot open a recording of the exchange"), `packages/core/tests/connect-code.test.ts` ("a relay that relabels or repeats messages changes nothing", "a recording of the room, and the code learned later, open nothing", "a code works for one program: a second with the same code is not answered", "the program asks only the home it opened, and keeps that home, whatever the answer names")._
 
 ### 3.8 Host or carrier
 

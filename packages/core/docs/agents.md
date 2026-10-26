@@ -43,7 +43,8 @@ it follows the account's spaces and keeps working with every tab closed.
 
 An agent can also start `minca mcp` before it is connected, from settings
 added by hand. Until it is, the server offers one tool, which opens the
-account home the same way and gives the link too
+account home the same way, and gives the model the link only when no
+browser opened
 ([the CLI's README](https://github.com/leifriksheim/minca/blob/main/packages/cli/README.md#agents)). Once the
 person has allowed it, every tool arrives (`notifications/tools/list_changed`)
 without a restart.
@@ -77,16 +78,20 @@ What the reference sides add:
 
 - The terminal asks which account home to open, with home.minca.social, or
   the one it connected at last, filled in so Enter takes it.
-  `--account-home` or `MINCA_ACCOUNT_HOME` names it ahead, and the MCP
-  server's connect tool takes it too. Anywhere nothing can be asked, it uses
-  the usual one.
-- It opens the link in the browser and shows it too, for a computer where
-  none opens: a server, or a terminal over SSH. The link works from any
-  device.
+  `--account-home` or `MINCA_ACCOUNT_HOME` names it ahead. The MCP server's
+  connect tool takes no home: the model never chooses where the person signs
+  in. Anywhere nothing can be asked, it uses the usual one.
+- It opens the link in the browser, and shows it only when none opens (a
+  server, a terminal over SSH), since whoever else holds it could answer as
+  the home. The link works from any device.
+- `connectWithCode` asks only the home it opened, and keeps that home in the
+  grant, whatever the answer names; it prints the account's DID beside its
+  name.
 - The home (`apps/home/src/components/ConnectPage.tsx`) takes the code out
   of the address bar, shows the program's name and says to allow it only if
   the person started it just now. Once answered it says so, and the tab can
-  be closed.
+  be closed. When no program asks within a minute, it says the link was
+  used or has run out.
 - The terminal waits 10 minutes for the home to open, since the person may
   make an account first, then 30 minutes for the answer. It checks the grant
   with `checkGrant(grant, did, { recordsOnly: true })` before keeping it, and
