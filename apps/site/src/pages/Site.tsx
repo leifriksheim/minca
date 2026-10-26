@@ -99,12 +99,13 @@ function MenuMark() {
 
 /** The links in the bar: the same ones whether they sit in it or, on a phone, drop from the menu */
 const NAV_LINKS: ReadonlyArray<{
-  readonly to: '/developers' | '/download';
+  readonly to: '/download' | '/developers' | '/protocol';
   readonly page: PageName;
   readonly label: string;
 }> = [
-  { to: '/developers', page: 'developers', label: 'For nerds' },
   { to: '/download', page: 'download', label: 'Download' },
+  { to: '/developers', page: 'developers', label: 'Developers' },
+  { to: '/protocol', page: 'protocol', label: 'Protocol' },
 ];
 
 const MENU = 'site-menu';
@@ -133,17 +134,18 @@ function Nav({ page }: { page: PageName }) {
               {link.label}
             </Link>
           ))}
-          <a href={GITHUB} {...EXTERNAL}>
-            <GitHubMark />
-            GitHub
-          </a>
         </nav>
-        <a href={APP} {...EXTERNAL} className="btn btn-primary nav-open">
-          Open Minca
-        </a>
-        <button type="button" className="nav-toggle" popoverTarget={MENU} aria-label="Menu">
-          <MenuMark />
-        </button>
+        <div className="nav-end">
+          <a href={GITHUB} {...EXTERNAL} className="nav-icon" aria-label="GitHub">
+            <GitHubMark />
+          </a>
+          <a href={APP} {...EXTERNAL} className="btn btn-primary nav-open">
+            Open Minca
+          </a>
+          <button type="button" className="nav-toggle" popoverTarget={MENU} aria-label="Menu">
+            <MenuMark />
+          </button>
+        </div>
       </div>
     </header>
   );
@@ -159,7 +161,7 @@ function Footer() {
         </span>
         <span style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           <Link to="/">Communities</Link>
-          <Link to="/developers">For nerds</Link>
+          <Link to="/developers">Developers</Link>
           <Link to="/protocol">Protocol</Link>
           <Link to="/download">Download</Link>
           <Link to="/extension">Chrome extension</Link>
