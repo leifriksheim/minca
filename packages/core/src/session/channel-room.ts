@@ -28,11 +28,12 @@ export interface ChannelNetwork {
  * on the wire: a session key would tie the room to its account.
  */
 export async function meetOnChannel(kind: ChannelKind, network: ChannelNetwork, secret: Uint8Array) {
-  const did = await didOf((await createP256Provider().generateKeyPair()).publicKey);
+  const keys = await createP256Provider().generateKeyPair();
+  const did = await didOf(keys.publicKey);
   const room = await channelRoom(kind, secret);
   const net: NetworkManager = network.transport
     ? createNetworkManager({ did, createTransport: () => network.transport!(did) })
-    : createMesh({ relays: network.relays, did, introductions: false }).join(room);
+    : createMesh({ relays: network.relays, did, key: keys.privateKey, introductions: false }).join(room);
   const send = (to: string, type: string, payload: unknown) => net.send(to, { type, from: did, payload });
   const seal = async (to: string, type: string, channel: Channel, value: unknown) =>
     send(to, type, await channel.seal(type, utf8Encode(JSON.stringify(value))));

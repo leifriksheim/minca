@@ -278,8 +278,8 @@ this one own the use; this table is the registry.
 | `minca/one-per/v1`                       | HKDF → HMAC-SHA256 key                    | the space's first key K₀ (private) or the bytes of `minca/public-one-per/v1\|<spaceId>` (public) | HMAC key                   | `onePer` record keys                                                    | `records/rules.ts:78,81`            | 02     |
 | `minca/record-owner/v1\|<root>`          | SHA-256, first 16 bytes, base32 lowercase | —                                                                                                | owner part (26 characters) | The owner part of an owned record key                                   | `records/key.ts:54`                 | 02     |
 | `minca-room/v1\|<spaceId>`               | SHA-256, first 20 bytes, base32 lowercase | —                                                                                                | relay room name            | A space's room on a relay                                               | `node/space-runtime.ts:291`         | 04     |
-| `minca/rendezvous-topic/v1\|<room>`      | SHA-256, base64url                        | —                                                                                                | topic (43 characters)      | A room's topic on a relay                                               | `network/rendezvous.ts:111`         | 04     |
-| `minca/rendezvous-key/v1\|<room>`        | SHA-256                                   | —                                                                                                | AES-256-GCM key            | What is said in a room, on a relay                                      | `network/rendezvous.ts:112`         | 04     |
+| `minca/rendezvous-topic/v1\|<room>`      | SHA-256, base64url                        | —                                                                                                | topic (43 characters)      | A room's topic on a relay                                               | `network/rendezvous.ts:130`         | 04     |
+| `minca/rendezvous-key/v1\|<room>`        | SHA-256                                   | —                                                                                                | AES-256-GCM key            | What is said in a room, on a relay                                      | `network/rendezvous.ts:131`         | 04     |
 
 Labels of sealed things: every envelope and every HPKE seal (§9) names one,
 with the fields of its `bound`. _docs_ marks a label used by a convention
@@ -296,8 +296,8 @@ CLI's own node reads:
 | `minca/at-rest/v1`           | envelope  | `entry`                                                    | `storage/encrypted-adapter.ts:25`    | 05     |
 | `minca/pairing/v1`           | envelope  | `type`, `seq`                                              | `identity/channel.ts:41`             | 01     |
 | `minca/code/v1`              | envelope  | `type`, `seq`                                              | `identity/channel.ts:48`             | 06     |
-| `minca/rendezvous/v1`        | envelope  | `topic`                                                    | `network/rendezvous.ts:96`           | 04     |
-| `minca/rendezvous-signal/v1` | HPKE      | `topic`, `from`, `to`, `box`                               | `network/rendezvous.ts:97`           | 04     |
+| `minca/rendezvous/v1`        | envelope  | `topic`                                                    | `network/rendezvous.ts:104`          | 04     |
+| `minca/rendezvous-signal/v1` | HPKE      | `topic`, `from`, `to`, `box`                               | `network/rendezvous.ts:105`          | 04     |
 | `minca/mail/v1`              | HPKE      | `to`                                                       | `inbox/inbox.ts:64`                  | 07, 03 |
 | `minca/direct-text/v1`       | envelope  | `space`, `from`, `to`                                      | `privacy/direct.ts:37`               | docs   |
 | `minca/direct-box/v1`        | HPKE      | `space`, `from`, `to`, `reader`                            | `privacy/direct.ts:39`               | docs   |
@@ -316,7 +316,8 @@ new labels do not collide with them:
 | `{"audience":…,"proof":"minca/connect-key/v1",…}`      | Canonical JSON signed by a key a connect request names | `session/connect.ts:282` (`keyStatement`)                  | 06   |
 | `minca/inbox-purge/v1\|<topic>\|<nonce>\|<ids>`        | Signed by an inbox signing key, checked by a relay     | `inbox/inbox.ts:194`, `packages/relay/relay.mjs` (`purge`) | 07   |
 | `minca-peer/v3\|client\|…`, `minca-peer/v3\|server\|…` | Signed peer-auth messages                              | `network/peer-auth.ts:198,200`                             | 04   |
-| `minca-mesh/v1\|…`                                     | Signed mesh proof                                      | `network/peer-auth.ts:310`                                 | 04   |
+| `minca-mesh/v1\|…`                                     | Signed mesh proof                                      | `network/peer-auth.ts:316`                                 | 04   |
+| `minca/rendezvous-sig/v1\|…`                           | Signed rendezvous message                              | `network/rendezvous.ts:125`                                | 04   |
 | `minca-host/v1\n…`, `minca-host-status/v1\n…`          | Signed host requests and statuses                      | `session/hosting.ts:78,340`                                | 08   |
 
 Notes:

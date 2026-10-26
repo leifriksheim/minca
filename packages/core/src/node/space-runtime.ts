@@ -292,10 +292,14 @@ export async function relayRoom(spaceId: string): Promise<string> {
 }
 
 /** The one mesh a node's spaces share, when it has relays to meet on */
-export function meshFor(network: NodeNetworkConfig | undefined, did: string): Mesh | undefined {
+export function meshFor(
+  network: NodeNetworkConfig | undefined,
+  session: { readonly did: string; readonly key: CryptoKey },
+): Mesh | undefined {
   if (!network?.relays?.length) return undefined;
   return createMesh({
-    did,
+    did: session.did,
+    key: session.key,
     relays: network.relays,
     ...(network.iceServers ? { iceServers: network.iceServers } : {}),
     ...(network.createTransport ? { createTransport: network.createTransport } : {}),

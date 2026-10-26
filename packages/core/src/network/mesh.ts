@@ -48,6 +48,8 @@ import {
 
 export interface MeshConfig {
   readonly did: string;
+  /** The private half of the key `did` names: it signs what this node says in a room (`rendezvous.ts`) */
+  readonly key: CryptoKey;
   /** Relays of any kind, used all at once (`rendezvous.ts`) */
   readonly relays: ReadonlyArray<string>;
   readonly iceServers?: ReadonlyArray<RTCIceServer>;
@@ -149,7 +151,7 @@ type Deliver = (kind: SignalKind, data: unknown) => void;
 
 export function createMesh(config: MeshConfig): Mesh {
   const { did } = config;
-  const signaling = createRendezvous(config.relays, did);
+  const signaling = createRendezvous(config.relays, { did, key: config.key });
   const configuredIce = config.iceServers ?? DEFAULT_ICE_SERVERS;
   let relayIce: { servers: ReadonlyArray<RTCIceServer>; expiresAt: number } | null = null;
   let iceAskedAt = 0;
