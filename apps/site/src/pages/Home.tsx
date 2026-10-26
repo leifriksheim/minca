@@ -12,11 +12,14 @@ import { usePlatform } from './downloads';
 import { downloadLink } from './Install';
 
 /**
- * The front page, for community builders: it sells the Minca app. A minca
- * (minka) is the Andean custom of everyone turning out to build what serves
- * them all. The page's argument: making software is nearly free now, so a
- * group can have whatever it imagines, change it whenever it likes, and pass
- * it on to the next group.
+ * The front page, for community builders who are tired of billionaires
+ * owning every place we meet. A minca (minka) is the Andean custom of
+ * everyone turning out to build what serves them all. The page's argument:
+ * our social spaces are infrastructure, like water and power, yet a few
+ * companies own them, rebuild the same app in silos and take a cut of
+ * everything. Software is nearly free to make now, so groups can build on
+ * shared ground instead, and every group that improves a tool improves it
+ * for the next.
  *
  * It shows rather than tells: each band is the product doing one thing, drawn
  * as the app draws it (`demos.tsx`). The brand draws a space as a ruled grid
@@ -152,6 +155,170 @@ const REMIXES: ReadonlyArray<{ group: string; change: string; app: ReactNode }> 
   { group: 'Oak Primary parents', change: 'Turns it into a school run', app: <SchoolRun /> },
 ];
 
+/**
+ * The big platforms, drawn as a badge in their own colour with their name on
+ * it (`.brand-*` in site.css), not their logo files
+ */
+type Brand = 'uber' | 'bolt' | 'lyft' | 'lime' | 'voi' | 'vinted' | 'ticketmaster' | 'meta';
+const BRAND_NAMES: Readonly<Record<Brand, string>> = {
+  uber: 'Uber',
+  bolt: 'Bolt',
+  lyft: 'Lyft',
+  lime: 'Lime',
+  voi: 'Voi',
+  vinted: 'Vinted',
+  ticketmaster: 'Ticketmaster',
+  meta: 'Meta',
+};
+
+function BrandBadge({ brand }: { brand: Brand }) {
+  return (
+    <span className={`brand-badge brand-${brand}`} aria-hidden>
+      {BRAND_NAMES[brand][0]}
+    </span>
+  );
+}
+
+/** A week of ordinary things, and what the platforms in the middle kept */
+const RECEIPT: ReadonlyArray<{ brand: Brand; what: string; cut: string }> = [
+  { brand: 'uber', what: 'Lift home from the match', cut: '€3.20' },
+  { brand: 'vinted', what: 'A jacket from down the street', cut: '€1.95' },
+  { brand: 'ticketmaster', what: 'Two tickets to a gig', cut: '€14.50' },
+  { brand: 'meta', what: 'Your club’s Facebook group', cut: 'Your attention' },
+];
+
+function Receipt() {
+  return (
+    <div className="receipt">
+      <div className="receipt-head">
+        <b>Your week online</b>
+        <span>Their cut</span>
+      </div>
+      {RECEIPT.map((line) => (
+        <div key={line.what} className="receipt-line">
+          <span className="receipt-what">
+            <BrandBadge brand={line.brand} />
+            <span>
+              {line.what}
+              <small>{BRAND_NAMES[line.brand]}</small>
+            </span>
+          </span>
+          <span>{line.cut}</span>
+        </div>
+      ))}
+      <div className="receipt-total">
+        <span>Paid to oligarchs</span>
+        <b>€19.65</b>
+      </div>
+    </div>
+  );
+}
+
+/** Five ride apps: the same map under each, only the name and the colour change */
+const RIDE_APPS: readonly Brand[] = ['uber', 'bolt', 'lyft', 'lime', 'voi'];
+
+/** The map every ride app draws: blocks, a route, you and a car */
+function RideMap() {
+  return (
+    <svg className="ride-map" viewBox="0 0 100 110" aria-hidden>
+      {[
+        [8, 8, 34, 22],
+        [52, 8, 40, 30],
+        [8, 40, 26, 30],
+        [44, 48, 48, 18],
+        [8, 80, 50, 22],
+        [68, 76, 24, 26],
+      ].map(([x, y, w, h]) => (
+        <rect key={`${x}-${y}`} x={x} y={y} width={w} height={h} rx="4" />
+      ))}
+      <path className="ride-route" d="M24 100V74H40V42H90" />
+      <circle className="ride-you" cx="24" cy="100" r="4.5" />
+      <rect className="ride-car" x="84" y="37" width="12" height="10" rx="3" />
+    </svg>
+  );
+}
+
+function SameApp() {
+  return (
+    <div className="same-app">
+      {RIDE_APPS.map((brand) => (
+        <div key={brand} className={`ride-phone brand-${brand}`}>
+          <div className="ride-brand">
+            <BrandBadge brand={brand} />
+            {BRAND_NAMES[brand]}
+          </div>
+          <RideMap />
+          <div className="ride-book">
+            <span>Ride now</span>
+            <small>+ service fee</small>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** What a group's space gives it, whoever made its tools */
+const YOURS: ReadonlyArray<{ title: string; body: string; shape: ShapeKind }> = [
+  {
+    title: 'No ads, no feed',
+    body: 'Nobody’s watching, and nothing decides what you see.',
+    shape: 'eyeShut',
+  },
+  { title: 'Your rules', body: 'Your group decides who can do what.', shape: 'group' },
+  {
+    title: 'Private',
+    body: 'Private spaces are locked on your phone before anything leaves it.',
+    shape: 'lock',
+  },
+  { title: 'Works offline', body: 'On the bus, in the field, in the basement.', shape: 'signal' },
+];
+
+/** Five companies each build the app from nothing; five groups build on the one before */
+const COMPANY_BUILDS = RIDE_APPS.map((brand) => BRAND_NAMES[brand]);
+const GROUP_BUILDS: ReadonlyArray<{ group: string; adds: string }> = [
+  { group: 'Riverside FC', adds: 'Carpool' },
+  { group: 'Northside', adds: '+ Waitlist' },
+  { group: 'Oak Primary', adds: '+ School run' },
+  { group: 'Elm Street', adds: '+ Lifts home' },
+  { group: 'Hill Road', adds: '+ Reminders' },
+];
+
+function Compounds() {
+  return (
+    <div className="compounds">
+      <div className="frame compound">
+        <h3>Five companies</h3>
+        <div className="compound-cols">
+          {COMPANY_BUILDS.map((name) => (
+            <div key={name} className="compound-col">
+              <span className="compound-block is-same">Ride app</span>
+              <small>{name}</small>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="frame compound">
+        <h3>Five groups on Minca</h3>
+        <div className="compound-cols">
+          {GROUP_BUILDS.map((build, i) => (
+            <div key={build.group} className="compound-col">
+              {GROUP_BUILDS.slice(0, i + 1)
+                .reverse()
+                .map((step, j) => (
+                  <span key={step.adds} className={`compound-block ${colour(i - j)}`}>
+                    {step.adds}
+                  </span>
+                ))}
+              <small>{build.group}</small>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** What groups asked for, in their own words, and the tool each became */
 const ASKS: ReadonlyArray<{ ask: string; tool: string; kind: ShapeKind; colour: ShapeColour }> = [
   { ask: 'Can we sort out lifts to away games?', tool: 'Carpool', kind: 'clover', colour: 'coral' },
@@ -167,7 +334,13 @@ const ASKS: ReadonlyArray<{ ask: string; tool: string; kind: ShapeKind; colour: 
     kind: 'star',
     colour: 'peach',
   },
-  { ask: 'Whose turn is it to do the bins?', tool: 'Chore wheel', kind: 'burst', colour: 'lilac' },
+  { ask: 'Who needs groceries this week?', tool: 'Mutual aid', kind: 'burst', colour: 'lilac' },
+  {
+    ask: 'A sign-up sheet for the potluck. Joe says he’s bringing the rich.',
+    tool: 'Potluck',
+    kind: 'flower',
+    colour: 'cobalt',
+  },
 ];
 
 /** The big shape in the panel, melting from one to the next */
@@ -208,8 +381,8 @@ function HeroActions() {
         <a href={APP} className="btn btn-primary btn-lg">
           Start a minca
         </a>
-        <a href="#mend" className="btn btn-secondary btn-lg">
-          See what it does
+        <a href="#why" className="btn btn-secondary btn-lg">
+          Why this matters
         </a>
       </div>
     );
@@ -247,8 +420,8 @@ export function Home() {
             make it happen.
           </h1>
           <p>
-            One place for your club, your street or your crew to talk, plan and get things done. Need
-            something that doesn’t exist yet? Ask for it, and it’s yours.
+            One place for your club, your street or your crew to talk, plan and build any app you need. And it
+            belongs to all of you.
           </p>
           <HeroActions />
         </div>
@@ -258,7 +431,46 @@ export function Home() {
       </section>
 
       <Band
+        id="why"
+        tone="sunken"
+        title="The same app, built a hundred times."
+        intro={
+          <p>
+            Uber, Bolt, Lyft, Lime and Voi each built a map, a way to pay and a ride nearby, then walled it
+            off. That’s like every town laying five water mains so five billionaires can bill you for a glass.
+            Now AI can build the app in an afternoon, and the walls are only there to collect the toll.
+          </p>
+        }
+      >
+        <SameApp />
+      </Band>
+
+      <section className="band">
+        <div className="wrap">
+          <div className="tile tile-panel panel c-cobalt">
+            <Morph steps={ANYTHING} className="panel-morph" />
+            <div className="section-head">
+              <h2>If you can say it, you can have it.</h2>
+              <p>Tell Claude, ChatGPT or any AI what your group needs, and it’s there by tonight.</p>
+            </div>
+            <ul className="asks">
+              {ASKS.map((item) => (
+                <li key={item.tool}>
+                  <q>{item.ask}</q>
+                  <span className="asks-tool">
+                    <Shape kind={item.kind} colour={item.colour} />
+                    {item.tool}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <Band
         id="mend"
+        tone="sunken"
         title="Change anything. Just say how."
         intro={
           <p>
@@ -280,9 +492,9 @@ export function Home() {
                 trusts add it, or everyone votes.
               </p>
               <ul>
+                <li>Everyone’s vote counts the same, however much they put in the kitty</li>
                 <li>Pick how many yeses it takes</li>
                 <li>A tool only sees its own things, never your chats</li>
-                <li>Nobody has to count, and nobody can fake it</li>
               </ul>
             </div>
             <div className="frame paper-grid">{PROPOSAL}</div>
@@ -293,7 +505,12 @@ export function Home() {
       <Band
         tone="sunken"
         title="Good ideas spread."
-        intro={<p>Made something great? Pass it to another group. They make it theirs, and pass it on.</p>}
+        intro={
+          <p>
+            Riverside FC makes a carpool. A hockey club copies it and adds a waitlist. A school turns it into
+            a school run. Nobody asked permission and nobody took a cut.
+          </p>
+        }
       >
         <div className="ruled remixes">
           {REMIXES.map((remix, i) => (
@@ -307,75 +524,77 @@ export function Home() {
         </div>
       </Band>
 
-      <section className="band">
+      <Band
+        title="Nobody has to start from scratch."
+        intro={
+          <p>
+            Every company builds the same thing again from nothing. When a group on Minca makes a tool better,
+            every group after them gets the better one.
+          </p>
+        }
+      >
+        <Compounds />
+      </Band>
+
+      <section className="band sunken">
         <div className="wrap">
-          <div className="tile tile-panel panel c-cobalt">
-            <Morph steps={ANYTHING} className="panel-morph" />
-            <div className="section-head">
-              <h2>If you can say it, you can have it.</h2>
+          <div className="split">
+            <div>
+              <h2 className="split-title">Digital landlords own our spaces.</h2>
               <p>
-                Building an app used to take money and experts. Now you tell Claude, ChatGPT or any AI what
-                your group needs, and it’s there by tonight. No code, no servers, no bills.
+                Your group chat, your local marketplace and your ride home all sit on someone else’s property.
+                They make the rules, take a cut of every lift and every sale, and book the profit wherever the
+                tax is lowest. It’s feudalism with an app store.
               </p>
             </div>
-            <ul className="asks">
-              {ASKS.map((item) => (
-                <li key={item.tool}>
-                  <q>{item.ask}</q>
-                  <span className="asks-tool">
-                    <Shape kind={item.kind} colour={item.colour} />
-                    {item.tool}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            <div className="frame paper-grid">
+              <Receipt />
+            </div>
           </div>
         </div>
       </section>
+
+      <Band
+        title="Some things should belong to everyone."
+        intro={
+          <p>Minca is an open protocol, a shared set of rules anyone can build on and nobody can buy.</p>
+        }
+      >
+        <Marked items={YOURS} />
+      </Band>
 
       <Band
         id="minca"
         tone="sunken"
         title="In the Andes, nobody waits for someone else to build the bridge."
         intro={
-          <p>
-            They call it a minca: when something would help everyone, everyone shows up and builds it. Minca
-            gives your club, your street and your crew a place to do the same, and it’s yours, not a
-            platform’s.
-          </p>
+          <>
+            <p>
+              Minca comes from <i>minka</i> (say “MEEN-ka”), the Quechua word for work done together. Quechua
+              and Aymara communities have practised it for centuries. When something would help everyone,
+              everyone turns up and builds it.
+            </p>
+            <p>
+              Every June, four Quechua communities in Peru still reweave the Q’eswachaka rope bridge by hand,
+              the way they have for over 500 years.
+            </p>
+          </>
         }
-      >
-        <Marked
-          items={[
-            {
-              title: 'No ads, no feed',
-              body: 'Nobody’s watching, and nothing decides what you see.',
-              shape: 'eyeShut',
-            },
-            { title: 'Your rules', body: 'Your group decides who can do what.', shape: 'group' },
-            {
-              title: 'Private',
-              body: 'Private spaces are locked on your phone before anything leaves it.',
-              shape: 'lock',
-            },
-            { title: 'Works offline', body: 'On the bus, in the field, in the basement.', shape: 'signal' },
-          ]}
-        />
-      </Band>
+      />
 
       <Band title="Fair questions.">
         <Points
           points={[
+            { title: 'Who owns it?', body: 'Nobody, the same way nobody owns a language.' },
+            {
+              title: 'Can I build a business on it?',
+              body: 'Sure, the way people build businesses on roads. You just can’t own the road.',
+            },
             { title: 'Do I need to code?', body: 'No. If you can describe it, you can make it.' },
             {
-              title: 'Does everyone need an AI?',
-              body: 'No. Only whoever makes something new. Everyone else just opens the link.',
-            },
-            {
               title: 'Is it ready?',
-              body: 'It’s early days. It works, and it’s still changing. Start with a group that’s up for an adventure.',
+              body: 'It works and it’s early. Start with a group that’s up for an adventure.',
             },
-            { title: 'Who owns it?', body: 'Your group. There’s no company in the middle.' },
           ]}
         />
       </Band>
@@ -385,7 +604,6 @@ export function Home() {
           <div className="cta-panel">
             <Loader decorative size={34} style={{ marginBottom: 28 }} />
             <h2>Call your people.</h2>
-            <p>Start a minca and make it yours.</p>
             <div className="actions">
               <a href={APP} className="btn btn-primary btn-lg">
                 Start a minca

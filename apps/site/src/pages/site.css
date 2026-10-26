@@ -2173,6 +2173,249 @@
   background: var(--card);
 }
 
+/* ─── Front page: the receipt, the same app, the compounding ──────── */
+
+.site .split .frame .receipt {
+  width: 100%;
+  max-width: 400px;
+}
+.site .receipt {
+  padding: 22px 24px 18px;
+  border: var(--edge);
+  border-radius: var(--r-lg);
+  background: var(--card);
+  font-family: var(--mono);
+  font-size: 13.5px;
+  color: var(--body);
+}
+.site .receipt-head,
+.site .receipt-line,
+.site .receipt-total {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.site .receipt-head {
+  padding-bottom: 12px;
+  font-size: 12px;
+  color: var(--faint);
+}
+.site .receipt-head b {
+  font-family: var(--display);
+  font-size: 18px;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.site .receipt-line {
+  padding: 9px 0;
+  border-top: 1px dashed var(--line-strong);
+}
+.site .receipt-what {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.site .receipt-what small {
+  display: block;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+.site .receipt-line {
+  align-items: center;
+}
+.site .receipt-line > span:last-child {
+  flex: none;
+  color: var(--coral);
+}
+.site .receipt-total {
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: var(--edge);
+  color: var(--ink);
+}
+.site .receipt-total b {
+  color: var(--coral);
+}
+
+/* The platforms' badges: their colour, their initial */
+.site .brand-uber {
+  --c: #000;
+  --on: #fff;
+}
+.site .brand-bolt {
+  --c: #34d186;
+  --on: #0b2a1a;
+}
+.site .brand-lyft {
+  --c: #ff00bf;
+  --on: #fff;
+}
+.site .brand-lime {
+  --c: #00de00;
+  --on: #062b06;
+}
+.site .brand-voi {
+  --c: #f26961;
+  --on: #fff;
+}
+.site .brand-vinted {
+  --c: #09b1ba;
+  --on: #fff;
+}
+.site .brand-ticketmaster {
+  --c: #026cdf;
+  --on: #fff;
+}
+.site .brand-meta {
+  --c: #0866ff;
+  --on: #fff;
+}
+.site .brand-badge {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--c);
+  color: var(--on);
+  font-family: var(--minca-font);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* Five phones with one map */
+.site .same-app {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+}
+.site .ride-phone {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 12px 12px;
+  border: var(--edge);
+  border-radius: 28px;
+  background: var(--card);
+}
+.site .ride-brand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--display);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+.site .ride-brand .brand-badge {
+  width: 22px;
+  height: 22px;
+  font-size: 13px;
+}
+.site .ride-map {
+  display: block;
+  width: 100%;
+  border-radius: var(--r-md);
+  background: var(--sunken);
+}
+.site .ride-map rect {
+  fill: var(--paper);
+  stroke: var(--line);
+}
+.site .ride-map .ride-route {
+  fill: none;
+  stroke: var(--c);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.site .ride-map .ride-you {
+  fill: var(--ink);
+}
+.site .ride-map .ride-car {
+  fill: var(--c);
+  stroke: none;
+}
+.site .ride-book {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 6px;
+  border-radius: 999px;
+  background: var(--c);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.site .ride-book {
+  color: var(--on);
+}
+.site .ride-book small {
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+/* Two rows of five: copies that stay level, and versions that stack up */
+.site .compounds {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.site .compound {
+  padding: 28px 24px 20px;
+  background: var(--paper);
+}
+.site .compound h3 {
+  margin-bottom: 20px;
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+.site .compound-cols {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  align-items: end;
+  min-height: 200px;
+}
+.site .compound-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.site .compound-col small {
+  margin-top: 6px;
+  font-size: 11.5px;
+  line-height: 1.25;
+  text-align: center;
+  color: var(--faint);
+}
+.site .compound-block {
+  overflow: hidden;
+  padding: 6px 4px;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--c) 30%, var(--paper));
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+.site .compound-block.is-same {
+  border: 1px dashed var(--line-strong);
+  background: var(--card);
+  color: var(--muted);
+}
+
 /* ─── Front page: what groups asked for, on a colour tile ─────────── */
 
 .site .panel {
@@ -2343,8 +2586,23 @@
 /* ─── Phones ──────────────────────────────────────────────────────── */
 
 @media (max-width: 960px) {
-  .site .mend {
+  .site .mend,
+  .site .compounds {
     grid-template-columns: minmax(0, 1fr);
+  }
+  /* The phones scroll sideways in their own row */
+  .site .same-app {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(150px, 38%);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    margin: 0 -24px;
+    padding: 0 24px 8px;
+    scrollbar-width: none;
+  }
+  .site .ride-phone {
+    scroll-snap-align: start;
   }
 }
 
@@ -2513,6 +2771,27 @@
   .site .remix .cell-num {
     top: 14px;
     left: 20px;
+  }
+  /* The receipt keeps its width on a phone */
+  .site .split .frame {
+    padding: 24px 12px;
+  }
+  .site .receipt {
+    padding: 18px 16px 14px;
+    font-size: 12.5px;
+  }
+  /* Each version's name wraps rather than cut off */
+  .site .compound {
+    padding: 24px 16px 16px;
+  }
+  .site .compound-cols {
+    gap: 4px;
+    min-height: 140px;
+  }
+  .site .compound-block {
+    padding: 5px 2px;
+    font-size: 10px;
+    white-space: normal;
   }
   /* Footer links far enough apart for a thumb */
   .site footer a {
