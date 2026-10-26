@@ -28,6 +28,7 @@ import { openValue, sealValue } from '../src/identity/envelope.js';
 import { deriveReadKey } from '../src/space/space-access.js';
 import { until } from './helpers/until.js';
 import { sessionsInOrder, type Session } from './helpers/sessions.js';
+import { base64UrlEncode, utf8Encode } from '../src/utils/encoding.js';
 
 // Real sessions where peers meet through relays, which sign what they say there: A < B < C.
 const [A, B, C] = await sessionsInOrder(3);
@@ -273,6 +274,108 @@ describe('the mesh, through real relays', () => {
     );
 
     for (const room of [a, b, c]) room.disconnect();
+  });
+
+  /** A mesh whose transport says whom it offers to or answers, and lets the test send frames of its own */
+  const watched = (who: Session, namespace: string) => {
+    const dialled: string[] = [];
+    let raw: PeerTransport | null = null;
+    const created = createMesh({
+      did: who.did,
+      key: who.key,
+      relays: [relay],
+      createTransport: () => {
+        const transport = hub.signalled(who.did, namespace);
+        raw = transport;
+        return Object.freeze({
+          ...transport,
+          createOffer: (peer: string) => (dialled.push(peer), transport.createOffer(peer)),
+          handleOffer: (peer: string, offer: RTCSessionDescriptionInit) => (
+            dialled.push(peer),
+            transport.handleOffer(peer, offer)
+          ),
+        });
+      },
+    });
+    const send = (to: string, frame: object) =>
+      raw!.send(to, utf8Encode(JSON.stringify({ ...frame, from: who.did })));
+    return { mesh: created, dialled, send };
+  };
+
+  /** A relayed signal as spec 04 §8 has it, signed by `signer` */
+  const relayed = async (
+    room: string,
+    signer: Session,
+    fields: { origin: string; target: string; at: number; sdp: string },
+  ) => {
+    const { origin, target, at, sdp } = fields;
+    const label = utf8Encode(`minca/introduction/v1|${room}|${origin}|${target}|offer|${at}|${sdp}`);
+    const sig = base64UrlEncode(await createP256Provider().sign(signer.key, label));
+    return { origin, target, kind: 'offer', data: { type: 'offer', sdp }, at, sig, hops: 1 };
+  };
+
+  test('a signal passed on in someone else’s name is ignored, and a genuine one is acted on once', async () => {
+    const [mallory] = await sessionsInOrder(1);
+    const a = watched(A, 'signed-intro');
+    const m = watched(mallory, 'signed-intro');
+    const roomA = a.mesh.join('signed');
+    const roomM = m.mesh.join('signed');
+    const seenA = collect(roomA);
+    await roomA.connect();
+    await roomM.connect();
+    await until(() => seenA.connected.includes(mallory.did), 5000, 'A to meet Mallory');
+    // An offer from B, signed by Mallory.
+    const at = Date.now();
+    const forged = await relayed('signed', mallory, {
+      origin: B.did,
+      target: A.did,
+      at,
+      sdp: `offer:${B.did}->${A.did}`,
+    });
+    m.send(A.did, { room: 'signed', type: '__signal', payload: forged });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.ok(!a.dialled.includes(B.did), 'A did not answer Mallory’s offer in B’s name');
+    // An offer C signed, passed on by Mallory: taken, once, however often it comes.
+    const genuine = await relayed('signed', C, {
+      origin: C.did,
+      target: A.did,
+      at,
+      sdp: `offer:${C.did}->${A.did}`,
+    });
+    m.send(A.did, { room: 'signed', type: '__signal', payload: genuine });
+    m.send(A.did, { room: 'signed', type: '__signal', payload: genuine });
+    await until(() => a.dialled.includes(C.did), 2000, 'A to answer C');
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.equal(a.dialled.filter((peer) => peer === C.did).length, 1);
+    roomA.disconnect();
+    roomM.disconnect();
+  });
+
+  test('a signal is taken only from a peer admitted in its room', async () => {
+    const [mallory] = await sessionsInOrder(1);
+    const a = watched(A, 'room-intro');
+    const m = watched(mallory, 'room-intro');
+    // Mallory shares a public room with A, not the private one.
+    const publicA = a.mesh.join('public');
+    a.mesh.join('private');
+    const publicM = m.mesh.join('public');
+    const seenA = collect(publicA);
+    await publicA.connect();
+    await publicM.connect();
+    await until(() => seenA.connected.includes(mallory.did), 5000, 'A to meet Mallory');
+    const offer = await relayed('private', C, {
+      origin: C.did,
+      target: A.did,
+      at: Date.now(),
+      sdp: `offer:${C.did}->${A.did}`,
+    });
+    m.send(A.did, { room: 'private', type: '__signal', payload: offer });
+    // And with the room left off, as signals used to travel.
+    m.send(A.did, { type: '__signal', payload: offer });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.ok(!a.dialled.includes(C.did), 'A took no signal from a peer outside its room');
+    publicA.disconnect();
+    publicM.disconnect();
   });
 
   test('a room that names its own relay: two peers on different relays meet there, with nobody to introduce them', async () => {

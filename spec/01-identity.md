@@ -317,6 +317,7 @@ new labels do not collide with them:
 | `minca/inbox-purge/v1\|<topic>\|<nonce>\|<ids>`        | Signed by an inbox signing key, checked by a relay     | `inbox/inbox.ts:194`, `packages/relay/relay.mjs` (`purge`) | 07   |
 | `minca-peer/v3\|client\|…`, `minca-peer/v3\|server\|…` | Signed peer-auth messages                              | `network/peer-auth.ts:198,200`                             | 04   |
 | `minca-mesh/v1\|…`                                     | Signed mesh proof                                      | `network/peer-auth.ts:316`                                 | 04   |
+| `minca/introduction/v1\|…`                             | Signed signal passed on by peers                       | `network/introductions.ts:61`                              | 04   |
 | `minca/rendezvous-sig/v1\|…`                           | Signed rendezvous message                              | `network/rendezvous.ts:125`                                | 04   |
 | `minca-host/v1\n…`, `minca-host-status/v1\n…`          | Signed host requests and statuses                      | `session/hosting.ts:78,340`                                | 08   |
 

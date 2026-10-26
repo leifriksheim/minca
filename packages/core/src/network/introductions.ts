@@ -1,9 +1,10 @@
 /**
  * Peers introduce each other over the data channels they already have, so a
  * relay is needed only to meet the first one. `__peers` says who I can see;
- * `__signal` carries somebody else's offer to somebody I can reach.
+ * `__signal` carries somebody else's offer to somebody I can reach, in the
+ * room it belongs to and nowhere else, signed by whoever made it.
  */
-import { bytesToHex } from '../utils/encoding.js';
+import { utf8Encode } from '../utils/encoding.js';
 
 /** Message types reserved for the mesh itself, never handed to the application */
 export const PEERS_MESSAGE = '__peers';
@@ -35,18 +36,29 @@ export function isPeerDid(value: unknown): value is string {
   return typeof value === 'string' && value.length <= 256 && /^did:key:z[1-9A-HJ-NP-Za-km-z]+$/.test(value);
 }
 
-/** Somebody else's signaling, travelling over a data channel */
+/** Somebody else's signaling, travelling over a data channel within one room */
 export interface RelayedSignal {
-  /** Distinguishes this from copies arriving by another route */
-  readonly id: string;
-  /** Who wants to connect */
+  /** Who wants to connect: whose session key signed it */
   readonly origin: string;
   /** Who they want to connect to */
   readonly target: string;
   readonly kind: 'offer' | 'answer';
-  readonly data: unknown;
+  readonly data: { readonly type: 'offer' | 'answer'; readonly sdp: string };
+  /** When it was sent, ms: each later than the one before from its origin */
+  readonly at: number;
+  /** The origin's signature over `introductionLabel` */
+  readonly sig: string;
   /** Forwards left before this is dropped */
   readonly hops: number;
+}
+
+/** What a relayed signal's `sig` signs: everything in it but `id` and `hops`, which only route it */
+export function introductionLabel(
+  room: string,
+  signal: { origin: string; target: string; kind: string; at: number; sdp: string },
+): Uint8Array {
+  const { origin, target, kind, at, sdp } = signal;
+  return utf8Encode(`minca/introduction/v1|${room}|${origin}|${target}|${kind}|${at}|${sdp}`);
 }
 
 /** How far a relayed signal travels: everyone in a room tends to be within a hop or two, and it bounds what a peer can inject */
@@ -59,6 +71,8 @@ export function shouldInitiate(us: string, them: string): boolean {
 
 /** Remembers recently seen signals, so a flooded message is handled once. */
 export interface SeenSignals {
+  /** Whether an id was seen, without recording it */
+  has(id: string): boolean;
   /** Records an id, returning whether it is new */
   accept(id: string): boolean;
 }
@@ -67,6 +81,7 @@ export interface SeenSignals {
 export function createSeenSignals(limit = 512): SeenSignals {
   const seen = new Set<string>();
   return {
+    has: (id: string) => seen.has(id),
     accept(id: string): boolean {
       if (seen.has(id)) return false;
       seen.add(id);
@@ -75,9 +90,4 @@ export function createSeenSignals(limit = 512): SeenSignals {
       return true;
     },
   };
-}
-
-/** A fresh identifier for a relayed signal. */
-export function signalId(): string {
-  return bytesToHex(globalThis.crypto.getRandomValues(new Uint8Array(8)));
 }
