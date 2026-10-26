@@ -57,13 +57,6 @@ export const KNOCK_COLLECTION = 'sys.knock';
 export const MAX_INBOX_PLACES = 3;
 /** How long a knock waits in a mailbox, and so how old one may be when opened */
 export const KNOCK_TTL_SECONDS = 14 * 24 * 3600;
-/**
- * How far a knock's own time may be before when the relay took it. A knock is
- * dropped as soon as it is signed, so its time is checked against the relay's
- * — which the knocker can't choose — and a note that ran out can't be used by
- * dating a knock back to when it was good.
- */
-export const KNOCK_DROP_WINDOW_SECONDS = 600;
 const MAX_NAME = 64;
 const MAX_NOTE = 2000;
 
@@ -250,13 +243,11 @@ export async function sealKnock(
  * invitation from the same account to a private space that account alone
  * founded.
  * @param keys The private scalars it may be sealed to: the inbox keys, or the contact key
- * @param receivedAt For a mailbox, when the relay took it, ms; null for a contact request
  * @returns The knock, or null when it is anything less
  */
 export async function openKnock(
   keys: ReadonlyArray<Uint8Array>,
   blob: string,
-  receivedAt: number | null,
   provider: CryptoProvider,
 ): Promise<OpenedKnock | null> {
   let opened: unknown = null;
@@ -274,15 +265,10 @@ export async function openKnock(
   // or a key the account trusts less, may not.
   if (checked.note && !noteCovers(checked.note, ACCOUNT_REQUIREMENT)) return null;
 
-  // Recent; and from a mailbox, signed when it was dropped, not dated back to when a note was still good.
+  // Signed within the knock's life, and not in the future: wherever it waited, its note is judged then.
   const at = Math.floor(checked.at / 1000);
   const now = Math.floor(Date.now() / 1000);
-  if (at < now - KNOCK_TTL_SECONDS) return null;
-  if (receivedAt !== null) {
-    if (!Number.isFinite(receivedAt)) return null;
-    const dropped = Math.floor(receivedAt / 1000);
-    if (at > dropped + UCAN_CLOCK_SKEW_SECONDS || at < dropped - KNOCK_DROP_WINDOW_SECONDS) return null;
-  }
+  if (at < now - KNOCK_TTL_SECONDS || at > now + UCAN_CLOCK_SKEW_SECONDS) return null;
 
   const body = checked.version.body;
   if (!isRecord(body)) return null;

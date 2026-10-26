@@ -12,12 +12,7 @@
  * Delivery is never synchronous. Real transports are async, and a synchronous
  * fake hides reentrancy bugs.
  */
-import type {
-  CandidateSink,
-  PeerTransport,
-  PeerTransportEvents,
-  SignalledTransport,
-} from '../../src/network/transport.js';
+import type { PeerTransport, PeerTransportEvents, SignalledTransport } from '../../src/network/transport.js';
 import { createEmitter } from '../../src/utils/events.js';
 
 export interface FakeHubOptions {
@@ -138,19 +133,14 @@ export function createFakeHub(options: FakeHubOptions = {}): FakeHub {
       /** Offers made or accepted, keyed by peer — a link opens when both halves exist */
       const offered = new Set<string>();
 
-      const fakeCandidate = (onCandidate: CandidateSink) =>
-        later(() => onCandidate({ candidate: `candidate:${did}`, sdpMid: '0' }));
-
       return Object.freeze({
         ...rest,
-        async createOffer(peerId: string, onCandidate: CandidateSink) {
+        async createOffer(peerId: string) {
           offered.add(peerId);
-          fakeCandidate(onCandidate);
           return { type: 'offer' as const, sdp: `offer:${did}->${peerId}` };
         },
-        async handleOffer(peerId: string, offer: RTCSessionDescriptionInit, onCandidate: CandidateSink) {
+        async handleOffer(peerId: string, offer: RTCSessionDescriptionInit) {
           if (offer.sdp !== `offer:${peerId}->${did}`) throw new Error('Offer was not meant for this peer');
-          fakeCandidate(onCandidate);
           return { type: 'answer' as const, sdp: `answer:${did}->${peerId}` };
         },
         async handleAnswer(peerId: string, answer: RTCSessionDescriptionInit) {
@@ -159,9 +149,6 @@ export function createFakeHub(options: FakeHubOptions = {}): FakeHub {
             throw new Error('Answer was not meant for this peer');
           offered.delete(peerId);
           link(room, did, peerId);
-        },
-        async addIceCandidate() {
-          // Accepted and ignored: the fake needs no route discovery.
         },
       });
     },

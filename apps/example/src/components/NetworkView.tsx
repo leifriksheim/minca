@@ -35,7 +35,6 @@ export const HEALTH_COLOR: Record<Health, string> = {
   syncing: palette.accent.good,
   alone: palette.ink.faint,
   connecting: palette.accent.warn,
-  elsewhere: palette.accent.warn,
   offline: palette.accent.danger,
 };
 
@@ -129,10 +128,6 @@ function Summary({
     connecting: [
       network.connecting.length > 0 ? `Connecting to ${network.connecting.length} …` : 'Connecting…',
       'Finding the relay and the devices in this space.',
-    ],
-    elsewhere: [
-      'Open in another tab',
-      `This app is connected in another tab or window, and only one of them can be at a time: they share one key, and the relay lets it in once. Close the other one and this one connects${retry?.retryAt ? ` — next try in ${duration(retry.retryAt - now)}` : ''}.`,
     ],
     offline: [
       "Can't reach the relay",

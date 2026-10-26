@@ -224,10 +224,11 @@ export function checkRelays(relays: unknown): string | null {
     } catch {
       return `"${url}" is not a URL`;
     }
-    // Plain ws:// only on this machine: anywhere else it would show the room to everyone on the way.
+    // A kind of relay other than Minca's own goes before the scheme (`nostr+wss://`). Plain ws://
+    // only on this machine: anywhere else it would show the room to everyone on the way.
     const local = ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname);
-    if (parsed.protocol !== 'wss:' && !(parsed.protocol === 'ws:' && local))
-      return `"${url}" is not a wss:// relay`;
+    const transport = /^(?:[a-z][a-z0-9-]*\+)?(wss?):$/.exec(parsed.protocol)?.[1];
+    if (transport !== 'wss' && !(transport === 'ws' && local)) return `"${url}" is not a wss:// relay`;
   }
   return new Set(relays).size === relays.length ? null : 'A relay is named twice';
 }

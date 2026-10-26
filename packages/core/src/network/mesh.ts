@@ -23,9 +23,9 @@
 import type { PeerInfo, NetworkMessage } from '../types.js';
 import { utf8Encode, utf8Decode } from '../utils/encoding.js';
 import { createEmitter, type Emitter } from '../utils/events.js';
-import { isSignalKind, type RelayStatus, type SignalKind } from './signaling.js';
+import type { RelayStatus } from './relay-socket.js';
 import { isObject } from '../utils/guards.js';
-import { createMultiSignalingClient } from './multi-signaling.js';
+import { createRendezvous, isSignalKind, type SignalKind } from './rendezvous.js';
 import { createRTCTransport, DEFAULT_ICE_SERVERS } from './rtc-transport.js';
 import type { SignalledTransport } from './transport.js';
 import { peerNonce, type MeshAuth } from './peer-auth.js';
@@ -48,7 +48,7 @@ import {
 
 export interface MeshConfig {
   readonly did: string;
-  /** Relays, used all at once (`multi-signaling.ts`) */
+  /** Relays of any kind, used all at once (`rendezvous.ts`) */
   readonly relays: ReadonlyArray<string>;
   readonly iceServers?: ReadonlyArray<RTCIceServer>;
   /**
@@ -146,7 +146,7 @@ type Deliver = (kind: SignalKind, data: unknown) => void;
 
 export function createMesh(config: MeshConfig): Mesh {
   const { did } = config;
-  const signaling = createMultiSignalingClient(config.relays, did);
+  const signaling = createRendezvous(config.relays, did);
   const configuredIce = config.iceServers ?? DEFAULT_ICE_SERVERS;
   let relayIce: { servers: ReadonlyArray<RTCIceServer>; expiresAt: number } | null = null;
   let iceAskedAt = 0;
@@ -179,7 +179,7 @@ export function createMesh(config: MeshConfig): Mesh {
   >();
   /** Failed tries per peer, so each wait is longer; forgotten once a connection opens */
   const tries = new Map<string, number>();
-  /** The rooms each peer is in, as the relays say — the rooms to offer in again */
+  /** The rooms each peer said hello in — the rooms to offer in again */
   const present = new Map<string, Set<string>>();
   const seenSignals = createSeenSignals();
   let started: Promise<void> | null = null;
@@ -361,14 +361,13 @@ export function createMesh(config: MeshConfig): Mesh {
   const offerTo = async (peer: string, deliver: Deliver, again: (() => void) | null): Promise<void> => {
     watch(peer, again);
     try {
-      const offer = await transport.createOffer(peer, (candidate) => deliver('candidate', candidate));
-      deliver('offer', offer);
+      deliver('offer', await transport.createOffer(peer));
     } catch (err) {
       fail(err);
     }
   };
 
-  /** Acts on a peer's offer, answer or candidate, sending replies back the way it came. */
+  /** Acts on a peer's offer or answer, sending the answer back the way the offer came. */
   const onSignal = async (peer: string, kind: SignalKind, data: unknown, deliver: Deliver): Promise<void> => {
     // A connection that has proved itself is not replaced by an offer that has
     // not: anyone can put someone else's name on one.
@@ -379,15 +378,10 @@ export function createMesh(config: MeshConfig): Mesh {
         // The side that offered tries again; this side only lets go of what never opened.
         watch(peer, null);
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- setRemoteDescription checks it and throws into the catch below
-        const answer = await transport.handleOffer(peer, data as RTCSessionDescriptionInit, (candidate) =>
-          deliver('candidate', candidate),
-        );
-        deliver('answer', answer);
-      } else if (kind === 'answer') {
+        deliver('answer', await transport.handleOffer(peer, data as RTCSessionDescriptionInit));
+      } else {
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- setRemoteDescription checks it and throws into the catch below
         await transport.handleAnswer(peer, data as RTCSessionDescriptionInit);
-      } else {
-        await transport.addIceCandidate(peer, data);
       }
     } catch (err) {
       fail(err);
@@ -408,18 +402,15 @@ export function createMesh(config: MeshConfig): Mesh {
     }
   };
 
-  /** Offers again to a peer whose connection never opened, in the rooms the relays still see it in. */
+  /** Offers again to a peer whose connection never opened, in the rooms it said hello in. */
   const meetAgain = (peer: string): void => {
     for (const name of present.get(peer) ?? []) meet(name, peer, throughRelay(peer));
   };
 
+  // Both sides hear each other's hello, so one rule says who offers: the same as for introductions.
   signaling.on('peer-joined', (peer, room) => {
     (present.get(peer) ?? present.set(peer, new Set()).get(peer)!).add(room);
-    meet(room, peer, throughRelay(peer));
-  });
-  signaling.on('peer-left', (peer, room) => {
-    const rooms = present.get(peer);
-    if (rooms?.delete(room) && rooms.size === 0) present.delete(peer);
+    meet(room, peer, shouldInitiate(did, peer) ? throughRelay(peer) : null);
   });
   signaling.on(
     'signal',
@@ -596,6 +587,8 @@ export function createMesh(config: MeshConfig): Mesh {
           room.peers.clear();
           rooms.delete(name);
           signaling.leave(name);
+          for (const [peer, named] of present)
+            if (named.delete(name) && named.size === 0) present.delete(peer);
           for (const peer of [...links]) closeIfIdle(peer);
           if (rooms.size === 0) {
             for (const timer of idle.values()) clearTimeout(timer);

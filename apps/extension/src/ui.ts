@@ -90,7 +90,7 @@ export function spaceList(status: CarrierStatus): HTMLElement {
           'span',
           { class: 'name' },
           h('span', {
-            class: `dot ${space.connection === 'connected' ? 'good' : space.connection === 'error' || space.connection === 'refused' ? 'bad' : ''}`,
+            class: `dot ${space.connection === 'connected' ? 'good' : space.connection === 'error' ? 'bad' : ''}`,
           }),
           nameOf(space),
         ),

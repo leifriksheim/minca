@@ -3,7 +3,7 @@
  * The shape of a node. Everything a method returns is JSON-serialisable on
  * purpose: the same calls cross a port, and are actions for a CLI, MCP and WebMCP.
  */
-import type { MailboxClient } from '../network/mailbox.js';
+import type { MailboxClient } from '../network/relays.js';
 import type { BodyOf, CollectionRef, IncludeMap, Query, ResultFor } from '../query/types.js';
 import type { CollectionRules } from '../records/rules.js';
 import type { CollectionContract, Contract, Line } from '../records/contracts.js';
@@ -385,8 +385,8 @@ export interface ListOptions {
   readonly includeDeleted?: boolean;
 }
 
-/** How a space reaches its peers. `refused`: another node with the same session key holds every relay, until it stops */
-export type ConnectionState = 'offline' | 'connecting' | 'connected' | 'error' | 'refused';
+/** How a space reaches its peers */
+export type ConnectionState = 'offline' | 'connecting' | 'connected' | 'error';
 
 /** How long a revoke waits for a peer to take it in: for a device about to stop, which sends nothing after */
 export interface RevokeOptions {

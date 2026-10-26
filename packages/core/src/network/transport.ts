@@ -37,18 +37,18 @@ export interface PeerTransport {
   readonly binding?: (peerId: string) => { readonly local: string; readonly remote: string } | null;
 }
 
-/** Receives the ICE candidates a connection discovers, to be carried to the other side. */
-export type CandidateSink = (candidate: RTCIceCandidateInit) => void;
-
+/**
+ * A transport whose connections start with an offer and an answer. Each
+ * carries its ICE candidates inside it, gathered before it is handed over, so
+ * a connection takes one message each way and nothing trickles after.
+ */
 export interface SignalledTransport extends PeerTransport {
   /** Opens a connection and returns the offer to carry to the peer. */
-  readonly createOffer: (peerId: string, onCandidate: CandidateSink) => Promise<RTCSessionDescriptionInit>;
+  readonly createOffer: (peerId: string) => Promise<RTCSessionDescriptionInit>;
   /** Accepts a peer's offer and returns the answer to carry back. */
   readonly handleOffer: (
     peerId: string,
     offer: RTCSessionDescriptionInit,
-    onCandidate: CandidateSink,
   ) => Promise<RTCSessionDescriptionInit>;
   readonly handleAnswer: (peerId: string, answer: RTCSessionDescriptionInit) => Promise<void>;
-  readonly addIceCandidate: (peerId: string, candidate: RTCIceCandidateInit) => Promise<void>;
 }

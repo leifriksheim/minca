@@ -43,7 +43,7 @@ export interface RelayedSignal {
   readonly origin: string;
   /** Who they want to connect to */
   readonly target: string;
-  readonly kind: 'offer' | 'answer' | 'candidate';
+  readonly kind: 'offer' | 'answer';
   readonly data: unknown;
   /** Forwards left before this is dropped */
   readonly hops: number;

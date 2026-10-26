@@ -1,4 +1,4 @@
-import type { CandidateSink, PeerTransportEvents, SignalledTransport } from './transport.js';
+import type { PeerTransportEvents, SignalledTransport } from './transport.js';
 import { createEmitter } from '../utils/events.js';
 import { bufferSource } from '../utils/guards.js';
 
@@ -16,6 +16,28 @@ interface PeerConnectionData {
 function fingerprintOf(description: RTCSessionDescription | null): string | null {
   const match = description?.sdp?.match(/^a=fingerprint:\s*(\S+)\s+(\S+)/im);
   return match ? `${match[1]!.toLowerCase()} ${match[2]!.toUpperCase()}` : null;
+}
+
+/** How long to gather ICE candidates before handing a description over with what there is */
+const GATHER_MS = 2000;
+
+/** The description once ICE gathering is done, or has had its time: its candidates travel inside it */
+function gathered(connection: RTCPeerConnection): Promise<RTCSessionDescriptionInit> {
+  return new Promise((resolve, reject) => {
+    const done = () => {
+      clearTimeout(timer);
+      connection.removeEventListener('icegatheringstatechange', check);
+      const description = connection.localDescription;
+      if (description) resolve({ type: description.type, sdp: description.sdp });
+      else reject(new Error('The connection has no description to send'));
+    };
+    const check = () => {
+      if (connection.iceGatheringState === 'complete') done();
+    };
+    const timer = setTimeout(done, GATHER_MS);
+    connection.addEventListener('icegatheringstatechange', check);
+    check();
+  });
 }
 
 export const DEFAULT_ICE_SERVERS: ReadonlyArray<RTCIceServer> = [
@@ -47,15 +69,10 @@ export function createRTCTransport(config?: RTCTransportConfig): SignalledTransp
     };
   };
 
-  const createConnection = (peerId: string, onCandidate: CandidateSink): RTCPeerConnection => {
+  const createConnection = (peerId: string): RTCPeerConnection => {
     close(peerId);
     const connection = new RTCPeerConnection({ iceServers: [...iceServers()] });
     connections.set(peerId, { connection, channel: null });
-
-    // Attached before any description is set, so no candidate can be missed.
-    connection.onicecandidate = (event) => {
-      if (event.candidate) onCandidate(event.candidate.toJSON());
-    };
     connection.onconnectionstatechange = () => {
       if (connection.connectionState === 'failed' || connection.connectionState === 'closed') {
         emit('disconnected', peerId);
@@ -65,28 +82,22 @@ export function createRTCTransport(config?: RTCTransportConfig): SignalledTransp
     return connection;
   };
 
-  const createOffer = async (
-    peerId: string,
-    onCandidate: CandidateSink,
-  ): Promise<RTCSessionDescriptionInit> => {
-    const connection = createConnection(peerId, onCandidate);
+  const createOffer = async (peerId: string): Promise<RTCSessionDescriptionInit> => {
+    const connection = createConnection(peerId);
     setupDataChannel(peerId, connection.createDataChannel('data', { ordered: true }));
-    const offer = await connection.createOffer();
-    await connection.setLocalDescription(offer);
-    return offer;
+    await connection.setLocalDescription(await connection.createOffer());
+    return gathered(connection);
   };
 
   const handleOffer = async (
     peerId: string,
     offer: RTCSessionDescriptionInit,
-    onCandidate: CandidateSink,
   ): Promise<RTCSessionDescriptionInit> => {
-    const connection = createConnection(peerId, onCandidate);
+    const connection = createConnection(peerId);
     connection.ondatachannel = (event) => setupDataChannel(peerId, event.channel);
     await connection.setRemoteDescription(offer);
-    const answer = await connection.createAnswer();
-    await connection.setLocalDescription(answer);
-    return answer;
+    await connection.setLocalDescription(await connection.createAnswer());
+    return gathered(connection);
   };
 
   const connectionOf = (peerId: string): RTCPeerConnection => {
@@ -122,8 +133,6 @@ export function createRTCTransport(config?: RTCTransportConfig): SignalledTransp
     handleOffer,
     handleAnswer: async (peerId: string, answer: RTCSessionDescriptionInit) =>
       connectionOf(peerId).setRemoteDescription(answer),
-    addIceCandidate: async (peerId: string, candidate: RTCIceCandidateInit) =>
-      connectionOf(peerId).addIceCandidate(candidate),
     send,
     close,
     closeAll: () => [...connections.keys()].forEach(close),

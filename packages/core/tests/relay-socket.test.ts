@@ -1,22 +1,29 @@
 /**
- * Signaling client reconnects: a relay that goes away for a while is found
- * again, however long it was gone, and until the client is let go of.
+ * A relay's socket reconnects: a relay that goes away for a while is found
+ * again, however long it was gone, and until the link is let go of.
  *
  * A fake WebSocket stands in for the relay, and the clock is mocked, so a
  * minute of backoff takes no time.
  */
-import { test, describe, beforeEach, afterEach, mock } from 'node:test';
+import { test, describe, before, after, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { createServer, type Server } from 'node:http';
+import { WebSocket as WsSocket, WebSocketServer } from 'ws';
 
-import { createSignalingClient, type RelayStatus, type SignalingClient } from '../src/network/signaling.js';
+import { p256 } from '@noble/curves/nist.js';
+import { createMincaLink } from '../src/network/relay-minca.js';
+import type { RelayLink } from '../src/network/relays.js';
+import { rendezvousKeys } from '../src/network/rendezvous.js';
+import { sealValue } from '../src/identity/envelope.js';
+import { base64UrlEncode } from '../src/utils/encoding.js';
 import { createMesh } from '../src/network/mesh.js';
+import { createRelay, MAX_MESSAGE_BYTES } from '../../relay/relay.mjs';
+import { portOf, textOf } from './helpers/net.js';
 import type { PeerTransportEvents, SignalledTransport } from '../src/network/transport.js';
 import { createEmitter } from '../src/utils/events.js';
 
 /** Whether the pretend relay answers */
 let relayUp = true;
-/** What the pretend relay closes a newly opened socket with, if anything */
-let refuseWith: number | null = null;
 /** Whether the pretend relay answers pings (an older one doesn't) */
 let answersPings = false;
 let sockets: FakeWebSocket[] = [];
@@ -44,7 +51,6 @@ class FakeWebSocket {
       }
       this.readyState = 1;
       this.onopen?.();
-      if (refuseWith !== null) this.drop(refuseWith);
     });
   }
 
@@ -69,7 +75,7 @@ class FakeWebSocket {
 
 const global: { WebSocket?: unknown } = globalThis;
 const realWebSocket = global.WebSocket;
-let client: SignalingClient;
+let client: RelayLink;
 
 /** Lets queued socket events run. */
 const settle = async () => {
@@ -86,15 +92,18 @@ async function pass(ms: number): Promise<void> {
 
 const opened = () => sockets.filter((socket) => socket.readyState === 1);
 
-describe('signaling reconnects', () => {
+/** Whether a socket asked to watch a topic */
+const watches = (socket: FakeWebSocket, topic: string) =>
+  socket.sent.some((message) => message.includes('"watch":true') && message.includes(`"topic":"${topic}"`));
+
+describe('a relay link reconnects', () => {
   beforeEach(() => {
     relayUp = true;
-    refuseWith = null;
     answersPings = false;
     sockets = [];
     global.WebSocket = FakeWebSocket;
     mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] });
-    client = createSignalingClient('ws://relay.example', 'did:key:zMe');
+    client = createMincaLink('ws://relay.example');
   });
 
   afterEach(() => {
@@ -105,7 +114,7 @@ describe('signaling reconnects', () => {
 
   test('comes back after a relay is gone for minutes, not five tries', async () => {
     await client.connect();
-    client.join('room-a');
+    client.watch('topic-a');
     assert.equal(client.status().state, 'open');
 
     relayUp = false;
@@ -124,11 +133,11 @@ describe('signaling reconnects', () => {
     await pass(40_000);
     assert.equal(client.status().state, 'open');
     assert.equal(client.status().failures, 0);
-    // And the room is joined again on the new socket.
-    const joins = opened()[0]!
-      .sent.filter((message) => message.includes('"type":"join"'))
+    // And the topic is watched again on the new socket.
+    const watching = opened()[0]!
+      .sent.filter((message) => message.includes('"watch":true'))
       .map((message): unknown => JSON.parse(message));
-    assert.deepEqual(joins, [{ type: 'join', room: 'room-a', from: 'did:key:zMe' }]);
+    assert.deepEqual(watching, [{ type: 'fetch', topic: 'topic-a', watch: true }]);
   });
 
   test('never waits more than about 30 seconds between tries', async () => {
@@ -193,9 +202,9 @@ describe('signaling reconnects', () => {
   });
 
   test('waking from a sleep dials again, with nothing asked of the relay', async () => {
-    // A laptop asleep: the relay dropped its socket and its rooms, and no close ever came.
+    // A laptop asleep: the relay dropped its socket and what it watched, and no close ever came.
     await client.connect();
-    client.join('room-a');
+    client.watch('topic-a');
     const dead = sockets.at(-1)!;
     dead.deaf = true;
     // Asleep for ten minutes: the clock moves on, and no timer fires.
@@ -204,16 +213,13 @@ describe('signaling reconnects', () => {
     const live = sockets.at(-1)!;
     assert.notEqual(live, dead);
     assert.equal(client.status().state, 'open');
-    assert.ok(
-      live.sent.some((message) => message.includes('"join"') && message.includes('room-a')),
-      'the room is joined again',
-    );
+    assert.ok(watches(live, 'topic-a'), 'the topic is watched again');
   });
 
   test('a socket that dies while awake is found out by a relay that answers pings', async () => {
     answersPings = true;
     await client.connect();
-    client.join('room-a');
+    client.watch('topic-a');
     await pass(2 * 60_000);
     assert.equal(client.status().state, 'open', 'a relay that answers keeps its socket');
     assert.equal(sockets.length, 1);
@@ -224,10 +230,7 @@ describe('signaling reconnects', () => {
     const live = sockets.at(-1)!;
     assert.notEqual(live, dead);
     assert.equal(client.status().state, 'open');
-    assert.ok(
-      live.sent.some((message) => message.includes('"join"') && message.includes('room-a')),
-      'the room is joined again',
-    );
+    assert.ok(watches(live, 'topic-a'), 'the topic is watched again');
   });
 
   test('a relay that never answers pings is not held to them', async () => {
@@ -237,25 +240,6 @@ describe('signaling reconnects', () => {
     assert.equal(sockets.at(-1), first);
     assert.equal(client.status().state, 'open');
     assert.ok(first.sent.some((message) => message.includes('"ping"')));
-  });
-
-  test('says why when the relay still holds an earlier socket', async () => {
-    await client.connect();
-    const seen: RelayStatus[] = [];
-    client.on('status', (status) => seen.push(status));
-    refuseWith = 4009;
-    sockets.at(-1)!.drop();
-    await pass(3_000);
-    const refused = seen.find((status) => status.closeCode === 4009);
-    assert.ok(refused?.problem?.includes('another tab'), 'the refusal is explained');
-    // And the next try waits for the relay to let the old one go.
-    const status = client.status();
-    assert.equal(status.state, 'waiting');
-    assert.ok(status.retryAt !== null && status.retryAt - Date.now() >= 5_000);
-
-    refuseWith = null;
-    await pass(15_000);
-    assert.equal(client.status().state, 'open');
   });
 });
 
@@ -274,7 +258,6 @@ function silentTransport() {
     },
     handleOffer: () => Promise.resolve({ type: 'answer', sdp: 'v=0' }),
     handleAnswer: () => Promise.resolve(),
-    addIceCandidate: () => Promise.resolve(),
     send: () => {},
     close: (peer) => void closed.push(peer),
     closeAll: () => {},
@@ -287,10 +270,29 @@ function silentTransport() {
 /** A relay message, as if it had arrived on the first socket */
 const fromRelay = (message: object) => sockets[0]!.onmessage?.({ data: JSON.stringify(message) });
 
+/** Lets crypto finish, which runs off the mocked clock, until `done` holds */
+async function crunch(done: () => boolean): Promise<void> {
+  for (let i = 0; i < 1000 && !done(); i++) await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(done(), 'gave up waiting');
+}
+
+/** A peer's sealed hello in a room, as the relay hands it to watchers */
+async function helloFrom(peer: string, room: string): Promise<object> {
+  const { topic, key } = await rendezvousKeys(room);
+  const box = base64UrlEncode(p256.getPublicKey(p256.utils.randomSecretKey(), true));
+  const id = base64UrlEncode(crypto.getRandomValues(new Uint8Array(12)));
+  const blob = await sealValue(
+    key,
+    'minca/rendezvous/v1',
+    { topic },
+    { kind: 'hello', id, at: Date.now(), from: peer, box },
+  );
+  return { type: 'mail', topic, items: [{ blob }], more: false };
+}
+
 describe('the mesh offers again', () => {
   beforeEach(() => {
     relayUp = true;
-    refuseWith = null;
     answersPings = false;
     sockets = [];
     global.WebSocket = FakeWebSocket;
@@ -305,14 +307,16 @@ describe('the mesh offers again', () => {
   const meshWith = (transport: SignalledTransport) =>
     createMesh({ did: 'did:key:zMe', relays: ['ws://relay.example'], createTransport: () => transport });
 
-  test('when an offer is never answered, while the peer is still in the room', async () => {
+  test('when an offer is never answered, while the room is held', async () => {
     const fake = silentTransport();
     const mesh = meshWith(fake.transport);
     const room = mesh.join('room-a');
     await room.connect();
 
-    fromRelay({ type: 'join', room: 'room-a', from: 'did:key:zThem' });
-    await settle();
+    const { topic } = await rendezvousKeys('room-a');
+    await crunch(() => watches(sockets[0]!, topic));
+    fromRelay(await helloFrom('did:key:zThem', 'room-a'));
+    await crunch(() => fake.offers.length > 0);
     assert.deepEqual(fake.offers, ['did:key:zThem']);
     assert.equal(mesh.status().connecting.length, 1);
 
@@ -328,12 +332,11 @@ describe('the mesh offers again', () => {
     await pass(11_000);
     assert.equal(fake.offers.length, 3);
 
-    // Gone from the room: the attempt runs out, and no other is made.
-    fromRelay({ type: 'leave', room: 'room-a', from: 'did:key:zThem' });
+    // The room let go of: the attempt runs out, and no other is made.
+    room.disconnect();
     await pass(5 * 60_000);
     assert.equal(fake.offers.length, 3);
     assert.equal(mesh.status().connecting.length, 0);
-    room.disconnect();
   });
 
   test('a connection that opens stops the clock', async () => {
@@ -341,8 +344,10 @@ describe('the mesh offers again', () => {
     const mesh = meshWith(fake.transport);
     const room = mesh.join('room-a');
     await room.connect();
-    fromRelay({ type: 'join', room: 'room-a', from: 'did:key:zThem' });
-    await settle();
+    const { topic } = await rendezvousKeys('room-a');
+    await crunch(() => watches(sockets[0]!, topic));
+    fromRelay(await helloFrom('did:key:zThem', 'room-a'));
+    await crunch(() => fake.offers.length > 0);
     fake.events.emit('connected', 'did:key:zThem');
     assert.equal(mesh.status().connecting.length, 0);
     assert.deepEqual(mesh.status().links, [{ peer: 'did:key:zThem', rooms: 0 }]);
@@ -367,5 +372,33 @@ describe('the mesh offers again', () => {
     assert.equal(room.isConnected(), false);
     stop();
     room.disconnect();
+  });
+});
+
+describe('a real relay', () => {
+  const relay = createRelay({});
+  const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_MESSAGE_BYTES });
+  let server: Server;
+  let url: string;
+
+  before(async () => {
+    server = createServer();
+    server.on('upgrade', (req, socket, head) => relay.upgrade(wss, req, socket, head));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    url = `ws://127.0.0.1:${portOf(server)}`;
+  });
+
+  after(() => {
+    relay.close();
+    server.close();
+  });
+
+  test('answers a ping, watching or not, so a client can tell its socket still reaches it', async () => {
+    const ws = new WsSocket(url);
+    await new Promise((resolve) => ws.once('open', resolve));
+    const answer = new Promise<string>((resolve) => ws.once('message', (data) => resolve(textOf(data))));
+    ws.send(JSON.stringify({ type: 'ping' }));
+    assert.equal(await answer, '{"type":"pong"}');
+    ws.close();
   });
 });

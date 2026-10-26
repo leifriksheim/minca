@@ -10,7 +10,7 @@ import * as z from 'zod';
 import { createNode } from '../src/node/node.js';
 import { remoteNode, remoteSigner, serveNode, serveSigner } from '../src/node/remote.js';
 import { createTransportSwitch, remoteTransport, serveTransport } from '../src/network/remote-transport.js';
-import type { CandidateSink, PeerTransportEvents, SignalledTransport } from '../src/network/transport.js';
+import type { PeerTransportEvents, SignalledTransport } from '../src/network/transport.js';
 import { createEmitter } from '../src/utils/events.js';
 import type { NodeEvent, P2PNode } from '../src/node/types.js';
 import type { Typed } from '../src/query/types.js';
@@ -289,27 +289,23 @@ describe("the page's signer, from a worker", () => {
 function recordingTransport() {
   const calls: string[] = [];
   const sent: Array<[string, number[]]> = [];
-  const sinks = new Map<string, CandidateSink>();
   const iceSeen: Array<ReadonlyArray<RTCIceServer>> = [];
   const events = createEmitter<PeerTransportEvents>();
   let ice: () => ReadonlyArray<RTCIceServer> = () => [];
   const transport: SignalledTransport = {
-    createOffer: async (peer, onCandidate) => {
+    createOffer: async (peer) => {
       calls.push(`offer ${peer}`);
       iceSeen.push(ice());
-      sinks.set(peer, onCandidate);
       return { type: 'offer', sdp: `offer-to-${peer}` };
     },
-    handleOffer: async (peer, offer, onCandidate) => {
+    handleOffer: async (peer, offer) => {
       calls.push(`answer ${peer} ${offer.sdp}`);
-      sinks.set(peer, onCandidate);
       return { type: 'answer', sdp: `answer-to-${peer}` };
     },
     handleAnswer: async (peer) => {
       calls.push(`answered ${peer}`);
       throw new Error('No connection found for peer ' + peer);
     },
-    addIceCandidate: async (peer, candidate) => void calls.push(`candidate ${peer} ${candidate.candidate}`),
     send: (peer, data) => void sent.push([peer, [...data]]),
     close: (peer) => void calls.push(`close ${peer}`),
     closeAll: () => void calls.push('close all'),
@@ -320,7 +316,6 @@ function recordingTransport() {
   return {
     calls,
     sent,
-    sinks,
     iceSeen,
     emit: events.emit,
     create: (iceServers: () => ReadonlyArray<RTCIceServer>) => {
@@ -331,27 +326,21 @@ function recordingTransport() {
 }
 
 describe("the page's WebRTC, from a worker", () => {
-  test('offers, answers and candidates go to the page; frames and events come back', async () => {
+  test('offers and answers go to the page; frames and events come back', async () => {
     const page = recordingTransport();
     const pair = channel();
     cleanup.push(serveTransport(pair.port1, page.create));
     const turn: RTCIceServer = { urls: 'turn:relay.test', username: 'u', credential: 'c' };
     const worker = remoteTransport(pair.port2, () => [turn]);
 
-    const found: RTCIceCandidateInit[] = [];
-    const offer = await worker.createOffer('did:key:zPeer', (candidate) => found.push(candidate));
+    const offer = await worker.createOffer('did:key:zPeer');
     assert.equal(offer.sdp, 'offer-to-did:key:zPeer');
     assert.deepEqual(page.iceSeen, [[turn]], 'the ICE servers the worker knows reach the page');
 
-    page.sinks.get('did:key:zPeer')?.({ candidate: 'candidate:1', sdpMid: '0' });
-    await until(() => found.length === 1, 1000, 'the candidate');
-    assert.equal(found[0]?.candidate, 'candidate:1');
-
     assert.equal(
-      (await worker.handleOffer('did:key:zOther', { type: 'offer', sdp: 'x' }, () => {})).sdp,
+      (await worker.handleOffer('did:key:zOther', { type: 'offer', sdp: 'x' })).sdp,
       'answer-to-did:key:zOther',
     );
-    await worker.addIceCandidate('did:key:zPeer', { candidate: 'candidate:2' });
     await assert.rejects(
       () => worker.handleAnswer('did:key:zPeer', { type: 'answer', sdp: 'y' }),
       /No connection found/,
@@ -380,7 +369,6 @@ describe("the page's WebRTC, from a worker", () => {
     assert.deepEqual(page.calls, [
       'offer did:key:zPeer',
       'answer did:key:zOther x',
-      'candidate did:key:zPeer candidate:2',
       'answered did:key:zPeer',
       'close did:key:zOther',
       'close all',
@@ -408,7 +396,7 @@ describe('WebRTC for a node the tabs share', () => {
     transport.on('connected', (peer) => connected.push(peer));
     transport.on('disconnected', (peer) => disconnected.push(peer));
 
-    await transport.createOffer('did:key:zPeer', () => {});
+    await transport.createOffer('did:key:zPeer');
     assert.deepEqual(first.calls, ['offer did:key:zPeer'], 'the tab open longest makes the connection');
     first.emit('connected', 'did:key:zPeer');
     second.emit('connected', 'did:key:zStray');
@@ -416,10 +404,10 @@ describe('WebRTC for a node the tabs share', () => {
 
     connections.remove('first');
     assert.deepEqual(disconnected, ['did:key:zPeer']);
-    await transport.createOffer('did:key:zPeer', () => {});
+    await transport.createOffer('did:key:zPeer');
     assert.deepEqual(second.calls, ['offer did:key:zPeer']);
 
     connections.remove('second');
-    await assert.rejects(() => transport.createOffer('did:key:zPeer', () => {}), /No page is open/);
+    await assert.rejects(() => transport.createOffer('did:key:zPeer'), /No page is open/);
   });
 });

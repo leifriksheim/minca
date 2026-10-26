@@ -13,8 +13,9 @@ import {
   PEERS_MESSAGE,
   SIGNAL_MESSAGE,
 } from '../src/network/introductions.js';
-import { createMultiSignalingClient, type MultiSignalingClient } from '../src/network/multi-signaling.js';
+import { createRendezvous, rendezvousKeys, type Rendezvous } from '../src/network/rendezvous.js';
 import { isRecord } from '../src/utils/guards.js';
+import { until } from './helpers/until.js';
 
 describe('who opens the connection', () => {
   test('exactly one side of any pair initiates', () => {
@@ -91,27 +92,28 @@ interface FakeSocket {
 }
 
 let sockets: FakeSocket[] = [];
-/** The global the signaling client opens sockets with, swapped for the fake */
+/** The global the relay links open sockets with, swapped for the fake */
 const global: { WebSocket?: unknown } = globalThis;
 const realWebSocket = global.WebSocket;
 
 /**
- * Clients to shut down after each test.
+ * Rendezvous to shut down after each test.
  *
- * A closed socket schedules a reconnect with backoff, so a client left running
+ * A closed socket schedules a reconnect with backoff, so one left running
  * keeps timers alive and holds the test process open long after its assertions
  * have passed.
  */
-let created: MultiSignalingClient[] = [];
+let created: Rendezvous[] = [];
 
-function makeClient(urls: ReadonlyArray<string>, did = 'did:key:zMe'): MultiSignalingClient {
-  const client = createMultiSignalingClient(urls, did);
-  created.push(client);
-  return client;
+function makeRendezvous(urls: ReadonlyArray<string>, did = 'did:key:zMe'): Rendezvous {
+  const rendezvous = createRendezvous(urls, did);
+  created.push(rendezvous);
+  return rendezvous;
 }
 
 /** A WebSocket that opens immediately and records what it was told to send. */
 class FakeWebSocket implements FakeSocket {
+  static readonly CONNECTING = 0;
   static readonly OPEN = 1;
   readyState = 0;
   onopen: (() => void) | null = null;
@@ -138,123 +140,69 @@ class FakeWebSocket implements FakeSocket {
   };
 }
 
-function installFakeWebSocket(): void {
-  sockets = [];
-  global.WebSocket = FakeWebSocket;
-}
-
 /** What a socket was told to send, read back */
 const sentOn = (socket: FakeSocket) => socket.sent.map((m): unknown => JSON.parse(m)).filter(isRecord);
 
-/** Delivers a message as if it had arrived from a relay. */
-function deliver(socket: FakeSocket, message: unknown): void {
-  socket.onmessage?.({ data: JSON.stringify(message) });
-}
+/** The topics a socket asked to watch */
+const watched = (socket: FakeSocket) =>
+  sentOn(socket)
+    .filter((m) => m.type === 'fetch' && m.watch === true)
+    .map((m) => m.topic);
 
 describe('several relays at once', () => {
   beforeEach(() => {
     created = [];
-    installFakeWebSocket();
+    sockets = [];
+    global.WebSocket = FakeWebSocket;
   });
 
   afterEach(() => {
-    for (const client of created) client.disconnect();
+    for (const rendezvous of created) rendezvous.disconnect();
     global.WebSocket = realWebSocket;
   });
 
   test('connects to every relay', async () => {
-    const client = makeClient(['ws://a.example', 'ws://b.example']);
-    await client.connect();
+    const rendezvous = makeRendezvous(['ws://a.example', 'ws://b.example']);
+    await rendezvous.connect();
 
     assert.deepEqual(
       sockets.map((socket) => socket.url),
       ['ws://a.example', 'ws://b.example'],
     );
-    assert.equal(client.isConnected(), true);
-  });
-
-  test('a peer on two relays is announced once', async () => {
-    const client = makeClient(['ws://a.example', 'ws://b.example']);
-    const joined: string[] = [];
-    client.on('peer-joined', (did, room) => void joined.push(`${room} ${did}`));
-    await client.connect();
-
-    // The same person, seen through both phone books. Announcing twice would
-    // have both sides opening a second connection to each other.
-    deliver(sockets[0]!, { type: 'join', from: 'did:key:zAlice', room: 'r1' });
-    deliver(sockets[1]!, { type: 'join', from: 'did:key:zAlice', room: 'r1' });
-    // The same person in another room is news, though.
-    deliver(sockets[1]!, { type: 'join', from: 'did:key:zAlice', room: 'r2' });
-
-    assert.deepEqual(joined, ['r1 did:key:zAlice', 'r2 did:key:zAlice']);
-  });
-
-  test('a peer is only gone once every relay says so', async () => {
-    const client = makeClient(['ws://a.example', 'ws://b.example']);
-    const left: string[] = [];
-    client.on('peer-left', (did) => void left.push(did));
-    await client.connect();
-
-    deliver(sockets[0]!, { type: 'join', from: 'did:key:zAlice', room: 'r1' });
-    deliver(sockets[1]!, { type: 'join', from: 'did:key:zAlice', room: 'r1' });
-
-    deliver(sockets[0]!, { type: 'leave', from: 'did:key:zAlice', room: 'r1' });
-    assert.deepEqual(left, [], 'still reachable through the other relay');
-
-    deliver(sockets[1]!, { type: 'leave', from: 'did:key:zAlice', room: 'r1' });
-    assert.deepEqual(left, ['did:key:zAlice']);
-  });
-
-  test('replies go back through the relay the peer was seen on', async () => {
-    const client = makeClient(['ws://a.example', 'ws://b.example']);
-    await client.connect();
-
-    deliver(sockets[1]!, { type: 'join', from: 'did:key:zAlice', room: 'r1' });
-    client.signal('offer', 'did:key:zAlice', { type: 'offer', sdp: 'x' });
-
-    assert.equal(sockets[0]!.sent.filter((m) => m.includes('offer')).length, 0);
-    assert.equal(sockets[1]!.sent.filter((m) => m.includes('offer')).length, 1);
-  });
-
-  test('an unknown peer is shouted at on every relay', async () => {
-    const client = makeClient(['ws://a.example', 'ws://b.example']);
-    await client.connect();
-
-    // An answer to an offer that arrived before this client saw them join.
-    client.signal('answer', 'did:key:zStranger', { type: 'answer', sdp: 'y' });
-
-    for (const socket of sockets) {
-      assert.equal(socket.sent.filter((m) => m.includes('answer')).length, 1);
-    }
+    assert.equal(rendezvous.isConnected(), true);
   });
 
   test('one relay being down is survivable', async () => {
-    const client = makeClient(['ws://a.example', 'ws://b.example']);
-    await client.connect();
+    const rendezvous = makeRendezvous(['ws://a.example', 'ws://b.example']);
+    await rendezvous.connect();
 
     sockets[0]!.close();
 
-    assert.equal(client.isConnected(), true, 'the other relay is still up');
-    client.signal('offer', 'did:key:zAlice', { type: 'offer', sdp: 'x' });
-    assert.equal(sockets[1]!.sent.filter((m) => m.includes('offer')).length, 1);
+    assert.equal(rendezvous.isConnected(), true, 'the other relay is still up');
+    assert.deepEqual(
+      rendezvous.relays().map((relay) => relay.state),
+      ['waiting', 'open'],
+    );
   });
 
-  test('rooms are joined on every relay, before or after connecting', async () => {
-    const client = makeClient(['ws://a.example', 'ws://b.example']);
-    client.join('r1');
-    await client.connect();
-    client.join('r2');
-    const joins = (socket: FakeSocket) =>
-      sentOn(socket)
-        .filter((m) => m.type === 'join')
-        .map((m) => m.room);
-    for (const socket of sockets) assert.deepEqual(joins(socket), ['r1', 'r2']);
+  test('rooms are watched on every relay, before or after connecting', async () => {
+    const rendezvous = makeRendezvous(['ws://a.example', 'ws://b.example']);
+    const [r1, r2] = await Promise.all([rendezvousKeys('r1'), rendezvousKeys('r2')]);
+    rendezvous.join('r1');
+    await rendezvous.connect();
+    rendezvous.join('r2');
+    await until(() => sockets.every((socket) => watched(socket).length === 2), 1000, 'both rooms watched');
+    for (const socket of sockets) assert.deepEqual(watched(socket).sort(), [r1.topic, r2.topic].sort());
 
-    client.leave('r1');
-    assert.ok(sentOn(sockets[0]!).some((m) => m.type === 'leave'));
+    rendezvous.leave('r1');
+    await until(
+      () => sentOn(sockets[0]!).some((m) => m.type === 'unwatch' && m.topic === r1.topic),
+      1000,
+      'the room let go of',
+    );
   });
 
   test('configuring no relay at all is refused', () => {
-    assert.throws(() => makeClient([]), /at least one relay/i);
+    assert.throws(() => makeRendezvous([]), /at least one relay/i);
   });
 });

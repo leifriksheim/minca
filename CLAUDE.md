@@ -36,7 +36,7 @@ implement and less to get wrong, not more.
 | `spec/`                                       | The protocol specification, `README.md` plus parts 01–07 (normative), and its threat model.    |
 | `packages/core`                               | `@minca/core`: the protocol library, its tests (`tests/*.test.ts`) and docs (`docs/`)          |
 | `packages/cli`                                | `@minca/cli`: `minca`, the always-on node, hosting, agents, MCP                                |
-| `packages/relay`                              | The signaling relay and its mailbox                                                            |
+| `packages/relay`                              | The Minca relay: a mailbox peers meet through, and inboxes and short links wait in             |
 | `packages/ui`                                 | `@minca/ui`: the design system (tokens, shapes, avatars) and the kit every app's screen gets   |
 | `apps/home`, `apps/example`, `apps/extension` | The account home, the app, the Chrome extension                                                |
 | `apps/liquid`                                 | Liquid: liquid democracy as an app of its own, a reference for what can be built on Minca      |
@@ -208,8 +208,9 @@ why it clears the bar.
 What the protocol uses (`packages/core`):
 
 - `@noble/curves` (with `@noble/hashes`), `packages/core/src/identity/crypto-p256.ts`:
-  seed to P-256 key (FIPS 186-5 A.2), point compression. Audited, used by viem
-  and ethers.
+  seed to P-256 key (FIPS 186-5 A.2), point compression; and secp256k1
+  Schnorr signatures on Nostr events (`packages/core/src/network/relay-nostr.ts`).
+  Audited, used by viem and ethers.
 - `@scure/base`, `packages/core/src/identity/did.ts`: base58btc for `did:key`.
   Same author and audit as noble.
 - `@cfworker/json-schema`, `packages/core/src/schema/collection-def.ts`:

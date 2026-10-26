@@ -51,8 +51,8 @@ describe('TURN passwords from the relay', () => {
     server.close();
   });
 
-  /** Opens a socket, joins a room as `did` and returns the first TURN offer it gets. */
-  const firstOffer = async (did: string) => {
+  /** Opens a socket, watches a room's topic and returns the first TURN offer it gets. */
+  const firstOffer = async () => {
     const ws = new WebSocket(url);
     await new Promise((resolve) => ws.once('open', resolve));
     const offer = new Promise<IceOffer>((resolve) =>
@@ -61,13 +61,13 @@ describe('TURN passwords from the relay', () => {
         if (found) resolve(found);
       }),
     );
-    ws.send(JSON.stringify({ type: 'join', from: did, room: 'room' }));
+    ws.send(JSON.stringify({ type: 'fetch', topic: 'r'.repeat(43), watch: true }));
     return { ws, offer: await offer };
   };
 
   test('sockets from one address share a username, and the password checks out', async () => {
-    const a = await firstOffer('did:key:zA');
-    const b = await firstOffer('did:key:zB');
+    const a = await firstOffer();
+    const b = await firstOffer();
     const [serverA] = a.offer.servers;
     const [serverB] = b.offer.servers;
     assert.ok(serverA && serverB);
