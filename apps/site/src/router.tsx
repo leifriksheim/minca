@@ -5,7 +5,6 @@ import { Protocol } from './pages/Protocol';
 import { Extension } from './pages/Extension';
 import { Download } from './pages/Download';
 import { Install } from './pages/Install';
-import { Mcp } from './pages/Mcp';
 
 /** The site's pages; a path it doesn't know shows the front page. */
 const root = createRootRoute({ component: Outlet, notFoundComponent: Home });
@@ -24,7 +23,6 @@ const routes = [
   createRoute({ getParentRoute: () => root, path: '/protocol', component: Protocol }),
   createRoute({ getParentRoute: () => root, path: '/extension', component: Extension }),
   createRoute({ getParentRoute: () => root, path: '/download', component: Download }),
-  createRoute({ getParentRoute: () => root, path: '/mcp', component: Mcp }),
   createRoute({ getParentRoute: () => root, path: '/install/mac', component: () => <Install kind="mac" /> }),
   createRoute({
     getParentRoute: () => root,
