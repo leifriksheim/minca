@@ -87,6 +87,14 @@ export type { StaySignedIn, StaySignedInStore, KeyValueStore } from './stay-sign
 export { offerToPhone, receiveFromDesktop, readPairingTicket, clearPairingTicket } from './pairing.js';
 export { accountHomeLink, readAccountHint, clearAccountHint } from './account-hint.js';
 export type { PairingStage, PairingOffer, Handover } from './pairing.js';
-export { offerConnectCode, connectWithCode, newConnectCode, readConnectCode } from './connect-code.js';
-export type { ConnectCodeStage, ConnectCodeOffer, CodeAsking, ConnectCode } from './connect-code.js';
+export {
+  answerConnectCode,
+  connectWithCode,
+  connectCodeIn,
+  connectCodeUrl,
+  newConnectCode,
+  readConnectCode,
+  receiveConnectCode,
+} from './connect-code.js';
+export type { ConnectCodeStage, CodeAsking } from './connect-code.js';
 export { offerToSave, accountCredentialName, recoveryKit } from './credentials.js';

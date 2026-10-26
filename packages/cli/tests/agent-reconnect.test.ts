@@ -68,7 +68,16 @@ async function accountHolder(hub: FakeHub) {
 }
 
 const connectHere = (home: string, connect: typeof connectWithCode) =>
-  connectAgent({ home, code: 'mc_test', relays: [], name: 'Agent on test', log: () => {}, connect });
+  connectAgent({
+    home,
+    accountHome: 'https://home.test',
+    relays: [],
+    name: 'Agent on test',
+    log: () => {},
+    onLink: () => {},
+    check: async () => {},
+    connect,
+  });
 
 const writes = (agent: RunningAgent, space: string, text: string) =>
   agent.node.records.put(space, 'app.note', { text }).then(

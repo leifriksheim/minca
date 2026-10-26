@@ -41,7 +41,7 @@ export const PAIRING_CHANNEL: ChannelKind = Object.freeze({
   message: 'minca/pairing/v1',
 });
 
-/** Connecting a program by a pasted code (`session/connect-code.ts`) */
+/** Connecting a program by a code it opens the account home with (`session/connect-code.ts`) */
 export const CODE_CHANNEL: ChannelKind = Object.freeze({
   room: 'minca/code-room/v1',
   key: 'minca/code-key/v1',

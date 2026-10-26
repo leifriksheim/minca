@@ -32,62 +32,84 @@ await runAction(node, 'records_put', { space, collection: 'app.todo.item', body:
 From `@minca/cli`, the `minca` command:
 
 ```bash
-npx @minca/cli connect mc_…   # the code from "Connect an agent" in an app
+npx @minca/cli connect
 ```
 
-It makes a key for this computer's agent, waits while the person allows it at
-their account home, and adds `minca mcp` to the agents it finds (Claude Code,
-Claude Desktop, Cursor, VS Code, Windsurf, Zed, Codex and more). The agent is then a node of its own: it follows
-the account's spaces and keeps working with every tab closed.
+It makes a key for this computer's agent and opens the person's account home
+in the browser, where they sign in, or make an account, and allow it. The
+home then shows six digits, which the person types into the terminal: the
+agent keeps its note only once they match. Then it
+adds `minca mcp` to the agents it finds (Claude Code, Claude Desktop, Cursor,
+VS Code, Windsurf, Zed, Codex and more). The agent is then a node of its own:
+it follows the account's spaces and keeps working with every tab closed.
+
+An agent can also start `minca mcp` before it is connected, from settings
+added by hand. Until it is, the server offers one tool, which opens the
+account home the same way, and gives the model the link only when no
+browser opened. The model asks the person for the six digits the home shows
+and gives them back to the same tool
+([the CLI's README](https://github.com/leifriksheim/minca/blob/main/packages/cli/README.md#agents)). Once the
+person has allowed it, every tool arrives (`notifications/tools/list_changed`)
+without a restart.
 
 `minca agent` runs the same agent without a chat client: it chats in the
 terminal and thinks with the person's own Anthropic API key, offering the model
 the same tools. See `packages/cli/README.md`.
 
-## Connecting with a code
+## Connecting at your account home
 
 The code, the channel it opens and the messages the two sides trade are
 protocol, and know nothing of agents
 ([spec 06 §3](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
-The library's two sides are `offerConnectCode` (the app) and `connectWithCode`
-(the program).
+The library's two sides are `connectWithCode` (the program) and
+`receiveConnectCode` (the account home).
 
-- `offerConnectCode({ relays, account, origin? }, onStage)` makes a code that
-  names `account`, the account the app is signed in to, and tells the
-  program `origin` (default: the page's). On `asking` it hands the app the
-  program's ask (`did`, `name`, `proof`, `recordsOnly`) and two answers,
-  `allow(grant)` and `deny(reason?)`. What the program asked for is only a
-  request: the app decides, and denies an ask it won't grant as asked.
-- `connectWithCode({ code, key, name, recordsOnly, network, onWaiting? })`
-  signs the proof itself once it learns the app's origin
-  (`keyProof(key, { via: 'code', recordsOnly, origin })`), tells
-  `onWaiting({ origin })` when the app has heard, and refuses a grant from any
-  account but the one the code names.
+- `newConnectCode()` makes a code, and `connectCodeUrl(home, code)` the link
+  to open: `https://home.minca.social/connect#mc_…`.
+- `connectWithCode({ home, code, key, name, network, check, onWaiting? })`
+  waits in the code's room, signs the proof once it learns the home's origin
+  (`keyProof(key, { via: 'code', recordsOnly: true, origin })`), tells
+  `onWaiting({ origin })` when the home has heard, and keeps only a
+  records-only note made out to its key, once `check(matches)` has had the
+  person give the six digits the home showed.
+- `receiveConnectCode({ code, relays, onAnswered? })`, on the home's connect
+  page, answers the program and gives back the same `IncomingRequest` an
+  app's popup does: records only, in the whole account, for 30 days, with
+  `check`, the six digits to show.
+  `connectCodeIn(location.hash)` finds the code. `answerConnectCode` is the
+  same exchange without the request around it.
 
 What the reference sides add:
 
-- The terminal (`minca connect`) asks for records only, and shows the app's
-  origin while the person decides.
-- The app (`apps/example/src/components/ConnectAgent.tsx`) shows the code. It
-  gives a program records only (`apps/example/src/program-terms.ts`): it
-  denies an ask without `recordsOnly: true`, and otherwise shows the
-  program's name and what it may do, and asks the person to allow it.
-- Allowing opens the account home (`connectToHome` with `audience` and
-  `audienceProof`, which adds `via: 'code'`) with `access: write`,
-  `scope: account`, `chooseSpaces: false`, `recordsOnly: true` and the
-  lifetime the person chose. The home warns in red when a request by code asks
-  for more than records.
-- The app shows the agent connected when `code:done` arrives.
-- The terminal waits 60 s to hear `code:heard`, then 10 minutes for the
-  answer, and checks the grant with `checkGrant(grant, did, { recordsOnly: true })`
-  before keeping it, and again each time it starts.
-- The terminal makes a new key for each code. Connecting again, after a
+- The terminal asks which account home to open, with home.minca.social, or
+  the one it connected at last, filled in so Enter takes it.
+  `--account-home` or `MINCA_ACCOUNT_HOME` names it ahead. The MCP server's
+  connect tool takes no home: the model never chooses where the person signs
+  in. Anywhere nothing can be asked, it uses the usual one.
+- It opens the link in the browser, and shows it only when none opens (a
+  server, a terminal over SSH), since whoever else holds it could answer as
+  the home. The link works from any device.
+- `connectWithCode` asks only the home it opened, and keeps that home in the
+  grant, whatever the answer names; it prints the account's DID beside its
+  name.
+- The home (`apps/home/src/components/ConnectPage.tsx`) takes the code out
+  of the address bar, shows the program's name and says to allow it only if
+  the person started it just now. Once answered it says so, and the tab can
+  be closed. When no program asks within a minute, it says the link was
+  used or has run out.
+- The terminal waits 10 minutes for the home to open, since the person may
+  make an account first, then 30 minutes for the answer. It checks the grant
+  with `checkGrant(grant, did, { recordsOnly: true })` before keeping it, and
+  again each time it starts, and says whose account it joined.
+- The terminal makes a new key for each connect. Connecting again, after a
   disconnect or to renew, gives a new key and note; a running `minca mcp`
   takes them up without a restart. The earlier connection stays in the
   account home until it is disconnected there, and nothing can use it: its
   key is gone from the computer.
+- An app only says how: "Connect an agent" in the example app shows the
+  command (`apps/example/src/components/ConnectAgent.tsx`).
 
-_Source: `packages/core/src/session/connect-code.ts`, `packages/cli/src/agent.ts` (`connectAgent`, `startAgentNode`, `reloadOnConnect`), `apps/example/src/components/ConnectAgent.tsx`, `apps/example/src/program-terms.ts`, `apps/home/src/components/ConnectPage.tsx`. Tests: `packages/core/tests/connect-code.test.ts`, `packages/core/tests/records-only.test.ts` ("a program connected by code, through the account home"), `apps/example/tests/program-terms.test.ts`, `packages/cli/tests/agent-reconnect.test.ts`._
+_Source: `packages/core/src/session/connect-code.ts`, `packages/cli/src/agent.ts` (`connectAgent`, `openInBrowser`, `startAgentNode`, `reloadOnConnect`), `packages/cli/src/main.ts` (`chooseAccountHome`), `packages/cli/src/mcp.ts` (`connectWaiting`, `waitingMcp`), `apps/home/src/components/ConnectPage.tsx`. Tests: `packages/core/tests/connect-code.test.ts`, `packages/core/tests/records-only.test.ts` ("a program connected by code, through the account home"), `packages/cli/tests/agent-reconnect.test.ts`, `packages/cli/tests/cli.test.ts` ("not connected yet, it offers agent_connect…")._
 
 ## Tools an agent gets
 

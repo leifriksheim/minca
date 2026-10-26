@@ -9,7 +9,7 @@ interface ImportMetaEnv {
   readonly VITE_MINCA_HOST?: string;
   /** The account home's connect page, e.g. http://localhost:5174/connect */
   readonly VITE_MINCA_HOME?: string;
-  /** What "Connect an agent" tells people to run, before the code. Default `npx @minca/cli connect` */
+  /** What "Connect an agent" tells people to run. Default `npx @minca/cli connect` */
   readonly VITE_MINCA_CONNECT?: string;
   /** A Photon server for finding places (`@minca/app-shared/places`); photon.komoot.io when unset */
   readonly VITE_MINCA_PLACES?: string;

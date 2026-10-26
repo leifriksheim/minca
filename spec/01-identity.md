@@ -258,9 +258,9 @@ this one own the use; this table is the registry.
 | `minca/pairing-room/v1`                  | CID of prefix ‖ secret (no separator)     | 16-byte pairing secret                                                                           | room id                    | Pairing room                                                            | `identity/channel.ts:39`            | 01     |
 | `minca/pairing-key/v1\|<side>\|<O>\|<J>` | HKDF, L=32                                | pairing secret ‖ ECDH shared x                                                                   | AES-256-GCM key            | Pairing messages sent by `<side>` (`offer` or `join`)                   | `identity/channel.ts:40`            | 01     |
 | `minca/pairing-code/v1\|<O>\|<J>`        | HKDF, L=4 → uint32 mod 10⁶                | pairing secret ‖ ECDH shared x                                                                   | 6-digit code               | Code both screens show                                                  | `identity/pairing.ts:18`            | 01     |
+| `minca/code-check/v1\|<O>\|<J>`          | HKDF, L=4 → uint32 mod 10⁶                | connect-code secret ‖ ECDH shared x                                                              | 6-digit check              | Check the home shows and the person gives the program                   | `session/connect-code.ts:71`        | 06     |
 | `minca/code-room/v1`                     | CID of prefix ‖ secret (no separator)     | 16-byte connect-code secret                                                                      | room id                    | Room for connecting by code                                             | `identity/channel.ts:46`            | 06     |
 | `minca/code-key/v1\|<side>\|<O>\|<J>`    | HKDF, L=32                                | connect-code secret ‖ ECDH shared x                                                              | AES-256-GCM key            | Connect-by-code messages sent by `<side>`                               | `identity/channel.ts:47`            | 06     |
-| `minca/code-account/v1`                  | SHA-256 of prefix ‖ input, first 8 bytes  | UTF-8 account DID                                                                                | account fingerprint        | The account a connect code names                                        | `session/connect-code.ts:27`        | 06     |
 | `minca/space-invite/v1`                  | HKDF, L=32 → `P256KeyFrom`                | 32-byte invite secret                                                                            | P-256 key                  | Invite key                                                              | `space/space-access.ts:28`          | 03     |
 | `minca/invite-link/v1\|secret`           | HKDF, L=32                                | 16-byte short link secret                                                                        | 32-byte invite secret      | A short link's invite secret, which the invite key is derived from      | `space/invite-link.ts:177`          | 03     |
 | `minca/invite-link/v1\|seal`             | HKDF, L=32                                | 16-byte short link secret                                                                        | AES-256-GCM key            | The sealed invite a short link names                                    | `space/invite-link.ts:166`          | 03     |
@@ -313,7 +313,7 @@ new labels do not collide with them:
 | String                                                 | Kind                                                   | Defined in                                                 | Part |
 | ------------------------------------------------------ | ------------------------------------------------------ | ---------------------------------------------------------- | ---- |
 | `minca/space-invite/v1\|<spaceId>\|<did>`              | Message signed by an invite key                        | `space/space-access.ts:143`                                | 03   |
-| `{"audience":…,"proof":"minca/connect-key/v1",…}`      | Canonical JSON signed by a key a connect request names | `session/connect.ts:282` (`keyStatement`)                  | 06   |
+| `{"audience":…,"proof":"minca/connect-key/v1",…}`      | Canonical JSON signed by a key a connect request names | `session/connect.ts:283` (`keyStatement`)                  | 06   |
 | `minca/inbox-purge/v1\|<topic>\|<nonce>\|<ids>`        | Signed by an inbox signing key, checked by a relay     | `inbox/inbox.ts:194`, `packages/relay/relay.mjs` (`purge`) | 07   |
 | `minca-peer/v3\|client\|…`, `minca-peer/v3\|server\|…` | Signed peer-auth messages                              | `network/peer-auth.ts:198,200`                             | 04   |
 | `minca-mesh/v1\|…`                                     | Signed mesh proof                                      | `network/peer-auth.ts:316`                                 | 04   |
@@ -1228,8 +1228,9 @@ Each use names a **kind**, three labels:
 | Pairing         | `minca/pairing-room/v1` | `minca/pairing-key/v1` | `minca/pairing/v1` |
 | Connect by code | `minca/code-room/v1`    | `minca/code-key/v1`    | `minca/code/v1`    |
 
-The side that made the secret and shows it is `offer`; the side that joins
-with it is `join`. Both join mesh room ([04 — Network](04-network.md)):
+In pairing, the side that made the secret and shows it is `offer`, and the
+side that joins with it is `join`. In connecting by code the account home is
+`offer` and the program, which made the code, is `join`. Both join mesh room ([04 — Network](04-network.md)):
 
 ```
 room = CID(UTF-8(room label) ‖ secret)     // raw concatenation
@@ -1262,7 +1263,8 @@ refused message leaves the count as it was. So a message sent back to the side
 that sealed it, presented as another type, replayed or delivered out of order
 does not open.
 
-Pairing adds a short code both screens show, and a commitment:
+Pairing adds a short code both screens show, and a commitment (connecting by
+code adds the same, under `minca/code-check/v1`; [06](06-nodes-and-sessions.md) §3):
 
 ```
 code       = uint32_be(HKDF(ikm, "minca/pairing-code/v1" ‖ transcript, 4)) mod 1000000,

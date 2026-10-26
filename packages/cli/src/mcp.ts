@@ -182,28 +182,162 @@ async function serveStdio(
 
 /** The one tool offered while another process runs the agent */
 export const TAKE_OVER = 'agent_take_over';
+/** The one tool offered while this computer's agent isn't connected to an account */
+export const CONNECT = 'agent_connect';
 
-/** Another process runs this computer's agent: how to get it here */
+/** Minca isn't here yet: what the model is told, the one tool it may call, and how it comes to run here */
 export interface Waiting {
+  /** Why, and what to do: the server's instructions, and what any other tool says */
+  readonly why: string;
+  readonly tool: {
+    readonly name: string;
+    readonly description: string;
+    readonly destructive: boolean;
+    readonly inputSchema?: Record<string, unknown>;
+  };
+  /** What calling the tool does, with its arguments: starts the agent here, or says in words what happens next */
+  readonly call: (args: Record<string, unknown>) => Promise<P2PNode | string>;
+  /** Starts the agent here once it can, or gives null meanwhile */
+  readonly tryStart: () => Promise<P2PNode | null>;
+  /** The node once the agent runs here, if it can change after it starts: a reconnect starts it again */
+  readonly current?: () => P2PNode | null;
+  /** Once it runs here, what calling the tool again says: whose account it joined */
+  readonly joined?: () => string;
+}
+
+/** Another process runs this computer's agent: say who, and offer {@link TAKE_OVER} */
+export function busyWaiting(params: {
   /** Who runs it, for the person to recognise (`describeAgentProcess`) */
   readonly holder: string;
-  /** Starts the agent here if the other has stopped, or gives null while it runs */
   readonly tryStart: () => Promise<P2PNode | null>;
   /** Stops the other and starts the agent here */
   readonly takeOver: () => Promise<P2PNode>;
-  /** The node once the agent runs here, if it can change after it starts: a reconnect starts it again */
   readonly current?: () => P2PNode | null;
+}): Waiting {
+  return {
+    why:
+      `Minca isn't available in this session: this computer's agent is already running in ${params.holder}. ` +
+      'Only one process may run it at a time, since two would sign with the same key. ' +
+      `Tell the user, and ask them before calling ${TAKE_OVER}: it stops the other one, which then loses Minca. ` +
+      'If they close that one instead, this session gets Minca by itself within a few seconds.',
+    tool: {
+      name: TAKE_OVER,
+      description:
+        `Stop the other process running this computer's Minca agent (${params.holder}) and run it here instead, ` +
+        'which brings every Minca tool to this session. The other one loses Minca. Ask the user first.',
+      destructive: true,
+    },
+    call: () => params.takeOver(),
+    tryStart: params.tryStart,
+    ...(params.current ? { current: params.current } : {}),
+  };
 }
 
-/** How often a waiting server looks for the other to have stopped */
+/** How many check codes the model may give before connecting starts again */
+const CHECK_TRIES = 5;
+
+/**
+ * This computer's agent isn't connected: offer {@link CONNECT}, which opens
+ * the person's account home, then takes the check code it shows from them.
+ */
+export function connectWaiting(params: {
+  /** The account home it opens: the person's choice, never the model's */
+  readonly accountHome: string;
+  /**
+   * Starts connecting, asking for the check code through `check`, and says
+   * whether the browser opened. The link carries the code, so it is given
+   * only when it didn't: whoever else holds it could answer as the home.
+   */
+  readonly connect: (
+    check: (matches: (typed: string) => boolean) => Promise<void>,
+  ) => Promise<{ readonly opened: boolean; readonly url: string }>;
+  readonly tryStart: () => Promise<P2PNode | null>;
+  readonly current?: () => P2PNode | null;
+  /** Whose account it joined, once it has: `name` is only what the home said, `did` is the account */
+  readonly account: () => { readonly name: string; readonly did: string } | null;
+}): Waiting {
+  /** The connection waiting for the person's check code, once the home has their question */
+  let asking: {
+    readonly matches: (typed: string) => boolean;
+    readonly done: () => void;
+    readonly fail: (error: Error) => void;
+    tries: number;
+  } | null = null;
+  const check = (matches: (typed: string) => boolean) =>
+    new Promise<void>((done, fail) => (asking = { matches, done, fail, tries: 0 }));
+
+  const giveCode = (typed: string): string => {
+    const now = asking;
+    if (!now)
+      return (
+        "Their account home hasn't heard from Minca yet, so it shows no code. Ask them to open it and sign in, " +
+        `then call ${CONNECT} with the code it shows.`
+      );
+    if (now.matches(typed)) {
+      asking = null;
+      now.done();
+      return "That's the code. Minca's tools arrive here in a moment.";
+    }
+    now.tries += 1;
+    if (now.tries >= CHECK_TRIES) {
+      asking = null;
+      now.fail(new Error('Too many wrong codes.'));
+      return `Too many wrong codes, so connecting stopped. Call ${CONNECT} again to start over.`;
+    }
+    return "That isn't the code their account home shows. Ask them to read it again, from the page that opened.";
+  };
+
+  return {
+    why:
+      "Minca isn't connected to the user's account on this computer yet. " +
+      `Call ${CONNECT} when they want to use Minca: it opens their account home in the browser, ` +
+      'where they sign in, or make an account, and allow this agent. Their home then shows a six-digit code; ' +
+      `ask them for it and call ${CONNECT} again with it. Every Minca tool arrives once the code matches.`,
+    tool: {
+      name: CONNECT,
+      description:
+        `Connect Minca to the user's account: opens their Minca account home (${params.accountHome}) in the ` +
+        'browser to allow this agent. Call it again with `code`, the six digits that page shows once they ' +
+        'allow it; only the user can give it. To use another home, they run `minca connect` in a terminal.',
+      destructive: false,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          code: { type: 'string', description: 'The six-digit code the user read on their account home' },
+        },
+      },
+    },
+    call: async (args) => {
+      if (typeof args.code === 'string' && args.code.trim()) return giveCode(args.code);
+      const { opened, url } = await params.connect(check);
+      const there =
+        'There they sign in or make an account, and allow this agent. The page then shows a six-digit code: ' +
+        `ask them for it, and call ${CONNECT} with it.`;
+      return opened
+        ? `Opened the user's Minca account home (${params.accountHome}) in their browser. ${there}`
+        : `No browser opened on this computer. Give the user this link to open, and nobody else: ${url} ${there}`;
+    },
+    tryStart: params.tryStart,
+    ...(params.current ? { current: params.current } : {}),
+    joined: () => {
+      const account = params.account();
+      return account
+        ? `Connected to the Minca account “${account.name}” (${account.did}). Tell the user both, so they can ` +
+            "check it is theirs; if it isn't, they run `minca disconnect` and connect again."
+        : 'Connected.';
+    },
+  };
+}
+
+/** How often a waiting server looks for the agent to be ready */
 const RETRY_MS = 5_000;
 
 /**
- * Answers MCP while another process runs this computer's agent. Exiting
- * would leave the client with only "connection closed"; this says who has
- * the agent and offers one tool, {@link TAKE_OVER}. Once the agent runs here,
- * taken over or let go of by the other, the node's own tools replace it and
- * the client is told (`notifications/tools/list_changed`).
+ * Answers MCP while Minca can't run here yet: another process runs the agent,
+ * or it isn't connected. Exiting would leave the client with only
+ * "connection closed"; this says why and offers one tool. Once the agent
+ * runs here, the node's own tools replace it and the client is told
+ * (`notifications/tools/list_changed`).
  */
 export function waitingMcp(
   waiting: Waiting,
@@ -212,17 +346,18 @@ export function waitingMcp(
   notify: (message: Outgoing) => void,
 ) {
   let node: P2PNode | null = null;
-  // One start at a time: the retry and a take-over never race for the lock.
+  // One start at a time: the retry and the tool never race for the lock.
   let queue: Promise<unknown> = Promise.resolve();
-  const exclusive = (start: () => Promise<P2PNode | null>): Promise<P2PNode | null> => {
+  const exclusive = (start: () => Promise<P2PNode | string | null>): Promise<P2PNode | string | null> => {
     const next = queue.then(async () => {
       if (node) return node;
-      node = await start();
-      if (node) {
+      const result = await start();
+      if (result !== null && typeof result !== 'string') {
+        node = result;
         clearInterval(timer);
         notify({ jsonrpc: '2.0', method: 'notifications/tools/list_changed' });
       }
-      return node;
+      return result;
     });
     queue = next.catch(() => {});
     return next;
@@ -231,30 +366,31 @@ export function waitingMcp(
   const timer = setInterval(() => void attempt(), RETRY_MS);
   timer.unref();
 
-  const unavailable =
-    `Minca isn't available in this session: this computer's agent is already running in ${waiting.holder}. ` +
-    'Only one process may run it at a time, since two would sign with the same key. ' +
-    `Tell the user, and ask them before calling ${TAKE_OVER}: it stops the other one, which then loses Minca. ` +
-    'If they close that one instead, this session gets Minca by itself within a few seconds.';
-  const takeOverTool = {
-    name: TAKE_OVER,
-    description:
-      `Stop the other process running this computer's Minca agent (${waiting.holder}) and run it here instead, ` +
-      'which brings every Minca tool to this session. The other one loses Minca. Ask the user first.',
-    inputSchema: { type: 'object', properties: {} },
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+  const tool = {
+    name: waiting.tool.name,
+    description: waiting.tool.description,
+    inputSchema: waiting.tool.inputSchema ?? { type: 'object', properties: {} },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: waiting.tool.destructive,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
   };
 
   const live = () => (node ? (waiting.current?.() ?? node) : null);
 
   async function handle(message: JsonRpcRequest): Promise<JsonRpcResponse | null> {
     const running = live();
-    if (running) return handleMcpMessage(running, message, serverInfo, options);
     const id = message.id ?? null;
     const reply = (result: unknown): JsonRpcResponse | null =>
       message.id === undefined ? null : { jsonrpc: '2.0', id, result };
     const text = (said: string, isError: boolean) =>
       reply({ content: [{ type: 'text', text: said }], isError });
+    // Its tool, called again once it runs here, says whose account it joined.
+    if (running && waiting.joined && message.method === 'tools/call' && message.params?.name === tool.name)
+      return text(waiting.joined(), false);
+    if (running) return handleMcpMessage(running, message, serverInfo, options);
 
     switch (message.method) {
       case 'initialize': {
@@ -266,30 +402,27 @@ export function waitingMcp(
               : SUPPORTED_VERSIONS[0],
           capabilities: { tools: { listChanged: true } },
           serverInfo,
-          instructions: unavailable,
+          instructions: waiting.why,
         });
       }
       case 'tools/list': {
         const started = (await attempt()) && live();
-        return started
-          ? handleMcpMessage(started, message, serverInfo, options)
-          : reply({ tools: [takeOverTool] });
+        return started ? handleMcpMessage(started, message, serverInfo, options) : reply({ tools: [tool] });
       }
       case 'tools/call': {
-        if (message.params?.name === TAKE_OVER) {
+        if (message.params?.name === tool.name) {
           try {
-            await exclusive(waiting.takeOver);
-            const count = mcpTools(options).length;
-            return text(
-              `Done: Minca runs in this session now, with ${count} tools. The other one was stopped.`,
-              false,
-            );
+            const args = message.params?.arguments;
+            const result = await exclusive(() => waiting.call(isRecord(args) ? args : {}));
+            return typeof result === 'string'
+              ? text(result, false)
+              : text(`Done: Minca runs in this session now, with ${mcpTools(options).length} tools.`, false);
           } catch (error) {
             return text(error instanceof Error ? error.message : String(error), true);
           }
         }
         const started = (await attempt()) && live();
-        return started ? handleMcpMessage(started, message, serverInfo, options) : text(unavailable, true);
+        return started ? handleMcpMessage(started, message, serverInfo, options) : text(waiting.why, true);
       }
       case 'ping':
         return reply({});
@@ -309,8 +442,8 @@ export function waitingMcp(
 }
 
 /**
- * Serves MCP over stdin/stdout while another process runs the agent, until
- * stdin closes ({@link waitingMcp}).
+ * Serves MCP over stdin/stdout while Minca can't run here yet, until stdin
+ * closes ({@link waitingMcp}).
  * @returns The node, if the agent came to run here, for the caller to close
  */
 export async function runWaitingMcpStdio(

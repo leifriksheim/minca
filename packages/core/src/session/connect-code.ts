@@ -1,37 +1,37 @@
 /**
  * @module session/connect-code
- * Connecting a program that has no browser of its own (`minca connect mc_…`)
- * with one code copied from an app. The two meet on the code's channel
- * (`identity/channel.ts`, `CODE_CHANNEL`): the app says where it lives, the
- * program says which key it holds and what it asks for, the app decides
- * whether to ask the account home for that, and the person allows it there.
- * The app hands back a note made out to the program's key, and the program
- * keeps it only if it comes from the account the code names. The relay learns
- * and changes nothing, and a recording of the room is no use to someone who
- * sees the code later.
+ * Connecting a program that has no browser of its own (`minca connect`) to an
+ * account. The program makes a one-time code and opens the account home with
+ * it (`<home>/connect#mc_…`). The two meet on the code's channel
+ * (`identity/channel.ts`, `CODE_CHANNEL`): the home says where it lives, the
+ * program says which key it holds, the person signs in and allows it there,
+ * and the home hands back a records-only note made out to the program's key.
+ * The relay learns and changes nothing, and a recording of the room is no use
+ * to someone who sees the code later.
  */
 import type { PeerTransport } from '../network/transport.js';
 import { channelKeyPair, CODE_CHANNEL, deriveChannel, type Channel } from '../identity/channel.js';
-import { base64UrlDecode, base64UrlEncode, concatBytes, utf8Encode } from '../utils/encoding.js';
+
+/** One side's ephemeral key for one exchange */
+type ChannelKeys = Awaited<ReturnType<typeof channelKeyPair>>;
+import { base64UrlDecode, base64UrlEncode } from '../utils/encoding.js';
 import { sha256 } from '../utils/hash.js';
 import { isObject } from '../utils/guards.js';
 import type { NetworkMessage, PeerInfo } from '../types.js';
 import { grantsRecordsOnly } from '../identity/abilities.js';
-import { checkGrant, keyProof, type AppKey, type Grant } from './connect.js';
+import { checkGrant, keyProof, type AppKey, type Grant, type IncomingRequest } from './connect.js';
 import { bytesField, meetOnChannel } from './channel-room.js';
 
 const CODE_PREFIX = 'mc_';
 const SECRET_BYTES = 16;
-/** How much of the account's fingerprint the code carries */
-const ACCOUNT_BYTES = 8;
-const ACCOUNT_LABEL = 'minca/code-account/v1';
-/** base64url characters for the secret and the fingerprint together */
-const CODE_CHARS = Math.ceil(((SECRET_BYTES + ACCOUNT_BYTES) * 4) / 3);
+/** base64url characters for the secret, unpadded */
+const CODE_CHARS = Math.ceil((SECRET_BYTES * 4) / 3);
 
 /** Messages on the channel: the key exchange in the clear, the rest sealed */
 const HELLO = 'code:hello';
 const KEY = 'code:key';
-const APP = 'code:app';
+const POINT = 'code:point';
+const HOME = 'code:home';
 const ASK = 'code:ask';
 const HEARD = 'code:heard';
 const ANSWER = 'code:answer';
@@ -39,10 +39,8 @@ const DONE = 'code:done';
 
 /** Longest name a program may give itself */
 const MAX_NAME = 80;
-/** Longest origin an app may give */
+/** Longest origin a home may give */
 const MAX_ORIGIN = 200;
-/** Peers either side runs an exchange with before the right one shows up */
-const MAX_TRIED = 32;
 
 /** Who is asking, as the program said */
 export interface CodeAsking {
@@ -50,22 +48,16 @@ export interface CodeAsking {
   readonly did: string;
   /** What the program calls itself, e.g. "Agent on leifs-macbook". Shown, not trusted. */
   readonly name: string;
-  /** The key's proof that it holds itself, for the connect request (`keyProof`, `via: code`, this app's origin) */
+  /** The key's proof that it holds itself, for a records-only note (`keyProof`, `via: code`, the home's origin) */
   readonly proof: string;
-  /**
-   * Whether it asks for a note that grants records only. Only a request: the
-   * app decides what to ask the home for. The proof binds what the program
-   * asked, so an app that won't give that denies it.
-   */
-  readonly recordsOnly: boolean;
 }
 
-/** What the app tells the program */
+/** What the home tells the program */
 type Answer = { readonly grant: Grant } | { readonly denied: string };
 
 /** Where the two sides meet */
 interface CodeNetwork {
-  /** Relays to meet on. The app's and the program's must share one. */
+  /** Relays to meet on. The home's and the program's must share one. */
   readonly relays: ReadonlyArray<string>;
   /** A transport instead of WebRTC — for tests */
   readonly transport?: (did: string) => PeerTransport;
@@ -73,39 +65,50 @@ interface CodeNetwork {
 
 // ─── The code ────────────────────────────────────────────────────────
 
-/** What a code holds */
-export interface ConnectCode {
-  /** The channel's secret */
-  readonly secret: Uint8Array;
-  /** The start of the fingerprint of the account the app is signed in to: a grant must come from it */
-  readonly account: Uint8Array;
+/** What the program says first: a hash of its point, so neither side can pick a key to steer the check code */
+const commitTo = async (point: Uint8Array) => base64UrlEncode(await sha256(point));
+
+const CHECK_LABEL = 'minca/code-check/v1';
+
+/**
+ * The six digits the home shows and the person gives the program, from the
+ * exchange's channel: only the two ends of one exchange share them.
+ */
+async function connectCheck(channel: Channel): Promise<string> {
+  const bytes = await channel.derive(CHECK_LABEL, 4);
+  const value = new DataView(bytes.buffer, bytes.byteOffset, 4).getUint32(0) % 1_000_000;
+  return String(value).padStart(6, '0');
 }
 
-/** The start of an account's fingerprint, as a code carries it */
-async function accountFingerprint(account: string): Promise<Uint8Array> {
-  return (await sha256(concatBytes(utf8Encode(ACCOUNT_LABEL), utf8Encode(account)))).slice(0, ACCOUNT_BYTES);
+/** A new code: `mc_` and 128 random bits */
+export function newConnectCode(): string {
+  return CODE_PREFIX + base64UrlEncode(globalThis.crypto.getRandomValues(new Uint8Array(SECRET_BYTES)));
 }
 
-/** A new code for the app signed in to `account`: `mc_`, 128 random bits and the account's fingerprint */
-export async function newConnectCode(account: string): Promise<string> {
-  const secret = globalThis.crypto.getRandomValues(new Uint8Array(SECRET_BYTES));
-  return CODE_PREFIX + base64UrlEncode(concatBytes(secret, await accountFingerprint(account)));
-}
+/** Where the person allows a program: the home's connect page, with the code after `#` so it never reaches a server */
+export const connectCodeUrl = (home: string, code: string): string =>
+  `${new URL('/connect', home).href}#${code}`;
 
 const CODE_PATTERN = new RegExp(`mc_([A-Za-z0-9_-]{${CODE_CHARS}})(?![A-Za-z0-9_-])`);
 
 /**
- * What a code holds, for anything a person might paste — surrounding
- * spaces, quotes, the whole command.
+ * The secret a code holds, from anything it is found in: the code, or the
+ * link the program opened.
  * @throws When there is no code in it
  */
-export function readConnectCode(input: string): ConnectCode {
+export function readConnectCode(input: string): Uint8Array {
   const match = CODE_PATTERN.exec(input);
   const bytes = match ? base64UrlDecode(match[1]!) : null;
-  if (!bytes || bytes.length !== SECRET_BYTES + ACCOUNT_BYTES) {
-    throw new Error('That is not a connect code. Copy the whole command the app shows.');
+  if (!bytes || bytes.length !== SECRET_BYTES) {
+    throw new Error('That is not a connect code. Open the whole link the program showed.');
   }
-  return { secret: bytes.slice(0, SECRET_BYTES), account: bytes.slice(SECRET_BYTES) };
+  return bytes;
+}
+
+/** The code in a link the home was opened at, or null: `#mc_…` */
+export function connectCodeIn(hash: string): string | null {
+  const match = CODE_PATTERN.exec(hash);
+  return match && base64UrlDecode(match[1]!)?.length === SECRET_BYTES ? match[0] : null;
 }
 
 /** An origin as a browser reports one, e.g. `https://app.example`, or null */
@@ -121,67 +124,71 @@ function readOrigin(value: unknown): string | null {
 
 function readAsk(value: unknown): CodeAsking | null {
   if (!isObject(value)) return null;
-  const { did, proof, name, recordsOnly } = value;
+  const { did, proof, name } = value;
   if (typeof did !== 'string' || !did.startsWith('did:key:') || did.length > 200) return null;
-  // Without its proof the home would refuse the request anyway.
+  // Without its proof the home refuses to sign anything for it.
   if (typeof proof !== 'string' || proof.length > 200) return null;
-  if (typeof recordsOnly !== 'boolean') return null;
   const shown = typeof name === 'string' && name.trim() ? name.trim().slice(0, MAX_NAME) : 'A program';
-  return { did, proof, name: shown, recordsOnly };
+  return { did, proof, name: shown };
 }
 
-// ─── The app's side ──────────────────────────────────────────────────
+// ─── The home's side ─────────────────────────────────────────────────
 
 export type ConnectCodeStage =
   | { readonly kind: 'waiting' }
-  /** The program is there. Call `allow` from a click (it opens the home), or `deny`. */
+  /**
+   * The program is there. Show `check`, for the person to give the program,
+   * then sign it a records-only note and `allow` it, or `deny`.
+   */
   | {
       readonly kind: 'asking';
       readonly asking: CodeAsking;
+      readonly check: string;
       allow(grant: Grant): Promise<void>;
       deny(reason?: string): void;
     }
   | { readonly kind: 'connected'; readonly asking: CodeAsking }
   | { readonly kind: 'failed'; readonly reason: string };
 
-export interface ConnectCodeOffer {
-  /** What the person pastes: `mc_…` */
-  readonly code: string;
-  /** Stops listening. The code stops working. */
-  stop(): void;
-}
-
 /**
- * Starts offering a connection to a program, by code. Keep it running while
- * the code is on screen: the first program whose sealed ask opens is the one
- * asked about, and nobody after it. What the program asks for is only a
- * request: on `asking`, the app decides whether to ask the home for it, or
- * denies it.
+ * Answers the program that opened the home with a code. Keep it running while
+ * the page is open: the first program whose sealed ask opens is the one asked
+ * about, and nobody after it.
  *
- * @param options.account The account this app is signed in to: the code names it, and the program takes a note from no other
- * @param options.origin Where this app lives, as the home will see it. Default: this page's.
+ * @param options.code The code from the link the home was opened at
+ * @param options.origin Where this home lives: the program's proof names it. Default: this page's.
+ * @returns A way to stop listening; the code stops working
  */
-export async function offerConnectCode(
-  options: CodeNetwork & { readonly account: string; readonly origin?: string },
+export async function answerConnectCode(
+  options: CodeNetwork & {
+    readonly code: string;
+    readonly origin?: string;
+    /** How long to wait for the program to ask. Default 60 s: it is waiting when its link opens, unless it has gone or another home answered it. */
+    readonly findTimeoutMs?: number;
+  },
   onStage: (stage: ConnectCodeStage) => void,
-): Promise<ConnectCodeOffer> {
+): Promise<{ stop(): void }> {
   if (options.relays.length === 0 && !options.transport)
     throw new Error('Connecting by code needs a relay, and none is configured.');
   const origin = options.origin ?? globalThis.location?.origin;
   if (!origin || readOrigin({ origin }) === null)
-    throw new Error('Connecting by code needs the app’s origin.');
-  const code = await newConnectCode(options.account);
-  const { secret } = readConnectCode(code);
+    throw new Error('Connecting by code needs the home’s origin.');
+  const secret = readConnectCode(options.code);
   const room = await meetOnChannel(CODE_CHANNEL, options, secret);
-  const mine = await channelKeyPair();
-
-  /** An exchange with each peer that said hello, until one asks */
+  /**
+   * What each peer that said hello committed to, and the key made for that
+   * exchange alone (one key for every peer would let a peer learn it in one
+   * exchange and steer the check in another), then its exchange once it
+   * showed its point, until one asks
+   */
+  const commits = new Map<string, { readonly commit: string; readonly mine: ChannelKeys }>();
   const channels = new Map<string, Channel>();
   let asked: { readonly peer: string; readonly channel: Channel; readonly asking: CodeAsking } | null = null;
   let settled = false;
   const finish = (stage?: ConnectCodeStage) => {
     if (settled) return;
     settled = true;
+    globalThis.clearTimeout(timer);
     room.leave();
     if (stage) onStage(stage);
   };
@@ -189,22 +196,32 @@ export async function offerConnectCode(
   const handle = async (message: NetworkMessage): Promise<void> => {
     if (settled) return;
     if (message.type === HELLO && !asked) {
-      if (channels.has(message.from) || channels.size >= MAX_TRIED) return;
+      // One exchange, with the first peer to commit, as pairing has: with several, someone in the
+      // room could run many and pick a pair whose checks match.
+      if (commits.size > 0) return;
+      const commit = bytesField(message, 'commit');
+      if (!commit) return;
+      const mine = await channelKeyPair();
+      commits.set(message.from, { commit: base64UrlEncode(commit), mine });
+      // Its point comes only after this one: it committed to it before seeing it.
+      room.send(message.from, KEY, { key: base64UrlEncode(mine.point) });
+    } else if (message.type === POINT && !asked) {
+      if (channels.has(message.from)) return;
       const point = bytesField(message, 'key');
-      if (!point) return;
+      const said = commits.get(message.from);
+      if (!point || !said || (await commitTo(point)) !== said.commit) return;
       const channel = await deriveChannel({
         kind: CODE_CHANNEL,
         secret,
-        privateKey: mine.privateKey,
-        offer: mine.point,
+        privateKey: said.mine.privateKey,
+        offer: said.mine.point,
         join: point,
         side: 'offer',
       }).catch(() => null);
       if (!channel) return;
       channels.set(message.from, channel);
-      room.send(message.from, KEY, { key: base64UrlEncode(mine.point) });
-      // Where the app lives: the program's proof names it, so the proof is no use from anywhere else.
-      await room.seal(message.from, APP, channel, { origin });
+      // Where the home lives: the program's proof names it, so the proof is no use anywhere else.
+      await room.seal(message.from, HOME, channel, { origin });
     } else if (message.type === ASK && !asked) {
       const channel = channels.get(message.from);
       if (!channel) return;
@@ -214,22 +231,23 @@ export async function offerConnectCode(
       const peer = message.from;
       // The code is spent: nobody after this program is answered.
       asked = { peer, channel, asking };
+      globalThis.clearTimeout(timer);
       // So the program knows it was right, and the person is deciding.
       await room.seal(peer, HEARD, channel, {});
       onStage({
         kind: 'asking',
         asking,
+        check: await connectCheck(channel),
         allow: async (grant) => {
           if (grant.note.payload.aud !== asking.did) throw new Error('That note is for a different key.');
-          if (grant.did !== options.account) throw new Error('That note is from a different account.');
-          if (asking.recordsOnly && !grantsRecordsOnly(grant.note))
-            throw new Error('That note grants more than the program asked for.');
+          if (!grantsRecordsOnly(grant.note))
+            throw new Error('A program connected by code gets records only.');
           await room.seal(peer, ANSWER, channel, { grant } satisfies Answer);
         },
         deny: (reason = 'The person said no.') => {
           void room
             .seal(peer, ANSWER, channel, { denied: reason } satisfies Answer)
-            .then(() => finish({ kind: 'failed', reason: 'You said no. Make a new code to try again.' }));
+            .then(() => finish({ kind: 'failed', reason: 'You said no. The program can ask again.' }));
         },
       });
     } else if (message.type === DONE && asked && message.from === asked.peer) {
@@ -243,9 +261,14 @@ export async function offerConnectCode(
   });
 
   onStage({ kind: 'waiting' });
+  // Declared last: everything above that clears it runs only once the room is joined.
+  const timer = globalThis.setTimeout(
+    () =>
+      finish({ kind: 'failed', reason: 'The program that opened this link isn’t waiting for it any more.' }),
+    options.findTimeoutMs ?? 60_000,
+  );
   await room.net.connect();
   return {
-    code,
     stop: () => {
       finish();
       room.net.disconnect();
@@ -253,40 +276,109 @@ export async function offerConnectCode(
   };
 }
 
+/** How long a program connected by code stays in sync before it asks again */
+const CODE_DAYS = 30;
+
+/**
+ * The account home's connect page, opened at a code: answers the program and
+ * hands its ask to the same approval as an app's, as a request for records in
+ * the whole account. `approve` sends the note, `deny` says no. `onAnswered`
+ * says how it went, since this page was opened by a person, not an app, and
+ * stays open: allowed only once the program says it has the note.
+ *
+ * @returns The program's request, or null when none came
+ */
+export function receiveConnectCode(
+  options: CodeNetwork & {
+    readonly code: string;
+    readonly origin?: string;
+    readonly onAnswered?: (answer: { readonly allowed: boolean }) => void;
+  },
+): Promise<IncomingRequest | null> {
+  const origin = options.origin ?? globalThis.location?.origin ?? '';
+  return new Promise((resolve) => {
+    let asked = false;
+    void answerConnectCode({ ...options, origin }, (stage) => {
+      // The room is left by the exchange itself, after a moment for the last message to go.
+      if (stage.kind === 'connected') options.onAnswered?.({ allowed: true });
+      if (stage.kind === 'failed') {
+        if (asked) options.onAnswered?.({ allowed: false });
+        else resolve(null);
+      }
+      if (stage.kind !== 'asking') return;
+      asked = true;
+      const { asking, check } = stage;
+      resolve({
+        origin,
+        check,
+        request: {
+          v: 1,
+          audience: asking.did,
+          proof: asking.proof,
+          name: asking.name,
+          access: 'write',
+          scope: 'account',
+          chooseSpaces: false,
+          recordsOnly: true,
+          via: 'code',
+          days: CODE_DAYS,
+        },
+        approve: (answer) => {
+          if (!('note' in answer)) return stage.deny('The home answered with something other than a note.');
+          void stage
+            .allow({ ...answer, home: `${origin}/connect` })
+            .catch(() => stage.deny('The home could not send the note.'));
+        },
+        deny: (reason) => stage.deny(reason),
+      });
+    }).catch(() => resolve(null));
+  });
+}
+
 // ─── The program's side ──────────────────────────────────────────────
 
 /**
- * Connects this program with the code from the app.
+ * Connects this program with a code it made ({@link newConnectCode}): open
+ * {@link connectCodeUrl} for the person, then wait here for their home.
  *
- * @param params.key This program's key — the note will be made out to it, and it signs the proof for the app's origin
+ * @param params.home The account home it opened: only a peer saying it is that home is asked, and the grant keeps it
+ * @param params.key This program's key — the note will be made out to it, and it signs the proof for the home's origin
  * @param params.name What the person sees, e.g. "Agent on leifs-macbook"
- * @param params.recordsOnly Ask for a note that grants records only, and refuse any other
- * @param params.onWaiting Told once the app has heard, and the person is deciding, with where the app lives
- * @returns The grant, checked: from the account the code names
- * @throws When the code is wrong or stale, the person says no, or nothing answers in time
+ * @param params.onWaiting Told once the home has heard, and the person is deciding, with where the home lives
+ * @returns The grant, checked: a records-only note for this key, with `home` the one it opened
+ * @throws When the person says no, or nothing answers in time
  */
 export async function connectWithCode(params: {
   readonly code: string;
+  readonly home: string;
   readonly key: AppKey;
   readonly name: string;
-  readonly recordsOnly: boolean;
   readonly network: CodeNetwork;
-  readonly onWaiting?: (app: { readonly origin: string }) => void;
-  /** How long to wait for the app to answer at all. Default 60 s. */
+  readonly onWaiting?: (home: { readonly origin: string }) => void;
+  /**
+   * Asks the person for the check code the home shows, until `matches` says
+   * it does; rejecting gives up. The note is kept only once it matches: so a
+   * home the person never saw can't connect it.
+   */
+  readonly check: (matches: (typed: string) => boolean) => Promise<void>;
+  /** How long to wait for the home to open at all. Default 10 minutes: the person may make an account first. */
   readonly findTimeoutMs?: number;
-  /** How long the person has to decide. Default 10 minutes. */
+  /** How long the person has to decide once it has. Default 30 minutes. */
   readonly decideTimeoutMs?: number;
 }): Promise<Grant> {
-  const { secret, account } = readConnectCode(params.code);
+  const secret = readConnectCode(params.code);
+  const opened = new URL('/connect', params.home);
   const room = await meetOnChannel(CODE_CHANNEL, params.network, secret);
-  const mine = await channelKeyPair();
-  const hello = { key: base64UrlEncode(mine.point) };
+  /** A key for each peer it says hello to, for that exchange alone, as the home makes one for each */
+  const keys = new Map<string, Promise<ChannelKeys>>();
 
   return new Promise<Grant>((resolve, reject) => {
+    /** The person giving the check code: started once the home has heard */
+    let checked: Promise<void> | null = null;
     const channels = new Map<string, Channel>();
-    /** Where each peer that holds the code says its app lives, once it has said */
+    /** Where each peer that holds the code says its home lives, once it has said */
     const origins = new Map<string, string>();
-    let app: { readonly peer: string; readonly channel: Channel; readonly origin: string } | null = null;
+    let home: { readonly peer: string; readonly channel: Channel; readonly origin: string } | null = null;
     let settled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const settle = (done: () => void) => {
@@ -303,15 +395,22 @@ export async function connectWithCode(params: {
     };
 
     room.net.on('peer-connected', (peer: PeerInfo) => {
-      if (!app) room.send(peer.did, HELLO, hello);
+      if (home || keys.has(peer.did)) return;
+      const mine = channelKeyPair();
+      keys.set(peer.did, mine);
+      void mine
+        .then(async ({ point }) => room.send(peer.did, HELLO, { commit: await commitTo(point) }))
+        .catch(() => {});
     });
 
     const handle = async (message: NetworkMessage): Promise<void> => {
       if (settled) return;
-      if (message.type === KEY && !app) {
-        if (channels.has(message.from) || channels.size >= MAX_TRIED) return;
+      if (message.type === KEY && !home) {
+        // One exchange, with the first peer to answer: the home runs one too.
+        if (channels.size > 0) return;
         const point = bytesField(message, 'key');
-        if (!point) return;
+        const mine = await keys.get(message.from);
+        if (!point || !mine) return;
         const channel = await deriveChannel({
           kind: CODE_CHANNEL,
           secret,
@@ -322,34 +421,36 @@ export async function connectWithCode(params: {
         }).catch(() => null);
         if (!channel) return;
         channels.set(message.from, channel);
-      } else if (message.type === APP && !app) {
+        room.send(message.from, POINT, { key: base64UrlEncode(mine.point) });
+      } else if (message.type === HOME && !home) {
         const channel = channels.get(message.from);
         if (!channel || origins.has(message.from)) return;
         const origin = readOrigin(await room.open(message, channel));
-        if (!origin) return;
+        // Only the home it opened: the proof names it, and so does the grant it keeps.
+        if (origin !== opened.origin) return;
         origins.set(message.from, origin);
-        // The proof names the app's origin: a home it is shown at from anywhere else refuses it.
-        const proof = await keyProof(params.key, { via: 'code', recordsOnly: params.recordsOnly, origin });
+        // The proof names the home's origin: any other home refuses it.
+        const proof = await keyProof(params.key, { via: 'code', recordsOnly: true, origin });
         await room.seal(message.from, ASK, channel, {
           did: params.key.did,
           proof,
           name: params.name.slice(0, MAX_NAME),
-          recordsOnly: params.recordsOnly,
         });
-      } else if (message.type === HEARD && !app) {
+      } else if (message.type === HEARD && !home) {
         const channel = channels.get(message.from);
         const origin = origins.get(message.from);
-        // Only an app that holds the code, at the other end of this exchange, can seal this.
+        // Only a home that holds the code, at the other end of this exchange, can seal this.
         if (!channel || !origin || !(await room.open(message, channel))) return;
-        app = { peer: message.from, channel, origin };
+        const expected = await connectCheck(channel);
+        // Asked for before anything else runs: no answer is kept without it.
+        checked = params.check((typed) => typed.replace(/\D/g, '') === expected);
+        checked.catch((error: unknown) => fail(error instanceof Error ? error.message : String(error)));
+        home = { peer: message.from, channel, origin };
         params.onWaiting?.({ origin });
-        // Once the app has the question, the person gets longer to answer it.
-        wait(
-          params.decideTimeoutMs ?? 10 * 60_000,
-          'Nobody answered in the app. Make a new code and try again.',
-        );
-      } else if (message.type === ANSWER && app && message.from === app.peer) {
-        const answer = await room.open(message, app.channel);
+        // Once the home has the question, the person gets longer to answer it.
+        wait(params.decideTimeoutMs ?? 30 * 60_000, 'Nobody answered at the account home. Try again.');
+      } else if (message.type === ANSWER && home && message.from === home.peer) {
+        const answer = await room.open(message, home.channel);
         if (!isObject(answer)) return;
         if (typeof answer.denied === 'string') {
           fail(answer.denied.slice(0, 200));
@@ -358,13 +459,13 @@ export async function connectWithCode(params: {
         try {
           // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- checkGrant checks it
           const grant = answer.grant as Grant;
-          await checkGrant(grant, params.key.did, { recordsOnly: params.recordsOnly });
-          // Whoever else holds the code could answer first, with a note from their own account.
-          const from = await accountFingerprint(grant.did);
-          if (!from.every((byte, i) => byte === account[i]))
-            throw new Error('That note is from a different account than the code names.');
-          await room.seal(message.from, DONE, app.channel, {});
-          settle(() => resolve(grant));
+          await checkGrant(grant, params.key.did, { recordsOnly: true });
+          // Kept only once the person gave the code their own home showed.
+          if (!checked) return;
+          await checked;
+          await room.seal(message.from, DONE, home.channel, {});
+          // Where to connect again is the home it opened, never one the answer names.
+          settle(() => resolve({ ...grant, home: opened.href }));
         } catch (error) {
           settle(() => reject(error instanceof Error ? error : new Error(String(error))));
         }
@@ -376,10 +477,7 @@ export async function connectWithCode(params: {
       handling = handling.then(() => handle(message)).catch(() => {});
     });
 
-    wait(
-      params.findTimeoutMs ?? 60_000,
-      'The app did not answer. Check the window that showed the code is still open, or make a new code there.',
-    );
+    wait(params.findTimeoutMs ?? 10 * 60_000, 'The account home was not opened in time. Try again.');
     room.net.connect().catch(() => fail('Could not reach the relay.'));
   });
 }

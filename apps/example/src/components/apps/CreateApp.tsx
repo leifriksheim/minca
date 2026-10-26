@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { SpaceSummary } from '@minca/core';
-import { Modal } from '@minca/app-shared/Modal';
 import { Loader } from '@minca/app-shared/Loader';
-import { AgentStep, ConnectAgent, stepList, stepText, useKnownAgent } from '../ConnectAgent';
+import { ConnectAgent, stepText } from '../ConnectAgent';
 import { useNode } from '@minca/core/react';
 import { useLauncherRecords } from './entries';
 import { checkLauncherApp, prepareLauncher } from './launcher';
@@ -18,8 +17,8 @@ const IDEAS = [
 ] as const;
 
 /**
- * Making an app by asking an agent for it, step by step: connect one if this
- * browser knows none, then ask it in your own words. It proposes the app as
+ * Making an app by asking an agent for it, step by step: connect one, or
+ * skip that when it is, then ask it in your own words. It proposes the app as
  * the guide the launcher writes in the space says, and the proposal shows
  * here when it arrives.
  */
@@ -37,18 +36,14 @@ export function CreateApp({
   onReview: () => void;
   onBuildByHand?: () => void;
 }) {
-  const known = useKnownAgent();
   const node = useNode();
   // The guide the agent reads is in the space before it looks, when this person may write it.
   useEffect(() => {
     if (mayDefine) void prepareLauncher(node, space.id).catch(() => {});
   }, [node, space.id, mayDefine]);
-  const [connecting, setConnecting] = useState(false);
-
-  const ask = (agent: string) => (
+  const ask = (
     <AskForApp
       space={space}
-      agent={agent}
       mayDefine={mayDefine}
       onReview={() => {
         onClose();
@@ -65,47 +60,17 @@ export function CreateApp({
     />
   );
 
-  if (connecting || !known)
-    return (
-      <ConnectAgent title={TITLE} onClose={onClose} then={{ title: 'Ask it for your app', body: ask }} />
-    );
-
-  return (
-    <Modal title={TITLE} onClose={onClose} width={500}>
-      <ol style={stepList}>
-        <AgentStep
-          n={1}
-          title={`${known} is connected`}
-          at="done"
-          aside={
-            <button
-              type="button"
-              onClick={() => setConnecting(true)}
-              data-variant="ghost"
-              style={{ ...styles.linkButton, fontSize: 13, padding: 0 }}
-            >
-              Connect another
-            </button>
-          }
-        />
-        <AgentStep n={2} title="Ask it for your app" at="now" last>
-          {ask(known)}
-        </AgentStep>
-      </ol>
-    </Modal>
-  );
+  return <ConnectAgent title={TITLE} onClose={onClose} then={{ title: 'Ask it for your app', body: ask }} />;
 }
 
 /** The last step: what to say to the agent, and the app it proposes once it has */
 function AskForApp({
   space,
-  agent,
   mayDefine,
   onReview,
   onBuildByHand,
 }: {
   space: SpaceSummary;
-  agent: string;
   mayDefine: boolean;
   onReview: () => void;
   onBuildByHand?: () => void;
@@ -121,7 +86,7 @@ function AskForApp({
   return (
     <>
       <p style={stepText}>
-        Start a new chat in {agent} and say what {space.name} should have, in your own words. For example:
+        Start a new chat in your agent and say what {space.name} should have, in your own words. For example:
       </p>
       <ul style={ideas}>
         {IDEAS.map((idea) => (
@@ -141,12 +106,10 @@ function AskForApp({
           style={{ ...styles.note, display: 'flex', flexDirection: 'column', gap: 4, padding: '12px 14px' }}
         >
           <p style={{ fontSize: 14, fontWeight: 600, color: palette.ink.strong }}>
-            <span style={{ color: palette.accent.good }}>✓</span> {agent} proposed “{proposed.title}”
+            <span style={{ color: palette.accent.good }}>✓</span> Your agent proposed “{proposed.title}”
           </p>
           {problem ? (
-            <p style={styles.error}>
-              It can't be added yet; ask {agent} to fix it: {problem}
-            </p>
+            <p style={styles.error}>It can't be added yet; ask your agent to fix it: {problem}</p>
           ) : (
             <p style={{ fontSize: 13, color: palette.ink.body }}>
               Nothing changes in {space.name} until {adds}.

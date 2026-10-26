@@ -58,7 +58,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
   };
   // What disconnecting could not do yet: heard of nowhere else, or a read-only note that runs out on its own.
   const [notYet, setNotYet] = useState<string | null>(null);
-  // A program connected by code is its own key, and so is a carrier; an app takes the programs that connected through it along.
+  // A program connected by code is kept by its key, and so is a carrier.
   // It waits a moment for one of the account's devices or apps to take the revoke in, since only that stops it.
   const disconnect = (app: Connection) => {
     const what = app.name ?? new URL(app.origin).host;

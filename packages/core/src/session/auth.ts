@@ -233,7 +233,7 @@ export interface Connection {
   readonly grantedAt: string;
   /** Unix seconds */
   readonly expiresAt: number;
-  /** `code` for a program connected by code through the app at `origin`: its own key, kept apart from the app's own connection */
+  /** `code` for a program connected by code, at the home's own `origin`: kept by its key */
   readonly via?: 'code';
   /** Present, and true, when its note grants records only */
   readonly recordsOnly?: true;
@@ -495,10 +495,10 @@ export interface MincaAuth {
    * seen it write stays. What it could already read, it keeps — reading is
    * holding a space's key, and that is not taken back.
    *
-   * Disconnecting an app disconnects the programs connected by code through
-   * it too. `{ byCode: true }` disconnects only those programs; `{ audience }`
-   * only the one with that key. A carrier at the app's origin is not the app:
-   * it stays, and goes only by `{ audience }`, its own key.
+   * Disconnecting by origin disconnects every connection made from it but a
+   * carrier, which goes only by `{ audience }`, its own key. Programs
+   * connected by code are at the home's own origin; `{ audience }`
+   * disconnects one.
    *
    * The app hears of it when the revokes reach it: from this node, or a
    * device that has them. `{ waitMs }` waits up to that long for a peer to
@@ -508,7 +508,7 @@ export interface MincaAuth {
    */
   disconnect(
     origin: string,
-    options?: { readonly byCode?: boolean; readonly audience?: string; readonly waitMs?: number },
+    options?: { readonly audience?: string; readonly waitMs?: number },
   ): Promise<boolean>;
   readonly staySignedIn: {
     choice(): StaySignedIn;
@@ -1762,6 +1762,8 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       const access = request.access;
       const recordsOnly = request.recordsOnly === true;
       const byCode = request.via === 'code';
+      if (byCode && (!recordsOnly || access !== 'write'))
+        throw new Error('A program connected by code is given records only.');
       const problem = await audienceProblem(request, choice.origin);
       if (problem) throw new Error(problem);
       if (recordsOnly && request.create?.length)
@@ -1819,7 +1821,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
         ...(byCode ? { via: 'code' as const } : {}),
         ...(recordsOnly ? { recordsOnly: true as const } : {}),
       };
-      // Connecting again replaces the old note. A program connected by code is its own key: connecting one replaces only that one.
+      // Connecting again replaces the old note. A program connected by code is kept by its key: connecting one replaces only that one.
       // A carrier at the same origin is not the app, and stays (§2.10).
       const replaced = (known: Connection) => connectionKey(known) === connectionKey(connection);
       // A key it replaces is not revoked: this home has seen little of what it wrote, and a
@@ -1961,15 +1963,12 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     },
 
     async disconnect(origin, options = {}) {
-      // The app goes with the programs connected through it by code; such a program can go alone.
       // A carrier at the same origin is not the app, and goes only by its own key (§2.10).
       const { delivered } = await disconnectWhere(
         (known) =>
           options.audience !== undefined
             ? known.audience === options.audience
-            : known.origin === origin &&
-              known.access !== 'carry' &&
-              (!options.byCode || known.via === 'code'),
+            : known.origin === origin && known.access !== 'carry',
         options.waitMs ?? 0,
       );
       return delivered;

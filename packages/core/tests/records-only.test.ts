@@ -41,8 +41,13 @@ import {
   type DraftCollection,
 } from '../src/schemas/index.js';
 import { createMincaAuth, type MincaAuth } from '../src/session/auth.js';
-import { grantSigner, nodeOptionsFromGrant, type Grant } from '../src/session/connect.js';
-import { connectWithCode, offerConnectCode } from '../src/session/connect-code.js';
+import { grantSigner, isProposeRequest, nodeOptionsFromGrant, type Grant } from '../src/session/connect.js';
+import {
+  answerConnectCode,
+  connectWithCode,
+  newConnectCode,
+  receiveConnectCode,
+} from '../src/session/connect-code.js';
 import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { base64UrlDecode, base64UrlEncode } from '../src/utils/encoding.js';
 import { createFolderAccountStore } from '../src/identity/account-store.js';
@@ -1012,50 +1017,49 @@ describe('a program connected by code, through the account home', () => {
     return auth;
   }
 
-  test('over a code: the program learns the app’s origin, and its proof is refused from any other', async () => {
+  test('over a code: the program learns the home’s origin, and its proof is refused at any other', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const auth = await home(hub);
-    const origin = 'https://example.test';
+    const origin = 'https://home.test';
     const network = { relays: [], transport: (did: string) => hub.transport(did, 'code') };
     const program = await testAppKey('did:key:zCodeProgram');
     let proof = '';
-    const offer = await offerConnectCode(
-      { ...network, account: auth.getState().session!.did, origin },
-      (stage) => {
-        if (stage.kind !== 'asking') return;
-        proof = stage.asking.proof;
-        void auth
-          .grant({
-            origin,
-            request: {
-              v: 1,
-              audience: stage.asking.did,
-              proof: stage.asking.proof,
-              name: stage.asking.name,
-              access: 'write',
-              scope: 'account',
-              chooseSpaces: false,
-              recordsOnly: true,
-              via: 'code',
-            },
-            spaceIds: [],
-          })
-          .then((grant) => stage.allow({ ...grant, home: 'https://home.test/connect' }));
-      },
-    );
-    open.push({ close: async () => offer.stop() });
+    const code = newConnectCode();
+    const answering = await answerConnectCode({ ...network, code, origin }, (stage) => {
+      if (stage.kind !== 'asking') return;
+      proof = stage.asking.proof;
+      void auth
+        .grant({
+          origin,
+          request: {
+            v: 1,
+            audience: stage.asking.did,
+            proof: stage.asking.proof,
+            name: stage.asking.name,
+            access: 'write',
+            scope: 'account',
+            chooseSpaces: false,
+            recordsOnly: true,
+            via: 'code',
+          },
+          spaceIds: [],
+        })
+        .then((grant) => stage.allow({ ...grant, home: 'https://home.test/connect' }));
+    });
+    open.push({ close: async () => answering.stop() });
     const grant = await connectWithCode({
-      code: offer.code,
+      home: origin,
+      code,
+      check: async () => {},
       key: program,
       name: 'Agent on laptop',
-      recordsOnly: true,
       network,
     });
     assert.equal(grant.note.payload.cmd, '/record');
     assert.equal(grant.note.payload.sub, grant.did, 'about the whole account');
     assert.equal(grant.contactKey, undefined);
 
-    // Gone again: its proof is refused from another origin, and still good from the app's.
+    // Gone again: its proof is refused at another origin, and still good at this home's.
     await auth.disconnect(origin, { audience: program.did });
     const replayed = {
       v: 1,
@@ -1071,6 +1075,58 @@ describe('a program connected by code, through the account home', () => {
       /holds the key/,
     );
     await auth.grant({ origin, request: replayed, spaceIds: [] });
+    // A program connected by code is given records only, whatever the request says.
+    await assert.rejects(
+      async () =>
+        auth.grant({
+          origin,
+          request: await asked(
+            { v: 1, audience: 'did:key:zGreedy', access: 'write', scope: 'account', via: 'code' },
+            undefined,
+            origin,
+          ),
+          spaceIds: [],
+        }),
+      /records only/,
+    );
+  });
+
+  test('the home’s connect page says connected only once the program has its note, and it does', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const auth = await home(hub);
+    const origin = 'https://home.test';
+    const transport = (did: string) => hub.transport(did, 'code');
+    const code = newConnectCode();
+    const key = await testAppKey('did:key:zPageProgram');
+    const answers: boolean[] = [];
+    let shown = '';
+    void receiveConnectCode({
+      code,
+      relays: [],
+      transport,
+      origin,
+      onAnswered: ({ allowed }) => answers.push(allowed),
+    }).then(async (incoming) => {
+      assert.ok(incoming && !isProposeRequest(incoming.request) && incoming.check);
+      shown = incoming.check;
+      incoming.approve(await auth.grant({ origin, request: incoming.request, spaceIds: [] }));
+    });
+    const grant = await connectWithCode({
+      home: origin,
+      code,
+      key,
+      name: 'Agent',
+      network: { relays: [], transport },
+      decideTimeoutMs: 4000,
+      // The person reads the code off the page and types it in.
+      check: async (matches) => {
+        await until(async () => shown !== '', 2000, 'the page showing the code');
+        assert.ok(matches(shown));
+      },
+    });
+    assert.equal(grant.note.payload.aud, key.did);
+    await until(async () => answers.length > 0, 2000, 'the page hearing it worked');
+    assert.deepEqual(answers, [true]);
   });
 
   test('a connection kept in an older shape is dropped, not read as the app’s own', async () => {
@@ -1123,11 +1179,13 @@ describe('a program connected by code, through the account home', () => {
     );
   });
 
-  test("the home signs a records-only note for the program's key, kept apart from the app's own; the app going takes it too", async () => {
+  test("the home signs a records-only note for the program's key, kept apart from any app's", async () => {
     const auth = await home(createFakeHub({ latencyMs: 1 }));
     const { node } = auth.getState().session!;
     const gym = await node.spaces.create({ name: 'Gym', visibility: 'private' });
     const origin = 'https://app.test';
+    // A program connected by code is kept at the home's own origin.
+    const here = 'https://home.test';
 
     const app = await auth.grant({
       origin,
@@ -1135,7 +1193,7 @@ describe('a program connected by code, through the account home', () => {
       spaceIds: [gym.id],
     });
     const agent = await auth.grant({
-      origin,
+      origin: here,
       request: await asked(
         {
           v: 1,
@@ -1145,7 +1203,7 @@ describe('a program connected by code, through the account home', () => {
           recordsOnly: true,
         },
         undefined,
-        origin,
+        here,
       ),
       spaceIds: [gym.id],
     });
@@ -1161,7 +1219,7 @@ describe('a program connected by code, through the account home', () => {
     await assert.rejects(
       async () =>
         auth.grant({
-          origin,
+          origin: here,
           request: await asked(
             {
               v: 1,
@@ -1172,34 +1230,20 @@ describe('a program connected by code, through the account home', () => {
               create: [{ name: 'Mine', visibility: 'private' }],
             },
             undefined,
-            origin,
+            here,
           ),
           spaceIds: [],
         }),
       /spaces that exist/,
     );
 
-    await auth.disconnect(origin, { byCode: true });
+    // The app going leaves the program, and the program goes by its key.
+    await auth.disconnect(origin);
     assert.deepEqual(
       auth.connections().map((c) => c.audience),
-      [(await testAppKey('did:key:zApp')).did],
+      [(await testAppKey('did:key:zAgent')).did],
     );
-    await auth.grant({
-      origin,
-      request: await asked(
-        {
-          v: 1,
-          audience: 'did:key:zAgent2',
-          access: 'write',
-          via: 'code',
-          recordsOnly: true,
-        },
-        undefined,
-        origin,
-      ),
-      spaceIds: [gym.id],
-    });
-    await auth.disconnect(origin);
+    await auth.disconnect(here, { audience: (await testAppKey('did:key:zAgent')).did });
     assert.equal(auth.connections().length, 0);
   });
 

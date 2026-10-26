@@ -31,6 +31,7 @@ import { createInterface as createPromiseInterface } from 'node:readline/promise
 import { parseArgs } from 'node:util';
 import { isValidRecoveryCode, NODE_ACTIONS, runAction, type NodeAction, type P2PNode } from '@minca/core';
 import { suggestedAutomations } from '@minca/core/schemas';
+import { homeAddress } from '@minca/core/session';
 import {
   chooseAccount,
   createAccount,
@@ -65,8 +66,9 @@ import {
   walletFromEnv,
 } from './host-setup.js';
 import { isHostStats, statsLines } from './host-stats.js';
-import { runMcpStdio, runWaitingMcpStdio, TAKE_OVER } from './mcp.js';
+import { busyWaiting, CONNECT, connectWaiting, runMcpStdio, runWaitingMcpStdio, TAKE_OVER } from './mcp.js';
 import {
+  ACCOUNT_HOME,
   AgentBusy,
   agentRunning,
   configuredRelays,
@@ -76,7 +78,9 @@ import {
   defaultAgentName,
   forgetAgent,
   hasConnectedAgent,
+  loadAgentGrant,
   loadModelKey,
+  openInBrowser,
   reloadOnConnect,
   saveModelKey,
   startAgentNode,
@@ -114,7 +118,7 @@ Usage:
   minca host stats <address> [--json]       what a host carries and takes in, as it shows anyone
   minca carry --data DIR                     one account's spaces, from a folder the desktop app connected
   minca app-node --data DIR                  the desktop app's node; the desktop shell runs it
-  minca connect <code> [--name NAME] [--relay wss://…] [--no-configure]
+  minca connect [--account-home home.minca.social] [--name NAME] [--relay wss://…] [--no-configure]
   minca disconnect
   minca mcp [--account]
   minca agent [--setup] [--model claude-opus-5-5] [--daily-cap 2] [--no-chat]
@@ -128,10 +132,14 @@ Usage:
   minca actions
 
 Agents (Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Zed, Codex, …):
-  In the app, choose "Connect an agent" and run the command it shows. It
-  connects this computer's agent to your account, and adds "minca" to the
-  agents it finds. From then on they start "minca mcp" themselves: a node of
-  its own, working with every tab closed. "minca mcp --account" serves the
+  "minca connect" opens your account home in the browser, where you allow
+  this computer's agent, and adds "minca" to the agents it finds. From then
+  on they start "minca mcp" themselves: a node of its own, working with every
+  tab closed. An agent that starts "minca mcp" before it is connected offers
+  one tool, agent_connect, which opens your account home the same way.
+  Your account home is home.minca.social unless you name another: at a
+  terminal it asks, filled in, so Enter takes it; or --account-home, or
+  MINCA_ACCOUNT_HOME. Connecting again uses the one you used last. "minca mcp --account" serves the
   unlocked account instead, as you rather than as an agent.
 
   "minca agent" runs the connected agent on its own instead, chatting in this
@@ -210,21 +218,84 @@ async function withNode(globals: Globals, work: (node: P2PNode) => Promise<numbe
   }
 }
 
-/** Trades a code from the app for an agent's note, asking for the code when it wasn't given */
-async function connectHere(home: string, code: string, options: { name?: string; relays?: string[] } = {}) {
+/** The account home this agent was last connected at, else `MINCA_ACCOUNT_HOME`, else home.minca.social */
+async function usualAccountHome(home: string): Promise<string> {
+  const before = (await loadAgentGrant(home))?.home;
+  return before ? new URL(before).host : (process.env.MINCA_ACCOUNT_HOME ?? ACCOUNT_HOME);
+}
+
+/**
+ * The account home to connect at: the one given, or at a terminal asked for
+ * with the usual one filled in, so Enter takes it; anywhere else the usual one.
+ */
+async function chooseAccountHome(home: string, given?: string): Promise<string> {
+  if (given) return homeAddress(given);
+  const usual = await usualAccountHome(home);
+  if (!ask.interactive()) return homeAddress(usual);
+  const typed = await ask.text({
+    flag: 'account-home',
+    message: 'Your account home',
+    initialValue: usual,
+    hint: `Give it as --account-home ${usual}`,
+    validate: (value) => {
+      try {
+        homeAddress(value);
+        return undefined;
+      } catch (error) {
+        return messageOf(error);
+      }
+    },
+  });
+  return homeAddress(typed);
+}
+
+/**
+ * Connects this computer's agent: opens the account home in the browser at a
+ * new code, and waits there for the person to allow it.
+ * @param options.onLink Given the link first, instead of opening and showing it here
+ */
+function connectHere(
+  home: string,
+  accountHome: string,
+  options: {
+    name?: string;
+    relays?: string[];
+    onLink?: (url: string) => void;
+    check?: (matches: (typed: string) => boolean) => Promise<void>;
+  } = {},
+) {
   return connectAgent({
     home,
-    code:
-      code ||
-      (await ask.text({
-        flag: 'code',
-        message: 'The code from the app (in the app: Connect an agent)',
-        placeholder: 'mc_…',
-        hint: 'Give it as `minca connect mc_…`: in the app, choose "Connect an agent".',
-      })),
+    accountHome,
+    check: options.check ?? typeCheck,
     name: options.name ?? defaultAgentName(),
     relays: [...new Set([...(options.relays ?? []), ...configuredRelays()])],
     log: stderr,
+    onLink:
+      options.onLink ??
+      // The link carries the code: shown only when no browser opens, since whoever else holds it could answer as the home.
+      ((url) =>
+        void openInBrowser(url).then((opened) =>
+          stderr(
+            opened
+              ? `Opened your account home in the browser. Allow it there.`
+              : `Open this link to allow it, on any device. Keep it to yourself:\n  ${url}`,
+          ),
+        )),
+  });
+}
+
+/** The check code the account home shows, typed here: the agent keeps its note only once it matches */
+async function typeCheck(matches: (typed: string) => boolean): Promise<void> {
+  if (!ask.interactive())
+    throw new Error(
+      'Connecting needs a terminal to type the code your account home shows. Run it in one, or connect from your AI.',
+    );
+  await ask.text({
+    flag: 'check',
+    message: 'The code your account home shows',
+    placeholder: '482 913',
+    validate: (typed) => (matches(typed) ? undefined : 'That isn’t the code your account home shows.'),
   });
 }
 
@@ -858,23 +929,23 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
   }
 
   if (command === 'connect') {
-    const { values, positionals } = parseArgs({
+    const { values } = parseArgs({
       args,
-      allowPositionals: true,
       options: {
+        'account-home': { type: 'string' },
         name: { type: 'string' },
         relay: { type: 'string', multiple: true },
         'no-configure': { type: 'boolean' },
       },
     });
     const home = homePath(globals.home);
-    const grant = await connectHere(home, positionals.join(' '), {
+    const grant = await connectHere(home, await chooseAccountHome(home, values['account-home']), {
       ...(values.name ? { name: values.name } : {}),
       ...(values.relay ? { relays: values.relay } : {}),
     });
     stderr('');
     stderr(
-      `Connected to ${grant.name}'s account, for ${daysLeft(grant)} days. What the agent writes shows "via agent".`,
+      `Connected to ${grant.name}'s account (${grant.did}), for ${daysLeft(grant)} days. What the agent writes shows "via agent".`,
     );
     const server = serverCommand(home);
     if (values['no-configure']) {
@@ -931,7 +1002,7 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
     const trouble = () =>
       here.agent?.revoked().length
         ? "This agent was disconnected in the person's account home, so its key is revoked and nothing it writes counts. " +
-          'Ask them to connect it again: in the app, "Connect an agent", then run the command it shows. ' +
+          'Ask them to connect it again: run `minca connect`, which opens their account home to allow it. ' +
           'This session takes the new connection up by itself within a few seconds; no restart is needed.'
         : null;
     let stopReloading = () => {};
@@ -949,25 +1020,57 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
       stderr('minca mcp: stopped, by another session taking the agent over');
       void (here.agent?.close() ?? Promise.resolve()).then(() => process.exit(0));
     });
+    const current = () => here.agent?.node ?? null;
     let busy: AgentBusy | null = null;
+    const connected = await hasConnectedAgent(home);
     try {
-      started(await startAgentNode(home, start));
+      if (connected) started(await startAgentNode(home, start));
     } catch (error) {
       if (!(error instanceof AgentBusy)) throw error;
       busy = error;
     }
-    if (busy) {
+    if (!connected) {
+      // Not connected yet: offer to open the account home, and start once the person has allowed it there.
+      stderr(`minca mcp: not connected to an account; offering only ${CONNECT} until it is`);
+      let link: Promise<{ opened: boolean; url: string }> | null = null;
+      const accountHome = await usualAccountHome(home);
+      await runWaitingMcpStdio(
+        connectWaiting({
+          accountHome,
+          connect: (check) =>
+            (link ??= new Promise((resolve, reject) => {
+              connectHere(home, homeAddress(accountHome), {
+                check,
+                onLink: (url) => void openInBrowser(url).then((opened) => resolve({ opened, url })),
+              }).then(
+                (grant) => stderr(`minca mcp: connected to ${grant.name}'s account (${grant.did})`),
+                (error: unknown) => {
+                  link = null;
+                  stderr(`minca mcp: connecting failed: ${messageOf(error)}`);
+                  reject(error instanceof Error ? error : new Error(String(error)));
+                },
+              );
+            })),
+          tryStart: async () =>
+            (await hasConnectedAgent(home)) ? started(await startAgentNode(home, start)) : null,
+          current,
+          account: () => here.agent && { name: here.agent.grant.name, did: here.agent.grant.did },
+        }),
+        info,
+        { agent: true, trouble },
+      );
+    } else if (busy) {
       // Rather than exit, which the client shows as only "connection closed": say why, and offer to take over.
       const holder = await describeAgentProcess(busy.holder);
       stderr(`minca mcp: the agent already runs in ${holder}; offering only ${TAKE_OVER} until it stops`);
       await runWaitingMcpStdio(
-        {
+        busyWaiting({
           holder,
           tryStart: async () =>
             (await agentRunning(home)) === null ? started(await startAgentNode(home, start)) : null,
           takeOver: async () => started(await takeOverAgent(home, start)),
-          current: () => here.agent?.node ?? null,
-        },
+          current,
+        }),
         info,
         { agent: true, trouble },
       );
@@ -1010,12 +1113,15 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
     // A bot keeps everything in its own folder: its account, and its model, key and spending.
     const bot = values.bot ? await botAccount(globals, values.name) : null;
     const home = bot?.folder ?? homePath(globals.home);
-    // A person's agent needs connecting first: at a terminal, with the code from the app, here and now.
+    // A person's agent needs connecting first: at a terminal, at their account home, here and now.
     if (!values.bot && !(await hasConnectedAgent(home)) && ask.interactive()) {
       ask.intro('Connect an agent to your account');
-      ask.note('In the app, open the account menu and choose “Connect an agent”. It shows a code.', 'First');
-      const grant = await connectHere(home, '');
-      ask.note(`Connected to ${grant.name}'s account, for ${daysLeft(grant)} days.`, 'Connected');
+      ask.note('Your account home opens in your browser. Sign in there and allow it.', 'First');
+      const grant = await connectHere(home, await chooseAccountHome(home));
+      ask.note(
+        `Connected to ${grant.name}'s account (${grant.did}), for ${daysLeft(grant)} days.`,
+        'Connected',
+      );
     }
     // Flags, then the environment, then what setup kept; at a terminal with none of them, setup asks.
     const told =

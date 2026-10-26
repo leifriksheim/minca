@@ -139,8 +139,8 @@ export function testAppKey(name: string): Promise<{ keys: CryptoKeyPair; did: st
 
 /**
  * A connect request as an app would send it: the named key swapped for a real
- * one, with its proof. One with `via: code` needs the origin of the app it
- * goes through, which its proof names.
+ * one, with its proof. One with `via: code` needs the origin of the home it
+ * was handed to, which its proof names.
  */
 export async function asked<
   T extends { readonly audience: string; readonly via?: 'code'; readonly recordsOnly?: boolean },
@@ -149,7 +149,7 @@ export async function asked<
   key?: { readonly keys: CryptoKeyPair; readonly did: string },
   origin?: string,
 ): Promise<T & { readonly proof: string }> {
-  if (request.via === 'code' && !origin) throw new Error('A request via code needs the app’s origin.');
+  if (request.via === 'code' && !origin) throw new Error('A request via code needs the home’s origin.');
   const signer = key ?? (await testAppKey(request.audience));
   const proof = await keyProof(signer, requestTerms(request, origin ?? ''));
   return { ...request, audience: signer.did, proof };
