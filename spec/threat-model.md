@@ -957,10 +957,9 @@ the same sealed blobs.
     "someone in only a public room cannot pose there as B to keep A and B
     apart in a private one").
   - It can't make a peer act twice on one message, by replaying it or by
-    passing it through several relays: a peer acts only on what a sender
-    signed later than the last thing it acted on from that sender in that
-    room, and only within 2 minutes of when it was sent; nothing anyone else
-    says pushes that out (04 §2; "a replayed hello counts once", "a replayed
+    passing it through several relays: a peer acts once on each time a sender
+    signed, in that room, within 2 minutes of it, in whatever order messages
+    come; nothing anyone else says pushes that out (04 §2; "a replayed hello counts once", "a replayed
     offer is not acted on again, however much else was said since", "a blob
     that does not open under the room key, or is stale, or comes again, is
     ignored").

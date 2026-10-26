@@ -310,9 +310,12 @@ A receiver MUST ignore a blob unless all of these hold:
 2. `from` is a `did:key` other than its own, `box` a point on P-256, and
    `sig` verifies against the key `from` names.
 3. `at` is a non-negative integer within 2 minutes of its own clock, and
-   later than the `at` of the last message it acted on from `from` in this
-   room. A copy through a second relay, or a replay, is not; a sender makes
-   each message it sends later than the one before.
+   no message from `from` in this room was acted on with that `at`: a copy
+   through a second relay, or a replay, in whatever order they come. A
+   sender makes each message it sends later than the one before, so no two
+   share a time. A receiver remembers the times it acted on from each peer
+   within the 2 minutes, and MAY stop hearing a peer that sent more than 256
+   in them.
 4. A hello has no `to` and no `sdp`.
 5. For an offer or answer: `to` is its own DID, and `sdp` opens with its box,
    label `minca/rendezvous-signal/v1`, bound `{ topic, from, to, box }` with
@@ -366,7 +369,7 @@ is gone when its connection is (§5).
 > name, in its room or any other, so nobody can keep two peers apart there
 > by posing as one of them.
 
-_Source: `packages/core/src/network/rendezvous.ts` (`createRendezvous`, `rendezvousKeys`, `remember`, `MAX_ROOM_PEERS`), `packages/core/src/network/mesh.ts` (`meet`), `packages/core/src/network/introductions.ts` (`shouldInitiate`, `createSeenSignals`). Tests: `packages/core/tests/rendezvous.test.ts` ("an offer whose sealed description someone else put in, under its sender’s signature, is ignored", "a hello naming B but signed by another key is ignored", "someone in only a public room cannot pose there as B to keep A and B apart in a private one", "hellos under 90 made-up names start no more than 64 connections", "an offer re-wrapped with another box opens nothing", "a relay, or anyone on the topic, sees neither who meets nor their addresses", "a third peer in the room hears the offer pass but cannot open it", "a blob that does not open under the room key, or is stale, or comes again, is ignored", "a replayed hello counts once"), `packages/core/tests/network-manager.test.ts` ("the mesh, through real relays")._
+_Source: `packages/core/src/network/rendezvous.ts` (`createRendezvous`, `rendezvousKeys`, `signedLabel`, `isNew`, `remember`, `MAX_ROOM_PEERS`, `MAX_ACTED`), `packages/core/src/network/peer-auth.ts` (`signLabel`, `verifyBy`), `packages/core/src/network/mesh.ts` (`meet`), `packages/core/src/network/introductions.ts` (`shouldInitiate`). Tests: `packages/core/tests/rendezvous.test.ts` ("a sender’s messages are each acted on, in whatever order they arrive", "a replayed offer is not acted on again, however much else was said since", "an offer whose sealed description someone else put in, under its sender’s signature, is ignored", "a hello naming B but signed by another key is ignored", "someone in only a public room cannot pose there as B to keep A and B apart in a private one", "hellos under 90 made-up names start no more than 64 connections", "an offer re-wrapped with another box opens nothing", "a relay, or anyone on the topic, sees neither who meets nor their addresses", "a third peer in the room hears the offer pass but cannot open it", "a blob that does not open under the room key, or is stale, or comes again, is ignored", "a replayed hello counts once"), `packages/core/tests/network-manager.test.ts` ("the mesh, through real relays")._
 
 ### 2.1 Keeping a relay's socket
 

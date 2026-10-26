@@ -22,8 +22,8 @@
  * addresses. A peer says hello on joining, after every reconnect and every
  * two minutes; on a hello the lower DID offers, and the higher says hello
  * back so the lower hears of it. Relays are used all at once, so the same
- * message can come through each: a peer acts only on what a sender sent
- * after the last thing it acted on from that sender in that room.
+ * message can come through each: a peer acts once on each time a sender
+ * signed, in whatever order they come.
  *
  * A hello costs nothing to send, so a room remembers at most 64 peers, and
  * forgets one it hasn't heard from in five minutes: someone saying hello
@@ -111,6 +111,8 @@ const MAX_SKEW_MS = 120_000;
 const ANSWER_HELLO_MS = 10_000;
 /** Peers a room remembers, as a relay's room held at most 64 */
 const MAX_ROOM_PEERS = 64;
+/** Messages from one peer a room acts on within the 2-minute window: far more than an honest peer sends */
+const MAX_ACTED = 256;
 /** A peer not heard from in this long is forgotten: it would have said hello twice */
 const PEER_SILENT_MS = 5 * 60_000;
 
@@ -139,7 +141,7 @@ interface RoomState {
   /** The relays this room is on: the node's, and the room's own */
   urls: ReadonlySet<string>;
   /** Peers heard in this room: the box to seal to, and when last heard */
-  readonly peers: Map<string, { box: string; heard: number; last: number }>;
+  readonly peers: Map<string, { box: string; heard: number; acted: Set<number> }>;
   /** When this node last said hello back here */
   answered: number;
 }
@@ -172,21 +174,27 @@ export function createRendezvous(
   const relays = (): ReadonlyArray<RelayStatus> => linkList().map((link) => link.status());
 
   /**
-   * Whether a message from a peer is new: sent after the last one acted on
-   * from it in this room. A copy through another relay, or a replay, is not;
-   * nor is anything from a newcomer to a room full of others.
+   * Whether a message from a peer is new: no message from it in this room was
+   * acted on with this time. A copy through another relay, or a replay, is
+   * not, in whatever order they come; nor is anything from a newcomer to a
+   * room full of others, or from a peer that said more than it could have.
    */
   const isNew = (state: RoomState, peer: string, at: number): boolean => {
     const now = Date.now();
     for (const [other, held] of state.peers) if (now - held.heard > PEER_SILENT_MS) state.peers.delete(other);
     const held = state.peers.get(peer);
-    return held ? at > held.last : state.peers.size < MAX_ROOM_PEERS;
+    if (!held) return state.peers.size < MAX_ROOM_PEERS;
+    // Times older than the window are refused anyway, so only the window's are kept.
+    for (const time of held.acted) if (time < now - MAX_SKEW_MS) held.acted.delete(time);
+    return !held.acted.has(at) && held.acted.size < MAX_ACTED;
   };
   /** Remembers a peer's message as acted on: its box, and its time */
   const remember = (state: RoomState, peer: string, box: string, at: number): void => {
-    state.peers.set(peer, { box, heard: Date.now(), last: at });
+    const acted = state.peers.get(peer)?.acted ?? new Set<number>();
+    acted.add(at);
+    state.peers.set(peer, { box, heard: Date.now(), acted });
   };
-  /** When this node last sent: each message it sends is later than the one before */
+  /** When this node last sent: each message it sends is later than the one before, so no two share a time */
   let sentAt = 0;
 
   /** Seals a message for a room and hands it to its relays: every one, or only `on` */

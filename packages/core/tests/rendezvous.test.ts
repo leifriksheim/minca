@@ -189,6 +189,45 @@ describe('meeting through relays', () => {
     assert.equal(b.signals.length, 1);
   });
 
+  test('a sender’s messages are each acted on, in whatever order they arrive', async () => {
+    const sender = await eavesdrop(one.url);
+    const { key, topic } = await rendezvousKeys('room');
+    let theirBox = '';
+    sender.link.on('blob', (_topic, blob) => {
+      void openValue(key, 'minca/rendezvous/v1', { topic }, blob).then((message) => {
+        if (isObject(message) && message.from === B.did && typeof message.box === 'string')
+          theirBox = message.box;
+      });
+    });
+    const b = await peer(B, [one.url]);
+    await until(() => theirBox !== '', 2000, 'B says hello');
+    const box = await contactKeyPair(p256.utils.randomSecretKey());
+    sender.link.publish(topic, await signedHello('room', A, box.publicKey));
+    await until(() => b.joined.length === 1, 2000, 'B hears A');
+    // An offer, and a hello signed after it: the hello comes first, as through a faster relay,
+    // and the offer right behind it, as on one relay where the hello is quicker to check.
+    const at = Date.now() + 5;
+    const sdp = await sealValueTo(
+      theirBox,
+      'minca/rendezvous-signal/v1',
+      { topic, from: A.did, to: B.did, box: box.publicKey },
+      OFFER,
+    );
+    const offer = await sealedSigned('room', A, {
+      kind: 'offer',
+      at,
+      from: A.did,
+      box: box.publicKey,
+      to: B.did,
+      sdp,
+    });
+    sender.link.publish(topic, await signedHello('room', A, box.publicKey, { at: at + 1 }));
+    sender.link.publish(topic, offer);
+    await until(() => b.signals.length === 1, 2000, 'the offer');
+    assert.deepEqual(b.signals[0]?.payload, OFFER);
+    assert.equal(b.joined.length, 2);
+  });
+
   test('a replayed hello counts once', async () => {
     const watcher = await eavesdrop(one.url);
     const b = await peer(B, [one.url]);
