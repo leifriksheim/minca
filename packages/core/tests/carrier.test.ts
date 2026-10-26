@@ -507,7 +507,7 @@ describe('a carrier', () => {
     // Made, invited to, carried with its invite, and the laptop goes at once.
     const pair = await laptop.spaces.create({ name: 'Us', ...team, visibility: 'private' });
     const invite = await laptop.spaces.invite(pair.id, { role: 'editor' });
-    assert.equal(await laptop.spaces.carried(pair.id, { waitMs: 10_000 }), true);
+    assert.equal(await laptop.spaces.carried(pair.id), true);
     await laptop.close();
 
     // A friend who was never online with the laptop joins through the carrier, and takes the role.
@@ -517,15 +517,16 @@ describe('a carrier', () => {
     await until(async () => friend.spaces.holdsRole(pair.id, 'editor'), 5000, 'the friend to hold the role');
   });
 
-  test('carried is false at once with no carrier, and false when none comes in time', async () => {
+  test('carried is false at once with no carrier, or with one that is not online', async () => {
     const me = await account();
     const home = await device(me, createFakeHub({ latencyMs: 1 }));
     const space = await home.spaces.create({ name: 'Notes', visibility: 'private' });
-    const started = Date.now();
-    assert.equal(await home.spaces.carried(space.id), false);
-    assert.ok(Date.now() - started < 1000, `took ${Date.now() - started} ms`);
-    await home.carriers.add({ did: (await carrierKey()).did, name: 'Chrome' });
-    assert.equal(await home.spaces.carried(space.id, { waitMs: 300 }), false);
+    for (const step of ['none', 'offline']) {
+      if (step === 'offline') await home.carriers.add({ did: (await carrierKey()).did, name: 'Chrome' });
+      const started = Date.now();
+      assert.equal(await home.spaces.carried(space.id), false);
+      assert.ok(Date.now() - started < 1000, `${step}: took ${Date.now() - started} ms`);
+    }
   });
 
   test('reached is true at once for a carrier already level', async () => {

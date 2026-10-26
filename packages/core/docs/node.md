@@ -891,11 +891,11 @@ space open until it closes, so the carrier hears it.
 **A space made just now.** Until a carrier opens it from its pass and syncs
 it, a new space is only on the device that made it: an invite handed out and
 the device closed can't be used. `node.spaces.carried(spaceId, { waitMs? })`
-names the account's carriers keepers, writes their passes now, and waits up
-to `waitMs` (default 30 s) until one is level with this node in the space, so
-it holds the genesis and any invite opened before the call. It says whether
-one was: false at once when the account has no carrier or the node no
-network. `contacts.ask` and `inbox.knock` wait on it before the knock goes
+is a short loading step: when a carrier of the account is connected now, it
+names it a keeper, writes its pass at once, and waits up to `waitMs`
+(default 3 s) until it is level with this node in the space, so it holds the
+genesis and any invite opened before the call. It says whether it was: false
+at once when no carrier is connected. `contacts.ask` and `inbox.knock` wait on it before the knock goes
 out, and pass what it said on as `carried`, for the app to tell the person.
 
 _Source: `packages/core/src/node/node.ts` (`spaces.carried`, `makePair`). Tests: `packages/core/tests/carrier.test.ts` ("a space made just now, carried before its invite goes out…", "carried is false at once with no carrier…")._

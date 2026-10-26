@@ -348,12 +348,10 @@ Which of the knocks that pass these checks a client offers the person
 > - **Authority (3):** knocking makes a space and hands out its invite, so it
 >   needs what making spaces for the account needs: a note that grants
 >   `/account/write` for the whole account.
-> - **Time (4):** notes are judged when a knock was signed, since knocks are
->   read days later, long after an hour-long session note ran out. But
->   `createdAt` is the signer's word. Tying it to when the relay took the
->   knock, a time the inbox's owner picked the keeper of, means a note that ran
->   out can't be used by dating a knock back to when it was good. A knock with
->   no mailbox time is judged only against the 14 days.
+> - **Time (4):** knocks are read days later, long after an hour-long session
+>   note ran out, so the note is judged when the knock was signed. That time
+>   is the signer's word; tying it to when the relay took the knock stops a
+>   note that ran out from knocking by dating it back.
 
 _Source: `packages/core/src/inbox/inbox.ts` (`sealKnock`, `openKnock`, `knockId`), `packages/core/src/space/invitation.ts` (`checkInvitation`), `packages/core/src/identity/abilities.ts`. Tests: `packages/core/tests/inbox.test.ts` ("a knock")._
 
@@ -372,107 +370,59 @@ grants records only ([06 §2.8](06-nodes-and-sessions.md)).
 
 ## 8. Security considerations
 
-- **One inbox, not linked to the account.** An account has one inbox at a
-  time. Its keys are derived from the contact key, not published on any
-  profile, so someone who holds the code and shares a space with the account
-  can't tell from the code that it is theirs. Replacing it (a new `gen`)
-  gives keys nothing ties to the old ones.
-- **What a relay learns.** Topics, blob sizes and times, and the addresses of
-  the sockets that drop, fetch and purge, so it can see that some address
-  knocked on a topic that another address fetches. Not whose inbox it is, not
-  which account knocked, not what was said. Topics are stable per inbox (§4).
-- **What a knocker learns.** The code's name, which is only what the owner put
-  there. The owner's account only once they join.
-- **What the owner learns.** The knocker's account, proven, and the name and
-  note they chose. The name proves nothing: the account DID is what to trust,
-  and a code handed over in person is the proof of whose inbox it is.
-- **A changed code.** A code is signed by its own signing key (§3), so whoever
-  passes it on can't change its places or name. They can hand out a code of
-  an inbox of their own in its place: only where the code came from says
-  whose it is.
-- **Spam.** Anyone with a code can knock. On the reference relay, each
-  address gets 4 knocks per inbox and 30 in all per hour; each inbox holds 64.
-  A single IPv6 /56 holds 256 /64s, so a determined flood can fill one inbox:
-  its owner **clears** it, which keeps every printed code and bio link
-  working, or replaces it. Blocking hides an account's knocks everywhere. A
-  knock only shows as a request; nothing in it runs.
-- **Filling a relay.** The per-address budget across topics bounds what one
-  address can hold; the reserve keeps every inbox able to take a knock or two
-  when the relay is full; the TTL can't be raised by clients. Both budgets are
-  weaker than that today (see the known defect in §5).
-- **Authority.** Only a proof that grants `/account/write` for the whole
-  account can knock (§6). A note that ran out can't be used by backdating
-  unless a relay the inbox names gives a `receivedAt` as old as the backdated
-  knock, colluding with whoever holds the expired note. _Known limitation:_ a note that was **revoked** but hasn't run out yet
-  (an app disconnected at the home, whose note lasts up to its grant's days)
-  can still knock, because the owner can't see the knocker's revocations.
-  Revoking a session's note when it ends is planned in
-  [01 §7.6](01-identity.md) ([#165](https://github.com/leifriksheim/minca/issues/165)).
+- **What each side learns.** A relay: topics, blob sizes and times, and the
+  addresses that drop, fetch and purge; not whose inbox it is, who knocked or
+  what was said. Topics are stable per inbox (§4). A knocker: only the name
+  the code gives, and the owner's account once they join. The owner: the
+  knocker's account, proven, and the name and note they chose, which prove
+  nothing. The code says nothing about the account, and a new `gen` gives
+  keys nothing ties to the old ones.
+- **A changed code.** A code is signed by its own key (§3), so whoever passes
+  it on can't change its places or name. They can hand out a code of their
+  own instead: only where a code came from says whose it is.
+- **Spam.** Anyone with a code can knock. The owner clears the inbox, which
+  keeps every printed code working, or replaces it; blocking hides an
+  account's knocks everywhere. Relay budgets are in §5, and weaker than they
+  should be (the known defect there). A knock only shows as a request.
+- **Authority.** Only a note that grants `/account/write` for the whole
+  account can knock (§6). A note that ran out can't knock by backdating,
+  unless a relay the inbox names colludes by giving an old `receivedAt`. A
+  note that was revoked but hasn't run out yet still can, since the owner
+  can't see the knocker's revocations
+  ([#165](https://github.com/leifriksheim/minca/issues/165)).
 - **Leaked invites.** The invite in a knock is multi-use until the knocker
-  closes it. Nothing but the space tells the knocker who joined: whoever joins
-  first is taken as the contact, and the invite is closed then. Doors had an
-  answer, signed with the door's key, that told the person behind the door
-  from anyone else the invite reached; the inbox has none. Only the inbox key
-  opens the knock, so someone else joins first only if the recipient's key or
-  device leaked, the recipient passed the invite on, or an app the recipient
-  gave the contact key to (06 §2.8) joined first: the inbox keys are derived
-  from it ([#313](https://github.com/leifriksheim/minca/issues/313)). The knocker sees whoever joined under their own account, never
-  under the recipient's, though they may give the recipient's name.
-- **Replays.** A knock re-dropped by anyone is the same blob (same id).
-  Dropped again later, it fails the time check (§6, 4).
-- **Losing a relay.** An inbox names up to three places, and knocks go to all
-  of them. A relay can drop knocks but can't read, forge or alter them, nor
-  hide one that another relay the inbox names holds (§6).
+  closes it, and whoever joins first is taken as the contact. Someone else
+  joins first only if the recipient passed it on, lost a device, or gave an
+  app the contact key that the inbox keys are derived from
+  ([#313](https://github.com/leifriksheim/minca/issues/313)). They show under
+  their own account, though they may give the recipient's name.
+- **Replays and lost relays.** A knock dropped again is the same blob, and
+  later fails the time check (§6). Knocks go to every place an inbox names; a
+  relay can drop them but can't read, forge or alter them, nor hide one
+  another relay holds (§6).
 
 ## 9. Planned: names
 
 > **Planned.** Not normative. A handle that leads to an inbox, so a person can
 > paste `@anna.bsky.social`, sent to them anywhere, where a code works today.
 
-A name is a pointer to an inbox, never to the identity. It resolves to an
-inbox code, and never to the account DID: that would link everything the
-account ever signed to the handle. The first name provider is ATProto, whose
-handles are domains checked both ways against a DID. ATProto is used only to
-publish one record, never to sign in: its signing keys usually live with the
-PDS, the opposite of "the seed is the account".
+A name resolves to an inbox code, never to the account DID, which would link
+everything the account signed to the handle. The code is signed by the
+inbox's own key (§3), so whoever serves the name can't change where knocks
+go, only hand out another inbox.
 
-**Resolving a handle** (read only, no sign-in):
+- **ATProto first.** Handle → DID (DNS TXT `_atproto.<handle>`, else
+  `https://<handle>/.well-known/atproto-did`; the DID document must name the
+  handle back) → PDS → `com.atproto.repo.getRecord`, collection
+  `org.minca.inbox`, key `self`, `{ "code": "<inbox code>", "createdAt" }`.
+  ATProto is used only to publish that record, never to sign in. The account
+  home links a handle with ATProto OAuth asking only to write it.
+- **Plain DNS next:** `_minca.<domain>` TXT holding an inbox code, for people
+  with a domain and no ATProto account.
 
-1. **Handle → DID.** DNS TXT `_atproto.<handle>` (`did=did:plc:…`), else
-   `https://<handle>/.well-known/atproto-did`. Browsers can't read TXT
-   records: use the HTTPS path, then a configurable DNS-over-HTTPS resolver.
-   The DID document's `alsoKnownAs` MUST name the handle back.
-2. **DID → PDS**, from the DID document's `AtprotoPersonalDataServer` service
-   (`did:plc` through the PLC directory, `did:web` through the domain).
-3. **PDS → inbox.** `com.atproto.repo.getRecord`, collection
-   `org.minca.inbox`, key `self`:
-   `{ "$type": "org.minca.inbox", "code": "<inbox code>", "createdAt": "…" }`.
-   The repository is signed, so the record is the handle owner's word, and the
-   code is signed by the inbox's own key (§3).
-
-**A checked handle on a knock.** A knock gains an optional `handle` and a
-`handleProof`: the knocker's own inbox signing key over
-`minca/knock-handle/v1|<inbox key knocked on>|<knock createdAt>`. The owner
-resolves the handle, reads the knocker's own inbox record, and checks the
-proof against the `sign` key in that code. This proves the knocker controls
-the handle's repository and an inbox, without their account DID becoming
-public.
-
-**Linking a handle** happens at the account home: ATProto OAuth (PAR, PKCE,
-DPoP) asking only to write `org.minca.inbox`; the home writes the account's
-inbox code into the record. Unlinking deletes it; replacing the inbox writes
-the new code.
-
-How a client knocks on a handle, shows a checked one, and lets an inbox's
-owner limit who may knock is planned in
-[Inbox](../packages/core/docs/inbox.md).
-
-**Trade-offs.** The PLC directory, a DoH resolver and `bsky.social` owning its
-subdomains become dependencies of _discovery_ only: contacts already made are
-Minca spaces and survive them. An inbox record makes "this handle uses Minca"
-public, which is opt-in. A second provider should follow: plain DNS,
-`_minca.<domain>` TXT holding an inbox code, for people with a domain and no
-ATProto account.
+Name services become dependencies of discovery only: contacts already made
+are Minca spaces and survive them. Publishing a record makes "this handle
+uses Minca" public, which is opt-in.
 
 ## 10. Not yet specified
 

@@ -58,7 +58,7 @@ _Source: `packages/core/src/schemas/contacts.ts` (`inbox`), `packages/core/src/n
 1. reads the code and checks its signature, and refuses its own inbox;
 2. creates a private space named `"<own name> & <code name>"` with the `team`
    role preset, and makes an editor invite;
-3. waits, up to 30 seconds, for one of the account's carriers to hold the
+3. if one of the account's carriers is online, waits up to 3 seconds for it to hold the
    space and its invite (`spaces.carried`), so the other person can join with
    every device of the knocker's away. With no carrier, or none in time, it
    goes on and says so: `knock` returns `carried: false`;

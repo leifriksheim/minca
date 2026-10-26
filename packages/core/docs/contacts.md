@@ -70,7 +70,7 @@ theirs to leave, and opens as nothing.
 - `ask(space, did, { note? })` needs whole-account access and the askee's
   `contactKey` on their profile in that space. It creates a private `team`
   space named `"<my name> & <their name>"`, opens an `editor` invite to it,
-  waits up to 30 seconds for a carrier to hold it (`spaces.carried`), writes a
+  waits up to 3 seconds for a carrier that is online to hold it (`spaces.carried`), writes a
   `std.contact` for them with that space, then leaves the knock as
   `std.contact-request`. It returns the space for two, the record's key, and `carried`:
   false when no carrier held the space in time, so the askee can join only

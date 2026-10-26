@@ -195,8 +195,8 @@ interface CarrierEntry {
 
 /** How long leaving waits for a peer to take the account's removal before forgetting the space anyway */
 const LEAVE_WAIT_MS = 5000;
-/** How long `spaces.carried` waits for a carrier, by default: a new space reaches one through its pass first */
-const CARRIED_WAIT_MS = 30_000;
+/** How long `spaces.carried` waits, by default: a short loading step, not a promise */
+const CARRIED_WAIT_MS = 3000;
 
 function summarize(record: SpaceRecord): SpaceSummary {
   const { space, key } = record;
@@ -1305,7 +1305,10 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
     async carried(spaceId, options = {}) {
       if (!accountSpaceId || narrowNote || !config.network) return false;
-      if ((await liveCarriers()).length === 0) return false;
+      // Only with a carrier connected now, as the account registry shows it: else nothing is coming.
+      const carriers = new Set((await liveCarriers()).map(({ body }) => body.did));
+      const online = (await (await runtime(accountSpaceId)).status()).peers;
+      if (!online.some((peer) => carriers.has(peer))) return false;
       const deadline = Date.now() + (options.waitMs ?? CARRIED_WAIT_MS);
       const open = await runtime(spaceId);
       // Named a keeper, and given its pass now rather than whenever the next round comes.

@@ -533,11 +533,10 @@ export interface NodeSpaces {
   send(spaceId: string, message: unknown, to?: string): Promise<void>;
   status(spaceId: string): Promise<SpaceStatus>;
   /**
-   * Waits up to `waitMs` (default 30 s) for one of the account's carriers to
-   * hold everything this node does of a space, so an invite to it works with
-   * every device of the account away. False at once when the account has no
-   * carrier, and false when none caught up in time: then the space can be
-   * joined only while one of its devices is online.
+   * Waits up to `waitMs` (default 3 s) for one of the account's carriers that
+   * is connected now to hold everything this node does of a space, so an
+   * invite to it works with every device of the account away. False at once
+   * when no carrier is connected, and false when it didn't catch up in time.
    */
   carried(spaceId: string, options?: { readonly waitMs?: number }): Promise<boolean>;
   /** How a node serving this space checks connecting peers and signs its welcome; null for a space it does not hold */
