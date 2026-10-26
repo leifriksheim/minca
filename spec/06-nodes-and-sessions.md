@@ -714,16 +714,16 @@ Home                                                  Program
                           ◀── code:done    sealed {}
 ```
 
-- **Both sides** MUST make a new ephemeral key for each exchange, that is
-  for each peer: a point one peer has seen must not be used with another, or
-  that peer could pick its own to steer the check of a second exchange.
-- **The home** answers each `code:hello` with `code:key`, and a
-  `code:point` whose point hashes to that peer's commitment with
-  `code:home`; it MUST ignore one that does not. It runs an exchange with
-  each such peer (at most a few dozen), until one `code:ask` opens and reads
-  as above. That program is the one asked about, and the code is spent: the
-  home MUST NOT answer another hello or ask, and MUST ignore `code:done` from
-  any other peer. It sends `code:heard` at once, and MUST show the person the
+- **One exchange each side**, as in pairing. With several, someone in the
+  room could run many with each side and pick a pair whose checks match. Each
+  side MUST make a new ephemeral key for it, and MUST NOT use a point one
+  peer has seen with another.
+- **The home** answers the first `code:hello` with `code:key`, and MUST
+  ignore every later one. It answers that peer's `code:point` with
+  `code:home` if the point hashes to its commitment, and MUST ignore one that
+  does not. Once that program's `code:ask` opens and reads as above, it is the
+  one asked about, and the code is spent: the home MUST NOT answer another
+  ask, and MUST ignore `code:done` from any other peer. It sends `code:heard` at once, and MUST show the person the
   name the program gives, as a name only, and the check.
 - **What it gets** is a note that grants records only, in the whole account
   (§2.8), for as long as the home decides. The home makes the
@@ -735,7 +735,9 @@ Home                                                  Program
 - **The program** sends its commitment before it sees any `code:key`, and its
   point only after. It answers a `code:home` only when its `origin` is the
   origin of the home it opened, with `code:ask` on that exchange, its proof naming
-  that origin, and takes the first peer whose `code:heard` opens as the home,
+  that origin. It sends `code:point` only to the first peer whose `code:key`
+  it takes, and MUST ignore every later `code:key`; that peer, once its
+  `code:heard` opens, is the home,
   ignoring every other from then on. It MUST check a grant as an app does
   (§2.6): `v` is 2; the note verifies; `aud` is its own key; `iss` is
   `grant.did`; and the note's command is under `/record`. It MUST NOT keep
@@ -755,8 +757,9 @@ home and keeps its key and grant, and the MCP server's `agent_connect` are in
 > and someone who learns it later, holding a recording, still lacks the
 > point. A key per direction and a count in each message mean nobody in the
 > room can turn one side's message into the other's, relabel it or repeat
-> it. A peer that says hello without the code costs the home one exchange,
-> and spends nothing. The code travels from the program to the browser it
+> it. Someone else who holds the code can take either side's one exchange
+> first, so the program is never answered; that costs a retry, not the
+> account. The code travels from the program to the browser it
 > opens, in the fragment, so no server sees it. The account is not in the
 > code, since the program does not know it until the person has signed in;
 > so someone else who holds the code could answer first, saying they are
@@ -764,9 +767,11 @@ home and keeps its key and grant, and the MCP server's `agent_connect` are in
 > stops that: the person's own home shows nothing for an exchange it isn't
 > in, so the person has no check to give, and the program keeps nothing. The
 > program commits to its point before it sees the home's, and the home sends
-> its point before it sees the program's, each a point made for that
-> exchange alone, so nobody between them can pick a key to make two
-> exchanges show the same check; one guess in a million is left. Keeping the home it opened means no answer decides where it connects
+> its point before it sees the program's, in one exchange each with points
+> made for it, so nobody between them can pick a key to make two exchanges
+> show the same check; one guess in a million is left. The check protects
+> the program, not the account: the home sends the note when the person
+> allows it, and a page posing as a program gets it then. Keeping the home it opened means no answer decides where it connects
 > next time.
 
 _Source: `packages/core/src/session/connect-code.ts` (`newConnectCode`, `connectCodeUrl`, `connectCodeIn`, `readConnectCode`, `answerConnectCode`, `receiveConnectCode`, `connectWithCode`), `packages/core/src/identity/channel.ts` (`CODE_CHANNEL`), `packages/core/src/session/connect.ts` (`checkGrant`, `keyProof`), `packages/core/src/session/auth.ts` (`grant`), `apps/home/src/components/ConnectPage.tsx`. Tests: `packages/core/tests/connect-code.test.ts` ("the room for a code, and the link that carries it", "the code alone does not open a recorded exchange", "a recording of the room, and the code learned later, open nothing", "a relay that relabels or repeats messages changes nothing", "a code works for one program: a second with the same code is not answered", "saying no reaches the program; a note for another key, or for more than records, is refused", "the program asks only the home it opened, and keeps that home, whatever the answer names", "a home opened at a link nobody waits on any more says so", "the program keeps its note only once the person gives the code the home shows; a point that breaks its commitment is ignored", "each exchange has keys of its own on both sides, so seeing one tells nothing about another"), `packages/core/tests/records-only.test.ts` ("a program connected by code, through the account home": "over a code: the program learns the home’s origin, and its proof is refused at any other"), `packages/core/tests/connect.test.ts` ("an app can only ask for a key it holds, and none the home already uses for something else", "a request with a field it does not know is refused…")._

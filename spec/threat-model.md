@@ -145,9 +145,12 @@ reference implementation, or any implementation, honestly.
     its real origin, a program shows only a name it chose. The home says a
     program on a computer opened it, and to allow it only if something they
     started just now asks for its code; that is the only defence. The check
-    doesn't help here, since the page asks for it itself. By design, as with
-    a device-code sign-in (`gh auth login`), where a page that asks the
-    person for the code gets one.
+    doesn't help here: the note is sent on Allow. This is weaker than a
+    device-code sign-in (`gh auth login`), where a page must also get the
+    person to type its code at the real site; here the link carries the
+    code, and one click is enough. By design: the code a person types guards
+    the program they started, which is the case a person can't see for
+    themselves.
   - A page that takes over an app's tab while the account home waits for the
     app's request (up to 10 minutes in the reference home) can send its own
     request, in the window the person opened from the app. The home shows
@@ -977,9 +980,13 @@ the same sealed blobs.
     are the home it opened, with a note from their own account; but the
     program keeps a note only once the person gives it the check their own
     home showed, which only that exchange gives, so it keeps nothing. Nobody
-    between the two can steer both exchanges to one check: each side's point
-    is fixed before it sees the other's (06 §3). The program also keeps the
-    home it opened, whatever an answer names.
+    between the two can steer both exchanges to one check: each side runs one
+    exchange, and fixes its point before it sees the other's, so one guess in
+    a million is left (06 §3). The program also keeps the home it opened,
+    whatever an answer names. The check protects the program, not the
+    account: the home sends the note when the person allows it. In an AI the
+    check comes back through the model, so someone who can read and write
+    the model's context can give the check of their own exchange.
   - A connect code travels from the program to the browser it opens, in the
     link's fragment, so the relay never sees it, and no request to the
     home's server carries it. It can stay in the browser's history, and the
@@ -1037,9 +1044,10 @@ the same sealed blobs.
     and from which address it is fetched; a relay also serving the space's
     room can tie a fetch to the topic watched a moment later
     ([#162](https://github.com/leifriksheim/minca/issues/162)).
-  - Someone who holds a connect code can fill the 32 exchanges the home runs
-    before the right program arrives, so the program is never answered. A
-    relay can't, since it knows only the room's topic, not the room.
+  - Someone who holds a connect code can take the home's one exchange, or
+    the program's, before the other side arrives, so the program is never
+    answered and has to connect again. A relay can't, since it knows only
+    the room's topic, not the room.
   - Someone else who holds the code can also ask before the program does,
     posing as it. The person sees only the name it gives itself, and may
     allow a note for its key; the real program is then never answered.

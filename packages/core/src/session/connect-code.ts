@@ -41,8 +41,6 @@ const DONE = 'code:done';
 const MAX_NAME = 80;
 /** Longest origin a home may give */
 const MAX_ORIGIN = 200;
-/** Peers either side runs an exchange with before the right one shows up */
-const MAX_TRIED = 32;
 
 /** Who is asking, as the program said */
 export interface CodeAsking {
@@ -198,7 +196,9 @@ export async function answerConnectCode(
   const handle = async (message: NetworkMessage): Promise<void> => {
     if (settled) return;
     if (message.type === HELLO && !asked) {
-      if (commits.has(message.from) || commits.size >= MAX_TRIED) return;
+      // One exchange, with the first peer to commit, as pairing has: with several, someone in the
+      // room could run many and pick a pair whose checks match.
+      if (commits.size > 0) return;
       const commit = bytesField(message, 'commit');
       if (!commit) return;
       const mine = await channelKeyPair();
@@ -395,7 +395,7 @@ export async function connectWithCode(params: {
     };
 
     room.net.on('peer-connected', (peer: PeerInfo) => {
-      if (home || keys.has(peer.did) || keys.size >= MAX_TRIED) return;
+      if (home || keys.has(peer.did)) return;
       const mine = channelKeyPair();
       keys.set(peer.did, mine);
       void mine
@@ -406,7 +406,8 @@ export async function connectWithCode(params: {
     const handle = async (message: NetworkMessage): Promise<void> => {
       if (settled) return;
       if (message.type === KEY && !home) {
-        if (channels.has(message.from)) return;
+        // One exchange, with the first peer to answer: the home runs one too.
+        if (channels.size > 0) return;
         const point = bytesField(message, 'key');
         const mine = await keys.get(message.from);
         if (!point || !mine) return;
@@ -440,11 +441,12 @@ export async function connectWithCode(params: {
         const origin = origins.get(message.from);
         // Only a home that holds the code, at the other end of this exchange, can seal this.
         if (!channel || !origin || !(await room.open(message, channel))) return;
-        home = { peer: message.from, channel, origin };
-        params.onWaiting?.({ origin });
         const expected = await connectCheck(channel);
+        // Asked for before anything else runs: no answer is kept without it.
         checked = params.check((typed) => typed.replace(/\D/g, '') === expected);
         checked.catch((error: unknown) => fail(error instanceof Error ? error.message : String(error)));
+        home = { peer: message.from, channel, origin };
+        params.onWaiting?.({ origin });
         // Once the home has the question, the person gets longer to answer it.
         wait(params.decideTimeoutMs ?? 30 * 60_000, 'Nobody answered at the account home. Try again.');
       } else if (message.type === ANSWER && home && message.from === home.peer) {
@@ -459,6 +461,7 @@ export async function connectWithCode(params: {
           const grant = answer.grant as Grant;
           await checkGrant(grant, params.key.did, { recordsOnly: true });
           // Kept only once the person gave the code their own home showed.
+          if (!checked) return;
           await checked;
           await room.seal(message.from, DONE, home.channel, {});
           // Where to connect again is the home it opened, never one the answer names.

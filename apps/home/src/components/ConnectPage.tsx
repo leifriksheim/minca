@@ -327,8 +327,7 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
       <Frame>
         <h1 style={styles.title}>Now give it the code</h1>
         <p style={styles.subtitle}>
-          Type this into the terminal where you started it, or tell your AI. It works only once it has the
-          code.
+          Type this into the terminal where you started it, or tell your AI, so it knows this is your account.
         </p>
         <CheckCode check={incoming.check} />
         <p style={styles.hint}>
@@ -364,8 +363,9 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
 
       {incoming.check && (
         <Note title="Its code" below={20}>
-          After you allow it, give this code to the program where you started it: in its terminal, or tell
-          your AI. If nothing you started asks for a code, don’t allow it.
+          It can use your account as soon as you allow it, so allow it only if something you started just now
+          is asking for this code. Then give it the code, in its terminal or by telling your AI, so it knows
+          this is your account.
           <CheckCode check={incoming.check} />
         </Note>
       )}

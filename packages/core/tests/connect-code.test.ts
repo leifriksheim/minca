@@ -242,7 +242,8 @@ describe('connecting a program by code', () => {
       return grantFor(who, stage.asking.did);
     });
 
-    // A program with a different code, in the same place, gets nowhere.
+    // A program with a different code gets nowhere (on a hub of its own: the fake hub puts every
+    // code's peers in one room, and the home would take it as its one exchange).
     await assert.rejects(
       connectWithCode({
         home: ORIGIN,
@@ -250,7 +251,7 @@ describe('connecting a program by code', () => {
         check: async () => {},
         key,
         name: 'x',
-        network,
+        network: room(createFakeHub({ latencyMs: 1 })).network,
         findTimeoutMs: 300,
       }),
       /not opened in time/,
@@ -496,18 +497,24 @@ describe('connecting a program by code', () => {
     assert.ok(!said.includes('code:home'), 'no exchange for a point it did not commit to');
   });
 
-  test('each exchange has keys of its own on both sides, so seeing one tells nothing about another', async () => {
+  test('each side runs one exchange, with keys made for it: a second peer gets nothing to compare', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const who = await person(hub);
     const { network } = room(hub);
     // The fake hub puts every code's peers in one room: the program meets its listeners in another.
     const apart = room(createFakeHub({ latencyMs: 1 })).network;
-    /** A peer that only listens, saying hello with a commitment when it meets someone */
+    /** A peer that only listens, saying hello with a commitment when it meets someone, as a program would */
     async function listener(code: string, hello = true, where = network) {
       const meeting = await meetOnChannel(CODE_CHANNEL, where, readConnectCode(code));
       const heard: NetworkMessage[] = [];
-      const commit = base64UrlEncode(await sha256((await channelKeyPair()).point));
-      meeting.net.on('message', (message: NetworkMessage) => heard.push(message));
+      const mine = await channelKeyPair();
+      const commit = base64UrlEncode(await sha256(mine.point));
+      meeting.net.on('message', (message: NetworkMessage) => {
+        heard.push(message);
+        // As a home would: a key for whoever said hello.
+        if (!hello && message.type === 'code:hello')
+          meeting.send(message.from, 'code:key', { key: base64UrlEncode(mine.point) });
+      });
       meeting.net.on('peer-connected', (peer: { did: string }) => {
         if (hello) meeting.send(peer.did, 'code:hello', { commit });
       });
@@ -515,22 +522,16 @@ describe('connecting a program by code', () => {
       open.push({ close: async () => meeting.net.disconnect() });
       return heard;
     }
-    const field = (heard: NetworkMessage[], type: string, name: string) => {
-      const payload = heard.find((message) => message.type === type)?.payload;
-      return isObject(payload) ? payload[name] : undefined;
-    };
+    const has = (heard: NetworkMessage[], type: string) => heard.some((message) => message.type === type);
 
-    // Two peers say hello to one home: each gets a different point.
+    // Two peers say hello to one home: only the first gets a key.
     const home = await allowing(network, async (stage) => grantFor(who, stage.asking.did));
     const [a, b] = [await listener(home.code), await listener(home.code)];
-    await until(
-      async () => !!field(a, 'code:key', 'key') && !!field(b, 'code:key', 'key'),
-      2000,
-      'both keys',
-    );
-    assert.notEqual(field(a, 'code:key', 'key'), field(b, 'code:key', 'key'));
+    await until(async () => has(a, 'code:key') || has(b, 'code:key'), 2000, 'a key');
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.equal([a, b].filter((heard) => has(heard, 'code:key')).length, 1);
 
-    // A program meeting two peers commits to a different point with each.
+    // A program meeting two homes commits to a different point with each, and goes on with one.
     const code = newConnectCode();
     const [c, d] = [await listener(code, false, apart), await listener(code, false, apart)];
     void connectWithCode({
@@ -542,11 +543,14 @@ describe('connecting a program by code', () => {
       network: apart,
       findTimeoutMs: 1000,
     }).catch(() => {});
-    await until(
-      async () => !!field(c, 'code:hello', 'commit') && !!field(d, 'code:hello', 'commit'),
-      2000,
-      'both commitments',
-    );
-    assert.notEqual(field(c, 'code:hello', 'commit'), field(d, 'code:hello', 'commit'));
+    const commitOf = (heard: NetworkMessage[]) => {
+      const payload = heard.find((message) => message.type === 'code:hello')?.payload;
+      return isObject(payload) ? payload.commit : undefined;
+    };
+    await until(async () => !!commitOf(c) && !!commitOf(d), 2000, 'both commitments');
+    assert.notEqual(commitOf(c), commitOf(d));
+    await until(async () => has(c, 'code:point') || has(d, 'code:point'), 2000, 'a point');
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.equal([c, d].filter((heard) => has(heard, 'code:point')).length, 1);
   });
 });
