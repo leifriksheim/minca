@@ -90,7 +90,7 @@ async function proveRead(
 ): Promise<Omit<HelloProof, 'sig'> | null> {
   const key = await access.key();
   if (!key) return null;
-  const read = await sign(provider, key.privateKey, label);
+  const read = await signLabel(provider, key.privateKey, label);
   // A bare key pair has no name to give; the other side takes it as its current one.
   if (!key.did) return { read };
   const member = (await access.membership?.()) ?? null;
@@ -100,7 +100,7 @@ async function proveRead(
   const earlier = await Promise.all(
     older.map(async (held) => ({
       readKey: held.did,
-      read: await sign(provider, held.privateKey, label),
+      read: await signLabel(provider, held.privateKey, label),
     })),
   );
   return { read, readKey: key.did, ...(member ? { member } : {}), ...(earlier.length ? { earlier } : {}) };
@@ -199,7 +199,8 @@ const helloLabel = (spaceId: string, clientDid: string, nodeDid: string, nonce: 
 const welcomeLabel = (spaceId: string, nodeDid: string, nonce: string) =>
   utf8Encode(`minca-peer/v3|server|${spaceId}|${nodeDid}|${nonce}`);
 
-async function verifyBy(
+/** Whether `sig` is the key a `did:key` names, signing `data` */
+export async function verifyBy(
   provider: CryptoProvider,
   did: string,
   sig: unknown,
@@ -214,7 +215,12 @@ async function verifyBy(
   }
 }
 
-async function sign(provider: CryptoProvider, key: CryptoKey, label: Uint8Array): Promise<string> {
+/** Signs `label`, as base64url */
+export async function signLabel(
+  provider: CryptoProvider,
+  key: CryptoKey,
+  label: Uint8Array,
+): Promise<string> {
   return base64UrlEncode(await provider.sign(key, label));
 }
 
@@ -234,7 +240,7 @@ export function createClientAuth(
     async hello(clientDid: string, nodeDid: string, nodeNonce: string) {
       const label = helloLabel(spaceId, clientDid, nodeDid, nodeNonce);
       const proof = access && (await proveRead(access, label, provider));
-      return { sig: await sign(provider, session.key, label), ...proof };
+      return { sig: await signLabel(provider, session.key, label), ...proof };
     },
     checkWelcome(nodeDid: string, clientNonce: string, sig: unknown) {
       return verifyBy(provider, nodeDid, sig, welcomeLabel(spaceId, nodeDid, clientNonce));
@@ -257,7 +263,7 @@ export function createServerAuth(
     checkHello: (clientDid: string, nodeDid: string, nodeNonce: string, proof: unknown) =>
       checkProof(provider, access, clientDid, helloLabel(spaceId, clientDid, nodeDid, nodeNonce), proof),
     welcome: (nodeDid: string, clientNonce: string) =>
-      sign(provider, nodeKey, welcomeLabel(spaceId, nodeDid, clientNonce)),
+      signLabel(provider, nodeKey, welcomeLabel(spaceId, nodeDid, clientNonce)),
   });
 }
 
@@ -330,7 +336,7 @@ export function createMeshAuth(
       const proof = access && (await proveRead(access, label, provider));
       // A node without the space's key cannot prove it may read — and should not be served.
       if (access && !proof) throw new Error('This node cannot read the space, so it cannot join its peers');
-      return { sig: await sign(provider, session.key, label), ...proof };
+      return { sig: await signLabel(provider, session.key, label), ...proof };
     },
     check(peerDid: string, ourNonce: string, binding: ChannelBinding | null, proof: unknown) {
       // What they signed, seen from this end: their certificate is our remote one.

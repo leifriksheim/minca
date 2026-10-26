@@ -9,9 +9,13 @@
  * key   = SHA-256(UTF-8("minca/rendezvous-key/v1|" + room))          AES-256-GCM
  * blob  = sealValue(key, "minca/rendezvous/v1", { topic }, message)
  *
- * message = { kind: "hello", id, at, from, box }
- *         | { kind: "offer" | "answer", id, at, from, box, to, sdp: sealValueTo(theirBox, "minca/rendezvous-signal/v1", { topic, from, to, box }, description) }
+ * message = { kind: "hello", id, at, from, box, sig }
+ *         | { kind: "offer" | "answer", id, at, from, box, to, sdp: sealValueTo(theirBox, "minca/rendezvous-signal/v1", { topic, from, to, box }, description), sig }
+ * sig     = the key `from` names, over UTF-8("minca/rendezvous-sig/v1|" + topic + "|" + kind + "|" + id + "|" + at + "|" + from + "|" + box + "|" + (to ?? ""))
  * ```
+ *
+ * Every message is signed by the session key its `from` names, so nobody can
+ * say hello, offer or answer in another's name, in this room or any other.
  *
  * `box` is a P-256 key this node made for meeting, so an offer or answer is
  * sealed to the one peer it is for: others in the room never see its
@@ -38,6 +42,9 @@ import { openValue, sealValue } from '../identity/envelope.js';
 import { openValueFrom, sealValueTo } from '../identity/hpke.js';
 import { contactKeyPair, isContactPublicKey } from '../identity/contact-key.js';
 import type { RelayStatus } from './relay-socket.js';
+import type { CryptoProvider } from '../types.js';
+import { createP256Provider } from '../identity/crypto-p256.js';
+import { signLabel, verifyBy } from './peer-auth.js';
 import { createRelayLink, relayKind, type RelayLink } from './relays.js';
 import { createSeenSignals, isPeerDid, shouldInitiate, type SeenSignals } from './introductions.js';
 
@@ -106,6 +113,15 @@ const MAX_ROOM_PEERS = 64;
 /** A peer not heard from in this long is forgotten: it would have said hello twice */
 const PEER_SILENT_MS = 5 * 60_000;
 
+/** What a message's `sig` signs: everything in it but the sealed description, which is bound to its box */
+const signedLabel = (
+  topic: string,
+  m: { kind: unknown; id: unknown; at: unknown; from: unknown; box: unknown; to?: unknown },
+) =>
+  utf8Encode(
+    `minca/rendezvous-sig/v1|${topic}|${String(m.kind)}|${String(m.id)}|${String(m.at)}|${String(m.from)}|${String(m.box)}|${typeof m.to === 'string' ? m.to : ''}`,
+  );
+
 /** A room's topic and key, as everyone who knows the room derives them */
 export async function rendezvousKeys(room: string): Promise<{ topic: string; key: CryptoKey }> {
   const topic = base64UrlEncode(await sha256(utf8Encode(`minca/rendezvous-topic/v1|${room}`)));
@@ -130,7 +146,12 @@ interface RoomState {
 }
 
 /** Meets peers through every relay given, of whatever kind; kinds this library doesn't speak are passed over */
-export function createRendezvous(urls: ReadonlyArray<string>, did: string): Rendezvous {
+export function createRendezvous(
+  urls: ReadonlyArray<string>,
+  session: { readonly did: string; readonly key: CryptoKey },
+  provider: CryptoProvider = createP256Provider(),
+): Rendezvous {
+  const { did } = session;
   const defaults = new Set(urls.filter((url) => relayKind(url) !== null));
   if (defaults.size === 0) throw new Error('At least one relay is needed to introduce peers.');
 
@@ -173,8 +194,13 @@ export function createRendezvous(urls: ReadonlyArray<string>, did: string): Rend
       from: did,
       box: (await box).publicKey,
     };
+    const sig = await signLabel(
+      provider,
+      session.key,
+      signedLabel(topic, { ...full, kind: message.kind, to: message.to }),
+    );
     state.seen.accept(full.id);
-    const blob = await sealValue(key, ENVELOPE_LABEL, { topic }, full);
+    const blob = await sealValue(key, ENVELOPE_LABEL, { topic }, { ...full, sig });
     for (const url of on ? [on.url] : state.urls) {
       const link = byUrl.get(url);
       if (link?.isConnected()) link.publish(topic, blob);
@@ -193,6 +219,10 @@ export function createRendezvous(urls: ReadonlyArray<string>, did: string): Rend
     if (!isPeerDid(from) || from === did || !isContactPublicKey(theirs)) return;
     if (typeof id !== 'string' || id.length > 64 || typeof at !== 'number') return;
     if (Math.abs(Date.now() - at) > MAX_SKEW_MS) return;
+    if (message.to !== undefined && typeof message.to !== 'string') return;
+    // Signed by the key it names: nobody says anything here in another's name.
+    const label = signedLabel(topic, { kind, id, at, from, box: theirs, to: message.to });
+    if (!(await verifyBy(provider, from, message.sig, label))) return;
     const { room } = place;
     const state = rooms.get(room);
     if (!state) return;

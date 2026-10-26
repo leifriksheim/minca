@@ -223,7 +223,7 @@ export async function createCarryCore(config: CarryCoreConfig) {
   /** Spaces carried from a pass handed over alone, not through a carry space: a space paying for itself */
   const direct = new Map<string, SpaceRecord>();
 
-  const mesh = meshFor(config.network, did);
+  const mesh = meshFor(config.network, session);
   const open = (
     record: SpaceRecord,
     stores: StoreFactory,

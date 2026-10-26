@@ -290,7 +290,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   const writers = createWriters((did) =>
     did !== sessionDid ? handedIn : (claimed?.heads ?? (config.sessionKey ? handedIn : null)),
   );
-  const mesh = meshFor(config.network, sessionDid);
+  const mesh = meshFor(config.network, session);
   /**
    * A node whose note doesn't let it act as the account itself — an app, or
    * an agent on someone's computer running a node of its own. It may follow

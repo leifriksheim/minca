@@ -284,28 +284,32 @@ room, and publishes there, sealed under the room key:
 ```
 blob    = base64url( sealEnvelope( room key, "minca/rendezvous/v1", { topic }, UTF-8(JSON(message)) ) )
 
-message = { "kind": "hello", "id", "at", "from", "box" }
-        | { "kind": "offer" | "answer", "id", "at", "from", "box", "to", "sdp" }
+message = { "kind": "hello", "id", "at", "from", "box", "sig" }
+        | { "kind": "offer" | "answer", "id", "at", "from", "box", "to", "sdp", "sig" }
 sdp     = sealTo( box of `to`, "minca/rendezvous-signal/v1", { topic, from, to, box }, UTF-8(JSON(description)) )
+sig     = base64url( ECDSA-P256-SHA256( the key `from` names,
+            UTF-8("minca/rendezvous-sig/v1|" + topic + "|" + kind + "|" + id + "|" + at + "|" + from + "|" + box + "|" + to) ) )
 ```
 
 `sealEnvelope` is the symmetric envelope and `sealTo` sealing to a key
 ([01](01-identity.md) §9.1, §9.2).
 
-| Field  | Value                                                                                                   |
-| ------ | ------------------------------------------------------------------------------------------------------- |
-| `id`   | 12 random bytes, base64url: what makes copies of one message one                                        |
-| `at`   | when it was sent, ms since the epoch                                                                    |
-| `from` | the sender's session DID                                                                                |
-| `box`  | a P-256 public key the sender made for meeting, compressed, base64url; the private half never leaves it |
-| `to`   | the DID an offer or answer is for                                                                       |
-| `sdp`  | the `RTCSessionDescriptionInit`, with every ICE candidate in it, sealed to the recipient's `box`        |
+| Field  | Value                                                                                                                    |
+| ------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `id`   | 12 random bytes, base64url: what makes copies of one message one                                                         |
+| `at`   | when it was sent, ms since the epoch                                                                                     |
+| `from` | the sender's session DID                                                                                                 |
+| `box`  | a P-256 public key the sender made for meeting, compressed, base64url; the private half never leaves it                  |
+| `sig`  | the session key `from` names, signing the fields above; `to` is the empty string in a hello, and `at` its decimal digits |
+| `to`   | the DID an offer or answer is for                                                                                        |
+| `sdp`  | the `RTCSessionDescriptionInit`, with every ICE candidate in it, sealed to the recipient's `box`                         |
 
 A receiver MUST ignore a blob unless all of these hold:
 
 1. It opens under the room key, label `minca/rendezvous/v1`, bound
    `{ topic }`, and is a JSON object.
-2. `from` is a `did:key` other than its own, and `box` a point on P-256.
+2. `from` is a `did:key` other than its own, `box` a point on P-256, and
+   `sig` verifies against the key `from` names.
 3. `id` is a string of at most 64 characters it has not acted on in this
    room (it remembers a bounded number of recent ids per room, and records
    one only once its message passed every other check), and `at` is within
@@ -356,8 +360,12 @@ is gone when its connection is (§5).
 > in the room don't see that peer's addresses either. One rule for who offers,
 > the same as for introductions (§8), means both sides hearing each other's
 > hello never makes two connections.
+>
+> Signing each message with the session key closes the rest: nobody says
+> hello, offers or answers in a peer's name, in its room or any other, so
+> nobody can keep two peers apart by posing as one of them.
 
-_Source: `packages/core/src/network/rendezvous.ts` (`createRendezvous`, `rendezvousKeys`, `remember`, `MAX_ROOM_PEERS`), `packages/core/src/network/mesh.ts` (`meet`), `packages/core/src/network/introductions.ts` (`shouldInitiate`, `createSeenSignals`). Tests: `packages/core/tests/rendezvous.test.ts` ("hellos under 90 made-up names start no more than 64 connections", "an offer re-wrapped with another box opens nothing", "a relay, or anyone on the topic, sees neither who meets nor their addresses", "a third peer in the room hears the offer pass but cannot open it", "a blob that does not open under the room key, or is stale, or comes again, is ignored", "a replayed hello counts once"), `packages/core/tests/network-manager.test.ts` ("the mesh, through real relays")._
+_Source: `packages/core/src/network/rendezvous.ts` (`createRendezvous`, `rendezvousKeys`, `remember`, `MAX_ROOM_PEERS`), `packages/core/src/network/mesh.ts` (`meet`), `packages/core/src/network/introductions.ts` (`shouldInitiate`, `createSeenSignals`). Tests: `packages/core/tests/rendezvous.test.ts` ("a hello naming B but signed by another key is ignored", "someone in only a public room cannot pose there as B to keep A and B apart in a private one", "hellos under 90 made-up names start no more than 64 connections", "an offer re-wrapped with another box opens nothing", "a relay, or anyone on the topic, sees neither who meets nor their addresses", "a third peer in the room hears the offer pass but cannot open it", "a blob that does not open under the room key, or is stale, or comes again, is ignored", "a replayed hello counts once"), `packages/core/tests/network-manager.test.ts` ("the mesh, through real relays")._
 
 ### 2.1 Keeping a relay's socket
 

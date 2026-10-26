@@ -14,13 +14,16 @@ import { p256 } from '@noble/curves/nist.js';
 import { createMincaLink } from '../src/network/relay-minca.js';
 import type { RelayLink } from '../src/network/relays.js';
 import { rendezvousKeys } from '../src/network/rendezvous.js';
-import { sealValue } from '../src/identity/envelope.js';
 import { base64UrlEncode } from '../src/utils/encoding.js';
 import { createMesh } from '../src/network/mesh.js';
 import { createRelay, MAX_MESSAGE_BYTES } from '../../relay/relay.mjs';
 import { portOf, textOf } from './helpers/net.js';
 import type { PeerTransportEvents, SignalledTransport } from '../src/network/transport.js';
 import { createEmitter } from '../src/utils/events.js';
+import { sessionsInOrder, signedHello, type Session } from './helpers/sessions.js';
+
+// Real sessions, since hellos are signed; `me` is the lower, so it offers.
+const [me, them] = await sessionsInOrder(2);
 
 /** Whether the pretend relay answers */
 let relayUp = true;
@@ -276,17 +279,11 @@ async function crunch(done: () => boolean): Promise<void> {
   assert.ok(done(), 'gave up waiting');
 }
 
-/** A peer's sealed hello in a room, as the relay hands it to watchers */
-async function helloFrom(peer: string, room: string): Promise<object> {
-  const { topic, key } = await rendezvousKeys(room);
+/** A peer's signed, sealed hello in a room, as the relay hands it to watchers */
+async function helloFrom(peer: Session, room: string): Promise<object> {
+  const { topic } = await rendezvousKeys(room);
   const box = base64UrlEncode(p256.getPublicKey(p256.utils.randomSecretKey(), true));
-  const id = base64UrlEncode(crypto.getRandomValues(new Uint8Array(12)));
-  const blob = await sealValue(
-    key,
-    'minca/rendezvous/v1',
-    { topic },
-    { kind: 'hello', id, at: Date.now(), from: peer, box },
-  );
+  const blob = await signedHello(room, peer, box);
   return { type: 'mail', topic, items: [{ blob }], more: false };
 }
 
@@ -305,7 +302,12 @@ describe('the mesh offers again', () => {
   });
 
   const meshWith = (transport: SignalledTransport) =>
-    createMesh({ did: 'did:key:zMe', relays: ['ws://relay.example'], createTransport: () => transport });
+    createMesh({
+      did: me.did,
+      key: me.key,
+      relays: ['ws://relay.example'],
+      createTransport: () => transport,
+    });
 
   test('when an offer is never answered, it is given up, and made again on the next hello', async () => {
     const fake = silentTransport();
@@ -315,18 +317,18 @@ describe('the mesh offers again', () => {
 
     const { topic } = await rendezvousKeys('room-a');
     await crunch(() => watches(sockets[0]!, topic));
-    fromRelay(await helloFrom('did:key:zThem', 'room-a'));
+    fromRelay(await helloFrom(them, 'room-a'));
     await crunch(() => fake.offers.length > 0);
-    assert.deepEqual(fake.offers, ['did:key:zThem']);
+    assert.deepEqual(fake.offers, [them.did]);
     assert.equal(mesh.status().connecting.length, 1);
 
     // Unanswered, it is given up rather than waited on for ever, and made
     // again when the peer next says hello.
     await pass(21_000);
-    assert.deepEqual(fake.closed, ['did:key:zThem']);
+    assert.deepEqual(fake.closed, [them.did]);
     assert.equal(fake.offers.length, 1);
     assert.equal(mesh.status().connecting.length, 0);
-    fromRelay(await helloFrom('did:key:zThem', 'room-a'));
+    fromRelay(await helloFrom(them, 'room-a'));
     await crunch(() => fake.offers.length === 2);
     assert.equal(mesh.status().connecting[0]?.tries, 1);
 
@@ -338,7 +340,7 @@ describe('the mesh offers again', () => {
 
     // The room let go of: a hello there starts nothing.
     room.disconnect();
-    fromRelay(await helloFrom('did:key:zThem', 'room-a'));
+    fromRelay(await helloFrom(them, 'room-a'));
     await pass(1000);
     assert.equal(fake.offers.length, 2);
     assert.equal(mesh.status().connecting.length, 0);
@@ -351,11 +353,11 @@ describe('the mesh offers again', () => {
     await room.connect();
     const { topic } = await rendezvousKeys('room-a');
     await crunch(() => watches(sockets[0]!, topic));
-    fromRelay(await helloFrom('did:key:zThem', 'room-a'));
+    fromRelay(await helloFrom(them, 'room-a'));
     await crunch(() => fake.offers.length > 0);
-    fake.events.emit('connected', 'did:key:zThem');
+    fake.events.emit('connected', them.did);
     assert.equal(mesh.status().connecting.length, 0);
-    assert.deepEqual(mesh.status().links, [{ peer: 'did:key:zThem', rooms: 0 }]);
+    assert.deepEqual(mesh.status().links, [{ peer: them.did, rooms: 0 }]);
     await pass(60_000);
     assert.equal(fake.offers.length, 1);
     room.disconnect();
