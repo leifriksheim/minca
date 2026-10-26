@@ -42,8 +42,9 @@ VS Code, Windsurf, Zed, Codex and more). The agent is then a node of its own:
 it follows the account's spaces and keeps working with every tab closed.
 
 An agent can also start `minca mcp` before it is connected, from settings
-added by hand. Until it is, the server offers one tool, `agent_connect`,
-which opens the account home the same way and gives the link too. Once the
+added by hand. Until it is, the server offers one tool, which opens the
+account home the same way and gives the link too
+([the CLI's README](https://github.com/leifriksheim/minca/blob/main/packages/cli/README.md#agents)). Once the
 person has allowed it, every tool arrives (`notifications/tools/list_changed`)
 without a restart.
 
@@ -76,9 +77,9 @@ What the reference sides add:
 
 - The terminal asks which account home to open, with home.minca.social, or
   the one it connected at last, filled in so Enter takes it.
-  `--account-home` or `MINCA_ACCOUNT_HOME` names it ahead; `agent_connect`
-  takes it as `account_home`. Anywhere nothing can be asked, it uses the
-  usual one.
+  `--account-home` or `MINCA_ACCOUNT_HOME` names it ahead, and the MCP
+  server's connect tool takes it too. Anywhere nothing can be asked, it uses
+  the usual one.
 - It opens the link in the browser and shows it too, for a computer where
   none opens: a server, or a terminal over SSH. The link works from any
   device.
