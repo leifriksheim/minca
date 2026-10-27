@@ -12,7 +12,7 @@ export default {
     name: 'Minca',
     identifier: 'org.minca.desktop',
     // Bumped with the packages (bump.config.ts), so a release's tag names it.
-    version: '0.1.13',
+    version: '0.1.14',
   },
   runtime: {
     // Closing the window leaves the carrier running in the menu bar.
