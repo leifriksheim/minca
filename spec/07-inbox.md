@@ -224,7 +224,7 @@ them there: an inbox that names a Nostr relay should name a Minca relay too.
 
 A drop carries no proof of work. Work a phone does in a second, a server
 core does in a tenth of one, so it would hold back nobody the address
-budgets above don't.
+budgets above, or a Nostr relay's own limits, don't.
 
 > **Known defect:** both budgets are weaker than this section and §8 promise.
 > One IPv6 /64 counts as one address, so a home /56 (256 of them) can fill the
