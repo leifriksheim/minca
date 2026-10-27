@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node --conditions=@minca/source --import tsx src/main.ts",
-    "test": "node --conditions=@minca/source --import tsx --test --test-concurrency=4 --test-timeout=60000 --test-force-exit tests/*.test.ts",
+    "test": "node --conditions=@minca/source --import tsx --test --test-concurrency=8 --test-timeout=60000 --test-force-exit tests/*.test.ts",
     "typecheck": "tsc --noEmit",
     "eval": "node --conditions=@minca/source --import tsx evals/collections.ts",
     "bundle": "esbuild src/main.ts --bundle --platform=node --format=esm --main-fields=module,main --target=node22 --conditions=@minca/source --outfile=dist/minca.mjs --external:ws --external:node-datachannel --banner:js='#!/usr/bin/env node\nimport { createRequire } from \"node:module\";\nconst require = createRequire(import.meta.url);'",
