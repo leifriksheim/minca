@@ -76,7 +76,7 @@ export function Download() {
                 <ChromeMark size={14} />
                 Chrome extension
               </div>
-              <h2>Never miss a thing.</h2>
+              <h2>Your spaces keep syncing.</h2>
               <p>Your spaces stay in sync while Chrome is open, even with Minca closed.</p>
               <div className="actions">
                 <Link {...downloadLink('chrome')} className="btn btn-primary">

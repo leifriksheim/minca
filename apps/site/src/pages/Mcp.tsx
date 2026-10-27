@@ -303,8 +303,8 @@ export function Mcp() {
               <div className="kicker-inline">MCP</div>
               <h1>Bring your own AI.</h1>
               <p>
-                Connect Claude, Cursor or any AI that speaks MCP to your spaces. It knows what’s going on, and
-                gets things done for you.
+                Connect Claude, Cursor or any AI that speaks MCP to your spaces. Ask it what’s happening at
+                the club, or tell it to take the last seat.
               </p>
               <div className="command">
                 <code>{COMMAND}</code>
@@ -336,7 +336,9 @@ export function Mcp() {
         id="tools"
         tone="sunken"
         title="Tools"
-        intro={<p>What your AI can do in your spaces. Nothing that needs a person comes with it.</p>}
+        intro={
+          <p>What your AI can do in your spaces. It can’t add people or change who’s allowed to do what.</p>
+        }
       >
         <Tools />
       </Band>

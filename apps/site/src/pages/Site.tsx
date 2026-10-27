@@ -640,8 +640,8 @@ export function Developers() {
             runs nowhere.
           </h1>
           <p>
-            Let your users be your infrastructure: their devices keep the data, check the rules and sync with
-            each other. No servers to run, and nothing in the middle that can read it.
+            Your users’ devices keep the data, check the rules and sync with each other. No servers to run,
+            and nothing in the middle that can read it.
           </p>
           <div className="actions">
             <span className="install">
@@ -662,12 +662,7 @@ export function Developers() {
         id="concepts"
         kicker="The concepts"
         title="A protocol for any kind of social space."
-        intro={
-          <p>
-            Minca was built to enable decentralized governance without a blockchain. These are the parts it's
-            made of, and every app on it uses them.
-          </p>
-        }
+        intro={<p>Minca lets a group run itself, without a blockchain.</p>}
       >
         <Concepts />
       </Band>
@@ -675,12 +670,12 @@ export function Developers() {
       <Band
         id="walkthrough"
         kicker="How it fits together"
-        title="For any kind of community."
+        title="Every app does the same five things."
         intro={
           <p>
-            Every app on Minca does the same few things: start a space, describe its data, say who may do
-            what, use it, and read what it shows or proves. Pick a community to see them in its terms. Each
-            one runs, step by step, as a test in the repository.
+            Start a space, describe its data, say who may do what, use it, and read what it shows or proves.
+            Pick a community to see them in its terms. Each one runs, step by step, as a test in the
+            repository.
           </p>
         }
       >
@@ -697,8 +692,8 @@ export function Developers() {
                 an optional library of ready-made definitions.
               </p>
               <p>
-                They're ordinary collections, nothing special. Using the same ones is simply how two apps
-                agree: a poll asked in one can be voted on in another. Prefer your own shape? Define your own.
+                They're ordinary collections. When two apps use the same one, a poll made in one can be voted
+                on in the other. You can always define your own.
               </p>
               <ul>
                 <li>
@@ -721,8 +716,8 @@ export function Developers() {
             <div>
               <h3>Built for agents, too</h3>
               <p>
-                Every operation is described once — a name, a sentence, a JSON Schema — and becomes a CLI
-                command, an MCP tool and a WebMCP tool in the browser.
+                You describe each operation once, with a name, a sentence and a JSON Schema, and it becomes a
+                CLI command, an MCP tool and a WebMCP tool in the browser.
               </p>
               <p>An agent acts as the user, with the same permissions as the app it's in.</p>
             </div>
@@ -738,7 +733,7 @@ export function Developers() {
         title="Where Minca fits."
         intro={
           <p>
-            Other open protocols give people their data back too. They make different bets. Minca is for apps
+            Other open protocols give people their data back too. Here’s how they differ. Minca is for apps
             where data is private, shared between a few people, and works offline.
           </p>
         }

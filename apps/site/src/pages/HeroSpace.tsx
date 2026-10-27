@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Shape } from '@minca/app-shared/shapes';
-import { type RoundKind } from '@minca/ui/shapes';
 import { shapeColours, type ShapeColour } from '@minca/ui/tokens';
+import { EventHead, Face } from './demos';
 
 /**
  * The front page's hero: many hands making one small app. A handful of
- * people, each a shape, share a canvas; one asks for a carpool and it appears,
- * the others use it at once, and when it fills up someone asks for a
- * waitlist and gets that too. Asking, using and changing, in one picture.
+ * people, each a face, share a canvas; one asks for an RSVP for hack night and
+ * it appears, the others use it at once, and when it fills up someone asks
+ * for a waitlist and gets that too. Asking, using and changing, in one picture.
  *
  * The cursors find what they point at by `data-target`, measured on the
  * page, so they land on the right thing at any width.
@@ -19,17 +18,13 @@ type Spot = readonly [number, number];
 
 /** Where each cursor rests, as fractions of the canvas: around the app, or below it on a narrow one */
 const PEOPLE: Readonly<
-  Record<
-    Who,
-    { name: string; kind: RoundKind; colour: ShapeColour; inkLabel?: boolean; home: Spot; narrowHome: Spot }
-  >
+  Record<Who, { name: string; colour: ShapeColour; inkLabel?: boolean; home: Spot; narrowHome: Spot }>
 > = {
-  maya: { name: 'Maya', kind: 'scallop', colour: 'cobalt', home: [0.12, 0.7], narrowHome: [0.08, 0.76] },
-  joe: { name: 'Joe', kind: 'flower', colour: 'coral', home: [0.84, 0.18], narrowHome: [0.62, 0.74] },
-  anna: { name: 'Anna', kind: 'clover', colour: 'sage', home: [0.88, 0.66], narrowHome: [0.7, 0.9] },
+  maya: { name: 'Maya', colour: 'cobalt', home: [0.12, 0.7], narrowHome: [0.08, 0.76] },
+  joe: { name: 'Joe', colour: 'coral', home: [0.84, 0.18], narrowHome: [0.62, 0.74] },
+  anna: { name: 'Anna', colour: 'sage', home: [0.88, 0.66], narrowHome: [0.7, 0.9] },
   sam: {
     name: 'Sam',
-    kind: 'star',
     colour: 'peach',
     inkLabel: true,
     home: [0.16, 0.22],
@@ -37,7 +32,6 @@ const PEOPLE: Readonly<
   },
   lea: {
     name: 'Lea',
-    kind: 'burst',
     colour: 'lilac',
     inkLabel: true,
     home: [0.76, 0.86],
@@ -48,132 +42,116 @@ const PEOPLE: Readonly<
 const NARROW = 640;
 const WHO: readonly Who[] = ['maya', 'joe', 'anna', 'sam', 'lea'];
 
-type Seats = readonly [string, string, string];
+type Spots = readonly [string, string, string];
 
 interface Step {
   readonly ms: number;
-  readonly say: string;
   /** What the ask box holds, and whether it is being typed right now */
   readonly prompt: string;
   readonly typing?: boolean;
-  readonly app: 'none' | 'empty' | 'ride';
-  readonly seats: Seats;
+  readonly app: 'none' | 'empty' | 'event';
+  readonly spots: Spots;
   readonly waitlist: 'none' | 'open' | 'joined';
   /** Where each cursor points, by `data-target`; anyone missing rests at home */
   readonly at: Partial<Record<Who, string>>;
   readonly click?: readonly Who[];
 }
 
-const NONE: Seats = ['', '', ''];
-const TWO: Seats = ['Anna', 'Sam', ''];
-const FULL: Seats = ['Anna', 'Sam', 'Maya'];
-const ASK = 'A carpool for away games';
+const NONE: Spots = ['', '', ''];
+const TWO: Spots = ['Anna', 'Sam', ''];
+const FULL: Spots = ['Anna', 'Sam', 'Maya'];
+const ASK = 'An RSVP for our hack night';
 const CHANGE = 'Add a waitlist';
-const ASKING = 'Maya asks for a carpool.';
-const SEATS = 'Anna and Sam grab seats.';
-const LAST_SEAT = 'Maya takes the last one.';
-const MENDING = 'Full already. Lea asks for a waitlist.';
-const MENDED = 'Anyone can change it, and everyone gets the change.';
 
 const STEPS: readonly Step[] = [
-  { ms: 900, say: ASKING, prompt: '', app: 'none', seats: NONE, waitlist: 'none', at: { maya: 'prompt' } },
+  { ms: 900, prompt: '', app: 'none', spots: NONE, waitlist: 'none', at: { maya: 'prompt' } },
   {
     ms: 1900,
-    say: ASKING,
     prompt: ASK,
     typing: true,
     app: 'none',
-    seats: NONE,
+    spots: NONE,
     waitlist: 'none',
     at: { maya: 'prompt' },
   },
   {
     ms: 800,
-    say: ASKING,
     prompt: ASK,
     app: 'none',
-    seats: NONE,
+    spots: NONE,
     waitlist: 'none',
     at: { maya: 'send' },
     click: ['maya'],
   },
   {
     ms: 1500,
-    say: 'It’s there for everyone, straight away.',
     prompt: '',
     app: 'empty',
-    seats: NONE,
+    spots: NONE,
     waitlist: 'none',
     at: { joe: 'offer' },
   },
   {
     ms: 1300,
-    say: 'Joe offers a ride.',
     prompt: '',
-    app: 'ride',
-    seats: NONE,
+    app: 'event',
+    spots: NONE,
     waitlist: 'none',
     at: { joe: 'offer' },
     click: ['joe'],
   },
   {
     ms: 1100,
-    say: SEATS,
     prompt: '',
-    app: 'ride',
-    seats: NONE,
+    app: 'event',
+    spots: NONE,
     waitlist: 'none',
-    at: { anna: 'seat-0', sam: 'seat-1' },
+    at: { anna: 'spot-0', sam: 'spot-1' },
   },
   {
     ms: 1100,
-    say: SEATS,
     prompt: '',
-    app: 'ride',
-    seats: TWO,
+    app: 'event',
+    spots: TWO,
     waitlist: 'none',
-    at: { anna: 'seat-0', sam: 'seat-1' },
+    at: { anna: 'spot-0', sam: 'spot-1' },
     click: ['anna', 'sam'],
   },
-  { ms: 900, say: LAST_SEAT, prompt: '', app: 'ride', seats: TWO, waitlist: 'none', at: { maya: 'seat-2' } },
+  { ms: 900, prompt: '', app: 'event', spots: TWO, waitlist: 'none', at: { maya: 'spot-2' } },
   {
     ms: 1300,
-    say: LAST_SEAT,
     prompt: '',
-    app: 'ride',
-    seats: FULL,
+    app: 'event',
+    spots: FULL,
     waitlist: 'none',
-    at: { maya: 'seat-2' },
+    at: { maya: 'spot-2' },
     click: ['maya'],
   },
-  { ms: 900, say: MENDING, prompt: '', app: 'ride', seats: FULL, waitlist: 'none', at: { lea: 'prompt' } },
+  { ms: 900, prompt: '', app: 'event', spots: FULL, waitlist: 'none', at: { lea: 'prompt' } },
   {
     ms: 1500,
-    say: MENDING,
     prompt: CHANGE,
     typing: true,
-    app: 'ride',
-    seats: FULL,
+    app: 'event',
+    spots: FULL,
     waitlist: 'none',
     at: { lea: 'prompt' },
   },
   {
     ms: 800,
-    say: MENDING,
     prompt: CHANGE,
-    app: 'ride',
-    seats: FULL,
+    app: 'event',
+    spots: FULL,
     waitlist: 'none',
     at: { lea: 'send' },
     click: ['lea'],
   },
-  { ms: 1100, say: MENDED, prompt: '', app: 'ride', seats: FULL, waitlist: 'open', at: { lea: 'join' } },
+  { ms: 1100, prompt: '', app: 'event', spots: FULL, waitlist: 'open', at: { lea: 'join' } },
   {
     ms: 3200,
-    say: MENDED,
     prompt: '',
-    app: 'ride',
-    seats: FULL,
+    app: 'event',
+    spots: FULL,
     waitlist: 'joined',
     at: { lea: 'join' },
     click: ['lea'],
@@ -196,29 +174,15 @@ function Typed({ text }: { text: string }) {
   );
 }
 
-/** Someone in a seat, in the colour of their cursor; it keeps the seat's target, so the cursor stays put */
-function Initial({ who, target }: { who: Who; target: string }) {
-  const person = PEOPLE[who];
-  return (
-    <span
-      data-target={target}
-      className="app-initial"
-      style={{ background: shapeColours[person.colour], color: person.inkLabel ? 'var(--ink)' : '#fff' }}
-    >
-      {person.name[0]}
-    </span>
-  );
-}
+const TAKEN: Readonly<Record<string, Who>> = { Anna: 'anna', Sam: 'sam', Maya: 'maya' };
 
-const SEATED: Readonly<Record<string, Who>> = { Anna: 'anna', Sam: 'sam', Maya: 'maya' };
-
-/** Each person is one of the brand's shapes, with their name beside it, the way a shared canvas shows who is where */
+/** Each person is their face, ringed in their colour, with their name beside it, the way a shared canvas shows who is where */
 function Pointer({ who }: { who: Who }) {
   const person = PEOPLE[who];
   const fill = shapeColours[person.colour];
   return (
     <>
-      <Shape kind={person.kind} colour={person.colour} className="cursor-shape" />
+      <img className="cursor-face" src={`/faces/${who}.jpg`} alt="" style={{ borderColor: fill }} />
       <span
         className="cursor-name"
         style={{ background: fill, color: person.inkLabel ? 'var(--ink)' : '#fff' }}
@@ -283,6 +247,8 @@ export function HeroSpace() {
           el.style.transitionDelay = '';
         }
         el.style.transform = `translate(${x}px, ${y}px)`;
+        // Near the right edge the name goes on the face's left, so it stays on the page
+        el.classList.toggle('is-flipped', x > box.width - 90);
       }
     };
     place();
@@ -291,7 +257,7 @@ export function HeroSpace() {
     return () => watch.disconnect();
   }, [step, still]);
 
-  const full = step.seats.every(Boolean);
+  const full = step.spots.every(Boolean);
   const sending = Boolean(step.click?.length && step.prompt);
 
   return (
@@ -307,38 +273,41 @@ export function HeroSpace() {
               )}
             </span>
             <span className={sending ? 'ask-send pressed' : 'ask-send'} data-target="send">
-              Ask
+              Create
             </span>
           </div>
 
           {step.app === 'none' ? null : (
             <div className="canvas-app" key={`app-${at.round}`}>
               <div className="app">
-                <div className="app-head">
-                  Carpool · Saturday away
-                  <span>{step.app === 'empty' ? 'No rides yet' : full ? 'Full' : '1 ride'}</span>
-                </div>
-                {step.app === 'ride' ? (
+                <EventHead
+                  day="Thu"
+                  date="14"
+                  title="Hack night"
+                  meta={step.app === 'empty' ? '7pm · no host yet' : '7pm · The Loft · Joe hosts'}
+                />
+                {step.app === 'event' ? (
                   <div className="app-row">
                     <span>
-                      <b>Joe</b> is driving
+                      <b>Going</b>
+                      <small>{full ? 'Full' : `${step.spots.filter(Boolean).length} of 3 spots`}</small>
                     </span>
-                    <span className="app-seats">
-                      {step.seats.map((name, i) => {
-                        const who = SEATED[name];
+                    <span className="app-spots">
+                      {step.spots.map((name, i) => {
+                        const who = TAKEN[name];
                         return who ? (
-                          <Initial key={i} who={who} target={`seat-${i}`} />
+                          <Face key={i} who={who} target={`spot-${i}`} />
                         ) : (
-                          <span key={i} className="app-seat" data-target={`seat-${i}`} />
+                          <span key={i} className="app-spot" data-target={`spot-${i}`} />
                         );
                       })}
                     </span>
                   </div>
                 ) : (
                   <div className="app-row">
-                    <span>Driving on Saturday?</span>
+                    <span>Who’s hosting?</span>
                     <span className="app-pill free" data-target="offer">
-                      Offer a ride
+                      Host it
                     </span>
                   </div>
                 )}
@@ -346,10 +315,10 @@ export function HeroSpace() {
                   <div className="app-row is-new">
                     <span>
                       <b>Waitlist</b>
-                      <small>First in line gets a seat that opens</small>
+                      <small>First in line gets a spot that opens</small>
                     </span>
                     {step.waitlist === 'joined' ? (
-                      <Initial who="lea" target="join" />
+                      <Face who="lea" target="join" />
                     ) : (
                       <span className="app-pill free" data-target="join">
                         Join
@@ -374,9 +343,6 @@ export function HeroSpace() {
           </div>
         ))}
       </div>
-      <p className="canvas-say" key={step.say}>
-        {step.say}
-      </p>
     </div>
   );
 }

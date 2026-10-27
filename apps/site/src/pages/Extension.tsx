@@ -120,7 +120,7 @@ export function Extension() {
             },
             {
               title: 'It can’t read them',
-              body: 'It carries your spaces still locked, the way they travel.',
+              body: 'Your spaces stay encrypted while it carries them.',
               shape: 'lock',
             },
             {
