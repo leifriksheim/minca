@@ -410,7 +410,9 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     has every node holding the space whole ask its peers and list its
     mirrors for each, one id at a time, again every ten minutes, and ask
     each peer that connects meanwhile, which delays its fetching the files
-    that exist: nothing bounds bytes served per peer
+    that exist; a read of one waits for good, asking every connected peer
+    on each pass and every 15 seconds while the space is open: nothing
+    bounds bytes served per peer
     (05 §16.6; [#33](https://github.com/leifriksheim/minca/issues/33)).
   - Someone who may define a collection can give it computed fields that
     every member's device works out for each record a query filters or

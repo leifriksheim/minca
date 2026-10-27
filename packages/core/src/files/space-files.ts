@@ -496,10 +496,7 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
   /** Peers connected since the last sweep: asked at once for what nobody else had */
   const joined = new Set<string>();
   /** Reads waiting for a file nobody had, one wait per file id */
-  const waiting = new Map<
-    string,
-    { file: FileName; done: Promise<Error | null>; settle: (error: Error | null) => void }
-  >();
+  const waiting = new Map<string, { done: Promise<Error | null>; settle: (error: Error | null) => void }>();
   let waitTimer: ReturnType<typeof setTimeout> | null = null;
   let closed = false;
 
@@ -525,31 +522,30 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
 
   /**
    * Fetches what this node wants and lacks: the files reads wait for, and,
-   * when it holds the whole space, every file a version it keeps whole names.
+   * when it holds the whole space, every file a version it keeps whole names,
+   * trying every size named for each. A file nobody had is asked of everyone
+   * again, mirrors too, only after `RETRY_MS`; meanwhile of each peer that
+   * connects, and, while a read waits for it, of every peer on each pass.
    */
   async function fetchMissing(): Promise<void> {
     const fresh = [...joined];
     joined.clear();
-    await fetchWaited();
-    if (!config.holdsAll?.()) return;
-    for (const [hash, sizes] of await namedFiles()) {
-      if (closed) return;
-      // One nobody had a moment ago is asked only of the peers that have come since.
-      const recent = Date.now() - (unfound.get(hash) ?? 0) < RETRY_MS;
-      const peers = recent ? askable().filter((peer) => fresh.includes(peer)) : askable();
-      if (recent && peers.length === 0) continue;
-      if (await fetchAny(hash, sizes, peers, !recent)) unfound.delete(hash);
-      else if (!recent) unfound.set(hash, Date.now());
-    }
-  }
-
-  /** Asks every peer, and the mirrors, for the files reads wait for: few, and wanted now */
-  async function fetchWaited(): Promise<void> {
-    for (const [hash, { file }] of waiting) {
-      if (closed) return;
+    const named = await namedFiles();
+    for (const hash of [...waiting.keys()]) {
       // Its body was superseded meanwhile: nothing here names it to ask for any more.
-      if (!(await isNamed(file))) settle(hash, new Error('No record here names that file'));
-      else if (await fetchAny(hash, [file], askable(), true)) settle(hash, null);
+      if (!named.has(hash)) settle(hash, new Error('No record here names that file'));
+    }
+    for (const [hash, sizes] of named) {
+      if (closed) return;
+      const waited = waiting.has(hash);
+      if (!waited && !config.holdsAll?.()) continue;
+      const recent = Date.now() - (unfound.get(hash) ?? 0) < RETRY_MS;
+      const peers = recent && !waited ? askable().filter((peer) => fresh.includes(peer)) : askable();
+      if (recent && peers.length === 0) continue;
+      if (await fetchAny(hash, sizes, peers, !recent)) {
+        unfound.delete(hash);
+        settle(hash, null);
+      } else if (!recent) unfound.set(hash, Date.now());
     }
   }
 
@@ -563,9 +559,13 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
     if (waitTimer || closed) return;
     waitTimer = setTimeout(() => {
       waitTimer = null;
-      void fetchWaited().finally(() => {
-        if (waiting.size > 0) keepAsking();
-      });
+      void fetchMissing()
+        .catch(() => {
+          // A store out of reach; asked again next time.
+        })
+        .finally(() => {
+          if (waiting.size > 0) keepAsking();
+        });
     }, WAIT_MS);
     unref(waitTimer);
   }
@@ -584,7 +584,7 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
       if (!entry) {
         let settled: (error: Error | null) => void = () => {};
         const done = new Promise<Error | null>((resolve) => (settled = resolve));
-        entry = { file: { hash: ref.hash, size: ref.size }, done, settle: (error) => settled(error) };
+        entry = { done, settle: (error) => settled(error) };
         waiting.set(ref.hash, entry);
         keepAsking();
       }

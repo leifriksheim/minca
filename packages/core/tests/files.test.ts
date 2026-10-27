@@ -544,6 +544,25 @@ describe('what a peer refuses', () => {
     await assert.rejects(files.b.open(wrong));
   });
 
+  test('a wrong size another member names, read first, keeps no read of the real file waiting', async () => {
+    const { a, b, files, meet } = apart();
+    const ref = await files.a.add(bytesOf(300));
+    const wrong = { ...ref, size: ref.size + CHUNK };
+    await name(a.storage, ref);
+    await name(b.storage, ref);
+    await name(b.storage, wrong, "someone else's post");
+    const theirs = files.b.open(wrong).then(
+      () => 'opened',
+      () => 'refused',
+    );
+    const real = files.b.open(ref);
+    assert.equal(await pending(real), 'pending');
+    meet();
+    await files.b.fetchMissing();
+    assert.deepEqual(await real, bytesOf(300));
+    assert.equal(await theirs, 'refused');
+  });
+
   test('a node holding the whole space fetches what nobody had from a peer that connects later, and asks no one else again', async () => {
     const { a, b, files, counts, meet } = apart({ holdsAll: true });
     const ref = await files.a.add(bytesOf(300));
