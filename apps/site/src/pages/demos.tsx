@@ -7,128 +7,174 @@ import type { ReactNode } from 'react';
  * change.
  */
 
-function Initial({ name }: { name: string }) {
-  return <span className="app-initial">{name[0]}</span>;
+/**
+ * The people in the demos, each a face in `public/faces/`: free portraits
+ * from Unsplash (unsplash.com/license), by their photo id
+ */
+const FACES = {
+  maya: { name: 'Maya', photo: '1494790108377-be9c29b29330' },
+  joe: { name: 'Joe', photo: '1507003211169-0a1dd7228f2d' },
+  anna: { name: 'Anna', photo: '1531123897727-8f129e1688ce' },
+  sam: { name: 'Sam', photo: '1539571696357-5a69c17a67c6' },
+  lea: { name: 'Lea', photo: '1520813792240-56fc4a3765a7' },
+  leo: { name: 'Leo', photo: '1500648767791-00dcc994a43e' },
+  ben: { name: 'Ben', photo: '1472099645785-5658abf4ff4e' },
+  kai: { name: 'Kai', photo: '1534528741775-53994a69daeb' },
+  ola: { name: 'Ola', photo: '1438761681033-6461ffad8d80' },
+  ida: { name: 'Ida', photo: '1544005313-94ddf0286df2' },
+} as const;
+type Person = keyof typeof FACES;
+
+/** Someone's face, round; `target` lets a hero cursor find it */
+export function Face({ who, target }: { who: Person; target?: string }) {
+  return (
+    <img
+      className="app-face"
+      src={`/faces/${who}.jpg`}
+      alt={FACES[who].name}
+      width={24}
+      height={24}
+      data-target={target}
+    />
+  );
 }
 
-function Seats({ seats }: { seats: readonly string[] }) {
+/** Spots in a row: a face where someone took one, an empty ring where one is open */
+function Spots({ taken, of }: { taken: readonly Person[]; of: number }) {
   return (
-    <span className="app-seats">
-      {seats.map((name, i) =>
-        name ? <Initial key={i} name={name} /> : <span key={i} className="app-seat" />,
-      )}
+    <span className="app-spots">
+      {Array.from({ length: of }, (_, i) => {
+        const who = taken[i];
+        return who ? <Face key={i} who={who} /> : <span key={i} className="app-spot" />;
+      })}
     </span>
   );
 }
 
-function Head({ title, meta }: { title: string; meta: string }) {
+/** An event's head: its date on a little calendar leaf, its name, when and where */
+export function EventHead({
+  day,
+  date,
+  title,
+  meta,
+}: {
+  day: string;
+  date: string;
+  title: string;
+  meta: string;
+}) {
   return (
-    <div className="app-head">
-      {title}
-      <span>{meta}</span>
+    <div className="app-event">
+      <span className="app-date">
+        <small>{day}</small>
+        {date}
+      </span>
+      <span>
+        <b>{title}</b>
+        <small>{meta}</small>
+      </span>
     </div>
   );
 }
 
 /** A row the latest change added, marked so the eye finds it */
-function Fresh({ on, children }: { on: boolean; children: ReactNode }) {
-  return <div className={on ? 'app-row is-new' : 'app-row'}>{children}</div>;
+function Fresh({ children }: { children: ReactNode }) {
+  return <div className="app-row is-new">{children}</div>;
 }
 
-/** What a group asked to change about its carpool, in the "mend it" demo and the remixes */
-export type CarpoolChange = 'waitlist' | 'home' | 'reminder';
+/** What a group asked to change about its meetup, in the "change anything" demo and the remixes */
+export type MeetupChange = 'waitlist' | 'talks' | 'reminder';
 
-export function Carpool({
-  used = false,
+export function Meetup({
   change,
-  trip = 'Saturday · away at Northside',
+  title = 'Hack night',
+  day = 'Thu',
+  date = '14',
+  where = '7pm · The Loft',
 }: {
-  used?: boolean;
-  change?: CarpoolChange;
-  trip?: string;
+  change?: MeetupChange;
+  title?: string;
+  day?: string;
+  date?: string;
+  where?: string;
 }) {
   const full = change === 'waitlist';
-  const rides = [
-    { driver: 'Anna', seats: ['Maya', 'Leo', full ? 'Ben' : ''] },
-    { driver: 'Joe', seats: ['Kai', 'Ola', used || full ? 'Sam' : ''] },
-  ];
+  const going: readonly Person[] = full ? ['maya', 'leo', 'kai', 'ben'] : ['maya', 'leo', 'kai'];
   return (
     <div className="app">
-      <Head title={trip} meta={full ? 'Full' : '2 rides'} />
+      <EventHead day={day} date={date} title={title} meta={where} />
       {change === 'reminder' ? (
-        <Fresh on>
+        <Fresh>
           <span>
             <b>Reminder</b>
-            <small>Drivers get a message Friday at 7pm</small>
+            <small>Everyone gets a nudge the day before</small>
           </span>
           <span className="app-pill">On</span>
         </Fresh>
       ) : null}
-      {rides.map((ride) => (
-        <div key={ride.driver} className="app-row">
+      <div className="app-row">
+        <span>
+          Hosted by <b>Joe</b>
+        </span>
+        <Face who="joe" />
+      </div>
+      <div className="app-row">
+        <span>
+          <b>Going</b>
+          <small>{full ? 'Full' : `${going.length} of 4 spots`}</small>
+        </span>
+        <Spots taken={going} of={4} />
+      </div>
+      {change === 'talks' ? (
+        <Fresh>
           <span>
-            <b>{ride.driver}</b> is driving
+            <b>Lightning talks</b>
+            <small>Anna on Rust · Sam on synths</small>
           </span>
-          <Seats seats={ride.seats} />
-        </div>
-      ))}
-      {change === 'waitlist' ? (
-        <Fresh on>
-          <span>
-            <b>Waitlist</b>
-            <small>First to get a seat if one opens</small>
-          </span>
-          <span className="app-seats">
-            <Initial name="Lea" />
-            <Initial name="Tom" />
-            <span className="app-pill free">Join</span>
-          </span>
+          <span className="app-pill free">Give one</span>
         </Fresh>
       ) : null}
-      {change === 'home' ? (
-        <Fresh on>
+      {full ? (
+        <Fresh>
           <span>
-            <b>Coming home</b>
-            <small>Joe drives back · 2 seats left</small>
+            <b>Waitlist</b>
+            <small>First in line gets a spot that opens</small>
           </span>
-          <span className="app-pill free">Ride back</span>
+          <span className="app-spots">
+            <Face who="lea" />
+            <Face who="ida" />
+            <span className="app-pill free">Join</span>
+          </span>
         </Fresh>
       ) : null}
     </div>
   );
 }
 
-/** The carpool after a school's parents made it theirs: the same rides, every weekday */
-export function SchoolRun() {
+/** The meetup after an open mic made it theirs: the same sign-up, as slots in a running order */
+export function OpenMic() {
   return (
     <div className="app">
-      <Head title="School run · this week" meta="1 open" />
+      <EventHead day="Fri" date="15" title="Open mic" meta="8pm · The Crown" />
       <div className="app-rota">
-        <span />
-        <span className="app-rota-label">There</span>
-        <span className="app-rota-label">Back</span>
-        <RotaRow day="Mon" slots={['Anna', 'Joe']} />
-        <RotaRow day="Tue" slots={['Priya', 'Anna']} />
-        <RotaRow day="Wed" slots={['Joe', '']} take="Drive" />
+        <Slot time="8:00" who="anna" act="Anna · songs" />
+        <Slot time="8:15" who="sam" act="Sam · synths" />
+        <Slot time="8:30" />
       </div>
     </div>
   );
 }
 
-function RotaRow({ day, slots, take = 'Take it' }: { day: string; slots: readonly string[]; take?: string }) {
+function Slot({ time, who, act }: { time: string; who?: Person; act?: string }) {
   return (
     <>
-      <span className="app-rota-label">{day}</span>
-      {slots.map((name, i) =>
-        name ? (
-          <span key={i} className="app-shift">
-            <Initial name={name} /> {name}
-          </span>
-        ) : (
-          <span key={i} className="app-shift open">
-            {take}
-          </span>
-        ),
+      <span className="app-rota-label">{time}</span>
+      {who ? (
+        <span className="app-shift">
+          <Face who={who} /> {act}
+        </span>
+      ) : (
+        <span className="app-shift open">Take it</span>
       )}
     </>
   );

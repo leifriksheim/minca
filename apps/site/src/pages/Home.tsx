@@ -1,15 +1,16 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { APP, Band, ChromeMark, DownloadMark, EXTERNAL, Marked, Page, Points } from './Site';
+import { APP, Band, ChromeMark, DownloadMark, EXTERNAL, Marked, Page, Points, Tabs } from './Site';
 import { HeroSpace } from './HeroSpace';
 import { Loader } from '@minca/app-shared/Loader';
 import { MARK_BANDS } from '@minca/app-shared/mark';
 import { Morph, Shape } from '@minca/app-shared/shapes';
 import { type ShapeKind } from '@minca/ui/shapes';
 import type { ShapeColour } from '@minca/ui/tokens';
-import { Carpool, SchoolRun, type CarpoolChange } from './demos';
+import { Meetup, OpenMic, type MeetupChange } from './demos';
 import { usePlatform } from './downloads';
 import { downloadLink } from './Install';
+import { LOGOS } from './logos';
 
 /**
  * The front page, for community builders who are tired of billionaires
@@ -30,11 +31,11 @@ import { downloadLink } from './Install';
 const COLOURS = ['cobalt', 'coral', 'peach', 'sage', 'lilac'] as const;
 const colour = (i: number) => `c-${COLOURS[i % COLOURS.length]}`;
 
-/** What a group asks to change about its carpool, and what stays as it was */
-const CHANGES: ReadonlyArray<{ id: CarpoolChange; ask: string; who: string }> = [
-  { id: 'waitlist', ask: 'Add a waitlist for when the cars are full', who: 'Maya' },
-  { id: 'home', ask: 'Let people sort out lifts home too', who: 'Joe' },
-  { id: 'reminder', ask: 'Remind drivers the night before', who: 'Anna' },
+/** What a group asks to change about its meetup, and what stays as it was */
+const CHANGES: ReadonlyArray<{ id: MeetupChange; ask: string; who: string }> = [
+  { id: 'waitlist', ask: 'Add a waitlist for when it’s full', who: 'Maya' },
+  { id: 'talks', ask: 'Let people sign up for a lightning talk', who: 'Joe' },
+  { id: 'reminder', ask: 'Remind everyone the day before', who: 'Anna' },
 ];
 
 /** A shape beside each change asked for */
@@ -86,7 +87,7 @@ function Mend() {
         <div className="frame-head">
           <span className="frame-title">
             <Shape kind="clover" colour="coral" />
-            <b>Carpool</b>
+            <b>Hack night</b>
           </span>
           <div className="toggle" role="group" aria-label="Before or after">
             <button type="button" aria-pressed={!at.now} onClick={() => pick({ ...at, now: false })}>
@@ -98,11 +99,11 @@ function Mend() {
           </div>
         </div>
         <div className="frame-body" key={`${at.change}-${at.now}`}>
-          <Carpool change={at.now ? change.id : undefined} />
+          <Meetup change={at.now ? change.id : undefined} />
         </div>
         <div className="frame-foot">
           <span>Stays as it was</span>
-          {['Who’s in the group', 'Your chats', 'Who can change a ride'].map((kept) => (
+          {['Who’s in the group', 'Your chats', 'Who can change the event'].map((kept) => (
             <span key={kept} className="kept">
               {kept}
             </span>
@@ -117,14 +118,14 @@ function Mend() {
 const PROPOSAL = (
   <div className="proposal">
     <div className="proposal-head">
-      <b>Carpool, with a waitlist</b>
+      <b>Hack night, with a waitlist</b>
       <span className="tag good">Decided</span>
     </div>
     <div className="by">From Maya · 5 yeses decide it</div>
     <ul>
-      <li>Anyone can join the waitlist for a full ride</li>
-      <li>The first in line gets a seat that opens</li>
-      <li>Still: only the driver changes their ride</li>
+      <li>Anyone can join the waitlist when it’s full</li>
+      <li>The first in line gets a spot that opens</li>
+      <li>Only the host can change the event</li>
     </ul>
     <div className="tally">
       {[
@@ -146,35 +147,64 @@ const PROPOSAL = (
 
 /** One tool travelling between groups, each making it theirs */
 const REMIXES: ReadonlyArray<{ group: string; change: string; app: ReactNode }> = [
-  { group: 'Riverside FC', change: 'Makes a carpool for away games', app: <Carpool /> },
+  { group: 'Riverside Makers', change: 'Makes an RSVP for hack night', app: <Meetup /> },
   {
-    group: 'Northside Hockey',
+    group: 'Pixel Pals Discord',
     change: 'Takes it, and adds a waitlist',
-    app: <Carpool change="waitlist" trip="Sunday · away at Eastfield" />,
+    app: <Meetup change="waitlist" title="Game night" day="Fri" date="15" where="9pm · voice channel" />,
   },
-  { group: 'Oak Primary parents', change: 'Turns it into a school run', app: <SchoolRun /> },
+  { group: 'Northside Open Mic', change: 'Turns it into slots for acts', app: <OpenMic /> },
 ];
 
 /**
- * The big platforms, drawn as a badge in their own colour with their name on
- * it (`.brand-*` in site.css), not their logo files
+ * The big platforms, drawn as their logo in white on a badge of their colour
+ * (`.brand-*` in site.css); one without a logo in `logos.ts` gets its initial
  */
-type Brand = 'uber' | 'bolt' | 'lyft' | 'lime' | 'voi' | 'vinted' | 'ticketmaster' | 'meta';
+type Brand =
+  | 'uber'
+  | 'lyft'
+  | 'grab'
+  | 'vinted'
+  | 'ticketmaster'
+  | 'meta'
+  | 'airbnb'
+  | 'booking'
+  | 'expedia'
+  | 'slack'
+  | 'discord'
+  | 'googlechat'
+  | 'instagram'
+  | 'tiktok'
+  | 'x';
 const BRAND_NAMES: Readonly<Record<Brand, string>> = {
   uber: 'Uber',
-  bolt: 'Bolt',
   lyft: 'Lyft',
-  lime: 'Lime',
-  voi: 'Voi',
+  grab: 'Grab',
   vinted: 'Vinted',
   ticketmaster: 'Ticketmaster',
   meta: 'Meta',
+  airbnb: 'Airbnb',
+  booking: 'Booking',
+  expedia: 'Expedia',
+  slack: 'Slack',
+  discord: 'Discord',
+  googlechat: 'Google Chat',
+  instagram: 'Instagram',
+  tiktok: 'TikTok',
+  x: 'X',
 };
 
 function BrandBadge({ brand }: { brand: Brand }) {
+  const logo = LOGOS[brand];
   return (
     <span className={`brand-badge brand-${brand}`} aria-hidden>
-      {BRAND_NAMES[brand][0]}
+      {logo ? (
+        <svg viewBox="0 0 24 24">
+          <path d={logo} />
+        </svg>
+      ) : (
+        BRAND_NAMES[brand][0]
+      )}
     </span>
   );
 }
@@ -214,46 +244,325 @@ function Receipt() {
   );
 }
 
-/** Five ride apps: the same map under each, only the name and the colour change */
-const RIDE_APPS: readonly Brand[] = ['uber', 'bolt', 'lyft', 'lime', 'voi'];
+/** One feature of an app, outlined on its screen by boxes in the screen's units; none means the button */
+type Feature = {
+  name: string;
+  colour: ShapeColour;
+  boxes?: ReadonlyArray<readonly [number, number, number, number]>;
+};
 
-/** The map every ride app draws: blocks, a route, you and a car */
-function RideMap() {
-  return (
-    <svg className="ride-map" viewBox="0 0 100 110" aria-hidden>
-      {[
-        [8, 8, 34, 22],
-        [52, 8, 40, 30],
-        [8, 40, 26, 30],
-        [44, 48, 48, 18],
-        [8, 80, 50, 22],
-        [68, 76, 24, 26],
-      ].map(([x, y, w, h]) => (
-        <rect key={`${x}-${y}`} x={x} y={y} width={w} height={h} rx="4" />
-      ))}
-      <path className="ride-route" d="M24 100V74H40V42H90" />
-      <circle className="ride-you" cx="24" cy="100" r="4.5" />
-      <rect className="ride-car" x="84" y="37" width="12" height="10" rx="3" />
-    </svg>
-  );
-}
+/** Every feature keeps one colour wherever it turns up, so the same piece reads the same in each app */
+const FEATURE_COLOURS: Readonly<Record<string, ShapeColour>> = {
+  Photos: 'sage',
+  Listings: 'cobalt',
+  Saved: 'coral',
+  Reviews: 'peach',
+  Payments: 'lilac',
+  Map: 'sage',
+  'Live location': 'coral',
+  Rooms: 'cobalt',
+  Messages: 'peach',
+  Profiles: 'coral',
+  Posts: 'sage',
+  Likes: 'peach',
+  Comments: 'cobalt',
+  Ads: 'lilac',
+};
 
+const feature = (name: string, boxes?: Feature['boxes']): Feature => ({
+  name,
+  colour: FEATURE_COLOURS[name] ?? 'cobalt',
+  boxes,
+});
+
+/** Three apps of a kind, and the features any one of them is made of */
+const KINDS: ReadonlyArray<{
+  id: string;
+  name: string;
+  shape: { kind: ShapeKind; colour: ShapeColour };
+  kind: string;
+  brands: readonly [Brand, Brand, Brand];
+  button: string;
+  fee: string;
+  screen: ReactNode;
+  features: readonly Feature[];
+}> = [
+  {
+    id: 'stays',
+    name: 'Stays',
+    shape: { kind: 'arch', colour: 'coral' },
+    kind: 'stay',
+    brands: ['airbnb', 'booking', 'expedia'],
+    button: 'Reserve',
+    fee: '+ service fee',
+    screen: (
+      <>
+        <rect className="screen-block" x="8" y="8" width="84" height="56" rx="6" />
+        <path className="screen-accent" d="M8 52l22-18 16 12 14-10 32 22v6a6 6 0 0 1-6 6H14a6 6 0 0 1-6-6z" />
+        <circle className="screen-accent" cx="62" cy="24" r="7" />
+        <circle className="screen-block" cx="83" cy="17" r="5" />
+        <text className="screen-text" x="80.4" y="19.4">
+          ♥
+        </text>
+        <rect className="screen-line" x="8" y="72" width="58" height="7" rx="3.5" />
+        <text className="screen-text" x="8" y="94">
+          ★ 4.9 · 212 reviews
+        </text>
+      </>
+    ),
+    features: [
+      feature('Photos', [[5, 5, 90, 62]]),
+      feature('Saved', [[75, 9, 16, 16]]),
+      feature('Listings', [[5, 69, 64, 13]]),
+      feature('Reviews', [[5, 86, 74, 12]]),
+      feature('Payments'),
+    ],
+  },
+  {
+    id: 'rides',
+    name: 'Rides',
+    shape: { kind: 'clover', colour: 'cobalt' },
+    kind: 'ride',
+    brands: ['uber', 'lyft', 'grab'],
+    button: 'Ride now',
+    fee: '+ service fee',
+    screen: (
+      <>
+        {[
+          [8, 8, 34, 22],
+          [52, 8, 40, 30],
+          [8, 40, 26, 26],
+          [44, 48, 48, 18],
+        ].map(([x, y, w, h]) => (
+          <rect key={`${x}-${y}`} className="screen-block" x={x} y={y} width={w} height={h} rx="4" />
+        ))}
+        <path className="screen-route" d="M24 74V36H40V42H86" />
+        <circle className="screen-you" cx="24" cy="74" r="4.5" />
+        <rect className="screen-accent" x="80" y="37" width="12" height="10" rx="3" />
+        <rect className="screen-block" x="8" y="84" width="84" height="18" rx="6" />
+        <text className="screen-text" x="13" y="95.5">
+          Ali · ★ 4.8 · 3 min away
+        </text>
+      </>
+    ),
+    features: [
+      feature('Map', [[5, 5, 90, 64]]),
+      feature('Live location', [
+        [17, 67, 14, 14],
+        [76, 33, 20, 18],
+      ]),
+      feature('Reviews', [[5, 81, 90, 24]]),
+      feature('Payments'),
+    ],
+  },
+  {
+    id: 'chat',
+    name: 'Chat',
+    shape: { kind: 'scallop', colour: 'peach' },
+    kind: 'chat',
+    brands: ['slack', 'discord', 'googlechat'],
+    button: 'Upgrade',
+    fee: '€8 a seat',
+    screen: (
+      <>
+        {['general', 'random', 'help'].map((room, i) => (
+          <g key={room}>
+            <rect
+              className={i === 0 ? 'screen-accent' : 'screen-block'}
+              x="8"
+              y={8 + i * 13}
+              width="84"
+              height="10"
+              rx="4"
+            />
+            <text className={i === 0 ? 'screen-text is-on' : 'screen-text'} x="13" y={15 + i * 13}>
+              # {room}
+            </text>
+          </g>
+        ))}
+        {[
+          [56, 52],
+          [74, 40],
+          [92, 58],
+        ].map(([y, w]) => (
+          <g key={y}>
+            <circle className="screen-you" cx="13" cy={(y ?? 0) + 6} r="5" />
+            <rect className="screen-block" x="22" y={y} width={w} height="12" rx="6" />
+          </g>
+        ))}
+      </>
+    ),
+    features: [
+      feature('Rooms', [[5, 5, 90, 42]]),
+      feature('Messages', [[19, 52, 76, 54]]),
+      feature('Profiles', [[6, 52, 14, 54]]),
+      feature('Payments'),
+    ],
+  },
+  {
+    id: 'feeds',
+    name: 'Feeds',
+    shape: { kind: 'star', colour: 'lilac' },
+    kind: 'feed',
+    brands: ['instagram', 'tiktok', 'x'],
+    button: 'Follow',
+    fee: '+ ads',
+    screen: (
+      <>
+        <circle className="screen-you" cx="14" cy="14" r="6" />
+        <rect className="screen-line" x="24" y="11" width="40" height="6" rx="3" />
+        <rect className="screen-block" x="8" y="25" width="84" height="52" rx="6" />
+        <path className="screen-accent" d="M8 65l26-20 18 12 16-10 24 16v8a6 6 0 0 1-6 6H14a6 6 0 0 1-6-6z" />
+        <text className="screen-text" x="8" y="90">
+          ♥ 1.2k · 💬 48
+        </text>
+        <rect className="screen-line" x="8" y="96" width="70" height="6" rx="3" />
+      </>
+    ),
+    features: [
+      feature('Profiles', [[5, 5, 64, 18]]),
+      feature('Posts', [[5, 22, 90, 58]]),
+      feature('Likes', [[5, 82, 56, 11]]),
+      feature('Comments', [[5, 94, 76, 10]]),
+      feature('Ads'),
+    ],
+  },
+];
+
+/** How long each step holds: three phones, sliding together, one phone, each feature, then the whole picture */
+const APART_MS = 1100;
+const SLIDE_MS = 800;
+const MERGED_MS = 700;
+const FEATURE_MS = 950;
+const HOLD_MS = 2600;
+
+/** The step a kind ends on, every feature named */
+const lastStep = (i: number) => (KINDS[i]?.features.length ?? 0) + 3;
+
+/**
+ * Three apps of a kind side by side, slid together into one, then taken
+ * apart feature by feature; then the next kind. Picking a kind starts it there.
+ */
 function SameApp() {
+  const still = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+  const [at, setAt] = useState({ kind: 0, step: still ? lastStep(0) : 0 });
+  const kind = KINDS[at.kind] ?? KINDS[0]!;
+  const done = lastStep(at.kind);
+
+  useEffect(() => {
+    if (still) return;
+    const { step } = at;
+    const wait =
+      step === 0
+        ? APART_MS
+        : step === 1
+          ? SLIDE_MS
+          : step === 2
+            ? MERGED_MS
+            : step >= done
+              ? HOLD_MS
+              : FEATURE_MS;
+    const timer = setTimeout(
+      () =>
+        setAt(
+          step < done ? { kind: at.kind, step: step + 1 } : { kind: (at.kind + 1) % KINDS.length, step: 0 },
+        ),
+      wait,
+    );
+    return () => clearTimeout(timer);
+  }, [at, done, still]);
+
+  const sliding = at.step >= 1;
+  const merged = at.step >= 2;
+  const lit = at.step - 3;
+  const button = kind.features.find((f) => !f.boxes);
+
+  const chip = (f: Feature) => {
+    const i = kind.features.indexOf(f);
+    return (
+      <span
+        key={f.name}
+        className={`feature-chip c-${f.colour}`}
+        data-on={i <= lit || undefined}
+        data-now={i === lit || undefined}
+      >
+        <span className="feature-dot" />
+        {f.name}
+      </span>
+    );
+  };
+
   return (
-    <div className="same-app">
-      {RIDE_APPS.map((brand) => (
-        <div key={brand} className={`ride-phone brand-${brand}`}>
-          <div className="ride-brand">
-            <BrandBadge brand={brand} />
-            {BRAND_NAMES[brand]}
+    <div className="frame same-app">
+      <Tabs
+        label="Kinds of app"
+        items={KINDS}
+        selected={kind.id}
+        onSelect={(id) => {
+          const i = KINDS.findIndex((each) => each.id === id);
+          setAt({ kind: i, step: still ? lastStep(i) : 0 });
+        }}
+      >
+        {() => (
+          <div className="same-stage paper-grid" data-sliding={sliding || undefined} key={kind.id}>
+            <div className="feature-list is-left">
+              {kind.features.filter((_, i) => i % 2 === 0).map(chip)}
+            </div>
+            {kind.brands.map((brand, i) => {
+              const generic = i === 1 && merged;
+              return (
+                <div
+                  key={brand}
+                  className={generic ? 'app-phone is-merged' : `app-phone brand-${brand}`}
+                  style={{ animationDelay: `${i * 120}ms` }}
+                >
+                  <div className="app-phone-name">
+                    {generic ? (
+                      <span className="app-phone-logos">
+                        {kind.brands.map((b) => (
+                          <BrandBadge key={b} brand={b} />
+                        ))}
+                      </span>
+                    ) : (
+                      <BrandBadge brand={brand} />
+                    )}
+                    <span>{generic ? `Any ${kind.kind} app` : BRAND_NAMES[brand]}</span>
+                  </div>
+                  <svg className="app-screen" viewBox="0 0 100 110" aria-hidden>
+                    {kind.screen}
+                    {i === 1
+                      ? kind.features[lit]?.boxes?.map(([x, y, w, h]) => (
+                          <rect
+                            key={`${lit}-${x}-${y}`}
+                            className={`screen-ring c-${kind.features[lit]?.colour}`}
+                            x={x}
+                            y={y}
+                            width={w}
+                            height={h}
+                            rx="6"
+                          />
+                        ))
+                      : null}
+                  </svg>
+                  <div
+                    className={
+                      i === 1 && button && kind.features.indexOf(button) === lit
+                        ? `app-phone-button is-lit c-${button.colour}`
+                        : 'app-phone-button'
+                    }
+                  >
+                    <span>{kind.button}</span>
+                    <small>{kind.fee}</small>
+                  </div>
+                </div>
+              );
+            })}
+            <div className="feature-list is-right">
+              {kind.features.filter((_, i) => i % 2 === 1).map(chip)}
+            </div>
           </div>
-          <RideMap />
-          <div className="ride-book">
-            <span>Ride now</span>
-            <small>+ service fee</small>
-          </div>
-        </div>
-      ))}
+        )}
+      </Tabs>
     </div>
   );
 }
@@ -275,12 +584,12 @@ const YOURS: ReadonlyArray<{ title: string; body: string; shape: ShapeKind }> = 
 ];
 
 /** Five companies each build the app from nothing; five groups build on the one before */
-const COMPANY_BUILDS = RIDE_APPS.map((brand) => BRAND_NAMES[brand]);
+const COMPANY_BUILDS = ['Meetup', 'Eventbrite', 'Luma', 'Partiful', 'Facebook'];
 const GROUP_BUILDS: ReadonlyArray<{ group: string; adds: string }> = [
-  { group: 'Riverside FC', adds: 'Carpool' },
-  { group: 'Northside', adds: '+ Waitlist' },
-  { group: 'Oak Primary', adds: '+ School run' },
-  { group: 'Elm Street', adds: '+ Lifts home' },
+  { group: 'Riverside Makers', adds: 'RSVP' },
+  { group: 'Pixel Pals', adds: '+ Waitlist' },
+  { group: 'Open Mic', adds: '+ Slots' },
+  { group: 'Elm Street', adds: '+ Talks' },
   { group: 'Hill Road', adds: '+ Reminders' },
 ];
 
@@ -292,7 +601,7 @@ function Compounds() {
         <div className="compound-cols">
           {COMPANY_BUILDS.map((name) => (
             <div key={name} className="compound-col">
-              <span className="compound-block is-same">Ride app</span>
+              <span className="compound-block is-same">Events app</span>
               <small>{name}</small>
             </div>
           ))}
@@ -321,7 +630,7 @@ function Compounds() {
 
 /** What groups asked for, in their own words, and the tool each became */
 const ASKS: ReadonlyArray<{ ask: string; tool: string; kind: ShapeKind; colour: ShapeColour }> = [
-  { ask: 'Can we sort out lifts to away games?', tool: 'Carpool', kind: 'clover', colour: 'coral' },
+  { ask: 'Who’s coming to hack night on Thursday?', tool: 'RSVP', kind: 'clover', colour: 'coral' },
   {
     ask: 'Could we share tools instead of all buying drills?',
     tool: 'Tool library',
@@ -420,8 +729,8 @@ export function Home() {
             make it happen.
           </h1>
           <p>
-            One place for your club, your street or your crew to talk, plan and build any app you need. And it
-            belongs to all of you.
+            Talk, plan and build together in a space your community owns. No oligarchs at the door, no ads on
+            the walls.
           </p>
           <HeroActions />
         </div>
@@ -433,12 +742,12 @@ export function Home() {
       <Band
         id="why"
         tone="sunken"
-        title="The same app, built a hundred times."
+        title="Let’s stop building the same thing."
         intro={
           <p>
-            Uber, Bolt, Lyft, Lime and Voi each built a map, a way to pay and a ride nearby, then walled it
-            off. That’s like every town laying five water mains so five billionaires can bill you for a glass.
-            Now AI can build the app in an afternoon, and the walls are only there to collect the toll.
+            The world doesn’t need another company rebuilding the same app so people can do things together.
+            Software costs next to nothing now. On Minca you make what you need, share it, and let the next
+            group make it better.
           </p>
         }
       >
@@ -472,12 +781,7 @@ export function Home() {
         id="mend"
         tone="sunken"
         title="Change anything. Just say how."
-        intro={
-          <p>
-            Every tool in your space can be mended by anyone with an idea. Say what’s missing, and the new
-            version arrives just like the first one did.
-          </p>
-        }
+        intro={<p>Anyone in the group can change a tool. Say what’s missing and it’s there.</p>}
       >
         <Mend />
       </Band>
@@ -507,8 +811,8 @@ export function Home() {
         title="Good ideas spread."
         intro={
           <p>
-            Riverside FC makes a carpool. A hockey club copies it and adds a waitlist. A school turns it into
-            a school run. Nobody asked permission and nobody took a cut.
+            Riverside Makers make an RSVP for hack night. A Discord gaming group copies it and adds a
+            waitlist. An open mic turns it into slots for acts. Nobody asked permission and nobody took a cut.
           </p>
         }
       >
@@ -526,12 +830,7 @@ export function Home() {
 
       <Band
         title="Nobody has to start from scratch."
-        intro={
-          <p>
-            Every company builds the same thing again from nothing. When a group on Minca makes a tool better,
-            every group after them gets the better one.
-          </p>
-        }
+        intro={<p>When a group on Minca makes a tool better, every group after them gets the better one.</p>}
       >
         <Compounds />
       </Band>
