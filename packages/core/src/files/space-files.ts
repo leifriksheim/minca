@@ -7,7 +7,7 @@
  * f/<id>/list     the chunk list
  * f/<id>/<n>      chunk n
  * f/<id>/own      added here: the time it was added, 0 once named
- * f/<id>/used     when it was last fetched or read; kept when dropped
+ * f/<id>/used     when it was last fetched or opened, and its size; kept when dropped
  * ```
  */
 import type { StorageAdapter, Version } from '../types.js';
@@ -83,6 +83,8 @@ const BYTES_PER_MESSAGE = 24_000;
 const REQUEST_MS = 30_000;
 /** A file added here and never named is dropped after this */
 const UNNAMED_MS = 24 * 60 * 60 * 1000;
+/** Past its limit, a node drops files down to this share of it */
+const LOW_WATER = 0.9;
 
 const listKey = (id: string) => `f/${id}/list`;
 const chunkKey = (id: string, index: number) => `f/${id}/${index}`;
@@ -322,6 +324,7 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
         const held = await heldChunks(file);
         return Array.from({ length: n }, (_, i) => i).filter((i) => !held.has(i));
       };
+      if ((await missing()).length === 0) return false;
       for (const peer of peers) {
         if (n > 1 && !list) {
           await ask(peer, file, ['list'], null);
@@ -334,17 +337,25 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
           for (const run of runs(left)) brought += (await ask(peer, file, run, list)).size;
           if (brought === 0) break;
         }
-        if ((await missing()).length === 0) return;
+        if ((await missing()).length === 0) return true;
       }
-      if ((await missing()).length === 0) return;
-      if (mirrors && (await fromMirrors(file))) return;
+      if ((await missing()).length === 0) return true;
+      if (mirrors && (await fromMirrors(file))) return true;
       throw new Error('No peer or mirror holds that file now');
     })()
-      // Here whole, fetched or read: used now.
-      .then(() => adapter.put(usedKey(file.hash), utf8Encode(String(Date.now()))))
+      // Fetched: used now. One already here is used only when opened.
+      .then(async (fetched) => {
+        if (fetched) await markUsed(file.hash);
+      })
       .finally(() => fetching.delete(at));
     fetching.set(at, work);
     return work;
+  }
+
+  /** Marks a file here as used now, with the size its list fits: what the limit counts it as */
+  async function markUsed(hash: string): Promise<void> {
+    const held = await heldFile(hash);
+    if (held) await adapter.put(usedKey(hash), utf8Encode(`${Date.now()} ${held.size}`));
   }
 
   /** Files being read now, and by how many reads: none is dropped meanwhile */
@@ -515,15 +526,16 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
         if (!wanted.has(id)) await mirror.store.delete(key);
       }
     }
-    if (config.limits) await dropLeastUsed(config.limits.keep);
   }
 
   /**
    * Past `keep` bytes held of files not added here, drops those used longest
-   * ago; one never whole here, never used, goes first. Each keeps a `used`
-   * mark, so it isn't fetched unread again; a read fetches it.
+   * ago, down to `LOW_WATER` of it so a flood doesn't look again after every
+   * file; one never whole here goes first. One that was whole keeps its
+   * `used` mark, so it isn't fetched unread again; a read fetches it. Gives
+   * back the bytes left.
    */
-  async function dropLeastUsed(keep: number): Promise<void> {
+  async function dropLeastUsed(keep: number): Promise<number> {
     const parts = new Map<string, string[]>();
     for (const key of await adapter.list('f/')) {
       const [, id = '', part = ''] = key.split('/');
@@ -532,24 +544,27 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
     const held: { id: string; at: number; bytes: number }[] = [];
     let total = 0;
     for (const [id, has] of parts) {
-      const bytes = CHUNK * has.filter((part) => /^\d+$/.test(part)).length;
-      if (has.includes('own') || (bytes === 0 && !has.includes('list'))) continue;
+      const chunks = has.filter((part) => /^\d+$/.test(part)).length;
+      const list = has.includes('list') ? ((await adapter.get(listKey(id)))?.length ?? 0) : 0;
+      if (has.includes('own') || (chunks === 0 && list === 0)) continue;
       const used = await adapter.get(usedKey(id));
-      held.push({ id, at: used ? Number(utf8Decode(used)) : 0, bytes });
+      const [at = 0, size = 0] = used ? utf8Decode(used).split(' ').map(Number) : [];
+      // Whole once, it is the size its list fit; never whole, every chunk but the last is full.
+      const bytes = list + (size || chunks * CHUNK);
+      held.push({ id, at, bytes });
       total += bytes;
     }
+    if (total <= keep) return total;
     held.sort((a, b) => a.at - b.at);
     for (const file of held) {
-      if (total <= keep) return;
+      if (total <= keep * LOW_WATER) break;
       // One being fetched or read now is left for the next pass.
       if (reading.has(file.id) || [...fetching.keys()].some((at) => at.startsWith(`${file.id}:`))) continue;
       const keys = (await adapter.list(`f/${file.id}/`)).filter((key) => key !== usedKey(file.id));
-      await adapter.batch([
-        ...keys.map((key) => ({ type: 'delete' as const, key })),
-        { type: 'put' as const, key: usedKey(file.id), value: utf8Encode(String(file.at)) },
-      ]);
+      await adapter.batch(keys.map((key) => ({ type: 'delete' as const, key })));
       total -= file.bytes;
     }
+    return total;
   }
 
   /** Files a sweep found nobody had, and when it last asked everyone */
@@ -598,6 +613,7 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
     const fresh = [...joined];
     joined.clear();
     const named = await namedFiles();
+    let total = config.limits ? await dropLeastUsed(config.limits.keep) : 0;
     for (const hash of [...waiting.keys()]) {
       // Its body was superseded meanwhile: nothing here names it to ask for any more.
       if (!named.has(hash)) settle(hash, new Error('No record here names that file'));
@@ -615,8 +631,11 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
       if (got) {
         unfound.delete(hash);
         settle(hash, null);
-        // Within the limit after each file, not only after the pass: a flood never holds more than `keep`.
-        if (got === 'fetched' && !waited && config.limits) await dropLeastUsed(config.limits.keep);
+        // Within the limit as it goes, not only after the pass: a flood never holds more than `keep`.
+        if (got === 'fetched' && !waited && config.limits) {
+          total += Math.max(...ahead.map((file) => file.size));
+          if (total > config.limits.keep) total = await dropLeastUsed(config.limits.keep);
+        }
       } else if (!recent) unfound.set(hash, Date.now());
     }
   }
@@ -654,7 +673,9 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
   async function open(ref: SealedFile): Promise<Uint8Array> {
     for (;;) {
       try {
-        return await openFile(await read(ref), ref);
+        const bytes = await openFile(await read(ref), ref);
+        await markUsed(ref.hash);
+        return bytes;
       } catch (error) {
         // A file no version here names, or whose id is here whole yet won't open as named, is never coming.
         const held = await heldFile(ref.hash);

@@ -607,7 +607,7 @@ describe('what a peer refuses', () => {
   });
 
   test('past its limit a device drops what others wrote and was used longest ago, never its own, and fetches it again only when read', async () => {
-    const { a, b, files, counts, meet } = apart({ limits: { ahead: CHUNK, keep: 2 * CHUNK } });
+    const { a, b, files, counts, meet } = apart({ limits: { ahead: CHUNK, keep: (5 * CHUNK) / 2 } });
     meet();
     const theirs: SealedFile[] = [];
     for (const n of [1, 2, 3]) {
@@ -624,7 +624,7 @@ describe('what a peer refuses', () => {
     const mine = await files.b.add(bytesOf(CHUNK - 50));
     await name(b.storage, mine, 'my photo');
     files.b.changed();
-    await files.b.tidy();
+    await files.b.fetchMissing();
     const held = async (ref: SealedFile) => !!(await b.adapter.get(`f/${ref.hash}/0`));
     assert.deepEqual(
       await Promise.all([...theirs, mine].map(held)),
@@ -676,9 +676,27 @@ describe('what a peer refuses', () => {
       files.b.changed();
       await files.b.open({ ...ref, size: 1 }).catch(() => {});
     }
-    await files.b.tidy();
+    await files.b.fetchMissing();
     // Files of 4 chunks each: only the newest, past the limit alone, may stay till it is read no more.
     assert.ok((await heldBytes(b.adapter)) <= keep + 4 * CHUNK);
+  });
+
+  test('a limit counts files at their size: a flood of tiny ones drops nobody else’s', async () => {
+    const { a, b, files, meet } = apart({ limits: { ahead: CHUNK, keep: 2 * CHUNK } });
+    meet();
+    const photo = await files.a.add(bytesOf(CHUNK - 100));
+    await name(a.storage, photo);
+    await name(b.storage, photo);
+    await files.b.fetchMissing();
+    for (let n = 0; n < 300; n++) {
+      const tiny = await files.a.add(new Uint8Array(0));
+      await name(a.storage, tiny);
+      await name(b.storage, tiny);
+    }
+    files.a.changed();
+    files.b.changed();
+    await files.b.fetchMissing();
+    assert.ok(await b.adapter.get(`f/${photo.hash}/0`));
   });
 
   test('files a member sends all but the last chunk of count against the limit, and go first', async () => {
@@ -695,7 +713,7 @@ describe('what a peer refuses', () => {
       await name(b.storage, ref);
     }
     await files.b.fetchMissing();
-    await files.b.tidy();
+    await files.b.fetchMissing();
     assert.ok((await heldBytes(b.adapter)) <= keep);
   });
 
@@ -705,7 +723,7 @@ describe('what a peer refuses', () => {
       // Records arrive mid-fetch: the pass tidies while the read fetches.
       if (armed && to === 'b' && message.type === 'file' && message.chunk === 1 && message.at === 0) {
         armed = false;
-        void files.b.tidy();
+        void files.b.fetchMissing();
       }
       return true;
     });
@@ -714,7 +732,7 @@ describe('what a peer refuses', () => {
     await name(a.storage, ref);
     await name(b.storage, ref);
     await files.b.open(ref);
-    await files.b.tidy();
+    await files.b.fetchMissing();
     assert.equal(await b.adapter.get(`f/${ref.hash}/0`), null, 'past the limit alone, dropped once read');
     armed = true;
     assert.deepEqual(await files.b.open(ref), bytesOf(3 * CHUNK));

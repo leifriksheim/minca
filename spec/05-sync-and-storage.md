@@ -1294,7 +1294,7 @@ by them); a peer that holds or serves a file never checks them.
 **Keeping.** A node keeps a file's chunks at most while it keeps whole
 (§10) a version naming it, and drops them when it keeps none: a file goes
 with the body that names it, so a superseded version's stub frees its
-files. Before then it MAY drop a file it did not write, to fetch again when
+files. Before then it MAY drop a file it did not add, to fetch again when
 read. A file
 a node has added and not yet named in a version it wrote is its own to
 keep. A node need not fetch, serve or keep the files of a version that does

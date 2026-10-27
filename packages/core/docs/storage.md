@@ -344,16 +344,17 @@ type: ref.mime }))` shows it.
   once of each peer that connects meanwhile.
 - **A device's limits.** A node limits the files it did not add, in every
   space: it fetches unread only files of up to 5 MiB, so photos and
-  documents come ahead and video when played, and past 256 MiB of their
-  chunks in a space, whole or not, it drops those fetched or read longest
-  ago, after each file it fetches unread and on every pass. One that never
-  arrived whole goes first. A file added here is never dropped, nor one
-  being fetched or read; reading one file larger than the limit drops every
-  other in the space. A dropped file keeps its `used` entry, so it is not
-  fetched unread again while a version names it; reading it fetches it. It
-  stays in a data folder this node mirrors to. The limit is per space, so
-  a device in many spaces holds more. A node with `fetchFiles: 'all'`, a
-  carrier or host, fetches and keeps every file.
+  documents come ahead and video when played. Past 256 MiB of them in a
+  space, counting each at the size its list proves, or every chunk held of
+  one never whole, it drops those fetched or opened longest ago, down to
+  90%, at the start of each pass and as it fetches. One never whole goes
+  first. A file added here is never dropped, nor one being fetched or read;
+  one larger than the limit is dropped on the pass after it is read, and
+  fetched again at the next read. A dropped file that was whole keeps its
+  `used` entry, so it is not fetched unread again while a version names it;
+  reading it fetches it. The limit is per space, so a device in many spaces
+  holds more. A node with `fetchFiles: 'all'`, a carrier or host, fetches
+  and keeps every file.
 - **Serving.** A `want-file` is answered with at most 4 chunks; the asker
   asks again for the rest, so a large file never floods a connection.
 - **Keeping.** About 2 s after records change, files no version kept whole
