@@ -2634,7 +2634,6 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       const standing = await standingOf(version);
       return standing.ok || !!standing.withdrawn;
     },
-    mine: async (version) => ((await judge(version)).root ?? version.author) === deps.rootDid,
     // Files follow records: every file a version kept whole names is fetched, within a device's limits.
     ...(deps.fetchFiles === 'all' ? {} : { limits: DEVICE_LIMITS }),
   });

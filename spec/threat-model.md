@@ -399,12 +399,15 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
   - A member can name up to 16 files of up to 2³¹ bytes in every version,
     and every node that keeps that version whole fetches each, unread. A
     carrier or host holds them all while the version is kept whole, and
-    copies each into every mirror it writes (a bucket, a data folder). Every other node,
-    the account home and agents too, fetches unread only files of up to
-    5 MiB and keeps at most 256 MiB of others' files per space, dropping
-    those used longest ago, so a flood costs it bandwidth, not storage, and
-    pushes other members' files back to being fetched when read; one it
-    dropped stays in a data folder it mirrors to. The files are held for good where the version is retained, a first version under `onePer`, or under
+    copies each into every mirror it writes (a bucket, a data folder).
+    Every other node, the account home and agents too, fetches unread only
+    files of up to 5 MiB and keeps at most 256 MiB of chunks of files it did
+    not add per space, dropping those used longest ago, so a flood costs it
+    bandwidth, not storage, though the limit adds up across spaces. It
+    pushes other members' files back, for good, to being fetched when read,
+    from a writer or carrier that is online; one it dropped stays in a data
+    folder it mirrors to. An app granted to write as the account is held to
+    the same limit on the account's other devices. The files are held for good where the version is retained, a first version under `onePer`, or under
     `history: "all"`. It can also name another member's deleted file in a
     version of its own, keeping its ciphertext held, though nobody without
     the old body can open it. `size` is the writer's word until the bytes

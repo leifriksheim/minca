@@ -323,13 +323,8 @@ describe('what a peer refuses', () => {
   }
 
   /** A version naming a file, kept whole in a store */
-  async function name(
-    storage: StorageProvider,
-    ref: SealedFile,
-    text = 'a photo',
-    keys?: Awaited<ReturnType<typeof provider.generateKeyPair>>,
-  ) {
-    keys ??= await provider.generateKeyPair();
+  async function name(storage: StorageProvider, ref: SealedFile, text = 'a photo') {
+    const keys = await provider.generateKeyPair();
     const did = publicKeyToDid(await provider.exportPublicKey(keys.publicKey), P256_MULTICODEC);
     const version = await signer.sign(
       createVersion({ author: did, collection: 'app.photo', body: { text, photo: ref }, files: [ref] }),
@@ -480,8 +475,8 @@ describe('what a peer refuses', () => {
   /** A writer and a reader of one space, apart until `meet`; `asked` counts the reader's wants */
   function apart(
     options: Partial<SpaceFilesConfig> = {},
-    /** Told of each message once the other side took it */
-    taken?: (to: 'a' | 'b', message: SyncMessageBody) => void,
+    /** Whether a message reaches the other side */
+    deliver?: (to: 'a' | 'b', message: SyncMessageBody) => boolean,
   ) {
     const make = () => {
       const adapter = createMemoryAdapter();
@@ -499,10 +494,10 @@ describe('what a peer refuses', () => {
         storage: side.storage,
         send: (_peer, message) => {
           if (other === 'a' && message.type === 'want-file') counts.asked++;
-          queue = queue.then(async () => {
-            await files[other].onMessage(other === 'a' ? 'b' : 'a', structuredClone(message));
-            taken?.(other, message);
-          });
+          if (deliver?.(other, message) === false) return;
+          queue = queue.then(() =>
+            files[other].onMessage(other === 'a' ? 'b' : 'a', structuredClone(message)),
+          );
         },
         peers: () => (met ? [other] : []),
         ...more,
@@ -612,12 +607,7 @@ describe('what a peer refuses', () => {
   });
 
   test('past its limit a device drops what others wrote and was used longest ago, never its own, and fetches it again only when read', async () => {
-    const keys = await provider.generateKeyPair();
-    const self = publicKeyToDid(await provider.exportPublicKey(keys.publicKey), P256_MULTICODEC);
-    const { a, b, files, counts, meet } = apart({
-      limits: { ahead: CHUNK, keep: 2 * CHUNK },
-      mine: async (version) => version.author === self,
-    });
+    const { a, b, files, counts, meet } = apart({ limits: { ahead: CHUNK, keep: 2 * CHUNK } });
     meet();
     const theirs: SealedFile[] = [];
     for (const n of [1, 2, 3]) {
@@ -632,7 +622,7 @@ describe('what a peer refuses', () => {
       theirs.push(ref);
     }
     const mine = await files.b.add(bytesOf(CHUNK - 50));
-    await name(b.storage, mine, 'my photo', keys);
+    await name(b.storage, mine, 'my photo');
     files.b.changed();
     await files.b.tidy();
     const held = async (ref: SealedFile) => !!(await b.adapter.get(`f/${ref.hash}/0`));
@@ -647,11 +637,11 @@ describe('what a peer refuses', () => {
     assert.deepEqual(await files.b.open(theirs[0]!), bytesOf(CHUNK - 101));
   });
 
-  /** Bytes of chunks and lists a store holds */
+  /** Bytes of chunks a store holds: what the limit counts, lists aside */
   const heldBytes = async (adapter: StorageAdapter) => {
     let total = 0;
     for (const key of await adapter.list('f/'))
-      if (!key.endsWith('/used') && !key.endsWith('/own')) total += (await adapter.get(key))?.length ?? 0;
+      if (/\/\d+$/.test(key)) total += (await adapter.get(key))?.length ?? 0;
     return total;
   };
 
@@ -691,6 +681,24 @@ describe('what a peer refuses', () => {
     assert.ok((await heldBytes(b.adapter)) <= keep + 4 * CHUNK);
   });
 
+  test('files a member sends all but the last chunk of count against the limit, and go first', async () => {
+    const keep = 2 * CHUNK;
+    // The last chunk of each never comes.
+    const { a, b, files, meet } = apart(
+      { limits: { ahead: 4 * CHUNK, keep } },
+      (to, message) => !(to === 'b' && message.type === 'file' && message.chunk === 2),
+    );
+    meet();
+    for (let n = 0; n < 10; n++) {
+      const ref = await files.a.add(bytesOf(3 * CHUNK - 500 - n));
+      await name(a.storage, ref);
+      await name(b.storage, ref);
+    }
+    await files.b.fetchMissing();
+    await files.b.tidy();
+    assert.ok((await heldBytes(b.adapter)) <= keep);
+  });
+
   test('a file dropped and read again while a pass runs is not dropped from under the read', async () => {
     let armed = false;
     const { a, b, files, meet } = apart({ limits: { ahead: CHUNK, keep: 2 * CHUNK } }, (to, message) => {
@@ -699,6 +707,7 @@ describe('what a peer refuses', () => {
         armed = false;
         void files.b.tidy();
       }
+      return true;
     });
     meet();
     const ref = await files.a.add(bytesOf(3 * CHUNK));
