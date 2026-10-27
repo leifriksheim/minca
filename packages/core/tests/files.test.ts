@@ -160,7 +160,7 @@ describe('files between nodes', () => {
     await Promise.all(open.splice(0).map((node) => node.close()));
   });
 
-  async function pair(options: { keeper?: boolean } = {}) {
+  async function pair() {
     const hub = createFakeHub({ latencyMs: 1 });
     const start = async (extra: Partial<Parameters<typeof createNode>[0]> = {}) => {
       const manager = createIdentityManager();
@@ -178,7 +178,7 @@ describe('files between nodes', () => {
       return node;
     };
     const alice = await start();
-    const bob = await start(options.keeper ? { fetchFiles: 'all' } : {});
+    const bob = await start();
     const space = await alice.spaces.create({ name: 'Photos', visibility: 'private', ...team });
     await bob.spaces.join(await alice.spaces.invite(space.id, { role: 'editor' }));
     await joined(bob, space.id);
@@ -200,8 +200,8 @@ describe('files between nodes', () => {
     assert.deepEqual(await bob.records.readFile(space.id, got!.body!.photo), photo);
   });
 
-  test('a keeper fetches a named file before anyone reads it, and serves it when the writer is gone', async () => {
-    const { alice, bob, space } = await pair({ keeper: true });
+  test('a node holding the whole space fetches a named file before anyone reads it, and serves it when the writer is gone', async () => {
+    const { alice, bob, space } = await pair();
     const ref = await alice.records.addFile(space.id, bytesOf(CHUNK + 10), { mime: 'video/mp4' });
     const record = await alice.records.put(space.id, 'app.clip', { clip: ref });
     await until(
@@ -463,5 +463,95 @@ describe('what a peer refuses', () => {
     ]);
     await name(b.storage, ref);
     assert.deepEqual(await files.b.open(ref), bytesOf(CHUNK + 5));
+  });
+
+  /** A writer and a reader of one space, apart until `meet`; `asked` counts the reader's wants */
+  function apart(options: { holdsAll?: boolean } = {}) {
+    const make = () => {
+      const adapter = createMemoryAdapter();
+      return { adapter, storage: createStorageProvider(adapter) };
+    };
+    const a = make();
+    const b = make();
+    let met = false;
+    const counts = { asked: 0 };
+    let queue: Promise<void> = Promise.resolve();
+    const service = (side: typeof a, other: 'a' | 'b', holdsAll: boolean) =>
+      createSpaceFiles({
+        space: 'demo',
+        adapter: side.adapter,
+        storage: side.storage,
+        send: (_peer, message) => {
+          if (other === 'a' && message.type === 'want-file') counts.asked++;
+          queue = queue.then(() =>
+            files[other].onMessage(other === 'a' ? 'b' : 'a', structuredClone(message)),
+          );
+        },
+        peers: () => (met ? [other] : []),
+        holdsAll: () => holdsAll,
+      });
+    const files: { a: SpaceFiles; b: SpaceFiles } = {
+      a: service(a, 'b', false),
+      b: service(b, 'a', options.holdsAll ?? false),
+    };
+    const meet = () => {
+      met = true;
+      files.b.joined('a');
+    };
+    return { a, b, files, counts, meet };
+  }
+  const pending = (promise: Promise<unknown>) =>
+    Promise.race([
+      promise.then(() => 'settled'),
+      new Promise((resolve) => setTimeout(resolve, 50, 'pending')),
+    ]);
+
+  test('a read waits for a file nobody has, and opens once a peer that has it connects', async () => {
+    const { a, b, files, meet } = apart();
+    const ref = await files.a.add(bytesOf(CHUNK + 7));
+    await name(a.storage, ref);
+    await name(b.storage, ref);
+    const reading = files.b.open(ref);
+    assert.equal(await pending(reading), 'pending');
+    meet();
+    await files.b.fetchMissing();
+    assert.deepEqual(await reading, bytesOf(CHUNK + 7));
+  });
+
+  test('a node holding the whole space fetches what nobody had from a peer that connects later, and asks no one else again', async () => {
+    const { a, b, files, counts, meet } = apart({ holdsAll: true });
+    const ref = await files.a.add(bytesOf(300));
+    await name(a.storage, ref);
+    await name(b.storage, ref);
+    await files.b.fetchMissing();
+    assert.equal(await b.adapter.get(`f/${ref.hash}/0`), null);
+    // Nobody had it: a pass on the next change asks no one again.
+    await files.b.fetchMissing();
+    assert.equal(counts.asked, 0);
+    meet();
+    await files.b.fetchMissing();
+    assert.ok(await b.adapter.get(`f/${ref.hash}/0`));
+    assert.deepEqual(await files.b.open(ref), bytesOf(300));
+  });
+
+  test('a node holding part of a space fetches nothing nobody read', async () => {
+    const { a, b, files, counts, meet } = apart();
+    const ref = await files.a.add(bytesOf(300));
+    await name(a.storage, ref);
+    await name(b.storage, ref);
+    meet();
+    await files.b.fetchMissing();
+    assert.equal(counts.asked, 0);
+  });
+
+  test('a waiting read ends when the space closes', async () => {
+    const { a, b, files } = apart();
+    const ref = await files.a.add(bytesOf(300));
+    await name(a.storage, ref);
+    await name(b.storage, ref);
+    const reading = files.b.open(ref);
+    assert.equal(await pending(reading), 'pending');
+    files.b.close();
+    await assert.rejects(reading, /closed/);
   });
 });

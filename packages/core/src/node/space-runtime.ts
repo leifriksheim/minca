@@ -394,8 +394,6 @@ export interface SpaceRuntimeDeps {
   readonly cache?: CacheConfig;
   /** Told of every version a peer sent that was taken in — what a carrier matches subscriptions against */
   readonly onArrived?: (version: Version) => void;
-  /** Fetch every file the space's records name, as a keeper does, rather than only those read (spec 05 §16.6) */
-  readonly fetchFiles?: 'all';
 }
 
 /** One open space, as `openSpaceRuntime` gives it */
@@ -2154,7 +2152,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       filesTimer = null;
       filesPass = (async () => {
         await spaceFiles?.tidy();
-        if (deps.fetchFiles === 'all') await spaceFiles?.fetchAll();
+        await spaceFiles?.fetchMissing();
       })()
         .catch(() => {
           // A peer or mirror out of reach; the next change tries again.
@@ -2634,6 +2632,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       const standing = await standingOf(version);
       return standing.ok || !!standing.withdrawn;
     },
+    // Files follow records: a node holding the whole space keeps every file it names.
+    holdsAll: () => !partial,
   });
 
   const sync = createSyncEngine({
@@ -2840,6 +2840,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       sync.addPeer(info.did);
       // Reconcile at once rather than waiting for the heartbeat.
       sync.notifyPeers([info.did]);
+      // It may hold a file nobody else had.
+      spaceFiles?.joined(info.did);
+      filesChanged();
       emit({ type: 'status', space: space.id });
       // The key may have changed between checking it and letting it in.
       void letGoOfOutsiders().catch(() => {});

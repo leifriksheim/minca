@@ -76,12 +76,6 @@ export interface NodeConfig {
   readonly writerKey?: WriterKeySource;
   /** How often to look for writes another process made to a folder store. 0 disables. Default 2000. */
   readonly watchIntervalMs?: number;
-  /**
-   * Fetch every file the records it keeps name, as soon as they are named:
-   * what a node keeping a space for others does. Without it, a file is
-   * fetched when it is read (spec 05 §16.6).
-   */
-  readonly fetchFiles?: 'all';
   /** Hold only the collections this node uses, once a space names a keeper to hold the rest */
   readonly cache?: CacheConfig;
 }

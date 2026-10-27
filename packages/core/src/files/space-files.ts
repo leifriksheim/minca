@@ -50,6 +50,8 @@ export interface SpaceFilesConfig {
   readonly mirrors?: () => ReadonlyArray<FileMirror>;
   /** Whether a version stands: a version that doesn't, though kept whole, keeps no files here */
   readonly stands?: (version: Version) => Promise<boolean>;
+  /** Whether this node holds the whole space, and so every file it names; otherwise a file is fetched when read */
+  readonly holdsAll?: () => boolean;
 }
 
 /** Chunks asked of a peer in one `want-file` */
@@ -58,7 +60,7 @@ const MAX_CHUNKS_PER_WANT = 64;
 const MAX_CHUNKS = MAX_FILE_SIZE / CHUNK;
 /** A request that hears nothing for this long is given up, and what it lacks asked elsewhere */
 const IDLE_MS = 5_000;
-/** A file nobody had is not asked for again before this */
+/** A file nobody had is not asked of everyone again before this; a peer that connects since is asked at once */
 const RETRY_MS = 10 * 60_000;
 /** Chunks a peer sends in answer to one `want-file`; the rest it leaves for the next ask */
 const CHUNKS_PER_REPLY = 4;
@@ -291,7 +293,7 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
 
   const fetching = new Map<string, Promise<void>>();
   /** Fetches whatever of a file is not held here: from peers, then mirrors. Throws if none has it all. */
-  function fetchFile(file: FileName): Promise<void> {
+  function fetchFile(file: FileName, peers = askable(), mirrors = true): Promise<void> {
     const at = `${file.hash}:${file.size}`;
     const running = fetching.get(at);
     if (running) return running;
@@ -302,7 +304,7 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
         const held = await heldChunks(file);
         return Array.from({ length: n }, (_, i) => i).filter((i) => !held.has(i));
       };
-      for (const peer of askable()) {
+      for (const peer of peers) {
         if (n > 1 && !list) {
           await ask(peer, file, ['list'], null);
           list = await heldList(file);
@@ -317,7 +319,7 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
         if ((await missing()).length === 0) return;
       }
       if ((await missing()).length === 0) return;
-      if (await fromMirrors(file)) return;
+      if (mirrors && (await fromMirrors(file))) return;
       throw new Error('No peer or mirror holds that file now');
     })().finally(() => fetching.delete(at));
     fetching.set(at, work);
@@ -483,45 +485,98 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
     }
   }
 
-  /** Files a keeper found nobody had, and when */
+  /** Files nobody had, and when they were last asked of everyone */
   const unfound = new Map<string, number>();
+  /** Peers connected since the last pass: asked at once for what nobody else had */
+  const joined = new Set<string>();
+  /** Reads waiting for a file nobody had, by id */
+  const waiting = new Map<string, { file: FileName; wake: Array<(error?: Error) => void> }>();
+  let closed = false;
 
-  /** Fetches every file a version kept whole names that is not here yet: what a keeper does */
-  async function fetchAll(): Promise<void> {
-    for (const [hash, sizes] of await namedFiles()) {
+  /**
+   * Fetches what this node wants and lacks: every file a version it keeps whole
+   * names when it holds the whole space, and the files reads are waiting for.
+   */
+  async function fetchMissing(): Promise<void> {
+    const fresh = [...joined];
+    joined.clear();
+    const wanted = new Map(config.holdsAll?.() ? await namedFiles() : []);
+    for (const [hash, { file }] of waiting) {
+      // Its body was superseded meanwhile: nothing here names it to ask for any more.
+      if (!(await isNamed(file))) wake(hash, new Error('No record here names that file'));
+      else if (!wanted.has(hash)) wanted.set(hash, [file]);
+    }
+    for (const [hash, sizes] of wanted) {
+      if (closed) return;
       const held = await heldFile(hash);
-      if (held && (await isWhole(held))) continue;
-      // One nobody had a moment ago is not asked of everyone again on every change.
-      if (Date.now() - (unfound.get(hash) ?? 0) < RETRY_MS) continue;
+      if (held && (await isWhole(held))) {
+        wake(hash);
+        continue;
+      }
+      // One nobody had a moment ago is asked only of the peers that have come since.
+      const recent = Date.now() - (unfound.get(hash) ?? 0) < RETRY_MS;
+      const peers = recent ? askable().filter((peer) => fresh.includes(peer)) : askable();
+      if (recent && peers.length === 0) continue;
       // Every size named for it, the file's own first if its list is here: the wrong ones fail on the list.
       for (const file of held ? [held] : sizes) {
-        const fetched = await fetchFile(file).then(
+        const fetched = await fetchFile(file, peers, !recent).then(
           () => true,
           () => false,
         );
         if (fetched) {
           unfound.delete(hash);
+          wake(hash);
           break;
         }
-        unfound.set(hash, Date.now());
+        if (!recent) unfound.set(hash, Date.now());
       }
+    }
+  }
+
+  function wake(hash: string, error?: Error): void {
+    for (const resolve of waiting.get(hash)?.wake ?? []) resolve(error);
+    waiting.delete(hash);
+  }
+
+  /** Opens a file a body refers to, waiting for its bytes while no peer or mirror has them */
+  async function open(ref: SealedFile): Promise<Uint8Array> {
+    for (;;) {
+      try {
+        return await openFile(await read(ref), ref);
+      } catch (error) {
+        // A file no version here names, or one held whole that won't open, is never coming.
+        if (closed || !(await isNamed(ref)) || (await isWhole(ref))) throw error;
+      }
+      unfound.set(ref.hash, Date.now());
+      const failed = await new Promise<Error | undefined>((resolve) => {
+        const entry = waiting.get(ref.hash) ?? { file: { hash: ref.hash, size: ref.size }, wake: [] };
+        entry.wake.push(resolve);
+        waiting.set(ref.hash, entry);
+      });
+      if (failed) throw failed;
     }
   }
 
   return Object.freeze({
     add,
     read,
-    /** Opens a file a body refers to */
-    open: async (ref: SealedFile): Promise<Uint8Array> => openFile(await read(ref), ref),
+    open,
     onMessage,
     /** Something changed in the store: which files are named is worked out again */
     changed() {
       named = null;
     },
+    /** A peer connected: asked for what nobody had on the next pass, whether or not it answered before */
+    joined(peer: string) {
+      silent.delete(peer);
+      joined.add(peer);
+    },
     tidy,
-    fetchAll,
+    fetchMissing,
     close() {
+      closed = true;
       for (const request of requests.values()) request.settle();
+      for (const hash of [...waiting.keys()]) wake(hash, new Error('The space is closed'));
     },
   });
 }

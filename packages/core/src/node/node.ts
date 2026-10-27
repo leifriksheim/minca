@@ -543,7 +543,6 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
           // The account's own spaces are always held whole: every device needs all of them.
           ...(config.cache && !kind ? { cache: config.cache } : {}),
           watchIntervalMs: config.watchIntervalMs ?? 2000,
-          ...(config.fetchFiles ? { fetchFiles: config.fetchFiles } : {}),
           emit: fromRuntime,
           onRole: (role) => {
             // Holding a role now — perhaps just joined — means the space may hear who this is.
