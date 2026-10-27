@@ -397,21 +397,20 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     version's own view, once; nothing bounds how many warrants a member
     writes, true or false ([#33](https://github.com/leifriksheim/minca/issues/33)).
   - A member can name up to 16 files of up to 2³¹ bytes in every version,
-    and every node holding the space whole fetches and holds each while that
-    version is kept whole, unread: its keepers, any node not holding part,
-    and in a space naming no keeper every member's devices. One member can
-    so fill those devices' storage: in a browser it is the store records
-    live in, so a full one stores no versions in any space, and each device
-    also copies every file into each mirror it writes (a bucket, a data
-    folder). The account's own spaces are always held whole, so an app
-    granted to write in one fills every device of the account the same
-    way. The files are held for good where the version is retained, a first version under `onePer`, or under
+    and every node that keeps that version whole fetches each, unread. A
+    keeper, carrier or other node without `cache` holds them all while the
+    version is kept whole, and copies each into every mirror it writes (a
+    bucket, a data folder). A member's device fetches unread only files of
+    up to 5 MiB and keeps at most 256 MiB of others' files per space,
+    dropping those used longest ago, so a flood costs it bandwidth, not
+    storage, and pushes other members' files back to being fetched when
+    read. The files are held for good where the version is retained, a first version under `onePer`, or under
     `history: "all"`. It can also name another member's deleted file in a
     version of its own, keeping its ciphertext held, though nobody without
     the old body can open it. `size` is the writer's word until the bytes
     arrive. And any peer it serves can ask for up to four chunks (1 MiB) per
     `want-file`, as often as it likes, and a member naming ids nobody holds
-    has every node holding the space whole ask its peers and list its
+    has every node that keeps the version whole ask its peers and list its
     mirrors for each, one id at a time, again every ten minutes, and ask
     each peer that connects meanwhile, which delays its fetching the files
     that exist; a read of one waits for good, asking every connected peer

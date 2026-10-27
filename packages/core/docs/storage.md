@@ -333,18 +333,23 @@ How this library does the rest:
   space closes. For a picture, `URL.createObjectURL(new Blob([bytes], {
 type: ref.mime }))` shows it.
 - **Where chunks live.** Entries in the space's own store: `f/<id>/list`,
-  `f/<id>/<n>`, and `f/<id>/own` with the time a file was added and not yet
-  named. A data folder keeps these in this device's own stores, not the
+  `f/<id>/<n>`, `f/<id>/own` with the time a file was added and not yet
+  named, and `f/<id>/used` with when it was last fetched or read, and its
+  size. A data folder keeps these in this device's own stores, not the
   folder.
-- **What a node fetches.** Files follow records. A node holding the whole
-  space fetches every named file about 2 s after its records change, while
-  the writer is likely still connected: a carrier or host, any node without
-  `cache`, the account's own spaces, and every node in a space naming no
-  keeper ([holding part of a space](node.md#holding-part-of-a-space)). A
-  node holding part of a space fetches a file when it is read, from
-  whichever peer or mirror has it, usually the keeper. A file this sweep
-  found nobody had is not asked of everyone again for 10 minutes, but is
-  asked at once of each peer that connects meanwhile.
+- **What a node fetches.** Files follow records. A node fetches every file
+  named by a version it keeps whole about 2 s after its records change,
+  while the writer is likely still connected. A file this sweep found
+  nobody had is not asked of everyone again for 10 minutes, but is asked at
+  once of each peer that connects meanwhile.
+- **A device's limits.** A node with `cache` (an app's device) limits the
+  files others wrote, in every space, the account's own too: it fetches
+  unread only files of up to 5 MiB, so photos and documents come ahead and
+  video when played, and past 256 MiB of them in a space it drops those
+  fetched or read longest ago. Files its own versions name are never
+  dropped. A dropped file keeps its `used` entry, so it is not fetched
+  unread again; reading it fetches it. A node without `cache`, a carrier or
+  host, fetches and keeps every file.
 - **Serving.** A `want-file` is answered with at most 4 chunks; the asker
   asks again for the rest, so a large file never floods a connection.
 - **Keeping.** About 2 s after records change, files no version kept whole

@@ -7,6 +7,7 @@
  * f/<id>/list     the chunk list
  * f/<id>/<n>      chunk n
  * f/<id>/own      added here and not yet named: the time it was added
+ * f/<id>/used     when it was last fetched or read, and its size; kept when dropped
  * ```
  */
 import type { StorageAdapter, Version } from '../types.js';
@@ -50,9 +51,21 @@ export interface SpaceFilesConfig {
   readonly mirrors?: () => ReadonlyArray<FileMirror>;
   /** Whether a version stands: a version that doesn't, though kept whole, keeps no files here */
   readonly stands?: (version: Version) => Promise<boolean>;
-  /** Whether this node holds the whole space, and so every file it names; otherwise a file is fetched when read */
-  readonly holdsAll?: () => boolean;
+  /** This node: files named by its own versions are never dropped */
+  readonly self?: string;
+  /** Limits on the files others wrote, for a device; absent, every file named is fetched and kept */
+  readonly limits?: FileLimits;
 }
+
+export interface FileLimits {
+  /** The largest file fetched before anyone reads it; a larger one is fetched when read */
+  readonly ahead: number;
+  /** The bytes of files others wrote a space keeps; past it, those used longest ago are dropped */
+  readonly keep: number;
+}
+
+/** A device's limits: photos and documents come ahead, video when played */
+export const DEVICE_LIMITS: FileLimits = Object.freeze({ ahead: 5 * 1024 * 1024, keep: 256 * 1024 * 1024 });
 
 /** Chunks asked of a peer in one `want-file` */
 const MAX_CHUNKS_PER_WANT = 64;
@@ -76,6 +89,7 @@ const UNNAMED_MS = 24 * 60 * 60 * 1000;
 const listKey = (id: string) => `f/${id}/list`;
 const chunkKey = (id: string, index: number) => `f/${id}/${index}`;
 const ownKey = (id: string) => `f/${id}/own`;
+const usedKey = (id: string) => `f/${id}/used`;
 
 type Part = number | 'list';
 
@@ -108,9 +122,12 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
   /** Versions already looked at, and those of them that name files: the rest are never read again */
   const scanned = new Set<string>();
   const namers = new Set<string>();
+  /** The files this node's own versions name, as of the last `namedFiles` */
+  let mine = new Set<string>();
   const namedFiles = (): Promise<Map<string, FileName[]>> =>
     (named ??= (async () => {
       const files = new Map<string, FileName[]>();
+      const own = new Set<string>();
       const kept = await storage.versionIds();
       for (const id of kept) {
         // Only versions not seen before, and those that name files (which may since be stubs).
@@ -126,6 +143,7 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
         const taken = filesOf(version);
         if (config.stands && !(await config.stands(version))) continue;
         for (const file of taken) {
+          if (version.author === config.self) own.add(file.hash);
           const sizes = files.get(file.hash) ?? [];
           if (!sizes.some((known) => known.size === file.size)) sizes.push(file);
           files.set(file.hash, sizes);
@@ -140,6 +158,7 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
           namers.delete(id);
         }
       }
+      mine = own;
       return files;
     })());
   const isNamed = async (file: FileName) =>
@@ -327,7 +346,10 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
       if ((await missing()).length === 0) return;
       if (mirrors && (await fromMirrors(file))) return;
       throw new Error('No peer or mirror holds that file now');
-    })().finally(() => fetching.delete(at));
+    })()
+      // Here whole, fetched or read: used now.
+      .then(() => adapter.put(usedKey(file.hash), utf8Encode(`${Date.now()} ${file.size}`)))
+      .finally(() => fetching.delete(at));
     fetching.set(at, work);
     return work;
   }
@@ -489,6 +511,33 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
         if (!wanted.has(id)) await mirror.store.delete(key);
       }
     }
+    if (config.limits) await dropLeastUsed(config.limits.keep);
+  }
+
+  /**
+   * Past `keep` bytes, drops the files others wrote that were used longest ago.
+   * Their `used` mark stays, so they aren't fetched unread again; a read
+   * fetches them.
+   */
+  async function dropLeastUsed(keep: number): Promise<void> {
+    const held: { id: string; at: number; size: number }[] = [];
+    let total = 0;
+    for (const key of await adapter.list('f/')) {
+      const id = key.split('/')[1]!;
+      if (key !== usedKey(id) || mine.has(id) || !(await adapter.get(listKey(id)))) continue;
+      const [at = 0, size = 0] = utf8Decode((await adapter.get(key)) ?? new Uint8Array())
+        .split(' ')
+        .map(Number);
+      held.push({ id, at, size });
+      total += size;
+    }
+    held.sort((a, b) => a.at - b.at);
+    for (const file of held) {
+      if (total <= keep) return;
+      const keys = (await adapter.list(`f/${file.id}/`)).filter((key) => key !== usedKey(file.id));
+      await adapter.batch(keys.map((key) => ({ type: 'delete' as const, key })));
+      total -= file.size;
+    }
   }
 
   /** Files a sweep found nobody had, and when it last asked everyone */
@@ -521,9 +570,10 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
   }
 
   /**
-   * Fetches what this node wants and lacks: the files reads wait for, and,
-   * when it holds the whole space, every file a version it keeps whole names,
-   * trying every size named for each. A file nobody had is asked of everyone
+   * Fetches what this node wants and lacks: the files reads wait for, and
+   * every file a version it keeps whole names, unless it was dropped here or
+   * is larger than the limits let come ahead. Each is tried at
+   * every size named for it. A file nobody had is asked of everyone
    * again, mirrors too, only after `RETRY_MS`; meanwhile of each peer that
    * connects, and, while a read waits for it, of every peer on each pass.
    */
@@ -538,11 +588,13 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
     for (const [hash, sizes] of named) {
       if (closed) return;
       const waited = waiting.has(hash);
-      if (!waited && !config.holdsAll?.()) continue;
+      const ahead = sizes.filter((file) => file.size <= (config.limits?.ahead ?? Infinity));
+      const dropped = async () => !!(await adapter.get(usedKey(hash))) && !(await adapter.get(listKey(hash)));
+      if (!waited && (ahead.length === 0 || (await dropped()))) continue;
       const recent = Date.now() - (unfound.get(hash) ?? 0) < RETRY_MS;
       const peers = recent && !waited ? askable().filter((peer) => fresh.includes(peer)) : askable();
       if (recent && peers.length === 0) continue;
-      if (await fetchAny(hash, sizes, peers, !recent)) {
+      if (await fetchAny(hash, waited ? sizes : ahead, peers, !recent)) {
         unfound.delete(hash);
         settle(hash, null);
       } else if (!recent) unfound.set(hash, Date.now());

@@ -172,7 +172,7 @@ import {
 import { FOUNDER } from '../space/space-manager.js';
 import { createSyncEngine, type Holds } from '../sync/sync-engine.js';
 import { SYNC_PROTOCOL_VERSION } from '../sync/sync-messages.js';
-import { createSpaceFiles, type SealedFile, type SpaceFiles } from '../files/space-files.js';
+import { createSpaceFiles, DEVICE_LIMITS, type SealedFile, type SpaceFiles } from '../files/space-files.js';
 import { fileRefsIn, MAX_FILES } from '../files/file-id.js';
 import type { NetworkMessage, PeerInfo } from '../types.js';
 import type { StoreFactory } from './stores.js';
@@ -392,6 +392,8 @@ export interface SpaceRuntimeDeps {
   readonly accountOnly?: boolean;
   /** Hold only the collections used, once the space names a keeper (`NodeConfig.cache`). Absent: hold it whole. */
   readonly cache?: CacheConfig;
+  /** A device's storage: files others wrote are fetched unread only when small, and the least used dropped past a limit (`NodeConfig.cache`) */
+  readonly limitFiles?: boolean;
   /** Told of every version a peer sent that was taken in — what a carrier matches subscriptions against */
   readonly onArrived?: (version: Version) => void;
 }
@@ -2632,8 +2634,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       const standing = await standingOf(version);
       return standing.ok || !!standing.withdrawn;
     },
-    // Files follow records: a node holding the whole space keeps every file it names.
-    holdsAll: () => !partial,
+    // Files follow records: every file a version kept whole names is fetched, within a device's limits.
+    self: session.did,
+    ...(deps.limitFiles ? { limits: DEVICE_LIMITS } : {}),
   });
 
   const sync = createSyncEngine({
