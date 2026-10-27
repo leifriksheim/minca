@@ -589,6 +589,46 @@ describe('what a peer refuses', () => {
     assert.equal(counts.asked, 0);
   });
 
+  test('a read deciding whether to wait as the space closes ends too', async () => {
+    const writer = apart().files.a;
+    const ref = await writer.add(bytesOf(300));
+    const adapter = createMemoryAdapter();
+    const storage = createStorageProvider(adapter);
+    await name(storage, ref);
+    let files: SpaceFiles | null = null;
+    let armed = false;
+    files = createSpaceFiles({
+      space: 'demo',
+      // A record arrives as the read looks for the file, and the space closes while it works out what is named.
+      adapter: {
+        ...adapter,
+        get: async (key) => {
+          if (key === `f/${ref.hash}/list` && !armed) {
+            armed = true;
+            files?.changed();
+          }
+          return adapter.get(key);
+        },
+      },
+      storage: {
+        ...storage,
+        versionIds: async () => {
+          if (armed) files?.close();
+          return storage.versionIds();
+        },
+      },
+      send: () => {},
+      peers: () => [],
+    });
+    const reading = files.open(ref).then(
+      () => 'opened',
+      () => 'refused',
+    );
+    assert.equal(await pending(reading), 'settled');
+    assert.ok(armed);
+    assert.equal(await reading, 'refused');
+  });
+
   test('a waiting read ends when the space closes', async () => {
     const { a, b, files } = apart();
     const ref = await files.a.add(bytesOf(300));

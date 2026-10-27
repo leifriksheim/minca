@@ -399,9 +399,13 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
   - A member can name up to 16 files of up to 2³¹ bytes in every version,
     and every node holding the space whole fetches and holds each while that
     version is kept whole, unread: its keepers, any node not holding part,
-    and in a space naming no keeper every member's devices, whose storage
-    one member can so fill:
-    for good where it is retained, a first version under `onePer`, or under
+    and in a space naming no keeper every member's devices. One member can
+    so fill those devices' storage: in a browser it is the store records
+    live in, so a full one stores no versions in any space, and each device
+    also copies every file into each mirror it writes (a bucket, a data
+    folder). The account's own spaces are always held whole, so an app
+    granted to write in one fills every device of the account the same
+    way. The files are held for good where the version is retained, a first version under `onePer`, or under
     `history: "all"`. It can also name another member's deleted file in a
     version of its own, keeping its ciphertext held, though nobody without
     the old body can open it. `size` is the writer's word until the bytes

@@ -578,7 +578,9 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
       } catch (error) {
         // A file no version here names, or whose id is here whole yet won't open as named, is never coming.
         const held = await heldFile(ref.hash);
-        if (closed || !(await isNamed(ref)) || (held && (await isWhole(held)))) throw error;
+        const never = !(await isNamed(ref)) || (held && (await isWhole(held)));
+        // Asked after those, since the space may close meanwhile and a wait made then would never end.
+        if (never || closed) throw error;
       }
       let entry = waiting.get(ref.hash);
       if (!entry) {
