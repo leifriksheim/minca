@@ -22,6 +22,8 @@ import {
   reviewBlueprint,
   standardCollections,
   supersededBlueprints,
+  tryContracts,
+  type ContractExample,
 } from '../schemas/blueprints.js';
 import { blueprint, type Blueprint } from '../schemas/library/collections.js';
 import { guidesOf } from '../schemas/guides.js';
@@ -109,6 +111,26 @@ function oneOf<const T extends string>(input: Record<string, unknown>, key: stri
 }
 
 const isBlueprint = (value: unknown): value is Blueprint => checkBlueprint(value) === null;
+const isDid = (value: unknown) => value === undefined || typeof value === 'string';
+const isLinks = (value: unknown) =>
+  value === undefined ||
+  (Array.isArray(value) &&
+    value.every((l) => isRecord(l) && typeof l.rel === 'string' && typeof l.to === 'string'));
+const isExample = (value: unknown): value is ContractExample =>
+  isRecord(value) &&
+  typeof value.collection === 'string' &&
+  isRecord(value.body) &&
+  isDid(value.author) &&
+  isLinks(value.links) &&
+  (value.prev === undefined ||
+    (isRecord(value.prev) &&
+      isRecord(value.prev.body) &&
+      isDid(value.prev.author) &&
+      isLinks(value.prev.links))) &&
+  isDid(value.creator) &&
+  (value.expect === 'pass' || value.expect === 'fail');
+const EXAMPLE_SHAPE =
+  '{ collection, body, author?, links?, prev?: { body, author?, links? }, creator?, expect: "pass" | "fail" }';
 
 const links = {
   type: 'array',
@@ -555,6 +577,13 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
       'Read collections_list first and reuse what the space already has rather than inventing a twin; the guides it ' +
       'names say how an app in the space wants new things proposed. To change a blueprint already applied, read ' +
       'collections_proposals and pass the key of its newest version, the one not superseded, as "updates". ' +
+      "Anyone in the space can write records directly, not only through an app, so an app's own checks stop nobody: " +
+      "where records mean nothing unless they keep a rule their shape and rules can't say (whose turn it is, a legal " +
+      'move, a balance that stays above zero), give the collection a "contract", which every reader judges: ' +
+      '{ "check": [{ "that": <CEL>, "else": <why a version failing it doesn\'t count> }] }. CEL reads body, prev (the ' +
+      'version before, with its body; null for a first version), author (the account), links, seq and member(did); it ' +
+      'has the macros all, exists, filter and map, but no variables, so name a value with [expr].all(x, ...). Numbers ' +
+      'in a body are doubles: write body.n + 1.0, or int(body.n). Then pass "examples" to try it. ' +
       'Returns its key and what each collection will allow; tell the person that, not your own description.',
     input: {
       type: 'object',
@@ -571,6 +600,14 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
           description:
             'The collections: a standard one by name ("std.poll"), or a definition as collections_define takes it, without version',
         },
+        examples: {
+          type: 'array',
+          description:
+            `Versions to try the schemas and contracts on before proposing, each ${EXAMPLE_SHAPE}: author is an ` +
+            'account DID (you when left out), prev the version before (by the same author unless it names one), creator ' +
+            'who wrote the first version. Give fair ones that must count and cheats that must not; if any comes out ' +
+            'otherwise, nothing is proposed. Rules (onePer, fixed, final) and who may write are not tried.',
+        },
       },
       required: ['space', 'title', 'collections'],
     },
@@ -583,6 +620,16 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
         collections: standardCollections(input.collections),
       };
       if (!isBlueprint(body)) throw new Error(checkBlueprint(body) ?? 'Not a blueprint');
+      const given: unknown[] = Array.isArray(input.examples) ? input.examples : [];
+      const examples = given.filter(isExample);
+      if (examples.length < given.length)
+        throw new Error(`examples[${given.findIndex((e) => !isExample(e))}] must be ${EXAMPLE_SHAPE}`);
+      const members = (await node.spaces.access(spaceId)).members;
+      const wrong = await tryContracts(body, examples, {
+        proposer: node.did,
+        member: (did) => members.some((m) => m.did === did),
+      });
+      if (wrong.length) throw new Error(`Nothing was proposed: ${wrong.join('; ')}`);
       const record = await proposeCollections(node, spaceId, body);
       const blueprints = await node.records.list<Blueprint>(spaceId, { collection: blueprint.name });
       const review = reviewBlueprint(body, await node.collections.list(spaceId), {
@@ -599,6 +646,14 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
         ),
         // A twin of a standard collection splits the space's records between apps that can't read each other's.
         ...body.collections.flatMap(lookalikes),
+        // A contract nobody tried may refuse every fair move, or let a cheat count.
+        ...body.collections
+          .filter((c) => c.contract?.check?.length && !examples.some((e) => e.collection === c.name))
+          .map(
+            (c) =>
+              `No example tried ${c.name}'s contract. Propose it again with "examples": a version that must count and ` +
+              'one that must not.',
+          ),
       ];
       return {
         key: record.key,

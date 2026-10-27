@@ -31,6 +31,7 @@ import { isObject } from '../utils/guards.js';
 import { canonicalize } from '../schema/version.js';
 import { describeCollection } from '../records/describe.js';
 import { storedContract } from '../records/contract-builder.js';
+import { checkContractShape, runContracts } from '../records/contracts.js';
 import { blueprint, type Blueprint, type DraftCollection } from './library/collections.js';
 
 /** Why this can't be a blueprint, or null when it can */
@@ -49,6 +50,9 @@ export function checkBlueprint(value: unknown): string | null {
     if ('version' in draft) return `${at}: leave out "version": the space decides it when it is applied`;
     const stored = { ...draft, version: 1 };
     if (!isStoredCollection(stored)) return `${at}: ${checkStoredCollection(stored)}`;
+    // Readers judge nothing under a contract key they don't know, and applying it would be refused.
+    if (stored.contract !== undefined && checkContractShape(stored.contract) === 'unknown')
+      return `${at}: contract takes only "check" and "line"`;
     if (names.has(stored.name)) return `${at}: ${stored.name} is listed twice`;
     names.add(stored.name);
     try {
@@ -58,6 +62,88 @@ export function checkBlueprint(value: unknown): string | null {
     }
   }
   return null;
+}
+
+type ExampleLinks = ReadonlyArray<{ readonly rel: string; readonly to: string }>;
+
+/** A version that a proposed collection's contract must let count, or must not */
+export interface ContractExample {
+  readonly collection: string;
+  readonly body: unknown;
+  /** Who writes it, an account DID; the proposer when left out */
+  readonly author?: string;
+  readonly links?: ExampleLinks;
+  /** The version before, for a contract that reads `prev`; none for a first version. Its author is this one's when left out */
+  readonly prev?: { readonly body: unknown; readonly author?: string; readonly links?: ExampleLinks };
+  /** Who wrote the record's first version; the version before's author, or this one's, when left out */
+  readonly creator?: string;
+  readonly expect: 'pass' | 'fail';
+}
+
+/**
+ * Runs each example through its collection's schema and contract, and says
+ * which came out other than expected, so its proposer sees a contract that
+ * refuses a fair move, or lets a cheat count, before proposing it. Rules and
+ * lines are not tried, `member` asks the space as it is now, and a cited
+ * version can't be given, so an example whose contract cites one is never `pass`.
+ */
+export async function tryContracts(
+  plan: Blueprint,
+  examples: ReadonlyArray<ContractExample>,
+  scope: { readonly proposer: string; readonly member: (did: string) => boolean },
+): Promise<string[]> {
+  const wrong: string[] = [];
+  for (const [index, example] of examples.entries()) {
+    const at = `examples[${index}] (${example.collection})`;
+    const draft = plan.collections.find((c) => c.name === example.collection);
+    if (!draft) {
+      wrong.push(`${at}: the blueprint has no such collection`);
+      continue;
+    }
+    // A body that doesn't fit is kept and flagged, not refused, but no fair move should need one.
+    const misfit = example.expect === 'pass' ? schemaProblem(draft.schema, example.body) : null;
+    if (misfit) {
+      wrong.push(`${at}: should count, but its body doesn't fit the schema: ${misfit}`);
+      continue;
+    }
+    const author = example.author ?? scope.proposer;
+    const prev =
+      example.prev === undefined
+        ? null
+        : {
+            id: 'example-prev',
+            key: 'example',
+            collection: draft.name,
+            seq: 0,
+            author: example.prev.author ?? author,
+            createdAt: '',
+            deleted: false,
+            body: example.prev.body,
+            links: example.prev.links ?? [],
+          };
+    const outcome = await runContracts(draft.contract?.check ?? [], {
+      values: {
+        body: example.body,
+        links: example.links ?? [],
+        key: 'example',
+        seq: prev ? 1 : 0,
+        collection: draft.name,
+        author,
+        creator: example.creator ?? prev?.author ?? author,
+        createdAt: '',
+        prev,
+      },
+      cite: async () => ({ unreadable: true }),
+      member: scope.member,
+    });
+    const passed = 'passed' in outcome && outcome.passed;
+    if (passed && example.expect === 'fail') wrong.push(`${at}: should not count, but its contract lets it`);
+    if (!passed && example.expect === 'pass')
+      wrong.push(
+        `${at}: should count, but ${'reason' in outcome ? `its contract refuses it: “${outcome.reason}”` : 'it cites versions, which an example can’t give'}`,
+      );
+  }
+  return wrong;
 }
 
 /** The parts of a definition that say what it is, rather than what it is called */

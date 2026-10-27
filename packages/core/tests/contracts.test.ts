@@ -25,6 +25,7 @@ import { until } from './helpers/until.js';
 import { useSchemas } from '../src/schemas/index.js';
 import { ballot, decision, goal, goalReached, pledge, proposal } from '../src/schemas/library/community.js';
 import { forge, person, type Person } from './helpers/person.js';
+import { runAction } from '../src/node/actions.js';
 
 // ─── The language, alone ───────────────────────────────────────────
 
@@ -625,5 +626,109 @@ describe('checks: std.decision and std.goal-reached', () => {
     );
     assert.match((await alice.node.records.contracts(space, key))?.reason ?? '', /quorum/);
     assert.equal(await alice.node.records.get(space, key), null);
+  });
+});
+
+describe('checks: tried before they are proposed', () => {
+  const counter = {
+    name: 'app.counter',
+    schema: { type: 'object', properties: { n: { type: 'number' } } },
+    contract: { check: [BY_ONE] },
+  };
+  const BOB_DID = 'did:key:zBob';
+  const propose = async (
+    examples?: unknown,
+    collections: unknown[] = [counter],
+  ): Promise<Record<string, unknown>> => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const alice = await person(hub);
+    const { id: space } = await alice.node.spaces.create({ name: 'Club', ...team, visibility: 'private' });
+    const result = await runAction(alice.node, 'collections_propose', {
+      space,
+      title: 'Counter',
+      collections,
+      ...(examples === undefined ? {} : { examples }),
+    });
+    assert.ok(result !== null && typeof result === 'object');
+    return { ...result };
+  };
+
+  test('examples that come out as expected propose it, with no warning', async () => {
+    const proposed = await propose([
+      { collection: 'app.counter', body: { n: 0 }, expect: 'pass' },
+      { collection: 'app.counter', prev: { body: { n: 4 } }, body: { n: 5 }, expect: 'pass' },
+      { collection: 'app.counter', prev: { body: { n: 4 } }, body: { n: 9 }, expect: 'fail' },
+    ]);
+    assert.equal(proposed.proposed, true);
+    assert.equal(proposed.warnings, undefined);
+  });
+
+  test('a fair example whose body does not fit the schema is not proposed', async () => {
+    await assert.rejects(
+      propose([{ collection: 'app.counter', body: { n: 'zero' }, expect: 'pass' }]),
+      /examples\[0\] \(app\.counter\): should count, but its body doesn't fit the schema/,
+    );
+  });
+
+  test('the version before, and the first, can be by someone else: turns and creators are tried as readers judge them', async () => {
+    const turns = {
+      name: 'app.turns',
+      schema: { type: 'object', properties: { move: { type: 'number' } } },
+      contract: { check: [{ that: 'prev == null || prev.author != author', else: 'Players take turns' }] },
+    };
+    const own = {
+      name: 'app.note',
+      schema: { type: 'object' },
+      contract: { check: [{ that: 'author == creator', else: 'Only its writer changes it' }] },
+    };
+    const proposed = await propose(
+      [
+        {
+          collection: 'app.turns',
+          prev: { body: { move: 1 }, author: BOB_DID },
+          body: { move: 2 },
+          expect: 'pass',
+        },
+        { collection: 'app.turns', prev: { body: { move: 1 } }, body: { move: 2 }, expect: 'fail' },
+        { collection: 'app.note', prev: { body: {} }, body: {}, expect: 'pass' },
+        {
+          collection: 'app.note',
+          prev: { body: {}, author: ALICE },
+          body: {},
+          author: BOB_DID,
+          expect: 'fail',
+        },
+        { collection: 'app.note', body: {}, creator: BOB_DID, expect: 'fail' },
+      ],
+      [turns, own],
+    );
+    assert.equal(proposed.proposed, true);
+  });
+
+  test('a contract that lets a cheat count, or refuses a fair move, is not proposed', async () => {
+    await assert.rejects(
+      propose([{ collection: 'app.counter', prev: { body: { n: 4 } }, body: { n: 9 }, expect: 'pass' }]),
+      /Nothing was proposed: examples\[0\] \(app\.counter\): should count, but its contract refuses it: “A counter starts at 0/,
+    );
+    await assert.rejects(
+      propose([{ collection: 'app.counter', prev: { body: { n: 4 } }, body: { n: 5 }, expect: 'fail' }]),
+      /examples\[0\] \(app\.counter\): should not count, but its contract lets it/,
+    );
+    await assert.rejects(
+      propose([{ collection: 'app.other', body: {}, expect: 'pass' }]),
+      /no such collection/,
+    );
+    await assert.rejects(propose([{ collection: 'app.counter', body: { n: 0 } }]), /examples\[0\] must be/);
+    // A key readers don't know leaves the collection unjudged, so nothing in it would ever count.
+    await assert.rejects(
+      propose(undefined, [{ ...counter, contract: { check: [BY_ONE], future: {} } }]),
+      /collections\[0\]: contract takes only "check" and "line"/,
+    );
+  });
+
+  test('a contract no example tried is proposed with a warning saying so', async () => {
+    const { warnings } = await propose();
+    assert.ok(Array.isArray(warnings));
+    assert.match(String(warnings[0]), /No example tried app\.counter's contract/);
   });
 });

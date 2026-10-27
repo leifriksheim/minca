@@ -44,6 +44,48 @@ Through `collections_propose`, a standard collection may be given by name
 (`"std.task"`): `standardCollections` puts the library's definition in its
 place.
 
+## Trying a contract before proposing it
+
+Anyone in a space can write records directly, not only through the app that
+proposed a collection, so an app's own checks stop nobody. What records must
+keep to for the app to mean anything (whose turn it is, a legal move, a
+balance) belongs in the collection's [contract](collections.md#contracts),
+which every reader judges.
+
+A contract written wrong refuses fair moves, or lets a cheat count, and
+nothing shows it until someone plays. So `collections_propose` takes
+`examples`: versions it runs through their collection's schema and contract
+before writing anything, so the proposer sees a mistake first.
+
+```json
+"examples": [
+  { "collection": "app.counter", "body": { "n": 0 }, "expect": "pass" },
+  { "collection": "app.counter", "prev": { "body": { "n": 4 } }, "body": { "n": 5 }, "expect": "pass" },
+  { "collection": "app.counter", "prev": { "body": { "n": 4 } }, "body": { "n": 9 }, "expect": "fail" },
+  { "collection": "app.counter", "prev": { "body": { "n": 4 }, "author": "did:key:z…" }, "body": { "n": 5 }, "author": "did:key:z…", "expect": "pass" }
+]
+```
+
+- `author` is an account DID, the proposer's when left out. `prev` is the
+  version before, `{ body, author?, links? }`, for a contract that reads
+  `prev`; its author is this one's unless it names another, so turn-taking
+  is tried by naming both. `creator`, who wrote the first version, is the
+  version before's author, or this one's, unless given. Without `prev` the
+  example is a first version.
+- An example that should count must fit its collection's schema too.
+- If any example comes out other than expected, nothing is proposed, and the
+  error says which and why.
+- A collection with a contract that no example names is still proposed, with
+  a warning saying so. The warning goes to the proposer only: the person
+  applying the blueprint sees the contract's conditions, not whether anyone
+  tried them.
+- What examples don't try: rules (`onePer`, `fixed`, `final`), who may write,
+  and a contract's `line`. `member(did)` asks the space as it is now, not as
+  of what the version saw. A cited version can't be given, so an example
+  whose contract cites one never counts as `pass`.
+
+_Source: `packages/core/src/schemas/blueprints.ts` (`tryContracts`), `packages/core/src/node/actions.ts` (`collections_propose`). Tests: `packages/core/tests/contracts.test.ts` ("checks: tried before they are proposed")._
+
 ## Saying how they are meant to be used
 
 A definition can't say "write one rota for each week, and say in it who does
