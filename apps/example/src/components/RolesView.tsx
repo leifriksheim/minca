@@ -12,7 +12,7 @@ import {
   type RoleView,
 } from '../derive/abilities';
 import { nameOf, peopleFrom, type People } from '../derive/people';
-import { Avatar } from '@minca/app-shared/Avatar';
+import { PersonAvatar } from './std/PersonAvatar';
 import { RingButton } from './calls/Calls';
 import { createInviteLink } from '../spaces';
 import { styles, palette, variants } from '../styles';
@@ -479,7 +479,7 @@ function Members({
     const removes = powers.remove.has(did);
     return (
       <li key={did} style={{ ...styles.row, padding: '8px 4px', flexWrap: 'wrap' }}>
-        <Avatar did={did} size={28} />
+        <PersonAvatar spaceId={space.id} did={did} size={28} />
         {/* Room for a name at least; past that, what can be done with them wraps under it. */}
         <div style={{ flex: '1 1 160px', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <span style={{ color: palette.ink.strong, fontSize: 14 }}>
