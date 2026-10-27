@@ -542,9 +542,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
           accountOnly: kind !== null,
           // The account's own spaces are always held whole: every device needs all of them.
           ...(config.cache && !kind ? { cache: config.cache } : {}),
-          // A device limits its files in every space, the account's own too.
-          limitFiles: config.cache !== undefined,
           watchIntervalMs: config.watchIntervalMs ?? 2000,
+          ...(config.fetchFiles ? { fetchFiles: config.fetchFiles } : {}),
           emit: fromRuntime,
           onRole: (role) => {
             // Holding a role now — perhaps just joined — means the space may hear who this is.

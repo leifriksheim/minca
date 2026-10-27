@@ -247,6 +247,8 @@ export async function createCarryCore(config: CarryCoreConfig) {
       rootDid: as.did,
       network,
       watchIntervalMs: config.watchIntervalMs ?? 2000,
+      // It keeps spaces for others: their files too, so they are there while the writer is away.
+      fetchFiles: 'all',
       emit: onEvent,
     });
 

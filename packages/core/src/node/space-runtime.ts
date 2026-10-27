@@ -392,10 +392,10 @@ export interface SpaceRuntimeDeps {
   readonly accountOnly?: boolean;
   /** Hold only the collections used, once the space names a keeper (`NodeConfig.cache`). Absent: hold it whole. */
   readonly cache?: CacheConfig;
-  /** A device's storage: files others wrote are fetched unread only when small, and the least used dropped past a limit (`NodeConfig.cache`) */
-  readonly limitFiles?: boolean;
   /** Told of every version a peer sent that was taken in — what a carrier matches subscriptions against */
   readonly onArrived?: (version: Version) => void;
+  /** Fetch and keep every file the space's records name, as a keeper does, rather than within a device's limits (spec 05 §16.6) */
+  readonly fetchFiles?: 'all';
 }
 
 /** One open space, as `openSpaceRuntime` gives it */
@@ -2634,9 +2634,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       const standing = await standingOf(version);
       return standing.ok || !!standing.withdrawn;
     },
+    mine: async (version) => ((await judge(version)).root ?? version.author) === deps.rootDid,
     // Files follow records: every file a version kept whole names is fetched, within a device's limits.
-    self: session.did,
-    ...(deps.limitFiles ? { limits: DEVICE_LIMITS } : {}),
+    ...(deps.fetchFiles === 'all' ? {} : { limits: DEVICE_LIMITS }),
   });
 
   const sync = createSyncEngine({

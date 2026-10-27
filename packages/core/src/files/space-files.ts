@@ -51,8 +51,8 @@ export interface SpaceFilesConfig {
   readonly mirrors?: () => ReadonlyArray<FileMirror>;
   /** Whether a version stands: a version that doesn't, though kept whole, keeps no files here */
   readonly stands?: (version: Version) => Promise<boolean>;
-  /** This node: files named by its own versions are never dropped */
-  readonly self?: string;
+  /** Whether a version is this account's own: files it names are never dropped */
+  readonly mine?: (version: Version) => Promise<boolean>;
   /** Limits on the files others wrote, for a device; absent, every file named is fetched and kept */
   readonly limits?: FileLimits;
 }
@@ -122,7 +122,7 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
   /** Versions already looked at, and those of them that name files: the rest are never read again */
   const scanned = new Set<string>();
   const namers = new Set<string>();
-  /** The files this node's own versions name, as of the last `namedFiles` */
+  /** The files this account's own versions name, as of the last `namedFiles` */
   let mine = new Set<string>();
   const namedFiles = (): Promise<Map<string, FileName[]>> =>
     (named ??= (async () => {
@@ -142,8 +142,8 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
         if (!('body' in version)) continue;
         const taken = filesOf(version);
         if (config.stands && !(await config.stands(version))) continue;
+        if (await config.mine?.(version)) for (const file of taken) own.add(file.hash);
         for (const file of taken) {
-          if (version.author === config.self) own.add(file.hash);
           const sizes = files.get(file.hash) ?? [];
           if (!sizes.some((known) => known.size === file.size)) sizes.push(file);
           files.set(file.hash, sizes);
@@ -347,26 +347,38 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
       if (mirrors && (await fromMirrors(file))) return;
       throw new Error('No peer or mirror holds that file now');
     })()
-      // Here whole, fetched or read: used now.
-      .then(() => adapter.put(usedKey(file.hash), utf8Encode(`${Date.now()} ${file.size}`)))
+      // Here whole, fetched or read: used now, at the size its list fits, whatever size was asked.
+      .then(async () => {
+        const held = await heldFile(file.hash);
+        if (held) await adapter.put(usedKey(file.hash), utf8Encode(`${Date.now()} ${held.size}`));
+      })
       .finally(() => fetching.delete(at));
     fetching.set(at, work);
     return work;
   }
 
+  /** Files being read now, and by how many reads: none is dropped meanwhile */
+  const reading = new Map<string, number>();
   /** A file's bytes as stored: held here, or fetched */
   async function read(file: FileName): Promise<Uint8Array> {
     const held = (await heldChunks(file)).size === chunkCount(file.size);
     // A peer is asked only for a file a version kept whole here names (spec 05 §16.6).
     if (!held && !(await isNamed(file))) throw new Error('No record here names that file');
-    await fetchFile(file);
-    const pieces: Uint8Array[] = [];
-    for (let index = 0; index < chunkCount(file.size); index++) {
-      const chunk = await adapter.get(chunkKey(file.hash, index));
-      if (!chunk) throw new Error('A chunk of that file went missing');
-      pieces.push(chunk);
+    reading.set(file.hash, (reading.get(file.hash) ?? 0) + 1);
+    try {
+      await fetchFile(file);
+      const pieces: Uint8Array[] = [];
+      for (let index = 0; index < chunkCount(file.size); index++) {
+        const chunk = await adapter.get(chunkKey(file.hash, index));
+        if (!chunk) throw new Error('A chunk of that file went missing');
+        pieces.push(chunk);
+      }
+      return concatBytes(...pieces);
+    } finally {
+      const left = (reading.get(file.hash) ?? 1) - 1;
+      if (left > 0) reading.set(file.hash, left);
+      else reading.delete(file.hash);
     }
-    return concatBytes(...pieces);
   }
 
   // ─── Messages ──────────────────────────────────────────────────────
@@ -520,12 +532,18 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
    * fetches them.
    */
   async function dropLeastUsed(keep: number): Promise<void> {
+    await namedFiles();
+    const parts = new Map<string, string[]>();
+    for (const key of await adapter.list('f/')) {
+      const [, id = '', part = ''] = key.split('/');
+      parts.set(id, [...(parts.get(id) ?? []), part]);
+    }
     const held: { id: string; at: number; size: number }[] = [];
     let total = 0;
-    for (const key of await adapter.list('f/')) {
-      const id = key.split('/')[1]!;
-      if (key !== usedKey(id) || mine.has(id) || !(await adapter.get(listKey(id)))) continue;
-      const [at = 0, size = 0] = utf8Decode((await adapter.get(key)) ?? new Uint8Array())
+    for (const [id, has] of parts) {
+      // Anything held of one fetched or read here, list or not; added here, it is this node's own.
+      if (mine.has(id) || has.includes('own') || !has.includes('used') || has.length === 1) continue;
+      const [at = 0, size = 0] = utf8Decode((await adapter.get(usedKey(id))) ?? new Uint8Array())
         .split(' ')
         .map(Number);
       held.push({ id, at, size });
@@ -534,6 +552,8 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
     held.sort((a, b) => a.at - b.at);
     for (const file of held) {
       if (total <= keep) return;
+      // One being fetched or read now is left for the next pass.
+      if (reading.has(file.id) || [...fetching.keys()].some((at) => at.startsWith(`${file.id}:`))) continue;
       const keys = (await adapter.list(`f/${file.id}/`)).filter((key) => key !== usedKey(file.id));
       await adapter.batch(keys.map((key) => ({ type: 'delete' as const, key })));
       total -= file.size;
@@ -549,24 +569,24 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
   let waitTimer: ReturnType<typeof setTimeout> | null = null;
   let closed = false;
 
-  /** Fetches a file at any size named for it, its own first if its list is here; whether it is here whole */
+  /** Fetches a file at any size named for it, its own first if its list is here; whether it was here, came, or neither */
   async function fetchAny(
     hash: string,
     sizes: ReadonlyArray<FileName>,
     peers: ReadonlyArray<string>,
     mirrors: boolean,
-  ): Promise<boolean> {
+  ): Promise<'here' | 'fetched' | null> {
     const held = await heldFile(hash);
-    if (held && (await isWhole(held))) return true;
+    if (held && (await isWhole(held))) return 'here';
     // The wrong sizes fail on the list.
     for (const file of held ? [held] : sizes) {
       const fetched = await fetchFile(file, peers, mirrors).then(
         () => true,
         () => false,
       );
-      if (fetched) return true;
+      if (fetched) return 'fetched';
     }
-    return false;
+    return null;
   }
 
   /**
@@ -594,9 +614,12 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
       const recent = Date.now() - (unfound.get(hash) ?? 0) < RETRY_MS;
       const peers = recent && !waited ? askable().filter((peer) => fresh.includes(peer)) : askable();
       if (recent && peers.length === 0) continue;
-      if (await fetchAny(hash, waited ? sizes : ahead, peers, !recent)) {
+      const got = await fetchAny(hash, waited ? sizes : ahead, peers, !recent);
+      if (got) {
         unfound.delete(hash);
         settle(hash, null);
+        // Within the limit after each file, not only after the pass: a flood never holds more than `keep`.
+        if (got === 'fetched' && !waited && config.limits) await dropLeastUsed(config.limits.keep);
       } else if (!recent) unfound.set(hash, Date.now());
     }
   }

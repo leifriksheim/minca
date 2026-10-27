@@ -342,14 +342,16 @@ type: ref.mime }))` shows it.
   while the writer is likely still connected. A file this sweep found
   nobody had is not asked of everyone again for 10 minutes, but is asked at
   once of each peer that connects meanwhile.
-- **A device's limits.** A node with `cache` (an app's device) limits the
-  files others wrote, in every space, the account's own too: it fetches
-  unread only files of up to 5 MiB, so photos and documents come ahead and
-  video when played, and past 256 MiB of them in a space it drops those
-  fetched or read longest ago. Files its own versions name are never
-  dropped. A dropped file keeps its `used` entry, so it is not fetched
-  unread again; reading it fetches it. A node without `cache`, a carrier or
-  host, fetches and keeps every file.
+- **A device's limits.** A node limits the files others wrote, in every
+  space: it fetches unread only files of up to 5 MiB, so photos and
+  documents come ahead and video when played, and past 256 MiB of them in a
+  space it drops those fetched or read longest ago, after each file it
+  fetches unread and on every pass. Files the account's own versions name
+  are never dropped, nor one being read. A dropped file keeps its `used`
+  entry, so it is not fetched unread again; reading it fetches it. It stays
+  in a data folder this node mirrors to until no version names it. A node
+  with `fetchFiles: 'all'`, a carrier or host, fetches and keeps every
+  file.
 - **Serving.** A `want-file` is answered with at most 4 chunks; the asker
   asks again for the rest, so a large file never floods a connection.
 - **Keeping.** About 2 s after records change, files no version kept whole
