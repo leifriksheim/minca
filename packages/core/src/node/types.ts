@@ -77,9 +77,10 @@ export interface NodeConfig {
   /** How often to look for writes another process made to a folder store. 0 disables. Default 2000. */
   readonly watchIntervalMs?: number;
   /**
-   * Fetch every file the records it keeps name, as soon as they are named:
-   * what a node keeping a space for others does. Without it, a file is
-   * fetched when it is read (spec 05 §16.6).
+   * Fetch and keep every file the records it keeps name, of any size: what a
+   * node keeping spaces for others does. Without it, files others wrote are
+   * fetched unread up to 5 MiB, and past 256 MiB in a space those used
+   * longest ago are dropped (spec 05 §16.6).
    */
   readonly fetchFiles?: 'all';
   /** Hold only the collections this node uses, once a space names a keeper to hold the rest */

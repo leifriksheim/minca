@@ -1291,15 +1291,17 @@ by them); a peer that holds or serves a file never checks them.
   frame at a time: a receiver handles a peer's messages in order (§6.1), so
   only the sender keeps a file from holding up a sync round.
 
-**Keeping.** A node keeps a file's chunks while it keeps whole (§10) a
-version naming it, and drops them when it keeps none: a file goes with the
-body that names it, so a superseded version's stub frees its files. A file
+**Keeping.** A node keeps a file's chunks at most while it keeps whole
+(§10) a version naming it, and drops them when it keeps none: a file goes
+with the body that names it, so a superseded version's stub frees its
+files. Before then it MAY drop a file it did not add, to fetch again when
+read. A file
 a node has added and not yet named in a version it wrote is its own to
 keep. A node need not fetch, serve or keep the files of a version that does
 not stand ([02](02-records.md) §9): one a revoked key or a removed member
 wrote, though it is kept whole, holds nobody's bandwidth or storage. A node
 MUST NOT refuse a version because it lacks its files: a file's absence is
-about availability, never validity. Which files a node fetches, and when,
+about availability, never validity. Which files a node fetches and keeps, and when,
 is its own ([Sync and storage in the library](../packages/core/docs/storage.md#files)).
 
 **Mirrors.** A store writer keeps a file it holds at

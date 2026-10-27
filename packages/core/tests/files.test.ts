@@ -36,10 +36,17 @@ import { memoryStores } from './helpers/memory-stores.js';
 import { joined } from './helpers/joined.js';
 import { until } from './helpers/until.js';
 import { createMemoryAdapter } from './helpers/memory-adapter.js';
+import type { StorageAdapter } from '../src/types.js';
+import type { SyncMessageBody } from '../src/sync/sync-messages.js';
 import { createStorageProvider, type StorageProvider } from '../src/storage/storage-provider.js';
 import { createMemoryBlobStore } from '../src/storage/blob/memory.js';
 import { deleteMirrored } from '../src/storage/mirror.js';
-import { createSpaceFiles, type SealedFile, type SpaceFiles } from '../src/files/space-files.js';
+import {
+  createSpaceFiles,
+  type SealedFile,
+  type SpaceFiles,
+  type SpaceFilesConfig,
+} from '../src/files/space-files.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import { createSigner } from '../src/schema/signer.js';
@@ -160,7 +167,7 @@ describe('files between nodes', () => {
     await Promise.all(open.splice(0).map((node) => node.close()));
   });
 
-  async function pair(options: { keeper?: boolean } = {}) {
+  async function pair() {
     const hub = createFakeHub({ latencyMs: 1 });
     const start = async (extra: Partial<Parameters<typeof createNode>[0]> = {}) => {
       const manager = createIdentityManager();
@@ -178,7 +185,7 @@ describe('files between nodes', () => {
       return node;
     };
     const alice = await start();
-    const bob = await start(options.keeper ? { fetchFiles: 'all' } : {});
+    const bob = await start();
     const space = await alice.spaces.create({ name: 'Photos', visibility: 'private', ...team });
     await bob.spaces.join(await alice.spaces.invite(space.id, { role: 'editor' }));
     await joined(bob, space.id);
@@ -200,8 +207,8 @@ describe('files between nodes', () => {
     assert.deepEqual(await bob.records.readFile(space.id, got!.body!.photo), photo);
   });
 
-  test('a keeper fetches a named file before anyone reads it, and serves it when the writer is gone', async () => {
-    const { alice, bob, space } = await pair({ keeper: true });
+  test('a node fetches a named file before anyone reads it, and serves it when the writer is gone', async () => {
+    const { alice, bob, space } = await pair();
     const ref = await alice.records.addFile(space.id, bytesOf(CHUNK + 10), { mime: 'video/mp4' });
     const record = await alice.records.put(space.id, 'app.clip', { clip: ref });
     await until(
@@ -209,7 +216,7 @@ describe('files between nodes', () => {
       5000,
       'the record to arrive',
     );
-    // Read from the keeper alone once it has had time to fetch: the writer has left.
+    // Read from the other node alone once it has had time to fetch: the writer has left.
     await new Promise((resolve) => setTimeout(resolve, 3000));
     await alice.close();
     assert.deepEqual(await bob.records.readFile(space.id, ref), bytesOf(CHUNK + 10));
@@ -463,5 +470,326 @@ describe('what a peer refuses', () => {
     ]);
     await name(b.storage, ref);
     assert.deepEqual(await files.b.open(ref), bytesOf(CHUNK + 5));
+  });
+
+  /** A writer and a reader of one space, apart until `meet`; `asked` counts the reader's wants */
+  function apart(
+    options: Partial<SpaceFilesConfig> = {},
+    /** Whether a message reaches the other side */
+    deliver?: (to: 'a' | 'b', message: SyncMessageBody) => boolean,
+  ) {
+    const make = () => {
+      const adapter = createMemoryAdapter();
+      return { adapter, storage: createStorageProvider(adapter) };
+    };
+    const a = make();
+    const b = make();
+    let met = false;
+    const counts = { asked: 0 };
+    let queue: Promise<void> = Promise.resolve();
+    const service = (side: typeof a, other: 'a' | 'b', more: Partial<SpaceFilesConfig>) =>
+      createSpaceFiles({
+        space: 'demo',
+        adapter: side.adapter,
+        storage: side.storage,
+        send: (_peer, message) => {
+          if (other === 'a' && message.type === 'want-file') counts.asked++;
+          if (deliver?.(other, message) === false) return;
+          queue = queue.then(() =>
+            files[other].onMessage(other === 'a' ? 'b' : 'a', structuredClone(message)),
+          );
+        },
+        peers: () => (met ? [other] : []),
+        ...more,
+      });
+    const files: { a: SpaceFiles; b: SpaceFiles } = {
+      a: service(a, 'b', {}),
+      b: service(b, 'a', options),
+    };
+    const meet = () => {
+      met = true;
+      files.b.joined('a');
+    };
+    return { a, b, files, counts, meet };
+  }
+  const pending = (promise: Promise<unknown>) =>
+    Promise.race([
+      promise.then(() => 'settled'),
+      new Promise((resolve) => setTimeout(resolve, 50, 'pending')),
+    ]);
+
+  test('a read waits for a file nobody has, and opens once a peer that has it connects', async () => {
+    const { a, b, files, meet } = apart();
+    const ref = await files.a.add(bytesOf(CHUNK + 7));
+    await name(a.storage, ref);
+    await name(b.storage, ref);
+    const reading = files.b.open(ref);
+    assert.equal(await pending(reading), 'pending');
+    meet();
+    await files.b.fetchMissing();
+    assert.deepEqual(await reading, bytesOf(CHUNK + 7));
+  });
+
+  test('a waiting read is asked again of a peer already connected, which has the file since', async () => {
+    const { a, b, files, meet } = apart();
+    meet();
+    const ref = await files.a.add(bytesOf(300));
+    await name(b.storage, ref);
+    // The peer holds the bytes but no version it keeps names them yet: it serves nothing.
+    const reading = files.b.open(ref);
+    assert.equal(await pending(reading), 'pending');
+    await name(a.storage, ref);
+    files.a.changed();
+    await files.b.fetchMissing();
+    assert.deepEqual(await reading, bytesOf(300));
+  });
+
+  test('a read of a size the file is not ends, once the file itself is here', async () => {
+    const { a, b, files, meet } = apart();
+    meet();
+    const ref = await files.a.add(bytesOf(300));
+    const wrong = { ...ref, size: ref.size + CHUNK };
+    await name(a.storage, ref);
+    await name(b.storage, ref);
+    await name(b.storage, wrong, 'the wrong size');
+    assert.deepEqual(await files.b.open(ref), bytesOf(300));
+    await assert.rejects(files.b.open(wrong));
+  });
+
+  test('a wrong size another member names, read first, keeps no read of the real file waiting', async () => {
+    const { a, b, files, meet } = apart();
+    const ref = await files.a.add(bytesOf(300));
+    const wrong = { ...ref, size: ref.size + CHUNK };
+    await name(a.storage, ref);
+    await name(b.storage, ref);
+    await name(b.storage, wrong, "someone else's post");
+    const theirs = files.b.open(wrong).then(
+      () => 'opened',
+      () => 'refused',
+    );
+    const real = files.b.open(ref);
+    assert.equal(await pending(real), 'pending');
+    meet();
+    await files.b.fetchMissing();
+    assert.deepEqual(await real, bytesOf(300));
+    assert.equal(await theirs, 'refused');
+  });
+
+  test('a node fetches what nobody had from a peer that connects later, and asks no one else again', async () => {
+    const { a, b, files, counts, meet } = apart();
+    const ref = await files.a.add(bytesOf(300));
+    await name(a.storage, ref);
+    await name(b.storage, ref);
+    await files.b.fetchMissing();
+    assert.equal(await b.adapter.get(`f/${ref.hash}/0`), null);
+    // Nobody had it: a pass on the next change asks no one again.
+    await files.b.fetchMissing();
+    assert.equal(counts.asked, 0);
+    meet();
+    await files.b.fetchMissing();
+    assert.ok(await b.adapter.get(`f/${ref.hash}/0`));
+    assert.deepEqual(await files.b.open(ref), bytesOf(300));
+  });
+
+  test('a device fetches unread only the files its limit lets come ahead; a larger one when read', async () => {
+    const { a, b, files, counts, meet } = apart({ limits: { ahead: CHUNK, keep: 10 * CHUNK } });
+    const small = await files.a.add(bytesOf(300));
+    const large = await files.a.add(bytesOf(2 * CHUNK));
+    for (const ref of [small, large]) {
+      await name(a.storage, ref);
+      await name(b.storage, ref);
+    }
+    meet();
+    await files.b.fetchMissing();
+    assert.ok(await b.adapter.get(`f/${small.hash}/0`));
+    assert.equal(counts.asked, 1);
+    assert.deepEqual(await files.b.open(large), bytesOf(2 * CHUNK));
+  });
+
+  test('past its limit a device drops what others wrote and was used longest ago, never its own, and fetches it again only when read', async () => {
+    const { a, b, files, counts, meet } = apart({ limits: { ahead: CHUNK, keep: (5 * CHUNK) / 2 } });
+    meet();
+    const theirs: SealedFile[] = [];
+    for (const n of [1, 2, 3]) {
+      const ref = await files.a.add(bytesOf(CHUNK - 100 - n));
+      await name(a.storage, ref);
+      await name(b.storage, ref);
+      files.a.changed();
+      files.b.changed();
+      await files.b.fetchMissing();
+      // Used one after another: the first longest ago.
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      theirs.push(ref);
+    }
+    const mine = await files.b.add(bytesOf(CHUNK - 50));
+    await name(b.storage, mine, 'my photo');
+    files.b.changed();
+    await files.b.fetchMissing();
+    const held = async (ref: SealedFile) => !!(await b.adapter.get(`f/${ref.hash}/0`));
+    assert.deepEqual(
+      await Promise.all([...theirs, mine].map(held)),
+      [false, true, true, true],
+      'the oldest of theirs goes; mine stays, though it is past the limit with it',
+    );
+    const asked = counts.asked;
+    await files.b.fetchMissing();
+    assert.equal(counts.asked, asked, 'what was dropped is not fetched again unread');
+    assert.deepEqual(await files.b.open(theirs[0]!), bytesOf(CHUNK - 101));
+  });
+
+  /** Bytes of chunks a store holds: what the limit counts, lists aside */
+  const heldBytes = async (adapter: StorageAdapter) => {
+    let total = 0;
+    for (const key of await adapter.list('f/'))
+      if (/\/\d+$/.test(key)) total += (await adapter.get(key))?.length ?? 0;
+    return total;
+  };
+
+  test('a flood of small files fetched in one pass leaves a device within its limit', async () => {
+    const keep = 2 * CHUNK;
+    const { a, b, files, meet } = apart({ limits: { ahead: CHUNK, keep } });
+    meet();
+    for (let n = 0; n < 12; n++) {
+      const ref = await files.a.add(bytesOf(CHUNK - 200 - n));
+      await name(a.storage, ref);
+      await name(b.storage, ref);
+    }
+    // One pass, and no record change after it to tidy.
+    await files.b.tidy();
+    await files.b.fetchMissing();
+    assert.ok((await heldBytes(b.adapter)) <= keep);
+  });
+
+  test('a file named at a smaller size, read, still counts at its own size', async () => {
+    const keep = 2 * CHUNK;
+    const { a, b, files, meet } = apart({ limits: { ahead: CHUNK, keep } });
+    meet();
+    for (let n = 0; n < 3; n++) {
+      const ref = await files.a.add(bytesOf(3 * CHUNK + n));
+      await name(a.storage, ref);
+      await name(b.storage, ref);
+      files.a.changed();
+      files.b.changed();
+      await files.b.open(ref);
+      // Someone's post names the same id at 1 byte; showing it reads it.
+      await name(b.storage, { ...ref, size: 1 }, "someone else's post");
+      files.b.changed();
+      await files.b.open({ ...ref, size: 1 }).catch(() => {});
+    }
+    await files.b.fetchMissing();
+    // Files of 4 chunks each: only the newest, past the limit alone, may stay till it is read no more.
+    assert.ok((await heldBytes(b.adapter)) <= keep + 4 * CHUNK);
+  });
+
+  test('a limit counts files at their size: a flood of tiny ones drops nobody else’s', async () => {
+    const { a, b, files, meet } = apart({ limits: { ahead: CHUNK, keep: 2 * CHUNK } });
+    meet();
+    const photo = await files.a.add(bytesOf(CHUNK - 100));
+    await name(a.storage, photo);
+    await name(b.storage, photo);
+    await files.b.fetchMissing();
+    for (let n = 0; n < 300; n++) {
+      const tiny = await files.a.add(new Uint8Array(0));
+      await name(a.storage, tiny);
+      await name(b.storage, tiny);
+    }
+    files.a.changed();
+    files.b.changed();
+    await files.b.fetchMissing();
+    assert.ok(await b.adapter.get(`f/${photo.hash}/0`));
+  });
+
+  test('files a member sends all but the last chunk of count against the limit, and go first', async () => {
+    const keep = 2 * CHUNK;
+    // The last chunk of each never comes.
+    const { a, b, files, meet } = apart(
+      { limits: { ahead: 4 * CHUNK, keep } },
+      (to, message) => !(to === 'b' && message.type === 'file' && message.chunk === 2),
+    );
+    meet();
+    for (let n = 0; n < 10; n++) {
+      const ref = await files.a.add(bytesOf(3 * CHUNK - 500 - n));
+      await name(a.storage, ref);
+      await name(b.storage, ref);
+    }
+    await files.b.fetchMissing();
+    await files.b.fetchMissing();
+    assert.ok((await heldBytes(b.adapter)) <= keep);
+  });
+
+  test('a file dropped and read again while a pass runs is not dropped from under the read', async () => {
+    let armed = false;
+    const { a, b, files, meet } = apart({ limits: { ahead: CHUNK, keep: 2 * CHUNK } }, (to, message) => {
+      // Records arrive mid-fetch: the pass tidies while the read fetches.
+      if (armed && to === 'b' && message.type === 'file' && message.chunk === 1 && message.at === 0) {
+        armed = false;
+        void files.b.fetchMissing();
+      }
+      return true;
+    });
+    meet();
+    const ref = await files.a.add(bytesOf(3 * CHUNK));
+    await name(a.storage, ref);
+    await name(b.storage, ref);
+    await files.b.open(ref);
+    await files.b.fetchMissing();
+    assert.equal(await b.adapter.get(`f/${ref.hash}/0`), null, 'past the limit alone, dropped once read');
+    armed = true;
+    assert.deepEqual(await files.b.open(ref), bytesOf(3 * CHUNK));
+    assert.ok(
+      await b.adapter.get(`f/${ref.hash}/list`),
+      'its list with its chunks, so it can be served and dropped',
+    );
+  });
+
+  test('a read deciding whether to wait as the space closes ends too', async () => {
+    const writer = apart().files.a;
+    const ref = await writer.add(bytesOf(300));
+    const adapter = createMemoryAdapter();
+    const storage = createStorageProvider(adapter);
+    await name(storage, ref);
+    let files: SpaceFiles | null = null;
+    let armed = false;
+    files = createSpaceFiles({
+      space: 'demo',
+      // A record arrives as the read looks for the file, and the space closes while it works out what is named.
+      adapter: {
+        ...adapter,
+        get: async (key) => {
+          if (key === `f/${ref.hash}/list` && !armed) {
+            armed = true;
+            files?.changed();
+          }
+          return adapter.get(key);
+        },
+      },
+      storage: {
+        ...storage,
+        versionIds: async () => {
+          if (armed) files?.close();
+          return storage.versionIds();
+        },
+      },
+      send: () => {},
+      peers: () => [],
+    });
+    const reading = files.open(ref).then(
+      () => 'opened',
+      () => 'refused',
+    );
+    assert.equal(await pending(reading), 'settled');
+    assert.ok(armed);
+    assert.equal(await reading, 'refused');
+  });
+
+  test('a waiting read ends when the space closes', async () => {
+    const { a, b, files } = apart();
+    const ref = await files.a.add(bytesOf(300));
+    await name(a.storage, ref);
+    await name(b.storage, ref);
+    const reading = files.b.open(ref);
+    assert.equal(await pending(reading), 'pending');
+    files.b.close();
+    await assert.rejects(reading, /closed/);
   });
 });

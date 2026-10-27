@@ -172,7 +172,7 @@ import {
 import { FOUNDER } from '../space/space-manager.js';
 import { createSyncEngine, type Holds } from '../sync/sync-engine.js';
 import { SYNC_PROTOCOL_VERSION } from '../sync/sync-messages.js';
-import { createSpaceFiles, type SealedFile, type SpaceFiles } from '../files/space-files.js';
+import { createSpaceFiles, DEVICE_LIMITS, type SealedFile, type SpaceFiles } from '../files/space-files.js';
 import { fileRefsIn, MAX_FILES } from '../files/file-id.js';
 import type { NetworkMessage, PeerInfo } from '../types.js';
 import type { StoreFactory } from './stores.js';
@@ -394,7 +394,7 @@ export interface SpaceRuntimeDeps {
   readonly cache?: CacheConfig;
   /** Told of every version a peer sent that was taken in — what a carrier matches subscriptions against */
   readonly onArrived?: (version: Version) => void;
-  /** Fetch every file the space's records name, as a keeper does, rather than only those read (spec 05 §16.6) */
+  /** Fetch and keep every file the space's records name, as a keeper does, rather than within a device's limits (spec 05 §16.6) */
   readonly fetchFiles?: 'all';
 }
 
@@ -2154,7 +2154,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       filesTimer = null;
       filesPass = (async () => {
         await spaceFiles?.tidy();
-        if (deps.fetchFiles === 'all') await spaceFiles?.fetchAll();
+        await spaceFiles?.fetchMissing();
       })()
         .catch(() => {
           // A peer or mirror out of reach; the next change tries again.
@@ -2634,6 +2634,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       const standing = await standingOf(version);
       return standing.ok || !!standing.withdrawn;
     },
+    // Files follow records: every file a version kept whole names is fetched, within a device's limits.
+    ...(deps.fetchFiles === 'all' ? {} : { limits: DEVICE_LIMITS }),
   });
 
   const sync = createSyncEngine({
@@ -2840,6 +2842,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       sync.addPeer(info.did);
       // Reconcile at once rather than waiting for the heartbeat.
       sync.notifyPeers([info.did]);
+      // It may hold a file nobody else had.
+      spaceFiles?.joined(info.did);
+      filesChanged();
       emit({ type: 'status', space: space.id });
       // The key may have changed between checking it and letting it in.
       void letGoOfOutsiders().catch(() => {});

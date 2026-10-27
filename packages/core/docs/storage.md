@@ -326,16 +326,35 @@ How this library does the rest:
   (`fileRefsIn`, at most 16), so the envelope and the body always agree.
 - **Reading.** `records.readFile(space, ref)` gives the bytes: held here, or
   fetched from connected peers, one after another, then from mirrors,
-  checking every chunk. It asks only for files a version this node keeps
-  whole names. For a picture, `URL.createObjectURL(new Blob([bytes], { type:
-ref.mime }))` shows it.
+  checking every chunk. When none has them it waits, asking everyone again
+  whenever records change or a peer connects, and every 15 s, and resolves
+  once one does. It rejects for a file no version this node keeps whole
+  names, one whose id is here whole yet won't open as named, and when the
+  space closes. For a picture, `URL.createObjectURL(new Blob([bytes], {
+type: ref.mime }))` shows it.
 - **Where chunks live.** Entries in the space's own store: `f/<id>/list`,
-  `f/<id>/<n>`, and `f/<id>/own` with the time a file was added and not yet
-  named. A data folder keeps these in this device's own stores, not the
+  `f/<id>/<n>`, `f/<id>/own` with the time a file was added here (0 once a
+  version names it), and `f/<id>/used` with when it was last fetched or
+  read. A data folder keeps these in this device's own stores, not the
   folder.
-- **What a node fetches.** A node with `fetchFiles: 'all'` (carriers and
-  hosts) fetches every named file about 2 s after its records change. Any
-  other node fetches a file when it is read.
+- **What a node fetches.** Files follow records. A node fetches every file
+  named by a version it keeps whole about 2 s after its records change,
+  while the writer is likely still connected. A file this sweep found
+  nobody had is not asked of everyone again for 10 minutes, but is asked at
+  once of each peer that connects meanwhile.
+- **A device's limits.** A node limits the files it did not add, in every
+  space: it fetches unread only files of up to 5 MiB, so photos and
+  documents come ahead and video when played. Past 256 MiB of them in a
+  space, counting each at the size its list proves, or every chunk held of
+  one never whole, it drops those fetched or opened longest ago, down to
+  90%, at the start of each pass and as it fetches. One never whole goes
+  first. A file added here is never dropped, nor one being fetched or read;
+  one larger than the limit is dropped on the pass after it is read, and
+  fetched again at the next read. A dropped file that was whole keeps its
+  `used` entry, so it is not fetched unread again while a version names it;
+  reading it fetches it. The limit is per space, so a device in many spaces
+  holds more. A node with `fetchFiles: 'all'`, a carrier or host, fetches
+  and keeps every file.
 - **Serving.** A `want-file` is answered with at most 4 chunks; the asker
   asks again for the rest, so a large file never floods a connection.
 - **Keeping.** About 2 s after records change, files no version kept whole
