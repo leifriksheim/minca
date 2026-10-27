@@ -44,6 +44,39 @@ Through `collections_propose`, a standard collection may be given by name
 (`"std.task"`): `standardCollections` puts the library's definition in its
 place.
 
+## Trying a contract before proposing it
+
+Anyone in a space can write records directly, not only through the app that
+proposed a collection, so an app's own checks stop nobody. What records must
+keep to for the app to mean anything (whose turn it is, a legal move, a
+balance) belongs in the collection's [contract](collections.md#contracts),
+which every reader judges.
+
+A contract written wrong refuses fair moves, or lets a cheat count, and
+nothing shows it until someone plays. So `collections_propose` takes
+`examples`: versions it runs through their collection's contract, as a reader
+would, before writing anything.
+
+```json
+"examples": [
+  { "collection": "app.counter", "body": { "n": 0 }, "expect": "pass" },
+  { "collection": "app.counter", "prev": { "n": 4 }, "body": { "n": 5 }, "expect": "pass" },
+  { "collection": "app.counter", "prev": { "n": 4 }, "body": { "n": 9 }, "expect": "fail" }
+]
+```
+
+- `prev` is the body of the version before, for a contract that reads
+  `prev`; without it the example is a first version. `author` is an account
+  DID, the proposer's when left out. `member(did)` asks the space as it is.
+- If any example comes out other than expected, nothing is proposed, and the
+  error says which and why.
+- A collection with a contract that no example names is still proposed, with
+  a warning saying so.
+- An example can't give cited versions, so one whose contract cites any never
+  counts as `pass`.
+
+_Source: `packages/core/src/schemas/blueprints.ts` (`tryContracts`), `packages/core/src/node/actions.ts` (`collections_propose`). Tests: `packages/core/tests/contracts.test.ts` ("checks: tried before they are proposed")._
+
 ## Saying how they are meant to be used
 
 A definition can't say "write one rota for each week, and say in it who does

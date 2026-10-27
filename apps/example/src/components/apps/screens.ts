@@ -157,6 +157,7 @@ An error the screen doesn't catch is shown to the person, so they can tell you a
 Links look like { rel: "game", to: "<record key>" }, with the roles the definition declares.
 Draw everything from minca.list(...) and redraw on minca.onChange — other people's moves arrive that way.
 Two people can write at once: design collections so that clashes resolve by the rules (onePer, each person changing only their own records), not by the screen.
+Anyone can also write records without your screen, and a record whose collection changed keeps its old shape: check a body has what you read before reading it.
 No other libraries can be loaded.
 
 ${UI_GUIDE}`;

@@ -31,6 +31,7 @@ import { isObject } from '../utils/guards.js';
 import { canonicalize } from '../schema/version.js';
 import { describeCollection } from '../records/describe.js';
 import { storedContract } from '../records/contract-builder.js';
+import { runContracts } from '../records/contracts.js';
 import { blueprint, type Blueprint, type DraftCollection } from './library/collections.js';
 
 /** Why this can't be a blueprint, or null when it can */
@@ -58,6 +59,77 @@ export function checkBlueprint(value: unknown): string | null {
     }
   }
   return null;
+}
+
+/** A version that a proposed collection's contract must let count, or must not */
+export interface ContractExample {
+  readonly collection: string;
+  readonly body: unknown;
+  /** The body of the version before, for a contract that reads `prev`; none for a first version */
+  readonly prev?: unknown;
+  /** Who writes it, an account DID; the proposer when left out */
+  readonly author?: string;
+  readonly links?: ReadonlyArray<{ readonly rel: string; readonly to: string }>;
+  readonly expect: 'pass' | 'fail';
+}
+
+/**
+ * Runs each example through its collection's contract as every reader would,
+ * and says which came out other than expected: before anyone applies a
+ * contract that refuses a fair move, or lets a cheat count. A cited version
+ * can't be given, so an example whose contract cites one is never `pass`.
+ */
+export async function tryContracts(
+  plan: Blueprint,
+  examples: ReadonlyArray<ContractExample>,
+  scope: { readonly proposer: string; readonly member: (did: string) => boolean },
+): Promise<string[]> {
+  const wrong: string[] = [];
+  for (const [index, example] of examples.entries()) {
+    const at = `examples[${index}] (${example.collection})`;
+    const draft = plan.collections.find((c) => c.name === example.collection);
+    if (!draft) {
+      wrong.push(`${at}: the blueprint has no such collection`);
+      continue;
+    }
+    const author = example.author ?? scope.proposer;
+    const prev =
+      example.prev === undefined
+        ? null
+        : {
+            id: 'example-prev',
+            key: 'example',
+            collection: draft.name,
+            seq: 0,
+            author,
+            createdAt: '',
+            deleted: false,
+            body: example.prev,
+            links: [],
+          };
+    const outcome = await runContracts(draft.contract?.check ?? [], {
+      values: {
+        body: example.body,
+        links: example.links ?? [],
+        key: 'example',
+        seq: prev ? 1 : 0,
+        collection: draft.name,
+        author,
+        creator: author,
+        createdAt: '',
+        prev,
+      },
+      cite: async () => ({ unreadable: true }),
+      member: scope.member,
+    });
+    const passed = 'passed' in outcome && outcome.passed;
+    if (passed && example.expect === 'fail') wrong.push(`${at}: should not count, but its contract lets it`);
+    if (!passed && example.expect === 'pass')
+      wrong.push(
+        `${at}: should count, but ${'reason' in outcome ? `its contract refuses it: “${outcome.reason}”` : 'it cites versions, which an example can’t give'}`,
+      );
+  }
+  return wrong;
 }
 
 /** The parts of a definition that say what it is, rather than what it is called */

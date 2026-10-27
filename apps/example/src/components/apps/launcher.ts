@@ -254,6 +254,15 @@ const LAUNCHER_GUIDE = `To make an app for this space that people open from its 
 3. If plain lists and forms can't show it (a game board, a calendar, a whiteboard), add "screen": its own HTML UI, one
    document, and, only if it must reach the network, "network": the exact origins. The screen is described below.
 
+Your screen is not the only way in: anyone in the space can write any record directly, through an agent or another
+app. Ask what a member could do that way. Where the app means nothing unless records keep a rule their shape and
+rules can't say (whose turn it is, a legal move, a vote counted once), give the collection a "contract", as
+collections_propose describes, and try it there with "examples": fair moves that must count and cheats that must not.
+A screen only shows what the contract allows; it is not what stops a cheat.
+
+Records don't change when their collection does. Change a collection that has records only by adding optional
+fields; for anything else, give the new shape a name of its own, and let the old app finish what it holds.
+
 Nothing changes until someone who may define collections adds it from the Apps page: that applies the blueprint and
 writes the record again as theirs. A launcher.app record that person did not write is only a proposal, and its screen
 never runs. To change an app that is already added, write a new launcher.app record with "updates": the key of the one
@@ -441,6 +450,7 @@ const toDraft = (held: NodeCollection): DraftCollection | null =>
         history: held.history,
         links: held.links,
         rules: held.rules,
+        ...(held.contract !== undefined ? { contract: held.contract } : {}),
         topics: held.topics,
       };
 

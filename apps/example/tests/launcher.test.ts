@@ -345,6 +345,28 @@ describe('the launcher', () => {
     assert.ok((await alice.node.collections.list(other)).some((c) => c.name === 'carpool.trip'));
   });
 
+  test('a copied app keeps its contract, so a cheat counts no more there than here', async () => {
+    const { alice, space } = await setup();
+    const check = [
+      { that: 'prev == null ? body.n == 0.0 : body.n == prev.body.n + 1.0', else: 'Counts up by one' },
+    ];
+    await alice.node.collections.define(space, {
+      name: 'app.counter',
+      schema: { type: 'object' },
+      contract: { check },
+    });
+    const app = await alice.node.records.put(space, launcherApp, {
+      title: 'Counter',
+      collections: ['app.counter'],
+    });
+    const { id: other } = await alice.node.spaces.create({ name: 'Other gym', visibility: 'public' });
+    await copyApp(alice.node, space, app, other);
+    const there = await launcherOf(alice.node, other);
+    await addMade(alice.node, other, there.proposed[0]!, there.placed);
+    const copied = (await alice.node.collections.list(other)).find((c) => c.name === 'app.counter');
+    assert.deepEqual(copied?.contract?.check, check);
+  });
+
   test('a made app names its collections, and notifies only about those', () => {
     const app = { title: 'Carpool', collections: ['carpool.trip'] };
     assert.equal(checkLauncherApp(app), null);
