@@ -111,16 +111,26 @@ function oneOf<const T extends string>(input: Record<string, unknown>, key: stri
 }
 
 const isBlueprint = (value: unknown): value is Blueprint => checkBlueprint(value) === null;
+const isDid = (value: unknown) => value === undefined || typeof value === 'string';
+const isLinks = (value: unknown) =>
+  value === undefined ||
+  (Array.isArray(value) &&
+    value.every((l) => isRecord(l) && typeof l.rel === 'string' && typeof l.to === 'string'));
 const isExample = (value: unknown): value is ContractExample =>
   isRecord(value) &&
   typeof value.collection === 'string' &&
   isRecord(value.body) &&
-  (value.prev === undefined || isRecord(value.prev)) &&
-  (value.author === undefined || typeof value.author === 'string') &&
-  (value.links === undefined ||
-    (Array.isArray(value.links) &&
-      value.links.every((l) => isRecord(l) && typeof l.rel === 'string' && typeof l.to === 'string'))) &&
+  isDid(value.author) &&
+  isLinks(value.links) &&
+  (value.prev === undefined ||
+    (isRecord(value.prev) &&
+      isRecord(value.prev.body) &&
+      isDid(value.prev.author) &&
+      isLinks(value.prev.links))) &&
+  isDid(value.creator) &&
   (value.expect === 'pass' || value.expect === 'fail');
+const EXAMPLE_SHAPE =
+  '{ collection, body, author?, links?, prev?: { body, author?, links? }, creator?, expect: "pass" | "fail" }';
 
 const links = {
   type: 'array',
@@ -593,9 +603,10 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
         examples: {
           type: 'array',
           description:
-            'Versions to try the contracts on before proposing, each { collection, body, prev?, author?, links?, expect: ' +
-            '"pass" | "fail" }: prev is the body of the version before, author an account DID (you when left out). Give ' +
-            'fair ones that must count and cheats that must not; if any comes out otherwise, nothing is proposed.',
+            `Versions to try the schemas and contracts on before proposing, each ${EXAMPLE_SHAPE}: author is an ` +
+            'account DID (you when left out), prev the version before (by the same author unless it names one), creator ' +
+            'who wrote the first version. Give fair ones that must count and cheats that must not; if any comes out ' +
+            'otherwise, nothing is proposed. Rules (onePer, fixed, final) and who may write are not tried.',
         },
       },
       required: ['space', 'title', 'collections'],
@@ -612,9 +623,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
       const given: unknown[] = Array.isArray(input.examples) ? input.examples : [];
       const examples = given.filter(isExample);
       if (examples.length < given.length)
-        throw new Error(
-          `examples[${given.findIndex((e) => !isExample(e))}] must be { collection, body, prev?, author?, links?, expect: "pass" | "fail" }`,
-        );
+        throw new Error(`examples[${given.findIndex((e) => !isExample(e))}] must be ${EXAMPLE_SHAPE}`);
       const members = (await node.spaces.access(spaceId)).members;
       const wrong = await tryContracts(body, examples, {
         proposer: node.did,
