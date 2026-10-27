@@ -518,6 +518,32 @@ describe('what a peer refuses', () => {
     assert.deepEqual(await reading, bytesOf(CHUNK + 7));
   });
 
+  test('a waiting read is asked again of a peer already connected, which has the file since', async () => {
+    const { a, b, files, meet } = apart();
+    meet();
+    const ref = await files.a.add(bytesOf(300));
+    await name(b.storage, ref);
+    // The peer holds the bytes but no version it keeps names them yet: it serves nothing.
+    const reading = files.b.open(ref);
+    assert.equal(await pending(reading), 'pending');
+    await name(a.storage, ref);
+    files.a.changed();
+    await files.b.fetchMissing();
+    assert.deepEqual(await reading, bytesOf(300));
+  });
+
+  test('a read of a size the file is not ends, once the file itself is here', async () => {
+    const { a, b, files, meet } = apart();
+    meet();
+    const ref = await files.a.add(bytesOf(300));
+    const wrong = { ...ref, size: ref.size + CHUNK };
+    await name(a.storage, ref);
+    await name(b.storage, ref);
+    await name(b.storage, wrong, 'the wrong size');
+    assert.deepEqual(await files.b.open(ref), bytesOf(300));
+    await assert.rejects(files.b.open(wrong));
+  });
+
   test('a node holding the whole space fetches what nobody had from a peer that connects later, and asks no one else again', async () => {
     const { a, b, files, counts, meet } = apart({ holdsAll: true });
     const ref = await files.a.add(bytesOf(300));

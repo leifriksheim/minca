@@ -326,24 +326,25 @@ How this library does the rest:
   (`fileRefsIn`, at most 16), so the envelope and the body always agree.
 - **Reading.** `records.readFile(space, ref)` gives the bytes: held here, or
   fetched from connected peers, one after another, then from mirrors,
-  checking every chunk. When none has them it waits, and resolves once a
-  peer that has them connects; it rejects only for a file no version this
-  node keeps whole names, one that won't open, or when the space closes. For
-  a picture, `URL.createObjectURL(new Blob([bytes], { type: ref.mime }))`
-  shows it.
+  checking every chunk. When none has them it waits, asking everyone again
+  whenever records change or a peer connects, and every 15 s, and resolves
+  once one does. It rejects for a file no version this node keeps whole
+  names, one whose id is here whole yet won't open as named, and when the
+  space closes. For a picture, `URL.createObjectURL(new Blob([bytes], {
+type: ref.mime }))` shows it.
 - **Where chunks live.** Entries in the space's own store: `f/<id>/list`,
   `f/<id>/<n>`, and `f/<id>/own` with the time a file was added and not yet
   named. A data folder keeps these in this device's own stores, not the
   folder.
 - **What a node fetches.** Files follow records. A node holding the whole
-  space (a carrier, a host, or any node with no `cache`, or in a space naming
-  no keeper; see [holding part of a space](node.md#holding-part-of-a-space))
-  fetches every named file about 2 s after its records change, while the
-  writer is likely still connected. A node holding part of a space fetches a
-  file when it is read, from the keeper that holds it whole. Whatever nobody
-  had is not asked of everyone again for 10 minutes, but is asked of each
-  peer as it connects, so a file reaches whoever wants it as soon as anyone
-  who has it is around.
+  space fetches every named file about 2 s after its records change, while
+  the writer is likely still connected: a carrier or host, any node without
+  `cache`, the account's own spaces, and every node in a space naming no
+  keeper ([holding part of a space](node.md#holding-part-of-a-space)). A
+  node holding part of a space fetches a file when it is read, from
+  whichever peer or mirror has it, usually the keeper. A file this sweep
+  found nobody had is not asked of everyone again for 10 minutes, but is
+  asked at once of each peer that connects meanwhile.
 - **Serving.** A `want-file` is answered with at most 4 chunks; the asker
   asks again for the rest, so a large file never floods a connection.
 - **Keeping.** About 2 s after records change, files no version kept whole

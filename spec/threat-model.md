@@ -398,8 +398,9 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     writes, true or false ([#33](https://github.com/leifriksheim/minca/issues/33)).
   - A member can name up to 16 files of up to 2³¹ bytes in every version,
     and every node holding the space whole fetches and holds each while that
-    version is kept whole: its keepers, or, in a space naming none, every
-    member's devices:
+    version is kept whole, unread: its keepers, any node not holding part,
+    and in a space naming no keeper every member's devices, whose storage
+    one member can so fill:
     for good where it is retained, a first version under `onePer`, or under
     `history: "all"`. It can also name another member's deleted file in a
     version of its own, keeping its ciphertext held, though nobody without

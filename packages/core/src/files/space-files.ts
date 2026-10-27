@@ -27,7 +27,7 @@ import {
 } from './file-id.js';
 import { openFile, sealFile, type FileKey } from './seal.js';
 import { base64UrlDecode, base64UrlEncode, concatBytes, utf8Decode, utf8Encode } from '../utils/encoding.js';
-import { isRecord } from '../utils/guards.js';
+import { isRecord, unref } from '../utils/guards.js';
 
 /** What `addFile` gives back: what names the file on a version, and what opens it, for the body */
 export type SealedFile = FileName & FileKey;
@@ -64,6 +64,8 @@ const IDLE_MS = 5_000;
 const RETRY_MS = 10 * 60_000;
 /** Chunks a peer sends in answer to one `want-file`; the rest it leaves for the next ask */
 const CHUNKS_PER_REPLY = 4;
+/** How often a file a read waits for is asked of everyone again, while nothing else asks */
+const WAIT_MS = 15_000;
 /** Bytes in one `file` message, before base64 */
 const BYTES_PER_MESSAGE = 24_000;
 /** A request with no answer by now is given up, and the chunks asked elsewhere */
@@ -293,7 +295,11 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
 
   const fetching = new Map<string, Promise<void>>();
   /** Fetches whatever of a file is not held here: from peers, then mirrors. Throws if none has it all. */
-  function fetchFile(file: FileName, peers = askable(), mirrors = true): Promise<void> {
+  function fetchFile(
+    file: FileName,
+    peers: ReadonlyArray<string> = askable(),
+    mirrors = true,
+  ): Promise<void> {
     const at = `${file.hash}:${file.size}`;
     const running = fetching.get(at);
     if (running) return running;
@@ -485,57 +491,83 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
     }
   }
 
-  /** Files nobody had, and when they were last asked of everyone */
+  /** Files a sweep found nobody had, and when it last asked everyone */
   const unfound = new Map<string, number>();
-  /** Peers connected since the last pass: asked at once for what nobody else had */
+  /** Peers connected since the last sweep: asked at once for what nobody else had */
   const joined = new Set<string>();
-  /** Reads waiting for a file nobody had, by id */
-  const waiting = new Map<string, { file: FileName; wake: Array<(error?: Error) => void> }>();
+  /** Reads waiting for a file nobody had, one wait per file id */
+  const waiting = new Map<
+    string,
+    { file: FileName; done: Promise<Error | null>; settle: (error: Error | null) => void }
+  >();
+  let waitTimer: ReturnType<typeof setTimeout> | null = null;
   let closed = false;
 
+  /** Fetches a file at any size named for it, its own first if its list is here; whether it is here whole */
+  async function fetchAny(
+    hash: string,
+    sizes: ReadonlyArray<FileName>,
+    peers: ReadonlyArray<string>,
+    mirrors: boolean,
+  ): Promise<boolean> {
+    const held = await heldFile(hash);
+    if (held && (await isWhole(held))) return true;
+    // The wrong sizes fail on the list.
+    for (const file of held ? [held] : sizes) {
+      const fetched = await fetchFile(file, peers, mirrors).then(
+        () => true,
+        () => false,
+      );
+      if (fetched) return true;
+    }
+    return false;
+  }
+
   /**
-   * Fetches what this node wants and lacks: every file a version it keeps whole
-   * names when it holds the whole space, and the files reads are waiting for.
+   * Fetches what this node wants and lacks: the files reads wait for, and,
+   * when it holds the whole space, every file a version it keeps whole names.
    */
   async function fetchMissing(): Promise<void> {
     const fresh = [...joined];
     joined.clear();
-    const wanted = new Map(config.holdsAll?.() ? await namedFiles() : []);
-    for (const [hash, { file }] of waiting) {
-      // Its body was superseded meanwhile: nothing here names it to ask for any more.
-      if (!(await isNamed(file))) wake(hash, new Error('No record here names that file'));
-      else if (!wanted.has(hash)) wanted.set(hash, [file]);
-    }
-    for (const [hash, sizes] of wanted) {
+    await fetchWaited();
+    if (!config.holdsAll?.()) return;
+    for (const [hash, sizes] of await namedFiles()) {
       if (closed) return;
-      const held = await heldFile(hash);
-      if (held && (await isWhole(held))) {
-        wake(hash);
-        continue;
-      }
       // One nobody had a moment ago is asked only of the peers that have come since.
       const recent = Date.now() - (unfound.get(hash) ?? 0) < RETRY_MS;
       const peers = recent ? askable().filter((peer) => fresh.includes(peer)) : askable();
       if (recent && peers.length === 0) continue;
-      // Every size named for it, the file's own first if its list is here: the wrong ones fail on the list.
-      for (const file of held ? [held] : sizes) {
-        const fetched = await fetchFile(file, peers, !recent).then(
-          () => true,
-          () => false,
-        );
-        if (fetched) {
-          unfound.delete(hash);
-          wake(hash);
-          break;
-        }
-        if (!recent) unfound.set(hash, Date.now());
-      }
+      if (await fetchAny(hash, sizes, peers, !recent)) unfound.delete(hash);
+      else if (!recent) unfound.set(hash, Date.now());
     }
   }
 
-  function wake(hash: string, error?: Error): void {
-    for (const resolve of waiting.get(hash)?.wake ?? []) resolve(error);
+  /** Asks every peer, and the mirrors, for the files reads wait for: few, and wanted now */
+  async function fetchWaited(): Promise<void> {
+    for (const [hash, { file }] of waiting) {
+      if (closed) return;
+      // Its body was superseded meanwhile: nothing here names it to ask for any more.
+      if (!(await isNamed(file))) settle(hash, new Error('No record here names that file'));
+      else if (await fetchAny(hash, [file], askable(), true)) settle(hash, null);
+    }
+  }
+
+  function settle(hash: string, error: Error | null): void {
+    waiting.get(hash)?.settle(error);
     waiting.delete(hash);
+  }
+
+  /** While a read waits, it is asked for again now and then: a peer may have fetched it since, though nothing here changed */
+  function keepAsking(): void {
+    if (waitTimer || closed) return;
+    waitTimer = setTimeout(() => {
+      waitTimer = null;
+      void fetchWaited().finally(() => {
+        if (waiting.size > 0) keepAsking();
+      });
+    }, WAIT_MS);
+    unref(waitTimer);
   }
 
   /** Opens a file a body refers to, waiting for its bytes while no peer or mirror has them */
@@ -544,15 +576,19 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
       try {
         return await openFile(await read(ref), ref);
       } catch (error) {
-        // A file no version here names, or one held whole that won't open, is never coming.
-        if (closed || !(await isNamed(ref)) || (await isWhole(ref))) throw error;
+        // A file no version here names, or whose id is here whole yet won't open as named, is never coming.
+        const held = await heldFile(ref.hash);
+        if (closed || !(await isNamed(ref)) || (held && (await isWhole(held)))) throw error;
       }
-      unfound.set(ref.hash, Date.now());
-      const failed = await new Promise<Error | undefined>((resolve) => {
-        const entry = waiting.get(ref.hash) ?? { file: { hash: ref.hash, size: ref.size }, wake: [] };
-        entry.wake.push(resolve);
+      let entry = waiting.get(ref.hash);
+      if (!entry) {
+        let settled: (error: Error | null) => void = () => {};
+        const done = new Promise<Error | null>((resolve) => (settled = resolve));
+        entry = { file: { hash: ref.hash, size: ref.size }, done, settle: (error) => settled(error) };
         waiting.set(ref.hash, entry);
-      });
+        keepAsking();
+      }
+      const failed = await entry.done;
       if (failed) throw failed;
     }
   }
@@ -576,7 +612,8 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
     close() {
       closed = true;
       for (const request of requests.values()) request.settle();
-      for (const hash of [...waiting.keys()]) wake(hash, new Error('The space is closed'));
+      if (waitTimer) clearTimeout(waitTimer);
+      for (const hash of [...waiting.keys()]) settle(hash, new Error('The space is closed'));
     },
   });
 }
