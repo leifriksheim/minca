@@ -95,7 +95,7 @@ identical everywhere:
 | `when`     | string 10–64: RFC 3339 date-time (`2026-03-01T18:30:00+01:00`), or `YYYY-MM-DD` for a whole day                                                                                                                      |
 | `day`      | string of 10: `YYYY-MM-DD`                                                                                                                                                                                           |
 | `timeZone` | string 1–64: an IANA zone, `Europe/Oslo`                                                                                                                                                                             |
-| DID        | string 1–256, `format: "did"`: an account DID (built by `person`)                                                                                                                                                    |
+| DID        | string 1–256, `x-kind: "did"`: an account DID (built by `person`)                                                                                                                                                    |
 | `money`    | `{ amount, currency }`, both required: `amount` a decimal string 1–32 (`"12.50"`), never a number; `currency` ISO 4217, 3 characters                                                                                 |
 | `address`  | `{ street, locality, region, postcode, country }`, each optional; `country` ISO 3166-1 alpha-2                                                                                                                       |
 | `place`    | `{ name, address, lat, lon, cells }` (built by `placeRef`), each optional; `lat` −90–90, `lon` −180–180, WGS 84; `cells` string 1–12[] (≤ 8), the geohash cells of `lat` and `lon` (see Places and areas)            |
@@ -103,7 +103,8 @@ identical everywhere:
 | `image`    | `{ blob, alt? }`: `alt` ≤ 2000, what it shows                                                                                                                                                                        |
 | `position` | string 1–200 that sorts where a record goes (Positions, below)                                                                                                                                                       |
 
-`when` and `day` are checked only for length. A `blob` is what `records.addFile` gives
+Until the dialect has `format` ([spec 02 §6.2](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)), `when` and `day` are checked only for
+length. A `blob` is what `records.addFile` gives
 ([storage](storage.md#files)): its `hash` is the file's id, and it carries
 the `key` and `salt` that open it
 ([spec 05 §16.6](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md)).
@@ -514,6 +515,7 @@ _Source: `packages/core/src/schemas/geo.ts` (`geohash`, `cellsOf`, `cellsAround`
 >   [#38](https://github.com/leifriksheim/minca/issues/38)). `std.follow`'s
 >   `space` is a plain space id, and a repost or a list item can point only
 >   within its own space.
+> - **`format`** ([spec 02 §6.2](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)), to check `when`, `day` and `url`.
 
 ## `std.call`
 

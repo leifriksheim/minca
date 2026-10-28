@@ -487,8 +487,8 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
     description:
       'Define a collection in a space, so every app and person in it knows its shape. The schema is JSON Schema ' +
       'using only: type, properties, required, items, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, ' +
-      'additionalProperties (boolean), title, description, format. A field holding a person (an account DID) is ' +
-      '{ "type": "string", "format": "did" }, so apps can show who it is and offer a list of people; format is a label, never checked. ' +
+      'additionalProperties (boolean), title, description. A field holding a person (an account DID) is ' +
+      '{ "type": "string", "x-kind": "did" }, so apps can show who it is and offer a list of people; x-kind is a label, never checked. ' +
       'For choices with labels use ' +
       'oneOf: [{ "const": "low", "title": "Low" }, …]. When a value picks from a list in a linked record — a vote\'s choice ' +
       'from its poll\'s options — add "x-choicesFrom": { "rel": "about", "field": "options" } to the field (a number is a ' +

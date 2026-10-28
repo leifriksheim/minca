@@ -99,20 +99,21 @@ describe('stored schemas', () => {
     assert.deepEqual(validateJsonSchema(vote, { choice: 7 }), []);
   });
 
-  test('format is a label: any name publishes, and no value is checked against it', () => {
+  test('an x-* keyword is an annotation: any one publishes, and no value is checked against it', () => {
     const event = {
       type: 'object',
       properties: {
-        host: { type: 'string', format: 'did' },
-        starts: { type: 'string', format: 'date-time' },
-        guests: { type: 'array', items: { type: 'string', format: 'did' } },
+        host: { type: 'string', 'x-kind': 'did' },
+        guests: {
+          type: 'array',
+          items: { type: 'string', 'x-kind': 'did', 'x-anything': { any: ['json'] } },
+        },
       },
     };
     assert.equal(checkPublishableSchema(event), null);
-    // Not even the formats JSON Schema defines, which the validator would otherwise check.
-    assert.deepEqual(validateJsonSchema(event, { host: 'bob', starts: 'friday', guests: ['carol'] }), []);
-    assert.match(checkPublishableSchema({ type: 'string', format: '' }) ?? '', /format must be a name/);
-    assert.match(checkPublishableSchema({ type: 'string', format: 1 }) ?? '', /format must be a name/);
+    assert.deepEqual(validateJsonSchema(event, { host: 'bob', guests: ['carol'] }), []);
+    // format is not an annotation: validators check it, so it stays out until it is specified.
+    assert.match(checkPublishableSchema({ type: 'string', format: 'did' }) ?? '', /format is not supported/);
   });
 
   test('names are reverse-DNS, and sys.* is reserved', () => {

@@ -52,22 +52,23 @@ and three that say what a value means, so any app can show it well:
   this one links to as `rel`, in its field `field`. A number is a position in
   that list; anything else is the option itself. A vote's `choice` picks from
   its poll's `options`. It is a display hint, never checked when validating.
-- `format: "<name>"`: what kind of value a string is. A label, never checked
-  when validating, not even a name JSON Schema defines, like `date-time` or
-  `email`. The names apps read:
+- `x-kind: "<name>"`: what kind of value a field holds. The names apps read:
 
-  | `format` | The value                                                                                                          | An app shows                                 |
+  | `x-kind` | The value                                                                                                          | An app shows                                 |
   | -------- | ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------- |
   | `did`    | an account's DID, `did:key:z…` ([spec 01 §4](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md)) | who it is, and a list of people to pick from |
 
-  A field holding a person says `format: "did"`; `fragments.person` writes
-  it. An app shows a name it doesn't know as plain text. A new name is a row
-  in this table, never a change to the protocol.
+  A field holding a person says `x-kind: "did"`; `fragments.person` writes
+  it. An app shows a kind it doesn't know as the plain value.
 
-Anything else, like `pattern`, is refused when you define the collection,
-with the reason. A Zod `.regex()` fails for that reason. A validator's
-formats become labels: `z.url()` stores `format: "uri"`, and no app checks
-it, so a body that isn't a web address still fits. Validators that can describe themselves as JSON Schema work directly:
+Any keyword starting `x-` is an annotation like these: any JSON, never
+checked when validating, and every validator ignores it. A new one, or a new
+`x-kind`, is a row here, never a change to the protocol. With Zod, add one
+with `.meta({ 'x-kind': 'did' })`.
+
+Anything else, like `pattern` or `format`, is refused when you define the
+collection, with the reason. A Zod `.regex()` or `.email()` fails for that
+reason. Validators that can describe themselves as JSON Schema work directly:
 Zod 4.2+, ArkType 2.1.28+, Valibot with `toStandardJsonSchema`. They are
 converted with target `draft-2020-12` before storing, a `$schema` member is
 dropped, and the result is checked like any other. For checks that stay
@@ -89,7 +90,7 @@ enforced on arrival, because two peers may have seen different versions of a
 definition ([spec 02 §9.6](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)).
 Rules, below, are enforced everywhere.
 
-_Source: `packages/core/src/schema/collection-def.ts` (`validateJsonSchema`, `toJsonSchema`, `asStandardSchema`), `packages/core/src/node/space-runtime.ts` (`contentIssues`). Tests: `packages/core/tests/space-catalog.test.ts` ("validate and reject within the supported subset", "an unknown keyword is ignored when validating, so newer spaces stay readable", "choices can carry labels, or come from a linked record", "format is a label: any name publishes, and no value is checked against it", "a record that does not fit is kept and flagged when it arrives, never rejected"), `packages/core/tests/schemas.test.ts` ("schemas from a validator you already use")._
+_Source: `packages/core/src/schema/collection-def.ts` (`validateJsonSchema`, `toJsonSchema`, `asStandardSchema`), `packages/core/src/node/space-runtime.ts` (`contentIssues`). Tests: `packages/core/tests/space-catalog.test.ts` ("validate and reject within the supported subset", "an unknown keyword is ignored when validating, so newer spaces stay readable", "choices can carry labels, or come from a linked record", "an x-\* keyword is an annotation: any one publishes, and no value is checked against it", "a record that does not fit is kept and flagged when it arrives, never rejected"), `packages/core/tests/schemas.test.ts` ("schemas from a validator you already use")._
 
 ## Links
 

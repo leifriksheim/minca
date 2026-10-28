@@ -444,10 +444,11 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
   - Which changes a peer holds can differ for good, and verdicts depend on a
     peer's keys, or the order it runs checks in ([#10](https://github.com/leifriksheim/minca/issues/10)).
   - Peers on different releases can disagree: a definition with a schema
-    keyword an older peer doesn't know (`format`, 02 §6.2) is invalid to it,
-    so it enforces none of that collection's rules, topics or contract,
-    silently, until it updates. This covers every collection with a person
-    field: `std.vote`, `std.ballot`, `std.pledge`, `std.award` and Liquid's.
+    keyword an older peer doesn't know is invalid to it, so it enforces none
+    of that collection's rules, topics or contract, silently, until it
+    updates. To a peer from before `x-*` annotations (02 §6.2), that is every
+    collection with a person field: `std.vote`, `std.ballot`, `std.pledge`,
+    `std.award` and Liquid's. Later annotations don't widen it.
     A member on an older release counts a second vote others refuse. Accepted
     before v1, when Minca does not support mixed releases
     ([#10](https://github.com/leifriksheim/minca/issues/10)).
@@ -547,7 +548,7 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     know leaves that collection, and what cites it, unjudged by that reader:
     old and new readers' counts split until the old one updates, but never
     silently (09 §1, §2, §7.1). A schema keyword it doesn't know does the same
-    silently (`format`, under Convergence above).
+    silently (under Convergence above).
   - A grant of `/member/remove` or `/role/unassign` without a policy on
     `.roles` reaches everyone but the founders. The space chose that by
     writing the grant (03 §2.3).

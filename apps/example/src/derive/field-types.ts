@@ -43,8 +43,8 @@ export function fieldSchema(type: FieldTypeName, options: ReadonlyArray<string> 
   return type === 'choice' ? { type: 'string', enum: [...options] } : structuredClone(FIELD_TYPES[type]);
 }
 
-/** A string holding an account's DID: one labelled `format: "did"`, as `fragments.person` writes it */
-const isPersonSchema = (schema: JsonSchema) => schema.type === 'string' && schema.format === 'did';
+/** A string holding an account's DID: one labelled `x-kind: "did"`, as `fragments.person` writes it */
+const isPersonSchema = (schema: JsonSchema) => schema.type === 'string' && schema['x-kind'] === 'did';
 
 /** Which of the pickable types an existing field is, or null when it is something else (kept as it is) */
 export function fieldTypeOf(schema: JsonSchema): FieldTypeName | null {
