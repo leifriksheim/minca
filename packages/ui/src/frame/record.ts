@@ -85,6 +85,10 @@ function partsOf(record: ScreenRecord): { face: ComponentChildren; title: string
   }
 }
 
+/** What a record is, in a few words: for a chip, or a message that shares it and says nothing else */
+export const recordTitle = (record: ScreenRecord): string =>
+  partsOf(record).title.trim().slice(0, 200) || 'Something';
+
 /**
  * One record as a line: its face, what it is, and a click that opens it in
  * the app it belongs to. A record shared from elsewhere opens through the

@@ -30,7 +30,8 @@ ui has:
   useBlob(key, ref)                 the whole file, as a URL for <img>, <video> or <audio>; null until here
   <\${Avatar} did size? round? />   someone's face: their picture, or the shape their account gives. Always use it for a person
   <\${Person} did size? name? face? />   face and name (face={false}: the name alone); a click opens their card in the app
-  <\${Comments} about=\${record} />   the comments on a record and a box to add one, with @mentions (needs "std.comment" in collections)
+  <\${Comments} about=\${record} />   the comments on a record and a box to add one, with @mentions and "/" to share something from
+                                    the space (needs "std.comment" in collections)
   <\${Attachments} about=\${key} />   the files attached to a record (std.file about it): pictures, videos and sound that play, others saved
   attach(about, files)              keeps Files (from a drop, a paste or <input type=file>) as std.file records about a record,
                                     or about nothing when about is null; → the records written
@@ -41,6 +42,10 @@ ui has:
                                     time; a click opens it in the app that shows it, or calls onOpen. Use it for records of collections
                                     other apps own: a shared one, from minca.get(key, { link: 'shares' }), with
                                     onOpen=\${() => minca.open({ record: key, link: 'shares' })}
+  useShare()                        sharing into what you send, as chat and comments do: share.pick() asks the person to choose a
+                                    record (a "/" button), onChange=\${(next) => setDraft(share.typed(draft, next))} does the same for "/"
+                                    typed into an empty box; put share.links on what you send, then share.clear(). <\${Sharing} share />
+                                    is the chip of the one waiting; <\${Shared} from=\${record} /> the card of what a record shares
   <\${Modal} title onClose width?>…</\${Modal}>   a dialog over the screen
   <\${Shape} kind colour? size? />  one of Minca's shapes; <\${Cover} seed colour size? class?>…</\${Cover}> a picture for what has none
                                     (colour: cobalt, coral, peach, sage or lilac)

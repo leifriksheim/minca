@@ -106,42 +106,15 @@
     color: #fff;
     background: rgb(0 0 0 / 0.6);
   }
-  /* A shared record sits as wide as it says, not across the whole line */
-  .shared {
-    align-self: flex-start;
-    max-width: 100%;
-  }
 </style>
 <script>
-  const { html, render, useState, useEffect, useRef, useRecords, useCan, usePeople, useShown } = ui;
-  const { Avatar, Person, MentionInput, MentionText, mentionsIn, Attachments, attach, ago, Record } = ui;
+  const { html, render, useState, useEffect, useRef, useRecords, useCan, usePeople, useShown, useShare } = ui;
+  const { Avatar, Person, MentionInput, MentionText, mentionsIn, Attachments, attach, ago } = ui;
+  const { Shared, Sharing, recordTitle } = ui;
   const MESSAGE = 'std.message';
   const me = minca.me.did;
   /** Messages from one person this close together read as one run, under one name */
   const RUN_MS = 5 * 60 * 1000;
-
-  /** A record in a few words, for a message that shares it and says nothing else */
-  const titleOf = (record) => {
-    const body = record.body ?? {};
-    for (const field of ['title', 'name', 'question', 'label', 'text'])
-      if (typeof body[field] === 'string' && body[field].trim()) return body[field].trim().slice(0, 200);
-    return record.collection;
-  };
-
-  /** What a message shares, read through its link, and opened in the app that shows it */
-  function Shared({ message }) {
-    const [record, setRecord] = useState(undefined);
-    useEffect(() => {
-      const load = () => minca.get(message.key, { link: 'shares' }).then(setRecord, () => setRecord(null));
-      load();
-      return minca.onChange(load);
-    }, [message.key]);
-    if (record === undefined) return null;
-    if (record === null) return html`<p class="faint">Shared something that isn't here.</p>`;
-    return html`<div class="shared">
-      <${Record} record=${record} onOpen=${() => minca.open({ record: message.key, link: 'shares' })} />
-    </div>`;
-  }
 
   function Chat() {
     const messages = useRecords(MESSAGE);
@@ -200,7 +173,7 @@
           </div>`
         }
         <p class="text"><${MentionText} text=${message.body.text} /></p>
-        ${message.links.some((link) => link.rel === 'shares') && html`<${Shared} message=${message} />`}
+        <${Shared} from=${message} />
         <${Attachments} about=${message.key} />
       </div>
       ${
@@ -237,7 +210,7 @@
     const [draft, setDraft] = useState('');
     const [files, setFiles] = useState([]);
     // A record the person chose to share, sent with the next message
-    const [sharing, setSharing] = useState(null);
+    const share = useShare();
     const [dropping, setDropping] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(null);
@@ -290,22 +263,10 @@
       };
     }, []);
 
-    // The person chooses in the app around this screen; this screen gets only what they choose.
-    const share = async () => {
-      setError(null);
-      try {
-        const picked = await minca.pick();
-        if (picked) setSharing(picked);
-        document.querySelector('.composer .mention-input input')?.focus();
-      } catch (e) {
-        setError(e.message);
-      }
-    };
-
     const send = async () => {
       const text =
         draft.trim() ||
-        (sharing ? titleOf(sharing) : '') ||
+        (share.sharing ? recordTitle(share.sharing) : '') ||
         files.map((file) => `📎 ${file.name}`).join('\n');
       if (!text || busy) return;
       setBusy(true);
@@ -315,12 +276,12 @@
         const sent = await minca.put(
           MESSAGE,
           { text, ...(mentions.length ? { mentions } : {}) },
-          sharing ? { links: [{ rel: 'shares', to: sharing.key }] } : {},
+          { links: share.links },
         );
         await attach(sent.key, files);
         setDraft('');
         setFiles([]);
-        setSharing(null);
+        share.clear();
       } catch (e) {
         setError(e.message);
       } finally {
@@ -336,14 +297,7 @@
       }}
     >
       ${dropping && html`<div class="drop">Drop files to attach</div>`}
-      ${
-        sharing &&
-        html`<div class="pending">
-          <button type="button" class="chip" title="Don't share it" onClick=${() => setSharing(null)}>
-            ↗ ${titleOf(sharing)} ✕
-          </button>
-        </div>`
-      }
+      ${share.sharing && html`<div class="pending"><${Sharing} share=${share} /></div>`}
       ${
         files.length > 0 &&
         html`<div class="pending">
@@ -372,7 +326,7 @@
           data-icon
           aria-label="Share something from this space"
           title="Share something from this space"
-          onClick=${() => share()}
+          onClick=${() => share.pick()}
         >
           /
         </button>
@@ -388,19 +342,19 @@
         />
         <${MentionInput}
           value=${draft}
-          onChange=${(next) => (!draft && next === '/' ? share() : setDraft(next))}
+          onChange=${(next) => setDraft(share.typed(draft, next))}
           placeholder="Message… @ to mention, / to share"
           aria-label="Message"
         />
         <button
           type="submit"
           data-variant="primary"
-          disabled=${busy || (!draft.trim() && !files.length && !sharing)}
+          disabled=${busy || (!draft.trim() && !files.length && !share.sharing)}
         >
           ${busy ? 'Sending…' : 'Send'}
         </button>
       </div>
-      ${error && html`<p class="error">${error}</p>`}
+      ${(error || share.error) && html`<p class="error">${error || share.error}</p>`}
     </form>`;
   }
 

@@ -254,7 +254,7 @@ describe('for agents', () => {
       .parse(await runAction(me, 'collections_list', { space, names: ['std.comment'] }));
     const comment = listed.find((c) => c.name === 'std.comment');
     assert.equal(comment?.version, 1);
-    assert.deepEqual(Object.keys(comment?.links ?? {}), ['about', 'replyTo']);
+    assert.deepEqual(Object.keys(comment?.links ?? {}), ['about', 'replyTo', 'shares']);
     // Without names, a line each: enough to choose which to read in full, several at once.
     const lines = z
       .array(
@@ -269,7 +269,7 @@ describe('for agents', () => {
           .strict(),
       )
       .parse(await runAction(me, 'collections_list', { space }));
-    assert.deepEqual(lines.find((c) => c.name === 'std.comment')?.links, ['about', 'replyTo']);
+    assert.deepEqual(lines.find((c) => c.name === 'std.comment')?.links, ['about', 'replyTo', 'shares']);
     assert.equal(
       z
         .array(z.unknown())

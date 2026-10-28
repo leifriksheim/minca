@@ -19,7 +19,8 @@ import { useLive, usePresence } from './live';
 import { html } from './html';
 import { MentionInput, MentionText, mentionsIn } from './mentions';
 import { Modal } from './modal';
-import { Record } from './record';
+import { Record, recordTitle } from './record';
+import { Shared, Sharing, useShare } from './share';
 import { Avatar, Person, useName } from './people';
 import {
   MapLink,
@@ -93,6 +94,10 @@ Object.defineProperty(globalThis, 'ui', {
     sizeOf,
     Modal,
     Record,
+    recordTitle,
+    useShare,
+    Sharing,
+    Shared,
     Shape,
     Cover,
     PlaceField,

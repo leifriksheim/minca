@@ -283,7 +283,7 @@ _Source: `packages/core/src/records/describe.ts`. Tests: `packages/core/tests/re
 
 An app decides it can open a space by finding a collection with the right
 **name**. Chat opens any `std.message`, whatever its fields and rules. And a space whose definition is a little older than the
-app's (a `std.message` without the `shares` link) stays that way, because the
+app's (a `std.message` or `std.comment` without the `shares` link) stays that way, because the
 library skips a collection the space already has. Whether an app can use a
 definition it did not write is a question for the app, not for peers: a peer
 stores and judges every record the same way whatever the answer.
