@@ -68,15 +68,17 @@ Every relay, of every kind, does two things:
 A relay is named by a URL whose scheme says its kind. Each kind maps §1.1 to
 a wire format of its own, and differs only in what it can do beyond it:
 
-| Scheme                                    | Kind                   | A fetch reads   | Purge | TURN |
-| ----------------------------------------- | ---------------------- | --------------- | ----- | ---- |
-| `wss://`, or `ws://` on this machine      | a Minca relay (§1.4)   | every blob held | yes   | MAY  |
-| `nostr+wss://`, or `nostr+ws://` likewise | a Nostr relay (§1.5)   | the newest 500  | no    | no   |
-| `<kind>+wss://`, any other kind           | not specified; ignored |                 |       |      |
+| Scheme                                    | Kind                   | A fetch reads            | Purge | TURN |
+| ----------------------------------------- | ---------------------- | ------------------------ | ----- | ---- |
+| `wss://`, or `ws://` on this machine      | a Minca relay (§1.4)   | oldest first, in pages   | yes   | MAY  |
+| `nostr+wss://`, or `nostr+ws://` likewise | a Nostr relay (§1.5)   | the newest 500, one page | no    | no   |
+| `<kind>+wss://`, any other kind           | not specified; ignored |                          |       |      |
 
-Where a fetch is bounded, drops past the bound bury older ones. Where a relay
-can't purge ([07](07-inbox.md) §5), a blob goes only when it expires. TURN
-passwords are in §1.4 and §10.
+A fetch that stops before the end of what a relay holds misses the rest, so
+junk can bury real blobs: the newer ones where it reads oldest first, the
+older ones where it reads newest first. Where a relay can't purge
+([07](07-inbox.md) §5), a blob goes only when it expires. TURN passwords are
+in §1.4 and §10.
 
 A valid relay URL is a string of at most 200 characters that parses as a URL
 whose scheme is `wss:`, or `<kind>+wss:` with `<kind>` matching

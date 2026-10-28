@@ -2561,7 +2561,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       const current = await inboxRecord();
       if (!current) throw new Error('Your inbox is not open');
       if ((await purgeInbox(current.body!, null)) === 0)
-        throw new Error("None of your inbox's mailboxes could be reached to clear it.");
+        throw new Error("None of your inbox's mailboxes could be reached and cleared.");
       knockCache.clear();
       failed.clear();
     },

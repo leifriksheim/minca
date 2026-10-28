@@ -1074,11 +1074,13 @@ see the same sealed blobs.
     answer meant for it").
   - An inbox's mailbox can be flooded ([#162](https://github.com/leifriksheim/minca/issues/162)).
     So can a short link's topic: 64 blobs fill it, and a drop of the link's
-    blob after its copy expired is then refused. Joiners read every page, so
-    junk can't hide a copy that is there, and a host's copy is not in the
-    relay's queue. On a relay that can't purge and whose fetch is bounded,
-    drops past the bound bury an inbox's earlier knocks there, or a short
-    link's invite (04 §1.2, 07 §5).
+    blob after its copy expired is then refused. A host's copy is not in the
+    relay's queue. A fetch that stops short buries what it misses (04 §1.2,
+    07 §5): on a Nostr relay, 500 drops bury earlier knocks or a short link's
+    invite; on a Minca relay the reference client reads 8 pages, at least 32
+    large blobs, so 33 junk blobs dropped first hide later knocks until the
+    owner purges, and a short link's copy dropped again after it expired for
+    good.
   - Of a short link it learns the topic, the sealed invite's size, and when
     and from which address it is fetched; a relay also serving the space's
     room can tie a fetch to the topic watched a moment later
