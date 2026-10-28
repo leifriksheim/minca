@@ -20,6 +20,7 @@ import type { ConnectRequest } from '@minca/core/session';
 import { runAppNode, type AppNodeOut, type StartParams } from '../src/app-node.js';
 import { openFsDirectory } from '../src/fs-directory.js';
 import { isRecord } from '../src/json.js';
+import { patience } from '../../core/tests/helpers/until.js';
 
 const ORIGIN = 'http://127.0.0.1:47830';
 const HOME = 'https://home.test/connect';
@@ -128,7 +129,7 @@ test('renewing from the menu bar keeps what the app wrote while the home could n
   });
   const next = (match: (message: AppNodeOut) => boolean, from = 0) =>
     new Promise<AppNodeOut>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('nothing said in time')), 10_000);
+      const timer = setTimeout(() => reject(new Error('nothing said in time')), patience(10_000));
       const check = () => {
         const found = said.slice(from).find(match);
         if (!found) return;
