@@ -10,6 +10,7 @@ import {
   collectionLabel,
   computedFieldsOf,
   fieldsOf,
+  isObject,
   humanize,
   labelOf,
   recordLabel,
@@ -116,7 +117,9 @@ export function RecordPanel({
   const title = titleField(schema);
   const fields = fieldsOf(schema).filter((f) => f.name !== title);
   const computed = computedFieldsOf(collection, collections);
-  const extra = Object.keys(body).filter((k) => k !== title && !fieldsOf(schema).some((f) => f.name === k));
+  // What the body holds beyond its schema; a field the schema names but hides, like a position, is not extra.
+  const declared = isObject(schema?.properties) ? schema.properties : {};
+  const extra = Object.keys(body).filter((k) => k !== title && !Object.hasOwn(declared, k));
   const linkedHere: LinkedByRel =
     record && data
       ? byRel(

@@ -7,13 +7,16 @@ import type { FileRef } from '@minca/core';
 import { dateOf, isWholeDay } from '@minca/ui/when';
 import { isObject } from './schema-ui';
 
-const valid = (date: Date) => !Number.isNaN(date.getTime());
+/** A time as the fragment writes one: a whole day, or RFC 3339 with its offset, so every reader sees the same moment */
+const WHEN = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2}))?$/i;
+/** An amount as a decimal string: no hex, exponents or spaces a reader might count differently */
+const AMOUNT = /^-?\d+(\.\d+)?$/;
 
 /** "Sat 12 Oct 2026, 19:00", or "Sat 12 Oct 2026" for a whole day; null when it isn't a time */
 export function whenText(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
+  if (typeof value !== 'string' || !WHEN.test(value)) return null;
   const date = dateOf(value);
-  if (!valid(date)) return null;
+  if (Number.isNaN(date.getTime())) return null;
   const day = date.toLocaleDateString(undefined, {
     weekday: 'short',
     day: 'numeric',
@@ -28,8 +31,8 @@ export function whenText(value: unknown): string | null {
 /** "€12.50" in the reader's format; the amount and code as they are for a currency it doesn't know */
 export function moneyText(value: unknown): string | null {
   if (!isObject(value) || typeof value.amount !== 'string' || typeof value.currency !== 'string') return null;
+  if (!AMOUNT.test(value.amount)) return null;
   const amount = Number(value.amount);
-  if (!Number.isFinite(amount)) return `${value.amount} ${value.currency}`;
   try {
     return new Intl.NumberFormat(undefined, { style: 'currency', currency: value.currency }).format(amount);
   } catch {

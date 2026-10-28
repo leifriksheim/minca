@@ -63,10 +63,16 @@ test('values read by their kind: a time, money, a safe link, a file', () => {
   assert.doesNotMatch(whenText('2026-10-12') ?? '', /:/);
   assert.match(whenText('2026-10-12T19:00:00+02:00') ?? '', /:/);
   assert.equal(whenText('friday'), null);
+  // Without an offset each reader would see their own moment; free-form dates read differently by engine.
+  assert.equal(whenText('2026-10-12T19:00'), null);
+  assert.equal(whenText('October 12, 2026'), null);
 
   assert.match(moneyText({ amount: '12.50', currency: 'EUR' }) ?? '', /12[.,]50/);
   assert.equal(moneyText({ amount: '12.50', currency: 'XYZW' }), '12.50 XYZW');
   assert.equal(moneyText({ amount: 12.5, currency: 'EUR' }), null);
+  // Shown only when every reader would count it the same.
+  for (const amount of ['0x64', '1e2', ' 100 ', '0b1100100'])
+    assert.equal(moneyText({ amount, currency: 'EUR' }), null);
 
   assert.equal(safeHref('https://minca.social/a'), 'https://minca.social/a');
   assert.equal(safeHref('javascript:alert(1)'), null);

@@ -67,7 +67,10 @@ and three that say what a value means, so any app can show it well:
 
   Each is what the fragment of the same name writes (`person` writes `did`,
   `blob` writes `file`). An app shows a kind it doesn't know as the plain
-  value.
+  value. A definition
+  already in a space keeps the labels it was written with: a space defined
+  before these labels shows those fields plainly until the collection is
+  redefined.
 
 Any keyword starting `x-` is an annotation like these: any JSON, and it says
 nothing about whether a body fits. A new one, or a new `x-kind`, is a row
