@@ -62,8 +62,8 @@ export interface MailboxClient {
    * @throws When the relay refuses it, or can't be reached
    */
   drop(relay: string, topic: string, blob: string, ttlSeconds?: number): Promise<string>;
-  /** Everything a relay holds under a topic, after a sequence number, in at most `pages` pages (default 8) */
-  fetch(relay: string, topic: string, after?: number, pages?: number): Promise<ReadonlyArray<MailItem>>;
+  /** Everything a relay holds under a topic, after a sequence number */
+  fetch(relay: string, topic: string, after?: number): Promise<ReadonlyArray<MailItem>>;
   /**
    * Clears blobs from a topic — all of them, or those named — as the inbox's
    * owner: shows the signing key and signs the relay's challenge with it.
@@ -128,7 +128,7 @@ export function createMailboxClient(options: MailboxOptions = {}): MailboxClient
   };
   const client: MailboxClient = {
     drop: (relay, topic, blob, ttl) => of(relay).box.drop(relay, topic, blob, ttl),
-    fetch: (relay, topic, after, pages) => of(relay).box.fetch(relay, topic, after, pages),
+    fetch: (relay, topic, after) => of(relay).box.fetch(relay, topic, after),
     purge: (relay, topic, sign, ids, signChallenge) => {
       const { kind, box } = of(relay);
       return kind.can.purge && box.purge

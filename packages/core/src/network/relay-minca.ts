@@ -76,8 +76,8 @@ export function createMincaLink(url: string): RelayLink {
   });
 }
 
-/** At most this many pages per fetch: 16 blobs each, and an inbox holds 64 */
-const MAX_PAGES = 8;
+/** At most this many pages per fetch: a topic holds 64 blobs, and a page at least four */
+const MAX_PAGES = 16;
 
 /** A Minca relay's mailbox: each call opens its own short-lived socket, so the relay can't tie it to a peer */
 function createMincaMailbox(options: MailboxOptions = {}): MailboxClient {
@@ -113,10 +113,10 @@ function createMincaMailbox(options: MailboxOptions = {}): MailboxClient {
       );
     },
 
-    async fetch(relay: string, topic: string, after = 0, pages = MAX_PAGES) {
+    async fetch(relay: string, topic: string, after = 0) {
       const found: MailItem[] = [];
       let from = after;
-      for (let page = 0; page < pages; page++) {
+      for (let page = 0; page < MAX_PAGES; page++) {
         const { items, more } = await ask(relay, { type: 'fetch', topic, after: from }, (answer) =>
           answer.type === 'mail' && answer.topic === topic && Array.isArray(answer.items)
             ? { items: answer.items.filter(isMailItem), more: answer.more === true }

@@ -1101,9 +1101,6 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   const linkTimer = setInterval(() => void keepLinks().catch(() => {}), 60 * 60 * 1000);
   unref(linkTimer);
 
-  /** Pages of a topic read for a short link: a relay holds 64 blobs, at least four a page */
-  const INVITE_PAGES = 16;
-
   /** A short link's invite, fetched once and kept: a preview and the join that follows ask once */
   const resolved = new Map<string, Promise<{ readonly long: string; readonly until?: number }>>();
 
@@ -1140,7 +1137,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       new Promise<void>((resolve) => unref(setTimeout(resolve, 20_000))),
       Promise.all(
         places.map((place) =>
-          mailbox.fetch(place, topic, 0, INVITE_PAGES).then(
+          mailbox.fetch(place, topic).then(
             (items) => items.forEach((item) => blobs.add(item.blob)),
             () => {},
           ),

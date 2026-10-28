@@ -1474,8 +1474,8 @@ gives the long form instead.
 **Reading a link.** A reader:
 
 1. fetches the topic from each place the link names and from the relays it
-   uses itself, reading as far as each relay's fetch reaches
-   ([04](04-network.md) §1.2);
+   uses itself, reading all a fetch of each relay's kind gives
+   ([04](04-network.md) §1.2: on a Minca relay, every page);
 2. **MUST** ignore every blob whose hash does not start with `pin`, unopened;
 3. **MUST** refuse the link if two different blobs match the pin;
 4. opens the one that does, and **MUST** refuse it if it does not decrypt,

@@ -163,11 +163,11 @@ _Source: `packages/core/src/inbox/inbox.ts` (`inboxTopic`)._
 
 ## 5. The relay mailbox
 
-An inbox's knocks wait in the mailboxes of the relays its code names: each
-is dropped there and fetched later ([04 — Network](04-network.md) §1.1), on
-a relay of any kind (04 §1.2). A knock is dropped with a time to live of 14
-days. A fetch reads every page it can (04 §1.2); the same blob from several
-relays is one knock, by its id (§6).
+An inbox's knocks wait in the mailboxes of the relays its code names: each is
+dropped there and fetched later ([04 — Network](04-network.md) §1.1), on a
+relay of any kind (04 §1.2). A knock is dropped with a time to live of 14
+days. A fetch reads all its relay's kind gives (04 §1.2); the same blob from
+several relays is one knock, by its id (§6).
 
 A relay keeps no time a reader trusts: what a knock's time is, is the
 knocker's word, signed (§6).
@@ -195,15 +195,15 @@ characters (no answer).
 
 ### Limits
 
-Blob size and blobs per topic are the same on every relay. Every other limit
-is the relay operator's to set; a client learns of one only from `refused`
-(or, for watches, from silence). The values below are the reference relay's.
-An **address** is an IPv4 address or an IPv6 /64.
+Blob size and blobs per topic are the same on every Minca relay. Every other
+limit is the relay operator's to set; a client learns of one only from
+`refused` (or, for watches, from silence). The values below are the reference
+relay's. An **address** is an IPv4 address or an IPv6 /64.
 
 | Limit                                  | Value                                                                              | On breach |
 | -------------------------------------- | ---------------------------------------------------------------------------------- | --------- |
-| Blob size                              | 12,000 chars (every relay)                                                         | `refused` |
-| Blobs per topic                        | 64 (every relay)                                                                   | `refused` |
+| Blob size                              | 12,000 chars (every Minca relay)                                                   | `refused` |
+| Blobs per topic                        | 64 (every Minca relay)                                                             | `refused` |
 | Drops per topic per address per hour   | 4                                                                                  | `refused` |
 | Drops per address per hour, all topics | 30                                                                                 | `refused` |
 | Topics held                            | 50,000                                                                             | `refused` |
@@ -218,8 +218,8 @@ A full inbox refuses new knocks rather than dropping old ones, so a flood
 can't push out real knocks; a full relay still takes a knock or two on every
 inbox, from the reserve. An owner whose inbox is flooded clears it (purge),
 which keeps its code working. On a relay that can't purge, junk stays until
-it expires, and where a fetch stops short it buries knocks (04 §1.2): an
-inbox that names such a relay should name one that can purge too.
+it expires, and where a fetch is bounded it buries the knocks before it (04
+§1.2): an inbox that names such a relay should name one that can purge too.
 
 A drop carries no proof of work. Work a phone does in a second, a server
 core does in a tenth of one, so it would hold back nobody the address
@@ -365,12 +365,9 @@ grants records only ([06 §2.8](06-nodes-and-sessions.md)).
   A note that was revoked but hasn't run out yet still can, since the owner
   can't see the knocker's revocations
   ([#165](https://github.com/leifriksheim/minca/issues/165)).
-- **Buried knocks.** Anyone with the code can bury knocks with junk a fetch
-  reads first: dated ahead on a relay that can't purge, where newest is the
-  dropper's word, as on Nostr; and on a Minca relay, 33 large blobs fill the
-  8 pages the reference client reads, until the owner purges, with nothing
-  to tell the owner to (§5, 04 §1.2,
-  [#162](https://github.com/leifriksheim/minca/issues/162)).
+- **Spam on a relay that can't purge.** Where its fetch is bounded, anyone
+  with the code can bury earlier knocks there with drops past the bound,
+  dated ahead where newest is the dropper's word, as on Nostr (§5, 04 §1.2).
 - **Leaked invites.** The invite in a knock is multi-use until the knocker
   closes it, and whoever joins first is taken as the contact. Someone else
   joins first only if the recipient passed it on, lost a device, or gave an
