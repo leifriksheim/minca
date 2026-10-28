@@ -15,12 +15,13 @@ import {
   screenPolicy,
   type ScreenHost,
 } from '../src/components/apps/screens';
-import type { P2PNode } from '@minca/core';
+import type { NodeRecord, P2PNode } from '@minca/core';
 import {
   file as fileCollection,
   list,
   listItem,
   message,
+  poll,
   useSchemas as addSchemas,
 } from '@minca/core/schemas';
 import { checkLauncherApp } from '../src/components/apps/launcher';
@@ -385,11 +386,13 @@ describe('screens', () => {
 });
 
 /** A page that does what a screen asks by writing it down */
-function fakeHost() {
+/** A page that does what a screen asks, and says what it was asked; `chosen` is what the person picks */
+function fakeHost(chosen: NodeRecord | null = null) {
   const asked: unknown[][] = [];
   const kept = new Map<string, unknown>();
   const host: ScreenHost = {
     open: (target) => void asked.push(['open', target]),
+    pick: async (text) => (asked.push(['pick', text]), chosen),
     searchPlaces: async (text, near) => (asked.push(['searchPlaces', text, near]), []),
     here: async () => null,
     link: (url) => void asked.push(['link', url]),
@@ -482,36 +485,126 @@ describe('the Files app', () => {
     }
   });
 
-  test('a link a screen points anywhere tells it nothing, and never opens the space’s own records', async () => {
+  test('a screen can’t point a link out of its app, so it can’t probe for keys or reach what no one shared', async () => {
     const { alice, space } = await setup();
     await addSchemas(alice.node, space, [fileCollection]);
     const secret = await alice.node.records.put(space, 'app.secret', { pin: 1234 });
-    const { host, asked } = fakeHost();
-    const { call, close } = bridgeFor(alice.node, space, [fileCollection.name], host);
-    // A record of its own, pointed wherever the screen likes, then followed
-    const follow = async (to: string) => {
-      const own = await call(
+    const { call, close } = bridgeFor(alice.node, space, [fileCollection.name], fakeHost().host);
+    const pointAt = (to: string) =>
+      call('put', fileCollection.name, { name: 'x', mime: 'text/plain' }, { links: [{ rel: 'about', to }] });
+    try {
+      const here = await pointAt(secret.key);
+      const missing = await pointAt(`${secret.key.split('.')[0]}.aaaaaaaaaaaaaaaaaaaaaaaaaa`);
+      const own = await pointAt(`collection:${fileCollection.name}`);
+      // Refused alike whether or not the record is here, or is the space's own.
+      for (const answer of [here, missing, own]) {
+        assert.equal(answer.ok, false);
+        assert.match(answer.error ?? '', /links only to records of "std.file", or one the person chose/);
+      }
+      // A link to a record of its own is fine.
+      const first = await call('put', fileCollection.name, { name: 'a', mime: 'text/plain' });
+      const { key } = z.object({ key: z.string() }).parse(first.value);
+      const linked = await call(
         'put',
         fileCollection.name,
-        { name: 'x', mime: 'text/plain' },
-        {
-          links: [{ rel: 'about', to }],
-        },
+        { name: 'b', mime: 'text/plain' },
+        { links: [{ rel: 'about', to: key }] },
       );
-      const { key } = z.object({ key: z.string() }).parse(own.value);
-      return call('open', { record: key, link: 'about' });
-    };
+      assert.equal(linked.ok, true, linked.error ?? '');
+    } finally {
+      close();
+    }
+  });
+});
+
+describe('sharing a record into an app', () => {
+  test('a record someone shared is read through the link to it, and only through that', async () => {
+    const { alice, space } = await setup();
+    await addSchemas(alice.node, space, [message, poll]);
+    const asked = await alice.node.records.put(space, poll.name, {
+      question: 'Where?',
+      options: ['Here', 'There'],
+    });
+    // Shared from elsewhere: another app, an agent, another device
+    const said = await alice.node.records.put(
+      space,
+      message.name,
+      { text: 'Vote!' },
+      { links: [{ rel: 'shares', to: asked.key }] },
+    );
+    const app = await alice.node.records.put(space, 'launcher.app', { title: 'Hidden' });
+    const odd = await alice.node.records.put(
+      space,
+      message.name,
+      { text: 'Look' },
+      { links: [{ rel: 'shares', to: app.key }] },
+    );
+    const { call, close } = bridgeFor(alice.node, space, [message.name], fakeHost().host);
     try {
-      const here = await follow(secret.key);
-      const missing = await follow(`${secret.key.split('.')[0]}.aaaaaaaaaaaaaaaaaaaaaaaaaa`);
-      const own = await follow(`collection:${fileCollection.name}`);
-      // The same answer whether or not the record is here, or is the space's own: no way to probe for keys.
-      assert.deepEqual([here, missing, own], [here, here, here]);
-      assert.equal(here.ok, true);
-      // The page shows the person a record they can see anyway; the space's own records it never opens.
-      const opened = asked.filter(([what]) => what === 'open').map(([, target]) => target);
-      assert.equal(opened.length, 1);
-      assert.ok(isRecord(opened[0]) && isRecord(opened[0].record) && opened[0].record.key === secret.key);
+      assert.equal((await call('get', asked.key)).value, null, 'not by its key: it is no record of the chat');
+      const shared = await call('get', said.key, { link: 'shares' });
+      assert.ok(isRecord(shared.value) && isRecord(shared.value.body));
+      assert.equal(shared.value.body.question, 'Where?');
+      assert.equal((await call('get', said.key, { link: 'replyTo' })).value, null, 'a link it does not have');
+      assert.equal(
+        (await call('get', odd.key, { link: 'shares' })).value,
+        null,
+        'never the space’s own apps',
+      );
+      assert.equal(
+        (await call('get', asked.key, { link: 'shares' })).value,
+        null,
+        'only from a record of its own',
+      );
+    } finally {
+      close();
+    }
+  });
+
+  test('a screen links out only to what the person picked for it, and is handed what they picked', async () => {
+    const { alice, space } = await setup();
+    await addSchemas(alice.node, space, [message, poll]);
+    const asked = await alice.node.records.put(space, poll.name, { question: 'Where?', options: ['Here'] });
+    const share = (
+      call: (method: string, ...args: unknown[]) => Promise<{ ok: boolean; error?: string | undefined }>,
+    ) => call('put', message.name, { text: 'Vote!' }, { links: [{ rel: 'shares', to: asked.key }] });
+
+    const declined = fakeHost(null);
+    const before = bridgeFor(alice.node, space, [message.name], declined.host);
+    const chooses = fakeHost(asked);
+    const after = bridgeFor(alice.node, space, [message.name], chooses.host);
+    try {
+      assert.equal((await share(before.call)).ok, false, 'not before the person chose it');
+      assert.equal((await before.call('pick', { text: 'poll' })).value, null, 'the person chose nothing');
+      assert.equal((await share(before.call)).ok, false);
+      assert.deepEqual(declined.asked, [['pick', 'poll']]);
+
+      const picked = await after.call('pick');
+      assert.ok(isRecord(picked.value) && picked.value.key === asked.key);
+      const sent = await share(after.call);
+      assert.equal(sent.ok, true, sent.error ?? '');
+      // What was picked in one app is not another's: each bridge keeps its own.
+      assert.equal((await share(before.call)).ok, false);
+    } finally {
+      before.close();
+      after.close();
+    }
+  });
+
+  test('the space’s own records are never picked for a screen', async () => {
+    const { alice, space } = await setup();
+    await addSchemas(alice.node, space, [message]);
+    const app = await alice.node.records.put(space, 'launcher.app', { title: 'Hidden' });
+    const { call, close } = bridgeFor(alice.node, space, [message.name], fakeHost(app).host);
+    try {
+      assert.equal((await call('pick')).value, null);
+      const sent = await call(
+        'put',
+        message.name,
+        { text: 'x' },
+        { links: [{ rel: 'shares', to: app.key }] },
+      );
+      assert.equal(sent.ok, false);
     } finally {
       close();
     }

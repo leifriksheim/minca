@@ -35,8 +35,10 @@ ui has:
   <\${Playable} record />          a std.file that is a video or a sound, playing where it is; fetched once it comes into view
   useSeen(ref)                      whether the element in ref has come into view: load something large only then
   sizeOf(bytes)                     "812 KB", "3.1 MB"
-  <\${Record} record=\${r} />         any record as one line, the same in every app: a file's picture, a task's tick, an event's
-                                    time; a click opens it in the app that shows it. Use it for records of collections other apps own
+  <\${Record} record=\${r} onOpen? />  any record as one line, the same in every app: a file's picture, a task's tick, an event's
+                                    time; a click opens it in the app that shows it, or calls onOpen. Use it for records of collections
+                                    other apps own: a shared one, from minca.get(key, { link: 'shares' }), with
+                                    onOpen=\${() => minca.open({ record: key, link: 'shares' })}
   <\${Modal} title onClose width?>…</\${Modal}>   a dialog over the screen
   <\${Shape} kind colour? size? />  one of Minca's shapes; <\${Cover} seed colour size? class?>…</\${Cover}> a picture for what has none
                                     (colour: cobalt, coral, peach, sage or lilac)

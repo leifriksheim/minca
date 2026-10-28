@@ -85,14 +85,18 @@ function partsOf(record: ScreenRecord): { face: ComponentChildren; title: string
   }
 }
 
-/** One record as a line: its face, what it is, and a click that opens it in the app it belongs to */
-export function Record({ record }: { record: ScreenRecord }) {
+/**
+ * One record as a line: its face, what it is, and a click that opens it in
+ * the app it belongs to. A record shared from elsewhere opens through the
+ * record that links to it, so `onOpen` says how.
+ */
+export function Record({ record, onOpen }: { record: ScreenRecord; onOpen?: () => void }) {
   const { face, title, detail } = partsOf(record);
   return html`<button
     type="button"
     class="record"
     title=${title}
-    onClick=${() => void minca.open({ record: record.key })}
+    onClick=${() => (onOpen ? onOpen() : void minca.open({ record: record.key }))}
   >
     ${face}
     <span class="ellipsis">${title}</span>

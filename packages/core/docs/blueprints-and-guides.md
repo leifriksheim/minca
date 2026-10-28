@@ -168,7 +168,7 @@ its app's collections and the people in its space: it lists and writes
 records as the person looking, asks what they may do (`can`), gets someone's
 picture (`picture`), and asks the page to show a record or a person
 (`open`), or the record one of its own links to (`open` with `link`: the
-message a file was shared on). Following a link is the one way past its collections. The bridge answers the same whether or not the record is there, and never opens the space's own records (`sys.*`, `launcher.app`); but the page visibly opens a record that is there, for the person, who can see it anyway, so a screen that already knows a key could notice, from outside, that it exists. What a sealed frame can't do, the page does for it when it asks,
+message a file was shared on). Following a link is the one way past its collections, and only someone's choice puts a link there (below). The bridge never follows one to the space's own records (`sys.*`, `launcher.app`), and opening one answers the same whether or not the record is there; but the page visibly opens a record that is there, for the person, who can see it anyway. What a sealed frame can't do, the page does for it when it asks,
 after checking the request: it searches for places and asks where the person
 is (`places`), opens http and https pages (`link`), saves text files
 (`save`), keeps a few kilobytes per app on the device (`remember`, `recall`),
@@ -191,6 +191,20 @@ the chat, and a chat's file in Files, without either knowing the other. An
 app that names a collection in `shows` must do something with what it is
 handed. The kit's `<Record>` draws any standard record as one line the same
 way in every app, and opens it this way when clicked.
+
+**Sharing a record into an app.** A screen can't list or read what its app
+doesn't name, but a person can hand it one record, as a page gets only the
+file a person picks for it. `minca.pick` asks the page to show a finder over
+the whole space, and gives the screen the record the person chooses, or
+null. The screen may then link one of its records to it, like a message's
+`shares`, and anyone's screen reads it back through that link
+(`minca.get(key, { link: 'shares' })`), read only. A screen writes a link
+only to a record of its own collections, one the person picked for it, or
+one the record already has, refused alike whether or not the target is here:
+so every link out of an app is someone's choice, made in the page or by a
+person, agent or other app writing the record, and keys can't be guessed. A
+chat shares a poll without the chat being able to read polls. The chat's `/`
+button, and `/poll` sent alone, pick one.
 
 A screen also sends live messages, kept nowhere, to the other devices that
 have the same app open in the space (`live.send`, `live.on`): for cursors,
@@ -223,7 +237,7 @@ defines its collections and writes a copy of it, naming where it came from
 (`template: "kanban"`), and from then on the space changes its copy like any
 other app.
 
-_Source: `apps/example/src/components/apps/launcher.ts` (`addTemplate`), `apps/example/src/components/apps/screens.ts`, `apps/example/src/components/apps/ScreenFrame.tsx`, `apps/example/src/components/apps/templates/`, `apps/example/public/screen.html`, `packages/ui/src/frame/`, `packages/ui/src/guide.ts`. Tests: `apps/example/tests/launcher.test.ts` ("adding a ready-made app copies it into the space once, with its collections and first records"), `apps/example/tests/screens.test.ts` ("a screen checks, shows faces and opens things only within its app and its space", "what the page does for a screen, it does only as asked properly", "a screen hears the same app's screens on other devices, as who sent it, and no other app's")._
+_Source: `apps/example/src/components/apps/launcher.ts` (`addTemplate`), `apps/example/src/components/apps/screens.ts`, `apps/example/src/components/apps/ScreenFrame.tsx`, `apps/example/src/components/apps/templates/`, `apps/example/public/screen.html`, `packages/ui/src/frame/`, `packages/ui/src/guide.ts`. Tests: `apps/example/tests/launcher.test.ts` ("adding a ready-made app copies it into the space once, with its collections and first records"), `apps/example/tests/screens.test.ts` ("a screen checks, shows faces and opens things only within its app and its space", "what the page does for a screen, it does only as asked properly", "a screen can’t point a link out of its app, so it can’t probe for keys or reach what no one shared", "a record someone shared is read through the link to it, and only through that", "a screen links out only to what the person picked for it, and is handed what they picked", "the space’s own records are never picked for a screen", "a screen hears the same app's screens on other devices, as who sent it, and no other app's")._
 
 ## Describing a collection
 
