@@ -489,6 +489,9 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
       'using only: type, properties, required, items, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, ' +
       'additionalProperties (boolean), title, description. A field holding a person (an account DID) is ' +
       '{ "type": "string", "x-kind": "did" }, so apps can show who it is and offer a list of people; x-kind is a label, never checked. ' +
+      'Label other fields the same way: "when" (RFC 3339 or YYYY-MM-DD), "day" (YYYY-MM-DD), "url", ' +
+      '"money" ({ amount: decimal string, currency: ISO 4217 }), "file" (what records.addFile gives), ' +
+      '"image" ({ blob, alt }), "position" (a sort key, never shown). ' +
       'For choices with labels use ' +
       'oneOf: [{ "const": "low", "title": "Low" }, …]. When a value picks from a list in a linked record — a vote\'s choice ' +
       'from its poll\'s options — add "x-choicesFrom": { "rel": "about", "field": "options" } to the field (a number is a ' +

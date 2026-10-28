@@ -74,7 +74,7 @@ export function opsFor(kind: ClauseKind): ReadonlyArray<{ op: ClauseOp; label: s
 
 export const needsValue = (op: ClauseOp) => op !== 'filled' && op !== 'empty';
 
-const KIND_OF_TYPE: Readonly<Record<FieldTypeName, ClauseKind>> = {
+const KIND_OF_TYPE: Readonly<Record<FieldTypeName, ClauseKind | null>> = {
   text: 'text',
   'long text': 'text',
   number: 'number',
@@ -85,6 +85,10 @@ const KIND_OF_TYPE: Readonly<Record<FieldTypeName, ClauseKind>> = {
   person: 'person',
   people: 'people',
   'web link': 'text',
+  // An amount and a currency, or a file: nothing a condition compares
+  money: null,
+  file: null,
+  picture: null,
   'list of text': 'list',
 };
 

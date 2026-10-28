@@ -53,6 +53,18 @@ export const define = <const C extends DefineCollection>(definition: C): C & Typ
 const described = <S extends object>(schema: S, description?: string): S =>
   description ? { ...schema, description } : schema;
 
+/**
+ * A field labelled with what it holds, so an app can show and edit it well
+ * (packages/core/docs/collections.md). A label, never checked.
+ */
+const kind = <S extends object, const K extends string>(
+  schema: S,
+  name: K,
+): S & { readonly 'x-kind': K } => ({
+  ...schema,
+  'x-kind': name,
+});
+
 /** A string of at most `max` characters; `min` 1 for a field that can't be blank */
 export const text = (max: number, description?: string, min?: number) =>
   described({ type: 'string' as const, ...(min ? { minLength: min } : {}), maxLength: max }, description);
@@ -65,46 +77,52 @@ export const markdown = (max: number, description = 'CommonMark') => text(max, d
 
 /**
  * A moment, RFC 3339 (`2026-03-01T18:30:00+01:00`), or a whole day,
- * `YYYY-MM-DD`. Unchecked until the dialect has `format`.
+ * `YYYY-MM-DD`. Only its length is checked.
  */
 export const when = (description?: string) =>
-  text(64, description ?? 'RFC 3339 date-time, or YYYY-MM-DD for a whole day', 10);
+  kind(text(64, description ?? 'RFC 3339 date-time, or YYYY-MM-DD for a whole day', 10), 'when');
 
 /** A day, `YYYY-MM-DD` */
 export const day = (description?: string) =>
-  described({ type: 'string' as const, minLength: 10, maxLength: 10 }, description ?? 'YYYY-MM-DD');
+  kind(
+    described({ type: 'string' as const, minLength: 10, maxLength: 10 }, description ?? 'YYYY-MM-DD'),
+    'day',
+  );
 
 /** An IANA time zone, `Europe/Oslo` */
 export const timeZone = () => text(64, 'IANA time zone, like Europe/Oslo', 1);
 
-/** A person, by their account DID; `x-kind: "did"` is what tells an app it is one */
-export const person = (description?: string) => ({
-  ...text(256, description ?? 'An account DID', 1),
-  'x-kind': 'did' as const,
-});
+/** A person, by their account DID */
+export const person = (description?: string) => kind(text(256, description ?? 'An account DID', 1), 'did');
 
 /** Some people, by their account DIDs */
 export const people = (max: number, description?: string) =>
   described({ type: 'array' as const, items: person(), maxItems: max }, description);
 
 /** A web address */
-export const url = (description?: string) => text(2048, description, 1);
+export const url = (description?: string) => kind(text(2048, description, 1), 'url');
 
 /**
  * An amount of money: a decimal string, never a float, so 0.1 + 0.2 is
  * nobody's problem, and an ISO 4217 currency code.
  */
 export const money = (description?: string) =>
-  described(
-    {
-      type: 'object' as const,
-      properties: {
-        amount: text(32, 'A decimal string, like "12.50"', 1),
-        currency: described({ type: 'string' as const, minLength: 3, maxLength: 3 }, 'ISO 4217, like "EUR"'),
+  kind(
+    described(
+      {
+        type: 'object' as const,
+        properties: {
+          amount: text(32, 'A decimal string, like "12.50"', 1),
+          currency: described(
+            { type: 'string' as const, minLength: 3, maxLength: 3 },
+            'ISO 4217, like "EUR"',
+          ),
+        },
+        required: ['amount', 'currency'] as const,
       },
-      required: ['amount', 'currency'] as const,
-    },
-    description,
+      description,
+    ),
+    'money',
   );
 
 /** A postal address, in JSContact's parts */
@@ -154,34 +172,44 @@ export const point = () => ({ lat: latitude(), lon: longitude() });
  * names the file on its version, so peers fetch and keep it.
  */
 export const blob = (description?: string) =>
-  described(
-    {
-      type: 'object' as const,
-      properties: {
-        hash: described(
-          { type: 'string' as const, minLength: 64, maxLength: 64 },
-          'SHA-256 of the bytes, hex',
-        ),
-        size: { type: 'integer' as const, minimum: 0 },
-        mime: text(255, undefined, 1),
-        name: text(255),
-        key: described({ type: 'string' as const, minLength: 22, maxLength: 22 }, 'What opens it, base64url'),
-        salt: described({ type: 'string' as const, minLength: 22, maxLength: 22 }, 'Its salt, base64url'),
+  kind(
+    described(
+      {
+        type: 'object' as const,
+        properties: {
+          hash: described(
+            { type: 'string' as const, minLength: 64, maxLength: 64 },
+            'SHA-256 of the bytes, hex',
+          ),
+          size: { type: 'integer' as const, minimum: 0 },
+          mime: text(255, undefined, 1),
+          name: text(255),
+          key: described(
+            { type: 'string' as const, minLength: 22, maxLength: 22 },
+            'What opens it, base64url',
+          ),
+          salt: described({ type: 'string' as const, minLength: 22, maxLength: 22 }, 'Its salt, base64url'),
+        },
+        required: ['hash', 'size', 'mime'] as const,
       },
-      required: ['hash', 'size', 'mime'] as const,
-    },
-    description,
+      description,
+    ),
+    'file',
   );
 
 /** An image with its words for people who can't see it */
-export const image = () => ({
-  type: 'object' as const,
-  properties: { blob: blob(), alt: text(2000, 'What it shows') },
-  required: ['blob'] as const,
-});
+export const image = () =>
+  kind(
+    {
+      type: 'object' as const,
+      properties: { blob: blob(), alt: text(2000, 'What it shows') },
+      required: ['blob'] as const,
+    },
+    'image',
+  );
 
 /** Where a record goes in a hand-made order (see `positionBetween`) */
-export const position = (description = 'Sorts where it goes') => text(200, description, 1);
+export const position = (description = 'Sorts where it goes') => kind(text(200, description, 1), 'position');
 
 /** A whole number from `min` to `max` */
 export const count = (min: number, max?: number, description?: string) =>

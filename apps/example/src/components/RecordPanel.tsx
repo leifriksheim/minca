@@ -10,6 +10,7 @@ import {
   collectionLabel,
   computedFieldsOf,
   fieldsOf,
+  isObject,
   humanize,
   labelOf,
   recordLabel,
@@ -17,6 +18,7 @@ import {
   textOf,
   titleField,
   valueOf,
+  valueKindOf,
   type Field,
   type LinkedByRel,
 } from '../derive/schema-ui';
@@ -115,7 +117,9 @@ export function RecordPanel({
   const title = titleField(schema);
   const fields = fieldsOf(schema).filter((f) => f.name !== title);
   const computed = computedFieldsOf(collection, collections);
-  const extra = Object.keys(body).filter((k) => k !== title && !fieldsOf(schema).some((f) => f.name === k));
+  // What the body holds beyond its schema; a field the schema names but hides, like a position, is not extra.
+  const declared = isObject(schema?.properties) ? schema.properties : {};
+  const extra = Object.keys(body).filter((k) => k !== title && !Object.hasOwn(declared, k));
   const linkedHere: LinkedByRel =
     record && data
       ? byRel(
@@ -598,7 +602,8 @@ function FieldEditor({
       </label>
     );
   }
-  if (field.kind === 'text' || field.kind === 'longText') {
+  // Plain text is edited in place; a time, a link or a person shows as itself until clicked.
+  if ((field.kind === 'text' || field.kind === 'longText') && !valueKindOf(field.schema)) {
     return (
       <InlineText
         value={typeof value === 'string' ? value : ''}

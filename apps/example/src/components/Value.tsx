@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { labelOf, textOf, type Field, type LinkedByRel } from '../derive/schema-ui';
+import { itemKindOf, labelOf, textOf, valueKindOf, type Field, type LinkedByRel } from '../derive/schema-ui';
+import { byKind, PeopleValue } from './KindValue';
 import { styles, palette } from '../styles';
 
 /** Text longer than this folds away behind "Show": a screen's HTML is a field too */
@@ -25,6 +26,19 @@ export function Value({
   if (value === undefined || value === null || value === '') return <span style={{ opacity: 0.4 }}>—</span>;
   const label = field ? labelOf(field, value, linked) : null;
   if (label !== null) return <span>{label}</span>;
+  const kind = field ? valueKindOf(field.schema) : null;
+  const shown = kind ? byKind(kind, value, compact) : null;
+  if (shown !== null) return shown;
+  const items = field ? itemKindOf(field.schema) : null;
+  if (items === 'did' && Array.isArray(value)) return <PeopleValue value={value} />;
+  if ((items === 'file' || items === 'image') && Array.isArray(value))
+    return (
+      <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 6 }}>
+        {value.map((item, i) => (
+          <span key={i}>{byKind(items, item, compact)}</span>
+        ))}
+      </span>
+    );
   return <Plain value={value} compact={compact} longText={field?.kind === 'longText'} depth={0} />;
 }
 

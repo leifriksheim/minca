@@ -26,6 +26,9 @@ export function PersonScopeProvider({ children, ...scope }: PersonScope & { chil
   return <Scope.Provider value={scope}>{children}</Scope.Provider>;
 }
 
+/** The space on screen: null outside one */
+export const useSpaceHere = (): SpaceSummary | null => useContext(Scope)?.space ?? null;
+
 /** Who is in the space on screen, and which of them is you: null outside a space */
 export function usePeopleHere(): { readonly people: People; readonly me: string } | null {
   const scope = useContext(Scope);

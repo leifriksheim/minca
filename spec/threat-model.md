@@ -447,13 +447,16 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     keyword an older peer doesn't know is invalid to it, so it enforces none
     of that collection's rules, topics or contract, silently, until it
     updates. To a peer from before `x-*` annotations (02 §6.2), that is every
-    collection with a person field (`fragments.person` or `people`), from
-    `std.vote` and `std.settlement` to `std.message` and Liquid's. It counts
-    a second vote others refuse and lets a settlement's amount be edited. It
-    writes no topic tags, so newer peers refuse what it writes wherever the
-    body has a topic (a message in a channel, any settlement), while it
-    accepts all of theirs. Later annotations don't widen it. Accepted before
-    v1, when Minca does not support mixed releases
+    definition carrying one: 45 of the 86 standard ones (a person, a time, a
+    link, money, a file, a position), from `std.vote`, `std.settlement` and
+    `std.message` to `std.profile`, `std.proposal`, `std.event`,
+    `std.automation-run` and Liquid's. It counts a second vote or profile
+    others refuse, runs an automation twice, and lets a settlement's amount
+    or a proposal's options be edited. It writes no topic tags, so newer
+    peers refuse what it writes wherever the body has a topic (a message in
+    a channel, an event, a listing), while it accepts all of theirs. Once a
+    peer lets `x-*` through, a new annotation never widens it. Accepted
+    before v1, when Minca does not support mixed releases
     ([#10](https://github.com/leifriksheim/minca/issues/10)).
   - A removal or unassignment signed offline can arrive at any time and withdraw
     what its cutoff doesn't cover: peers converge, but no verdict is final
