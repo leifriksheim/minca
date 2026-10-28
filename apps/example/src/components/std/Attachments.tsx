@@ -3,24 +3,14 @@ import { useNode } from '@minca/react';
 import type { FileRef, NodeRecord, SpaceSummary } from '@minca/core';
 import { file as fileCollection } from '@minca/core/schemas';
 import { bodyOf } from '../../derive/schema-ui';
+import { fileRefOf } from '../../derive/kinds';
 import { fitImage } from '@minca/ui/image';
 import { sizeOf } from '@minca/ui/size';
 import { saveFile, useFileUrl } from '../../files';
 import { palette, styles } from '../../styles';
 
 /** The file an attachment names, when its body holds one */
-function fileOf(record: NodeRecord): FileRef | null {
-  const blob = bodyOf(record).blob;
-  if (typeof blob !== 'object' || blob === null) return null;
-  const ref: Record<string, unknown> = { ...blob };
-  return typeof ref.hash === 'string' &&
-    typeof ref.size === 'number' &&
-    typeof ref.key === 'string' &&
-    typeof ref.salt === 'string' &&
-    typeof ref.mime === 'string'
-    ? { hash: ref.hash, size: ref.size, key: ref.key, salt: ref.salt, mime: ref.mime }
-    : null;
-}
+const fileOf = (record: NodeRecord): FileRef | null => fileRefOf(bodyOf(record).blob);
 
 /** Adds files to a record as `std.file`s about it; large pictures made smaller */
 async function attachFiles(

@@ -6,9 +6,12 @@ import {
   fieldsOf,
   isObject,
   textOf,
+  itemKindOf,
+  valueKindOf,
   type Field,
   type LinkedByRel,
 } from '../derive/schema-ui';
+import { FileInput, FileListInput, MoneyInput, WhenInput } from './KindInputs';
 import { fieldTypeOf } from '../derive/field-types';
 import { nameOf } from '../derive/people';
 import { usePeopleHere } from './Person';
@@ -119,20 +122,28 @@ export function FieldInput({
     </span>
   );
 
-  // Strings the schema can't tell apart, spelled the way the standard library spells them.
-  if (type === 'date')
+  // What the field says it holds, as the standard library's fragments label it.
+  const kind = valueKindOf(field.schema);
+  if (kind === 'when') return <WhenInput label={label} value={value} onChange={onChange} />;
+  if (kind === 'money') return <MoneyInput label={label} value={value} onChange={onChange} />;
+  if (kind === 'file' || kind === 'image')
+    return <FileInput label={label} picture={kind === 'image'} value={value} onChange={onChange} />;
+  const items = itemKindOf(field.schema);
+  if (items === 'file' || items === 'image')
+    return <FileListInput label={label} picture={items === 'image'} value={value} onChange={onChange} />;
+  if (kind === 'day')
     return (
       <label style={labelStyle}>
         {label}
         <input
           type="date"
-          value={typeof value === 'string' ? value.slice(0, 10) : ''}
+          value={typeof value === 'string' ? value : ''}
           onChange={(e) => onChange(e.target.value || undefined)}
           style={styles.input}
         />
       </label>
     );
-  if (type === 'web link')
+  if (kind === 'url')
     return (
       <label style={labelStyle}>
         {label}

@@ -1,7 +1,7 @@
 /** The kinds of field and link a person can pick when defining a collection, spelled as `std.*` fragments spell them. */
 import type { JsonSchema } from '@minca/core';
 import { fragments } from '@minca/core/schemas';
-import { isObject, kindOf } from './schema-ui';
+import { itemKindOf, kindOf, valueKindOf } from './schema-ui';
 
 export const FIELD_TYPES = {
   text: { type: 'string' },
@@ -15,6 +15,9 @@ export const FIELD_TYPES = {
   person: fragments.person(),
   people: fragments.people(64),
   'web link': fragments.url('A web address'),
+  money: fragments.money(),
+  file: fragments.blob(),
+  picture: fragments.image(),
   'list of text': { type: 'array', items: { type: 'string' } },
 } as const satisfies Record<string, JsonSchema>;
 export type FieldTypeName = keyof typeof FIELD_TYPES;
@@ -31,6 +34,9 @@ export const FIELD_TYPE_INFO: Readonly<Record<FieldTypeName, { mark: string; hin
   person: { mark: '☺', hint: 'Someone in the space' },
   people: { mark: '☺☺', hint: 'Some of the people in the space' },
   'web link': { mark: '↗', hint: 'An address on the web' },
+  money: { mark: '¤', hint: 'A price, a cost, a balance' },
+  file: { mark: '⎘', hint: 'A document, a recording, any file' },
+  picture: { mark: '▣', hint: 'A photo, with words on what it shows' },
   'list of text': { mark: '≡', hint: 'Several short bits of text' },
 };
 
@@ -43,20 +49,22 @@ export function fieldSchema(type: FieldTypeName, options: ReadonlyArray<string> 
   return type === 'choice' ? { type: 'string', enum: [...options] } : structuredClone(FIELD_TYPES[type]);
 }
 
-/** A string holding an account's DID: one labelled `x-kind: "did"`, as `fragments.person` writes it */
-const isPersonSchema = (schema: JsonSchema) => schema.type === 'string' && schema['x-kind'] === 'did';
+/** The pickable type each `x-kind` is; a day is a date too */
+const TYPE_OF_KIND: Readonly<Record<string, FieldTypeName>> = {
+  did: 'person',
+  when: 'date',
+  day: 'date',
+  url: 'web link',
+  money: 'money',
+  file: 'file',
+  image: 'picture',
+};
 
 /** Which of the pickable types an existing field is, or null when it is something else (kept as it is) */
 export function fieldTypeOf(schema: JsonSchema): FieldTypeName | null {
-  if (isPersonSchema(schema)) return 'person';
-  if (schema.type === 'array' && isObject(schema.items) && isPersonSchema(schema.items)) return 'people';
-  if (
-    schema.type === 'string' &&
-    schema.minLength === 10 &&
-    (schema.maxLength === 64 || schema.maxLength === 10)
-  )
-    return 'date';
-  if (schema.type === 'string' && schema.maxLength === 2048 && !Array.isArray(schema.enum)) return 'web link';
+  const labelled = TYPE_OF_KIND[valueKindOf(schema) ?? ''];
+  if (labelled) return labelled;
+  if (itemKindOf(schema) === 'did') return 'people';
   switch (kindOf(schema)) {
     case 'text':
       return 'text';

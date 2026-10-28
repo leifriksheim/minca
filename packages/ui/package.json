@@ -10,6 +10,7 @@
     "./hash": "./src/hash.ts",
     "./round": "./src/round.ts",
     "./time": "./src/time.ts",
+    "./when": "./src/when.ts",
     "./size": "./src/size.ts",
     "./image": "./src/image.ts",
     "./guide": "./src/guide.ts",

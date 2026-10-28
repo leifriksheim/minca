@@ -17,6 +17,7 @@ import {
   textOf,
   titleField,
   valueOf,
+  valueKindOf,
   type Field,
   type LinkedByRel,
 } from '../derive/schema-ui';
@@ -598,7 +599,8 @@ function FieldEditor({
       </label>
     );
   }
-  if (field.kind === 'text' || field.kind === 'longText') {
+  // Plain text is edited in place; a time, a link or a person shows as itself until clicked.
+  if ((field.kind === 'text' || field.kind === 'longText') && !valueKindOf(field.schema)) {
     return (
       <InlineText
         value={typeof value === 'string' ? value : ''}

@@ -35,6 +35,14 @@ export function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** What a field holds, by its `x-kind` (packages/core/docs/collections.md), or null when it doesn't say */
+export const valueKindOf = (schema: JsonSchema): string | null =>
+  typeof schema['x-kind'] === 'string' ? schema['x-kind'] : null;
+
+/** A list's items' kind: `people` is a list of `did` */
+export const itemKindOf = (schema: JsonSchema): string | null =>
+  schema.type === 'array' && isObject(schema.items) ? valueKindOf(schema.items) : null;
+
 /** A record's fields; none when there is no record or its body cannot be opened */
 export function bodyOf(record: { readonly body: unknown } | null | undefined): Record<string, unknown> {
   const body = record?.body;
@@ -77,12 +85,16 @@ export function humanize(name: string): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
-/** The fields of an object schema, in the order the schema lists them */
+/**
+ * The fields of an object schema, in the order the schema lists them. A
+ * position only orders records, so it is never shown or edited by hand.
+ */
 export function fieldsOf(schema: JsonSchema | null): ReadonlyArray<Field> {
   const properties = isObject(schema?.properties) ? schema.properties : {};
   const required = new Set(Array.isArray(schema?.required) ? schema.required : []);
-  return Object.entries(properties).map(([name, value]) => {
+  return Object.entries(properties).flatMap(([name, value]) => {
     const field = isObject(value) ? value : {};
+    if (valueKindOf(field) === 'position') return [];
     return {
       name,
       schema: field,
@@ -136,8 +148,10 @@ export function withComputed(schema: JsonSchema | null, computed: ReadonlyArray<
 /** What a table shows: short fields, at most four */
 export function columnsOf(schema: JsonSchema | null): ReadonlyArray<Field> {
   const title = titleField(schema);
-  const short = fieldsOf(schema).filter((f) =>
-    ['text', 'number', 'integer', 'boolean', 'choice', 'list'].includes(f.kind),
+  const short = fieldsOf(schema).filter(
+    (f) =>
+      ['text', 'number', 'integer', 'boolean', 'choice', 'list'].includes(f.kind) ||
+      valueKindOf(f.schema) === 'money',
   );
   return [...short.filter((f) => f.name === title), ...short.filter((f) => f.name !== title)].slice(0, 4);
 }
@@ -145,6 +159,8 @@ export function columnsOf(schema: JsonSchema | null): ReadonlyArray<Field> {
 /** A starting value for a new record's field */
 export function emptyValue(field: Field): unknown {
   if (field.schema.default !== undefined) return field.schema.default;
+  // Money, a file or a picture is whole or absent, never an object of blanks.
+  if (valueKindOf(field.schema)) return undefined;
   switch (field.kind) {
     case 'boolean':
       return false;
@@ -281,7 +297,8 @@ export function metaFields(schema: JsonSchema | null): ReadonlyArray<Field> {
       (f) =>
         f.name !== title &&
         f.name !== check &&
-        ['text', 'number', 'integer', 'choice', 'list'].includes(f.kind),
+        (['text', 'number', 'integer', 'choice', 'list'].includes(f.kind) ||
+          valueKindOf(f.schema) === 'money'),
     )
     .slice(0, 3);
 }

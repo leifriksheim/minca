@@ -54,12 +54,20 @@ and three that say what a value means, so any app can show it well:
   its poll's `options`. It is a display hint, never checked when validating.
 - `x-kind: "<name>"`: what kind of value a field holds. The names apps read:
 
-  | `x-kind` | The value                                                                                                          | An app shows                                 |
-  | -------- | ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------- |
-  | `did`    | an account's DID, `did:key:z…` ([spec 01 §4](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md)) | who it is, and a list of people to pick from |
+  | `x-kind`   | The value                                                                                                          | An app shows                                                          |
+  | ---------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
+  | `did`      | an account's DID, `did:key:z…` ([spec 01 §4](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md)) | who it is, and a list of people to pick from                          |
+  | `when`     | a moment, RFC 3339, or a whole day, `YYYY-MM-DD`                                                                   | the time in the reader's words, a date and time picker with "all day" |
+  | `day`      | a day, `YYYY-MM-DD`                                                                                                | the day in the reader's words, a date picker                          |
+  | `url`      | a web address                                                                                                      | a link, opened only when it is `http` or `https`                      |
+  | `money`    | `{ amount, currency }`, `amount` a decimal string                                                                  | `€12.50` in the reader's format; an amount and a currency             |
+  | `file`     | a file, as `records.addFile` gives it                                                                              | its name and size, a picture when it is one; a file picker            |
+  | `image`    | `{ blob, alt }`: a picture and what it shows                                                                       | the picture; a picker and its description                             |
+  | `position` | a sort key (`positionBetween`)                                                                                     | nothing: it orders records, nobody reads it                           |
 
-  A field holding a person says `x-kind: "did"`; `fragments.person` writes
-  it. An app shows a kind it doesn't know as the plain value.
+  Each is what the fragment of the same name writes (`person` writes `did`,
+  `blob` writes `file`). An app shows a kind it doesn't know as the plain
+  value.
 
 Any keyword starting `x-` is an annotation like these: any JSON, and it says
 nothing about whether a body fits. A new one, or a new `x-kind`, is a row
