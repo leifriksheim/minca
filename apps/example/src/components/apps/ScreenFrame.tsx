@@ -144,6 +144,11 @@ export function ScreenFrame({
           pick: (text) => {
             if (pickingNow.current)
               return Promise.reject(new Error('The person is already choosing a record'));
+            // Only when the person just clicked or typed in it, so a screen can't keep a picker in their face.
+            if (globalThis.navigator?.userActivation?.isActive === false)
+              return Promise.reject(
+                new Error('minca.pick opens only right after the person clicks or types'),
+              );
             pickingNow.current = true;
             return new Promise((resolve) =>
               setPicking({

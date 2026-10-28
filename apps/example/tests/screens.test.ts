@@ -539,13 +539,20 @@ describe('sharing a record into an app', () => {
       { text: 'Look' },
       { links: [{ rel: 'shares', to: app.key }] },
     );
-    const { call, close } = bridgeFor(alice.node, space, [message.name], fakeHost().host);
+    const { host, asked: opened } = fakeHost();
+    const { call, close } = bridgeFor(alice.node, space, [message.name], host);
     try {
       assert.equal((await call('get', asked.key)).value, null, 'not by its key: it is no record of the chat');
+      // Opening what a message shares shows it to the person, but never the space's own apps.
+      assert.equal((await call('open', { record: said.key, link: 'shares' })).ok, true);
+      assert.equal((await call('open', { record: odd.key, link: 'shares' })).ok, true, 'answered the same');
+      const shown = opened.filter(([what]) => what === 'open').map(([, target]) => target);
+      assert.equal(shown.length, 1);
+      assert.ok(isRecord(shown[0]) && isRecord(shown[0].record) && shown[0].record.key === asked.key);
       const shared = await call('get', said.key, { link: 'shares' });
       assert.ok(isRecord(shared.value) && isRecord(shared.value.body));
       assert.equal(shared.value.body.question, 'Where?');
-      assert.equal((await call('get', said.key, { link: 'replyTo' })).value, null, 'a link it does not have');
+      assert.equal((await call('get', said.key, { link: 'replyTo' })).ok, false, 'only a share is read');
       assert.equal(
         (await call('get', odd.key, { link: 'shares' })).value,
         null,
@@ -556,6 +563,32 @@ describe('sharing a record into an app', () => {
         null,
         'only from a record of its own',
       );
+    } finally {
+      close();
+    }
+  });
+
+  test('a link made for something else shares nothing: a file about a diary entry doesn’t hand the entry over', async () => {
+    const { alice, space } = await setup();
+    await addSchemas(alice.node, space, [message, fileCollection]);
+    const entry = await alice.node.records.put(space, 'app.diary.entry', { text: 'my secret diary' });
+    const photo = await alice.node.records.put(
+      space,
+      fileCollection.name,
+      { name: 'p.jpg', mime: 'image/jpeg' },
+      { links: [{ rel: 'about', to: entry.key }] },
+    );
+    // The chat names std.file, as the ready-made one does, so it can list the photo.
+    const { call, close } = bridgeFor(
+      alice.node,
+      space,
+      [message.name, fileCollection.name],
+      fakeHost().host,
+    );
+    try {
+      const read = await call('get', photo.key, { link: 'about' });
+      assert.equal(read.ok, false);
+      assert.doesNotMatch(JSON.stringify(read), /secret diary/);
     } finally {
       close();
     }

@@ -117,8 +117,8 @@ Inside it, window.minca is:
                                     where: { "link:<rel>": "<record key>" } for records linking there, { field: value } for a field's value,
                                     a computed field's too; computed holds the values the collection's definition works out, like { done: true }
   await minca.get(key)              one record, or null
-  await minca.get(key, { link: 'shares' })   the record one of these links to with that role, of any collection, or null:
-                                    a message's shared poll. Read only, and only what someone put a link to
+  await minca.get(key, { link: 'shares' })   the record one of these shares, of any collection, or null: a message's
+                                    shared poll. Read only. Only "shares": other links can be opened, not read
   await minca.pick({ text? })       asks the person to choose a record anywhere in the space, and gives it, or null if they
                                     don't: to share it, put a link to its key (std.message's "shares"). Like a file picker
   await minca.history(key)          the versions of a record this device can read, newest first; older ones only if its collection keeps history
@@ -367,6 +367,9 @@ function linksOf(options: unknown): { links?: ReadonlyArray<Link> } {
 /** What a screen may ask the page around it to show */
 export type ScreenOpen = { readonly record: NodeRecord } | { readonly person: string };
 
+/** The link role that shares a record with an app: the only one a screen reads through (`minca.get`) */
+const SHARES = 'shares';
+
 /**
  * Records a person may hand a screen, and a screen may follow a link to: any
  * but the protocol's own and the space's apps.
@@ -517,10 +520,9 @@ export function createScreenBridge(params: {
   const picked = new Set<string>();
   /**
    * Links a screen may write, as the person: to records of its own
-   * collections, to one the person picked, or ones the record already has. So
-   * a link out of the app is always someone's choice, never the screen's, and
-   * following links (`linkedFrom`) reads only what someone shared. Refused the
-   * same way whether or not the record is here.
+   * collections, to one the person picked, or ones the record already has, so
+   * a screen never shares on its own. Refused the same way whether or not the
+   * record is here.
    */
   const checkLinks = async (links: ReadonlyArray<Link>, kept: ReadonlyArray<Link> = []) => {
     for (const link of links) {
@@ -534,9 +536,9 @@ export function createScreenBridge(params: {
   };
 
   /**
-   * What one of the app's records links to with this role, if it may be read:
-   * every link out of the app is someone's choice (`checkLinks`), and keys
-   * can't be guessed, so following one reads only what someone shared.
+   * What one of the app's records links to with this role, but never the
+   * space's own records: what `open` shows the person, and, for `shares`
+   * only, what `get` hands the screen.
    */
   const linkedFrom = async (key: unknown, link: unknown): Promise<NodeRecord | null> => {
     if (typeof link !== 'string') throw new Error('link names a link role, like "shares"');
@@ -595,6 +597,9 @@ export function createScreenBridge(params: {
     get: async (...args) => {
       const { key } = spread(args, ['key']);
       const link = fieldOf(args[1], 'link') ?? fieldOf(args[0], 'link');
+      // Only a share is the screen's to read: a file "about" a diary entry, or a reaction to it, shares nothing.
+      if (link !== undefined && link !== SHARES)
+        throw new Error('minca.get follows only a "shares" link: what someone shared with this app');
       try {
         const record = link === undefined ? await ownRecord(key) : await linkedFrom(key, link);
         return record ? toScreen(record, node.did) : null;
