@@ -3,25 +3,33 @@
  * one-time code and gets a records-only note from it there, signed to a key
  * made here that never leaves (`packages/core/src/session/connect-code.ts`). Then `minca mcp`
  * and `minca agent` run a node of their own as the agent, under that note.
- * Kept in `<home>/agent/`, readable only by this user: `key.json`,
- * `grant.json`, `data/`, and `minca agent`'s model keys and `spend.json`.
+ *
+ * A key signs in one process at a time, or its log forks (spec 02 §4.10), so
+ * each session that runs at once has a key of its own: a numbered slot,
+ * `<home>/agent/<n>/`, holding `key.json`, `grant.json`, its lock and what
+ * only that session keeps. The spaces themselves are in one folder,
+ * `<home>/agent/spaces/`, that every session reads and writes at once the
+ * way clients share a data folder (spec 05 §14.5), so what one session
+ * synced the next starts from. Beside
+ * them, `minca agent`'s model keys and `spend.json`. All readable only by
+ * this user.
  *
  * Each connect makes a new key: a key the home revoked stays revoked in every
  * space (`packages/core/src/space/roles.ts`, `judge`), so a new note made out
- * to it would write nothing. A running `minca mcp` takes the new key and note
- * up by itself ({@link reloadOnConnect}).
+ * to it would write nothing. A running session takes its slot's new key and
+ * note up by itself ({@link reloadOnConnect}).
  */
 import { execFile } from 'node:child_process';
 import { watch } from 'node:fs';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { setTimeout as delay } from 'node:timers/promises';
 import { promisify } from 'node:util';
 import {
   createNode,
   directoryStores,
   didOf,
+  folderStores,
   COLLECTION_DEFINE,
   type NodeConfig,
   type P2PNode,
@@ -42,7 +50,7 @@ import {
 import { openFsDirectory, writeWhole } from './fs-directory.js';
 import { nodeFor, type Unlocked } from './home.js';
 import { commaList, errorCode, isRecord, messageOf } from './json.js';
-import { holdLock, lockHolder } from './writer-keys.js';
+import { holdLock } from './writer-keys.js';
 
 /** The relay the apps meet on unless told otherwise */
 const DEFAULT_RELAYS: ReadonlyArray<string> = ['wss://minca.fly.dev'];
@@ -72,6 +80,9 @@ export async function enableWebRTC(): Promise<void> {
 }
 
 const agentDir = (home: string) => path.join(home, 'agent');
+/** How many sessions may run the agent at once, each with a key of its own */
+const MAX_SLOTS = 16;
+const slotDir = (home: string, slot: number) => path.join(agentDir(home), String(slot));
 
 interface Stored {
   readonly keys: CryptoKeyPair;
@@ -95,9 +106,9 @@ async function makeAgentKey(): Promise<Stored & { readonly jwk: string }> {
   return { keys, did: await didOf(keys.publicKey), jwk: `${JSON.stringify(stored)}\n` };
 }
 
-/** This computer's agent key, from `key.json`; null before `minca connect` made one */
-async function readAgentKey(home: string): Promise<Stored | null> {
-  const file = path.join(agentDir(home), 'key.json');
+/** A slot's key, from its `key.json`; null before it was connected */
+async function readAgentKey(slot: string): Promise<Stored | null> {
+  const file = path.join(slot, 'key.json');
   const subtle = globalThis.crypto.subtle;
   try {
     const stored: unknown = JSON.parse(await readFile(file, 'utf8'));
@@ -115,19 +126,67 @@ async function readAgentKey(home: string): Promise<Stored | null> {
   }
 }
 
-/** The grant this computer's agent was given, or null before `minca connect` */
-export async function loadAgentGrant(home: string): Promise<Grant | null> {
+/** The grant a slot was given, or null before it was connected */
+async function slotGrant(slot: string): Promise<Grant | null> {
   try {
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- written by connectAgent; startAgentNode checks it with checkGrant before use
-    return JSON.parse(await readFile(path.join(agentDir(home), 'grant.json'), 'utf8')) as Grant;
+    return JSON.parse(await readFile(path.join(slot, 'grant.json'), 'utf8')) as Grant;
   } catch {
     return null;
   }
 }
 
-/** Whether this computer's agent was connected to an account, and its note still runs */
-export async function hasConnectedAgent(home: string): Promise<boolean> {
-  return usableGrant(await loadAgentGrant(home));
+/** The grant of the first connected slot, or null before `minca connect` */
+export async function loadAgentGrant(home: string): Promise<Grant | null> {
+  for (let n = 1; n <= MAX_SLOTS; n += 1) {
+    const grant = await slotGrant(slotDir(home, n));
+    if (grant) return grant;
+  }
+  return null;
+}
+
+/**
+ * Whether the agent can run in a slot: its grant and key there check out. One
+ * that doesn't (half written, or its note run out) counts as not connected, so
+ * the session claiming it connects it again rather than fail to start.
+ */
+const runnable = (slot: string): Promise<boolean> =>
+  readConnection(slot).then(
+    () => true,
+    () => false,
+  );
+
+/** A slot this process holds: no other runs with its key until it lets go */
+export interface Slot {
+  readonly dir: string;
+  release(): Promise<void>;
+}
+
+/**
+ * Claims a slot: the first connected one no other process holds, else the
+ * first not connected yet, for this session to connect.
+ * @throws When every slot is held
+ */
+export async function claimSlot(home: string): Promise<Slot> {
+  await mkdir(agentDir(home), { recursive: true, mode: 0o700 });
+  for (const connected of [true, false])
+    for (let n = 1; n <= MAX_SLOTS; n += 1) {
+      const dir = slotDir(home, n);
+      if ((await runnable(dir)) !== connected) continue;
+      await mkdir(dir, { recursive: true, mode: 0o700 });
+      const release = await holdLock(path.join(dir, 'lock'));
+      // Connected meanwhile by the process that held it: a later pass may still take it.
+      if (release && (await runnable(dir)) === connected) return { dir, release };
+      await release?.();
+    }
+  throw new Error(
+    `Minca already runs in ${MAX_SLOTS} sessions on this computer. Close one, then start this one again.`,
+  );
+}
+
+/** Whether a slot was connected to an account, and its note still runs */
+export async function isConnected(slot: Slot): Promise<boolean> {
+  return runnable(slot.dir);
 }
 
 /** "Agent on leifs-macbook" — what the person sees in the app and their account */
@@ -145,7 +204,8 @@ export const ACCOUNT_HOME = 'home.minca.social';
  * @returns The grant, checked
  */
 export async function connectAgent(params: {
-  readonly home: string;
+  /** The slot it connects: one this process holds, or slot 1 for `minca connect`, whose session takes it up */
+  readonly slot: string;
   readonly accountHome: string;
   readonly relays: ReadonlyArray<string>;
   readonly name: string;
@@ -170,40 +230,44 @@ export async function connectAgent(params: {
     network: { relays: params.relays },
   });
 
-  // Another account's spaces don't belong next to this one's.
-  const before = await loadAgentGrant(params.home);
+  // What this slot kept of another account doesn't belong to this one; the shared folder keeps each account apart.
+  const before = await slotGrant(params.slot);
   if (before && before.did !== grant.did)
-    await rm(path.join(agentDir(params.home), 'data'), { recursive: true, force: true });
+    await rm(path.join(params.slot, 'stores'), { recursive: true, force: true });
+  // Slots connected to another account forget it: the next session handed one would write as that account.
+  for (let n = 1; n <= MAX_SLOTS; n += 1) {
+    const other = path.join(path.dirname(params.slot), String(n));
+    const theirs = path.resolve(other) === path.resolve(params.slot) ? null : await slotGrant(other);
+    if (theirs && theirs.did !== grant.did) await rm(path.join(other, 'grant.json'), { force: true });
+  }
   const kept = { ...grant, relays: [...new Set([...(grant.relays ?? []), ...params.relays])] };
-  await mkdir(agentDir(params.home), { recursive: true, mode: 0o700 });
+  await mkdir(params.slot, { recursive: true, mode: 0o700 });
   // The key, then the grant made out to it: a running agent reloads when the grant changes.
-  await writeWhole(path.join(agentDir(params.home), 'key.json'), key.jwk);
-  await writeWhole(path.join(agentDir(params.home), 'grant.json'), `${JSON.stringify(kept, null, 2)}\n`);
+  await writeWhole(path.join(params.slot, 'key.json'), key.jwk);
+  await writeWhole(path.join(params.slot, 'grant.json'), `${JSON.stringify(kept, null, 2)}\n`);
   return kept;
+}
+
+/**
+ * Connects the agent again from a terminal (`minca connect`): its first slot
+ * gets the new key and note, and the other slots forget theirs, so each
+ * session after asks for its own again rather than run on a note the person
+ * may have revoked.
+ */
+export async function reconnectAgent(
+  home: string,
+  connect: (slot: string) => Promise<Grant>,
+): Promise<Grant> {
+  const grant = await connect(slotDir(home, 1));
+  for (let n = 2; n <= MAX_SLOTS; n += 1)
+    await rm(path.join(slotDir(home, n), 'grant.json'), { force: true });
+  return grant;
 }
 
 /** Days until a grant runs out, rounded up — "30 days" just after asking for 30 */
 export function daysLeft(grant: Grant): number {
   return Math.max(0, Math.ceil((grant.expiresAt - Date.now() / 1000) / 86_400));
 }
-
-const agentLock = (home: string) => path.join(agentDir(home), 'lock');
-
-/** Thrown when another process on this computer already runs its agent */
-export class AgentBusy extends Error {
-  /** That process's id */
-  readonly holder: number;
-  constructor(holder: number) {
-    super(
-      `This computer’s agent is already running (pid ${holder}, another \`minca agent\` or \`minca mcp\`). Stop it first: two at once would sign with one key.`,
-    );
-    this.name = 'AgentBusy';
-    this.holder = holder;
-  }
-}
-
-/** The process running this computer's agent, or null when none is */
-export const agentRunning = (home: string): Promise<number | null> => lockHolder(agentLock(home));
 
 const run = promisify(execFile);
 
@@ -222,70 +286,6 @@ export async function openInBrowser(url: string): Promise<boolean> {
     return false;
   }
 }
-const psField = async (pid: number, field: string) =>
-  (await run('ps', ['-o', `${field}=`, '-p', String(pid)])).stdout.trim();
-
-/** The apps that start `minca mcp`, by their command line */
-const CLIENTS: ReadonlyArray<readonly [RegExp, string]> = [
-  [/Claude\.app\//, 'Claude Desktop'],
-  [/(^|\/)claude(\s|$)/, 'a Claude Code session'],
-  [/Cursor/, 'Cursor'],
-  [/Code( - Insiders)?\.app\/|(^|\/)code(\s|$)/, 'VS Code'],
-  [/Windsurf/, 'Windsurf'],
-];
-/** What starts a process on the way to the app that asked for it, so skipped */
-const LAUNCHERS = /^(npm|npx|node|bun|sh|bash|zsh|fish|env)$/;
-
-/**
- * Says who runs the agent, for a person to recognise: "`minca mcp` (pid
- * 14578), started Thu Oct 15 17:57:54 2026 by a Claude Code session".
- * Read from `ps`; where there is none, just the pid.
- */
-export async function describeAgentProcess(pid: number): Promise<string> {
-  try {
-    const command = await psField(pid, 'command');
-    const what = /\bagent\b/.test(command) && !/\bmcp\b/.test(command) ? '`minca agent`' : '`minca mcp`';
-    const started = await psField(pid, 'lstart');
-    // Up past npx, node and shells to what launched it.
-    let by = '';
-    let parent = Number(await psField(pid, 'ppid'));
-    for (let depth = 0; depth < 5 && parent > 1 && !by; depth += 1) {
-      const line = await psField(parent, 'command');
-      const name = path.basename(line.split(' ')[0] ?? '');
-      by = CLIENTS.find(([pattern]) => pattern.test(line))?.[1] ?? (LAUNCHERS.test(name) ? '' : name);
-      parent = Number(await psField(parent, 'ppid'));
-    }
-    return `${what} (pid ${pid}), started ${started}${by ? ` by ${by}` : ''}`;
-  } catch {
-    return `pid ${pid}`;
-  }
-}
-
-/**
- * Stops the process running this computer's agent, waits for it to let go,
- * and starts the agent here instead.
- * @throws When it doesn't stop in time, or isn't this user's to stop
- */
-export async function takeOverAgent(home: string, options: StartOptions = {}): Promise<RunningAgent> {
-  const holder = await agentRunning(home);
-  if (holder !== null) {
-    try {
-      // It closes its node and lets go of the lock on SIGTERM.
-      process.kill(holder, 'SIGTERM');
-    } catch (error) {
-      if (errorCode(error) !== 'ESRCH') throw new Error(`Couldn't stop pid ${holder}: ${messageOf(error)}`);
-    }
-    for (let waited = 0; (await agentRunning(home)) !== null; waited += 200) {
-      if (waited >= 10_000)
-        throw new Error(
-          `pid ${holder} didn't stop within 10 seconds. Stop it by hand (kill ${holder}), then try again.`,
-        );
-      await delay(200);
-    }
-  }
-  return startAgentNode(home, options);
-}
-
 export interface StartOptions {
   /** Nodes to reach by address, from `$MINCA_NODES` */
   readonly nodes?: ReadonlyArray<string>;
@@ -315,9 +315,9 @@ export interface RunningAgent {
   close(): Promise<void>;
 }
 
-/** The grant and key on disk, checked, or why the agent can't run under them */
-async function readConnection(home: string): Promise<{ grant: Grant; key: Stored }> {
-  const grant = await loadAgentGrant(home);
+/** A slot's grant and key, checked, or why the agent can't run under them */
+async function readConnection(slot: string): Promise<{ grant: Grant; key: Stored }> {
+  const grant = await slotGrant(slot);
   if (!grant)
     throw new Error(
       'No agent is connected on this computer. In the app, choose “Connect an agent” and run the command it shows.',
@@ -328,7 +328,7 @@ async function readConnection(home: string): Promise<{ grant: Grant; key: Stored
         ? 'The agent was connected by an older version, whose access no peer reads now. In the app, choose “Connect an agent” and run the new command.'
         : "The agent's access has run out. In the app, choose “Connect an agent” and run the new command.",
     );
-  const key = await readAgentKey(home);
+  const key = await readAgentKey(slot);
   if (!key)
     throw new Error(
       "The agent's key is gone. In the app, choose “Connect an agent” and run the command it shows.",
@@ -338,20 +338,21 @@ async function readConnection(home: string): Promise<{ grant: Grant; key: Stored
 }
 
 /**
- * Starts this computer's agent: a node of its own, following the account,
- * acting as the agent.
- * @throws Before `minca connect`, or once the note has run out; {@link AgentBusy} while another process runs it
+ * Starts the agent in a slot this process holds: a node of its own, following
+ * the account, acting as the agent. Closing it lets go of the slot.
+ * @throws Before the slot was connected, or once its note has run out
  */
-export async function startAgentNode(home: string, options: StartOptions = {}): Promise<RunningAgent> {
-  const first = await readConnection(home);
-  // One key, so one process signing with it: two at once would fork its log (spec 02 §4.10).
-  const release = await holdLock(agentLock(home));
-  if (!release) throw new AgentBusy((await agentRunning(home)) ?? 0);
+export async function startAgentNode(
+  home: string,
+  slot: Slot,
+  options: StartOptions = {},
+): Promise<RunningAgent> {
   let current: { grant: Grant; key: Stored; node: P2PNode; stop(): Promise<void> };
   try {
-    current = { ...first, ...(await startWithKey(home, first.grant, first.key, options)) };
+    const first = await readConnection(slot.dir);
+    current = { ...first, ...(await startWithKey(home, slot.dir, first.grant, first.key, options)) };
   } catch (error) {
-    await release();
+    await slot.release();
     throw error;
   }
 
@@ -362,6 +363,8 @@ export async function startAgentNode(home: string, options: StartOptions = {}): 
     return node.subscribe((event) => {
       if (event.type !== 'revoked' || told.has(event.space)) return;
       told.add(event.space);
+      // A revoked key never writes again: the next session here connects the slot anew, with a new key.
+      void rm(path.join(slot.dir, 'grant.json'), { force: true });
       options.onRevoked?.(event.space);
     });
   };
@@ -386,15 +389,18 @@ export async function startAgentNode(home: string, options: StartOptions = {}): 
     reload: () =>
       exclusive(async () => {
         if (closed) return false;
-        const next = await readConnection(home).catch(() => null);
+        const next = await readConnection(slot.dir).catch(() => null);
         if (!next || (next.key.did === current.key.did && sameGrant(next.grant, current.grant))) return false;
         unlisten();
         await current.stop();
         try {
-          current = { ...next, ...(await startWithKey(home, next.grant, next.key, options)) };
+          current = { ...next, ...(await startWithKey(home, slot.dir, next.grant, next.key, options)) };
         } catch (error) {
           // Back under what it had, so the session keeps what it could do.
-          current = { ...current, ...(await startWithKey(home, current.grant, current.key, options)) };
+          current = {
+            ...current,
+            ...(await startWithKey(home, slot.dir, current.grant, current.key, options)),
+          };
           unlisten = listen(current.node);
           throw error;
         }
@@ -407,27 +413,31 @@ export async function startAgentNode(home: string, options: StartOptions = {}): 
         closed = true;
         unlisten();
         await current.stop();
-        await release();
+        await slot.release();
       }),
   });
 }
 
 const sameGrant = (a: Grant, b: Grant) => JSON.stringify(a) === JSON.stringify(b);
 
-/** The agent's node under one grant and key, and how to stop it without letting go of the lock */
+/** The agent's node under one grant and key, and how to stop it without letting go of the slot */
 async function startWithKey(
   home: string,
+  slot: string,
   grant: Grant,
   key: Stored,
   options: StartOptions,
 ): Promise<{ node: P2PNode; stop(): Promise<void> }> {
   if (!options.network) await enableWebRTC();
-  const data = await openFsDirectory(path.join(agentDir(home), 'data'));
   const { relays, ...keys } = nodeOptionsFromGrant(grant, configuredRelays());
   const base = await createNode({
     signer: grantSigner(grant),
     sessionKey: key.keys,
-    stores: directoryStores(data),
+    // The spaces in the folder every session shares, one account apart from another; the rest, its key's places in its logs among them, in its slot.
+    stores: folderStores(await openFsDirectory(path.join(agentDir(home), 'spaces')), {
+      basePath: grant.did.replace(/^did:key:/, ''),
+      local: directoryStores(await openFsDirectory(path.join(slot, 'stores'))),
+    }),
     ...keys,
     network: options.network ?? {
       relays,
@@ -456,12 +466,12 @@ const SETTLE_MS = 250;
 const LOOK_EVERY_MS = 30_000;
 
 /**
- * Reloads a running agent when `minca connect` gives this computer a new key
- * and note, so a session using it needs no restart.
+ * Reloads a running agent when `minca connect` gives its slot a new key and
+ * note, so a session using it needs no restart.
  * @returns How to stop watching
  */
 export function reloadOnConnect(
-  home: string,
+  slot: Slot,
   agent: RunningAgent,
   log: (line: string) => void,
   options: { readonly everyMs?: number } = {},
@@ -481,7 +491,7 @@ export function reloadOnConnect(
   };
   let watcher: ReturnType<typeof watch> | null = null;
   try {
-    watcher = watch(agentDir(home), (_event, file) => {
+    watcher = watch(slot.dir, (_event, file) => {
       if (file === null || file === 'grant.json') look();
     });
     watcher.on('error', () => {});
@@ -498,10 +508,16 @@ export function reloadOnConnect(
   };
 }
 
-/** Forgets this computer's agent: its note and its copy of the spaces. The key stays, so connecting again replaces it at the home. */
+/** Forgets this computer's agent: every slot's note, and its copy of the spaces. The keys stay, so connecting again replaces them at the home. */
 export async function forgetAgent(home: string): Promise<void> {
-  await rm(path.join(agentDir(home), 'grant.json'), { force: true });
-  await rm(path.join(agentDir(home), 'data'), { recursive: true, force: true });
+  for (let n = 1; n <= MAX_SLOTS; n += 1) {
+    await rm(path.join(slotDir(home, n), 'grant.json'), { force: true });
+    await rm(path.join(slotDir(home, n), 'stores'), { recursive: true, force: true });
+  }
+  await rm(path.join(agentDir(home), 'spaces'), { recursive: true, force: true });
+  // Where a minca from before the slots kept its one connection.
+  for (const old of ['key.json', 'grant.json', 'data'])
+    await rm(path.join(agentDir(home), old), { recursive: true, force: true });
 }
 
 /**

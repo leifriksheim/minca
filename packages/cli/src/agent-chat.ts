@@ -12,7 +12,7 @@
  * what other people wrote reaches the model marked as data, and every model
  * call is priced and counted against a daily cap before the next one starts.
  */
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type Anthropic from '@anthropic-ai/sdk';
 import type {
@@ -24,6 +24,7 @@ import type {
 } from '@anthropic-ai/sdk/resources/beta/messages/messages';
 import { callAction, offeredActions, type P2PNode } from '@minca/core';
 import { toolDescription, toolInstructions } from './mcp.js';
+import { writeWhole } from './fs-directory.js';
 import { errorCode, isRecord, messageOf } from './json.js';
 
 export const DEFAULT_MODEL = 'claude-opus-5-5';
@@ -144,9 +145,8 @@ export function fileSpend(dir: string, now: () => Date = () => new Date()): Spen
       const by = who === undefined ? spent.by : { ...spent.by, [who]: (spent.by[who] ?? 0) + usd };
       // Made on the first spend: a bot a host runs has no folder for it until then.
       await mkdir(dir, { recursive: true, mode: 0o700 });
-      await writeFile(file, `${JSON.stringify({ day: localDay(now()), usd: spent.usd + usd, by })}\n`, {
-        mode: 0o600,
-      });
+      // Whole, never seen empty: another session reading it then would count today from nothing.
+      await writeWhole(file, `${JSON.stringify({ day: localDay(now()), usd: spent.usd + usd, by })}\n`);
     },
   };
 }

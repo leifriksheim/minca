@@ -172,8 +172,12 @@ change and on close.
   directory store (`localPath` in `packages/cli/src/home.ts`). A command and
   the daemon share it, and the daemon finds the command's writes as it finds
   any directory store's (`reconcileFolder`). Writer keys are beside it in
-  `writers/`; a slot left in the home from before is not read. `minca agent`
-  still keeps its key and stores together in `<home>/agent`.
+  `writer-keys/`; a slot left in the home from before is not read, nor
+  `writers/`, where a minca from before the numbered lock keeps its keys, so
+  the two never sign with one key. `minca agent`
+  and `minca mcp` keep each session's key and stores together in a slot of
+  `<home>/agent`, beside the data folder the sessions share
+  ([actions](actions.md#the-agent-on-a-computer)).
 - **Elsewhere** it must be given: `folderStores` refuses to start without
   one, since a lasting key's places kept in memory would be handed out again
   after a restart.

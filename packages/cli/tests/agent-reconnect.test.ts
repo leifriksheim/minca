@@ -1,7 +1,8 @@
 /**
- * Connecting this computer's agent again: each `minca connect` makes a new
- * key, since a key the home revoked can't write again whatever note it gets,
- * and a running agent takes the new key and note up without a restart.
+ * This computer's agent: each `minca connect` makes a new key, since a key the
+ * home revoked can't write again whatever note it gets, and a running agent
+ * takes the new key and note up without a restart. Sessions running at once
+ * each have a key of their own, and share the spaces they keep.
  */
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -20,7 +21,17 @@ import { memoryStores } from '../../core/tests/helpers/memory-stores.js';
 import { createFakeHub, type FakeHub } from '../../core/tests/helpers/fake-transport.js';
 import { hold } from '../../core/tests/helpers/hold.js';
 import { until } from '../../core/tests/helpers/until.js';
-import { connectAgent, reloadOnConnect, startAgentNode, type RunningAgent } from '../src/agent.js';
+import {
+  claimSlot,
+  connectAgent,
+  isConnected,
+  reconnectAgent,
+  reloadOnConnect,
+  startAgentNode,
+  type RunningAgent,
+  type Slot,
+  type StartOptions,
+} from '../src/agent.js';
 import { onHub, tempDir } from './helpers/nodes.js';
 
 const open: Array<{ close(): Promise<void> }> = [];
@@ -67,9 +78,9 @@ async function accountHolder(hub: FakeHub) {
   return { node, connect, audiences };
 }
 
-const connectHere = (home: string, connect: typeof connectWithCode) =>
+const connectSlot = (slot: string, connect: typeof connectWithCode) =>
   connectAgent({
-    home,
+    slot,
     accountHome: 'https://home.test',
     relays: [],
     name: 'Agent on test',
@@ -77,6 +88,20 @@ const connectHere = (home: string, connect: typeof connectWithCode) =>
     check: async () => {},
     connect,
   });
+
+/** `minca connect`: the first slot */
+const connectHere = (home: string, connect: typeof connectWithCode) =>
+  reconnectAgent(home, (slot) => connectSlot(slot, connect));
+
+/** A session: claims a slot, and starts the agent there */
+async function session(home: string, options: StartOptions): Promise<RunningAgent> {
+  const slot = await claimSlot(home);
+  const agent = await startAgentNode(home, slot, options);
+  open.push(agent);
+  return agent;
+}
+
+const claimed = (home: string): Promise<Slot> => claimSlot(home);
 
 const writes = (agent: RunningAgent, space: string, text: string) =>
   agent.node.records.put(space, 'app.note', { text }).then(
@@ -89,20 +114,19 @@ describe('connecting the agent again', () => {
     const home = await tempDir();
     const { connect, audiences } = await accountHolder(createFakeHub({ latencyMs: 1 }));
     await connectHere(home, connect);
-    const firstKey = await readFile(path.join(home, 'agent', 'key.json'), 'utf8');
+    const firstKey = await readFile(path.join(home, 'agent', '1', 'key.json'), 'utf8');
     await connectHere(home, connect);
-    const secondKey = await readFile(path.join(home, 'agent', 'key.json'), 'utf8');
+    const secondKey = await readFile(path.join(home, 'agent', '1', 'key.json'), 'utf8');
 
     assert.equal(audiences.length, 2);
     assert.notEqual(audiences[0], audiences[1], 'a new key for the second connect');
     assert.notEqual(firstKey, secondKey);
     for (const file of ['key.json', 'grant.json'])
-      assert.equal((await stat(path.join(home, 'agent', file))).mode & 0o777, 0o600, file);
+      assert.equal((await stat(path.join(home, 'agent', '1', file))).mode & 0o777, 0o600, file);
 
     // What starts from them is the second key, under the second note.
     const hub = createFakeHub({ latencyMs: 1 });
-    const agent = await startAgentNode(home, { network: onHub(hub) });
-    open.push(agent);
+    const agent = await session(home, { network: onHub(hub) });
     assert.equal(agent.node.sessionDid, audiences[1]);
     assert.equal(await agent.reload(), false, 'nothing new on disk: nothing to reload');
   });
@@ -116,10 +140,14 @@ describe('connecting the agent again', () => {
     const home = await tempDir();
     await connectHere(home, ada.connect);
     const told: string[] = [];
-    const agent = await startAgentNode(home, { network: onHub(hub), onRevoked: (id) => told.push(id) });
+    const slot = await claimed(home);
+    const agent = await startAgentNode(home, slot, {
+      network: onHub(hub),
+      onRevoked: (id: string) => told.push(id),
+    });
     open.push(agent);
     const reloaded: string[] = [];
-    const stop = reloadOnConnect(home, agent, (line) => reloaded.push(line), { everyMs: 200 });
+    const stop = reloadOnConnect(slot, agent, (line) => reloaded.push(line), { everyMs: 200 });
     open.push({ close: async () => stop() });
     await until(
       async () => (await agent.node.spaces.list()).some((one) => one.id === space.id),
@@ -170,15 +198,142 @@ describe('connecting the agent again', () => {
     const ada = await accountHolder(hub);
     const home = await tempDir();
     await connectHere(home, ada.connect);
-    const agent = await startAgentNode(home, { network: onHub(hub) });
-    open.push(agent);
+    const agent = await session(home, { network: onHub(hub) });
     const running: P2PNode = agent.node;
 
     // Another connect's key without its grant, as between the two writes: not one to start under.
     const other = await tempDir();
     await connectHere(other, ada.connect);
-    await copyFile(path.join(other, 'agent', 'key.json'), path.join(home, 'agent', 'key.json'));
+    await copyFile(path.join(other, 'agent', '1', 'key.json'), path.join(home, 'agent', '1', 'key.json'));
     assert.equal(await agent.reload(), false);
     assert.equal(agent.node, running);
+  });
+});
+
+describe('sessions running at once', () => {
+  test('each claims a slot of its own; one not connected yet connects there, and both write, each with its key', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    const space = await ada.node.spaces.create({ name: 'Team', visibility: 'private' });
+    await hold(ada.node, space.id);
+    const home = await tempDir();
+    await connectHere(home, ada.connect);
+
+    const first = await session(home, { network: onHub(hub) });
+    // The connected slot is held, so the second session gets one to connect, and nobody else's key.
+    const second = await claimed(home);
+    assert.equal(path.basename(second.dir), '2');
+    await connectSlot(second.dir, ada.connect);
+    const other = await startAgentNode(home, second, { network: onHub(hub) });
+    open.push(other);
+    assert.notEqual(first.node.sessionDid, other.node.sessionDid);
+
+    for (const [agent, text] of [
+      [first, 'from the first'],
+      [other, 'from the second'],
+    ] as const) {
+      let written: string | Error = new Error('not tried');
+      await until(
+        async () => typeof (written = await writes(agent, space.id, text)) === 'string',
+        6000,
+        `${text} to be written`,
+      );
+      const key = String(written);
+      await until(
+        async () => (await ada.node.records.get(space.id, key))?.verified === true,
+        6000,
+        `${text} to reach Ada`,
+      );
+    }
+  });
+
+  test('a session starts from what earlier sessions kept, with no peer online', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    const space = await ada.node.spaces.create({ name: 'Team', visibility: 'private' });
+    await hold(ada.node, space.id);
+    const note = await ada.node.records.put(space.id, 'app.note', { text: 'kept' });
+    const home = await tempDir();
+    await connectHere(home, ada.connect);
+
+    const first = await session(home, { network: onHub(hub) });
+    const has = (agent: RunningAgent) =>
+      agent.node.records.get(space.id, note.key).then(
+        (record) => record !== null,
+        () => false,
+      );
+    await until(() => has(first), 6000, 'the first to sync');
+    // Held open while the second connects, so it claims a slot of its own.
+    const second = await claimed(home);
+    await connectSlot(second.dir, ada.connect);
+    await first.close();
+
+    // Nobody to sync from: what it has is what the first one kept in the folder they share.
+    const alone = await startAgentNode(home, second, { network: onHub(createFakeHub({ latencyMs: 1 })) });
+    open.push(alone);
+    await until(() => has(alone), 6000, 'the record from the folder');
+  });
+
+  test('a slot held by a running session is never claimed again until it lets go', async () => {
+    const home = await tempDir();
+    const ada = await accountHolder(createFakeHub({ latencyMs: 1 }));
+    await connectHere(home, ada.connect);
+    const one = await claimed(home);
+    const two = await claimed(home);
+    assert.notEqual(one.dir, two.dir);
+    await one.release();
+    assert.equal((await claimed(home)).dir, one.dir, 'the connected slot again, once let go');
+    await two.release();
+  });
+
+  test('minca connect again leaves only the first slot connected: the others ask for their own', async () => {
+    const home = await tempDir();
+    const ada = await accountHolder(createFakeHub({ latencyMs: 1 }));
+    await connectHere(home, ada.connect);
+    const one = await claimed(home);
+    const two = await claimed(home);
+    await connectSlot(two.dir, ada.connect);
+    await one.release();
+    await two.release();
+
+    await connectHere(home, ada.connect);
+    const again = await claimed(home);
+    const next = await claimed(home);
+    assert.equal(path.basename(again.dir), '1');
+    assert.equal(path.basename(next.dir), '2');
+    await assert.rejects(readFile(path.join(next.dir, 'grant.json')), 'its grant is gone');
+    await again.release();
+    await next.release();
+  });
+
+  test('a session connected to another account: the slots of the first forget it, so no session is handed them', async () => {
+    const home = await tempDir();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    const bea = await accountHolder(hub);
+    await connectHere(home, ada.connect);
+    const one = await claimed(home);
+    const two = await claimed(home);
+    await connectSlot(two.dir, bea.connect);
+    await assert.rejects(readFile(path.join(one.dir, 'grant.json')), 'slot 1 no longer runs as Ada');
+    await one.release();
+    await two.release();
+    const next = await claimed(home);
+    assert.equal(path.basename(next.dir), '2', 'the connected slot is the one for Bea');
+    await next.release();
+  });
+
+  test('a slot whose key and grant do not match counts as not connected, so a session connects it again rather than fail', async () => {
+    const home = await tempDir();
+    const ada = await accountHolder(createFakeHub({ latencyMs: 1 }));
+    await connectHere(home, ada.connect);
+    // Another connect's key without its grant, as when a session stops between the two writes.
+    const other = await tempDir();
+    await connectHere(other, ada.connect);
+    await copyFile(path.join(other, 'agent', '1', 'key.json'), path.join(home, 'agent', '1', 'key.json'));
+    const slot = await claimed(home);
+    assert.equal(path.basename(slot.dir), '1');
+    assert.equal(await isConnected(slot), false);
+    await slot.release();
   });
 });

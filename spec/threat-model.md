@@ -918,12 +918,23 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     and a file where a space's directory belongs stops every client pushing
     or pulling that space through the folder, until it is removed (05 §14.5,
     §16.4; [#33](https://github.com/leifriksheim/minca/issues/33)).
-  - `minca agent` keeps its key, grant and stores together in the CLI home
-    (`<home>/agent`). Where the home is a data folder others write, rolling
-    back the stores' `writers.log` has the agent sign at a place it used
-    before, and its key forks; a copy of the home on a second computer runs
-    the same key. Its stores' entries are its own, unjudged, though what it
-    reads is still judged when shown (`packages/cli/src/agent.ts`, `startWithKey`;
+  - `minca agent` and `minca mcp` keep each session's key, grant and stores
+    together in a slot of the CLI home (`<home>/agent/<n>`). One process signs
+    with a slot's key at a time only while the slot's lock holds: numbered
+    files, each linked into place whole, the highest the lock, no number used
+    twice. A minca from before this lock keeps its agent and writer keys
+    elsewhere (`<home>/agent/key.json`, `writers/`), and a lock it holds by
+    the bare file is held to this one too; one started after this one, on an
+    app-node folder, can still take its key (`packages/cli/src/writer-keys.ts`,
+    `holdLock`; tested in `packages/cli/tests/agent-slot-lock.test.ts`). Each
+    session is a connection of its own at the account home, disconnected
+    there on its own; a slot `minca connect` forgets keeps its key on disk,
+    and its note works until it runs out or is disconnected
+    ([#165](https://github.com/leifriksheim/minca/issues/165)). Where the home is
+    a data folder others write, rolling back a slot's stores has that session
+    sign at a place it used before, and its key forks; a copy of the home on a
+    second computer runs the same keys. Its stores' entries are its own, unjudged, though what it
+    reads is still judged when shown (`packages/cli/src/agent.ts`, `claimSlot`, `startWithKey`;
     [#287](https://github.com/leifriksheim/minca/issues/287)).
   - Given a space and `/access/change` there, it can still redefine or
     delete a role its own account holds, if that role may define itself: the

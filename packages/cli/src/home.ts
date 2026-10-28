@@ -194,7 +194,12 @@ export async function unlock(
     }),
     accountKey: await deriveAccountKey(seed),
     contactKey: await deriveContactKeyBytes(seed),
-    writerKey: fileWriterKeys(path.join(localPath(home.path, account.id), 'writers'), localKey, account.did),
+    // Not `writers/`, where a minca from before this lock keeps its keys: the two never open one key.
+    writerKey: fileWriterKeys(
+      path.join(localPath(home.path, account.id), 'writer-keys'),
+      localKey,
+      account.did,
+    ),
   };
 }
 
