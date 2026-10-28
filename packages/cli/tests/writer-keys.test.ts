@@ -4,7 +4,7 @@
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { fileWriterKeys, holdLock, lockHolder } from '../src/writer-keys.js';
@@ -105,6 +105,29 @@ describe('writer keys on disk', () => {
     const again = await holdLock(file);
     assert.ok(again);
     await again();
+  });
+
+  test('a lock number is never used twice, so one taker that stalled can’t hold it beside another', async () => {
+    const dir = await tempDir();
+    const file = path.join(dir, 'lock');
+    // Left by a process that is gone. A taker reads it as free, and stalls.
+    await writeFile(`${file}.3`, '2147483646');
+    const first = await holdLock(file);
+    assert.ok(first);
+    await first();
+    const next = await holdLock(file);
+    assert.ok(next);
+    // The stalled one goes on to take the number above the one it read, 4.
+    await writeFile(`${file}.4`, String(process.pid), { flag: 'w' });
+    const taken = (await readdir(dir))
+      .filter((name) => /^lock\.\d+$/.test(name))
+      .map((name) => Number(name.slice(5)));
+    assert.equal(
+      Math.max(...taken),
+      5,
+      'the one let go of kept its number, so the next took 5, and 4 is not the lock',
+    );
+    await next();
   });
 
   test('the private key can sign, and is not given out', async () => {

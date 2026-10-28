@@ -909,11 +909,18 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     the same key. Its stores' entries are its own, unjudged, though what it
     reads is still judged when shown (`packages/cli/src/agent.ts`, `startWithKey`;
     [#287](https://github.com/leifriksheim/minca/issues/287)).
-  - The process running the agent lends its node, every tool the agent has,
-    to any process that reaches the socket in `<home>/agent`. It lends only
-    while that folder is this user's alone (0700), so only their processes
-    reach it, as only they can read the agent's key there; on Windows it
+  - The process running the agent lends its node, the node's whole API as
+    it answers an agent (what the agent's note doesn't allow is refused), to
+    any process that reaches the socket in `<home>/agent`. It checks that
+    folder is this user's alone (0700) before it lends, so only their
+    processes reach it, as only they can read the agent's key there; that
+    holds only while `<home>` is private too, which nothing checks
+    ([#287](https://github.com/leifriksheim/minca/issues/287)). On Windows it
     lends to none (`packages/cli/src/agent.ts`, `lend`, `useAgent`).
+  - Every minca using one home must be the same version. One from before
+    numbered locks takes the agent's lock, and a writer key's slot, while a
+    newer one holds it, and both sign with the one key
+    (`packages/cli/src/writer-keys.ts`, `holdLock`).
   - Given a space and `/access/change` there, it can still redefine or
     delete a role its own account holds, if that role may define itself: the
     account keeps the role by name and loses what it gave (01 §8) _(traced)_.

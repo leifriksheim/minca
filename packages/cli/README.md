@@ -374,6 +374,8 @@ counts. Every other `minca mcp` borrows the agent from that one, over a socket
 in the agent's folder, so several Claude Code sessions use it at once; when it
 stops, one of them takes it up. `minca agent` runs automations, so it doesn't
 borrow: started while another runs the agent, it offers to stop that one.
+Every `minca` using one home must be the same version: upgrade them together,
+since an older one doesn't see a newer one's lock and would sign beside it.
 
 It also runs your **automations** (`std.automation`, see
 `packages/core/docs/automations.md`): what to do when some records come to be a

@@ -20,6 +20,27 @@ test('bytes, a missing argument and an object that looks like a tag come back as
   assert.ok(!encodeMessage(message).includes('\n'), 'one message, one line');
 });
 
+test('a line that never ends drops the connection', async () => {
+  const at = path.join(await tempDir(), 'socket');
+  const closed = new Promise<void>((resolve) => {
+    const server = createServer((socket: Socket) => {
+      socketPort(socket);
+      socket.once('close', () => {
+        server.close();
+        resolve();
+      });
+    });
+    server.listen(at, () => {
+      const socket = connect(at);
+      socket.on('error', () => {});
+      // 70 MB with no newline, a megabyte at a time.
+      const chunk = 'x'.repeat(2 ** 20);
+      for (let sent = 0; sent < 70; sent += 1) socket.write(chunk);
+    });
+  });
+  await closed;
+});
+
 test('a node asked across a socket that closes says so, rather than waiting for ever', async () => {
   const at = path.join(await tempDir(), 'socket');
   // A process that takes the call and goes away without answering.

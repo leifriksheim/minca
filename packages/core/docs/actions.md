@@ -119,9 +119,12 @@ Only one process with the same `--home` runs the agent's node: it signs with
 the one agent key, which is held under a lock in the agent's folder, since two
 signing at once would fork its log. The lock is numbered files, `lock.<n>`,
 each naming the process that took it and linked into place whole; the highest
-is the lock. One left by a process that is gone is never removed to take it:
-the next takes the number above it, so of several taking it at once only one
-gets each number, and one that got a lower number steps back.
+is the lock, and numbers only grow. One let go of says `released` and keeps
+its number; one left by a process that is gone is never removed to take it.
+The next takes the number above, so of several taking it at once only one
+gets each number, and one that got a lower number steps back. Every minca
+using one home must be the same version: an older one doesn't read numbered
+locks, and takes the key while a newer one holds it.
 
 That process also listens on a socket in the agent's folder
 (`<home>/agent/socket`) from the moment it holds the lock, and every other

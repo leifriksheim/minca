@@ -51,21 +51,20 @@ async function gonePid(): Promise<number> {
 }
 
 describe('one signer for a key', () => {
-  for (const left of ['lock.0', 'lock'])
-    test(`several processes taking a lock left behind (${left}) at once: one gets it`, async () => {
-      for (let trial = 0; trial < 5; trial += 1) {
-        const dir = await tempDir();
-        await writeFile(path.join(dir, left), String(await gonePid()));
-        const racers = [0, 1, 2, 3].map(() => start('lock-child.ts', [path.join(dir, 'lock')]));
-        await until(() => racers.every((racer) => racer.last() === 'ready'), 10_000, 'the racers to start');
-        const at = Date.now() + 300;
-        for (const racer of racers) racer.child.stdin?.write(`${at}\n`);
-        await until(() => racers.every((racer) => racer.said.length === 2), 10_000, 'each to try');
-        const held = racers.filter((racer) => racer.last() === 'HELD').length;
-        for (const racer of racers) racer.child.stdin?.end();
-        assert.equal(held, 1, `trial ${trial}: ${held} processes hold the lock`);
-      }
-    });
+  test('several processes taking a lock left behind at once: one gets it', async () => {
+    for (let trial = 0; trial < 5; trial += 1) {
+      const dir = await tempDir();
+      await writeFile(path.join(dir, 'lock.0'), String(await gonePid()));
+      const racers = [0, 1, 2, 3].map(() => start('lock-child.ts', [path.join(dir, 'lock')]));
+      await until(() => racers.every((racer) => racer.last() === 'ready'), 10_000, 'the racers to start');
+      const at = Date.now() + 300;
+      for (const racer of racers) racer.child.stdin?.write(`${at}\n`);
+      await until(() => racers.every((racer) => racer.said.length === 2), 10_000, 'each to try');
+      const held = racers.filter((racer) => racer.last() === 'HELD').length;
+      for (const racer of racers) racer.child.stdin?.end();
+      assert.equal(held, 1, `trial ${trial}: ${held} processes hold the lock`);
+    }
+  });
 
   for (const signal of ['SIGTERM', 'SIGKILL'] as const)
     test(`the process running the agent stopped by ${signal}: one of those borrowing takes it up`, async () => {

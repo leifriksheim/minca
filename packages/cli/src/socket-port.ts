@@ -55,6 +55,8 @@ export function decodeMessage(line: string): unknown {
 
 /** The tag `node/remote.ts` puts on a node's messages */
 const NODE = 'minca-node';
+/** The longest line taken, in characters: past it the connection is dropped */
+const MAX_LINE = 64 * 2 ** 20;
 
 /**
  * `socket` as a port. Once it closes, every call still waiting for its
@@ -95,6 +97,8 @@ export function socketPort(socket: Socket): MessagePortLike {
         waiting.delete(message.id);
       deliver(message);
     }
+    // A line that never ends would take memory for ever; a file read whole is the longest one sent.
+    if (buffered.length > MAX_LINE) socket.destroy();
   });
   // An error is followed by `close`, which is where it is dealt with.
   socket.on('error', () => {});

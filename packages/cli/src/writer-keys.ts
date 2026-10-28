@@ -44,13 +44,7 @@ function alive(pid: number): boolean {
  */
 export async function holdLock(file: string): Promise<(() => Promise<void>) | null> {
   const mine = await lock(file);
-  return mine ? () => rm(mine, { force: true }) : null;
-}
-
-/** The running process a file names, or null */
-async function runningIn(file: string): Promise<number | null> {
-  const holder = Number((await readFile(file, 'utf8').catch(() => '')).trim());
-  return Number.isSafeInteger(holder) && holder > 0 && alive(holder) ? holder : null;
+  return mine ? () => letGo(mine) : null;
 }
 
 /** A lock's numbers, highest first: each `<file>.<n>` names the process that took it */
@@ -63,57 +57,64 @@ async function numbers(file: string): Promise<number[]> {
     .sort((a, b) => b - a);
 }
 
+/** What a lock file says once its process lets go of it */
+const RELEASED = 'released';
+
 /** The running process that holds a lock, or null when none does */
 export async function lockHolder(file: string): Promise<number | null> {
-  // The file itself, as a minca from before numbered locks kept it, counts while that process runs.
-  const before = await runningIn(file);
-  if (before !== null) return before;
   const [top] = await numbers(file);
-  return top === undefined ? null : runningIn(`${file}.${top}`);
+  if (top === undefined) return null;
+  const holder = Number((await readFile(`${file}.${top}`, 'utf8').catch(() => '')).trim());
+  return Number.isSafeInteger(holder) && holder > 0 && alive(holder) ? holder : null;
 }
 
 /**
- * Whether a lock file was left by a process that is gone. One that is empty
- * or can't be read is let go of as it is read, or an older minca is writing
- * it: held, so two never both take it.
+ * Whether a lock file is free to take over: let go of, or left by a process
+ * that is gone. One that is empty or can't be read is held, so two never
+ * both take it.
  */
-async function leftBehind(file: string): Promise<boolean> {
-  const holder = Number((await readFile(file, 'utf8').catch(() => '')).trim());
-  return Number.isSafeInteger(holder) && holder > 0 && !alive(holder);
+async function free(file: string): Promise<boolean> {
+  const text = (await readFile(file, 'utf8').catch(() => '')).trim();
+  const holder = Number(text);
+  return text === RELEASED || (Number.isSafeInteger(holder) && holder > 0 && !alive(holder));
 }
+
+/** Puts `text` at `file` whole: written to a file of its own, then moved or linked there */
+async function putWhole(file: string, text: string, place: (from: string, to: string) => Promise<void>) {
+  const whole = `${file}.writing-${process.pid}-${crypto.randomUUID()}`;
+  await writeFile(whole, text, { mode: 0o600 });
+  try {
+    await place(whole, file);
+  } finally {
+    await rm(whole, { force: true });
+  }
+}
+
+/** Lets go of a lock, keeping its number: none is used twice */
+const letGo = (mine: string) => putWhole(mine, RELEASED, rename);
 
 /**
  * Takes a lock, or says another running process holds it: the path this
- * process holds it by, or null. A stale lock is never removed to take it, so
- * two processes that find it can't both take it. The lock is its highest
- * number: each is linked into place whole, one above a number left behind,
- * so only one process gets each, and one that got a lower number while
- * another got a higher steps back.
+ * process holds it by, or null. The lock is its highest number, and numbers
+ * only grow: each is linked into place whole, one above a number that is
+ * free, and kept when let go of, so only one process ever gets each. One
+ * that got a lower number while another got a higher steps back.
  */
 async function lock(file: string): Promise<string | null> {
   for (let attempt = 0; attempt < 5; attempt += 1) {
-    const before = await stat(file).then(
-      () => true,
-      () => false,
-    );
-    if (before && !(await leftBehind(file))) return null;
-    // One look decides: the number this one takes is above the one it saw left behind.
+    // One look decides: the number this one takes is above the one it saw free.
     const [top = -1] = await numbers(file);
-    if (top >= 0 && !(await leftBehind(`${file}.${top}`))) return null;
+    if (top >= 0 && !(await free(`${file}.${top}`))) return null;
     const mine = `${file}.${top + 1}`;
-    const whole = `${file}.taking-${process.pid}-${crypto.randomUUID()}`;
-    await writeFile(whole, String(process.pid), { mode: 0o600 });
     try {
-      await link(whole, mine);
+      await putWhole(mine, String(process.pid), link);
     } catch (error) {
       if (errorCode(error) !== 'EEXIST') throw error;
       continue;
-    } finally {
-      await rm(whole, { force: true });
     }
     const [highest] = await numbers(file);
     if (highest === top + 1) {
-      // Those below were left by processes that are gone, or are stepping back.
+      // Those below are free, or stepping back; this one's number stays above them.
       for (const below of await numbers(file))
         if (below < top + 1) await rm(`${file}.${below}`, { force: true });
       return mine;
@@ -227,7 +228,7 @@ export function fileWriterKeys(dir: string, localKey: CryptoKey, did: string): W
             keys: await keyPair(sealed, { localKey, did, slot }),
             heads: headStore(path.join(where, 'heads')),
             async release() {
-              await rm(lockFile, { force: true });
+              await letGo(lockFile);
             },
             // A revoked key: the slot's next claim makes a new one, with lines of its own.
             // Its places stay while it may still sign this run.
@@ -236,7 +237,7 @@ export function fileWriterKeys(dir: string, localKey: CryptoKey, did: string): W
             },
           });
         } catch (error) {
-          await rm(lockFile, { force: true });
+          await letGo(lockFile);
           throw error;
         }
       }
