@@ -1025,7 +1025,7 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
           why =
             error instanceof AgentBusy
               ? `Minca isn't available in this session: this computer's agent runs in ${await describeAgentProcess(error.holder)}, ` +
-                "which doesn't share it with other sessions (on Windows, or where others may open its folder). It signs with one key, " +
+                "which isn't sharing it with this session. It signs with one key, " +
                 'so only one process may run it. Tell the user; once they close that one, this session gets Minca by itself within a few seconds.'
               : `Minca couldn't start: ${messageOf(error)}`;
           stderr(`minca mcp: ${why}`);

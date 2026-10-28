@@ -914,13 +914,15 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     any process that reaches the socket in `<home>/agent`. It checks that
     folder is this user's alone (0700) before it lends, so only their
     processes reach it, as only they can read the agent's key there; that
-    holds only while `<home>` is private too, which nothing checks
-    ([#287](https://github.com/leifriksheim/minca/issues/287)). On Windows it
-    lends to none (`packages/cli/src/agent.ts`, `lend`, `useAgent`).
+    holds only while `<home>` is private too, which nothing checks. On
+    Windows it lends to none (`packages/cli/src/agent.ts`, `lend`,
+    `useAgent`). A borrower gets nothing larger than 64 MiB in one reply: the
+    connection drops, and it borrows again.
   - Every minca using one home must be the same version. One from before
     numbered locks takes the agent's lock, and a writer key's slot, while a
     newer one holds it, and both sign with the one key
-    (`packages/cli/src/writer-keys.ts`, `holdLock`).
+    (`packages/cli/src/writer-keys.ts`, `holdLock`). Accepted before v1:
+    every minca on one home is upgraded together.
   - Given a space and `/access/change` there, it can still redefine or
     delete a role its own account holds, if that role may define itself: the
     account keeps the role by name and loses what it gave (01 §8) _(traced)_.

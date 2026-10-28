@@ -135,9 +135,14 @@ at once, as one peer. It lends only while the folder is this user's and mode
 Windows it lends to none, since Node gives a named pipe no such owner, and a
 second session says the agent runs elsewhere. Messages are one JSON line each,
 with bytes and missing arguments tagged; beside the node's own, the process
-tells each borrower where the key was revoked. When the process running the
-node stops, a session that borrowed it takes the lock and runs it, and the
-rest borrow from that one. A session answers MCP while it starts or borrows;
+tells each borrower where the key was revoked. Each end pings every 3 s, and
+drops the other after 10 s without a word, or once 64 MiB waits unread for
+it: so a process that is stopped (Ctrl-Z, say) or stops reading fails what
+waits on it rather than hanging it. A session that borrows the agent can't
+read a file over about 48 MB, or get a reply over 64 MiB, in one call: the
+connection drops and it borrows again. The session running the agent can.
+When the process running the node stops, a session that borrowed it takes
+the lock and runs it, and the rest borrow from that one. A session answers MCP while it starts or borrows;
 when the process holding the lock lends it to nobody, it says so to every
 tool. A second `minca agent` doesn't borrow, since it runs automations: it
 says the agent is already running, and offers to stop the other.

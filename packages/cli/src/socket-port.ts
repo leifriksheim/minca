@@ -57,11 +57,18 @@ export function decodeMessage(line: string): unknown {
 const NODE = 'minca-node';
 /** The longest line taken, in characters: past it the connection is dropped */
 const MAX_LINE = 64 * 2 ** 20;
+/** What each end sends while it has nothing else to say, so the other knows it still answers */
+const PING = { 'minca-ping': true };
+const PING_MS = 3_000;
+/** How long an end may say nothing before the connection is dropped: stopped, say, or not reading */
+const SILENCE_MS = 10_000;
 
 /**
  * `socket` as a port. Once it closes, every call still waiting for its
  * reply, and every call made after, is answered with an error: a worker's
  * port never goes away, a process can, and `remoteNode` would wait for ever.
+ * A process that stops answering, or stops reading, goes the same way: each
+ * end pings, and drops the other after {@link SILENCE_MS} without a word.
  */
 export function socketPort(socket: Socket): MessagePortLike {
   const listeners = new Set<(event: MessageEvent) => void>();
@@ -79,10 +86,31 @@ export function socketPort(socket: Socket): MessagePortLike {
       error: { name: 'Error', message: "The session running this computer's agent went away" },
     });
 
+  let heard = Date.now();
+  const pinging = setInterval(() => {
+    // Silent, or not reading what this end sends.
+    if (Date.now() - heard > SILENCE_MS || socket.writableLength > MAX_LINE) socket.destroy();
+    else if (socket.writable) socket.write(`${JSON.stringify(PING)}\n`);
+  }, PING_MS);
+  pinging.unref();
+
   let buffered = '';
+  const parts: string[] = [];
+  let partsLength = 0;
   socket.setEncoding('utf8');
   socket.on('data', (chunk: string) => {
-    buffered += chunk;
+    heard = Date.now();
+    // Only a chunk with a line's end is looked through, so a long line costs once, not once a chunk.
+    if (!chunk.includes('\n')) {
+      parts.push(chunk);
+      partsLength += chunk.length;
+      // A line that never ends would take memory for ever; a file read whole is the longest one sent.
+      if (buffered.length + partsLength > MAX_LINE) socket.destroy();
+      return;
+    }
+    buffered += parts.join('') + chunk;
+    parts.length = 0;
+    partsLength = 0;
     let end: number;
     while ((end = buffered.indexOf('\n')) !== -1) {
       const line = buffered.slice(0, end);
@@ -93,16 +121,17 @@ export function socketPort(socket: Socket): MessagePortLike {
       } catch {
         continue;
       }
+      if (isRecord(message) && message['minca-ping'] === true) continue;
       if (isRecord(message) && message.kind === 'reply' && typeof message.id === 'number')
         waiting.delete(message.id);
       deliver(message);
     }
-    // A line that never ends would take memory for ever; a file read whole is the longest one sent.
     if (buffered.length > MAX_LINE) socket.destroy();
   });
   // An error is followed by `close`, which is where it is dealt with.
   socket.on('error', () => {});
   socket.once('close', () => {
+    clearInterval(pinging);
     for (const id of waiting) gone(id);
     waiting.clear();
   });

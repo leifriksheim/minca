@@ -16,7 +16,7 @@ import { generateSeed } from '../../core/src/identity/recovery-code.js';
 import { GRANT_VERSION } from '../../core/src/session/connect.js';
 import { base64UrlEncode } from '../../core/src/utils/encoding.js';
 import { until } from '../../core/tests/helpers/until.js';
-import { connectAgent } from '../src/agent.js';
+import { connectAgent, useAgent } from '../src/agent.js';
 import { tempDir } from './helpers/nodes.js';
 
 const children: ChildProcess[] = [];
@@ -68,37 +68,7 @@ describe('one signer for a key', () => {
 
   for (const signal of ['SIGTERM', 'SIGKILL'] as const)
     test(`the process running the agent stopped by ${signal}: one of those borrowing takes it up`, async () => {
-      const manager = createIdentityManager();
-      const seed = generateSeed();
-      const me = await manager.fromSeed(seed);
-      const accountKey = await deriveAccountKey(seed);
-      const home = await tempDir();
-      await connectAgent({
-        home,
-        accountHome: 'https://home.test',
-        relays: [],
-        name: 'Agent on test',
-        onLink: () => {},
-        check: async () => {},
-        connect: async ({ key }) =>
-          ({
-            v: GRANT_VERSION,
-            did: me.did,
-            name: 'Ada',
-            note: await createLocalRootSigner(me, manager.getProvider()).delegate({
-              audience: key.did,
-              command: '/record',
-              expiration: Math.floor(Date.now() / 1000) + 3600,
-            }),
-            access: 'write',
-            scope: 'account',
-            spaces: [],
-            accountKey: base64UrlEncode(accountKey),
-            expiresAt: Math.floor(Date.now() / 1000) + 3600,
-            home: 'https://home.test/connect',
-          }) satisfies Grant,
-      });
-
+      const home = await connectedHome();
       const first = start('session-child.ts', [home]);
       await until(() => first.last() === 'LOCAL', 10_000, 'the first to run the agent');
       const rest = [0, 1, 2].map(() => start('session-child.ts', [home]));
@@ -112,4 +82,61 @@ describe('one signer for a key', () => {
       assert.equal(running, 1, `${running} processes ran the agent's node, each signing with its key`);
       assert.ok(rest.every((one) => one.last() === 'LOCAL' || one.last() === 'REMOTE'));
     });
+
+  test('a process running the agent that stops answering (Ctrl-Z) fails what a borrower asks, rather than hanging it', async () => {
+    const home = await connectedHome();
+    const lender = start('session-child.ts', [home]);
+    await until(() => lender.last() === 'LOCAL', 10_000, 'it to run the agent');
+    const agent = await useAgent(home, { network: { transports: () => [] } });
+    try {
+      await agent.node.spaces.list();
+      lender.child.kill('SIGSTOP');
+      const outcome = await Promise.race([
+        agent.node.spaces.list().then(
+          () => 'answered',
+          () => 'failed',
+        ),
+        new Promise((resolve) => setTimeout(() => resolve('hung'), 15_000)),
+      ]);
+      assert.equal(outcome, 'failed');
+    } finally {
+      lender.child.kill('SIGCONT');
+      await agent.close();
+    }
+  });
 });
+
+/** A home whose agent is connected to a new account */
+async function connectedHome(): Promise<string> {
+  const manager = createIdentityManager();
+  const seed = generateSeed();
+  const me = await manager.fromSeed(seed);
+  const accountKey = await deriveAccountKey(seed);
+  const home = await tempDir();
+  await connectAgent({
+    home,
+    accountHome: 'https://home.test',
+    relays: [],
+    name: 'Agent on test',
+    onLink: () => {},
+    check: async () => {},
+    connect: async ({ key }) =>
+      ({
+        v: GRANT_VERSION,
+        did: me.did,
+        name: 'Ada',
+        note: await createLocalRootSigner(me, manager.getProvider()).delegate({
+          audience: key.did,
+          command: '/record',
+          expiration: Math.floor(Date.now() / 1000) + 3600,
+        }),
+        access: 'write',
+        scope: 'account',
+        spaces: [],
+        accountKey: base64UrlEncode(accountKey),
+        expiresAt: Math.floor(Date.now() / 1000) + 3600,
+        home: 'https://home.test/connect',
+      }) satisfies Grant,
+  });
+  return home;
+}
