@@ -180,7 +180,8 @@ the screen.
 `collections`, the ones it `shows`: the ones whose records it is the place
 to open (`shows: ["std.message"]` for a chat). Whatever asks the example app
 to open a record, a screen's `open` or a link beside a record, goes to the
-app that shows that record's collection, the one open first, and that app's
+app that shows that record's collection: the one open, if it does, else the
+only one, else the one the person picks when asked, and that app's
 screen is handed the record's key (`minca.shown`, `minca.onShow`, the kit's
 `useShown`) to scroll to or open, but only of a collection it shows, which
 it could list anyway. That app does learn which of those records the person

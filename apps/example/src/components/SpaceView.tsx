@@ -20,6 +20,7 @@ import {
   useSpaceStatus,
 } from '@minca/react';
 import { RecordPanel } from './RecordPanel';
+import { OpenWith } from './apps/OpenWith';
 import { AppIcon, Count } from './apps/AppIcon';
 import { CreateApp } from './apps/CreateApp';
 import { NotifyButton } from './apps/NotifyButton';
@@ -190,6 +191,8 @@ function SpaceView({ space }: { space: SpaceSummary }) {
   const [dragging, setDragging] = useState<string | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  // A record more than one app can open, while the person picks which
+  const [choosing, setChoosing] = useState<NodeRecord | null>(null);
   const [everyApp, setEveryApp] = useState(false);
   const [hoodOpen, setHoodOpen] = useState(() => hoodWasOpen() || hood !== undefined);
   const openHood = (open: boolean) => {
@@ -235,8 +238,17 @@ function SpaceView({ space }: { space: SpaceSummary }) {
   const openApp = (appId: string) =>
     void navigate({ to: '/spaces/$spaceId/apps/$appId', params: { spaceId: space.id, appId } });
   // In Data, a record opens in its own collection. Elsewhere it opens in the app that shows its
-  // collection, the one open first, so a message opens in the chat; with none, or when that app
-  // asks (`here`) to open one of its own, beside what is open.
+  // collection, so a message opens in the chat: the open one if it does, else the only one, else
+  // the person picks one. With none, or when that app asks (`here`) to open one of its own,
+  // beside what is open.
+  const showing = (collection: string) =>
+    apps.ready.filter((app) => app.record.body?.shows?.includes(collection) === true);
+  const openIn = (r: NodeRecord, app: AppEntry) =>
+    void navigate({
+      to: '/spaces/$spaceId/apps/$appId',
+      params: { spaceId: space.id, appId: app.id },
+      search: (was) => ({ ...was, record: undefined, at: r.key }),
+    });
   const openRecord = (r: NodeRecord, here = false) => {
     if (hood?.id === 'data')
       return void navigate({
@@ -244,14 +256,10 @@ function SpaceView({ space }: { space: SpaceSummary }) {
         params,
         search: { collection: r.collection, record: r.key },
       });
-    const shows = (app: AppEntry) => app.record.body?.shows?.includes(r.collection) === true;
-    const app = open && shows(open) ? open : apps.ready.find(shows);
-    if (app && !here)
-      return void navigate({
-        to: '/spaces/$spaceId/apps/$appId',
-        params: { spaceId: space.id, appId: app.id },
-        search: (was) => ({ ...was, record: undefined, at: r.key }),
-      });
+    const can = here ? [] : showing(r.collection);
+    const app = can.find((one) => one.id === open?.id) ?? (can.length === 1 ? can[0] : undefined);
+    if (app) return openIn(r, app);
+    if (can.length > 1) return setChoosing(r);
     void navigate({ to: '.', search: (was) => ({ ...was, record: r.key }) });
   };
   const clearShown = () =>
@@ -643,6 +651,18 @@ function SpaceView({ space }: { space: SpaceSummary }) {
           collections={collections}
           onOpen={openRecord}
           onClose={closeRecord}
+          onOpenWith={(r) => (showing(r.collection).length > 1 ? () => setChoosing(r) : undefined)}
+        />
+      )}
+
+      {choosing && (
+        <OpenWith
+          apps={showing(choosing.collection)}
+          onClose={() => setChoosing(null)}
+          onChoose={(app) => {
+            setChoosing(null);
+            openIn(choosing, app);
+          }}
         />
       )}
 
