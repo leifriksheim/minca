@@ -99,7 +99,8 @@
   }
 </style>
 <script>
-  const { html, render, useState, useEffect, useRef, useRecords, useCan, usePeople, Person, ago } = ui;
+  const { html, render, useState, useEffect, useRef, useRecords, useCan, useMarked, usePeople, Person, ago } =
+    ui;
   const POLL = 'std.poll';
   const VOTE = 'std.vote';
   const me = minca.me.did;
@@ -110,6 +111,8 @@
     const mayAsk = useCan('create', POLL);
     const mayVote = useCan('create', VOTE);
     const [asking, setAsking] = useState(false);
+    // A poll opened from elsewhere, like one shared in a chat: scrolled to and lit up a moment.
+    const marked = useMarked();
     if (!polls || !votes) return null;
     const newest = [...polls].reverse();
     return html`<div class="stack" style="gap: 16px">
@@ -143,12 +146,13 @@
             poll=${poll}
             votes=${votes.filter((v) => v.links.some((l) => l.rel === 'about' && l.to === poll.key))}
             mayVote=${mayVote}
+            marked=${poll.key === marked}
           />`,
       )}
     </div>`;
   }
 
-  function Poll({ poll, votes: all, mayVote }) {
+  function Poll({ poll, votes: all, mayVote, marked }) {
     const people = usePeople();
     const nameOf = (did) => (did === me ? 'You' : (people.find((p) => p.did === did)?.name ?? 'Someone'));
     const { question, options, closed } = poll.body;
@@ -164,7 +168,7 @@
             { choice, ...(poll.createdBy && poll.createdBy !== me ? { respondingTo: poll.createdBy } : {}) },
             { links: [{ rel: 'about', to: poll.key }] },
           );
-    return html`<article class="card stack poll">
+    return html`<article class="card stack poll" data-key=${poll.key} data-marked=${marked}>
       <header>
         <${Person} did=${poll.createdBy} size=${18} />
         <span>asked · ${ago(poll.createdAt)}</span>

@@ -117,7 +117,7 @@ export interface SpaceScreen {
   readonly go: (to: SpacePath) => void;
   readonly openApp: (id: string) => void;
   /** Open a record: in the app that shows its collection, else in the panel beside whatever is open */
-  readonly openRecord: (record: NodeRecord) => void;
+  readonly openRecord: (record: NodeRecord, here?: boolean) => void;
   /** The record the open app was asked to show, until it has been handed over */
   readonly shown: string | undefined;
   readonly clearShown: () => void;
@@ -235,8 +235,9 @@ function SpaceView({ space }: { space: SpaceSummary }) {
   const openApp = (appId: string) =>
     void navigate({ to: '/spaces/$spaceId/apps/$appId', params: { spaceId: space.id, appId } });
   // In Data, a record opens in its own collection. Elsewhere it opens in the app that shows its
-  // collection, the one open first, so a message opens in the chat; with none, beside what is open.
-  const openRecord = (r: NodeRecord) => {
+  // collection, the one open first, so a message opens in the chat; with none, or when that app
+  // asks (`here`) to open one of its own, beside what is open.
+  const openRecord = (r: NodeRecord, here = false) => {
     if (hood?.id === 'data')
       return void navigate({
         to: '/spaces/$spaceId/data',
@@ -245,7 +246,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
       });
     const shows = (app: AppEntry) => app.record.body?.shows?.includes(r.collection) === true;
     const app = open && shows(open) ? open : apps.ready.find(shows);
-    if (app)
+    if (app && !here)
       return void navigate({
         to: '/spaces/$spaceId/apps/$appId',
         params: { spaceId: space.id, appId: app.id },
@@ -668,7 +669,7 @@ export function OpenApp({ app }: { app: AppEntry }) {
       space={space}
       record={app.record}
       collections={collections}
-      onOpen={openRecord}
+      onOpen={(r) => openRecord(r, app.record.body?.shows?.includes(r.collection))}
       shown={shown}
       onShown={clearShown}
     />

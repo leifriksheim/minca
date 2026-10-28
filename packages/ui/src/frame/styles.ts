@@ -39,6 +39,8 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--m
 :focus-visible { outline: 2px solid var(--minca-accent); outline-offset: 2px; }
 .card { background: var(--minca-card); border: 1px solid var(--minca-line); border-radius: var(--minca-radius-lg); padding: 12px 14px; }
 .row { display: flex; align-items: center; gap: 8px; }
+[data-marked="true"] { outline: 2px solid var(--minca-accent); outline-offset: 2px; animation: minca-marked 2.5s ease-out; }
+@keyframes minca-marked { from { box-shadow: 0 0 0 6px var(--minca-accent-soft); } }
 .stack { display: flex; flex-direction: column; gap: 8px; }
 .muted { color: var(--minca-muted); }
 .faint { color: var(--minca-faint); font-size: 12px; }

@@ -54,6 +54,17 @@ describe('screens', () => {
     assert.deepEqual(minca.collections, ['app.chess.game']);
   });
 
+  test('a record to show comes with the screen, so it is there for the first draw', () => {
+    const port = { postMessage: () => {}, onmessage: null };
+    const window: Record<string, unknown> = {
+      __minca: { port, me: { did: 'did:key:zMe', name: 'Anna' }, collections: ['std.poll'], shown: 'k1' },
+    };
+    runScreenClient(window, () => {}, {});
+    const minca = window.minca;
+    assert.ok(isRecord(minca) && typeof minca.shown === 'function');
+    assert.equal(Reflect.apply(minca.shown, undefined, []), 'k1');
+  });
+
   test("the script in front of a screen passes a list's where on, so a screen gets only what it asked for", () => {
     const sent: unknown[] = [];
     const port = { postMessage: (message: unknown) => sent.push(message), onmessage: null };

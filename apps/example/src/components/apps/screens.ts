@@ -178,7 +178,7 @@ export const SCREEN_CLIENT = `(() => {
   const listeners = new Set();
   const hearing = new Set();
   const showing = new Set();
-  let shown = null;
+  let shown = given.shown || null;
   let next = 0;
   const call = (method, ...args) =>
     new Promise((resolve, reject) => {

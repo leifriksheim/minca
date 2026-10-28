@@ -80,7 +80,7 @@
   }
 </style>
 <script>
-  const { html, render, useState, useEffect, useRef, useRecords, useCan, positionBetween } = ui;
+  const { html, render, useState, useEffect, useRef, useRecords, useCan, useMarked, positionBetween } = ui;
   const TASK = 'std.task';
   const COLUMN = 'std.column';
   /** The lane for tasks whose column is gone, or that never had one */
@@ -108,6 +108,8 @@
     const [drop, setDrop] = useState(null);
     const [addingTo, setAddingTo] = useState(null);
     const [addingColumn, setAddingColumn] = useState(false);
+    // A task opened from elsewhere, like one shared in a chat: scrolled to and lit up a moment.
+    const marked = useMarked();
     if (!columns || !tasks) return null;
 
     const cols = [...columns].sort(byPosition);
@@ -205,6 +207,8 @@
                 <button
                   type="button"
                   class="task"
+                  data-key=${t.key}
+                  data-marked=${t.key === marked}
                   draggable=${mayMove}
                   style=${{ opacity: dragging === t.key ? 0.4 : 1 }}
                   onDragStart=${(event) => {

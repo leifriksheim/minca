@@ -22,6 +22,8 @@ ui has:
   useFile(key, ref)                 a picture the record \`key\` refers to, as a URL for <img>; null until here
   useShown()                        { key } of the record this app was last asked to show (its "shows"), a new object each time;
                                     null until one is. Scroll to it, open it: useEffect(() => …, [shown])
+  useMarked()                       for a list, that key once the element with data-key=\${key} is drawn: scrolled to, and kept a
+                                    moment, for data-marked=\${key === marked} to light it up
   usePresence(state)                [{ did, device, state }] of everyone else with this app open, each sharing their state (a cursor,
                                     what is selected, "typing"): yours goes out when it changes, ten times a second at most. Once per screen
   useLive(callback)                 callback({ from, device, data }) for each minca.live.send from another device, kept nowhere

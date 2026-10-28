@@ -185,8 +185,9 @@ screen is handed the record's key (`minca.shown`, `minca.onShow`, the kit's
 `useShown`) to scroll to or open, but only of a collection it shows, which
 it could list anyway. That app does learn which of those records the person
 opens from elsewhere, which is why only someone who may define collections
-adds an app. With no app that shows it, the record
-opens beside whatever is open. So the Files app opens a file's message in
+adds an app. With no app that shows it, or when that app opens one of its
+own (a poll's title in Polls, for its comments), the record opens beside
+whatever is open. So the Files app opens a file's message in
 the chat, and a chat's file in Files, without either knowing the other. An
 app that names a collection in `shows` must do something with what it is
 handed. The kit's `<Record>` draws any standard record as one line the same

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Minca, ScreenRecord } from './minca';
 
 /**
@@ -118,6 +118,32 @@ export function useShown(): { key: string } | null {
   });
   useEffect(() => minca.onShow((key) => setShown({ key })), []);
   return shown;
+}
+
+/**
+ * For a list: the key of the record this app was asked to show, once the
+ * element with that `data-key` is drawn (it looks after each draw). The
+ * element is scrolled to, and the key stays a moment, for `data-marked` to
+ * light it up.
+ */
+export function useMarked(): string | null {
+  const shown = useShown();
+  const [marked, setMarked] = useState<string | null>(null);
+  const done = useRef<{ key: string } | null>(null);
+  useEffect(() => {
+    if (!shown || done.current === shown) return;
+    const element = document.querySelector(`[data-key="${CSS.escape(shown.key)}"]`);
+    if (!element) return;
+    done.current = shown;
+    element.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+    setMarked(shown.key);
+  });
+  useEffect(() => {
+    if (!marked) return;
+    const off = setTimeout(() => setMarked(null), 2500);
+    return () => clearTimeout(off);
+  }, [marked]);
+  return marked;
 }
 
 /** Whether the person looking may `create`, `edit` or `delete` in a collection; false until known */

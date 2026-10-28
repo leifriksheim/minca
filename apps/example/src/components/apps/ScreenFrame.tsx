@@ -166,6 +166,8 @@ export function ScreenFrame({
           document: screenDocument(screen, answer === 'yes' && allowed ? allowed.split(' ') : [], ui),
           me: { did: node.did, name: account.name },
           collections: list,
+          // Handed over with the document, since a message on the port before it is written in is lost
+          shown: pending.current,
         },
         // The frame's origin is opaque, so it can't be named. The port is what carries anything that matters.
         '*',
@@ -173,7 +175,6 @@ export function ScreenFrame({
       );
       live.current = bridge;
       if (pending.current) {
-        bridge.show(pending.current);
         pending.current = undefined;
         handed.current?.();
       }

@@ -193,6 +193,7 @@
     useRecords,
     useCan,
     useFile,
+    useShown,
     Person,
     Avatar,
     Comments,
@@ -294,6 +295,11 @@
     const [freeOnly, setFreeOnly] = useState(false);
     const [openKey, setOpenKey] = useState(null);
     const [editing, setEditing] = useState(null);
+    // A listing opened from elsewhere, like one shared in a chat: its page.
+    const asked = useShown();
+    useEffect(() => {
+      if (asked) setOpenKey(asked.key);
+    }, [asked]);
     const [near, setNear] = useNear();
     // The cells around the circle, as a keeper would match them; then the exact distance. With no circle, every listing.
     const where = nearWhere(near);

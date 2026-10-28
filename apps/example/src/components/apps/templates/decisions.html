@@ -96,7 +96,8 @@
   }
 </style>
 <script>
-  const { html, render, useState, useEffect, useRef, useRecords, useCan, usePeople, Person, ago } = ui;
+  const { html, render, useState, useEffect, useRef, useRecords, useCan, useMarked, usePeople, Person, ago } =
+    ui;
   const PROPOSAL = 'std.proposal';
   const BALLOT = 'std.ballot';
   const DECISION = 'std.decision';
@@ -111,6 +112,8 @@
     const mayCast = useCan('create', BALLOT);
     const mayDecide = useCan('create', DECISION);
     const [proposing, setProposing] = useState(false);
+    // A proposal opened from elsewhere, like one shared in a chat: scrolled to and lit up a moment.
+    const marked = useMarked();
     if (!proposals || !ballots || !decisions) return null;
     return html`<div class="stack" style="gap: 16px">
       ${
@@ -147,6 +150,7 @@
               decisions=${decisions.filter(about(proposal))}
               mayCast=${mayCast}
               mayDecide=${mayDecide}
+              marked=${proposal.key === marked}
             />`,
         )}
     </div>`;
@@ -160,7 +164,7 @@
     return first.version;
   }
 
-  function Proposal({ proposal, ballots: all, decisions, mayCast, mayDecide }) {
+  function Proposal({ proposal, ballots: all, decisions, mayCast, mayDecide, marked }) {
     const people = usePeople();
     const nameOf = (did) => (did === me ? 'You' : (people.find((p) => p.did === did)?.name ?? 'Someone'));
     const [confirming, setConfirming] = useState(null);
@@ -182,7 +186,7 @@
     const responding =
       proposal.createdBy && proposal.createdBy !== me ? { respondingTo: proposal.createdBy } : {};
 
-    return html`<article class="card stack proposal">
+    return html`<article class="card stack proposal" data-key=${proposal.key} data-marked=${marked}>
       <header>
         <${Person} did=${proposal.createdBy} size=${18} />
         <span>proposed · ${ago(proposal.createdAt)}</span>
