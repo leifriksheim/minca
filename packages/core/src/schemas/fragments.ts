@@ -77,8 +77,11 @@ export const day = (description?: string) =>
 /** An IANA time zone, `Europe/Oslo` */
 export const timeZone = () => text(64, 'IANA time zone, like Europe/Oslo', 1);
 
-/** A person, by their account DID */
-export const person = (description?: string) => text(256, description ?? 'An account DID', 1);
+/** A person, by their account DID; `format: "did"` is what tells an app it is one */
+export const person = (description?: string) => ({
+  ...text(256, description ?? 'An account DID', 1),
+  format: 'did' as const,
+});
 
 /** Some people, by their account DIDs */
 export const people = (max: number, description?: string) =>

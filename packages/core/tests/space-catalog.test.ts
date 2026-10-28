@@ -99,6 +99,22 @@ describe('stored schemas', () => {
     assert.deepEqual(validateJsonSchema(vote, { choice: 7 }), []);
   });
 
+  test('format is a label: any name publishes, and no value is checked against it', () => {
+    const event = {
+      type: 'object',
+      properties: {
+        host: { type: 'string', format: 'did' },
+        starts: { type: 'string', format: 'date-time' },
+        guests: { type: 'array', items: { type: 'string', format: 'did' } },
+      },
+    };
+    assert.equal(checkPublishableSchema(event), null);
+    // Not even the formats JSON Schema defines, which the validator would otherwise check.
+    assert.deepEqual(validateJsonSchema(event, { host: 'bob', starts: 'friday', guests: ['carol'] }), []);
+    assert.match(checkPublishableSchema({ type: 'string', format: '' }) ?? '', /format must be a name/);
+    assert.match(checkPublishableSchema({ type: 'string', format: 1 }) ?? '', /format must be a name/);
+  });
+
   test('names are reverse-DNS, and sys.* is reserved', () => {
     assert.equal(checkStoredCollection({ name: 'app.trip.expense', schema: expense, version: 1 }), null);
     assert.match(

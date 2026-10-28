@@ -296,8 +296,8 @@ Anything the checker cannot decide is a break.
   this is a walk of both schemas: `type` sets contained (`integer` inside
   `number`); a field one side relies on is `required` on the other; numeric
   and length ranges contained; `enum`, `const` and `oneOf` value sets
-  contained; recurse into `properties` and `items`. `title`, `description`
-  and `x-choicesFrom` are ignored. A field only one side mentions is ignored,
+  contained; recurse into `properties` and `items`. `title`, `description`,
+  `x-choicesFrom` and `format` are ignored. A field only one side mentions is ignored,
   unless that side requires it or closes the schema
   (`additionalProperties: false`).
 - **Links.** A link role the app uses is declared in the space; where it may
@@ -385,13 +385,13 @@ which field is the title or that votes are shown as counts. The plan adds
 optional hints to a definition:
 
 - which field is the record's **title**;
-- a field's **role** (a date, a person, an amount);
 - **tallies**: "show as a count" of records linking here, the way
   `x-choicesFrom` already makes vote-style counts possible;
 - values **worked out on read**: "voting closes Friday", "who hasn't
   answered". Each reader computes them from the records and its own clock, so
   nothing has to run anywhere.
 
+A field's kind (a person) is already its `format` ([collections](collections.md#schemas)).
 Like `x-choicesFrom`, hints are display only and never checked when
 validating, and [`compare`](#compatible-definitions) ignores them. They would go in a new
 top-level definition member rather than as schema keywords: unknown

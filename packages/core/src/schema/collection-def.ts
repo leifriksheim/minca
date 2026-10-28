@@ -15,7 +15,7 @@
  *   minLength · maxLength · minItems · maxItems · additionalProperties
  *   (boolean) · title · description
  *
- * plus two ways to say what a value *means*, so any app can show it well:
+ * plus three ways to say what a value *means*, so any app can show it well:
  *
  * - `oneOf: [{ const, title }]` — fixed choices with labels, the standard
  *   JSON Schema way (`enum` has no labels).
@@ -24,6 +24,9 @@
  *   vote's `choice` picks from the `options` of the poll it is `about`. A
  *   number is a position in that list; anything else is the option itself.
  *   Not checked when validating — the other record may not be here yet.
+ * - `format: "<name>"` — what kind of value a string is, such as `did` for
+ *   a person. A label for apps, never checked: which names mean what is a
+ *   convention (docs/collections.md), not something every peer must agree on.
  *
  * Anything else is refused at publish time — loudly, where the author can fix
  * it. At validation time unknown keywords are ignored instead, so a space
@@ -212,6 +215,7 @@ const KEYWORDS = new Set([
   'oneOf',
   'const',
   'x-choicesFrom',
+  'format',
 ]);
 const TYPES = new Set(['object', 'array', 'string', 'number', 'integer', 'boolean', 'null']);
 /** A collection's name: lower case, reverse-DNS, at least one dot */
@@ -287,6 +291,9 @@ export function checkPublishableSchema(schema: unknown, path = 'schema'): string
       }
       case 'const':
         break;
+      case 'format':
+        if (typeof value !== 'string' || !value) return `${at} must be a name, like "did"`;
+        break;
       case 'x-choicesFrom': {
         const from = value;
         if (
@@ -355,6 +362,29 @@ export interface SchemaIssue {
 
 const validators = new WeakMap<object, Validator>();
 
+/**
+ * A schema without its `format` labels, where a stored schema nests them. The
+ * validator would check the formats it knows (`date-time`, `uri`), and a
+ * label is never checked, so every app judges a body the same way.
+ */
+function withoutFormat(schema: unknown): unknown {
+  if (!isRecord(schema)) return schema;
+  const { format: _label, properties, items, ...rest } = schema;
+  return {
+    ...rest,
+    ...(isRecord(properties)
+      ? {
+          properties: Object.fromEntries(
+            Object.entries(properties).map(([name, sub]) => [name, withoutFormat(sub)]),
+          ),
+        }
+      : properties !== undefined
+        ? { properties }
+        : {}),
+    ...(items !== undefined ? { items: withoutFormat(items) } : {}),
+  };
+}
+
 function newValidator(schema: unknown): Validator {
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the library interprets any JSON Schema value; its type lists only the keywords it knows
   return new Validator(schema as Schema | boolean, '2020-12', false);
@@ -368,7 +398,7 @@ function validatorFor(schema: JsonSchema): Validator {
   if (typeof schema !== 'object' || schema === null) return newValidator(schema);
   let found = validators.get(schema);
   if (!found) {
-    found = newValidator(structuredClone(schema));
+    found = newValidator(withoutFormat(structuredClone(schema)));
     validators.set(schema, found);
   }
   return found;
