@@ -443,6 +443,11 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     as times are the writer's everywhere else.
   - Which changes a peer holds can differ for good, and verdicts depend on a
     peer's keys, or the order it runs checks in ([#10](https://github.com/leifriksheim/minca/issues/10)).
+  - Peers on different releases can disagree: a definition with a schema
+    keyword an older peer doesn't know (`format`, 02 §6.2) is invalid to it,
+    so it enforces none of that collection's rules or contract, silently, until
+    it updates. Before v1 peers update together
+    ([#10](https://github.com/leifriksheim/minca/issues/10)).
   - A removal or unassignment signed offline can arrive at any time and withdraw
     what its cutoff doesn't cover: peers converge, but no verdict is final
     until members witness each other's heads

@@ -961,9 +961,10 @@ Anything else (`pattern`, `$ref`, `anyOf`, a schema-valued
 not part of the subset.
 
 `format` is a label, as JSON Schema 2020-12 makes it by default: a peer
-accepts any name and never checks a value against it, not even a name JSON
-Schema defines, such as `date-time`. What each name means to an app is not
-protocol ([collections](../packages/core/docs/collections.md#schemas)).
+accepts any name, and it takes no part in whether a body fits its schema, not
+even a name JSON Schema defines, such as `date-time`. What each name means to
+an app is not protocol
+([collections](../packages/core/docs/collections.md#schemas)).
 
 > Rationale: a format a peer checked would be a list every implementation
 > keeps in step, growing with each new kind of value. As a label it costs a
@@ -991,11 +992,14 @@ protocol: see [collections](../packages/core/docs/collections.md#validating).
 > record that does not fit is still kept and flagged (§9.6), so a space using
 > `pattern` stays readable by an app that predates it.
 >
-> _Open:_ the publishing check above makes a definition that uses `pattern`
-> **invalid** to an older peer, and an invalid definition counts as none
-> (§6.1), so that peer would enforce none of its rules. Either the publishing
-> check must tolerate these keywords before any app writes them, or such a
-> definition needs a higher protocol version that older peers recognise.
+> _Open:_ the publishing check above makes a definition that uses a keyword
+> a peer doesn't know **invalid** to it, and an invalid definition counts as
+> none (§6.1), so that peer enforces none of its rules. This already holds for
+> `format`: a peer from before it treats every definition with a person field
+> (`fragments.person`) as having no rules, until it updates. Before v1, peers
+> are expected to update together. After it, either the publishing check
+> tolerates keywords it doesn't know before any app writes a new one, or such
+> a definition needs a higher protocol version that older peers recognise.
 > Tracked in [#10](https://github.com/leifriksheim/minca/issues/10).
 
 ### 6.3 A definition's version number
