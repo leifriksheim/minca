@@ -201,12 +201,17 @@ a message, and anyone's screen reads it back through that link
 (`minca.get(key, { link: 'shares' })`), read only. `shares` is the only role
 a screen reads through: a file about a diary entry, or a reaction to it,
 shares nothing, so a screen reads beyond its collections only records the
-person picked, or that a record of its collections shares. A screen writes a
-link only to a record of its own collections, one the person picked for it,
-or one the record already has, refused alike whether or not the target is
-here, so it never shares on its own. `pick` opens only right after the
-person clicks or types in the screen. A chat shares a poll without being
-able to read polls; its `/` button, and `/poll` sent alone, pick one.
+person picked, or that someone writing its collections shares (a member, an
+agent, another app). A shared record comes with its files. A screen writes
+a link only to a record of its own collections, one the person picked for
+it, or one the record already has, refused alike whether or not the target
+is here (so a link to a record that hasn't arrived yet waits until it has):
+a screen never links out on its own, though like anything it reads, it can
+copy what was shared into its own records. A screen may ask to pick as often
+as it likes, and start the search from its own text; what it gets is still
+only what the person chooses, in a space they can read anyway. A chat
+shares a poll without being able to read polls; its `/` button, and `/poll`
+sent alone, pick one.
 
 A screen also sends live messages, kept nowhere, to the other devices that
 have the same app open in the space (`live.send`, `live.on`): for cursors,

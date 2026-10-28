@@ -160,6 +160,7 @@ Every write is checked against the collection's rules, as the person looking: a 
 An error the screen doesn't catch is shown to the person, so they can tell you about it.
 Links look like { rel: "game", to: "<record key>" }, with the roles the definition declares. A screen links only to records of
 its own collections, or one the person chose with minca.pick: sharing a poll in a chat is the person's choice, never the screen's.
+A link to a record that hasn't reached this device yet is refused until it has.
 Draw everything from minca.list(...) and redraw on minca.onChange — other people's moves arrive that way.
 Two people can write at once: design collections so that clashes resolve by the rules (onePer, each person changing only their own records), not by the screen.
 Anyone can also write records without your screen, and a record whose collection changed keeps its old shape: check a body has what you read before reading it.
