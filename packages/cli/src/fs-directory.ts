@@ -129,12 +129,13 @@ function directory(dir: string): DirectoryHandleLike {
     },
 
     async *keys() {
-      for (const entry of await fs.readdir(dir)) {
+      // Types come with the listing: a call per entry made opening a space of thousands of files take seconds.
+      for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
         // Another writer's file mid-rename is not an entry yet.
-        if (entry.endsWith('.tmp')) continue;
+        if (entry.name.endsWith('.tmp')) continue;
         // Nor is a link — every other method refuses to follow one.
-        if ((await fs.lstat(path.join(dir, entry)).catch(() => null))?.isSymbolicLink()) continue;
-        yield entry;
+        if (entry.isSymbolicLink()) continue;
+        yield entry.name;
       }
     },
 
