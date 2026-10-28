@@ -29,7 +29,7 @@ jobs:
             paths: '^(packages/(core|relay)/|package(-lock)?\.json$|tsconfig\.base\.json$|\.github/workflows/check\.yml$)'
           # Every other workspace, by folder: a new app is picked up, a new package must be added.
           - name: test
-            run: npm test --if-present -w packages/cli -w packages/relay -w apps -w scenarios
+            run: npm test --if-present -w packages/cli -w packages/relay -w packages/calls -w apps -w scenarios
           # Format, lint, typecheck and fallow: seconds each, so one runner.
           - name: check
             run: npm run check
