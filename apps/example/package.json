@@ -12,6 +12,7 @@
   "dependencies": {
     "@mcp-b/webmcp-polyfill": "^4.0.0",
     "@minca/app-shared": "*",
+    "@minca/calls": "*",
     "@minca/core": "*",
     "@minca/ui": "*",
     "@tanstack/react-router": "^1.170.44",

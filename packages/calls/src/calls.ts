@@ -33,10 +33,18 @@
  * same moment as the other, and the side with the lower session DID always
  * makes the offer.
  */
-import type { P2PNode, NodeEvent } from '../node/types.js';
-import { call as callSchema } from '../schemas/index.js';
-import { isObject, unref } from '../utils/guards.js';
-import { bytesToHex } from '../utils/encoding.js';
+import { bytesToHex, type P2PNode, type NodeEvent } from '@minca/core';
+import { call as callSchema } from '@minca/core/schemas';
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+/** Lets a Node timer go, so it doesn't keep the process open; nothing in a browser */
+function unref(handle: unknown): void {
+  if (typeof handle !== 'object' || handle === null || !('unref' in handle)) return;
+  const { unref: release } = handle;
+  if (typeof release === 'function') Reflect.apply(release, handle, []);
+}
 
 export interface CallsOptions {
   /** How a WebRTC connection is made. `new RTCPeerConnection` by default. */
@@ -126,8 +134,8 @@ export interface CallOptions {
 
 export interface Calls {
   /** What's going on now. The same object until something changes. */
-  getState(): CallsState;
-  subscribe(listener: () => void): () => void;
+  getState(this: void): CallsState;
+  subscribe(this: void, listener: () => void): () => void;
   /** Joins the call going on in a space, or starts one. Leaves any other call first. */
   start(space: string, options?: CallOptions & { readonly call?: string }): Promise<void>;
   /** Starts a call in a space, and rings one person there — all their devices, until one answers */

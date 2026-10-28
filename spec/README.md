@@ -93,7 +93,7 @@ change without touching this spec:
 - **The inbox's settings kept as a record**, and how a knock becomes a
   contact; the inbox code, the relay mailbox and the knock itself are in
   [07](07-inbox.md) ([inbox](../packages/core/docs/inbox.md)).
-- **Calls**, built from live messages ([calls](../packages/core/docs/calls.md)).
+- **Calls**, built from live messages ([calls](../packages/calls/README.md)).
 - **What one node keeps for itself**: its stores and caches, how it paces
   sync, its timers, retries and defaults ([storage](../packages/core/docs/storage.md),
   [node](../packages/core/docs/node.md)).

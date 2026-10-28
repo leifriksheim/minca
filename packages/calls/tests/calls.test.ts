@@ -6,23 +6,27 @@
 import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createNode } from '../src/node/node.js';
-import type { P2PNode } from '../src/node/types.js';
-import { createCalls, type Calls, type CallsOptions } from '../src/calls/calls.js';
-import { call as callSchema } from '../src/schemas/index.js';
-import { createIdentityManager } from '../src/identity/identity-manager.js';
-import { createLocalRootSigner } from '../src/identity/root-signer.js';
-import { generateSeed } from '../src/identity/recovery-code.js';
-import { deriveAccountKey } from '../src/identity/account-vault.js';
-import { joined } from './helpers/joined.js';
-import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
-import { memoryStores } from './helpers/memory-stores.js';
+import {
+  createNode,
+  createIdentityManager,
+  createLocalRootSigner,
+  generateSeed,
+  deriveAccountKey,
+  team,
+  type P2PNode,
+} from '@minca/core';
+import { call as callSchema } from '@minca/core/schemas';
+import { createCalls, type Calls, type CallsOptions } from '../src/calls.js';
+import { joined } from '../../core/tests/helpers/joined.js';
+import { createFakeHub, type FakeHub } from '../../core/tests/helpers/fake-transport.js';
+import { memoryStores } from '../../core/tests/helpers/memory-stores.js';
+import { hold, letGo } from '../../core/tests/helpers/hold.js';
+import { until } from '../../core/tests/helpers/until.js';
+import { settle } from '../../core/tests/helpers/person.js';
 import { fakeConnection, fakeDisplayMedia, fakeStream, fakeUserMedia } from './helpers/fake-rtc.js';
-import { team } from '../src/space/presets.js';
-import { hold, letGo } from './helpers/hold.js';
-import { until } from './helpers/until.js';
-import { isObject } from '../src/utils/guards.js';
-import { settle } from './helpers/person.js';
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
 
 const nodes: P2PNode[] = [];
 const allCalls: Calls[] = [];

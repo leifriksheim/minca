@@ -3,7 +3,7 @@
 A call is voice and video between the members of a space. It is live messages
 in that space ([spec 04 §9.2](https://github.com/leifriksheim/minca/blob/main/spec/04-network.md)),
 plus one WebRTC connection of its own between each pair of devices in it (a
-full mesh, good up to about six people with video). Its history is a [`std.call`](standard-library.md#stdcall)
+full mesh, good up to about six people with video). Its history is a [`std.call`](../core/docs/standard-library.md#stdcall)
 record.
 
 This is a convention built on the protocol, not part of it. Peers that have
@@ -19,11 +19,11 @@ The setup travels over the space's peer connection, whose handshake proved
 who is at the other end, so an offer really comes from that device. A relay
 only introduces devices and never sees a call.
 
-In the library, `createCalls(node)` from `@minca/core/calls` runs all
-of it; in React, `CallsProvider` and `useCalls` ([node.md](node.md#client-conveniences)).
+In the library, `createCalls(node)` from `@minca/calls` runs all
+of it; in React, `CallsProvider` and `useCalls` from `@minca/calls/react`, under a `MincaProvider` ([node.md](../core/docs/node.md#client-conveniences)).
 
 ```ts
-import { createCalls } from '@minca/core/calls';
+import { createCalls } from '@minca/calls';
 
 const calls = createCalls(node);
 await calls.start(space); // join the call going on here, or start one
@@ -93,7 +93,7 @@ device.
 
 `start(space)` joins the call already going on in the space (the one with the
 lowest id, if several) or starts one with a new id. Joining holds the space
-([holding a space](node.md#opening-and-holding-spaces)) for as long as the
+([holding a space](../core/docs/node.md#opening-and-holding-spaces)) for as long as the
 call lasts, so moving between screens never interrupts it. When a device
 alone in its call (no connections yet) hears a `call.here` for a call with a
 lower id in the same space, it moves into that call: two calls started at
@@ -117,7 +117,7 @@ once merge into the lower id.
   call. A connection not connected within `gone` (15 s) of its offer counts as
   failed too: an offer or answer lost on the way leaves a connection that
   never fails, only never connects.
-- ICE servers come from `node.iceServers()` ([node.md](node.md)): the
+- ICE servers come from `node.iceServers()` ([node.md](../core/docs/node.md)): the
   configured ones plus TURN servers a relay offers.
 
 ## Ringing
@@ -137,7 +137,7 @@ once merge into the lower id.
    `call.here` in the call from the rung account clears `outgoing` too, so an
    answer lost on the way still stops the ringing.
 5. After 45 s unanswered, the caller sends `call.cancel`, writes a missed-call
-   record ([`std.call`](standard-library.md#stdcall)), shows `missed`, and
+   record ([`std.call`](../core/docs/standard-library.md#stdcall)), shows `missed`, and
    leaves 2.5 s later if alone.
 
 A device must not ring again for a call it stopped ringing for (answered,
@@ -157,14 +157,14 @@ released 1 s later, so the goodbye gets out first.
 
 The call a device is in is kept in `sessionStorage` under `minca-call`, so
 after a reload the page can offer to rejoin
-([`std.call`](standard-library.md#stdcall)).
+([`std.call`](../core/docs/standard-library.md#stdcall)).
 
 Reference values, all in `createCalls`'s options or constants: `heartbeatMs`
 5 s, `goneMs` 15 s, `ringMs` 45 s; 2 s before offering again, 2.5 s before
 giving up on a declined or missed ring, 1 s before letting go of the space,
 10 s for the member list.
 
-_Source: `packages/core/src/calls/calls.ts` (`createCalls`, `isCallMessage`, `RINGS_PER_MINUTE`, `GIVE_UP_MS`, `LEAVE_LINGER_MS`, `MEMBERS_MS`, `RETRY_MS`), `packages/core/src/react/use-calls.ts`, `packages/core/src/node/space-runtime.ts` (`accountOf`). Tests: `packages/core/tests/calls.test.ts`, `packages/core/tests/live.test.ts` ("recordsOnly marks a note that writes records here and nothing more, not one that only reads"), `packages/core/tests/live-elsewhere.test.ts`._
+_Source: `packages/calls/src/calls.ts` (`createCalls`, `isCallMessage`, `RINGS_PER_MINUTE`, `GIVE_UP_MS`, `LEAVE_LINGER_MS`, `MEMBERS_MS`, `RETRY_MS`), `packages/calls/src/react.ts`, `packages/core/src/node/space-runtime.ts` (`accountOf`). Tests: `packages/calls/tests/calls.test.ts`, `packages/core/tests/live.test.ts` ("recordsOnly marks a note that writes records here and nothing more, not one that only reads"), `packages/core/tests/live-elsewhere.test.ts`._
 
 ## Planned
 
