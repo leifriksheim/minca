@@ -31,6 +31,7 @@ import {
 } from '../src/app-node.js';
 import { openFsDirectory } from '../src/fs-directory.js';
 import { isRecord } from '../src/json.js';
+import { patience } from '../../core/tests/helpers/until.js';
 
 const ORIGIN = 'http://127.0.0.1:47830';
 const HOME = 'https://home.example/connect';
@@ -114,7 +115,7 @@ function run(data: string, sealKey: Uint8Array) {
   /** The first thing said, from now on or already, that matches */
   const next = (match: (message: AppNodeOut) => boolean, from = 0): Promise<AppNodeOut> =>
     new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('nothing said in time')), 5000);
+      const timer = setTimeout(() => reject(new Error('nothing said in time')), patience(5000));
       const check = () => {
         const found = said.slice(from).find(match);
         if (!found) return;
