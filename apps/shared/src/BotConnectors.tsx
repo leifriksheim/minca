@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { COLLECTION_DEFINE, type SpaceHostingView } from '@minca/core';
-import { useCollections, useLive, useNode } from '@minca/core/react';
+import { useCollections, useLive, useNode } from '@minca/react';
 import {
   askToConnect,
   askToDisconnect,

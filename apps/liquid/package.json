@@ -12,6 +12,7 @@
   "dependencies": {
     "@minca/app-shared": "*",
     "@minca/core": "*",
+    "@minca/react": "*",
     "@minca/ui": "*",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"

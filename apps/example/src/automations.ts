@@ -1,6 +1,6 @@
 /** Automations picked from the space's collections, kept with what was picked so they can be shown in words; run by `startAutomations` while this app is open. */
 import { useEffect } from 'react';
-import { useAccount, useNode } from '@minca/core/react';
+import { useAccount, useNode } from '@minca/react';
 import type { Filter, NodeCollection, QueryRecord } from '@minca/core';
 import {
   IT,

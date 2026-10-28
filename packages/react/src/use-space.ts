@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import type { NodeCollection, NodeRecord, SpaceAccess, SpaceProfile, SpaceStatus } from '../node/types.js';
+import type { NodeCollection, NodeRecord, SpaceAccess, SpaceProfile, SpaceStatus } from '@minca/core';
 import { useNode } from './context.js';
 import { useLive } from './use-live.js';
 

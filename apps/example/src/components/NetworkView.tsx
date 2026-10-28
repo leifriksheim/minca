@@ -2,7 +2,7 @@ import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode
 import { checkRelays, MAX_RELAYS, SPACE_RELAYS } from '@minca/core';
 import { useMay } from '@minca/app-shared/may';
 import type { CarrierSummary, MeshStatus, RelayStatus, SpaceStatus, SpaceSummary } from '@minca/core';
-import { useAccess, useAccount, useNetwork, useNode } from '@minca/core/react';
+import { useAccess, useAccount, useNetwork, useNode } from '@minca/react';
 import { Avatar } from '@minca/app-shared/Avatar';
 import {
   duration,

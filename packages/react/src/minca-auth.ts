@@ -6,10 +6,10 @@ import {
   type CSSProperties,
   type ReactElement,
 } from 'react';
-import type { MincaAuth as Auth, MincaSession } from '../session/auth.js';
-import '../elements/minca-auth.js';
+import type { MincaAuth as Auth, MincaSession } from '@minca/core/session';
+import '@minca/core/elements';
+import type { MincaAuthElement } from '@minca/core/elements';
 import { useMinca } from './context.js';
-import type { MincaAuthElement } from '../elements/minca-auth.js';
 
 export interface MincaAuthProps {
   /** The flow to draw. Default: the one from the nearest `MincaProvider`. */

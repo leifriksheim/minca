@@ -51,11 +51,6 @@
       "types": "./dist/elements/index.d.ts",
       "import": "./dist/elements/index.js"
     },
-    "./react": {
-      "@minca/source": "./src/react/index.ts",
-      "types": "./dist/react/index.d.ts",
-      "import": "./dist/react/index.js"
-    },
     "./inbox": {
       "@minca/source": "./src/inbox/index.ts",
       "types": "./dist/inbox/index.d.ts",
@@ -71,7 +66,6 @@
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {
-    "@types/react": "^19.3.0",
     "@types/ws": "^8.18.2",
     "esbuild": "^0.28.2",
     "tsx": "^4.19.0",
@@ -89,14 +83,6 @@
     "@noble/hashes": "^2.4.0",
     "@scure/base": "^2.4.0",
     "aws4fetch": "^1.0.20"
-  },
-  "peerDependencies": {
-    "react": "^19.3.1"
-  },
-  "peerDependenciesMeta": {
-    "react": {
-      "optional": true
-    }
   },
   "publishConfig": {
     "access": "public"

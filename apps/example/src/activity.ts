@@ -2,7 +2,7 @@
  * `std.activity`: where agents and bots say what they are at work on. A space
  * whose automations ask one needs the collection.
  */
-import { useCollections, useLive, useNode } from '@minca/core/react';
+import { useCollections, useLive, useNode } from '@minca/react';
 import { useMayDefine } from '@minca/app-shared/may';
 import { activity, automation, automationOf } from '@minca/core/schemas';
 

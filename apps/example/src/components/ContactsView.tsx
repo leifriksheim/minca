@@ -9,7 +9,7 @@ import type {
 } from '@minca/core';
 import { readInbox } from '@minca/core/inbox';
 import { createP256Provider } from '@minca/core';
-import { useAccount, useNode } from '@minca/core/react';
+import { useAccount, useNode } from '@minca/react';
 import {
   clearInboxFromUrl,
   inboxLink,

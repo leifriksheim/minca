@@ -2,7 +2,7 @@ import { useState, type CSSProperties } from 'react';
 import { useAction } from '@minca/app-shared/action';
 import { MEMBER_REMOVE, ROLE_ASSIGN, ROLE_DEFINE, ROLE_UNASSIGN } from '@minca/core';
 import type { SpaceGrant as Grant, NodeCollection, SpaceSummary } from '@minca/core';
-import { useAccess, useAccount, useLive, useNode, useProfiles } from '@minca/core/react';
+import { useAccess, useAccount, useLive, useNode, useProfiles } from '@minca/react';
 import {
   abilitiesOf,
   choicesIn,

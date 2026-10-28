@@ -2,7 +2,7 @@ import { createRoot } from 'react-dom/client';
 import { RouterProvider } from '@tanstack/react-router';
 import { injectBaseStyles } from './styles';
 import { exposeToAgents } from './webmcp';
-import { MincaProvider } from '@minca/core/react';
+import { MincaProvider } from '@minca/react';
 import { connection } from './minca';
 import { tellDesktop } from './desktop';
 import { router } from './router';

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { NodeCollection, NodeRecord, SpaceSummary } from '@minca/core';
-import { useLive, useNode } from '@minca/core/react';
+import { useLive, useNode } from '@minca/react';
 import { collectionLabel, humanize, recordLabel } from '../derive/schema-ui';
 import { styles, palette } from '../styles';
 import { useAction } from '@minca/app-shared/action';

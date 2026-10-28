@@ -194,7 +194,7 @@
       "plugins": ["react"]
     },
     {
-      "files": ["**/*.{jsx,tsx}", "packages/core/src/react/**/*.ts"],
+      "files": ["**/*.{jsx,tsx}", "packages/react/src/**/*.ts", "packages/calls/src/react.ts"],
       "rules": {
         "react/rules-of-hooks": "error",
         "react/exhaustive-deps": "warn",

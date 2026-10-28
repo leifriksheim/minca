@@ -1,0 +1,25 @@
+{
+  "name": "@minca/react",
+  "private": true,
+  "type": "module",
+  "description": "React bindings for Minca: follow the sign-in flow, draw it, and keep what you read from a space live. A library on the protocol, not protocol.",
+  "exports": {
+    ".": {
+      "@minca/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "typescript": "^7.0.2"
+  },
+  "peerDependencies": {
+    "@minca/core": "*",
+    "react": "^19.3.1"
+  },
+  "license": "MIT"
+}

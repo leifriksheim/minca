@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useConnection } from '@minca/core/react';
+import { useConnection } from '@minca/react';
 import { Wordmark } from '@minca/app-shared/Wordmark';
 import { styles, palette } from '../styles';
 

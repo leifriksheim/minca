@@ -1,4 +1,4 @@
-import { useMinca } from '@minca/core/react';
+import { useMinca } from '@minca/react';
 import { relayOnlyLocal, relayProblem } from '@minca/app-shared/relay';
 import { PodChoice } from './PodChoice';
 import { palette, styles } from '../styles';

@@ -1,11 +1,5 @@
 import { useEffect, useState } from 'react';
-import {
-  plainQuery,
-  type CollectionRef,
-  type IncludeMap,
-  type Query,
-  type ResultFor,
-} from '../query/types.js';
+import { plainQuery, type CollectionRef, type IncludeMap, type Query, type ResultFor } from '@minca/core';
 import { useNode } from './context.js';
 
 export interface QueryState<R> {

@@ -10,7 +10,7 @@ import {
   type IncomingRequest,
   type ProposeRequest,
 } from '@minca/core/session';
-import { useAuth, useSession, useMinca } from '@minca/core/react';
+import { useAuth, useSession, useMinca } from '@minca/react';
 import { Wordmark } from '@minca/app-shared/Wordmark';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { useAccountPicture } from '../picture';

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAction } from '@minca/app-shared/action';
 import type { NodeCollection, SpaceSummary } from '@minca/core';
-import { useNode } from '@minca/core/react';
+import { useNode } from '@minca/react';
 import type { AppEntry, useSpaceApps } from './entries';
 import { AppIcon, Count } from './AppIcon';
 import { Proposals } from './MadeApps';

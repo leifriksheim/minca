@@ -18,7 +18,7 @@ import {
   useProfiles,
   useAccount,
   useSpaceStatus,
-} from '@minca/core/react';
+} from '@minca/react';
 import { RecordPanel } from './RecordPanel';
 import { AppIcon, Count } from './apps/AppIcon';
 import { CreateApp } from './apps/CreateApp';

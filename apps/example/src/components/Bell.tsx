@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState, type ReactNode } from 'react';
 import type { SpaceSummary } from '@minca/core';
-import { useAccount, useCollections } from '@minca/core/react';
+import { useAccount, useCollections } from '@minca/react';
 import { useDismiss } from '@minca/app-shared/useDismiss';
 import { markRead, useAlerts, useTabDot } from '../alerts';
 import { useAppNotifications, useOwnAutomations } from '../notifications';

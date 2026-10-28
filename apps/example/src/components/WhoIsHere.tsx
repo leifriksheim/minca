@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { CarrierSummary, SpaceStatus } from '@minca/core';
-import { useAccount, useNetwork, useNode } from '@minca/core/react';
+import { useAccount, useNetwork, useNode } from '@minca/react';
 import { healthOf, type Health } from '../derive/network';
 import { Dot, HEALTH_COLOR } from './NetworkView';
 import { nameOf, type People } from '../derive/people';

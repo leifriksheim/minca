@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { COLLECTION_DEFINE, KEY_CHANGE, RECORD_WRITE, describeHost } from '@minca/core';
 import type { FundOffer, OverSpace, SpaceHostingView, SpaceUsage } from '@minca/core';
-import { useAccess, useCollections, useNode } from '@minca/core/react';
+import { useAccess, useCollections, useNode } from '@minca/react';
 import { useMay } from './may';
 import { host as hostSchema } from '@minca/core/schemas';
 import { DEFAULT_HOST } from './relay';

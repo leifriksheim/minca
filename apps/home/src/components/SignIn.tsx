@@ -1,4 +1,4 @@
-import { MincaAuth, useMinca } from '@minca/core/react';
+import { MincaAuth, useMinca } from '@minca/react';
 import { avatarElement } from '@minca/ui/avatar';
 import { Loader } from '@minca/app-shared/Loader';
 

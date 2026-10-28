@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useSession } from '@minca/core/react';
+import { useSession } from '@minca/react';
 import { describeHost, type HostDescription, type OverSpace } from '@minca/core';
 import type { HostingView, P2PNode } from '@minca/core/node';
 import { DEFAULT_HOST } from '@minca/app-shared/relay';

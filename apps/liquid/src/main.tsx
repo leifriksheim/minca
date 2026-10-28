@@ -1,5 +1,5 @@
 import { createRoot } from 'react-dom/client';
-import { MincaProvider } from '@minca/core/react';
+import { MincaProvider } from '@minca/react';
 import { baseCss } from '@minca/app-shared/styles';
 import { App } from './App';
 import { connection } from './minca';

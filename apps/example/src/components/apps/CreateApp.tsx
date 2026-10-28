@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { SpaceSummary } from '@minca/core';
 import { Loader } from '@minca/app-shared/Loader';
 import { ConnectAgent, stepText } from '../ConnectAgent';
-import { useNode } from '@minca/core/react';
+import { useNode } from '@minca/react';
 import { useLauncherRecords } from './entries';
 import { checkLauncherApp, prepareLauncher } from './launcher';
 import { styles, palette } from '../../styles';

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { NewSpace, SpaceSummary } from '../node/types.js';
+import type { NewSpace, SpaceSummary } from '@minca/core';
 import { useNode } from './context.js';
 
 export interface SpacesState {

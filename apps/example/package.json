@@ -14,6 +14,7 @@
     "@minca/app-shared": "*",
     "@minca/calls": "*",
     "@minca/core": "*",
+    "@minca/react": "*",
     "@minca/ui": "*",
     "@tanstack/react-router": "^1.170.44",
     "react": "^19.3.1",

@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import type { ContactView, SpaceSummary } from '@minca/core';
-import { useNode } from '@minca/core/react';
+import { useNode } from '@minca/react';
 import { styles, palette } from '../styles';
 import { isBot, nameOf, type People } from '../derive/people';
 import { NOT_CARRIED, takeBack, useContacts, useStanding } from '../contacts';

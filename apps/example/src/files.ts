@@ -4,7 +4,7 @@
  * The bytes come from `records.readFile` (spec 05 §16.6).
  */
 import { useEffect, useState } from 'react';
-import { useNode } from '@minca/core/react';
+import { useNode } from '@minca/react';
 import type { FileRef } from '@minca/core';
 
 /** Object URLs by file id: one per file for the life of the page, however many places show it */

@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { parse, render } from 'sugar-high/core';
 import * as json from 'sugar-high/lang/json';
-import { useNode, useProfiles } from '@minca/core/react';
+import { useNode, useProfiles } from '@minca/react';
 import type { NodeCollection, NodeRecord, Query, QueryRecord, QueryResult, SpaceSummary } from '@minca/core';
 import { collectionLabel, fieldsOf, recordLabel, titleField } from '../derive/schema-ui';
 import { nameOf, peopleFrom } from '../derive/people';

@@ -6,7 +6,7 @@ import {
   type NodeRecord,
   type SpaceSummary,
 } from '@minca/core';
-import { useAccount, useNode } from '@minca/core/react';
+import { useAccount, useNode } from '@minca/react';
 import { useMay, useMayDefine } from '@minca/app-shared/may';
 import { Modal } from '@minca/app-shared/Modal';
 import { AddBotDialog, useSpaceBots } from '@minca/app-shared/CommunitySetup';

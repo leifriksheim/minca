@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { InvitePreview } from '../node/types.js';
+import type { InvitePreview } from '@minca/core';
 import { useNode } from './context.js';
 
 /**

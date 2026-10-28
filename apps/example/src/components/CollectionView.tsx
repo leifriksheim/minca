@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { useNode, useLive, useProfiles, useCan, useAccount } from '@minca/core/react';
+import { useNode, useLive, useProfiles, useCan, useAccount } from '@minca/react';
 import type { Filter, NodeCollection, NodeRecord, Query, QueryRecord, SpaceSummary } from '@minca/core';
 import { reaction, comment, tag } from '@minca/core/schemas';
 import {

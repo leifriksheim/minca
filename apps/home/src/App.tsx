@@ -1,4 +1,4 @@
-import { useMinca } from '@minca/core/react';
+import { useMinca } from '@minca/react';
 import { AccountHint } from './components/AccountHint';
 import { AccountNotices } from './components/AccountNotices';
 import { AccountSwitcher } from './components/AccountSwitcher';

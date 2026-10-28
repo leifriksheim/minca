@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { useAuth, useSession } from '@minca/core/react';
+import { useAuth, useSession } from '@minca/react';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { useDismiss } from '@minca/app-shared/useDismiss';
 import { useCopy } from '@minca/app-shared/action';

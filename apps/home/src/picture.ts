@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useSession } from '@minca/core/react';
+import { useSession } from '@minca/react';
 
 /**
  * The account's picture, as a URL to show it by, or null while there is none.

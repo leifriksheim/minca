@@ -11,7 +11,7 @@ import {
   type Connection,
   type StaySignedIn,
 } from '@minca/core/session';
-import { useAuth, useSession } from '@minca/core/react';
+import { useAuth, useSession } from '@minca/react';
 import { Shape } from '@minca/app-shared/shapes';
 import { shapeFor, type ShapeKind } from '@minca/ui/shapes';
 import type { ShapeColour } from '@minca/ui/tokens';

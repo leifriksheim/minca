@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { useNode } from '@minca/core/react';
+import { useNode } from '@minca/react';
 import type { FileRef, NodeRecord, SpaceSummary } from '@minca/core';
 import { file as fileCollection } from '@minca/core/schemas';
 import { bodyOf } from '../../derive/schema-ui';
