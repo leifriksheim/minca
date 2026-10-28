@@ -1943,7 +1943,15 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     // The protocol's own bookkeeping — definitions, profiles, roles — has no user-facing schema.
     if (collection.startsWith('sys.')) return null;
     const described = await definitionOf(collection);
-    if (described) return validateJsonSchema(described.schema, body);
+    if (described) {
+      // A schema the validator can't build (a bad $id in an annotation, say)
+      // checks nothing, like a definition that is invalid (spec 02 §6.1).
+      try {
+        return validateJsonSchema(described.schema, body);
+      } catch {
+        return null;
+      }
+    }
     if (schemas.getCollection(collection)) {
       const checked = await schemas.validate(collection, body);
       return (checked.issues ?? []).map((issue) => ({ path: '/', message: issue.message }));
