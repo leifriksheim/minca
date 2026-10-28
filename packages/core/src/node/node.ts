@@ -102,7 +102,7 @@ import {
   signPurge,
   type OpenedKnock,
 } from '../inbox/inbox.js';
-import { createMailboxClient } from '../network/relays.js';
+import { createMailboxClient, relayKind } from '../network/relays.js';
 import { team } from '../space/presets.js';
 import {
   CARRIER_COLLECTION,
@@ -1101,9 +1101,6 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   const linkTimer = setInterval(() => void keepLinks().catch(() => {}), 60 * 60 * 1000);
   unref(linkTimer);
 
-  /** Pages of a topic read for a short link: a relay holds 64 blobs, at least four a page */
-  const INVITE_PAGES = 16;
-
   /** A short link's invite, fetched once and kept: a preview and the join that follows ask once */
   const resolved = new Map<string, Promise<{ readonly long: string; readonly until?: number }>>();
 
@@ -1140,7 +1137,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       new Promise<void>((resolve) => unref(setTimeout(resolve, 20_000))),
       Promise.all(
         places.map((place) =>
-          mailbox.fetch(place, topic, 0, INVITE_PAGES).then(
+          mailbox.fetch(place, topic).then(
             (items) => items.forEach((item) => blobs.add(item.blob)),
             () => {},
           ),
@@ -2375,15 +2372,17 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     );
   }
 
-  /** Clears knocks from every mailbox an inbox names, as its owner; how many did */
+  /** Clears knocks from every mailbox an inbox names that can purge, as its owner; how many did */
   async function purgeInbox(body: Inbox, ids: ReadonlyArray<string> | null): Promise<number> {
     const keys = await inboxKeys(body.gen);
     const done = await Promise.allSettled(
-      body.places.map((place) =>
-        mailbox.purge(place, keys.topic, keys.signPublic, ids, (nonce) =>
-          signPurge(keys.sign, keys.topic, nonce, ids),
+      body.places
+        .filter((place) => relayKind(place)?.can.purge)
+        .map((place) =>
+          mailbox.purge(place, keys.topic, keys.signPublic, ids, (nonce) =>
+            signPurge(keys.sign, keys.topic, nonce, ids),
+          ),
         ),
-      ),
     );
     return done.filter((result) => result.status === 'fulfilled').length;
   }
@@ -2559,7 +2558,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       const current = await inboxRecord();
       if (!current) throw new Error('Your inbox is not open');
       if ((await purgeInbox(current.body!, null)) === 0)
-        throw new Error("None of your inbox's mailboxes could be reached to clear it.");
+        throw new Error("None of your inbox's mailboxes could be reached and cleared.");
       knockCache.clear();
       failed.clear();
     },

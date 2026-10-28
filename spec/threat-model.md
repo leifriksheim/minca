@@ -39,7 +39,7 @@ and metadata through relays and hosts (§3.7, §3.8).
 | **Key thief**        | One of an account's delegated keys (session, writer or app key), with its note                                     |
 | **Root thief**       | The account's seed or recovery code                                                                                |
 | **App or program**   | A grant from the account, by popup or by code: a note, and perhaps the account, contact or member keys (06 §2, §3) |
-| **Relay**            | Minca or Nostr: the sealed blobs under the topics it serves, and what it keeps for inboxes and short links         |
+| **Relay**            | Of any kind: the sealed blobs under the topics it serves, and what it keeps for inboxes and short links            |
 | **Host or carrier**  | Every version of the spaces it keeps and their envelopes, a pass's read seed, a connection to members              |
 | **Network attacker** | Can watch, delay, drop and replay traffic between peers                                                            |
 
@@ -949,8 +949,8 @@ _Source: 01 §7.5, §8, §11; 06 §2, §3; 05 §14, §15; 02 §4.1. Tests: `pack
 
 ### 3.7 Relay
 
-A Minca relay, a Nostr relay, or anyone else watching a topic on one: all see
-the same sealed blobs.
+A relay of any kind (04 §1.2), or anyone else watching a topic on one: all
+see the same sealed blobs.
 
 - **Holds.** It can always drop and delay. Beyond that:
   - A relay that doesn't know the room learns no session DID: neither who is
@@ -1076,9 +1076,9 @@ the same sealed blobs.
     So can a short link's topic: 64 blobs fill it, and a drop of the link's
     blob after its copy expired is then refused. Joiners read every page, so
     junk can't hide a copy that is there, and a host's copy is not in the
-    relay's queue. A Nostr relay can't be purged, and a fetch reads its
-    newest 500 blobs: 500 drops bury an inbox's earlier knocks there, or a
-    short link's invite (04 §1.5, 07 §5).
+    relay's queue. On a relay that can't purge and whose fetch is bounded,
+    drops past the bound bury an inbox's earlier knocks there, or a short
+    link's invite (04 §1.2, 07 §5).
   - Of a short link it learns the topic, the sealed invite's size, and when
     and from which address it is fetched; a relay also serving the space's
     room can tie a fetch to the topic watched a moment later

@@ -208,6 +208,22 @@ describe("the relay's mailbox", () => {
     assert.deepEqual(await mailbox.fetch(relayUrl, topic, items[0]!.seq), []);
   });
 
+  test('a fetch reads every page, so junk dropped first hides no knock after it', async () => {
+    const { topic } = await someInbox();
+    // Large blobs fill a page with four: 63 of them, and the knock last, fill the topic.
+    const own = await startRelay({ dropsPerNetwork: 10_000, dropsPerNetworkPerTopic: 10_000 });
+    try {
+      for (let i = 0; i < 63; i++)
+        await mailbox.drop(own.url, topic, `${i}`.padStart(2, '0').padEnd(12_000, 'A'));
+      await mailbox.drop(own.url, topic, 'cmVhbA');
+      const items = await mailbox.fetch(own.url, topic);
+      assert.equal(items.length, 64);
+      assert.equal(items.at(-1)!.blob, 'cmVhbA');
+    } finally {
+      own.close();
+    }
+  });
+
   test('refuses what is not a sealed blob, and topics that are not a hash', async () => {
     const { topic } = await someInbox();
     await assert.rejects(mailbox.drop(relayUrl, topic, 'not base64url!'), /refused/);

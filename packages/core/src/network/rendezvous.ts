@@ -90,7 +90,7 @@ export interface Rendezvous {
    * offer came, sealed to the box the offer came with.
    */
   readonly signal: (kind: SignalKind, to: string, payload: unknown, room: string, box?: string) => void;
-  /** Asks relays for fresh TURN passwords; they arrive as an `ice` event, from relays that have TURN */
+  /** Asks the relays that can hand out TURN passwords for fresh ones; they arrive as an `ice` event */
   readonly requestIce: () => void;
   /** Tries every relay that is waiting to reconnect, now */
   readonly reconnect: () => void;
@@ -417,7 +417,8 @@ export function createRendezvous(
     },
 
     requestIce: () => {
-      for (const link of linkList()) if (link.isConnected()) link.requestIce();
+      for (const link of linkList())
+        if (link.isConnected() && relayKind(link.url)?.can.ice) link.requestIce?.();
     },
 
     reconnect: () => {
