@@ -447,11 +447,12 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     keyword an older peer doesn't know is invalid to it, so it enforces none
     of that collection's rules, topics or contract, silently, until it
     updates. To a peer from before `x-*` annotations (02 §6.2), that is every
-    collection with a person field: `std.vote`, `std.ballot`, `std.pledge`,
-    `std.award` and Liquid's. Later annotations don't widen it.
-    A member on an older release counts a second vote others refuse. Accepted
-    before v1, when Minca does not support mixed releases
-    ([#10](https://github.com/leifriksheim/minca/issues/10)).
+    collection with a person field (`fragments.person` or `people`), from
+    `std.vote` and `std.settlement` to `std.message` and Liquid's: it counts
+    a second vote others refuse, lets a settlement's amount be edited, and
+    tags none of what it writes, so "mentions me" misses it. Later
+    annotations don't widen it. Accepted before v1, when Minca does not
+    support mixed releases ([#10](https://github.com/leifriksheim/minca/issues/10)).
   - A removal or unassignment signed offline can arrive at any time and withdraw
     what its cutoff doesn't cover: peers converge, but no verdict is final
     until members witness each other's heads

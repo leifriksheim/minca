@@ -52,10 +52,25 @@ describe('stored schemas', () => {
   });
 
   test('an unknown keyword is ignored when validating, so newer spaces stay readable', () => {
-    assert.deepEqual(
-      validateJsonSchema({ ...expense, 'x-from-the-future': { anything: true } }, { what: 'a', amount: 1 }),
-      [],
-    );
+    assert.deepEqual(validateJsonSchema({ ...expense, minProperties: 5 }, { what: 'a', amount: 1 }), []);
+  });
+
+  test('only what decides whether a body fits reaches the validator, so no value elsewhere can break it', () => {
+    const bad = { $id: 'http://[' };
+    const schema = {
+      type: 'object',
+      'x-kind': bad,
+      properties: {
+        level: {
+          type: 'integer',
+          oneOf: [{ const: 1, description: bad }],
+          'x-choicesFrom': { rel: 'about', field: 'f', ...bad },
+        },
+        name: { type: 'string', 'x-a': { $id: 'https://github.com/cfworker' }, title: 'Name' },
+      },
+    };
+    assert.deepEqual(validateJsonSchema(schema, { level: 1, name: 'a' }), []);
+    assert.equal(validateJsonSchema(schema, { level: 2, name: 'a' }).length > 0, true);
   });
 
   test('but refused when publishing, where the author can fix it', () => {

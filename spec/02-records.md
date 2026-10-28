@@ -1000,8 +1000,8 @@ protocol: see [collections](../packages/core/docs/collections.md#validating).
 > check must tolerate these keywords before any app writes them, or such a
 > definition needs a higher protocol version that older peers recognise.
 > This already holds for `x-*` annotations: a peer from before them treats
-> every definition with a person field (`fragments.person`) as having no
-> rules, until it updates. Before v1, Minca does not support mixed releases.
+> every definition with a person field (`fragments.person` or `people`) as
+> having no schema, rules or topics, until it updates. Before v1, Minca does not support mixed releases.
 > To a peer that has this rule, a new annotation never makes a definition
 > invalid.
 > Tracked in [#10](https://github.com/leifriksheim/minca/issues/10).

@@ -144,6 +144,47 @@ describe('attacks on a shared space', () => {
     assert.deepEqual(poll?.rules, { fixed: ['options'] });
   });
 
+  test("an annotation in a definition can't break reading the collection, or the space", async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const alice = await person(hub);
+    const mallory = await person(hub);
+    // team lets editors define collections
+    const { id: space } = await alice.node.spaces.create({ name: 'Team', ...team, visibility: 'private' });
+    await mallory.node.spaces.join(await alice.node.spaces.invite(space, { role: 'editor' }));
+    for (const { node } of [alice, mallory]) await hold(node, space);
+    await joined(mallory.node, space);
+    const message = {
+      type: 'object',
+      properties: { text: { type: 'string', minLength: 1 } },
+      required: ['text'],
+    };
+    await alice.node.collections.define(space, { name: 'app.chat.message', schema: message });
+    const note = await alice.node.records.put(space, 'app.chat.message', { text: 'hello' });
+    await until(async () => (await mallory.node.records.get(space, note.key)) !== null, 4000, 'the message');
+
+    // The validator would follow an $id anywhere it doesn't know, and throw on a bad one.
+    await mallory.node.collections.define(space, {
+      name: 'app.chat.message',
+      schema: {
+        ...message,
+        'x-kind': { $id: 'http://[' },
+        properties: { text: { type: 'string', 'x-a': { $id: 'https://github.com/cfworker' } } },
+      },
+    });
+    await until(
+      async () =>
+        (await alice.node.collections.list(space)).some(
+          (c) => c.name === 'app.chat.message' && c.version === 2,
+        ),
+      4000,
+      'the new definition',
+    );
+    assert.deepEqual((await alice.node.records.get(space, note.key))?.body, { text: 'hello' });
+    assert.equal((await alice.node.records.list(space, { collection: 'app.chat.message' })).length, 1);
+    assert.ok((await alice.node.records.list(space)).length > 0);
+    await alice.node.records.put(space, 'app.chat.message', { text: 'still here' });
+  });
+
   test('a member cannot freeze a record by skipping ahead to a seq nobody can outrank', async () => {
     const { alice, bob, space } = await setup();
     const note = await alice.node.records.put(space, 'app.note', { text: 'first' });

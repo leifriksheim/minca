@@ -363,15 +363,53 @@ function newValidator(schema: unknown): Validator {
   return new Validator(schema as Schema | boolean, '2020-12', false);
 }
 
+/** The keywords that decide whether a body fits, as the validator reads them */
+const VALIDATING = new Set([
+  'type',
+  'required',
+  'enum',
+  'const',
+  'minimum',
+  'maximum',
+  'minLength',
+  'maxLength',
+  'minItems',
+  'maxItems',
+  'additionalProperties',
+]);
+
 /**
- * One validator per schema object. It is built from a copy: the validator
- * writes into the schema it is given, and a stored schema is frozen.
+ * Only what decides whether a body fits, as a new object. The validator walks
+ * any key it doesn't know looking for `$id`s, and throws on a bad one, so an
+ * annotation, a label or a keyword from a newer release must never reach it.
+ */
+function validating(schema: unknown): unknown {
+  if (!isRecord(schema)) return schema;
+  const kept = Object.fromEntries(Object.entries(schema).filter(([keyword]) => VALIDATING.has(keyword)));
+  const { properties, items, oneOf } = schema;
+  if (isRecord(properties)) {
+    kept.properties = Object.fromEntries(
+      Object.entries(properties).map(([name, sub]) => [name, validating(sub)]),
+    );
+  }
+  if (items !== undefined) kept.items = validating(items);
+  if (Array.isArray(oneOf)) {
+    const choices: unknown[] = oneOf;
+    kept.oneOf = choices.map((choice) => (isObject(choice) ? { const: choice.const } : choice));
+  }
+  return kept;
+}
+
+/**
+ * One validator per schema object, built from what in it validates (the
+ * validator also writes into the schema it is given, and a stored schema is
+ * frozen).
  */
 function validatorFor(schema: JsonSchema): Validator {
   if (typeof schema !== 'object' || schema === null) return newValidator(schema);
   let found = validators.get(schema);
   if (!found) {
-    found = newValidator(structuredClone(schema));
+    found = newValidator(validating(schema));
     validators.set(schema, found);
   }
   return found;
