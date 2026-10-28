@@ -12,8 +12,10 @@
  * up by itself ({@link reloadOnConnect}).
  */
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { watch } from 'node:fs';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { connect as connectSocket, createServer, type Server, type Socket } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -22,6 +24,8 @@ import {
   createNode,
   directoryStores,
   didOf,
+  remoteNode,
+  serveNode,
   COLLECTION_DEFINE,
   type NodeConfig,
   type P2PNode,
@@ -42,6 +46,7 @@ import {
 import { openFsDirectory, writeWhole } from './fs-directory.js';
 import { nodeFor, type Unlocked } from './home.js';
 import { commaList, errorCode, isRecord, messageOf } from './json.js';
+import { socketPort } from './socket-port.js';
 import { holdLock, lockHolder } from './writer-keys.js';
 
 /** The relay the apps meet on unless told otherwise */
@@ -275,12 +280,13 @@ export async function takeOverAgent(home: string, options: StartOptions = {}): P
     } catch (error) {
       if (errorCode(error) !== 'ESRCH') throw new Error(`Couldn't stop pid ${holder}: ${messageOf(error)}`);
     }
-    for (let waited = 0; (await agentRunning(home)) !== null; waited += 200) {
+    // Often, so it is first to the lock: the sessions that borrowed from that one wait a little before they look.
+    for (let waited = 0; (await agentRunning(home)) !== null; waited += 50) {
       if (waited >= 10_000)
         throw new Error(
           `pid ${holder} didn't stop within 10 seconds. Stop it by hand (kill ${holder}), then try again.`,
         );
-      await delay(200);
+      await delay(50);
     }
   }
   return startAgentNode(home, options);
@@ -339,7 +345,8 @@ async function readConnection(home: string): Promise<{ grant: Grant; key: Stored
 
 /**
  * Starts this computer's agent: a node of its own, following the account,
- * acting as the agent.
+ * acting as the agent. While it runs it lends the node to the other sessions
+ * on this computer ({@link useAgent}).
  * @throws Before `minca connect`, or once the note has run out; {@link AgentBusy} while another process runs it
  */
 export async function startAgentNode(home: string, options: StartOptions = {}): Promise<RunningAgent> {
@@ -354,6 +361,22 @@ export async function startAgentNode(home: string, options: StartOptions = {}): 
     await release();
     throw error;
   }
+
+  const borrowers = new Set<Socket>();
+  const server = await lend(home, (socket) => {
+    borrowers.add(socket);
+    // Its view of the node: closing it ends that session's connection, not the node.
+    const view = Object.freeze({ ...current.node, close: async () => void socket.end() });
+    const stop = serveNode(view, socketPort(socket));
+    socket.once('close', () => {
+      borrowers.delete(socket);
+      stop();
+    });
+  });
+  // They come back for the node that runs now.
+  const dropBorrowers = () => {
+    for (const socket of borrowers) socket.destroy();
+  };
 
   let revokedIn = new Set<string>();
   const listen = (node: P2PNode) => {
@@ -397,6 +420,8 @@ export async function startAgentNode(home: string, options: StartOptions = {}): 
           current = { ...current, ...(await startWithKey(home, current.grant, current.key, options)) };
           unlisten = listen(current.node);
           throw error;
+        } finally {
+          dropBorrowers();
         }
         unlisten = listen(current.node);
         return true;
@@ -405,10 +430,193 @@ export async function startAgentNode(home: string, options: StartOptions = {}): 
       exclusive(async () => {
         if (closed) return;
         closed = true;
+        // The socket goes while the lock is held, so closing it never takes the next process's with it.
+        server?.close();
         unlisten();
         await current.stop();
         await release();
+        dropBorrowers();
       }),
+  });
+}
+
+/**
+ * Where the agent's process listens for the other sessions on this computer:
+ * in the agent folder, which only this user may open (0700), so only their
+ * processes reach it. Nothing else guards it. On Windows a named pipe, named
+ * for that folder.
+ */
+function agentSocket(home: string): string {
+  if (process.platform !== 'win32') return path.join(agentDir(home), 'socket');
+  const name = createHash('sha256')
+    .update(path.resolve(agentDir(home)))
+    .digest('hex')
+    .slice(0, 16);
+  return `\\\\.\\pipe\\minca-agent-${name}`;
+}
+
+/**
+ * Listens for the sessions that borrow the agent. Null when it can't, as when
+ * the folder's path is too long for a socket: the agent then runs for this
+ * process alone.
+ */
+async function lend(home: string, serve: (socket: Socket) => void): Promise<Server | null> {
+  const at = agentSocket(home);
+  // Called under the lock, so a socket already there was left by a process that is gone.
+  if (process.platform !== 'win32') await rm(at, { force: true });
+  const server = createServer(serve);
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(at, () => {
+        server.off('error', reject);
+        resolve();
+      });
+    });
+  } catch {
+    return null;
+  }
+  server.on('error', () => {});
+  server.unref();
+  return server;
+}
+
+/** This computer's agent as one session uses it: run here, or borrowed from the process that runs it */
+export interface AgentSession {
+  /** Changes when the agent moves to another process, or reloads: read it each time */
+  readonly node: P2PNode;
+  readonly grant: Grant;
+  /** The spaces where the key the agent writes with was revoked */
+  revoked(): ReadonlyArray<string>;
+  close(): Promise<void>;
+}
+
+/** What a session holds now, and when it loses it: the process it borrowed from went away */
+interface Held {
+  readonly node: () => P2PNode;
+  readonly grant: Grant;
+  readonly revoked: () => ReadonlyArray<string>;
+  readonly close: () => Promise<void>;
+  readonly lost: Promise<void>;
+}
+
+/** How long a session waits after losing the agent before it looks again, so a `minca agent` taking over is first */
+const FAILOVER_MS = 500;
+/** How often it looks again while the process holding the lock starts, before it listens */
+const BORROW_RETRY_MS = 200;
+/** How long it looks before giving up */
+const BORROW_WAIT_MS = 30_000;
+
+/** The agent, borrowed from the process on this computer that runs it; null when none answers */
+async function borrowAgent(home: string, options: StartOptions): Promise<Held | null> {
+  const { grant } = await readConnection(home);
+  const socket = await new Promise<Socket | null>((resolve) => {
+    const opened = connectSocket(agentSocket(home));
+    opened.once('connect', () => resolve(opened));
+    opened.once('error', () => resolve(null));
+  });
+  if (!socket) return null;
+  const lost = new Promise<void>((resolve) => socket.once('close', () => resolve()));
+  const node = await remoteNode(socketPort(socket)).catch(() => null);
+  if (!node) {
+    socket.destroy();
+    return null;
+  }
+  const revoked = new Set<string>();
+  node.subscribe((event) => {
+    if (event.type !== 'revoked' || revoked.has(event.space)) return;
+    revoked.add(event.space);
+    options.onRevoked?.(event.space);
+  });
+  return {
+    node: () => node,
+    grant,
+    revoked: () => [...revoked],
+    // Hanging up is enough: the node is the other process's to close.
+    close: async () => void socket.destroy(),
+    lost,
+  };
+}
+
+/** The agent run here, by the session that got the lock: it takes up a new `minca connect` too */
+async function runAgentHere(home: string, options: StartOptions, log: (line: string) => void): Promise<Held> {
+  const running = await startAgentNode(home, options);
+  const stopReloading = reloadOnConnect(home, running, log);
+  return {
+    node: () => running.node,
+    get grant() {
+      return running.grant;
+    },
+    revoked: () => running.revoked(),
+    close: async () => {
+      stopReloading();
+      await running.close();
+    },
+    lost: new Promise(() => {}),
+  };
+}
+
+/**
+ * This computer's agent for one session, as `minca mcp` uses it. The first
+ * session runs the node and lends it over a local socket; the others borrow
+ * it, as tabs share one node through a worker. So every session uses the
+ * agent at once, while one process signs with its key. When that one stops,
+ * a session that borrowed runs it instead, or borrows from whichever did.
+ * @throws As {@link startAgentNode}; {@link AgentBusy} when the process running it lends it to nobody
+ */
+export async function useAgent(
+  home: string,
+  options: StartOptions & { readonly log?: (line: string) => void } = {},
+): Promise<AgentSession> {
+  const log = options.log ?? (() => {});
+  const take = async (): Promise<Held> => {
+    const until = Date.now() + BORROW_WAIT_MS;
+    for (;;) {
+      try {
+        return await runAgentHere(home, options, log);
+      } catch (error) {
+        if (!(error instanceof AgentBusy) || Date.now() > until) throw error;
+      }
+      const borrowed = await borrowAgent(home, options);
+      if (borrowed) return borrowed;
+      await delay(BORROW_RETRY_MS);
+    }
+  };
+
+  let held = await take();
+  let closed = false;
+  // When the process it borrowed from goes, it takes the agent up again.
+  const follow = (was: Held) =>
+    void was.lost.then(async () => {
+      await delay(FAILOVER_MS);
+      while (!closed && held === was) {
+        try {
+          const next = await take();
+          if (closed) await next.close();
+          else {
+            held = next;
+            follow(next);
+          }
+        } catch (error) {
+          log(`taking the agent up again failed: ${messageOf(error)}`);
+          await delay(BORROW_WAIT_MS / 6);
+        }
+      }
+    });
+  follow(held);
+
+  return Object.freeze({
+    get node() {
+      return held.node();
+    },
+    get grant() {
+      return held.grant;
+    },
+    revoked: () => held.revoked(),
+    close: async () => {
+      closed = true;
+      await held.close();
+    },
   });
 }
 

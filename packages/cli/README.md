@@ -368,11 +368,12 @@ today's spend reaches `--daily-cap` (dollars, default 2) it starts no more calls
 until tomorrow. `--model` picks the model (default `claude-opus-5-5`, or
 `$MINCA_AGENT_MODEL`); it must be one whose price it knows.
 
-Only one of `minca agent` and `minca mcp` can use an agent at a time: they sign
-with the same key, and two signing at once would fork its log, after which
-nothing more it signs counts. The second one to start says the agent is
-already running, and stops (a lock in the agent's folder, taken over once the
-process holding it is gone).
+One process runs the agent at a time: they all sign with the same key, and
+two signing at once would fork its log, after which nothing more it signs
+counts. Every other `minca mcp` borrows the agent from that one, over a socket
+in the agent's folder, so several Claude Code sessions use it at once; when it
+stops, one of them takes it up. `minca agent` runs automations, so it doesn't
+borrow: started while another runs the agent, it offers to stop that one.
 
 It also runs your **automations** (`std.automation`, see
 `packages/core/docs/automations.md`): what to do when some records come to be a

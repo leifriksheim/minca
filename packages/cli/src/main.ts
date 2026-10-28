@@ -66,11 +66,10 @@ import {
   walletFromEnv,
 } from './host-setup.js';
 import { isHostStats, statsLines } from './host-stats.js';
-import { busyWaiting, CONNECT, connectWaiting, runMcpStdio, runWaitingMcpStdio, TAKE_OVER } from './mcp.js';
+import { CONNECT, connectWaiting, runMcpStdio, runWaitingMcpStdio } from './mcp.js';
 import {
   ACCOUNT_HOME,
   AgentBusy,
-  agentRunning,
   configuredRelays,
   connectAgent,
   describeAgentProcess,
@@ -81,12 +80,12 @@ import {
   loadAgentGrant,
   loadModelKey,
   openInBrowser,
-  reloadOnConnect,
   saveModelKey,
   startAgentNode,
   startBotNode,
   takeOverAgent,
-  type RunningAgent,
+  useAgent,
+  type AgentSession,
 } from './agent.js';
 import { createAgentChat, DEFAULT_MODEL, fileSpend, priceOf } from './agent-chat.js';
 import { capEachOf, runAutomations } from './bot-runner.js';
@@ -983,18 +982,19 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
   }
 
   if (command === 'mcp' && !args.includes('--account')) {
-    // The connected agent: a node of its own, online, acting as the agent.
+    // The connected agent: run here, or borrowed from the session on this computer that runs it.
     const home = homePath(globals.home);
     const nodes = commaList(process.env.MINCA_NODES);
     const info = { name: 'minca', version: VERSION };
-    // Set here or, once it stops or is taken over, from the waiting server.
-    const here: { agent: RunningAgent | null } = { agent: null };
+    // Set here or, once the person connects, from the waiting server.
+    const here: { agent: AgentSession | null } = { agent: null };
     const start = {
       nodes,
       onRevoked: (space: string) =>
         stderr(
           `minca mcp: the agent's key was revoked in ${space}; nothing it writes there counts until it connects again`,
         ),
+      log: (line: string) => stderr(`minca mcp: ${line}`),
     };
     // While its key is revoked, a failed write says what to do: the model sees only "revoked" otherwise.
     const trouble = () =>
@@ -1003,31 +1003,23 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
           'Ask them to connect it again: run `minca connect`, which opens their account home to allow it. ' +
           'This session takes the new connection up by itself within a few seconds; no restart is needed.'
         : null;
-    let stopReloading = () => {};
-    const started = (running: RunningAgent) => {
-      here.agent = running;
+    const started = (agent: AgentSession) => {
+      here.agent = agent;
       stderr(
-        `minca mcp: an agent for ${running.grant.name} (${running.grant.did}), ${daysLeft(running.grant)} days left`,
+        `minca mcp: an agent for ${agent.grant.name} (${agent.grant.did}), ${daysLeft(agent.grant)} days left`,
       );
-      // `minca connect` again, after a disconnect or to renew: take the new key and note up here.
-      stopReloading = reloadOnConnect(home, running, (line) => stderr(`minca mcp: ${line}`));
-      return running.node;
+      return agent.node;
     };
-    // Taken over by another session (agent_take_over): close, so the lock and the writes are left in order.
+    // Stopped, by `minca agent` taking the agent over say: close, so the lock and the writes are left in order.
     process.once('SIGTERM', () => {
-      stderr('minca mcp: stopped, by another session taking the agent over');
+      stderr('minca mcp: stopped');
       void (here.agent?.close() ?? Promise.resolve()).then(() => process.exit(0));
     });
-    const current = () => here.agent?.node ?? null;
-    let busy: AgentBusy | null = null;
-    const connected = await hasConnectedAgent(home);
-    try {
-      if (connected) started(await startAgentNode(home, start));
-    } catch (error) {
-      if (!(error instanceof AgentBusy)) throw error;
-      busy = error;
-    }
-    if (!connected) {
+    if (await hasConnectedAgent(home)) {
+      const agent = await useAgent(home, start);
+      started(agent);
+      await runMcpStdio(() => agent.node, info, { agent: true, trouble });
+    } else {
       // Not connected yet: offer to open the account home, and start once the person has allowed it there.
       stderr(`minca mcp: not connected to an account; offering only ${CONNECT} until it is`);
       let link: Promise<{ opened: boolean; url: string }> | null = null;
@@ -1050,33 +1042,14 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
               );
             })),
           tryStart: async () =>
-            (await hasConnectedAgent(home)) ? started(await startAgentNode(home, start)) : null,
-          current,
+            (await hasConnectedAgent(home)) ? started(await useAgent(home, start)) : null,
+          current: () => here.agent?.node ?? null,
           account: () => here.agent && { name: here.agent.grant.name, did: here.agent.grant.did },
         }),
         info,
         { agent: true, trouble },
       );
-    } else if (busy) {
-      // Rather than exit, which the client shows as only "connection closed": say why, and offer to take over.
-      const holder = await describeAgentProcess(busy.holder);
-      stderr(`minca mcp: the agent already runs in ${holder}; offering only ${TAKE_OVER} until it stops`);
-      await runWaitingMcpStdio(
-        busyWaiting({
-          holder,
-          tryStart: async () =>
-            (await agentRunning(home)) === null ? started(await startAgentNode(home, start)) : null,
-          takeOver: async () => started(await takeOverAgent(home, start)),
-          current,
-        }),
-        info,
-        { agent: true, trouble },
-      );
-    } else if (here.agent) {
-      const running = here.agent;
-      await runMcpStdio(() => running.node, info, { agent: true, trouble });
     }
-    stopReloading();
     await here.agent?.close();
     // WebRTC keeps the process alive; the agent closed stdin, so it's done.
     process.exit(0);

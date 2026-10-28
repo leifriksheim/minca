@@ -15,7 +15,7 @@ import { openFsDirectory } from '../src/fs-directory.js';
 import { openHome, createAccount, unlock, chooseAccount, localPath, nodeFor } from '../src/home.js';
 import { startDaemon, type Daemon } from '../src/daemon.js';
 import { enableWebRTC, holdEverySpace } from '../src/agent.js';
-import { busyWaiting, CONNECT, connectWaiting, handleMcpMessage, TAKE_OVER, waitingMcp } from '../src/mcp.js';
+import { CONNECT, connectWaiting, handleMcpMessage, waitingMcp } from '../src/mcp.js';
 import { aNode, tempDir } from './helpers/nodes.js';
 import { loadModelSetting } from '../src/guide.js';
 import { createNode } from '../../core/src/node/node.js';
@@ -510,65 +510,6 @@ describe('MCP', () => {
     assert.match(String(at(refused, 'error', 'message')), /Unknown tool/);
   });
 
-  test('while another process runs the agent, it says who and offers to take over, then serves the tools', async () => {
-    const node = await aNode(5);
-    const sent: unknown[] = [];
-    let otherRunning = true;
-    const server = waitingMcp(
-      busyWaiting({
-        holder: '`minca mcp` (pid 42), started by a Claude Code session',
-        tryStart: async () => (otherRunning ? null : node),
-        takeOver: async () => {
-          otherRunning = false;
-          return node;
-        },
-      }),
-      info,
-      { agent: true },
-      (message) => sent.push(message),
-    );
-    try {
-      const init = await server.handle({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
-      assert.match(String(at(init, 'result', 'instructions')), /pid 42.*Claude Code/);
-      assert.equal(at(init, 'result', 'capabilities', 'tools', 'listChanged'), true);
-
-      const listed = at(
-        await server.handle({ jsonrpc: '2.0', id: 2, method: 'tools/list' }),
-        'result',
-        'tools',
-      );
-      assert.deepEqual(Array.isArray(listed) && listed.map((tool: unknown) => at(tool, 'name')), [TAKE_OVER]);
-
-      const early = await server.handle({
-        jsonrpc: '2.0',
-        id: 3,
-        method: 'tools/call',
-        params: { name: 'spaces_list', arguments: {} },
-      });
-      assert.equal(at(early, 'result', 'isError'), true);
-      assert.match(String(at(early, 'result', 'content', 0, 'text')), /already running/);
-
-      const taken = await server.handle({
-        jsonrpc: '2.0',
-        id: 4,
-        method: 'tools/call',
-        params: { name: TAKE_OVER },
-      });
-      assert.equal(at(taken, 'result', 'isError'), false);
-      assert.deepEqual(sent, [{ jsonrpc: '2.0', method: 'notifications/tools/list_changed' }]);
-      assert.equal(server.node(), node);
-
-      const tools = at(
-        await server.handle({ jsonrpc: '2.0', id: 5, method: 'tools/list' }),
-        'result',
-        'tools',
-      );
-      assert.ok(Array.isArray(tools) && tools.some((tool: unknown) => at(tool, 'name') === 'records_put'));
-    } finally {
-      server.stop();
-    }
-  });
-
   test('not connected yet, agent_connect opens the account home, takes the code it shows from the user, then serves the tools', async () => {
     const node = await aNode(10);
     let browser = true;
@@ -639,21 +580,22 @@ describe('MCP', () => {
     }
   });
 
-  test('a waiting server starts by itself once the other process stops', async () => {
+  test('a waiting server starts by itself once the person has connected, say in a terminal', async () => {
     const node = await aNode(6);
-    let otherRunning = true;
+    let connected = false;
     const server = waitingMcp(
-      busyWaiting({
-        holder: 'pid 42',
-        tryStart: async () => (otherRunning ? null : node),
-        takeOver: () => Promise.reject(new Error('not asked')),
+      connectWaiting({
+        accountHome: 'home.test',
+        connect: () => Promise.reject(new Error('not asked')),
+        tryStart: async () => (connected ? node : null),
+        account: () => null,
       }),
       info,
       { agent: true },
       () => {},
     );
     try {
-      otherRunning = false;
+      connected = true;
       const tools = at(
         await server.handle({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
         'result',
@@ -671,10 +613,11 @@ describe('MCP', () => {
     const second = await aNode(8);
     let current = first;
     const server = waitingMcp(
-      busyWaiting({
-        holder: 'pid 42',
+      connectWaiting({
+        accountHome: 'home.test',
+        connect: () => Promise.reject(new Error('not asked')),
         tryStart: async () => first,
-        takeOver: () => Promise.reject(new Error('not asked')),
+        account: () => null,
         current: () => current,
       }),
       info,

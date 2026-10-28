@@ -2,6 +2,8 @@
  * Connecting this computer's agent again: each `minca connect` makes a new
  * key, since a key the home revoked can't write again whatever note it gets,
  * and a running agent takes the new key and note up without a restart.
+ * And several sessions using the agent at once, through the one process
+ * that signs with its key.
  */
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -20,7 +22,14 @@ import { memoryStores } from '../../core/tests/helpers/memory-stores.js';
 import { createFakeHub, type FakeHub } from '../../core/tests/helpers/fake-transport.js';
 import { hold } from '../../core/tests/helpers/hold.js';
 import { until } from '../../core/tests/helpers/until.js';
-import { connectAgent, reloadOnConnect, startAgentNode, type RunningAgent } from '../src/agent.js';
+import {
+  agentRunning,
+  connectAgent,
+  reloadOnConnect,
+  startAgentNode,
+  useAgent,
+  type AgentSession,
+} from '../src/agent.js';
 import { onHub, tempDir } from './helpers/nodes.js';
 
 const open: Array<{ close(): Promise<void> }> = [];
@@ -78,7 +87,7 @@ const connectHere = (home: string, connect: typeof connectWithCode) =>
     connect,
   });
 
-const writes = (agent: RunningAgent, space: string, text: string) =>
+const writes = (agent: { readonly node: P2PNode }, space: string, text: string) =>
   agent.node.records.put(space, 'app.note', { text }).then(
     (record) => record.key,
     (error: Error) => error,
@@ -180,5 +189,87 @@ describe('connecting the agent again', () => {
     await copyFile(path.join(other, 'agent', 'key.json'), path.join(home, 'agent', 'key.json'));
     assert.equal(await agent.reload(), false);
     assert.equal(agent.node, running);
+  });
+});
+
+/** Ada with a private space, and this computer's agent connected to her account */
+async function connectedHome() {
+  const hub = createFakeHub({ latencyMs: 1 });
+  const ada = await accountHolder(hub);
+  const space = await ada.node.spaces.create({ name: 'Team', visibility: 'private' });
+  await hold(ada.node, space.id);
+  const home = await tempDir();
+  await connectHere(home, ada.connect);
+  const session = async () => {
+    const agent = await useAgent(home, { network: onHub(hub) });
+    open.push(agent);
+    return agent;
+  };
+  return { ada, space, home, session };
+}
+
+/** Waits for a session to write a note, and gives its key */
+async function wrote(agent: AgentSession, space: string, text: string): Promise<string> {
+  let written: string | Error = new Error('not tried');
+  await until(async () => typeof (written = await writes(agent, space, text)) === 'string', 6000, 'a write');
+  return String(written);
+}
+
+describe('several sessions on one computer', () => {
+  test('share one agent: the first runs it, the others borrow it, and all of them read and write', async () => {
+    const { ada, space, home, session } = await connectedHome();
+    const first = await session();
+    const second = await session();
+    assert.equal(await agentRunning(home), process.pid);
+    assert.equal(second.node.sessionDid, first.node.sessionDid, 'one key, so one peer');
+    assert.equal(second.grant.did, first.grant.did);
+
+    const keys = [
+      await wrote(first, space.id, 'from the first'),
+      await wrote(second, space.id, 'from the second'),
+    ];
+    for (const key of keys)
+      await until(async () => (await ada.node.records.get(space.id, key)) !== null, 6000, 'it to reach Ada');
+    const listed = await second.node.records.list(space.id, { collection: 'app.note' });
+    assert.deepEqual(
+      listed.map((record) => record.key).sort(),
+      [...keys].sort(),
+      'each reads what the other wrote',
+    );
+
+    // Bytes cross whole.
+    const bytes = new Uint8Array([0, 1, 2, 250, 255]);
+    const file = await second.node.records.addFile(space.id, bytes, { mime: 'application/octet-stream' });
+    assert.deepEqual(await second.node.records.readFile(space.id, file), bytes);
+  });
+
+  test('when the one running it stops, a session that borrowed runs it, the rest borrow from that one, and all follow a new connect', async () => {
+    const { ada, space, home, session } = await connectedHome();
+    const first = await session();
+    const second = await session();
+    const third = await session();
+    const borrowed = [second.node, third.node];
+    await first.close();
+
+    await until(() => second.node !== borrowed[0] && third.node !== borrowed[1], 6000, 'both to take it up');
+    await wrote(second, space.id, 'after, from the second');
+    await wrote(third, space.id, 'after, from the third');
+    assert.equal(third.node.sessionDid, second.node.sessionDid);
+
+    // `minca connect` again: the one running it takes the new key up, and the other comes back for it.
+    const before = second.node.sessionDid;
+    await connectHere(home, ada.connect);
+    await until(
+      () => second.node.sessionDid !== before && third.node.sessionDid !== before,
+      6000,
+      'both to follow the new key',
+    );
+    await wrote(second, space.id, 'reconnected, from the second');
+    await wrote(third, space.id, 'reconnected, from the third');
+
+    // Once the last of them stops, nobody holds it.
+    await second.close();
+    await third.close();
+    assert.equal(await agentRunning(home), null);
   });
 });
