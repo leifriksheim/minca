@@ -75,6 +75,7 @@ describe('the launcher', () => {
       {
         title: 'Carpool',
         collections: ['carpool.trip'],
+        shows: ['carpool.trip'],
         screen: '<p>Who drives</p>',
         notify: [notifyOn('New trip', 'carpool.trip')],
       },
@@ -94,6 +95,7 @@ describe('the launcher', () => {
     const after = await launcherOf(bob.node, space);
     assert.deepEqual(titles(after.placed), ['Carpool']);
     assert.equal(after.placed[0]?.root, bob.node.did);
+    assert.deepEqual(after.placed[0]?.body?.shows, ['carpool.trip'], 'where its trips open stays with it');
 
     // The agent writing it again makes it a proposal again.
     await waitFor(
