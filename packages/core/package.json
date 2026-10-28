@@ -56,11 +56,6 @@
       "types": "./dist/react/index.d.ts",
       "import": "./dist/react/index.js"
     },
-    "./calls": {
-      "@minca/source": "./src/calls/index.ts",
-      "types": "./dist/calls/index.d.ts",
-      "import": "./dist/calls/index.js"
-    },
     "./inbox": {
       "@minca/source": "./src/inbox/index.ts",
       "types": "./dist/inbox/index.d.ts",

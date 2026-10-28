@@ -7,7 +7,7 @@ an account home, **connecting by code** a program that has no browser, and
 **carriers** that keep spaces online without reading them. Hosts, carriers many accounts pay for, are in
 [08 — Hosting](08-hosting.md). Calls, built only from live messages, are
 a layer on it and described with the library
-([calls](../packages/core/docs/calls.md)).
+([calls](../packages/calls/README.md)).
 
 The node's programming interface is not protocol, and another implementation
 may shape its own however it likes. The reference one is described in the
@@ -432,7 +432,7 @@ open knocks left for the account, in shared spaces and in its inbox
 ([07](07-inbox.md)). What the library also ignores from such a key (knocks, and calls
 from a key that writes records here and nothing more) is in
 [contacts](../packages/core/docs/contacts.md) and
-[calls](../packages/core/docs/calls.md#messages).
+[calls](../packages/calls/README.md#messages).
 
 _Source: `packages/core/src/session/connect.ts` (`grantTerms`), `packages/core/src/identity/abilities.ts` (`noteTerms`), `packages/core/src/session/auth.ts` (`grant`), `packages/core/src/identity/abilities.ts`, `packages/core/src/node/space-runtime.ts` (`buildEvent`, `judgeStanding`, `write`, `upkeep`). Tests: `packages/core/tests/records-only.test.ts` ("a definition signed by hand under a records-only note is ignored by every peer", "what counts is what the note grants", "it never writes the account itself…", "in the account's own spaces, a version under a records-only note does not stand", "a program on a computer gets the whole account, records only, for as long as asked; each is its own connection"), `packages/core/tests/connect.test.ts` ("the grant is a note from the account to the app key, for the chosen spaces only")._
 
@@ -1033,4 +1033,4 @@ Calls are not protocol. A call is live messages (§9.2 of [04](04-network.md))
 between copies of an app, plus WebRTC connections of the app's own; no peer
 syncs, stores or judges a record differently because of it. The `call.*`
 messages two calling apps agree on, and how the reference library rings,
-joins and leaves, are in [calls](../packages/core/docs/calls.md).
+joins and leaves, are in [calls](../packages/calls/README.md).

@@ -1,0 +1,39 @@
+{
+  "name": "@minca/calls",
+  "private": true,
+  "type": "module",
+  "description": "Voice and video calls between the people in a Minca space, built on live messages. A library convention, not protocol.",
+  "exports": {
+    ".": {
+      "@minca/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./react": {
+      "@minca/source": "./src/react.ts",
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.js"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit && tsc -p tests",
+    "test": "node --conditions=@minca/source --import tsx --test --test-concurrency=4 --test-timeout=60000 --test-force-exit tests/*.test.ts"
+  },
+  "dependencies": {
+    "@minca/core": "*"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "tsx": "^4.19.0",
+    "typescript": "^7.0.2"
+  },
+  "peerDependencies": {
+    "react": "^19.3.1"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "license": "MIT"
+}

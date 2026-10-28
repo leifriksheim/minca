@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import type { SpaceSummary } from '@minca/core';
-import type { CallAround, CallPeer, CurrentCall, IncomingCall } from '@minca/core/calls';
-import { useAccount, useCalls, useProfiles } from '@minca/core/react';
+import type { CallAround, CallPeer, CurrentCall, IncomingCall } from '@minca/calls';
+import { useCalls } from '@minca/calls/react';
+import { useAccount, useProfiles } from '@minca/core/react';
 import { nameOf, peopleFrom } from '../../derive/people';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { Icon, type ICONS } from '../Icon';

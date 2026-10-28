@@ -67,7 +67,7 @@ the others wrote.
 | [contracts.md](contracts.md)                         | `contract` (`check` and `line`): how the library runs contracts (spec 09), counts only versions that pass, and refuses its own failing ones                                              |
 | [automations.md](automations.md)                     | `std.automation`: when a query finds records, or at set times, do something: in an app, an agent or a bot; and the account's own, which notify it                                        |
 | [bots.md](bots.md)                                   | Who may configure a bot, its instructions, connecting one to a service a host offers, writing a connector, and GitHub                                                                    |
-| [calls.md](calls.md)                                 | Voice and video calls in a space: the `call.*` messages, ringing, joining, leaving                                                                                                       |
+| [calls](../../calls/README.md)                       | Voice and video calls in a space: the `call.*` messages, ringing, joining, leaving                                                                                                       |
 | [contacts.md](contacts.md)                           | `std.contact`: the list, asking in a shared space, `node.contacts`                                                                                                                       |
 | [inbox.md](inbox.md)                                 | The inbox kept as a record, and how a knock becomes a contact: `std.inbox`, `std.knock`                                                                                                  |
 | [spaces.md](spaces.md)                               | Constitution templates, invite defaults, key upkeep, profiles, the space manager                                                                                                         |
@@ -77,7 +77,7 @@ the others wrote.
 ## Rules of thumb
 
 - Import only from the package's entry points: `@minca/core`, and
-  `/react`, `/session`, `/schemas`, `/elements`, `/calls` for those parts.
+  `/react`, `/session`, `/schemas`, `/elements` for those parts.
 - Name your collections reverse-DNS style, `app.<yours>.<thing>`. `sys.*` is
   the protocol's own, and `std.*` is the shared library in `/schemas`.
 - Check the standard library (`@minca/core/schemas`) before defining a

@@ -163,7 +163,7 @@ describe('live messages', () => {
       await until(() => heard.some((m) => m.peer === did), 4000, `the ${can} message`);
       const message = heard.find((m) => m.peer === did)!;
       assert.equal(message.from, alice.node.did, can);
-      // A read-only app may take part in calls; a key given records to write here may not (docs/calls.md).
+      // A read-only app may take part in calls; a key given records to write here may not (packages/calls/README.md).
       assert.equal(message.recordsOnly, recordsOnly, can);
       wire.closeAll();
     }

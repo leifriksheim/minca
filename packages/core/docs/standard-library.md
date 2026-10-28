@@ -519,7 +519,7 @@ _Source: `packages/core/src/schemas/geo.ts` (`geohash`, `cellsOf`, `cellsAround`
 
 ## `std.call`
 
-Calls themselves are kept nowhere ([calls](calls.md)). Their history is a
+Calls themselves are kept nowhere ([calls](../../calls/README.md)). Their history is a
 `std.call` record in the space, written only if the space defines `std.call`:
 
 | Field       | Type                            | Meaning                                      |
@@ -545,4 +545,4 @@ _Implementation detail:_ the call a device is in is kept in `sessionStorage`
 under `minca-call` as `{ space, call }`, so after a reload the page can offer to
 rejoin while the call is still going on.
 
-_Source: `packages/core/src/calls/calls.ts`, `packages/core/src/schemas/library/publishing.ts` (`call`). Tests: `packages/core/tests/calls.test.ts`._
+_Source: `packages/calls/src/calls.ts`, `packages/core/src/schemas/library/publishing.ts` (`call`). Tests: `packages/calls/tests/calls.test.ts`._

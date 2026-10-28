@@ -1,20 +1,22 @@
+/** React bindings for calls: `CallsProvider` and `useCalls`. `react` is a peer dependency, needed only here. */
 import {
   createContext,
   createElement,
   useContext,
   useEffect,
   useState,
+  useSyncExternalStore,
   type ReactElement,
   type ReactNode,
 } from 'react';
-import { createCalls, type Calls, type CallsOptions, type CallsState } from '../calls/calls.js';
-import { useNode } from './context.js';
-import { useFollow } from './follow.js';
+import { useNode } from '@minca/core/react';
+import { createCalls, type Calls, type CallsOptions, type CallsState } from './calls.js';
 
 const CallsContext = createContext<Calls | null>(null);
 
 const EMPTY: CallsState = Object.freeze({ current: null, ringing: [], around: [], rejoin: null });
 const empty = () => EMPTY;
+const never = () => () => {};
 
 /**
  * Calls for everything below it: one per node, so a call keeps going while
@@ -51,6 +53,10 @@ export function CallsProvider({
  */
 export function useCalls(): { readonly state: CallsState; readonly calls: Calls | null } {
   const calls = useContext(CallsContext);
-  const state = useFollow(calls, empty);
+  const state = useSyncExternalStore<CallsState>(
+    calls ? calls.subscribe : never,
+    calls ? calls.getState : empty,
+    calls ? calls.getState : empty,
+  );
   return { state, calls };
 }

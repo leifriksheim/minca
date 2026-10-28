@@ -1,4 +1,4 @@
-/** A key given records only in one space is not taken as its account in another, so it can't speak in calls there (docs/calls.md). */ import { test } from 'node:test';
+/** A key given records only in one space is not taken as its account in another, so it can't speak in calls there (packages/calls/README.md). */ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { LiveMessage, P2PNode } from '../src/node/types.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';

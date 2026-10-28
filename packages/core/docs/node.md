@@ -616,7 +616,7 @@ successors, mine, heads, key, relays, keepers, copies, forks, flagged }`
   accepting also need whole-account access.
 - `node.carriers`, `node.hosting`, `node.notifications` — [carriers and hosting](#carriers-hosting-and-notifications), [spec 06 §4](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md).
 - `node.iceServers()` — the configured ICE servers plus TURN servers a relay
-  offers ([the network](#the-network)); what [calls](calls.md#connections) use.
+  offers ([the network](#the-network)); what [calls](../../calls/README.md#connections) use.
 - `node.network` — `status()`: each relay's state (open, or waiting to redial,
   when and why), the connections open and those still being made, and whether
   a relay offered TURN; `reconnect()` redials a waiting relay now
@@ -1036,7 +1036,7 @@ _Source: `packages/core/src/node/node.ts` (`keepSpaceHosts`, `askSpaceHost`, `ho
 
 ## Client conveniences
 
-These are not protocol; another client may draw sign-in and [calls](calls.md) however it
+These are not protocol; another client may draw sign-in and [calls](../../calls/README.md) however it
 likes.
 
 - **`<minca-auth>`** draws the flow of [sign-in](sign-in.md) into its own light DOM (so password
@@ -1051,6 +1051,7 @@ likes.
   `<MincaAuth>`, `useQuery`, `useLive`, `useSpaces`,
   `useHoldSpace` (holds a space while mounted, releasing it a few seconds late),
   `useRecord`, `useLinked`, `useCollections`, `useProfiles`, `useAccess`,
-  `useSpaceStatus`, `useCan`, `CallsProvider`, `useCalls`.
+  `useSpaceStatus`, `useCan`. Calls' `CallsProvider` and `useCalls` are in
+  `@minca/calls/react`.
 
 _Source: `packages/core/src/elements/minca-auth.ts`, `packages/core/src/react/`. Tests: none._

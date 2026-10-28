@@ -236,7 +236,7 @@ you're on, so you keep talking as you move around; the sidebar marks the space
 a call is in. The panel grows to fill the screen, or moves into a
 picture-in-picture window where the browser has one. Someone ringing you shows
 as a card on any page. The **Calls** app keeps a log of a space's calls
-(`std.call`). `createCalls` is made once in `App.tsx`, above everything that
+(`std.call`). Calls come from `@minca/calls` (`packages/calls`); `CallsProvider` makes them once in `App.tsx`, above everything that
 changes as you move around.
 
 ### Agents
