@@ -263,11 +263,13 @@ function connectHere(
     check?: (matches: (typed: string) => boolean) => Promise<void>;
   } = {},
 ) {
+  const session = Number(path.basename(slot));
   return connectAgent({
     slot,
     accountHome,
     check: options.check ?? typeCheck,
-    name: options.name ?? defaultAgentName(),
+    // Each session's connection named apart, so the person can tell them apart at their account home.
+    name: options.name ?? `${defaultAgentName()}${session > 1 ? `, session ${session}` : ''}`,
     relays: [...new Set([...(options.relays ?? []), ...configuredRelays()])],
     onLink:
       options.onLink ??
@@ -657,8 +659,10 @@ async function runAgent(
   const thinking = await thinker(model, apiKey);
   const modelOptions = { model: model.name, price: model.price, ...(isPlain(model) ? { plain: true } : {}) };
   const today = async () => `$${(await spend.today()).toFixed(2)} of $${options.dailyCap.toFixed(2)} today`;
-  // Every session may chat, but one runs the automations, or each would run twice.
-  const automating = await holdLock(path.join(home, 'agent', 'automations.lock'));
+  // Every session of an account may chat, but one runs its automations, or each would run twice.
+  const automating = await holdLock(
+    path.join(home, 'agent', `automations-${runner.account.replace(/^did:key:/, '')}.lock`),
+  );
   if (!automating)
     stderr('  Automations run in another `minca agent` on this computer; this one only chats.');
   const stopRules = automating
@@ -1014,6 +1018,14 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
           'start this session again.'
         : null;
     let stopReloading = () => {};
+    // Stopped by a signal: close and let go of the slot, so its lock isn't left for the next session to take over.
+    const stop = () => {
+      stderr('minca mcp: stopped');
+      stopReloading();
+      void (here.agent?.close() ?? slot.release()).finally(() => process.exit(0));
+    };
+    process.once('SIGINT', stop);
+    process.once('SIGTERM', stop);
     const started = (running: RunningAgent) => {
       here.agent = running;
       stderr(

@@ -222,6 +222,12 @@ export async function connectAgent(params: {
   const before = await slotGrant(params.slot);
   if (before && before.did !== grant.did)
     await rm(path.join(params.slot, 'stores'), { recursive: true, force: true });
+  // Slots connected to another account forget it: the next session handed one would write as that account.
+  for (let n = 1; n <= MAX_SLOTS; n += 1) {
+    const other = path.join(path.dirname(params.slot), String(n));
+    const theirs = path.resolve(other) === path.resolve(params.slot) ? null : await slotGrant(other);
+    if (theirs && theirs.did !== grant.did) await rm(path.join(other, 'grant.json'), { force: true });
+  }
   const kept = { ...grant, relays: [...new Set([...(grant.relays ?? []), ...params.relays])] };
   await mkdir(params.slot, { recursive: true, mode: 0o700 });
   // The key, then the grant made out to it: a running agent reloads when the grant changes.

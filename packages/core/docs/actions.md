@@ -120,7 +120,15 @@ the person allows this session at their account home and gives the model the
 code it shows, once; the slot keeps its key and grant for later sessions.
 `minca connect` at a terminal connects slot 1 and forgets the other slots'
 grants, so each session after asks for its own again rather than run on a
-note the person may have revoked. A new key each time, since a key the
+note the person may have revoked; a session connected to another account
+has every slot connected to the first forget its grant, so no later session
+is handed one and writes as that account. Each connection is named for its
+slot: "Agent on <host>", then ", session <n>" from slot 2. A slot's lock is
+numbered files, `lock.<n>`, each linked into place whole: the highest is the
+lock, taken over once its process is gone by linking the next number, and
+let go of by writing `released` into it, so no number is used twice. Only one
+session of an account runs its automations, under
+`<home>/agent/automations-<account key>.lock`. A new key each time, since a key the
 account home revoked stays revoked in every space, so a new note made out to
 it would write nothing.
 
@@ -138,4 +146,4 @@ closes its node and starts one under them, keeping the slot, so the session
 needs no restart. When the node hears that its key was revoked in a space, a
 tool that fails says so, and that connecting again fixes it.
 
-_Source: `packages/cli/src/agent.ts` (`claimSlot`, `connectAgent`, `reconnectAgent`, `startAgentNode`, `reloadOnConnect`), `packages/cli/src/writer-keys.ts` (`holdLock`), `packages/cli/src/mcp.ts`, `packages/cli/src/main.ts` (`minca mcp`). Tests: `packages/core/tests/records-only.test.ts` ("an agent running a node of its own"), `packages/cli/tests/cli.test.ts` ("MCP"), `packages/cli/tests/agent-reconnect.test.ts` (all)._
+_Source: `packages/cli/src/agent.ts` (`claimSlot`, `connectAgent`, `reconnectAgent`, `startAgentNode`, `reloadOnConnect`), `packages/cli/src/writer-keys.ts` (`holdLock`), `packages/cli/src/mcp.ts`, `packages/cli/src/main.ts` (`minca mcp`). Tests: `packages/core/tests/records-only.test.ts` ("an agent running a node of its own"), `packages/cli/tests/cli.test.ts` ("MCP"), `packages/cli/tests/agent-reconnect.test.ts` (all), `packages/cli/tests/agent-slot-lock.test.ts` (all), `packages/cli/tests/writer-keys.test.ts` ("a lock number is never used twice, so one taker that stalled can’t hold it beside another")._

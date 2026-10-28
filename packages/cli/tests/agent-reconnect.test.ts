@@ -304,4 +304,21 @@ describe('sessions running at once', () => {
     await again.release();
     await next.release();
   });
+
+  test('a session connected to another account: the slots of the first forget it, so no session is handed them', async () => {
+    const home = await tempDir();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    const bea = await accountHolder(hub);
+    await connectHere(home, ada.connect);
+    const one = await claimed(home);
+    const two = await claimed(home);
+    await connectSlot(two.dir, bea.connect);
+    await assert.rejects(readFile(path.join(one.dir, 'grant.json')), 'slot 1 no longer runs as Ada');
+    await one.release();
+    await two.release();
+    const next = await claimed(home);
+    assert.equal(path.basename(next.dir), '2', 'the connected slot is the one for Bea');
+    await next.release();
+  });
 });

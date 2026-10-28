@@ -244,8 +244,8 @@ node makes a key for this run as it would without a source.
   `minca/writer-key/v1` and bound `{ did: <account DID>, slot: <n> }`
   (`key.sealed`, mode 600), so a copy of the files can't sign, and a key file
   moved to another slot or account is refused rather than used; its places in
-  `heads/`; and a `lock` file naming the process that holds it, taken over
-  once that process is gone.
+  `heads/`; and numbered `lock.<n>` files naming the process that holds the
+  highest, taken over once that process is gone.
 
 _Source: `packages/core/src/node/writer-keys.ts` (`browserWriterKeys`), `packages/core/src/node/writers.ts` (`createWriters`), `packages/core/src/node/node.ts` (`createNode`, `revokeSelf`), `packages/core/src/node/stores.ts` (`writerKeysFor`), `packages/core/src/node/worker.ts` (`withWriterKey`), `packages/cli/src/writer-keys.ts` (`fileWriterKeys`), `packages/cli/src/home.ts` (`unlock`, `nodeFor`). Tests: `packages/core/tests/writer-logs.test.ts` ("a writer key that outlives the node"), `packages/cli/tests/writer-keys.test.ts` ("a key file moved to another slot, or to another account, does not open")._
 

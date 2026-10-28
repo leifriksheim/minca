@@ -903,7 +903,12 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     or pulling that space through the folder, until it is removed (05 §14.5,
     §16.4; [#33](https://github.com/leifriksheim/minca/issues/33)).
   - `minca agent` and `minca mcp` keep each session's key, grant and stores
-    together in a slot of the CLI home (`<home>/agent/<n>`). Where the home is
+    together in a slot of the CLI home (`<home>/agent/<n>`). One process signs
+    with a slot's key at a time only while the slot's lock holds: numbered
+    files, each linked into place whole, the highest the lock, no number used
+    twice; every minca using one home must be the same version
+    (`packages/cli/src/writer-keys.ts`, `holdLock`; tested in
+    `packages/cli/tests/agent-slot-lock.test.ts`). Where the home is
     a data folder others write, rolling back a slot's stores has that session
     sign at a place it used before, and its key forks; a copy of the home on a
     second computer runs the same keys. Its stores' entries are its own, unjudged, though what it
