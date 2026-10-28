@@ -906,7 +906,8 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     together in a slot of the CLI home (`<home>/agent/<n>`). One process signs
     with a slot's key at a time only while the slot's lock holds: numbered
     files, each linked into place whole, the highest the lock, no number used
-    twice; every minca using one home must be the same version
+    twice. A minca from before this lock keeps its keys elsewhere
+    (`writers/`, `<home>/agent/key.json`), so the two never sign with one key
     (`packages/cli/src/writer-keys.ts`, `holdLock`; tested in
     `packages/cli/tests/agent-slot-lock.test.ts`). Where the home is
     a data folder others write, rolling back a slot's stores has that session

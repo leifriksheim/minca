@@ -98,7 +98,9 @@ describe('accounts in a home', () => {
     );
     const local = (await readdir(localPath(home.path, account.id), { recursive: true })).map(String);
     assert.ok(
-      local.some((file) => file.startsWith('writers')) && local.some((file) => file.startsWith('stores')),
+      local.includes('writer-keys') &&
+        !local.includes('writers') &&
+        local.some((file) => file.startsWith('stores')),
     );
   });
 

@@ -144,6 +144,17 @@ export async function loadAgentGrant(home: string): Promise<Grant | null> {
   return null;
 }
 
+/**
+ * Whether the agent can run in a slot: its grant and key there check out. One
+ * that doesn't (half written, or its note run out) counts as not connected, so
+ * the session claiming it connects it again rather than fail to start.
+ */
+const runnable = (slot: string): Promise<boolean> =>
+  readConnection(slot).then(
+    () => true,
+    () => false,
+  );
+
 /** A slot this process holds: no other runs with its key until it lets go */
 export interface Slot {
   readonly dir: string;
@@ -160,11 +171,11 @@ export async function claimSlot(home: string): Promise<Slot> {
   for (const connected of [true, false])
     for (let n = 1; n <= MAX_SLOTS; n += 1) {
       const dir = slotDir(home, n);
-      if (usableGrant(await slotGrant(dir)) !== connected) continue;
+      if ((await runnable(dir)) !== connected) continue;
       await mkdir(dir, { recursive: true, mode: 0o700 });
       const release = await holdLock(path.join(dir, 'lock'));
       // Connected meanwhile by the process that held it: a later pass may still take it.
-      if (release && usableGrant(await slotGrant(dir)) === connected) return { dir, release };
+      if (release && (await runnable(dir)) === connected) return { dir, release };
       await release?.();
     }
   throw new Error(
@@ -174,7 +185,7 @@ export async function claimSlot(home: string): Promise<Slot> {
 
 /** Whether a slot was connected to an account, and its note still runs */
 export async function isConnected(slot: Slot): Promise<boolean> {
-  return usableGrant(await slotGrant(slot.dir));
+  return runnable(slot.dir);
 }
 
 /** "Agent on leifs-macbook" — what the person sees in the app and their account */
@@ -501,6 +512,9 @@ export async function forgetAgent(home: string): Promise<void> {
     await rm(path.join(slotDir(home, n), 'stores'), { recursive: true, force: true });
   }
   await rm(path.join(agentDir(home), 'spaces'), { recursive: true, force: true });
+  // Where a minca from before the slots kept its one connection.
+  for (const old of ['key.json', 'grant.json', 'data'])
+    await rm(path.join(agentDir(home), old), { recursive: true, force: true });
 }
 
 /**

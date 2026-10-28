@@ -24,6 +24,7 @@ import { until } from '../../core/tests/helpers/until.js';
 import {
   claimSlot,
   connectAgent,
+  isConnected,
   reconnectAgent,
   reloadOnConnect,
   startAgentNode,
@@ -320,5 +321,19 @@ describe('sessions running at once', () => {
     const next = await claimed(home);
     assert.equal(path.basename(next.dir), '2', 'the connected slot is the one for Bea');
     await next.release();
+  });
+
+  test('a slot whose key and grant do not match counts as not connected, so a session connects it again rather than fail', async () => {
+    const home = await tempDir();
+    const ada = await accountHolder(createFakeHub({ latencyMs: 1 }));
+    await connectHere(home, ada.connect);
+    // Another connect's key without its grant, as when a session stops between the two writes.
+    const other = await tempDir();
+    await connectHere(other, ada.connect);
+    await copyFile(path.join(other, 'agent', '1', 'key.json'), path.join(home, 'agent', '1', 'key.json'));
+    const slot = await claimed(home);
+    assert.equal(path.basename(slot.dir), '1');
+    assert.equal(await isConnected(slot), false);
+    await slot.release();
   });
 });
