@@ -45,13 +45,28 @@ What gets stored is JSON Schema, in a small subset every app agrees on:
 `maximum`, `minLength`, `maxLength`, `minItems`, `maxItems`,
 `additionalProperties` (true or false), `title`, `description`
 
-and two that say what a value means, so any app can show it well:
+and three that say what a value means, so any app can show it well:
 
 - `oneOf: [{ const, title }]`: fixed choices with labels.
 - `x-choicesFrom: { rel, field }`: the value picks from a list in the record
   this one links to as `rel`, in its field `field`. A number is a position in
   that list; anything else is the option itself. A vote's `choice` picks from
   its poll's `options`. It is a display hint, never checked when validating.
+- `x-kind: "<name>"`: what kind of value a field holds. The names apps read:
+
+  | `x-kind` | The value                                                                                                          | An app shows                                 |
+  | -------- | ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------- |
+  | `did`    | an account's DID, `did:key:z…` ([spec 01 §4](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md)) | who it is, and a list of people to pick from |
+
+  A field holding a person says `x-kind: "did"`; `fragments.person` writes
+  it. An app shows a kind it doesn't know as the plain value.
+
+Any keyword starting `x-` is an annotation like these: any JSON, and it says
+nothing about whether a body fits. A new one, or a new `x-kind`, is a row
+here, never a change to the protocol. With Zod, add one with
+`.meta({ 'x-kind': 'did' })`. Keep annotations to plain values: a validator
+that can't build from a schema (an `$id` inside one is enough) checks
+nothing against it, so the collection's shape goes unchecked.
 
 Anything else, like `pattern` or `format`, is refused when you define the
 collection, with the reason. A Zod `.regex()` or `.email()` fails for that
@@ -69,7 +84,9 @@ unknown keywords ignored, so a space written by a newer app that allows more
 stays readable by an older one. Every failing leaf is reported, not only the
 first, with a JSON Pointer to the value. The validator is
 `@cfworker/json-schema`, which interprets rather than compiles, so it runs
-under a strict CSP.
+under a strict CSP. A schema it can't build a validator from (it follows
+`$id`s into any key it doesn't know, so a bad one in an annotation is enough)
+checks nothing, like an invalid definition; reading never fails on it.
 
 A record that doesn't fit the schema is still kept and synced, and comes back
 with `conforms: false` and the issues. Shape is checked when you write, not
@@ -77,7 +94,7 @@ enforced on arrival, because two peers may have seen different versions of a
 definition ([spec 02 §9.6](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)).
 Rules, below, are enforced everywhere.
 
-_Source: `packages/core/src/schema/collection-def.ts` (`validateJsonSchema`, `toJsonSchema`, `asStandardSchema`), `packages/core/src/node/space-runtime.ts` (`contentIssues`). Tests: `packages/core/tests/space-catalog.test.ts` ("validate and reject within the supported subset", "an unknown keyword is ignored when validating, so newer spaces stay readable", "choices can carry labels, or come from a linked record", "a record that does not fit is kept and flagged when it arrives, never rejected"), `packages/core/tests/schemas.test.ts` ("schemas from a validator you already use")._
+_Source: `packages/core/src/schema/collection-def.ts` (`validateJsonSchema`, `toJsonSchema`, `asStandardSchema`), `packages/core/src/node/space-runtime.ts` (`contentIssues`). Tests: `packages/core/tests/space-catalog.test.ts` ("validate and reject within the supported subset", "an unknown keyword is ignored when validating, so newer spaces stay readable", "choices can carry labels, or come from a linked record", "an x-\* keyword is an annotation: any one publishes, and no value is checked against it", "a record that does not fit is kept and flagged when it arrives, never rejected"), `packages/core/tests/attacks.test.ts` ("a definition the validator can't use can't break reading the collection, or the space"), `packages/core/tests/schemas.test.ts` ("schemas from a validator you already use")._
 
 ## Links
 

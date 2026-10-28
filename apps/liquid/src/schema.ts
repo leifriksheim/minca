@@ -26,7 +26,7 @@ import {
 import type { Contract, SpaceRole } from '@minca/core';
 import { fragments } from '@minca/core/schemas';
 
-const { typed, words, text, markdown, count, choice, people, one } = fragments;
+const { typed, words, text, markdown, count, choice, person, people, one } = fragments;
 
 /** The most voters one proposal can have */
 export const MAX_VOTERS = 500;
@@ -353,7 +353,7 @@ export const party = typed<Party>()({
       members: people(MAX_VOTERS, 'Who the stewards let in'),
       stewards: people(20, 'Who keeps the party: changes it and freezes its members for each proposal'),
       decides: choice(PARTY_RULES, 'How it takes a position'),
-      representative: text(256, 'Who votes for it, when it decides by representative: a member', 1),
+      representative: person('Who votes for it, when it decides by representative: a member'),
     },
     required: ['name', 'members', 'stewards', 'decides'],
   },
@@ -407,7 +407,7 @@ export const partyRoll = typed<PartyRoll>()({
       party: words(128, 'The id of the party’s version it was taken from'),
       members: people(MAX_VOTERS, 'Its members for this proposal'),
       toTake: count(1, MAX_VOTERS, 'How many of them must vote alike for the party to take a position'),
-      representative: text(256, 'Whose own vote is the party’s, instead', 1),
+      representative: person('Whose own vote is the party’s, instead'),
     },
     required: ['party', 'members'],
   },

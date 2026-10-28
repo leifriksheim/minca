@@ -15,7 +15,7 @@
  *   minLength · maxLength · minItems · maxItems · additionalProperties
  *   (boolean) · title · description
  *
- * plus two ways to say what a value *means*, so any app can show it well:
+ * plus three ways to say what a value *means*, so any app can show it well:
  *
  * - `oneOf: [{ const, title }]` — fixed choices with labels, the standard
  *   JSON Schema way (`enum` has no labels).
@@ -24,6 +24,9 @@
  *   vote's `choice` picks from the `options` of the poll it is `about`. A
  *   number is a position in that list; anything else is the option itself.
  *   Not checked when validating — the other record may not be here yet.
+ * - any `x-*` keyword, such as `x-kind: "did"` for a person: an annotation
+ *   for apps, any JSON, never checked. Which ones mean what is a convention
+ *   (docs/collections.md), so a new one is never a protocol change.
  *
  * Anything else is refused at publish time — loudly, where the author can fix
  * it. At validation time unknown keywords are ignored instead, so a space
@@ -222,8 +225,8 @@ export function checkPublishableSchema(schema: unknown, path = 'schema'): string
   if (!isRecord(schema)) return `${path} must be an object`;
   for (const [keyword, value] of Object.entries(schema)) {
     const at = `${path}.${keyword}`;
-    if (!KEYWORDS.has(keyword)) {
-      return `${at} is not supported. Stored schemas may use: ${[...KEYWORDS].join(', ')}`;
+    if (!KEYWORDS.has(keyword) && !keyword.startsWith('x-')) {
+      return `${at} is not supported. Stored schemas may use: ${[...KEYWORDS].join(', ')}, and x-* annotations`;
     }
     switch (keyword) {
       case 'type': {
@@ -353,7 +356,7 @@ export interface SchemaIssue {
   readonly message: string;
 }
 
-const validators = new WeakMap<object, Validator>();
+const validators = new WeakMap<object, Validator | Error>();
 
 function newValidator(schema: unknown): Validator {
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the library interprets any JSON Schema value; its type lists only the keywords it knows
@@ -362,15 +365,21 @@ function newValidator(schema: unknown): Validator {
 
 /**
  * One validator per schema object. It is built from a copy: the validator
- * writes into the schema it is given, and a stored schema is frozen.
+ * writes into the schema it is given, and a stored schema is frozen. A
+ * schema it can't be built from is remembered too, so it costs one try.
  */
 function validatorFor(schema: JsonSchema): Validator {
   if (typeof schema !== 'object' || schema === null) return newValidator(schema);
   let found = validators.get(schema);
   if (!found) {
-    found = newValidator(structuredClone(schema));
+    try {
+      found = newValidator(structuredClone(schema));
+    } catch (error) {
+      found = error instanceof Error ? error : new Error(String(error));
+    }
     validators.set(schema, found);
   }
+  if (found instanceof Error) throw found;
   return found;
 }
 

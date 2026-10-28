@@ -99,6 +99,23 @@ describe('stored schemas', () => {
     assert.deepEqual(validateJsonSchema(vote, { choice: 7 }), []);
   });
 
+  test('an x-* keyword is an annotation: any one publishes, and no value is checked against it', () => {
+    const event = {
+      type: 'object',
+      properties: {
+        host: { type: 'string', 'x-kind': 'did' },
+        guests: {
+          type: 'array',
+          items: { type: 'string', 'x-kind': 'did', 'x-anything': { any: ['json'] } },
+        },
+      },
+    };
+    assert.equal(checkPublishableSchema(event), null);
+    assert.deepEqual(validateJsonSchema(event, { host: 'bob', guests: ['carol'] }), []);
+    // format is not an annotation: validators check it, so it stays out until it is specified.
+    assert.match(checkPublishableSchema({ type: 'string', format: 'did' }) ?? '', /format is not supported/);
+  });
+
   test('names are reverse-DNS, and sys.* is reserved', () => {
     assert.equal(checkStoredCollection({ name: 'app.trip.expense', schema: expense, version: 1 }), null);
     assert.match(

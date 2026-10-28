@@ -954,10 +954,22 @@ these value types:
 | `title`, `description`                                                 | string                                                                                                                   |
 | `oneOf`                                                                | non-empty list of `{ "const": …, "title"?: string, "description"?: … }` — labelled choices only, not general composition |
 | `x-choicesFrom`                                                        | `{ "rel": <link role>, "field": <non-empty string> }`                                                                    |
+| any other keyword starting `x-`                                        | any                                                                                                                      |
 
 Anything else (`pattern`, `$ref`, `format`, `anyOf`, a schema-valued
 `additionalProperties`, …) makes the definition invalid. A `$schema` member is
 not part of the subset.
+
+A keyword starting `x-` is an annotation: it says nothing about whether a
+body fits its schema, as JSON Schema 2020-12 treats a keyword it doesn't
+define.
+What each one means to an app, such as `x-kind: "did"` for a person, is not
+protocol ([collections](../packages/core/docs/collections.md#schemas)).
+
+> Rationale: an app needs to know what a value is to show it well, and the
+> list of kinds keeps growing. Open annotations let it grow without every
+> peer learning each one. `format` is not used for this, because validators
+> check it.
 
 Whether a body fits its schema is never a reason to refuse it (§9.6), so how
 a reader validates a body, and what `x-choicesFrom` means to an app, are not
@@ -988,6 +1000,11 @@ protocol: see [collections](../packages/core/docs/collections.md#validating).
 > (§6.1), so that peer would enforce none of its rules. Either the publishing
 > check must tolerate these keywords before any app writes them, or such a
 > definition needs a higher protocol version that older peers recognise.
+> This already holds for `x-*` annotations: a peer from before them treats
+> every definition with a person field (`fragments.person` or `people`) as
+> having no schema, rules or topics, until it updates. Before v1, Minca does not support mixed releases.
+> To a peer that has this rule, a new annotation never makes a definition
+> invalid.
 > Tracked in [#10](https://github.com/leifriksheim/minca/issues/10).
 
 ### 6.3 A definition's version number
@@ -1089,7 +1106,7 @@ Names are **local to a space**. Nothing registers or owns a name across
 spaces, so a name never says what shape a collection has; its definition in
 that space does.
 
-_Source: `packages/core/src/schema/collection-def.ts` (`StoredCollection`, `CATALOG_COLLECTION`, `checkStoredCollection`, `checkPublishableSchema`), `packages/core/src/node/space-runtime.ts` (`definitionIn`, `inForce`, `loadCatalog`), `packages/core/src/space/roles.ts` (`definition` events, `mergeDefinitions`, `definerOf`, `contested`, `refusal`). Tests: `packages/core/tests/record-keys.test.ts` ("rival first definitions by two accounts name no one…", "a backdated rival with a ground-low id does not put its rules in force", "on real nodes, rivals that differ put no rules in force; rivals that agree do", "a backdated delete of nothing, however low its id, is refused", "a ground-low delete of her own rival does not win by id…", "the definer and someone who may define it changing it apart…", "on real nodes, a ground-low backdated delete can’t take a collection from its definer"), `packages/core/tests/space-catalog.test.ts` ("but refused when publishing, where the author can fix it", "names are reverse-DNS, and sys.\* is reserved", "redefining bumps the version, and only the definer or someone who may define it may"), `packages/core/tests/attacks.test.ts` ("a member cannot take down a collection's definition they did not write")._
+_Source: `packages/core/src/schema/collection-def.ts` (`StoredCollection`, `CATALOG_COLLECTION`, `checkStoredCollection`, `checkPublishableSchema`), `packages/core/src/node/space-runtime.ts` (`definitionIn`, `inForce`, `loadCatalog`), `packages/core/src/space/roles.ts` (`definition` events, `mergeDefinitions`, `definerOf`, `contested`, `refusal`). Tests: `packages/core/tests/record-keys.test.ts` ("rival first definitions by two accounts name no one…", "a backdated rival with a ground-low id does not put its rules in force", "on real nodes, rivals that differ put no rules in force; rivals that agree do", "a backdated delete of nothing, however low its id, is refused", "a ground-low delete of her own rival does not win by id…", "the definer and someone who may define it changing it apart…", "on real nodes, a ground-low backdated delete can’t take a collection from its definer"), `packages/core/tests/space-catalog.test.ts` ("an x-\* keyword is an annotation: any one publishes, and no value is checked against it", "but refused when publishing, where the author can fix it", "names are reverse-DNS, and sys.\* is reserved", "redefining bumps the version, and only the definer or someone who may define it may"), `packages/core/tests/attacks.test.ts` ("a member cannot take down a collection's definition they did not write")._
 
 ### 6.5 Planned: compatible definitions
 
