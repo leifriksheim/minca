@@ -210,8 +210,8 @@ a screen never links out on its own, though like anything it reads, it can
 copy what was shared into its own records. A screen may ask to pick as often
 as it likes, and start the search from its own text; what it gets is still
 only what the person chooses, in a space they can read anyway. A chat
-shares a poll without being able to read polls; its `/` button, and `/poll`
-sent alone, pick one.
+shares a poll without being able to read polls; `/` typed into an empty
+message, or its `/` button, picks one.
 
 A screen also sends live messages, kept nowhere, to the other devices that
 have the same app open in the space (`live.send`, `live.on`): for cursors,

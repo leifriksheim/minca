@@ -23,6 +23,7 @@ button {
   border: 1px solid var(--minca-line-strong); border-radius: var(--minca-radius-pill);
   background: var(--minca-card); color: var(--minca-ink); cursor: pointer;
 }
+button[data-icon] { width: 36px; padding: 0; flex-shrink: 0; }
 button:hover { background: var(--minca-sunken); }
 button[data-variant="primary"] { background: var(--minca-accent); border-color: transparent; color: var(--minca-inverse); }
 button[data-variant="primary"]:hover { background: var(--minca-accent-hover); }

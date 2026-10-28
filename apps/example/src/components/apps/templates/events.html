@@ -849,8 +849,8 @@
         >
           Today
         </button>
-        <button aria-label="Previous month" onClick=${() => shift(-1)}>‹</button>
-        <button aria-label="Next month" onClick=${() => shift(1)}>›</button>
+        <button data-icon aria-label="Previous month" onClick=${() => shift(-1)}>‹</button>
+        <button data-icon aria-label="Next month" onClick=${() => shift(1)}>›</button>
       </div>
       <div class="month" role="grid" aria-label="Month">
         ${days.slice(0, 7).map((d) => html`<div key=${d} class="weekday" role="columnheader">${d.toLocaleDateString(undefined, { weekday: 'short' })}</div>`)}

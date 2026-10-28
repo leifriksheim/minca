@@ -53,6 +53,11 @@ export function RecordFinder({
         autoFocus
         value={search}
         onChange={(e) => setSearch(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter' || disabled || !candidates[0]) return;
+          e.preventDefault();
+          onPick(candidates[0]);
+        }}
         placeholder={placeholder}
         aria-label="Find a record"
         style={styles.input}

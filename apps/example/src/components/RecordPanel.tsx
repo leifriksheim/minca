@@ -742,12 +742,19 @@ const bigTitle = {
   color: palette.ink.strong,
   lineHeight: 1.3,
 };
+/** A circle whatever the symbol in it, so ✕ in any font doesn't make it an oval */
 const iconButton = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 28,
+  height: 28,
+  flexShrink: 0,
   border: 'none',
   background: 'none',
   color: palette.ink.muted,
   fontSize: 14,
-  padding: 6,
+  padding: 0,
   borderRadius: palette.radius.pill,
 };
 const linkish = {

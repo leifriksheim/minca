@@ -151,6 +151,8 @@ export function ScreenFrame({
                 done: (record) => {
                   pickingNow.current = false;
                   setPicking(null);
+                  // Back to where the person was typing, as any dialog gives focus back
+                  frame.current?.focus();
                   resolve(record);
                 },
               }),

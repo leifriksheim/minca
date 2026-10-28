@@ -250,7 +250,13 @@ export function PlaceField({
           } else if (event.key === 'Escape') setOpen(false);
         }}
       />
-      <button type="button" title="Use where I am" aria-label="Use where I am" onClick=${() => void here()}>
+      <button
+        type="button"
+        data-icon
+        title="Use where I am"
+        aria-label="Use where I am"
+        onClick=${() => void here()}
+      >
         ◎
       </button>
     </div>

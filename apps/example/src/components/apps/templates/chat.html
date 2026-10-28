@@ -119,8 +119,6 @@
   const me = minca.me.did;
   /** Messages from one person this close together read as one run, under one name */
   const RUN_MS = 5 * 60 * 1000;
-  /** "/" alone, or "/poll": share something, found by what was typed after it */
-  const SLASH = /^\/(\S*)$/;
 
   /** A record in a few words, for a message that shares it and says nothing else */
   const titleOf = (record) => {
@@ -293,22 +291,18 @@
     }, []);
 
     // The person chooses in the app around this screen; this screen gets only what they choose.
-    const share = async (text = '') => {
+    const share = async () => {
       setError(null);
       try {
-        const picked = await minca.pick({ text });
+        const picked = await minca.pick();
         if (picked) setSharing(picked);
+        document.querySelector('.composer .mention-input input')?.focus();
       } catch (e) {
         setError(e.message);
       }
     };
 
     const send = async () => {
-      const slash = SLASH.exec(draft.trim());
-      if (slash && !files.length) {
-        setDraft('');
-        return share(slash[1]);
-      }
       const text =
         draft.trim() ||
         (sharing ? titleOf(sharing) : '') ||
@@ -366,6 +360,7 @@
       <div class="row">
         <button
           type="button"
+          data-icon
           aria-label="Attach files"
           title="Attach files"
           onClick=${() => picker.current?.click()}
@@ -374,6 +369,7 @@
         </button>
         <button
           type="button"
+          data-icon
           aria-label="Share something from this space"
           title="Share something from this space"
           onClick=${() => share()}
@@ -392,7 +388,7 @@
         />
         <${MentionInput}
           value=${draft}
-          onChange=${setDraft}
+          onChange=${(next) => (!draft && next === '/' ? share() : setDraft(next))}
           placeholder="Message… @ to mention, / to share"
           aria-label="Message"
         />

@@ -40,7 +40,7 @@ export function Modal({
     >
       <header class="row">
         <h2 style="flex: 1">${title}</h2>
-        <button type="button" data-variant="ghost" aria-label="Close" onClick=${onClose}>✕</button>
+        <button type="button" data-variant="ghost" data-icon aria-label="Close" onClick=${onClose}>✕</button>
       </header>
       ${children}
     </div>

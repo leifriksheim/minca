@@ -53,7 +53,7 @@ ui has:
 To show a record the way the app does, with its comments, attachments and history, call minca.open({ record: key }).
 
 The page already looks like Minca: buttons are pills (data-variant="primary" for the main action, "ghost" for quiet ones,
-"danger" for deleting), inputs, headings and the page are styled, and these classes lay things out: card, row, stack,
+"danger" for deleting; data-icon makes one holding a single symbol a circle), inputs, headings and the page are styled, and these classes lay things out: card, row, stack,
 muted, faint, empty, chip (a toggle pill, on with aria-pressed), label, error, ellipsis. Write as little CSS as you can; when you need colours, use the variables: var(--minca-ink),
 --minca-body, --minca-muted, --minca-faint, --minca-page, --minca-card, --minca-sunken, --minca-line, --minca-accent,
 --minca-danger, and corners --minca-radius-sm, -md, -lg, -pill. Fonts from URLs never load.`;
