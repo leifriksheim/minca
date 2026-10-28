@@ -9,7 +9,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactElement,
 } from 'react';
-import { useLive, useNode, useProfiles } from '@minca/core/react';
+import { useLive, useNode, useProfiles } from '@minca/react';
 import type { NodeCollection, NodeRecord, SpaceSummary } from '@minca/core';
 import { collectionLabel, humanize, recordLabel } from '../derive/schema-ui';
 import { nameOf, peopleFrom } from '../derive/people';

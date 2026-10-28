@@ -3,7 +3,7 @@
  * asked of the node, which judges them as every peer does, and asked again
  * whenever the space changes.
  */
-import { useLive } from '@minca/core/react';
+import { useLive } from '@minca/react';
 import type { SpaceGrant as Grant } from '@minca/core';
 
 /** Whether this account may invoke `cmd` with `args` in a space now; false until known */

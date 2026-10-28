@@ -7,7 +7,7 @@ import { Info } from '@minca/app-shared/Info';
 import { Shape } from '@minca/app-shared/shapes';
 import { markFor } from '@minca/ui/shapes';
 import type { ShapeColour } from '@minca/ui/tokens';
-import { useMyName } from '@minca/core/react';
+import { useMyName } from '@minca/react';
 import { NameField } from './NameField';
 import { styles, palette } from '../styles';
 import { useSpaceUnread } from '../seen';

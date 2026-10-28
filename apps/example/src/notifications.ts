@@ -1,6 +1,6 @@
 /** Notifications: each app's `notify` offered through the account home, then matched and shown by this app while it is open. */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useAccount, useConnection, useNode } from '@minca/core/react';
+import { useAccount, useConnection, useNode } from '@minca/react';
 import {
   MAX_PROPOSALS,
   ownQuery,

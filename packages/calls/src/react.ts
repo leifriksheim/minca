@@ -9,7 +9,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react';
-import { useNode } from '@minca/core/react';
+import { useNode } from '@minca/react';
 import { createCalls, type Calls, type CallsOptions, type CallsState } from './calls.js';
 
 const CallsContext = createContext<Calls | null>(null);

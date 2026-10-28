@@ -1046,7 +1046,7 @@ likes.
   `element.auth = createMincaAuth(…)`. It sizes to its container, so it fits a
   page, a modal or a side panel, and draws nothing once someone is in. Colours,
   font and radius are custom properties (`--minca-accent`, `--minca-font`, …).
-- **React** (`@minca/core/react`): `MincaProvider`, `useMinca`,
+- **React** (`@minca/react`): `MincaProvider`, `useMinca`,
   `useAuth`, `useSession`, `useConnection`, `useAccount`, `useNode`,
   `<MincaAuth>`, `useQuery`, `useLive`, `useSpaces`,
   `useHoldSpace` (holds a space while mounted, releasing it a few seconds late),
@@ -1054,4 +1054,4 @@ likes.
   `useSpaceStatus`, `useCan`. Calls' `CallsProvider` and `useCalls` are in
   `@minca/calls/react`.
 
-_Source: `packages/core/src/elements/minca-auth.ts`, `packages/core/src/react/`. Tests: none._
+_Source: `packages/core/src/elements/minca-auth.ts`, `packages/react/src/`. Tests: none._

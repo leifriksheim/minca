@@ -1,7 +1,7 @@
 /** What is new: records others wrote in an app since you last opened it, tracked in this browser only. */
 import { useSyncExternalStore } from 'react';
 import type { SpaceSummary } from '@minca/core';
-import { useAccount, useCollections, useLive } from '@minca/core/react';
+import { useAccount, useCollections, useLive } from '@minca/react';
 import { namesMe, useSpaceApps, type AppEntry } from './components/apps/entries';
 
 interface Seen {

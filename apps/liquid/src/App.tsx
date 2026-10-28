@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { SpaceSummary } from '@minca/core';
-import { useConnection, useNode, useSpaces } from '@minca/core/react';
+import { useConnection, useNode, useSpaces } from '@minca/react';
 import { Loader } from '@minca/app-shared/Loader';
 import { styles, palette } from '@minca/app-shared/styles';
 import { Wordmark } from '@minca/app-shared/Wordmark';

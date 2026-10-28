@@ -1,5 +1,5 @@
 import { matches, type NodeCollection, type NodeRecord, type SpaceSummary } from '@minca/core';
-import { useAccess, useLive } from '@minca/core/react';
+import { useAccess, useLive } from '@minca/react';
 import { asRunner, namesTheRunner, notifyOn, type AppAutomation } from '@minca/core/schemas';
 import { launcherApp, sortLauncher, type LauncherApp } from './launcher';
 import { TEMPLATES } from './templates';

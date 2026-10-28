@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAction } from '@minca/app-shared/action';
 import type { NodeCollection, NodeRecord, SpaceSummary } from '@minca/core';
-import { useLive, useNode, useProfiles } from '@minca/core/react';
+import { useLive, useNode, useProfiles } from '@minca/react';
 import { SchemaForm } from '../SchemaForm';
 import { Value } from '../Value';
 import {

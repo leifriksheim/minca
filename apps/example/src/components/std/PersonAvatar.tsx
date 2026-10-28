@@ -1,4 +1,4 @@
-import { useProfiles } from '@minca/core/react';
+import { useProfiles } from '@minca/react';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { useFileUrl } from '../../files';
 

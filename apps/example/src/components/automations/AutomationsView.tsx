@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { NodeCollection, NodeRecord, SpaceSummary } from '@minca/core';
-import { useAccount, useLive, useNode } from '@minca/core/react';
+import { useAccount, useLive, useNode } from '@minca/react';
 import { nameOf } from '../../derive/people';
 import { ago } from '@minca/ui/time';
 import {

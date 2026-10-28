@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAuth } from '@minca/core/react';
+import { useAuth } from '@minca/react';
 import { palette, styles } from '../styles';
 
 /**

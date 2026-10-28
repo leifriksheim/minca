@@ -1,5 +1,5 @@
 import { relayOnlyLocal, relayProblem } from '@minca/app-shared/relay';
-import { useNetwork, useNode } from '@minca/core/react';
+import { useNetwork, useNode } from '@minca/react';
 import { duration, nextRetry } from '../derive/network';
 import { styles } from '../styles';
 import { useNow } from './NetworkView';

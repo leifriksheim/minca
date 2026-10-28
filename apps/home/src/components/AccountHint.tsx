@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useMinca } from '@minca/core/react';
+import { useMinca } from '@minca/react';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { wantedAccount } from '../minca';
 import { palette, styles } from '../styles';

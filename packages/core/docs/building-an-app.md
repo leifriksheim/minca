@@ -12,7 +12,7 @@ the app cannot write anywhere it was not given.
 
 ```tsx
 import { createMincaConnection } from '@minca/core/session';
-import { MincaProvider, useConnection } from '@minca/core/react';
+import { MincaProvider, useConnection } from '@minca/react';
 
 const connection = createMincaConnection({
   home: 'https://home.minca.social/connect', // a suggestion: the person may use their own
@@ -67,7 +67,7 @@ element and as a React component.
 
 ```tsx
 import { createMincaAuth } from '@minca/core/session';
-import { MincaProvider, MincaAuth, useMinca } from '@minca/core/react';
+import { MincaProvider, MincaAuth, useMinca } from '@minca/react';
 
 const auth = createMincaAuth({ appName: 'Todo', network: { relays: ['wss://minca.fly.dev'] } });
 
@@ -135,7 +135,7 @@ await node.spaces.closeInvite(space.id, invite); // nobody else joins with it
 
 ## React hooks
 
-All from `@minca/core/react`, below a `MincaProvider`:
+All from `@minca/react`, below a `MincaProvider`:
 
 | Hook                                                                | Gives                                                                   |
 | ------------------------------------------------------------------- | ----------------------------------------------------------------------- |
@@ -177,7 +177,7 @@ takes the invite out of a pasted link, and `useInviteLink()` reads the one the
 page was opened with:
 
 ```tsx
-import { inviteLink, useInviteLink, useMyName, useNode } from '@minca/core/react';
+import { inviteLink, useInviteLink, useMyName, useNode } from '@minca/react';
 
 const link = inviteLink(await node.spaces.invite(space.id, { short: true })); // https://app.example/#invite=…
 

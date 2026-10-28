@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
 import type { NodeCollection } from '@minca/core';
-import { useQuery } from '@minca/core/react';
+import { useQuery } from '@minca/react';
 import {
   clauseOn,
   clauseWords,

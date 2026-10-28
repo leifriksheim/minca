@@ -9,6 +9,7 @@
     "packages/cli",
     "packages/ui",
     "packages/calls",
+    "packages/react",
     "apps/*",
     "scenarios"
   ],

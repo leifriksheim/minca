@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNode } from '@minca/core/react';
+import { useNode } from '@minca/react';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { Modal } from '@minca/app-shared/Modal';
 import { SpaceHosting } from '@minca/app-shared/SpaceHosting';

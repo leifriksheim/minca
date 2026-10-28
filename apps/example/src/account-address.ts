@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate, useSearch } from '@tanstack/react-router';
-import { useConnection } from '@minca/core/react';
+import { useConnection } from '@minca/react';
 import type { ConnectedAccount } from '@minca/core/session';
 
 /**

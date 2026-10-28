@@ -1,6 +1,5 @@
 import { useCallback, useSyncExternalStore } from 'react';
-import type { MeshStatus } from '../network/mesh.js';
-import type { P2PNode } from '../node/types.js';
+import type { MeshStatus, P2PNode } from '@minca/core';
 import { useNode } from './context.js';
 
 /** Each node's status as last read, so a render sees the same object until something changes */

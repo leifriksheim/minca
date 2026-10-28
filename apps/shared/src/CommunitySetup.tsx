@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import { COLLECTION_DEFINE, SPACE_KEEPERS, type SpaceHostingView } from '@minca/core';
-import { useCollections, useNode } from '@minca/core/react';
+import { useCollections, useNode } from '@minca/react';
 import { useAssignable, useMay } from './may';
 import { activity, INSTRUCT, profile } from '@minca/core/schemas';
 import { Modal } from './Modal';

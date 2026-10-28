@@ -1,6 +1,6 @@
 // Invite links carry the space, and a private one's key, in the URL fragment, which never reaches a server.
 import type { P2PNode } from '@minca/core';
-import { inviteLink } from '@minca/core/react';
+import { inviteLink } from '@minca/react';
 
 /**
  * A link that lets someone else open this space — joining with `role`, or with

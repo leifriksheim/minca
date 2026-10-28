@@ -17,7 +17,7 @@
  * same one (02 §4.3).
  */
 import { useEffect, useRef } from 'react';
-import { useNode } from '@minca/core/react';
+import { useNode } from '@minca/react';
 import type { P2PNode } from '@minca/core';
 import type { Assembly, PartyFull, ProposalView, RollView } from './model';
 import { conflict, decision, partyBallot, partyRoll, vote, type Choice } from './schema';

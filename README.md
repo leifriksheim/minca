@@ -113,7 +113,7 @@ which signs a note for the app's own key, for the spaces the person picks:
 
 ```tsx
 import { createMincaConnection } from '@minca/core/session';
-import { MincaProvider, useConnection } from '@minca/core/react';
+import { MincaProvider, useConnection } from '@minca/react';
 
 const connection = createMincaConnection({
   home: 'https://home.minca.social/connect', // a suggestion: the person may use their own

@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { displayName } from '../space/names.js';
+import { displayName } from '@minca/core';
 import { useProfiles } from './use-space.js';
 
 /**

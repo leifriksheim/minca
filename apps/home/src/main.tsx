@@ -1,5 +1,5 @@
 import { createRoot } from 'react-dom/client';
-import { MincaProvider } from '@minca/core/react';
+import { MincaProvider } from '@minca/react';
 import { App } from './App';
 import { ConnectPage } from './components/ConnectPage';
 import { injectBaseStyles } from './styles';

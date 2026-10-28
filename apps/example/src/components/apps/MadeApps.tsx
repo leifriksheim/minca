@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { message, useAction } from '@minca/app-shared/action';
 import { describeCollection, type NodeCollection, type NodeRecord, type SpaceSummary } from '@minca/core';
-import { useLive, useNode, useSpaces } from '@minca/core/react';
+import { useLive, useNode, useSpaces } from '@minca/react';
 import {
   blueprint as blueprintSchema,
   reviewBlueprint,

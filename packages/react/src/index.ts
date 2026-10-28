@@ -23,8 +23,8 @@
  * }
  * ```
  *
- * `react` is a peer dependency: this entry point is the only part of the
- * protocol that imports it.
+ * `react` and `@minca/core` are peer dependencies; core is read only through
+ * its public entry points.
  */
 export {
   MincaProvider,

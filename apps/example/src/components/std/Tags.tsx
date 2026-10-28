@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useCan, useNode } from '@minca/core/react';
+import { useCan, useNode } from '@minca/react';
 import type { NodeRecord, SpaceSummary } from '@minca/core';
 import { tag } from '@minca/core/schemas';
 import { bodyOf } from '../../derive/schema-ui';

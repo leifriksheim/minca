@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { matches, type Filter, type NodeCollection, type NodeRecord, type SpaceSummary } from '@minca/core';
-import { useAccount, useNode } from '@minca/core/react';
+import { useAccount, useNode } from '@minca/react';
 import { ME } from '@minca/core/schemas';
 import { Modal } from '@minca/app-shared/Modal';
 import { Loader } from '@minca/app-shared/Loader';

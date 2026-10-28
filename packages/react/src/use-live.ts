@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { P2PNode } from '../node/types.js';
+import type { P2PNode } from '@minca/core';
 import { useNode } from './context.js';
 
 /**

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { NodeRecord } from '@minca/core';
-import { useAccount, useNode } from '@minca/core/react';
+import { useAccount, useNode } from '@minca/react';
 import ui from 'virtual:minca-ui';
 import { placeAt, searchPlaces, whereAmI } from '@minca/app-shared/places';
 import { createScreenBridge, screenDocument, type ScreenBridge, type ScreenHost } from './screens';

@@ -1,5 +1,5 @@
 import type { SpaceSummary } from '@minca/core';
-import { useInviteLink, useMyName } from '@minca/core/react';
+import { useInviteLink, useMyName } from '@minca/react';
 import { NameField } from './NameField';
 import { styles } from '../styles';
 

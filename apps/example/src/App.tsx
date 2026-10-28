@@ -1,6 +1,6 @@
 import { Link, Outlet, useNavigate } from '@tanstack/react-router';
 import type { NewSpace } from '@minca/core';
-import { inviteFromLink, useAccount, useConnection, useNode, useSpaces } from '@minca/core/react';
+import { inviteFromLink, useAccount, useConnection, useNode, useSpaces } from '@minca/react';
 import { CallsProvider } from '@minca/calls/react';
 import { AccountMenu } from './components/AccountMenu';
 import { AgentCard } from './components/AgentCard';

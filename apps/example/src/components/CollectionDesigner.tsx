@@ -1,7 +1,7 @@
 import { useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { useMayDefine } from '@minca/app-shared/may';
 import type { DefineCollection, JsonSchema, NodeCollection, SpaceSummary } from '@minca/core';
-import { useAccount, useCollections, useNode, useProfiles } from '@minca/core/react';
+import { useAccount, useCollections, useNode, useProfiles } from '@minca/react';
 import { useAction } from '@minca/app-shared/action';
 import { nameOf, peopleFrom } from '../derive/people';
 import { collectionLabel, humanize, isObject } from '../derive/schema-ui';

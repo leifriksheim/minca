@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import type { SpaceSummary } from '@minca/core';
-import { useNode } from '@minca/core/react';
+import { useNode } from '@minca/react';
 import { Modal } from '@minca/app-shared/Modal';
 import { useAssembly, type Assembly } from './model';
 import { Proposals } from './Proposals';

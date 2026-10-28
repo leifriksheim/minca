@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { useNode } from '@minca/core/react';
+import { useNode } from '@minca/react';
 import { Modal } from '@minca/app-shared/Modal';
 import type { Assembly, ProposalView, RollView } from './model';
 import {
