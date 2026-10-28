@@ -655,8 +655,9 @@ says hello back in a room at most once every 10 s; one due sooner waits
 for the 10 s, once for everyone who said hello meanwhile. Each socket
 sends at most 20 messages a second, in bursts of 40, and queues the rest. A
 connection attempt that times out is retried on the peer's next hello. `requestIce`
-asks every connected relay for TURN. Each WebRTC offer or answer waits for
-ICE gathering to finish, or 2 s, and carries what it found.
+asks every connected relay whose kind can hand out TURN passwords. Each WebRTC
+offer or answer waits for ICE gathering to finish, or 2 s, and carries what it
+found.
 
 **Kinds of relay** (spec 04 §1.2). `network.relays` may mix kinds:
 `['wss://minca.fly.dev', 'nostr+wss://relay.damus.io']`. A relay of a kind
@@ -695,8 +696,8 @@ configured servers plus the TURN servers relays offered, the latter only while
 `expiresAt` is in the future. `node.iceServers()` returns the same list for
 the application's own connections (a call's). Before answering it refreshes:
 if any relay is connected and the TURN passwords held are missing or expire
-within 10 minutes, and it has not asked in the last 10 minutes, it sends `ice`
-to every connected relay and waits up to 1.5 s for an answer (relays without
+within 10 minutes, and it has not asked in the last 10 minutes, it asks every
+connected relay that can and waits up to 1.5 s for an answer (relays without
 TURN never answer), then returns what it has. A node with no relays returns
 the configured servers.
 

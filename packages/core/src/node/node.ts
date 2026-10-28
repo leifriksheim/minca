@@ -102,7 +102,7 @@ import {
   signPurge,
   type OpenedKnock,
 } from '../inbox/inbox.js';
-import { createMailboxClient } from '../network/relays.js';
+import { createMailboxClient, relayKind } from '../network/relays.js';
 import { team } from '../space/presets.js';
 import {
   CARRIER_COLLECTION,
@@ -2375,15 +2375,17 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     );
   }
 
-  /** Clears knocks from every mailbox an inbox names, as its owner; how many did */
+  /** Clears knocks from every mailbox an inbox names that can purge, as its owner; how many did */
   async function purgeInbox(body: Inbox, ids: ReadonlyArray<string> | null): Promise<number> {
     const keys = await inboxKeys(body.gen);
     const done = await Promise.allSettled(
-      body.places.map((place) =>
-        mailbox.purge(place, keys.topic, keys.signPublic, ids, (nonce) =>
-          signPurge(keys.sign, keys.topic, nonce, ids),
+      body.places
+        .filter((place) => relayKind(place)?.can.purge)
+        .map((place) =>
+          mailbox.purge(place, keys.topic, keys.signPublic, ids, (nonce) =>
+            signPurge(keys.sign, keys.topic, nonce, ids),
+          ),
         ),
-      ),
     );
     return done.filter((result) => result.status === 'fulfilled').length;
   }

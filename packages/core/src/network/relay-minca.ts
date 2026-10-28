@@ -3,7 +3,8 @@
  * mailbox, spoken in JSON text frames. A blob dropped with `ttl: 0` goes to
  * whoever watches its topic and is kept by nobody, which is how peers meet; a
  * blob dropped with a ttl is kept, which is how inboxes and short links work.
- * Minca relays also hand out TURN passwords.
+ * Beyond that, an inbox's owner can purge it, and the relay may hand out TURN
+ * passwords.
  *
  *   client → { type: 'drop', topic, blob, ttl? }       relay → { type: 'dropped', topic, id } | { type: 'refused', topic, reason }  (nothing for ttl 0)
  *   client → { type: 'fetch', topic, after?, watch? }  relay → { type: 'mail', topic, items: [{ seq?, id?, blob }], more }
@@ -79,7 +80,7 @@ export function createMincaLink(url: string): RelayLink {
 const MAX_PAGES = 8;
 
 /** A Minca relay's mailbox: each call opens its own short-lived socket, so the relay can't tie it to a peer */
-export function createMincaMailbox(options: MailboxOptions = {}): MailboxClient {
+function createMincaMailbox(options: MailboxOptions = {}): MailboxClient {
   const talk = {
     timeoutMs: options.timeoutMs ?? 8000,
     ...(options.WebSocket ? { WebSocket: options.WebSocket } : {}),
@@ -164,3 +165,11 @@ function isMailItem(value: unknown): value is MailItem {
 function reasonOf(answer: Record<string, unknown>): string {
   return typeof answer.reason === 'string' ? answer.reason.slice(0, 200) : 'no reason given';
 }
+
+/** `wss://`, or `ws://` on this machine (spec 04 §1.4) */
+export const mincaRelay = Object.freeze({
+  schemes: Object.freeze(['wss', 'ws']),
+  link: createMincaLink,
+  mailbox: createMincaMailbox,
+  can: Object.freeze({ purge: true, ice: true }),
+});

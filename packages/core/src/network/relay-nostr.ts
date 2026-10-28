@@ -11,8 +11,8 @@
  * by it. A relay that asks for authentication (NIP-42)
  * is answered with the same throwaway key.
  *
- * What Nostr has no word for: TURN passwords, and clearing someone else's
- * events, so an inbox on a Nostr relay can't be purged.
+ * It can't purge (nobody clears events someone else signed) and hands out no
+ * TURN passwords.
  */
 import { schnorr } from '@noble/curves/secp256k1.js';
 import { sha256 } from '@noble/hashes/sha2.js';
@@ -20,7 +20,7 @@ import { createEmitter } from '../utils/events.js';
 import { base64UrlEncode, bytesToHex, utf8Encode } from '../utils/encoding.js';
 import { isObject } from '../utils/guards.js';
 import { converse, createRelaySocket, dialOf } from './relay-socket.js';
-import type { MailboxClient, MailboxOptions, MailItem, RelayLink, RelayLinkEvents } from './relays.js';
+import type { MailboxOptions, MailItem, RelayLink, RelayLinkEvents, RelayMailbox } from './relays.js';
 
 /** Ephemeral: relays pass it on and keep nothing (NIP-01, 20000–29999) */
 export const NOSTR_EPHEMERAL_KIND = 24733;
@@ -114,7 +114,7 @@ function topicOf(
 const subscriptionOf = (topic: string) => `m${topic.slice(0, 20)}`;
 
 /** A socket to a Nostr relay, subscribed to the topics of the rooms this node is in */
-export function createNostrLink(url: string): RelayLink {
+function createNostrLink(url: string): RelayLink {
   const dial = dialOf(url);
   // Answers the relay's challenge; each event gets a key of its own, so nothing ties one room's to another's.
   const secret = throwawayKey();
@@ -180,8 +180,6 @@ export function createNostrLink(url: string): RelayLink {
         'EVENT',
         signNostrEvent(throwawayKey(), NOSTR_EPHEMERAL_KIND, [[TOPIC_TAG, topic]], blob),
       ]),
-    // Nostr relays hand out no TURN passwords.
-    requestIce: () => {},
     isConnected: socket.isConnected,
     status: socket.status,
     on,
@@ -193,13 +191,13 @@ export function createNostrLink(url: string): RelayLink {
 const DEFAULT_TTL_SECONDS = 14 * 24 * 3600;
 
 /** A Nostr relay as a mailbox: each call opens its own socket, under a key used once */
-export function createNostrMailbox(options: MailboxOptions = {}): MailboxClient {
+function createNostrMailbox(options: MailboxOptions = {}): RelayMailbox {
   const talk = {
     timeoutMs: options.timeoutMs ?? 8000,
     ...(options.WebSocket ? { WebSocket: options.WebSocket } : {}),
   };
 
-  const client: MailboxClient = {
+  const client: RelayMailbox = {
     drop(relay: string, topic: string, blob: string, ttlSeconds?: number) {
       const dial = dialOf(relay);
       const secret = throwawayKey();
@@ -281,10 +279,14 @@ export function createNostrMailbox(options: MailboxOptions = {}): MailboxClient 
         },
       );
     },
-
-    purge(relay: string) {
-      return Promise.reject(new Error(`${relay} is a Nostr relay, which can't clear what others left`));
-    },
   };
   return Object.freeze(client);
 }
+
+/** `nostr+wss://`, or `nostr+ws://` on this machine (spec 04 §1.5) */
+export const nostrRelay = Object.freeze({
+  schemes: Object.freeze(['nostr+wss', 'nostr+ws']),
+  link: createNostrLink,
+  mailbox: createNostrMailbox,
+  can: Object.freeze({ purge: false, ice: false }),
+});

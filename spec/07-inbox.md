@@ -164,17 +164,16 @@ _Source: `packages/core/src/inbox/inbox.ts` (`inboxTopic`)._
 ## 5. The relay mailbox
 
 An inbox's knocks wait in the mailboxes of the relays its code names: each
-is dropped there and fetched later ([04 — Network](04-network.md) §1.1),
-from a Minca relay (04 §1.4) or a Nostr relay (04 §1.5) alike. A knock is
-dropped with a time to live of 14 days. A fetch reads every page; the same
-blob from several relays is one knock, by its id (§6).
+is dropped there and fetched later ([04 — Network](04-network.md) §1.1), on
+a relay of any kind (04 §1.2). A knock is dropped with a time to live of 14
+days. A fetch reads every page; the same blob from several relays is one
+knock, by its id (§6).
 
 A relay keeps no time a reader trusts: what a knock's time is, is the
 knocker's word, signed (§6).
 
-**challenge / purge** — the inbox's owner clears knocks, on a Minca relay.
-Nobody can clear what someone else left on a Nostr relay, so knocks there go
-when they expire.
+**challenge / purge** — the inbox's owner clears knocks, on a relay that can
+purge (04 §1.2). On a Minca relay:
 
 ```json
 → { "type": "challenge" }
@@ -211,16 +210,16 @@ An **address** is an IPv4 address or an IPv6 /64.
 | Total held                             | 64 Mi chars, plus a reserve of 8 Mi only topics holding fewer than 2 blobs may use | `refused` |
 | TTL                                    | 14 days                                                                            | capped    |
 
-These are a Minca relay's; a Nostr relay keeps what its operator lets it.
+These are a Minca relay's; another kind keeps what its operator lets it.
 The socket's message budget, size cap, heartbeat and watches are the relay's
 usual ones ([04 — Network](04-network.md) §1.4).
 
 A full inbox refuses new knocks rather than dropping old ones, so a flood
 can't push out real knocks; a full relay still takes a knock or two on every
 inbox, from the reserve. An owner whose inbox is flooded clears it (purge),
-which keeps its code working. A Nostr relay can't be purged, and a fetch
-reads only its newest 500 blobs, so 500 junk drops bury the knocks before
-them there: an inbox that names a Nostr relay should name a Minca relay too.
+which keeps its code working. On a relay that can't purge, junk stays until
+it expires, and where a fetch is bounded it buries the knocks before it (04
+§1.2): an inbox that names such a relay should name one that can purge too.
 
 A drop carries no proof of work. Work a phone does in a second, a server
 core does in a tenth of one, so it would hold back nobody the address
@@ -244,7 +243,7 @@ does nothing different. No key hashes to such a topic, so a purge of it always
 fails: nobody can clear it. A host's relay also answers a fetch with the
 links its accounts keep ([06](06-nodes-and-sessions.md) §4.2).
 
-_Source: `packages/relay/relay.mjs` (`handleMail`, `purge`, `sweepMail`, `MAILBOX_LIMITS`, `mailboxFrom`), `packages/core/src/network/relays.ts` (`createMailboxClient`), `packages/core/src/network/relay-minca.ts` (`createMincaMailbox`), `packages/core/src/network/relay-nostr.ts` (`createNostrMailbox`). Tests: `packages/core/tests/inbox.test.ts` ("the relay's mailbox"), `packages/core/tests/invite-link.test.ts` ("a mailbox that keeps blobs for others", "nobody can clear it…"), `packages/core/tests/relay-nostr.test.ts` ("a Nostr relay as a mailbox")._
+_Source: `packages/relay/relay.mjs` (`handleMail`, `purge`, `sweepMail`, `MAILBOX_LIMITS`, `mailboxFrom`), `packages/core/src/network/relays.ts` (`createMailboxClient`), `packages/core/src/network/relay-minca.ts` (`createMincaMailbox`, `mincaRelay`), `packages/core/src/network/relay-nostr.ts` (`createNostrMailbox`, `nostrRelay`), `packages/core/src/node/node.ts` (`purgeInbox`). Tests: `packages/core/tests/inbox.test.ts` ("the relay's mailbox"), `packages/core/tests/invite-link.test.ts` ("a mailbox that keeps blobs for others", "nobody can clear it…"), `packages/core/tests/relay-nostr.test.ts` ("a Nostr relay as a mailbox")._
 
 ## 6. Knocks
 
@@ -366,9 +365,9 @@ grants records only ([06 §2.8](06-nodes-and-sessions.md)).
   A note that was revoked but hasn't run out yet still can, since the owner
   can't see the knocker's revocations
   ([#165](https://github.com/leifriksheim/minca/issues/165)).
-- **Spam on a Nostr relay.** A Nostr relay can't be purged, and a fetch
-  reads its newest 500 blobs, newest by the dropper's own word: anyone with
-  the code can bury earlier knocks there with 500 drops, dated ahead (§5).
+- **Spam on a relay that can't purge.** Where its fetch is bounded, anyone
+  with the code can bury earlier knocks there with drops past the bound,
+  dated ahead where newest is the dropper's word, as on Nostr (§5, 04 §1.2).
 - **Leaked invites.** The invite in a knock is multi-use until the knocker
   closes it, and whoever joins first is taken as the contact. Someone else
   joins first only if the recipient passed it on, lost a device, or gave an

@@ -14,7 +14,7 @@ keys, roles and the access log are in [03 — Spaces](03-spaces.md). What an
 inbox and a short link keep in a relay's mailbox is in [07 — Inbox](07-inbox.md).
 
 ```
-        ┌──────── relay: a Minca relay (wss://) or a Nostr relay (nostr+wss://) ────────┐
+        ┌──────── relay, of any kind (§1.2): wss://, nostr+wss://, … ────────────────────┐
         │  blobs under a topic: handed to watchers (ttl 0), or kept to be fetched        │
         │  it sees topics and sealed bytes, never who meets whom                          │
         └──────────▲─────────────────────────────────────────────────────▲───────────────┘
@@ -65,13 +65,18 @@ Every relay, of every kind, does two things:
 
 ### 1.2 Kinds of relay
 
-A relay is named by a URL whose scheme says its kind:
+A relay is named by a URL whose scheme says its kind. Each kind maps §1.1 to
+a wire format of its own, and differs only in what it can do beyond it:
 
-| Scheme                                    | Kind                   |
-| ----------------------------------------- | ---------------------- |
-| `wss://`, or `ws://` on this machine      | a Minca relay (§1.4)   |
-| `nostr+wss://`, or `nostr+ws://` likewise | a Nostr relay (§1.5)   |
-| `<kind>+wss://`, any other kind           | not specified; ignored |
+| Scheme                                    | Kind                   | A fetch reads   | Purge | TURN |
+| ----------------------------------------- | ---------------------- | --------------- | ----- | ---- |
+| `wss://`, or `ws://` on this machine      | a Minca relay (§1.4)   | every blob held | yes   | MAY  |
+| `nostr+wss://`, or `nostr+ws://` likewise | a Nostr relay (§1.5)   | the newest 500  | no    | no   |
+| `<kind>+wss://`, any other kind           | not specified; ignored |                 |       |      |
+
+Where a fetch is bounded, drops past the bound bury older ones. Where a relay
+can't purge ([07](07-inbox.md) §5), a blob goes only when it expires. TURN
+passwords are in §1.4 and §10.
 
 A valid relay URL is a string of at most 200 characters that parses as a URL
 whose scheme is `wss:`, or `<kind>+wss:` with `<kind>` matching
@@ -81,7 +86,7 @@ taken off the scheme. A client MUST pass over a relay of a kind it doesn't
 speak, and MUST NOT treat a list naming one as invalid for that, so a space
 can name a new kind before every member's app speaks it.
 
-_Source: `packages/core/src/network/relays.ts` (`relayKind`, `createRelayLink`, `createMailboxClient`), `packages/core/src/network/relay-socket.ts` (`dialOf`), `packages/core/src/space/roles.ts` (`checkRelays`). Tests: `packages/core/tests/rendezvous.test.ts` ("a relay of a kind this library does not speak is passed over")._
+_Source: `packages/core/src/network/relays.ts` (`RelayKind`, `relayKind`, `createRelayLink`, `createMailboxClient`), `packages/core/src/network/relay-minca.ts` (`mincaRelay`), `packages/core/src/network/relay-nostr.ts` (`nostrRelay`), `packages/core/src/network/relay-socket.ts` (`dialOf`), `packages/core/src/space/roles.ts` (`checkRelays`). Tests: `packages/core/tests/rendezvous.test.ts` ("a relay of a kind this library does not speak is passed over")._
 
 ### 1.3 Rooms and topics
 
@@ -248,14 +253,10 @@ the topic in an `x` tag:
   dropper's time to live, or 14 days.
 - A fetched blob's `id` is `base64url(SHA-256(UTF-8(content)))`, computed by
   the fetcher. Events past their `expiration` are not taken. A fetch reads
-  one page, the newest 500 the relay gives, so more than 500 blobs dropped
-  after it bury the older ones (threat model §3.7).
+  one page, the newest 500 the relay gives (§1.2).
 - A relay that asks for authentication (NIP-42, `["AUTH", <challenge>]`) is
   answered with a kind 22242 event from the same throwaway key, tagged
   `relay` and `challenge`; what it refused before is sent again.
-- A Nostr relay hands out no TURN passwords, and nobody can clear events
-  someone else signed, so an inbox kept there can't be purged
-  ([07](07-inbox.md) §5).
 
 ```json
 [
@@ -272,7 +273,7 @@ the topic in an `x` tag:
 ]
 ```
 
-_Source: `packages/core/src/network/relay-nostr.ts` (`createNostrLink`, `createNostrMailbox`, `signNostrEvent`, `NOSTR_EPHEMERAL_KIND`, `NOSTR_HELD_KIND`). Tests: `packages/core/tests/relay-nostr.test.ts`, against the NIP-01 relay in `packages/core/tests/helpers/nostr-relay.ts`._
+_Source: `packages/core/src/network/relay-nostr.ts` (`nostrRelay`, `createNostrLink`, `createNostrMailbox`, `signNostrEvent`, `NOSTR_EPHEMERAL_KIND`, `NOSTR_HELD_KIND`). Tests: `packages/core/tests/relay-nostr.test.ts`, against the NIP-01 relay in `packages/core/tests/helpers/nostr-relay.ts`._
 
 ---
 

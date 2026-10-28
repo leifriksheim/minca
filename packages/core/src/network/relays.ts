@@ -4,22 +4,20 @@
  * to a room's topic (`rendezvous.ts`), and an inbox or a short link leaves
  * blobs to be fetched later (a mailbox).
  *
- * A relay's kind is its URL's scheme: `wss://` is a Minca relay
- * (`relay-minca.ts`), `nostr+wss://` a Nostr relay (`relay-nostr.ts`). A
+ * Each kind is one frozen object beside its implementation (`relay-minca.ts`,
+ * `relay-nostr.ts`): the schemes that name it, a link, a mailbox, and what it
+ * can do beyond the contract. Callers ask about an ability, never a kind. A
  * kind this library doesn't know is passed over, so a space can name one
  * before every member's app can use it.
  */
 import type { RelayStatus } from './relay-socket.js';
-import { createMincaLink, createMincaMailbox } from './relay-minca.js';
-import { createNostrLink, createNostrMailbox } from './relay-nostr.js';
+import { mincaRelay } from './relay-minca.js';
+import { nostrRelay } from './relay-nostr.js';
 
 export type RelayLinkEvents = {
   /** A blob published under a topic this link watches */
   blob: (topic: string, blob: string) => void;
-  /**
-   * TURN servers the relay offers, with passwords that stop working at
-   * `expiresAt` (ms). Only Minca relays with TURN offer them.
-   */
+  /** TURN servers, with passwords that stop working at `expiresAt` (ms), from a kind that `can.ice` */
   ice: (servers: ReadonlyArray<RTCIceServer>, expiresAt: number) => void;
   connected: () => void;
   disconnected: () => void;
@@ -39,8 +37,8 @@ export interface RelayLink {
   readonly unwatch: (topic: string) => void;
   /** Hands a blob to whoever watches the topic now; nobody keeps it */
   readonly publish: (topic: string, blob: string) => void;
-  /** Asks for fresh TURN passwords; they arrive as an `ice` event, from relays that have TURN */
-  readonly requestIce: () => void;
+  /** Asks for fresh TURN passwords, which arrive as an `ice` event; only on a kind that `can.ice` */
+  readonly requestIce?: () => void;
   readonly isConnected: () => boolean;
   readonly status: () => RelayStatus;
   readonly on: <K extends keyof RelayLinkEvents>(event: K, callback: RelayLinkEvents[K]) => void;
@@ -69,7 +67,7 @@ export interface MailboxClient {
   /**
    * Clears blobs from a topic — all of them, or those named — as the inbox's
    * owner: shows the signing key and signs the relay's challenge with it.
-   * @throws Where the relay's kind can't clear (a Nostr relay)
+   * @throws Where the relay's kind can't purge
    */
   purge(
     relay: string,
@@ -80,6 +78,9 @@ export interface MailboxClient {
   ): Promise<number>;
 }
 
+/** One kind's mailbox: the contract, and `purge` on a kind that `can.purge` */
+export type RelayMailbox = Pick<MailboxClient, 'drop' | 'fetch'> & Partial<Pick<MailboxClient, 'purge'>>;
+
 export interface MailboxOptions {
   /** How long to wait for a relay to answer. Default 8 seconds. */
   readonly timeoutMs?: number;
@@ -87,43 +88,53 @@ export interface MailboxOptions {
   readonly WebSocket?: typeof WebSocket;
 }
 
-/** The kinds of relay this library speaks */
-export type RelayKind = 'minca' | 'nostr';
+/** A kind of relay (spec 04 §1.2) */
+export interface RelayKind {
+  /** The URL schemes that name it, lower case */
+  readonly schemes: ReadonlyArray<string>;
+  readonly link: (url: string) => RelayLink;
+  readonly mailbox: (options: MailboxOptions) => RelayMailbox;
+  /** What it does beyond the contract every relay meets */
+  readonly can: {
+    /** An inbox's owner can clear what others dropped (spec 07 §5) */
+    readonly purge: boolean;
+    /** It may hand out TURN passwords (spec 04 §1.4) */
+    readonly ice: boolean;
+  };
+}
 
-/**
- * A relay's kind, from its scheme: `wss:` (or `ws:`) is Minca's own,
- * `nostr+wss:` Nostr's; null for a kind this library doesn't speak.
- */
+/** The kinds this library speaks */
+const KINDS: ReadonlyArray<RelayKind> = Object.freeze([mincaRelay, nostrRelay]);
+
+/** A relay's kind, from its URL's scheme; null for a kind this library doesn't speak */
 export function relayKind(url: string): RelayKind | null {
-  const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(url)?.[1]?.toLowerCase();
-  if (scheme === 'wss' || scheme === 'ws') return 'minca';
-  if (scheme === 'nostr+wss' || scheme === 'nostr+ws') return 'nostr';
-  return null;
+  const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(url)?.[1]?.toLowerCase() ?? '';
+  return KINDS.find((kind) => kind.schemes.includes(scheme)) ?? null;
 }
 
 /** A socket to a relay, or null for a kind this library doesn't speak */
 export function createRelayLink(url: string): RelayLink | null {
-  const kind = relayKind(url);
-  if (kind === 'minca') return createMincaLink(url);
-  if (kind === 'nostr') return createNostrLink(url);
-  return null;
+  return relayKind(url)?.link(url) ?? null;
 }
 
 /** Mailboxes of every kind: each call goes to the kind its relay's URL names */
 export function createMailboxClient(options: MailboxOptions = {}): MailboxClient {
-  const minca = createMincaMailbox(options);
-  const nostr = createNostrMailbox(options);
-  const of = (relay: string): MailboxClient => {
+  const boxes = new Map(KINDS.map((kind) => [kind, kind.mailbox(options)]));
+  const of = (relay: string): { kind: RelayKind; box: RelayMailbox } => {
     const kind = relayKind(relay);
-    if (kind === 'minca') return minca;
-    if (kind === 'nostr') return nostr;
-    throw new Error(`${relay} is a kind of relay this app doesn't speak`);
+    const box = kind && boxes.get(kind);
+    if (!kind || !box) throw new Error(`${relay} is a kind of relay this app doesn't speak`);
+    return { kind, box };
   };
   const client: MailboxClient = {
-    drop: (relay, topic, blob, ttl) => of(relay).drop(relay, topic, blob, ttl),
-    fetch: (relay, topic, after, pages) => of(relay).fetch(relay, topic, after, pages),
-    purge: (relay, topic, sign, ids, signChallenge) =>
-      of(relay).purge(relay, topic, sign, ids, signChallenge),
+    drop: (relay, topic, blob, ttl) => of(relay).box.drop(relay, topic, blob, ttl),
+    fetch: (relay, topic, after, pages) => of(relay).box.fetch(relay, topic, after, pages),
+    purge: (relay, topic, sign, ids, signChallenge) => {
+      const { kind, box } = of(relay);
+      return kind.can.purge && box.purge
+        ? box.purge(relay, topic, sign, ids, signChallenge)
+        : Promise.reject(new Error(`${relay} can't clear what others left`));
+    },
   };
   return Object.freeze(client);
 }
