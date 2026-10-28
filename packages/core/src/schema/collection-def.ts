@@ -356,7 +356,7 @@ export interface SchemaIssue {
   readonly message: string;
 }
 
-const validators = new WeakMap<object, Validator>();
+const validators = new WeakMap<object, Validator | Error>();
 
 function newValidator(schema: unknown): Validator {
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the library interprets any JSON Schema value; its type lists only the keywords it knows
@@ -365,15 +365,21 @@ function newValidator(schema: unknown): Validator {
 
 /**
  * One validator per schema object. It is built from a copy: the validator
- * writes into the schema it is given, and a stored schema is frozen.
+ * writes into the schema it is given, and a stored schema is frozen. A
+ * schema it can't be built from is remembered too, so it costs one try.
  */
 function validatorFor(schema: JsonSchema): Validator {
   if (typeof schema !== 'object' || schema === null) return newValidator(schema);
   let found = validators.get(schema);
   if (!found) {
-    found = newValidator(structuredClone(schema));
+    try {
+      found = newValidator(structuredClone(schema));
+    } catch (error) {
+      found = error instanceof Error ? error : new Error(String(error));
+    }
     validators.set(schema, found);
   }
+  if (found instanceof Error) throw found;
   return found;
 }
 

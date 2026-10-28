@@ -61,10 +61,12 @@ and three that say what a value means, so any app can show it well:
   A field holding a person says `x-kind: "did"`; `fragments.person` writes
   it. An app shows a kind it doesn't know as the plain value.
 
-Any keyword starting `x-` is an annotation like these: any JSON, never
-checked when validating, and every validator ignores it. A new one, or a new
-`x-kind`, is a row here, never a change to the protocol. With Zod, add one
-with `.meta({ 'x-kind': 'did' })`.
+Any keyword starting `x-` is an annotation like these: any JSON, and it says
+nothing about whether a body fits. A new one, or a new `x-kind`, is a row
+here, never a change to the protocol. With Zod, add one with
+`.meta({ 'x-kind': 'did' })`. Keep annotations to plain values: a validator
+that can't build from a schema (an `$id` inside one is enough) checks
+nothing against it, so the collection's shape goes unchecked.
 
 Anything else, like `pattern` or `format`, is refused when you define the
 collection, with the reason. A Zod `.regex()` or `.email()` fails for that

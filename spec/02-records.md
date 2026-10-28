@@ -960,8 +960,9 @@ Anything else (`pattern`, `$ref`, `format`, `anyOf`, a schema-valued
 `additionalProperties`, …) makes the definition invalid. A `$schema` member is
 not part of the subset.
 
-A keyword starting `x-` is an annotation: it takes no part in whether a body
-fits its schema, as JSON Schema 2020-12 treats a keyword it doesn't define.
+A keyword starting `x-` is an annotation: it says nothing about whether a
+body fits its schema, as JSON Schema 2020-12 treats a keyword it doesn't
+define.
 What each one means to an app, such as `x-kind: "did"` for a person, is not
 protocol ([collections](../packages/core/docs/collections.md#schemas)).
 
