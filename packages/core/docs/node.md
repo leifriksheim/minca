@@ -239,7 +239,7 @@ node makes a key for this run as it would without a source.
   write fails until the page reloads, since signing on would fork the line
   and withdraw what the key wrote. A slot whose connection the browser
   closed opens again only while it still holds the key.
-- The CLI keeps them outside its home, in `<local>/writers/slot-<n>/` (`localPath` in `packages/cli/src/home.ts`, [sync and storage](storage.md#data-folders)): the key as
+- The CLI keeps them outside its home, in `<local>/writer-keys/slot-<n>/` (`localPath` in `packages/cli/src/home.ts`, [sync and storage](storage.md#data-folders)): the key as
   JWK in an envelope (spec 01 §9.1) under the account's local key, with label
   `minca/writer-key/v1` and bound `{ did: <account DID>, slot: <n> }`
   (`key.sealed`, mode 600), so a copy of the files can't sign, and a key file

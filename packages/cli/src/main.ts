@@ -990,7 +990,7 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
     await forgetAgent(home);
     for (const { client, result } of await unconfigureClients(home)) stderr(`  ${client}: ${result}`);
     stderr(
-      "This computer's agent is forgotten here. To stop its note working everywhere, disconnect it in your account home.",
+      "This computer's agent is forgotten here. To stop its notes working everywhere, disconnect each of its sessions in your account home.",
     );
     return 0;
   }
@@ -1014,8 +1014,7 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
     const trouble = () =>
       here.agent?.revoked().length
         ? "This agent was disconnected in the person's account home, so its key is revoked and nothing it writes counts. " +
-          'Ask them to connect it again: run `minca connect`, which opens their account home to allow it, then ' +
-          'start this session again.'
+          'Ask them to start this session again: it then asks to be allowed at their account home, with a new key.'
         : null;
     let stopReloading = () => {};
     // Stopped by a signal: close and let go of the slot, so its lock isn't left for the next session to take over.

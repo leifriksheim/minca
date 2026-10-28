@@ -130,6 +130,18 @@ describe('writer keys on disk', () => {
     await next();
   });
 
+  test('a lock a minca from before the numbered lock holds, by the bare file, is held to this one too', async () => {
+    const file = path.join(await tempDir(), 'lock');
+    // The process that started this one is running, as the older minca would be.
+    await writeFile(file, String(process.ppid));
+    assert.equal(await holdLock(file), null);
+    // Gone, it is free again.
+    await writeFile(file, '2147483646');
+    const release = await holdLock(file);
+    assert.ok(release);
+    await release();
+  });
+
   test('letting go of a lock that was taken over leaves the new holder’s alone', async () => {
     const dir = await tempDir();
     const file = path.join(dir, 'lock');

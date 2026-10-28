@@ -7,9 +7,10 @@
  * A key signs in one process at a time, or its log forks (spec 02 §4.10), so
  * each session that runs at once has a key of its own: a numbered slot,
  * `<home>/agent/<n>/`, holding `key.json`, `grant.json`, its lock and what
- * only that session keeps. The spaces themselves are in one data folder,
- * `<home>/agent/spaces/`, that every session reads and writes at once
- * (spec 05 §14), so what one session synced the next starts from. Beside
+ * only that session keeps. The spaces themselves are in one folder,
+ * `<home>/agent/spaces/`, that every session reads and writes at once the
+ * way clients share a data folder (spec 05 §14.5), so what one session
+ * synced the next starts from. Beside
  * them, `minca agent`'s model keys and `spend.json`. All readable only by
  * this user.
  *
@@ -203,7 +204,7 @@ export const ACCOUNT_HOME = 'home.minca.social';
  * @returns The grant, checked
  */
 export async function connectAgent(params: {
-  /** The slot it connects, which this process holds */
+  /** The slot it connects: one this process holds, or slot 1 for `minca connect`, whose session takes it up */
   readonly slot: string;
   readonly accountHome: string;
   readonly relays: ReadonlyArray<string>;
@@ -362,6 +363,8 @@ export async function startAgentNode(
     return node.subscribe((event) => {
       if (event.type !== 'revoked' || told.has(event.space)) return;
       told.add(event.space);
+      // A revoked key never writes again: the next session here connects the slot anew, with a new key.
+      void rm(path.join(slot.dir, 'grant.json'), { force: true });
       options.onRevoked?.(event.space);
     });
   };

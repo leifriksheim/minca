@@ -109,10 +109,16 @@ a `minca mcp` per Claude window or a `minca agent`, has a key of its own, in a
 numbered slot: `<home>/agent/<n>/` (1 to 16) holds `key.json`, the P-256 key
 as JWK (mode 0600), the grant made out to it in `grant.json`, each written
 whole, its lock, and `stores/`, what only that session keeps (its key's
-places in its logs among them). The spaces are in one data folder,
+places in its logs among them). The spaces are in one folder,
 `<home>/agent/spaces/`, under a path per account, that every session reads
-and writes at once (spec 05 §14, `folderStores`): what one session synced, the
-next starts from.
+and writes at once the way clients share a data folder (spec 05 §14.5,
+`folderStores`): what one session synced, the next starts from. It is a cache
+of this CLI's, not a data folder another program opens.
+
+Each session is a connection of its own at the account home, named "Agent on
+<host>, session <n>", and is disconnected there on its own. A session whose
+key is revoked forgets its slot's grant, so the next session there asks to be
+allowed again, with a new key.
 
 A session claims the first connected slot no other process holds, else the
 first not connected yet. In that one, `minca mcp` offers only `agent_connect`:

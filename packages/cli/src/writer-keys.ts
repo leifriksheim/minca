@@ -112,6 +112,9 @@ const letGo = (mine: string) => putWhole(mine, RELEASED, rename);
  * that got a lower number while another got a higher steps back.
  */
 async function lock(file: string): Promise<string | null> {
+  // A minca from before the numbered lock holds the bare file, and reads no other.
+  const older = Number((await readFile(file, 'utf8').catch(() => '')).trim());
+  if (Number.isSafeInteger(older) && older > 0 && alive(older)) return null;
   for (let attempt = 0; attempt < 5; attempt += 1) {
     // One look decides: the number this one takes is above the one it saw free.
     const [top = -1] = await numbers(file);
