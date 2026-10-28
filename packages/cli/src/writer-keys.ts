@@ -3,15 +3,15 @@
  *
  * The same idea as `browserWriterKeys` in core: one key per slot, claimed
  * under a lock so two processes never sign with one key, its places in its
- * logs kept beside it. Here a slot is a directory, the lock a file naming the
- * process that holds it, reclaimed once that process is gone.
+ * logs kept beside it. Here a slot is a directory, the lock numbered files
+ * naming the process that holds it, taken over once that process is gone.
  *
  * Kept outside the account's data, which may be copied or synced: a key in
  * two places at once forks its log. And sealed under the account's local
  * key, as the registry is, bound to the account and the slot, so a copy of
  * the files can't sign, and a key file moved to another slot doesn't open.
  */
-import { mkdir, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { link, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
   openEnvelope,
@@ -39,35 +39,103 @@ function alive(pid: number): boolean {
 }
 
 /**
- * Holds a lock file for this process, or gives null when another running
- * process holds it. A lock left by a process that is gone is taken over.
+ * Holds a lock for this process, or gives null when another running process
+ * holds it. A lock left by a process that is gone is taken over.
  */
 export async function holdLock(file: string): Promise<(() => Promise<void>) | null> {
-  return (await lock(file)) ? () => rm(file, { force: true }) : null;
+  const mine = await lock(file);
+  return mine ? () => letGo(mine) : null;
 }
 
-/** The running process that holds a lock file, or null when none does */
+/** A lock's numbers, highest first: each `<file>.<n>` names the process that took it */
+async function numbers(file: string): Promise<number[]> {
+  const prefix = `${path.basename(file)}.`;
+  const names = await readdir(path.dirname(file)).catch(() => []);
+  return names
+    .filter((name) => name.startsWith(prefix) && /^\d+$/.test(name.slice(prefix.length)))
+    .map((name) => Number(name.slice(prefix.length)))
+    .sort((a, b) => b - a);
+}
+
+/** What a lock file says once its process lets go of it */
+const RELEASED = 'released';
+
+/** The running process that holds a lock, or null when none does */
 export async function lockHolder(file: string): Promise<number | null> {
-  const holder = Number((await readFile(file, 'utf8').catch(() => '')).trim());
+  const [top] = await numbers(file);
+  if (top === undefined) return null;
+  const holder = Number((await readFile(`${file}.${top}`, 'utf8').catch(() => '')).trim());
   return Number.isSafeInteger(holder) && holder > 0 && alive(holder) ? holder : null;
 }
 
-/** Takes a slot's lock, or says another running process holds it */
-async function lock(file: string): Promise<boolean> {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+/**
+ * Whether a lock file is free to take over: let go of, or left by a process
+ * that is gone. One that is empty or can't be read is held, so two never
+ * both take it.
+ */
+async function free(file: string): Promise<boolean> {
+  const text = (await readFile(file, 'utf8').catch(() => '')).trim();
+  const holder = Number(text);
+  return text === RELEASED || (Number.isSafeInteger(holder) && holder > 0 && !alive(holder));
+}
+
+/** Links a file into place, or creates it there where the disk has no hard links (exFAT, some network mounts) */
+async function linkOrCreate(from: string, to: string): Promise<void> {
+  try {
+    await link(from, to);
+  } catch (error) {
+    if (!['EPERM', 'ENOTSUP', 'EOPNOTSUPP'].includes(String(errorCode(error)))) throw error;
+    // Seen empty for a moment, which reads as held.
+    await writeFile(to, await readFile(from), { flag: 'wx', mode: 0o600 });
+  }
+}
+
+/** Puts `text` at `file` whole: written to a file of its own, then moved or linked there */
+async function putWhole(file: string, text: string, place: (from: string, to: string) => Promise<void>) {
+  const whole = `${file}.writing-${process.pid}-${crypto.randomUUID()}`;
+  await writeFile(whole, text, { mode: 0o600 });
+  try {
+    await place(whole, file);
+  } finally {
+    await rm(whole, { force: true });
+  }
+}
+
+/** Lets go of a lock, keeping its number: none is used twice */
+const letGo = (mine: string) => putWhole(mine, RELEASED, rename);
+
+/**
+ * Takes a lock, or says another running process holds it: the path this
+ * process holds it by, or null. The lock is its highest number, and numbers
+ * only grow: each is linked into place whole, one above a number that is
+ * free, and kept when let go of, so only one process ever gets each. One
+ * that got a lower number while another got a higher steps back.
+ */
+async function lock(file: string): Promise<string | null> {
+  // A minca from before the numbered lock holds the bare file, and reads no other.
+  const older = Number((await readFile(file, 'utf8').catch(() => '')).trim());
+  if (Number.isSafeInteger(older) && older > 0 && alive(older)) return null;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    // One look decides: the number this one takes is above the one it saw free.
+    const [top = -1] = await numbers(file);
+    if (top >= 0 && !(await free(`${file}.${top}`))) return null;
+    const mine = `${file}.${top + 1}`;
     try {
-      const handle = await open(file, 'wx');
-      await handle.writeFile(String(process.pid));
-      await handle.close();
-      return true;
+      await putWhole(mine, String(process.pid), linkOrCreate);
     } catch (error) {
       if (errorCode(error) !== 'EEXIST') throw error;
-      if ((await lockHolder(file)) !== null) return false;
-      // Left by a process that is gone.
-      await rm(file, { force: true });
+      continue;
     }
+    const [highest] = await numbers(file);
+    if (highest === top + 1) {
+      // Those below are free, or stepping back; this one's number stays above them.
+      for (const below of await numbers(file))
+        if (below < top + 1) await rm(`${file}.${below}`, { force: true });
+      return mine;
+    }
+    await rm(mine, { force: true });
   }
-  return false;
+  return null;
 }
 
 /** Where a sealed key belongs: whose it is, and which slot */
@@ -153,8 +221,8 @@ export function fileWriterKeys(dir: string, localKey: CryptoKey, did: string): W
       for (let slot = 0; slot < MAX_SLOTS; slot += 1) {
         const where = path.join(dir, `slot-${slot}`);
         await mkdir(path.join(where, 'heads'), { recursive: true, mode: 0o700 });
-        const lockFile = path.join(where, 'lock');
-        if (!(await lock(lockFile))) continue;
+        const lockFile = await lock(path.join(where, 'lock'));
+        if (!lockFile) continue;
         try {
           const sealed = path.join(where, 'key.sealed');
           // A new key starts new lines: whatever a forgotten one left goes.
@@ -174,7 +242,7 @@ export function fileWriterKeys(dir: string, localKey: CryptoKey, did: string): W
             keys: await keyPair(sealed, { localKey, did, slot }),
             heads: headStore(path.join(where, 'heads')),
             async release() {
-              await rm(lockFile, { force: true });
+              await letGo(lockFile);
             },
             // A revoked key: the slot's next claim makes a new one, with lines of its own.
             // Its places stay while it may still sign this run.
@@ -183,7 +251,7 @@ export function fileWriterKeys(dir: string, localKey: CryptoKey, did: string): W
             },
           });
         } catch (error) {
-          await rm(lockFile, { force: true });
+          await letGo(lockFile);
           throw error;
         }
       }

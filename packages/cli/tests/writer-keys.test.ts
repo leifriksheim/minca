@@ -4,7 +4,7 @@
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { fileWriterKeys, holdLock, lockHolder } from '../src/writer-keys.js';
@@ -43,7 +43,7 @@ describe('writer keys on disk', () => {
     const first = (await source.claim())!;
     const kept = await didOf(first.keys);
     // As if it crashed: the lock stays, naming a process that no longer runs.
-    await writeFile(path.join(dir, 'slot-0', 'lock'), '2147483646');
+    await writeFile(path.join(dir, 'slot-0', 'lock.0'), '2147483646');
     const again = (await source.claim())!;
     assert.equal(await didOf(again.keys), kept);
     await again.release();
@@ -105,6 +105,56 @@ describe('writer keys on disk', () => {
     const again = await holdLock(file);
     assert.ok(again);
     await again();
+  });
+
+  test('a lock number is never used twice, so one taker that stalled can’t hold it beside another', async () => {
+    const dir = await tempDir();
+    const file = path.join(dir, 'lock');
+    // Left by a process that is gone. A taker reads it as free, and stalls.
+    await writeFile(`${file}.3`, '2147483646');
+    const first = await holdLock(file);
+    assert.ok(first);
+    await first();
+    const next = await holdLock(file);
+    assert.ok(next);
+    // The stalled one goes on to take the number above the one it read, 4.
+    await writeFile(`${file}.4`, String(process.pid), { flag: 'w' });
+    const taken = (await readdir(dir))
+      .filter((name) => /^lock\.\d+$/.test(name))
+      .map((name) => Number(name.slice(5)));
+    assert.equal(
+      Math.max(...taken),
+      5,
+      'the one let go of kept its number, so the next took 5, and 4 is not the lock',
+    );
+    await next();
+  });
+
+  test('a lock a minca from before the numbered lock holds, by the bare file, is held to this one too', async () => {
+    const file = path.join(await tempDir(), 'lock');
+    // The process that started this one is running, as the older minca would be.
+    await writeFile(file, String(process.ppid));
+    assert.equal(await holdLock(file), null);
+    // Gone, it is free again.
+    await writeFile(file, '2147483646');
+    const release = await holdLock(file);
+    assert.ok(release);
+    await release();
+  });
+
+  test('letting go of a lock that was taken over leaves the new holder’s alone', async () => {
+    const dir = await tempDir();
+    const file = path.join(dir, 'lock');
+    const first = await holdLock(file);
+    assert.ok(first);
+    // As if this one's process were gone and another took the lock over.
+    await writeFile(`${file}.0`, '2147483646');
+    const second = await holdLock(file);
+    assert.ok(second);
+    await first();
+    assert.equal(await lockHolder(file), process.pid, 'still held by the one that took it over');
+    assert.equal(await holdLock(file), null);
+    await second();
   });
 
   test('the private key can sign, and is not given out', async () => {

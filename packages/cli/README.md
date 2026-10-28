@@ -336,6 +336,14 @@ revoked key never writes again, and a `minca mcp` already running takes the
 new connection up by itself, so the agent's session needs no restart. Until
 then, a tool that fails says the agent was disconnected.
 
+Several sessions can use Minca at once, in Claude Code, Claude Desktop and
+Cursor alike. Each signs with a key of its own, since two signing with one
+would undo what it writes. The first time more sessions run at once than are
+connected, the new one asks you to allow it at your account home, the same
+way as connecting, and keeps that connection for next time. They all share
+one copy of your spaces in `~/.minca/agent/spaces`, so a new session starts
+from what the others synced.
+
 `minca mcp --account` serves the unlocked account instead, as you:
 
 ```json
@@ -368,11 +376,9 @@ today's spend reaches `--daily-cap` (dollars, default 2) it starts no more calls
 until tomorrow. `--model` picks the model (default `claude-opus-5-5`, or
 `$MINCA_AGENT_MODEL`); it must be one whose price it knows.
 
-Only one of `minca agent` and `minca mcp` can use an agent at a time: they sign
-with the same key, and two signing at once would fork its log, after which
-nothing more it signs counts. The second one to start says the agent is
-already running, and stops (a lock in the agent's folder, taken over once the
-process holding it is gone).
+`minca agent` runs beside any `minca mcp` sessions, each with a key of its
+own (above). With two `minca agent` running, the first runs your automations
+and the second only chats, so none runs twice.
 
 It also runs your **automations** (`std.automation`, see
 `packages/core/docs/automations.md`): what to do when some records come to be a
