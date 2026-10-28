@@ -239,6 +239,13 @@ function Proposal({
                 .join('')}
             </p>
           )}
+          {body?.shows?.length ? (
+            // What opens here is what it learns the person opens, from anywhere in the space.
+            <p style={{ fontSize: 13, color: palette.ink.muted, lineHeight: 1.5 }}>
+              {body.shows.map((name) => collections.find((c) => c.name === name)?.title ?? name).join(', ')}{' '}
+              opened anywhere in {space.name} can open here.
+            </p>
+          ) : null}
           <button
             onClick={() => setOpen((was) => !was)}
             data-variant="ghost"

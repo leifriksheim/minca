@@ -28,6 +28,8 @@ export function RecordFinder({
   placeholder?: string;
 }) {
   const [search, setSearch] = useState(initialText);
+  // Enter takes the top match only once the person has typed: what a screen asked for isn't their choice.
+  const [typed, setTyped] = useState(false);
   const everything = useLive(spaceId, (n) => n.records.list(spaceId, { newestFirst: true }), []) ?? [];
   const schemaOf = (name: string) => collections.find((c) => c.name === name)?.schema ?? null;
   const labelOf = (r: NodeRecord) => recordLabel(r, schemaOf(r.collection));
@@ -52,9 +54,12 @@ export function RecordFinder({
       <input
         autoFocus
         value={search}
-        onChange={(e) => setSearch(e.target.value)}
+        onChange={(e) => {
+          setSearch(e.target.value);
+          setTyped(true);
+        }}
         onKeyDown={(e) => {
-          if (e.key !== 'Enter' || disabled || !candidates[0]) return;
+          if (e.key !== 'Enter' || !typed || disabled || !candidates[0]) return;
           e.preventDefault();
           onPick(candidates[0]);
         }}

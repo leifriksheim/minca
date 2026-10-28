@@ -34,10 +34,9 @@ export function Comments({ about }: { about: Pick<ScreenRecord, 'key' | 'created
     const text = draft.trim() || (share.sharing ? recordTitle(share.sharing) : '');
     if (!text) return;
     const links = [{ rel: 'about', to: about.key }, ...share.links];
-    setDraft('');
-    share.clear();
     setError(null);
-    const mentions = mentionsIn(text, people);
+    // Only who the person named: a shared record's title is someone else's words.
+    const mentions = mentionsIn(draft, people);
     minca
       .put(
         COMMENT,
@@ -48,6 +47,10 @@ export function Comments({ about }: { about: Pick<ScreenRecord, 'key' | 'created
         },
         { links },
       )
+      .then(() => {
+        setDraft('');
+        share.clear();
+      })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
   };
 
