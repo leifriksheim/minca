@@ -117,17 +117,27 @@ the `PERSON_ONLY` actions or direct messages ([actions](#actions)).
 
 Only one process with the same `--home` runs the agent's node: it signs with
 the one agent key, which is held under a lock in the agent's folder, since two
-signing at once would fork its log. That process also listens on a socket in
-the agent's folder (`<home>/agent/socket`; a named pipe on Windows), and every
-other `minca mcp` borrows its node over it, through `serveNode` and
-`remoteNode`, as tabs share one node through a worker. So any number of
-sessions use the agent at once, as one peer. Only this user's processes reach
-the socket, since the folder is theirs alone (mode 0700); nothing else guards
-it. Messages are one JSON line each, with bytes and missing arguments tagged.
-When the process running the node stops, a session that borrowed it takes the
-lock and runs it, and the rest borrow from that one. A second `minca agent`
-doesn't borrow, since it runs automations: it says the agent is already
-running, and offers to stop the other.
+signing at once would fork its log. The lock is numbered files, `lock.<n>`,
+each naming the process that took it and linked into place whole; the highest
+is the lock. One left by a process that is gone is never removed to take it:
+the next takes the number above it, so of several taking it at once only one
+gets each number, and one that got a lower number steps back.
+
+That process also listens on a socket in the agent's folder
+(`<home>/agent/socket`) from the moment it holds the lock, and every other
+`minca mcp` borrows its node over it, through `serveNode` and `remoteNode`, as
+tabs share one node through a worker. So any number of sessions use the agent
+at once, as one peer. It lends only while the folder is this user's and mode
+0700, so only their processes reach the socket; nothing else guards it. On
+Windows it lends to none, since Node gives a named pipe no such owner, and a
+second session says the agent runs elsewhere. Messages are one JSON line each,
+with bytes and missing arguments tagged; beside the node's own, the process
+tells each borrower where the key was revoked. When the process running the
+node stops, a session that borrowed it takes the lock and runs it, and the
+rest borrow from that one. A session answers MCP while it starts or borrows;
+when the process holding the lock lends it to nobody, it says so to every
+tool. A second `minca agent` doesn't borrow, since it runs automations: it
+says the agent is already running, and offers to stop the other.
 
 The process running the node watches `grant.json`, and looks every 30 s as
 well. When `minca connect` writes a new key and grant that check out, it closes
@@ -136,4 +146,4 @@ borrowed come back for the new one, so none needs a restart. When the node
 hears that its key was revoked in a space, a tool that fails says so, and that
 connecting again fixes it.
 
-_Source: `packages/cli/src/agent.ts` (`connectAgent`, `startAgentNode`, `useAgent`, `reloadOnConnect`), `packages/cli/src/socket-port.ts`, `packages/cli/src/writer-keys.ts` (`holdLock`), `packages/cli/src/mcp.ts`, `packages/cli/src/main.ts` (`minca mcp`). Tests: `packages/core/tests/records-only.test.ts` ("an agent running a node of its own"), `packages/cli/tests/cli.test.ts` ("MCP"), `packages/cli/tests/agent-reconnect.test.ts` (all), `packages/cli/tests/socket-port.test.ts`._
+_Source: `packages/cli/src/agent.ts` (`connectAgent`, `startAgentNode`, `useAgent`, `reloadOnConnect`), `packages/cli/src/socket-port.ts`, `packages/cli/src/writer-keys.ts` (`holdLock`), `packages/cli/src/mcp.ts`, `packages/cli/src/main.ts` (`minca mcp`). Tests: `packages/core/tests/records-only.test.ts` ("an agent running a node of its own"), `packages/cli/tests/cli.test.ts` ("MCP"), `packages/cli/tests/agent-reconnect.test.ts` (all), `packages/cli/tests/agent-failover.test.ts`, `packages/cli/tests/socket-port.test.ts`, `packages/cli/tests/writer-keys.test.ts`._

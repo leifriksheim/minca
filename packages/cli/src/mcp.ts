@@ -183,17 +183,17 @@ async function serveStdio(
 /** The one tool offered while this computer's agent isn't connected to an account */
 export const CONNECT = 'agent_connect';
 
-/** Minca isn't here yet: what the model is told, the one tool it may call, and how it comes to run here */
+/** Minca isn't here yet: what the model is told, the one tool it may call if any, and how it comes to run here */
 export interface Waiting {
   /** Why, and what to do: the server's instructions, and what any other tool says */
-  readonly why: string;
-  readonly tool: {
+  readonly why: () => string;
+  readonly tool?: {
     readonly name: string;
     readonly description: string;
     readonly inputSchema?: Record<string, unknown>;
+    /** What calling it does, with its arguments: says in words what happens next */
+    readonly call: (args: Record<string, unknown>) => Promise<string>;
   };
-  /** What calling the tool does, with its arguments: says in words what happens next */
-  readonly call: (args: Record<string, unknown>) => Promise<string>;
   /** Starts the agent here once it can, or gives null meanwhile */
   readonly tryStart: () => Promise<P2PNode | null>;
   /** The node once the agent runs here, if it can change after it starts: a reconnect starts it again */
@@ -257,7 +257,7 @@ export function connectWaiting(params: {
   };
 
   return {
-    why:
+    why: () =>
       "Minca isn't connected to the user's account on this computer yet. " +
       `Call ${CONNECT} when they want to use Minca: it opens their account home in the browser, ` +
       'where they sign in, or make an account, and allow this agent. Their home then shows a six-digit code; ' +
@@ -274,16 +274,16 @@ export function connectWaiting(params: {
           code: { type: 'string', description: 'The six-digit code the user read on their account home' },
         },
       },
-    },
-    call: async (args) => {
-      if (typeof args.code === 'string' && args.code.trim()) return giveCode(args.code);
-      const { opened, url } = await params.connect(check);
-      const there =
-        'There they sign in or make an account, and allow this agent. The page then shows a six-digit code: ' +
-        `ask them for it, and call ${CONNECT} with it.`;
-      return opened
-        ? `Opened the user's Minca account home (${params.accountHome}) in their browser. ${there}`
-        : `No browser opened on this computer. Give the user this link to open, and nobody else: ${url} ${there}`;
+      call: async (args) => {
+        if (typeof args.code === 'string' && args.code.trim()) return giveCode(args.code);
+        const { opened, url } = await params.connect(check);
+        const there =
+          'There they sign in or make an account, and allow this agent. The page then shows a six-digit code: ' +
+          `ask them for it, and call ${CONNECT} with it.`;
+        return opened
+          ? `Opened the user's Minca account home (${params.accountHome}) in their browser. ${there}`
+          : `No browser opened on this computer. Give the user this link to open, and nobody else: ${url} ${there}`;
+      },
     },
     tryStart: params.tryStart,
     ...(params.current ? { current: params.current } : {}),
@@ -302,10 +302,10 @@ const RETRY_MS = 5_000;
 
 /**
  * Answers MCP while Minca can't run here yet: the agent isn't connected to
- * an account. Exiting would leave the client with only
- * "connection closed"; this says why and offers one tool. Once the agent
- * runs here, the node's own tools replace it and the client is told
- * (`notifications/tools/list_changed`).
+ * an account, or the process running it doesn't lend it. Exiting would leave
+ * the client with only "connection closed"; this says why, and offers a
+ * tool when there is one to call. Once the agent runs here, the node's own
+ * tools replace it and the client is told (`notifications/tools/list_changed`).
  */
 export function waitingMcp(
   waiting: Waiting,
@@ -334,17 +334,22 @@ export function waitingMcp(
   const timer = setInterval(() => void attempt(), RETRY_MS);
   timer.unref();
 
-  const tool = {
-    name: waiting.tool.name,
-    description: waiting.tool.description,
-    inputSchema: waiting.tool.inputSchema ?? { type: 'object', properties: {} },
-    annotations: {
-      readOnlyHint: false,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  };
+  const offered = waiting.tool;
+  const tools = offered
+    ? [
+        {
+          name: offered.name,
+          description: offered.description,
+          inputSchema: offered.inputSchema ?? { type: 'object', properties: {} },
+          annotations: {
+            readOnlyHint: false,
+            destructiveHint: false,
+            idempotentHint: true,
+            openWorldHint: false,
+          },
+        },
+      ]
+    : [];
 
   const live = () => (node ? (waiting.current?.() ?? node) : null);
 
@@ -356,12 +361,20 @@ export function waitingMcp(
     const text = (said: string, isError: boolean) =>
       reply({ content: [{ type: 'text', text: said }], isError });
     // Its tool, called again once it runs here, says whose account it joined.
-    if (running && waiting.joined && message.method === 'tools/call' && message.params?.name === tool.name)
+    if (
+      running &&
+      waiting.joined &&
+      message.method === 'tools/call' &&
+      message.params?.name === offered?.name
+    )
       return text(waiting.joined(), false);
     if (running) return handleMcpMessage(running, message, serverInfo, options);
 
     switch (message.method) {
       case 'initialize': {
+        // Started by then, as it usually is, it answers as itself.
+        const started = (await attempt()) && live();
+        if (started) return handleMcpMessage(started, message, serverInfo, options);
         const requested = message.params?.protocolVersion;
         return reply({
           protocolVersion:
@@ -370,18 +383,18 @@ export function waitingMcp(
               : SUPPORTED_VERSIONS[0],
           capabilities: { tools: { listChanged: true } },
           serverInfo,
-          instructions: waiting.why,
+          instructions: waiting.why(),
         });
       }
       case 'tools/list': {
         const started = (await attempt()) && live();
-        return started ? handleMcpMessage(started, message, serverInfo, options) : reply({ tools: [tool] });
+        return started ? handleMcpMessage(started, message, serverInfo, options) : reply({ tools });
       }
       case 'tools/call': {
-        if (message.params?.name === tool.name) {
+        if (offered && message.params?.name === offered.name) {
           try {
             const args = message.params?.arguments;
-            const result = await exclusive(() => waiting.call(isRecord(args) ? args : {}));
+            const result = await exclusive(() => offered.call(isRecord(args) ? args : {}));
             return typeof result === 'string'
               ? text(result, false)
               : text(`Done: Minca runs in this session now, with ${mcpTools(options).length} tools.`, false);
@@ -390,7 +403,7 @@ export function waitingMcp(
           }
         }
         const started = (await attempt()) && live();
-        return started ? handleMcpMessage(started, message, serverInfo, options) : text(waiting.why, true);
+        return started ? handleMcpMessage(started, message, serverInfo, options) : text(waiting.why(), true);
       }
       case 'ping':
         return reply({});

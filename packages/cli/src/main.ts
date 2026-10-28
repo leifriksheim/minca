@@ -1016,9 +1016,26 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
       void (here.agent?.close() ?? Promise.resolve()).then(() => process.exit(0));
     });
     if (await hasConnectedAgent(home)) {
-      const agent = await useAgent(home, start);
-      started(agent);
-      await runMcpStdio(() => agent.node, info, { agent: true, trouble });
+      // Answering at once, and starting behind it: if it can't, the model is told why rather than the client losing the server.
+      let why = 'Minca is starting in this session. Try again in a few seconds.';
+      let starting: Promise<P2PNode | null> | null = null;
+      const tryStart = () =>
+        (starting ??= useAgent(home, start).then(started, async (error: unknown) => {
+          starting = null;
+          why =
+            error instanceof AgentBusy
+              ? `Minca isn't available in this session: this computer's agent runs in ${await describeAgentProcess(error.holder)}, ` +
+                "which doesn't share it with other sessions (an older minca, Windows, or an agent folder others may open). It signs with one key, " +
+                'so only one process may run it. Tell the user; once they close that one, this session gets Minca by itself within a few seconds.'
+              : `Minca couldn't start: ${messageOf(error)}`;
+          stderr(`minca mcp: ${why}`);
+          return null;
+        }));
+      void tryStart();
+      await runWaitingMcpStdio({ why: () => why, tryStart, current: () => here.agent?.node ?? null }, info, {
+        agent: true,
+        trouble,
+      });
     } else {
       // Not connected yet: offer to open the account home, and start once the person has allowed it there.
       stderr(`minca mcp: not connected to an account; offering only ${CONNECT} until it is`);

@@ -580,6 +580,36 @@ describe('MCP', () => {
     }
   });
 
+  test('while the agent runs in a process that lends it to nobody, it says so and offers no tool', async () => {
+    const server = waitingMcp(
+      {
+        why: () => 'The agent runs in pid 42, which shares it with no other session.',
+        tryStart: async () => null,
+      },
+      info,
+      { agent: true },
+      () => {},
+    );
+    try {
+      const init = await server.handle({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
+      assert.match(String(at(init, 'result', 'instructions')), /pid 42/);
+      assert.deepEqual(
+        at(await server.handle({ jsonrpc: '2.0', id: 2, method: 'tools/list' }), 'result', 'tools'),
+        [],
+      );
+      const call = await server.handle({
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: { name: 'spaces_list', arguments: {} },
+      });
+      assert.equal(at(call, 'result', 'isError'), true);
+      assert.match(String(at(call, 'result', 'content', 0, 'text')), /pid 42/);
+    } finally {
+      server.stop();
+    }
+  });
+
   test('a waiting server starts by itself once the person has connected, say in a terminal', async () => {
     const node = await aNode(6);
     let connected = false;

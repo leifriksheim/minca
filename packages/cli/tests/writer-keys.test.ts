@@ -43,7 +43,7 @@ describe('writer keys on disk', () => {
     const first = (await source.claim())!;
     const kept = await didOf(first.keys);
     // As if it crashed: the lock stays, naming a process that no longer runs.
-    await writeFile(path.join(dir, 'slot-0', 'lock'), '2147483646');
+    await writeFile(path.join(dir, 'slot-0', 'lock.0'), '2147483646');
     const again = (await source.claim())!;
     assert.equal(await didOf(again.keys), kept);
     await again.release();

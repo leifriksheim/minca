@@ -7,7 +7,7 @@
  */
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { copyFile, readFile, stat } from 'node:fs/promises';
+import { chmod, copyFile, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type { connectWithCode, Grant } from '@minca/core/session';
 import { createNode } from '../../core/src/node/node.js';
@@ -23,6 +23,7 @@ import { createFakeHub, type FakeHub } from '../../core/tests/helpers/fake-trans
 import { hold } from '../../core/tests/helpers/hold.js';
 import { until } from '../../core/tests/helpers/until.js';
 import {
+  AgentBusy,
   agentRunning,
   connectAgent,
   reloadOnConnect,
@@ -271,5 +272,26 @@ describe('several sessions on one computer', () => {
     await second.close();
     await third.close();
     assert.equal(await agentRunning(home), null);
+  });
+
+  test('a session that borrows later is told where the key was already revoked', async () => {
+    const { ada, space, session } = await connectedHome();
+    const first = await session();
+    await wrote(first, space.id, 'before');
+    await ada.node.spaces.revoke(space.id, first.node.sessionDid);
+    await until(() => first.revoked().includes(space.id), 6000, 'the first to hear it');
+    const later = await session();
+    await until(() => later.revoked().includes(space.id), 6000, 'the later one to be told');
+    await later.close();
+    await first.close();
+  });
+
+  test('an agent folder others may open is lent to nobody', async () => {
+    const { home, session } = await connectedHome();
+    await chmod(path.join(home, 'agent'), 0o755);
+    const first = await session();
+    assert.ok(first.node);
+    await assert.rejects(useAgent(home, { network: { transports: () => [] } }), AgentBusy);
+    await first.close();
   });
 });

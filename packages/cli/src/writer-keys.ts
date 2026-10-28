@@ -3,15 +3,15 @@
  *
  * The same idea as `browserWriterKeys` in core: one key per slot, claimed
  * under a lock so two processes never sign with one key, its places in its
- * logs kept beside it. Here a slot is a directory, the lock a file naming the
- * process that holds it, reclaimed once that process is gone.
+ * logs kept beside it. Here a slot is a directory, the lock numbered files
+ * naming the process that holds it, taken over once that process is gone.
  *
  * Kept outside the account's data, which may be copied or synced: a key in
  * two places at once forks its log. And sealed under the account's local
  * key, as the registry is, bound to the account and the slot, so a copy of
  * the files can't sign, and a key file moved to another slot doesn't open.
  */
-import { mkdir, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { link, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
   openEnvelope,
@@ -43,31 +43,84 @@ function alive(pid: number): boolean {
  * process holds it. A lock left by a process that is gone is taken over.
  */
 export async function holdLock(file: string): Promise<(() => Promise<void>) | null> {
-  return (await lock(file)) ? () => rm(file, { force: true }) : null;
+  const mine = await lock(file);
+  return mine ? () => rm(mine, { force: true }) : null;
 }
 
-/** The running process that holds a lock file, or null when none does */
-export async function lockHolder(file: string): Promise<number | null> {
+/** The running process a file names, or null */
+async function runningIn(file: string): Promise<number | null> {
   const holder = Number((await readFile(file, 'utf8').catch(() => '')).trim());
   return Number.isSafeInteger(holder) && holder > 0 && alive(holder) ? holder : null;
 }
 
-/** Takes a slot's lock, or says another running process holds it */
-async function lock(file: string): Promise<boolean> {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+/** A lock's numbers, highest first: each `<file>.<n>` names the process that took it */
+async function numbers(file: string): Promise<number[]> {
+  const prefix = `${path.basename(file)}.`;
+  const names = await readdir(path.dirname(file)).catch(() => []);
+  return names
+    .filter((name) => name.startsWith(prefix) && /^\d+$/.test(name.slice(prefix.length)))
+    .map((name) => Number(name.slice(prefix.length)))
+    .sort((a, b) => b - a);
+}
+
+/** The running process that holds a lock, or null when none does */
+export async function lockHolder(file: string): Promise<number | null> {
+  // The file itself, as a minca from before numbered locks kept it, counts while that process runs.
+  const before = await runningIn(file);
+  if (before !== null) return before;
+  const [top] = await numbers(file);
+  return top === undefined ? null : runningIn(`${file}.${top}`);
+}
+
+/**
+ * Whether a lock file was left by a process that is gone. One that is empty
+ * or can't be read is let go of as it is read, or an older minca is writing
+ * it: held, so two never both take it.
+ */
+async function leftBehind(file: string): Promise<boolean> {
+  const holder = Number((await readFile(file, 'utf8').catch(() => '')).trim());
+  return Number.isSafeInteger(holder) && holder > 0 && !alive(holder);
+}
+
+/**
+ * Takes a lock, or says another running process holds it: the path this
+ * process holds it by, or null. A stale lock is never removed to take it, so
+ * two processes that find it can't both take it. The lock is its highest
+ * number: each is linked into place whole, one above a number left behind,
+ * so only one process gets each, and one that got a lower number while
+ * another got a higher steps back.
+ */
+async function lock(file: string): Promise<string | null> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const before = await stat(file).then(
+      () => true,
+      () => false,
+    );
+    if (before && !(await leftBehind(file))) return null;
+    // One look decides: the number this one takes is above the one it saw left behind.
+    const [top = -1] = await numbers(file);
+    if (top >= 0 && !(await leftBehind(`${file}.${top}`))) return null;
+    const mine = `${file}.${top + 1}`;
+    const whole = `${file}.taking-${process.pid}-${crypto.randomUUID()}`;
+    await writeFile(whole, String(process.pid), { mode: 0o600 });
     try {
-      const handle = await open(file, 'wx');
-      await handle.writeFile(String(process.pid));
-      await handle.close();
-      return true;
+      await link(whole, mine);
     } catch (error) {
       if (errorCode(error) !== 'EEXIST') throw error;
-      if ((await lockHolder(file)) !== null) return false;
-      // Left by a process that is gone.
-      await rm(file, { force: true });
+      continue;
+    } finally {
+      await rm(whole, { force: true });
     }
+    const [highest] = await numbers(file);
+    if (highest === top + 1) {
+      // Those below were left by processes that are gone, or are stepping back.
+      for (const below of await numbers(file))
+        if (below < top + 1) await rm(`${file}.${below}`, { force: true });
+      return mine;
+    }
+    await rm(mine, { force: true });
   }
-  return false;
+  return null;
 }
 
 /** Where a sealed key belongs: whose it is, and which slot */
@@ -153,8 +206,8 @@ export function fileWriterKeys(dir: string, localKey: CryptoKey, did: string): W
       for (let slot = 0; slot < MAX_SLOTS; slot += 1) {
         const where = path.join(dir, `slot-${slot}`);
         await mkdir(path.join(where, 'heads'), { recursive: true, mode: 0o700 });
-        const lockFile = path.join(where, 'lock');
-        if (!(await lock(lockFile))) continue;
+        const lockFile = await lock(path.join(where, 'lock'));
+        if (!lockFile) continue;
         try {
           const sealed = path.join(where, 'key.sealed');
           // A new key starts new lines: whatever a forgotten one left goes.
