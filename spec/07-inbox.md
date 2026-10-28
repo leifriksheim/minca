@@ -222,6 +222,10 @@ which keeps its code working. A Nostr relay can't be purged, and a fetch
 reads only its newest 500 blobs, so 500 junk drops bury the knocks before
 them there: an inbox that names a Nostr relay should name a Minca relay too.
 
+A drop carries no proof of work. Work a phone does in a second, a server
+core does in a tenth of one, so it would hold back nobody the address
+budgets above, or a Nostr relay's own limits, don't.
+
 > **Known defect:** both budgets are weaker than this section and §8 promise.
 > One IPv6 /64 counts as one address, so a home /56 (256 of them) can fill the
 > mailbox within an hour. And a topic holding no blobs may use the reserve, so
@@ -402,7 +406,6 @@ uses Minca" public, which is opt-in.
 ## 10. Not yet specified
 
 - **Topics that change over time** (§4).
-- **Proof of work** on `drop`, if public relays see abuse.
 - **Revocation** checks on a knocker's note (§8).
 - **Several inboxes at once**, so an account can hand out ones nobody can
   link to each other.

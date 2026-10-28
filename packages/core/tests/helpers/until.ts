@@ -1,7 +1,7 @@
 /**
  * Waiting for something that happens asynchronously. A deadline only decides
- * how soon a failing test says so, so it is generous: CI runs four test files
- * at once on two CPUs, where a wait can take several times what it does on a
+ * how soon a failing test says so, so it is generous: CI runs eight test files
+ * at once on a few CPUs, where a wait can take several times what it does on a
  * laptop.
  */
 
