@@ -11,7 +11,7 @@
  * key, as the registry is, bound to the account and the slot, so a copy of
  * the files can't sign, and a key file moved to another slot doesn't open.
  */
-import { mkdir, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { link, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
   openEnvelope,
@@ -55,16 +55,19 @@ export async function lockHolder(file: string): Promise<number | null> {
 /** Takes a slot's lock, or says another running process holds it */
 async function lock(file: string): Promise<boolean> {
   for (let attempt = 0; attempt < 2; attempt += 1) {
+    // Written whole beside it, then linked into place: a lock is never seen empty, which would read as left behind.
+    const whole = `${file}.${process.pid}`;
     try {
-      const handle = await open(file, 'wx');
-      await handle.writeFile(String(process.pid));
-      await handle.close();
+      await writeFile(whole, String(process.pid));
+      await link(whole, file);
       return true;
     } catch (error) {
       if (errorCode(error) !== 'EEXIST') throw error;
       if ((await lockHolder(file)) !== null) return false;
       // Left by a process that is gone.
       await rm(file, { force: true });
+    } finally {
+      await rm(whole, { force: true });
     }
   }
   return false;

@@ -66,30 +66,29 @@ import {
   walletFromEnv,
 } from './host-setup.js';
 import { isHostStats, statsLines } from './host-stats.js';
-import { busyWaiting, CONNECT, connectWaiting, runMcpStdio, runWaitingMcpStdio, TAKE_OVER } from './mcp.js';
+import { CONNECT, connectWaiting, runMcpStdio, runWaitingMcpStdio } from './mcp.js';
 import {
   ACCOUNT_HOME,
-  AgentBusy,
-  agentRunning,
+  claimSlot,
   configuredRelays,
   connectAgent,
-  describeAgentProcess,
   daysLeft,
   defaultAgentName,
   forgetAgent,
-  hasConnectedAgent,
+  isConnected,
   loadAgentGrant,
   loadModelKey,
   openInBrowser,
+  reconnectAgent,
   reloadOnConnect,
   saveModelKey,
   startAgentNode,
   startBotNode,
-  takeOverAgent,
   type RunningAgent,
 } from './agent.js';
 import { createAgentChat, DEFAULT_MODEL, fileSpend, priceOf } from './agent-chat.js';
 import { capEachOf, runAutomations } from './bot-runner.js';
+import { holdLock } from './writer-keys.js';
 import { chooseModel, isLoopback, isPlain, thinker, type ModelChoice } from './model.js';
 import { configSnippet, configureClients, serverCommand, unconfigureClients } from './clients.js';
 import { addRule, defineStandard, loadModelSetting, setUpModel } from './guide.js';
@@ -250,12 +249,12 @@ async function chooseAccountHome(home: string, given?: string): Promise<string> 
 }
 
 /**
- * Connects this computer's agent: opens the account home in the browser at a
- * new code, and waits there for the person to allow it.
+ * Connects a slot of this computer's agent: opens the account home in the
+ * browser at a new code, and waits there for the person to allow it.
  * @param options.onLink Given the link first, instead of opening and showing it here
  */
 function connectHere(
-  home: string,
+  slot: string,
   accountHome: string,
   options: {
     name?: string;
@@ -265,7 +264,7 @@ function connectHere(
   } = {},
 ) {
   return connectAgent({
-    home,
+    slot,
     accountHome,
     check: options.check ?? typeCheck,
     name: options.name ?? defaultAgentName(),
@@ -658,27 +657,33 @@ async function runAgent(
   const thinking = await thinker(model, apiKey);
   const modelOptions = { model: model.name, price: model.price, ...(isPlain(model) ? { plain: true } : {}) };
   const today = async () => `$${(await spend.today()).toFixed(2)} of $${options.dailyCap.toFixed(2)} today`;
-  const stopRules = runAutomations({
-    node,
-    account: runner.account,
-    ...(runner.bot ? { bot: runner.bot } : {}),
-    think: () => thinking(() => {}),
-    ...modelOptions,
-    spend,
-    dailyCap: options.dailyCap,
-    capEach: options.capEach,
-    log: stderr,
-    onRules: (rules) =>
-      stderr(
-        `  Rules: ${
-          rules.length
-            ? rules.map((name) => `“${name}”`).join(', ')
-            : runner.bot
-              ? `none yet. ${botWork(runner.bot, runner.account)}`
-              : 'none yet. Add one in an app, under Automations, or with `minca automation add`.'
-        }`,
-      ),
-  });
+  // Every session may chat, but one runs the automations, or each would run twice.
+  const automating = await holdLock(path.join(home, 'agent', 'automations.lock'));
+  if (!automating)
+    stderr('  Automations run in another `minca agent` on this computer; this one only chats.');
+  const stopRules = automating
+    ? runAutomations({
+        node,
+        account: runner.account,
+        ...(runner.bot ? { bot: runner.bot } : {}),
+        think: () => thinking(() => {}),
+        ...modelOptions,
+        spend,
+        dailyCap: options.dailyCap,
+        capEach: options.capEach,
+        log: stderr,
+        onRules: (rules) =>
+          stderr(
+            `  Rules: ${
+              rules.length
+                ? rules.map((name) => `“${name}”`).join(', ')
+                : runner.bot
+                  ? `none yet. ${botWork(runner.bot, runner.account)}`
+                  : 'none yet. Add one in an app, under Automations, or with `minca automation add`.'
+            }`,
+          ),
+      })
+    : () => {};
   if (!runner.bot) {
     const waiting = (
       await Promise.all(
@@ -693,6 +698,7 @@ async function runAgent(
 
   const close = async () => {
     stopRules();
+    await automating?.();
     await runner.close();
   };
   if (!options.chat) {
@@ -937,10 +943,13 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
       },
     });
     const home = homePath(globals.home);
-    const grant = await connectHere(home, await chooseAccountHome(home, values['account-home']), {
-      ...(values.name ? { name: values.name } : {}),
-      ...(values.relay ? { relays: values.relay } : {}),
-    });
+    const accountHome = await chooseAccountHome(home, values['account-home']);
+    const grant = await reconnectAgent(home, (slot) =>
+      connectHere(slot, accountHome, {
+        ...(values.name ? { name: values.name } : {}),
+        ...(values.relay ? { relays: values.relay } : {}),
+      }),
+    );
     stderr('');
     stderr(
       `Connected to ${grant.name}'s account (${grant.did}), for ${daysLeft(grant)} days. What the agent writes shows "via agent".`,
@@ -983,11 +992,12 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
   }
 
   if (command === 'mcp' && !args.includes('--account')) {
-    // The connected agent: a node of its own, online, acting as the agent.
+    // The connected agent: a node of its own, online, acting as the agent, with a key no other session signs with.
     const home = homePath(globals.home);
+    const slot = await claimSlot(home);
     const nodes = commaList(process.env.MINCA_NODES);
     const info = { name: 'minca', version: VERSION };
-    // Set here or, once it stops or is taken over, from the waiting server.
+    // Set once the agent runs here, now or once the person has connected this session.
     const here: { agent: RunningAgent | null } = { agent: null };
     const start = {
       nodes,
@@ -1000,8 +1010,8 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
     const trouble = () =>
       here.agent?.revoked().length
         ? "This agent was disconnected in the person's account home, so its key is revoked and nothing it writes counts. " +
-          'Ask them to connect it again: run `minca connect`, which opens their account home to allow it. ' +
-          'This session takes the new connection up by itself within a few seconds; no restart is needed.'
+          'Ask them to connect it again: run `minca connect`, which opens their account home to allow it, then ' +
+          'start this session again.'
         : null;
     let stopReloading = () => {};
     const started = (running: RunningAgent) => {
@@ -1010,34 +1020,25 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
         `minca mcp: an agent for ${running.grant.name} (${running.grant.did}), ${daysLeft(running.grant)} days left`,
       );
       // `minca connect` again, after a disconnect or to renew: take the new key and note up here.
-      stopReloading = reloadOnConnect(home, running, (line) => stderr(`minca mcp: ${line}`));
+      stopReloading = reloadOnConnect(slot, running, (line) => stderr(`minca mcp: ${line}`));
       return running.node;
     };
-    // Taken over by another session (agent_take_over): close, so the lock and the writes are left in order.
-    process.once('SIGTERM', () => {
-      stderr('minca mcp: stopped, by another session taking the agent over');
-      void (here.agent?.close() ?? Promise.resolve()).then(() => process.exit(0));
-    });
-    const current = () => here.agent?.node ?? null;
-    let busy: AgentBusy | null = null;
-    const connected = await hasConnectedAgent(home);
-    try {
-      if (connected) started(await startAgentNode(home, start));
-    } catch (error) {
-      if (!(error instanceof AgentBusy)) throw error;
-      busy = error;
-    }
-    if (!connected) {
-      // Not connected yet: offer to open the account home, and start once the person has allowed it there.
-      stderr(`minca mcp: not connected to an account; offering only ${CONNECT} until it is`);
+    if (await isConnected(slot)) {
+      const running = started(await startAgentNode(home, slot, start));
+      await runMcpStdio(() => here.agent?.node ?? running, info, { agent: true, trouble });
+    } else {
+      // Not connected, or every connection is in use by another session: offer to open the account home for this one.
+      const others = (await loadAgentGrant(home)) !== null;
+      stderr(`minca mcp: this session isn't connected to an account; offering only ${CONNECT} until it is`);
       let link: Promise<{ opened: boolean; url: string }> | null = null;
       const accountHome = await usualAccountHome(home);
       await runWaitingMcpStdio(
         connectWaiting({
           accountHome,
+          others,
           connect: (check) =>
             (link ??= new Promise((resolve, reject) => {
-              connectHere(home, homeAddress(accountHome), {
+              connectHere(slot.dir, homeAddress(accountHome), {
                 check,
                 onLink: (url) => void openInBrowser(url).then((opened) => resolve({ opened, url })),
               }).then(
@@ -1050,34 +1051,16 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
               );
             })),
           tryStart: async () =>
-            (await hasConnectedAgent(home)) ? started(await startAgentNode(home, start)) : null,
-          current,
+            (await isConnected(slot)) ? started(await startAgentNode(home, slot, start)) : null,
+          current: () => here.agent?.node ?? null,
           account: () => here.agent && { name: here.agent.grant.name, did: here.agent.grant.did },
         }),
         info,
         { agent: true, trouble },
       );
-    } else if (busy) {
-      // Rather than exit, which the client shows as only "connection closed": say why, and offer to take over.
-      const holder = await describeAgentProcess(busy.holder);
-      stderr(`minca mcp: the agent already runs in ${holder}; offering only ${TAKE_OVER} until it stops`);
-      await runWaitingMcpStdio(
-        busyWaiting({
-          holder,
-          tryStart: async () =>
-            (await agentRunning(home)) === null ? started(await startAgentNode(home, start)) : null,
-          takeOver: async () => started(await takeOverAgent(home, start)),
-          current,
-        }),
-        info,
-        { agent: true, trouble },
-      );
-    } else if (here.agent) {
-      const running = here.agent;
-      await runMcpStdio(() => running.node, info, { agent: true, trouble });
     }
     stopReloading();
-    await here.agent?.close();
+    await (here.agent?.close() ?? slot.release());
     // WebRTC keeps the process alive; the agent closed stdin, so it's done.
     process.exit(0);
   }
@@ -1111,11 +1094,12 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
     // A bot keeps everything in its own folder: its account, and its model, key and spending.
     const bot = values.bot ? await botAccount(globals, values.name) : null;
     const home = bot?.folder ?? homePath(globals.home);
-    // A person's agent needs connecting first: at a terminal, at their account home, here and now.
-    if (!values.bot && !(await hasConnectedAgent(home)) && ask.interactive()) {
+    // A person's agent runs under a slot of its own; one not connected yet is connected at a terminal, here and now.
+    const slot = values.bot ? null : await claimSlot(home);
+    if (slot && !(await isConnected(slot)) && ask.interactive()) {
       ask.intro('Connect an agent to your account');
       ask.note('Your account home opens in your browser. Sign in there and allow it.', 'First');
-      const grant = await connectHere(home, await chooseAccountHome(home));
+      const grant = await connectHere(slot.dir, await chooseAccountHome(home));
       ask.note(
         `Connected to ${grant.name}'s account (${grant.did}), for ${daysLeft(grant)} days.`,
         'Connected',
@@ -1167,13 +1151,8 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
         close: () => started.close(),
       };
     } else {
-      const agent = await startAgentNode(home, { nodes }).catch(async (error: unknown) => {
-        if (!(error instanceof AgentBusy)) throw error;
-        const holder = await describeAgentProcess(error.holder);
-        const question = `The agent already runs in ${holder}. Stop it and run it here instead?`;
-        if (!(await ask.confirm(question, { otherwise: false }))) throw error;
-        return takeOverAgent(home, { nodes });
-      });
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- claimed above for every agent that isn't a bot
+      const agent = await startAgentNode(home, slot!, { nodes });
       runner = {
         node: agent.node,
         account: agent.grant.did,

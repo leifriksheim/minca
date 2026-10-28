@@ -902,12 +902,12 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     and a file where a space's directory belongs stops every client pushing
     or pulling that space through the folder, until it is removed (05 §14.5,
     §16.4; [#33](https://github.com/leifriksheim/minca/issues/33)).
-  - `minca agent` keeps its key, grant and stores together in the CLI home
-    (`<home>/agent`). Where the home is a data folder others write, rolling
-    back the stores' `writers.log` has the agent sign at a place it used
-    before, and its key forks; a copy of the home on a second computer runs
-    the same key. Its stores' entries are its own, unjudged, though what it
-    reads is still judged when shown (`packages/cli/src/agent.ts`, `startWithKey`;
+  - `minca agent` and `minca mcp` keep each session's key, grant and stores
+    together in a slot of the CLI home (`<home>/agent/<n>`). Where the home is
+    a data folder others write, rolling back a slot's stores has that session
+    sign at a place it used before, and its key forks; a copy of the home on a
+    second computer runs the same keys. Its stores' entries are its own, unjudged, though what it
+    reads is still judged when shown (`packages/cli/src/agent.ts`, `claimSlot`, `startWithKey`;
     [#287](https://github.com/leifriksheim/minca/issues/287)).
   - Given a space and `/access/change` there, it can still redefine or
     delete a role its own account holds, if that role may define itself: the
