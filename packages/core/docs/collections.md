@@ -65,7 +65,9 @@ and three that say what a value means, so any app can show it well:
   in this table, never a change to the protocol.
 
 Anything else, like `pattern`, is refused when you define the collection,
-with the reason. A Zod `.regex()` fails for that reason. Validators that can describe themselves as JSON Schema work directly:
+with the reason. A Zod `.regex()` fails for that reason. A validator's
+formats become labels: `z.url()` stores `format: "uri"`, and no app checks
+it, so a body that isn't a web address still fits. Validators that can describe themselves as JSON Schema work directly:
 Zod 4.2+, ArkType 2.1.28+, Valibot with `toStandardJsonSchema`. They are
 converted with target `draft-2020-12` before storing, a `$schema` member is
 dropped, and the result is checked like any other. For checks that stay

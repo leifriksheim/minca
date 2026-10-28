@@ -996,8 +996,8 @@ protocol: see [collections](../packages/core/docs/collections.md#validating).
 > a peer doesn't know **invalid** to it, and an invalid definition counts as
 > none (§6.1), so that peer enforces none of its rules. This already holds for
 > `format`: a peer from before it treats every definition with a person field
-> (`fragments.person`) as having no rules, until it updates. Before v1, peers
-> are expected to update together. After it, either the publishing check
+> (`fragments.person`) as having no rules, until it updates. Before v1, Minca does
+> not support mixed releases. After it, either the publishing check
 > tolerates keywords it doesn't know before any app writes a new one, or such
 > a definition needs a higher protocol version that older peers recognise.
 > Tracked in [#10](https://github.com/leifriksheim/minca/issues/10).
