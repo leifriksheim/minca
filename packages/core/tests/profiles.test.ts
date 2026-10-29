@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import * as z from 'zod';
 
 import { runAction } from '../src/node/actions.js';
-import { profileKey } from '../src/node/space-runtime.js';
+import { profileKey } from '../src/node/space-profiles.js';
 import type { P2PNode } from '../src/node/types.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';

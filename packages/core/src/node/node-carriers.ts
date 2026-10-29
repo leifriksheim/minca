@@ -13,7 +13,8 @@ import {
 } from '../space/space-manager.js';
 import { MAX_KEEPERS, MAX_RELAYS } from '../space/roles.js';
 import { SPACE_KEEPERS } from '../space/grants.js';
-import { usableRelays, type SpaceRuntime } from './space-runtime.js';
+import type { SpaceRuntime } from './space-runtime.js';
+import { usableRelays } from './space-peers.js';
 import { deriveInviteKey } from '../space/space-access.js';
 import {
   encodeInviteLink,

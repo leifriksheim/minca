@@ -473,7 +473,7 @@ successor's constitution; a reader that holds it does.
 > view from before anyone held it, and the result is the same: a name in a
 > list, and a choice for each member.
 
-_Source: `packages/core/src/space/grants.ts` (`checkFoundingRole`, `readDefinition`, `grantFits`, `grantShape`, the command constants), `packages/core/src/space/roles.ts` (`may`, `effectiveRole`, `roleHolds`, `refusal`, `rolesOf`, `isMember`, `startState`), `packages/core/src/space/space-access.ts` (`stepDownKey`, `succeedKey`), `packages/core/src/node/space-runtime.ts` (`stepDown`, `succeed`), `packages/core/src/identity/policy.ts` (`policyOutcome`, `policyReads`). Tests: `packages/core/tests/roles.test.ts` (all of "founders and roles", "definitions", "unassigning and removing", "invites"), `packages/core/tests/access-attacks.test.ts` ("attacks on grants"), `packages/core/tests/constitution.test.ts` ("top: founders", "stepping down", "top: none", "/space/succeed", "the constitution on nodes")._
+_Source: `packages/core/src/space/grants.ts` (`checkFoundingRole`, `readDefinition`, `grantFits`, `grantShape`, the command constants), `packages/core/src/space/roles.ts` (`may`, `effectiveRole`, `roleHolds`, `refusal`, `rolesOf`, `isMember`, `startState`), `packages/core/src/space/space-access.ts` (`stepDownKey`, `succeedKey`), `packages/core/src/node/space-membership.ts` (`stepDown`, `succeed`), `packages/core/src/identity/policy.ts` (`policyOutcome`, `policyReads`). Tests: `packages/core/tests/roles.test.ts` (all of "founders and roles", "definitions", "unassigning and removing", "invites"), `packages/core/tests/access-attacks.test.ts` ("attacks on grants"), `packages/core/tests/constitution.test.ts` ("top: founders", "stepping down", "top: none", "/space/succeed", "the constitution on nodes")._
 
 ---
 
@@ -604,7 +604,7 @@ access version from outside (a peer, a folder) unless:
 > free. Only accounts the history has heard of can get anything stored, and
 > "named" only grows, so two peers never disagree for good.
 
-_Source: `packages/core/src/space/roles.ts` (collection constants, `ACCESS_KINDS`), `packages/core/src/space/space-access.ts` (record keys: `assignKey`, `removalKey`, `inviteKey`, `revokeKey`, `roleKey`, `stepDownKey`, `succeedKey`), `packages/core/src/space/grants.ts` (`readDefinition`), `packages/core/src/node/space-runtime.ts` (`buildEvent`, `loadAccess`, `admissible`). Tests: `packages/core/tests/space-access.test.ts` ("a stranger who knows the space cannot write in it…", "an invite carries no cutoff…"), `packages/core/tests/access-attacks.test.ts` ("a fresh key outliving its issuer…"), `packages/core/tests/constitution.test.ts` ("access record keys"), `packages/core/tests/attacks.test.ts`._
+_Source: `packages/core/src/space/roles.ts` (collection constants, `ACCESS_KINDS`), `packages/core/src/space/space-access.ts` (record keys: `assignKey`, `removalKey`, `inviteKey`, `revokeKey`, `roleKey`, `stepDownKey`, `succeedKey`), `packages/core/src/space/grants.ts` (`readDefinition`), `packages/core/src/node/space-history.ts` (`buildEvent`, `loadAccess`), `packages/core/src/node/space-standing.ts` (`admissible`). Tests: `packages/core/tests/space-access.test.ts` ("a stranger who knows the space cannot write in it…", "an invite carries no cutoff…"), `packages/core/tests/access-attacks.test.ts` ("a fresh key outliving its issuer…"), `packages/core/tests/constitution.test.ts` ("access record keys"), `packages/core/tests/attacks.test.ts`._
 
 ---
 
@@ -1033,7 +1033,7 @@ An access record stands when its event's status is `applied`.
 A non-member — including someone holding only a view-only invite — can
 therefore write nothing at all in a space, not even `sys.profile`.
 
-_Source: `packages/core/src/node/space-runtime.ts` (`judgeStanding`, `invocationOf`, `needsOf`, `rulesAt`, `definitionIn`), `packages/core/src/space/roles.ts` (`judge`, `may`). Tests: `packages/core/tests/roles.test.ts` ("records against the history"), `packages/core/tests/space-access.test.ts` ("who may write", "taking it back"), `packages/core/tests/rules.test.ts`, `packages/core/tests/access-convergence.test.ts`._
+_Source: `packages/core/src/node/space-standing.ts` (`judgeStanding`, `invocationOf`, `needsOf`), `packages/core/src/node/space-rules.ts` (`rulesAt`, `definitionIn`), `packages/core/src/space/roles.ts` (`judge`, `may`). Tests: `packages/core/tests/roles.test.ts` ("records against the history"), `packages/core/tests/space-access.test.ts` ("who may write", "taking it back"), `packages/core/tests/rules.test.ts`, `packages/core/tests/access-convergence.test.ts`._
 
 ---
 
@@ -1090,7 +1090,7 @@ becomes due (§9.2), and someone granted `/key/change` changes the key (§9.3).
 What the library does, and how long it waits for a peer, is in
 [its docs](../packages/core/docs/node.md#leaving-a-space).
 
-_Source: `packages/core/src/node/node.ts` (`spaces.leave`, `giveUpPlace`, `reconcileOnce`), `packages/core/src/node/space-runtime.ts` (`giveUpPlace`, `assign`, `removeAccount`, `defineRole`, `writeUntilStored`). Tests: `packages/core/tests/key-change.test.ts` ("leaving a private space"), `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/roles.test.ts` ("a founder steps down by leaving…"), `packages/core/tests/constitution.test.ts` ("stepping down")._
+_Source: `packages/core/src/node/node.ts` (`spaces.leave`, `giveUpPlace`, `reconcileOnce`), `packages/core/src/node/space-membership.ts` (`giveUpPlace`, `assign`, `removeAccount`, `defineRole`), `packages/core/src/node/space-peers.ts` (`writeUntilStored`). Tests: `packages/core/tests/key-change.test.ts` ("leaving a private space"), `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/roles.test.ts` ("a founder steps down by leaving…"), `packages/core/tests/constitution.test.ts` ("stepping down")._
 
 ### 6.3 Cutoffs
 
@@ -1146,7 +1146,7 @@ not a note, so every note to that key goes with it.
 A key can't pass its note on ([01](01-identity.md) §7.5), so no other key
 acts through a revoked one: the revoke of a key is all there is to undo.
 
-_Source: `packages/core/src/node/space-runtime.ts` (`assign`, `removeAccount`, `revoke`, `cutoffFor`, `linesOf`, `writeUntilStored`), `packages/core/src/node/node.ts` (`spaces.leave`). Tests: `packages/core/tests/roles.test.ts` ("a revoked key…"), `packages/core/tests/cutoff-limits.test.ts`, `packages/core/tests/space-access.test.ts` ("taking it back", "a key cannot pass its note on: a two-link proof counts for no peer")._
+_Source: `packages/core/src/node/space-membership.ts` (`assign`, `removeAccount`, `revoke`), `packages/core/src/node/space-lines.ts` (`cutoffFor`, `linesOf`), `packages/core/src/node/space-peers.ts` (`writeUntilStored`), `packages/core/src/node/node.ts` (`spaces.leave`). Tests: `packages/core/tests/roles.test.ts` ("a revoked key…"), `packages/core/tests/cutoff-limits.test.ts`, `packages/core/tests/space-access.test.ts` ("taking it back", "a key cannot pass its note on: a two-link proof counts for no peer")._
 
 ### 6.5 Proving a fork
 
@@ -1188,7 +1188,7 @@ already covers the place it found.
 > a place in one line says nothing about which of the key's versions
 > elsewhere came after it. The owner's revoke reaches every collection.
 
-_Source: `packages/core/src/records/fork.ts` (`checkFork`, `breaksLine`, `forkProof`), `packages/core/src/node/space-runtime.ts` (`buildEvent`, `placeInLog`, `reportFork`), `packages/core/src/space/space-access.ts` (`forkKey`), `packages/core/src/space/roles.ts` (`forked`, `forks`). Tests: `packages/core/tests/writer-logs.test.ts` ("a fork", "a fork reaches only the line it is in…"), `packages/core/tests/access-attacks.test.ts` ("a revoke or a fork proof undoes…"), `packages/core/tests/access-convergence.test.ts`._
+_Source: `packages/core/src/records/fork.ts` (`checkFork`, `breaksLine`, `forkProof`), `packages/core/src/node/space-history.ts` (`buildEvent`), `packages/core/src/node/space-lines.ts` (`placeInLog`, `reportFork`), `packages/core/src/space/space-access.ts` (`forkKey`), `packages/core/src/space/roles.ts` (`forked`, `forks`). Tests: `packages/core/tests/writer-logs.test.ts` ("a fork", "a fork reaches only the line it is in…"), `packages/core/tests/access-attacks.test.ts` ("a revoke or a fork proof undoes…"), `packages/core/tests/access-convergence.test.ts`._
 
 ---
 
@@ -1226,7 +1226,7 @@ view-only invite (§7.5) has no record and cannot be closed; only a key change
 > **Known defect:** deleting an invite record does not close it. A deleted
 > access version yields no event (§3.3), so the invite stays open as of its
 > last undeleted version. `closeInvite` writes `open: false`
-> (`packages/core/src/node/space-runtime.ts`). Other implementations MUST NOT rely on a
+> (`packages/core/src/node/space-membership.ts`). Other implementations MUST NOT rely on a
 > deleted invite staying open.
 > Tracked in [#20](https://github.com/leifriksheim/minca/issues/20).
 
@@ -1422,7 +1422,7 @@ Closing an invite by its link: derive the invite DID from the link's secret
 (§7.1; for a short link, from the invite secret §7.7 derives) and close that
 record.
 
-_Source: `packages/core/src/space/space-access.ts` (`generateInviteSecret`, `deriveInviteKey`, `signInvite`, `verifyInvite`), `packages/core/src/space/space-manager.ts` (`encodeSpaceInvite`, `parseSpaceInvite`, `join`), `packages/core/src/node/space-runtime.ts` (`openInvite`, `closeInvite`, `join`), `packages/core/src/node/node.ts` (`spaces.invite`, `preview`, `join`, `closeInvite`), `packages/core/src/node/node-carriers.ts` (`inviteKeyOf`, `bareInvite`). Tests: `packages/core/tests/space-access.test.ts` ("the keys", "invites"), `packages/core/tests/space.test.ts` ("invites"), `packages/core/tests/roles.test.ts` ("invites")._
+_Source: `packages/core/src/space/space-access.ts` (`generateInviteSecret`, `deriveInviteKey`, `signInvite`, `verifyInvite`), `packages/core/src/space/space-manager.ts` (`encodeSpaceInvite`, `parseSpaceInvite`, `join`), `packages/core/src/node/space-membership.ts` (`openInvite`, `closeInvite`, `join`), `packages/core/src/node/node.ts` (`spaces.invite`, `preview`, `join`, `closeInvite`), `packages/core/src/node/node-carriers.ts` (`inviteKeyOf`, `bareInvite`). Tests: `packages/core/tests/space-access.test.ts` ("the keys", "invites"), `packages/core/tests/space.test.ts` ("invites"), `packages/core/tests/roles.test.ts` ("invites")._
 
 ### 7.7 Short links
 
@@ -1611,7 +1611,7 @@ the new one's. How a peer proves it holds the read key when connecting is in
 
 Example: the key of §8.1 → `did:key:zDnaes7SHHEzJcR4LfXNL8UjSMWQ3VMFfQiv6vZzoxgkaCNqt`.
 
-_Source: `packages/core/src/privacy/space-encryption.ts` (`spaceKeyFromRaw`, `sealBody`, `openBody`), `packages/core/src/node/space-runtime.ts` (`IN_THE_CLEAR`, `write`, `openBody`), `packages/core/src/space/space-access.ts` (`deriveReadKey`, `deriveReadSeed`). Tests: `packages/core/tests/space.test.ts` ("private space versions"; "a sealed body moved to another record, collection or space does not open"; "the example body of spec 03 §8.3 opens"), `packages/core/tests/space-access.test.ts` ("a view-only invite to a private space reads everything and writes nothing"; the read-key vector)._
+_Source: `packages/core/src/privacy/space-encryption.ts` (`spaceKeyFromRaw`, `sealBody`, `openBody`), `packages/core/src/node/space-writing.ts` (`IN_THE_CLEAR`, `write`), `packages/core/src/node/space-versions.ts` (`openBody`), `packages/core/src/space/space-access.ts` (`deriveReadKey`, `deriveReadSeed`). Tests: `packages/core/tests/space.test.ts` ("private space versions"; "a sealed body moved to another record, collection or space does not open"; "the example body of spec 03 §8.3 opens"), `packages/core/tests/space-access.test.ts` ("a view-only invite to a private space reads everything and writes nothing"; the read-key vector)._
 
 ### 8.6 What a private space still shows
 
@@ -1634,7 +1634,7 @@ pass (§7.4, §14), a carrier among them. So are the ids a `sys.succeed` names
 (§2.7), like every access record (§8.2); the successors' constitutions are
 not in the old space.
 
-_Source: `packages/core/src/records/rules.ts` (`onePerSecret`, `onePerKey`), `packages/core/src/node/space-runtime.ts` (`onePerKeying`). Tests: `packages/core/tests/record-keys.test.ts` ("in a private space, nobody without its key can compute or test one (#87)")._
+_Source: `packages/core/src/records/rules.ts` (`onePerSecret`, `onePerKey`), `packages/core/src/node/space-rules.ts` (`onePerKeying`). Tests: `packages/core/tests/record-keys.test.ts` ("in a private space, nobody without its key can compute or test one (#87)")._
 
 > **Planned: what it still gives away.** Tracked in
 > [#223](https://github.com/leifriksheim/minca/issues/223).
@@ -1774,7 +1774,7 @@ write, and proves it may read with the newest key it holds (see
 [04](04-network.md)). A view-only invite made before a change carries only the
 old key; its holder is not a reader and gets no box.
 
-_Source: `packages/core/src/node/space-runtime.ts` (`learnKeys`, `malformedKeys`, `rotateKey`, `boxForMembers`, `upkeep`, `changeKeyNow`, `formerMembers`, `loadMemberKeys`), `packages/core/src/space/space-access.ts` (`MEMBER_KEY_COLLECTION`, `BOX_COLLECTION`, `boxKey`, `BOX_LABEL`, `boxBound`, `SPACE_KEY_RECORD`), `packages/core/src/identity/contact-key.ts` (`deriveMemberKeyBytes`), `packages/core/src/identity/hpke.ts` (`sealTo`). Tests: `packages/core/tests/key-change.test.ts` ("is taken as malformed: a manager replaces it, and a newcomer still gets the first key", "forces no key change, however malformed", "gives no reader a key the history doesn’t name", and the rest), `packages/core/tests/envelope.test.ts` ("a box opened with the wrong bound, label or key opens nothing")._
+_Source: `packages/core/src/node/space-keys.ts` (`learnKeys`, `malformedKeys`, `rotateKey`, `boxForMembers`, `upkeep`, `changeKeyNow`), `packages/core/src/node/space-history.ts` (`formerMembers`), `packages/core/src/node/space-profiles.ts` (`loadMemberKeys`), `packages/core/src/space/space-access.ts` (`MEMBER_KEY_COLLECTION`, `BOX_COLLECTION`, `boxKey`, `BOX_LABEL`, `boxBound`, `SPACE_KEY_RECORD`), `packages/core/src/identity/contact-key.ts` (`deriveMemberKeyBytes`), `packages/core/src/identity/hpke.ts` (`sealTo`). Tests: `packages/core/tests/key-change.test.ts` ("is taken as malformed: a manager replaces it, and a newcomer still gets the first key", "forces no key change, however malformed", "gives no reader a key the history doesn’t name", and the rest), `packages/core/tests/envelope.test.ts` ("a box opened with the wrong bound, label or key opens nothing")._
 
 ---
 
@@ -1798,7 +1798,7 @@ at most 200 characters, each `name` a string of at most 80 characters, no
 `/space/keepers` may set it.
 What keepers do is in [05 — Sync and storage](05-sync-and-storage.md).
 
-_Source: `packages/core/src/space/roles.ts` (`checkRelays`, `checkKeepers`, `MAX_RELAYS`, `MAX_KEEPERS`), `packages/core/src/node/space-runtime.ts` (`nameRelays`, `setRelays`, `setKeepers`). Tests: `packages/core/tests/space-relays.test.ts`, `packages/core/tests/carrier.test.ts` ("is named a keeper…")._
+_Source: `packages/core/src/space/roles.ts` (`checkRelays`, `checkKeepers`, `MAX_RELAYS`, `MAX_KEEPERS`), `packages/core/src/node/space-keys.ts` (`nameRelays`), `packages/core/src/node/space-membership.ts` (`setRelays`, `setKeepers`). Tests: `packages/core/tests/space-relays.test.ts`, `packages/core/tests/carrier.test.ts` ("is named a keeper…")._
 
 ---
 
@@ -1829,7 +1829,7 @@ How a reader picks among an account's versions, and when the library
 publishes a profile, is not protocol; see
 [its docs](../packages/core/docs/spaces.md#profiles).
 
-_Source: `packages/core/src/node/space-runtime.ts` (`profileKey`, `loadProfiles`). Tests: `packages/core/tests/profiles.test.ts`, `packages/core/tests/contacts.test.ts` ("the contact key"), `packages/core/tests/attacks.test.ts` ("a contact key on a profile signed by another account is ignored")._
+_Source: `packages/core/src/node/space-profiles.ts` (`profileKey`, `loadProfiles`). Tests: `packages/core/tests/profiles.test.ts`, `packages/core/tests/contacts.test.ts` ("the contact key"), `packages/core/tests/attacks.test.ts` ("a contact key on a profile signed by another account is ignored")._
 
 ---
 

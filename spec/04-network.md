@@ -119,7 +119,7 @@ Example: space id `example-space-id` → room
 A client MUST use these derivations; two implementations that differ here
 never meet.
 
-_Source: `packages/core/src/node/space-runtime.ts` (`relayRoom`), `packages/core/src/network/rendezvous.ts` (`rendezvousKeys`), `packages/core/src/utils/hash.ts` (`base32Encode`). Tests: `packages/core/tests/space-relays.test.ts`, `packages/core/tests/rendezvous.test.ts`._
+_Source: `packages/core/src/node/space-peers.ts` (`relayRoom`), `packages/core/src/network/rendezvous.ts` (`rendezvousKeys`), `packages/core/src/utils/hash.ts` (`base32Encode`). Tests: `packages/core/tests/space-relays.test.ts`, `packages/core/tests/rendezvous.test.ts`._
 
 ### 1.4 A Minca relay
 
@@ -462,7 +462,7 @@ room's topic on the new relays and stops on relays no longer named.
 How the reference node closes sockets no room needs, and names relays for a
 space it manages, is in [the node's docs](../packages/core/docs/node.md#the-network).
 
-_Source: `packages/core/src/space/roles.ts` (`RELAYS_COLLECTION`, `MAX_RELAYS`, `checkRelays`), `packages/core/src/space/space-access.ts` (`SPACE_RELAYS_RECORD`), `packages/core/src/node/space-runtime.ts` (`useRelays`, `setRelays`, `nameRelays`), `packages/core/src/network/rendezvous.ts` (`join`, `release`), `packages/core/src/network/mesh.ts` (`useRelays`). Tests: `packages/core/tests/space-relays.test.ts`, `packages/core/tests/network-manager.test.ts` ("a room that names its own relay…")._
+_Source: `packages/core/src/space/roles.ts` (`RELAYS_COLLECTION`, `MAX_RELAYS`, `checkRelays`), `packages/core/src/space/space-access.ts` (`SPACE_RELAYS_RECORD`), `packages/core/src/node/space-peers.ts` (`useRelays`), `packages/core/src/node/space-membership.ts` (`setRelays`), `packages/core/src/node/space-keys.ts` (`nameRelays`), `packages/core/src/network/rendezvous.ts` (`join`, `release`), `packages/core/src/network/mesh.ts` (`useRelays`). Tests: `packages/core/tests/space-relays.test.ts`, `packages/core/tests/network-manager.test.ts` ("a room that names its own relay…")._
 
 ---
 
@@ -574,7 +574,7 @@ The proof fields and what is signed are in §6.1. The client:
 
 How the reference client redials is in [the node's docs](../packages/core/docs/node.md#the-network).
 
-_Source: `packages/core/src/network/ws-transport.ts` (`nodeAddress`), `packages/core/src/network/peer-auth.ts` (`checkPin`, `pinned`), `packages/core/src/node/node-hosting.ts` (`pinnedTo`, `peerOf`), `packages/core/src/node/space-runtime.ts` (`nodeNetwork`), `packages/core/src/network/network-manager.ts`. Tests: `packages/core/tests/ws-transport.test.ts` ("pinning the node", "only a note for everything about the account pins…"), `packages/cli/tests/host.test.ts`, `packages/cli/tests/cli.test.ts` ("a device that pins the node by its account…")._
+_Source: `packages/core/src/network/ws-transport.ts` (`nodeAddress`), `packages/core/src/network/peer-auth.ts` (`checkPin`, `pinned`), `packages/core/src/node/node-hosting.ts` (`pinnedTo`, `peerOf`), `packages/core/src/node/space-peers.ts` (`nodeNetwork`), `packages/core/src/network/network-manager.ts`. Tests: `packages/core/tests/ws-transport.test.ts` ("pinning the node", "only a note for everything about the account pins…"), `packages/cli/tests/host.test.ts`, `packages/cli/tests/cli.test.ts` ("a device that pins the node by its account…")._
 
 ### 5.3 The `/peer` endpoint (node side)
 
@@ -797,7 +797,7 @@ when her node redials with K0 and her note, step 4 refuses her.
 > are behind, a node that missed a key change could never reconnect, since
 > the peers that could tell it about the change refuse it.
 
-_Source: `packages/core/src/network/peer-auth.ts` (`proveRead`, `checkRead`, `MAX_EARLIER_READ_KEYS`), `packages/core/src/node/space-runtime.ts` (`readAccess`, `letGoOfOutsiders`, `cutOff`, `formerMembers`), `packages/core/src/network/mesh.ts` (`drop`), `packages/core/src/network/network-manager.ts` (`drop`), `packages/core/src/privacy/space-encryption.ts` (`MEMBERSHIP_LABEL`), `packages/core/src/identity/envelope.ts` (`sealValue`, `openValue`). Tests: `packages/core/tests/key-change.test.ts` ("with nobody here to change the key…", "proving you may read, while a new key is due"), `packages/core/tests/ws-transport.test.ts` ("a private space"), `packages/core/tests/network-manager.test.ts` ("in a private space, a peer without its key never becomes a peer"; "after the space key changed"; "letting a peer go in one room…"), `packages/cli/tests/cli.test.ts` ("lets go of someone removed from a private space…"), `packages/cli/tests/serve.test.ts` ("a node behind on the space key admits a reader…")._
+_Source: `packages/core/src/network/peer-auth.ts` (`proveRead`, `checkRead`, `MAX_EARLIER_READ_KEYS`), `packages/core/src/node/space-peers.ts` (`readAccess`, `letGoOfOutsiders`, `cutOff`), `packages/core/src/node/space-history.ts` (`formerMembers`), `packages/core/src/network/mesh.ts` (`drop`), `packages/core/src/network/network-manager.ts` (`drop`), `packages/core/src/privacy/space-encryption.ts` (`MEMBERSHIP_LABEL`), `packages/core/src/identity/envelope.ts` (`sealValue`, `openValue`). Tests: `packages/core/tests/key-change.test.ts` ("with nobody here to change the key…", "proving you may read, while a new key is due"), `packages/core/tests/ws-transport.test.ts` ("a private space"), `packages/core/tests/network-manager.test.ts` ("in a private space, a peer without its key never becomes a peer"; "after the space key changed"; "letting a peer go in one room…"), `packages/cli/tests/cli.test.ts` ("lets go of someone removed from a private space…"), `packages/cli/tests/serve.test.ts` ("a node behind on the space key admits a reader…")._
 
 ### 6.4 The account behind a session
 
@@ -816,7 +816,7 @@ in the note is read here; what the library tells apps about the sender is in
 > Rationale: a note copied off someone's record names their key, not the
 > copier's, so it is useless to anyone else.
 
-_Source: `packages/core/src/node/space-runtime.ts` (`accountOf`, `WHO_MESSAGE`). Tests: `packages/core/tests/live.test.ts` ("a peer showing someone else’s note is known as nobody")._
+_Source: `packages/core/src/node/space-peers.ts` (`accountOf`, `WHO_MESSAGE`). Tests: `packages/core/tests/live.test.ts` ("a peer showing someone else’s note is known as nobody")._
 
 ---
 
@@ -1080,7 +1080,7 @@ Example:
 }
 ```
 
-_Source: `packages/core/src/node/space-runtime.ts` (`send`, `onLive`, `withinAllowance`, `LIVE_MESSAGE`, `MAX_LIVE_BYTES`, `LIVE_BURST`, `LIVE_PER_SECOND`). Tests: `packages/core/tests/live.test.ts`._
+_Source: `packages/core/src/node/space-peers.ts` (`send`, `onLive`, `withinAllowance`, `LIVE_MESSAGE`, `MAX_LIVE_BYTES`, `LIVE_BURST`, `LIVE_PER_SECOND`). Tests: `packages/core/tests/live.test.ts`._
 
 ---
 

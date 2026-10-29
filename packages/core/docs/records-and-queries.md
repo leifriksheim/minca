@@ -68,7 +68,7 @@ await node.records.get(space.id, hers);
   `lineKey(account, collection)` (exported by `@minca/core`), an
   owned key of the account's.
 
-_Source: `packages/core/src/records/key.ts`, `packages/core/src/node/space-runtime.ts` (`keyToWrite`, `keepsCollection`, `put`, `keyFor`, `onePerKey`). Tests: `packages/core/tests/record-keys.test.ts`, `packages/core/tests/versions.test.ts` ("a deleted key can be written again…")._
+_Source: `packages/core/src/records/key.ts`, `packages/core/src/node/space-writing.ts` (`keyToWrite`, `keepsCollection`, `put`, `onePerKey`), `packages/core/src/node/space-runtime.ts` (`keyFor`). Tests: `packages/core/tests/record-keys.test.ts`, `packages/core/tests/versions.test.ts` ("a deleted key can be written again…")._
 
 ## Links
 
