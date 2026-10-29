@@ -375,6 +375,7 @@
     useEffect,
     useRecords,
     useCan,
+    useShown,
     Person,
     Avatar,
     Comments,
@@ -474,6 +475,11 @@
     const [kind, setKind] = useState(null);
     const [openKey, setOpenKey] = useState(null);
     const [editing, setEditing] = useState(null);
+    // An event opened from elsewhere, like one shared in a chat: its page.
+    const asked = useShown();
+    useEffect(() => {
+      if (asked) setOpenKey(asked.key);
+    }, [asked]);
     const now = useMinute();
     const [near, setNear] = useNear();
     // The cells around the circle, as a keeper would match them; then the exact distance.
@@ -849,8 +855,8 @@
         >
           Today
         </button>
-        <button aria-label="Previous month" onClick=${() => shift(-1)}>‹</button>
-        <button aria-label="Next month" onClick=${() => shift(1)}>›</button>
+        <button data-icon aria-label="Previous month" onClick=${() => shift(-1)}>‹</button>
+        <button data-icon aria-label="Next month" onClick=${() => shift(1)}>›</button>
       </div>
       <div class="month" role="grid" aria-label="Month">
         ${days.slice(0, 7).map((d) => html`<div key=${d} class="weekday" role="columnheader">${d.toLocaleDateString(undefined, { weekday: 'short' })}</div>`)}

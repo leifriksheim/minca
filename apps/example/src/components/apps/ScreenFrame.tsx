@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { NodeRecord } from '@minca/core';
-import { useAccount, useNode } from '@minca/react';
+import { useAccount, useLive, useNode } from '@minca/react';
+import { Modal } from '@minca/app-shared/Modal';
 import ui from 'virtual:minca-ui';
 import { placeAt, searchPlaces, whereAmI } from '@minca/app-shared/places';
-import { createScreenBridge, screenDocument, type ScreenBridge, type ScreenHost } from './screens';
+import { createScreenBridge, offLimits, screenDocument, type ScreenBridge, type ScreenHost } from './screens';
 import { PersonCardHere } from '../Person';
+import { RecordFinder } from '../RecordFinder';
 import { saveFile } from '../../files';
 import { isObject } from '../../derive/schema-ui';
 import { styles, palette } from '../../styles';
@@ -46,6 +48,12 @@ export function ScreenFrame({
   const frame = useRef<HTMLIFrameElement>(null);
   // The person whose card the screen asked for
   const [person, setPerson] = useState<string | null>(null);
+  // The screen waiting on the person to choose a record (`minca.pick`), and what they started from
+  const [picking, setPicking] = useState<{
+    readonly text: string;
+    readonly done: (record: NodeRecord | null) => void;
+  } | null>(null);
+  const pickingNow = useRef(false);
   // Read when the screen asks, so a new handler doesn't start the frame again.
   const opens = useRef(onOpen);
   useEffect(() => {
@@ -130,9 +138,27 @@ export function ScreenFrame({
         collections: list,
         app: appKey,
         port: channel.port1,
-        host: screenHost(`minca.screen:${node.did}:${spaceId}:${appKey}:`, (open) =>
-          'record' in open ? opens.current(open.record) : setPerson(open.person),
-        ),
+        host: screenHost(`minca.screen:${node.did}:${spaceId}:${appKey}:`, {
+          open: (open) => ('record' in open ? opens.current(open.record) : setPerson(open.person)),
+          // One choice at a time, asked of the person in this page, never the screen's to make.
+          pick: (text) => {
+            if (pickingNow.current)
+              return Promise.reject(new Error('The person is already choosing a record'));
+            pickingNow.current = true;
+            return new Promise((resolve) =>
+              setPicking({
+                text,
+                done: (record) => {
+                  pickingNow.current = false;
+                  setPicking(null);
+                  // Back to where the person was typing, as any dialog gives focus back
+                  frame.current?.focus();
+                  resolve(record);
+                },
+              }),
+            );
+          },
+        }),
       });
       target.postMessage(
         {
@@ -140,6 +166,8 @@ export function ScreenFrame({
           document: screenDocument(screen, answer === 'yes' && allowed ? allowed.split(' ') : [], ui),
           me: { did: node.did, name: account.name },
           collections: list,
+          // Handed over with the document, since a message on the port before it is written in is lost
+          shown: pending.current,
         },
         // The frame's origin is opaque, so it can't be named. The port is what carries anything that matters.
         '*',
@@ -147,7 +175,6 @@ export function ScreenFrame({
       );
       live.current = bridge;
       if (pending.current) {
-        bridge.show(pending.current);
         pending.current = undefined;
         handed.current?.();
       }
@@ -261,19 +288,53 @@ export function ScreenFrame({
         }}
       />
       {person && <PersonCardHere did={person} onClose={() => setPerson(null)} />}
+      {picking && <SharePicker spaceId={spaceId} app={title} text={picking.text} onDone={picking.done} />}
     </div>
+  );
+}
+
+/**
+ * A record for a screen, chosen by the person: the screen gets only this one,
+ * as a page gets only the file a person picks for it.
+ */
+function SharePicker({
+  spaceId,
+  app,
+  text,
+  onDone,
+}: {
+  spaceId: string;
+  app: string;
+  text: string;
+  onDone: (record: NodeRecord | null) => void;
+}) {
+  const collections = useLive(spaceId, (n) => n.collections.list(spaceId), [spaceId]) ?? [];
+  return (
+    <Modal title={`Share with ${app}`} onClose={() => onDone(null)}>
+      <p style={{ fontSize: 13, color: palette.ink.muted, lineHeight: 1.5 }}>
+        {app} gets only the one you choose.
+      </p>
+      <RecordFinder
+        spaceId={spaceId}
+        collections={collections}
+        accepts={(r) => !offLimits(r.collection)}
+        onPick={onDone}
+        initialText={text}
+      />
+    </Modal>
   );
 }
 
 /**
  * What this page does for a screen when it asks (`ScreenHost`): finds places
  * and where the person is the way the rest of the app does, opens pages and
- * saves files, and keeps the app's own small things under `kept`, a prefix
- * for this person, space and app.
+ * saves files, asks the person to choose a record, and keeps the app's own
+ * small things under `kept`, a prefix for this person, space and app.
  */
-function screenHost(kept: string, open: ScreenHost['open']): ScreenHost {
+function screenHost(kept: string, { open, pick }: Pick<ScreenHost, 'open' | 'pick'>): ScreenHost {
   return {
     open,
+    pick,
     searchPlaces: (text, near) => searchPlaces(text, near ? { near } : {}),
     here: async () => {
       const at = await whereAmI();

@@ -1,4 +1,4 @@
-<!-- Chat: std.message as one room, with "@" mentions and files (std.file) dropped anywhere on it, pasted or picked. -->
+<!-- Chat: std.message as one room, with "@" mentions, files (std.file) dropped anywhere on it, pasted or picked, and anything in the space shared with "/". -->
 <style>
   html,
   body {
@@ -108,8 +108,9 @@
   }
 </style>
 <script>
-  const { html, render, useState, useEffect, useRef, useRecords, useCan, usePeople, useShown } = ui;
+  const { html, render, useState, useEffect, useRef, useRecords, useCan, usePeople, useShown, useShare } = ui;
   const { Avatar, Person, MentionInput, MentionText, mentionsIn, Attachments, attach, ago } = ui;
+  const { Shared, Sharing, recordTitle } = ui;
   const MESSAGE = 'std.message';
   const me = minca.me.did;
   /** Messages from one person this close together read as one run, under one name */
@@ -172,6 +173,7 @@
           </div>`
         }
         <p class="text"><${MentionText} text=${message.body.text} /></p>
+        <${Shared} from=${message} />
         <${Attachments} about=${message.key} />
       </div>
       ${
@@ -207,6 +209,8 @@
     const people = usePeople();
     const [draft, setDraft] = useState('');
     const [files, setFiles] = useState([]);
+    // A record the person chose to share, sent with the next message
+    const share = useShare();
     const [dropping, setDropping] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(null);
@@ -260,16 +264,24 @@
     }, []);
 
     const send = async () => {
-      const text = draft.trim() || files.map((file) => `📎 ${file.name}`).join('\n');
+      const text =
+        draft.trim() ||
+        (share.sharing ? recordTitle(share.sharing) : '') ||
+        files.map((file) => `📎 ${file.name}`).join('\n');
       if (!text || busy) return;
       setBusy(true);
       setError(null);
       try {
         const mentions = mentionsIn(draft, people);
-        const sent = await minca.put(MESSAGE, { text, ...(mentions.length ? { mentions } : {}) });
+        const sent = await minca.put(
+          MESSAGE,
+          { text, ...(mentions.length ? { mentions } : {}) },
+          { links: share.links },
+        );
         await attach(sent.key, files);
         setDraft('');
         setFiles([]);
+        share.clear();
       } catch (e) {
         setError(e.message);
       } finally {
@@ -285,6 +297,7 @@
       }}
     >
       ${dropping && html`<div class="drop">Drop files to attach</div>`}
+      ${share.sharing && html`<div class="pending"><${Sharing} share=${share} /></div>`}
       ${
         files.length > 0 &&
         html`<div class="pending">
@@ -301,11 +314,21 @@
       <div class="row">
         <button
           type="button"
+          data-icon
           aria-label="Attach files"
           title="Attach files"
           onClick=${() => picker.current?.click()}
         >
           +
+        </button>
+        <button
+          type="button"
+          data-icon
+          aria-label="Share something from this space"
+          title="Share something from this space"
+          onClick=${() => share.pick()}
+        >
+          /
         </button>
         <input
           ref=${picker}
@@ -319,15 +342,19 @@
         />
         <${MentionInput}
           value=${draft}
-          onChange=${setDraft}
-          placeholder="Message… @ to mention, or drop files anywhere"
+          onChange=${(next) => setDraft(share.typed(draft, next))}
+          placeholder="Message… @ to mention, / to share"
           aria-label="Message"
         />
-        <button type="submit" data-variant="primary" disabled=${busy || (!draft.trim() && !files.length)}>
+        <button
+          type="submit"
+          data-variant="primary"
+          disabled=${busy || (!draft.trim() && !files.length && !share.sharing)}
+        >
           ${busy ? 'Sending…' : 'Send'}
         </button>
       </div>
-      ${error && html`<p class="error">${error}</p>`}
+      ${(error || share.error) && html`<p class="error">${error || share.error}</p>`}
     </form>`;
   }
 

@@ -23,6 +23,7 @@ button {
   border: 1px solid var(--minca-line-strong); border-radius: var(--minca-radius-pill);
   background: var(--minca-card); color: var(--minca-ink); cursor: pointer;
 }
+button[data-icon] { width: 36px; padding: 0; flex-shrink: 0; }
 button:hover { background: var(--minca-sunken); }
 button[data-variant="primary"] { background: var(--minca-accent); border-color: transparent; color: var(--minca-inverse); }
 button[data-variant="primary"]:hover { background: var(--minca-accent-hover); }
@@ -38,6 +39,8 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--m
 :focus-visible { outline: 2px solid var(--minca-accent); outline-offset: 2px; }
 .card { background: var(--minca-card); border: 1px solid var(--minca-line); border-radius: var(--minca-radius-lg); padding: 12px 14px; }
 .row { display: flex; align-items: center; gap: 8px; }
+[data-marked="true"] { outline: 2px solid var(--minca-accent); outline-offset: 2px; animation: minca-marked 2.5s ease-out; }
+@keyframes minca-marked { from { box-shadow: 0 0 0 6px var(--minca-accent-soft); } }
 .stack { display: flex; flex-direction: column; gap: 8px; }
 .muted { color: var(--minca-muted); }
 .faint { color: var(--minca-faint); font-size: 12px; }
@@ -81,6 +84,8 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--m
 .attachment.playable audio { display: block; width: 268px; }
 .record { justify-content: flex-start; gap: 8px; max-width: 100%; min-height: 36px; padding: 4px 10px 4px 6px; border-radius: var(--minca-radius-md); font-weight: 400; text-align: left; }
 .record-face { flex-shrink: 0; width: 24px; height: 24px; display: grid; place-items: center; object-fit: cover; border-radius: var(--minca-radius-sm); }
+/* A shared record sits as wide as it says, not across the whole line */
+.shared { align-self: flex-start; max-width: 100%; }
 .lightbox { display: block; max-width: 100%; max-height: 75vh; margin: 0 auto; object-fit: contain; border-radius: var(--minca-radius-md); }
 .comment-text { white-space: pre-wrap; word-break: break-word; }
 .mention { padding: 0 2px; border-radius: var(--minca-radius-sm); background: var(--minca-accent-soft); color: var(--minca-accent); }

@@ -70,6 +70,7 @@ export const TEMPLATES: ReadonlyArray<Template> = [
       title: 'Kanban',
       description: 'Tasks on a board: drag them between columns, and into order.',
       collections: [task.name, column.name],
+      shows: [task.name],
       notify: [
         notifyOn('New task', task.name),
         notifyOn('Assigned to me', task.name, { assignees: { $contains: '$me' } }),
@@ -93,6 +94,7 @@ export const TEMPLATES: ReadonlyArray<Template> = [
       title: 'Polls',
       description: 'Ask the space a question. Everyone picks one option, and can change their mind.',
       collections: [poll.name, vote.name],
+      shows: [poll.name],
       notify: [
         notifyOn('New poll', poll.name),
         notifyOn('Votes on my polls', vote.name, { respondingTo: { $contains: '$me' } }),
@@ -108,6 +110,7 @@ export const TEMPLATES: ReadonlyArray<Template> = [
       description:
         'Put something to the space, and decide it once enough people agree. Every device checks the count.',
       collections: [proposal.name, ballot.name, decision.name],
+      shows: [proposal.name],
       notify: [
         notifyOn('New proposal', proposal.name),
         notifyOn('Decided', decision.name),
@@ -123,6 +126,7 @@ export const TEMPLATES: ReadonlyArray<Template> = [
       title: 'Events',
       description: "Concerts, meetups, parties: what's on, who's going, and a place to talk about each one.",
       collections: [event.name, rsvp.name, comment.name],
+      shows: [event.name],
       notify: [
         notifyOn('New event', event.name),
         notifyOn('Answers to my events', rsvp.name, { respondingTo: { $contains: '$me' } }),
@@ -138,6 +142,7 @@ export const TEMPLATES: ReadonlyArray<Template> = [
       title: 'Marketplace',
       description: 'Sell, give away and find things among the people in the space.',
       collections: [listing.name, order.name, orderUpdate.name, comment.name],
+      shows: [listing.name],
       notify: [
         notifyOn('New listing', listing.name),
         notifyOn('Requests for my things', order.name, { respondingTo: { $contains: '$me' } }),

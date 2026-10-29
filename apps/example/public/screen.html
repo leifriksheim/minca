@@ -27,7 +27,12 @@
       addEventListener('message', function load(event) {
         if (event.source !== parent || !event.data || event.data.minca !== 'load' || !event.ports[0]) return;
         removeEventListener('message', load);
-        window.__minca = { port: event.ports[0], me: event.data.me, collections: event.data.collections };
+        window.__minca = {
+          port: event.ports[0],
+          me: event.data.me,
+          collections: event.data.collections,
+          shown: event.data.shown,
+        };
         document.open();
         document.write(event.data.document);
         document.close();

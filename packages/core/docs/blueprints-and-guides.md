@@ -168,7 +168,7 @@ its app's collections and the people in its space: it lists and writes
 records as the person looking, asks what they may do (`can`), gets someone's
 picture (`picture`), and asks the page to show a record or a person
 (`open`), or the record one of its own links to (`open` with `link`: the
-message a file was shared on). Following a link is the one way past its collections. The bridge answers the same whether or not the record is there, and never opens the space's own records (`sys.*`, `launcher.app`); but the page visibly opens a record that is there, for the person, who can see it anyway, so a screen that already knows a key could notice, from outside, that it exists. What a sealed frame can't do, the page does for it when it asks,
+message a file was shared on), which shows it to the person and tells the screen nothing. The bridge never follows one to the space's own records (`sys.*`, `launcher.app`), and opening one answers the same whether or not the record is there; but the page visibly opens a record that is there, for the person, who can see it anyway. What a sealed frame can't do, the page does for it when it asks,
 after checking the request: it searches for places and asks where the person
 is (`places`), opens http and https pages (`link`), saves text files
 (`save`), keeps a few kilobytes per app on the device (`remember`, `recall`),
@@ -180,17 +180,45 @@ the screen.
 `collections`, the ones it `shows`: the ones whose records it is the place
 to open (`shows: ["std.message"]` for a chat). Whatever asks the example app
 to open a record, a screen's `open` or a link beside a record, goes to the
-app that shows that record's collection, the one open first, and that app's
+app that shows that record's collection: the one open, if it does, else the
+only one, else the one the person picks when asked, and that app's
 screen is handed the record's key (`minca.shown`, `minca.onShow`, the kit's
 `useShown`) to scroll to or open, but only of a collection it shows, which
 it could list anyway. That app does learn which of those records the person
 opens from elsewhere, which is why only someone who may define collections
-adds an app. With no app that shows it, the record
-opens beside whatever is open. So the Files app opens a file's message in
+adds an app. With no app that shows it, or when that app opens one of its
+own (a poll's title in Polls, for its comments), the record opens beside
+whatever is open. So the Files app opens a file's message in
 the chat, and a chat's file in Files, without either knowing the other. An
 app that names a collection in `shows` must do something with what it is
 handed. The kit's `<Record>` draws any standard record as one line the same
 way in every app, and opens it this way when clicked.
+
+**Sharing a record into an app.** A screen can't list or read what its app
+doesn't name, but a person can hand it one record, as a page gets only the
+file a person picks for it. `minca.pick` asks the page to show a finder over
+the whole space, and gives the screen the record the person chooses, or
+null. The screen may then link one of its records to it with `shares`, like
+a message, and anyone's screen reads it back through that link
+(`minca.get(key, { link: 'shares' })`), read only. `shares` is the only role
+a screen reads through: a file about a diary entry, or a reaction to it,
+shares nothing, so a screen reads beyond its collections only records the
+person picked, or that someone writing its collections shares (a member, an
+agent, another app). That binds the screen, not its author: a member who
+wrote a screen can share any record into its collections from their own
+node, and the screen reads it. A shared record comes with its files' keys,
+though not their bytes. A screen writes
+a link only to a record of its own collections, one the person picked for
+it, or one the record already has, refused alike whether or not the target
+is here (so a link to a record that hasn't arrived yet waits until it has):
+a screen never links out on its own, though like anything it reads, it can
+copy what was shared into its own records. A screen may ask to pick as often
+as it likes, and start the search from its own text; what it gets is still
+only what the person chooses, in a space they can read anyway: Enter takes
+the top match only once the person has typed. A chat
+shares a poll without being able to read polls; `/` typed into an empty
+message, or its `/` button, picks one; so does a comment box (the kit's
+`useShare`).
 
 A screen also sends live messages, kept nowhere, to the other devices that
 have the same app open in the space (`live.send`, `live.on`): for cursors,
@@ -223,7 +251,7 @@ defines its collections and writes a copy of it, naming where it came from
 (`template: "kanban"`), and from then on the space changes its copy like any
 other app.
 
-_Source: `apps/example/src/components/apps/launcher.ts` (`addTemplate`), `apps/example/src/components/apps/screens.ts`, `apps/example/src/components/apps/ScreenFrame.tsx`, `apps/example/src/components/apps/templates/`, `apps/example/public/screen.html`, `packages/ui/src/frame/`, `packages/ui/src/guide.ts`. Tests: `apps/example/tests/launcher.test.ts` ("adding a ready-made app copies it into the space once, with its collections and first records"), `apps/example/tests/screens.test.ts` ("a screen checks, shows faces and opens things only within its app and its space", "what the page does for a screen, it does only as asked properly", "a screen hears the same app's screens on other devices, as who sent it, and no other app's")._
+_Source: `apps/example/src/components/apps/launcher.ts` (`addTemplate`), `apps/example/src/components/apps/screens.ts`, `apps/example/src/components/apps/ScreenFrame.tsx`, `apps/example/src/components/apps/templates/`, `apps/example/public/screen.html`, `packages/ui/src/frame/`, `packages/ui/src/guide.ts`. Tests: `apps/example/tests/launcher.test.ts` ("adding a ready-made app copies it into the space once, with its collections and first records"), `apps/example/tests/screens.test.ts` ("a screen checks, shows faces and opens things only within its app and its space", "what the page does for a screen, it does only as asked properly", "a screen can’t point a link out of its app, so it can’t probe for keys or reach what no one shared", "a record someone shared is read through the link to it, and only through that", "a screen links out only to what the person picked for it, and is handed what they picked", "the space’s own records are never picked for a screen", "a screen hears the same app's screens on other devices, as who sent it, and no other app's")._
 
 ## Describing a collection
 
@@ -260,7 +288,7 @@ _Source: `packages/core/src/records/describe.ts`. Tests: `packages/core/tests/re
 
 An app decides it can open a space by finding a collection with the right
 **name**. Chat opens any `std.message`, whatever its fields and rules. And a space whose definition is a little older than the
-app's (a `std.message` without the `shares` link) stays that way, because the
+app's (a `std.message` or `std.comment` without the `shares` link) stays that way, because the
 library skips a collection the space already has. Whether an app can use a
 definition it did not write is a question for the app, not for peers: a peer
 stores and judges every record the same way whatever the answer.

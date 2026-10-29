@@ -825,12 +825,13 @@
         <strong class="ellipsis">${name}</strong>
         ${file.createdBy && html`<${Person} did=${file.createdBy} size=${20} />`}
         <span style="opacity: 0.7">${sizeOf(size ?? 0)} · ${ago(file.createdAt)}</span>
-        <button type="button" aria-label="Close" onClick=${onClose}>✕</button>
+        <button type="button" data-icon aria-label="Close" onClick=${onClose}>✕</button>
       </header>
       <div class="stage">
         <button
           type="button"
           class="step"
+          data-icon
           aria-label="Previous"
           disabled=${!hasPrevious}
           onClick=${() => onStep(-1)}
@@ -857,7 +858,14 @@
                       </div>`
           }
         </div>
-        <button type="button" class="step" aria-label="Next" disabled=${!hasNext} onClick=${() => onStep(1)}>
+        <button
+          type="button"
+          class="step"
+          data-icon
+          aria-label="Next"
+          disabled=${!hasNext}
+          onClick=${() => onStep(1)}
+        >
           →
         </button>
       </div>

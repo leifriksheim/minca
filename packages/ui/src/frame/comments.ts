@@ -1,7 +1,8 @@
 /**
  * `std.comment` on a record, the way the app shows it: a thread, oldest
  * first, and a box to add to it, where "@" mentions someone so they can be
- * told. A screen whose app names `std.comment` among its collections can use it.
+ * told and "/" shares something from the space. A screen whose app names
+ * `std.comment` among its collections can use it.
  */
 import { useState } from 'preact/hooks';
 import { ago } from '../time';
@@ -10,6 +11,8 @@ import { useCan, usePeople, useRecords } from './hooks';
 import { html } from './html';
 import { MentionInput, MentionText, mentionsIn } from './mentions';
 import { Avatar, Person } from './people';
+import { recordTitle } from './record';
+import { Shared, Sharing, useShare } from './share';
 
 const COMMENT = 'std.comment';
 
@@ -25,13 +28,15 @@ export function Comments({ about }: { about: Pick<ScreenRecord, 'key' | 'created
   const me = minca.me.did;
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const share = useShare();
 
   const send = () => {
-    const text = draft.trim();
+    const text = draft.trim() || (share.sharing ? recordTitle(share.sharing) : '');
     if (!text) return;
-    setDraft('');
+    const links = [{ rel: 'about', to: about.key }, ...share.links];
     setError(null);
-    const mentions = mentionsIn(text, people);
+    // Only who the person named: a shared record's title is someone else's words.
+    const mentions = mentionsIn(draft, people);
     minca
       .put(
         COMMENT,
@@ -40,8 +45,12 @@ export function Comments({ about }: { about: Pick<ScreenRecord, 'key' | 'created
           ...(mentions.length ? { mentions } : {}),
           ...(about.createdBy && about.createdBy !== me ? { respondingTo: about.createdBy } : {}),
         },
-        { links: [{ rel: 'about', to: about.key }] },
+        { links },
       )
+      .then(() => {
+        setDraft('');
+        share.clear();
+      })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
   };
 
@@ -57,27 +66,43 @@ export function Comments({ about }: { about: Pick<ScreenRecord, 'key' | 'created
               <span class="faint">· ${ago(c.createdAt)}</span>
             </div>
             <p class="comment-text"><${MentionText} text=${c.body.text ?? ''} /></p>
+            <${Shared} from=${c} />
           </div>
         </div>`,
     )}
     ${
       mayComment &&
       html`<form
-        class="row"
+        class="stack"
+        style="gap: 6px"
         onSubmit=${(event: Event) => {
           event.preventDefault();
           send();
         }}
       >
-        <${MentionInput}
-          value=${draft}
-          onChange=${setDraft}
-          placeholder="Write a comment… @ to mention someone"
-          aria-label="Write a comment"
-        />
-        <button type="submit" data-variant="primary" disabled=${!draft.trim()}>Send</button>
+        ${share.sharing && html`<div class="row"><${Sharing} share=${share} /></div>`}
+        <div class="row">
+          <button
+            type="button"
+            data-icon
+            aria-label="Share something from this space"
+            title="Share something from this space"
+            onClick=${() => void share.pick()}
+          >
+            /
+          </button>
+          <${MentionInput}
+            value=${draft}
+            onChange=${(next: string) => setDraft(share.typed(draft, next))}
+            placeholder="Write a comment… @ to mention, / to share"
+            aria-label="Write a comment"
+          />
+          <button type="submit" data-variant="primary" disabled=${!draft.trim() && !share.sharing}>
+            Send
+          </button>
+        </div>
       </form>`
     }
-    ${error && html`<p class="error">${error}</p>`}
+    ${(error ?? share.error) && html`<p class="error">${error ?? share.error}</p>`}
   </section>`;
 }

@@ -47,6 +47,7 @@ export const comment = define({
   links: {
     about: about('The record commented on'),
     replyTo: { to: ['std.comment'], cardinality: 'one', description: 'The comment this replies to' },
+    shares: { to: '*', cardinality: 'one', description: 'A record this comment shares, like a poll' },
   },
 });
 export type Comment = BodyOf<typeof comment>;

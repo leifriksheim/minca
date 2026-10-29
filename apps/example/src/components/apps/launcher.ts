@@ -242,7 +242,8 @@ const shown = (value: unknown) => JSON.stringify(value, null, 2).replaceAll('\n'
  */
 const LAUNCHER_GUIDE = `To make an app for this space that people open from its launcher:
 
-1. Propose the collections it needs with collections_propose (one std.blueprint). Use standard ones by name where they fit. Note its key.
+1. Propose the collections it needs with collections_propose (one std.blueprint). Use standard ones by name where they fit
+   (std.event, std.task, std.poll, …): their records then open in, and are shared with, the other apps here. Note its key.
 2. Write one launcher.app record with records_put, like this one:
    ${shown(EXAMPLE_APP)}
    with links [{ "rel": "blueprint", "to": "<the blueprint's key>" }].
@@ -295,11 +296,12 @@ export async function prepareLauncher(node: P2PNode, spaceId: string): Promise<v
 
 /** An app as it stands once added: its place is the launcher's, and it updates nothing */
 function settled(body: LauncherApp): LauncherApp {
-  const { title, description, collections, notify, screen, network, template } = body;
+  const { title, description, collections, shows, notify, screen, network, template } = body;
   return {
     ...(title !== undefined ? { title } : {}),
     ...(description !== undefined ? { description } : {}),
     ...(collections !== undefined ? { collections } : {}),
+    ...(shows !== undefined ? { shows } : {}),
     ...(notify !== undefined ? { notify } : {}),
     ...(screen !== undefined ? { screen } : {}),
     ...(network !== undefined ? { network } : {}),

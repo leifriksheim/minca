@@ -51,6 +51,7 @@ export function RecordPanel({
   onClose,
   onWriter,
   scrim = true,
+  onOpenWith,
 }: {
   space: SpaceSummary;
   recordKey: string;
@@ -61,6 +62,8 @@ export function RecordPanel({
   onWriter?: (did: string) => void;
   /** Dims what is behind; off where that should stay usable, like Explore's map */
   scrim?: boolean;
+  /** Asks which app to open it in, where more than one can; undefined where not */
+  onOpenWith?: (record: NodeRecord) => (() => void) | undefined;
 }) {
   const node = useNode();
   const [adding, setAdding] = useState<{ collection: NodeCollection; rel: string } | null>(null);
@@ -110,6 +113,7 @@ export function RecordPanel({
   // What this account may do here — by the record's rules and the space's.
   const may = { edit: useCan(space.id, 'edit', recordKey), delete: useCan(space.id, 'delete', recordKey) };
   const record = data?.record ?? null;
+  const openWith = record ? onOpenWith?.(record) : undefined;
   const schemaOf = (name: string) => collections.find((c) => c.name === name)?.schema ?? null;
   const collection = record ? collections.find((c) => c.name === record.collection) : undefined;
   const schema = collection?.schema ?? null;
@@ -175,9 +179,16 @@ export function RecordPanel({
           <span style={{ fontSize: 13, color: palette.ink.muted }}>
             {collection ? collectionLabel(collection) : record?.collection}
           </span>
-          <button onClick={onClose} aria-label="Close" style={iconButton}>
-            ✕
-          </button>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {openWith && (
+              <button onClick={openWith} style={styles.smallButton}>
+                Open with…
+              </button>
+            )}
+            <button onClick={onClose} aria-label="Close" style={iconButton}>
+              ✕
+            </button>
+          </span>
         </header>
 
         {!data ? (
@@ -742,12 +753,19 @@ const bigTitle = {
   color: palette.ink.strong,
   lineHeight: 1.3,
 };
+/** A circle whatever the symbol in it, so ✕ in any font doesn't make it an oval */
 const iconButton = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 28,
+  height: 28,
+  flexShrink: 0,
   border: 'none',
   background: 'none',
   color: palette.ink.muted,
   fontSize: 14,
-  padding: 6,
+  padding: 0,
   borderRadius: palette.radius.pill,
 };
 const linkish = {

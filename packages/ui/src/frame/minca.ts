@@ -44,6 +44,10 @@ export interface Minca {
     collection: string,
     options?: { where?: unknown },
   ): Promise<ScreenRecord<T>[]>;
+  /** One of the app's records, or with `link`, the record it links to with that role (a message's shared poll) */
+  get<T = Record<string, unknown>>(key: string, options?: { link?: string }): Promise<ScreenRecord<T> | null>;
+  /** Asks the person to choose a record anywhere in the space; null if they don't */
+  pick<T = Record<string, unknown>>(options?: { text?: string }): Promise<ScreenRecord<T> | null>;
   put(
     collection: string,
     body: unknown,

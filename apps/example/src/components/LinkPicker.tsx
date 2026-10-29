@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import type { NodeCollection, NodeRecord, SpaceSummary } from '@minca/core';
-import { useLive, useNode } from '@minca/react';
-import { collectionLabel, humanize, recordLabel } from '../derive/schema-ui';
+import { useNode } from '@minca/react';
+import { collectionLabel, humanize } from '../derive/schema-ui';
 import { styles, palette } from '../styles';
 import { useAction } from '@minca/app-shared/action';
+import { RecordFinder } from './RecordFinder';
 
 /**
  * Links this record to another, in one of the ways its collection allows —
@@ -29,12 +30,8 @@ export function LinkPicker({
   const node = useNode();
   const kinds = Object.entries(collection.links);
   const [rel, setRel] = useState<string | null>(initialRel ?? (kinds.length === 1 ? kinds[0]![0] : null));
-  const [search, setSearch] = useState('');
   const { run, busy, error } = useAction();
 
-  const everything = useLive(space.id, (n) => n.records.list(space.id, { newestFirst: true }), []) ?? [];
-  const schemaOf = (name: string) => collections.find((c) => c.name === name)?.schema ?? null;
-  const labelOf = (r: NodeRecord) => recordLabel(r, schemaOf(r.collection));
   const kindOf = (name: string) => {
     const c = collections.find((x) => x.name === name);
     return c ? collectionLabel(c) : name;
@@ -43,19 +40,6 @@ export function LinkPicker({
   const declared = rel ? collection.links[rel] : undefined;
   const one = declared?.cardinality === 'one';
   const current = rel ? record.links.filter((l) => l.rel === rel) : [];
-  const candidates = useMemo(() => {
-    if (!declared) return [];
-    const q = search.trim().toLowerCase();
-    return everything
-      .filter((r) => r.key !== record.key && r.body !== null && !current.some((l) => l.to === r.key))
-      .filter((r) => declared.to === '*' || declared.to.includes(r.collection))
-      .filter(
-        (r) => !q || labelOf(r).toLowerCase().includes(q) || kindOf(r.collection).toLowerCase().includes(q),
-      )
-      .slice(0, 8);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [everything, search, record, declared, collections]);
-
   const link = async (target: NodeRecord) => {
     if (!rel) return;
     // A kind of link there can be only one of is replaced, not added to.
@@ -111,54 +95,18 @@ export function LinkPicker({
             {declared.description && ` — ${declared.description}`}. Can point at {allowed}
             {one && current.length > 0 ? '; picking one replaces the one it has.' : '.'}
           </p>
-          <input
-            autoFocus
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+          <RecordFinder
+            spaceId={space.id}
+            collections={collections}
+            accepts={(r) =>
+              r.key !== record.key &&
+              !current.some((l) => l.to === r.key) &&
+              (declared.to === '*' || declared.to.includes(r.collection))
+            }
+            onPick={(r) => void link(r)}
+            disabled={busy}
             placeholder={`Find ${allowed === 'anything' ? 'anything' : allowed}`}
-            aria-label="Find a record"
-            style={styles.input}
           />
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {candidates.map((r) => (
-              <button
-                key={r.key}
-                type="button"
-                disabled={busy}
-                onClick={() => void link(r)}
-                data-row
-                style={pickRow}
-              >
-                <span
-                  style={{
-                    color: palette.ink.faint,
-                    fontSize: 12,
-                    width: 90,
-                    flexShrink: 0,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {kindOf(r.collection)}
-                </span>
-                <span
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {labelOf(r)}
-                </span>
-              </button>
-            ))}
-            {candidates.length === 0 && (
-              <span style={{ fontSize: 13, color: palette.ink.faint, padding: 6 }}>Nothing to link to.</span>
-            )}
-          </div>
         </>
       )}
       {error && <p style={styles.error}>{error}</p>}
@@ -173,16 +121,3 @@ export function LinkPicker({
     </section>
   );
 }
-
-const pickRow = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 10,
-  padding: '8px 6px',
-  border: 'none',
-  borderRadius: palette.radius.md,
-  background: 'none',
-  textAlign: 'left' as const,
-  fontSize: 14,
-  width: '100%',
-};
