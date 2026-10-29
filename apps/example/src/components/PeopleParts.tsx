@@ -183,7 +183,7 @@ export function AddDialog({
           <Avatar did={username} size={48} round />
           <div style={{ minWidth: 0 }}>
             <div style={{ fontWeight: 600, fontSize: 16, color: ink.strong }}>{who}</div>
-            <div style={{ fontSize: 13, color: ink.muted }}>{username}</div>
+            <div style={{ fontSize: 13, color: ink.muted }}>@{shortUsername(username)}</div>
           </div>
         </div>
         <label style={styles.fieldLabel} htmlFor="add-note">

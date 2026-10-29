@@ -2,7 +2,7 @@ import { useState, type FormEvent, type ReactNode } from 'react';
 import { useNode } from '@minca/react';
 import { message } from './action';
 import { palette, styles } from './styles';
-import { NAMES_DOMAIN, shortUsername, useUsernameLookup } from './usernames';
+import { NAMES_DOMAIN, OWN_DOMAIN_HELP, shortUsername, useAvailability } from './usernames';
 
 const { ink, surface, accent } = palette;
 
@@ -32,11 +32,13 @@ export function UsernamePicker({
   const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Only a bare name here: usernames this build gives out are at its own domain.
-  const bare = text.trim().toLowerCase();
-  const lookup = useUsernameLookup(bare.includes('@') ? '' : bare);
-  const wanted = lookup.status === 'nobody' ? lookup.username : null;
-  const mine = lookup.status === 'found' && lookup.username === current;
+  // A bare name is at this build's domain; one with its own domain is checked there.
+  const typedName = text.trim().toLowerCase();
+  const own = typedName.includes('@');
+  const availability = useAvailability(typedName);
+  const wanted = availability.status === 'free' ? availability.username : null;
+  const mine = availability.status === 'taken' && availability.username === current;
+  const domain = own ? typedName.slice(typedName.indexOf('@') + 1) : NAMES_DOMAIN;
 
   const claim = async (event: FormEvent) => {
     event.preventDefault();
@@ -54,23 +56,43 @@ export function UsernamePicker({
     }
   };
 
-  const status = bare.includes('@')
-    ? { text: `Just the name: it will be yours at ${NAMES_DOMAIN}`, tone: ink.muted }
-    : lookup.status === 'invalid'
+  const status: { text: ReactNode; tone: string } =
+    availability.status === 'invalid'
       ? {
-          text: 'Letters, numbers, dots, dashes and underscores; start and end with a letter or number',
+          text: typedName.endsWith('@')
+            ? 'Your domain, like you@yourname.com'
+            : 'Letters, numbers, dots, dashes and underscores; start and end with a letter or number',
           tone: ink.muted,
         }
-      : lookup.status === 'looking'
+      : availability.status === 'checking'
         ? { text: 'Checking…', tone: ink.faint }
-        : lookup.status === 'nobody'
-          ? { text: `${lookup.username} is free`, tone: accent.good }
-          : lookup.status === 'found'
+        : availability.status === 'free'
+          ? { text: `${shortUsername(availability.username)} is free`, tone: accent.good }
+          : availability.status === 'taken'
             ? {
                 text: mine ? 'That one is already yours' : 'Someone has that one. Try another?',
                 tone: mine ? ink.muted : accent.danger,
               }
-            : { text: 'Like a phone number, but one you choose.', tone: ink.muted };
+            : availability.status === 'unknown'
+              ? own
+                ? {
+                    text: (
+                      <>
+                        {domain} doesn’t give out Minca usernames yet.{' '}
+                        <a
+                          href={OWN_DOMAIN_HELP}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: 'inherit' }}
+                        >
+                          Set it up
+                        </a>
+                      </>
+                    ),
+                    tone: ink.muted,
+                  }
+                : { text: `Couldn’t reach ${NAMES_DOMAIN} just now. Try again in a moment.`, tone: ink.muted }
+              : { text: 'Like a phone number, but one you choose.', tone: ink.muted };
 
   return (
     <form
@@ -91,14 +113,11 @@ export function UsernamePicker({
             autoComplete="off"
             autoCapitalize="none"
             spellCheck={false}
-            maxLength={64}
+            maxLength={320}
             disabled={claiming}
             autoFocus
             style={fieldInput}
           />
-          <span style={{ color: ink.muted, fontWeight: 500, paddingRight: 16, whiteSpace: 'nowrap' }}>
-            @{NAMES_DOMAIN}
-          </span>
         </label>
         <button
           type="submit"
@@ -140,7 +159,7 @@ const fieldInput = {
   border: 'none',
   outline: 'none',
   background: 'transparent',
-  padding: '0 2px 0 18px',
+  padding: '0 18px',
   fontSize: 16,
   fontWeight: 500,
   color: ink.strong,

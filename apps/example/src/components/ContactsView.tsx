@@ -412,7 +412,7 @@ function FindPeople({
             name={known?.name ?? lookup.found.inbox.name ?? `@${shortUsername(lookup.username)}`}
             detail={
               <>
-                {lookup.username}
+                @{shortUsername(lookup.username)}
                 {yours ? ' · that’s you' : known ? ' · in your contacts' : waiting ? ' · request sent' : ''}
               </>
             }
@@ -438,14 +438,17 @@ function FindPeople({
         </ul>
       )}
       {lookup.status === 'looking' && matches === 0 && (
-        <p style={{ fontSize: 13, color: ink.faint, padding: '0 4px' }}>Looking for {lookup.username}…</p>
+        <p style={{ fontSize: 13, color: ink.faint, padding: '0 4px' }}>
+          Looking for @{shortUsername(lookup.username)}…
+        </p>
       )}
       {lookup.status === 'invalid' && matches === 0 && (
         <p style={{ fontSize: 13, color: ink.muted, padding: '0 4px' }}>No contact called that.</p>
       )}
       {lookup.status === 'nobody' && matches === 0 && (
         <p style={{ fontSize: 13, color: ink.muted, padding: '0 4px' }}>
-          Nobody is called <strong style={{ color: ink.strong }}>{lookup.username}</strong> yet.
+          Nobody is called <strong style={{ color: ink.strong }}>@{shortUsername(lookup.username)}</strong>{' '}
+          yet.
         </p>
       )}
       {adding && (

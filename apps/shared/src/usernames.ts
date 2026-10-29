@@ -78,3 +78,37 @@ export function useFreeUsername(ideas: ReadonlyArray<string>): string | null {
   }, [key]);
   return free;
 }
+
+/** Where a username being picked stands, as it is typed */
+export type Availability =
+  | { readonly status: 'empty' | 'invalid' }
+  | { readonly status: 'checking' | 'free' | 'taken' | 'unknown'; readonly username: string };
+
+/**
+ * Whether the username `text` names is free, a moment after typing stops:
+ * `anna` at this build's domain, `anna@example.org` at that one. `unknown`
+ * when its domain couldn't say, down or giving out no Minca usernames.
+ */
+export function useAvailability(text: string, delayMs = 300): Availability {
+  const username = usernameFrom(text);
+  const [found, setFound] = useState<{ username: string; free: boolean | null } | null>(null);
+  useEffect(() => {
+    if (!username) return;
+    let current = true;
+    const timer = setTimeout(() => {
+      void usernameFree(username).then((free) => current && setFound({ username, free }));
+    }, delayMs);
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
+  }, [username, delayMs]);
+  if (!text.trim()) return { status: 'empty' };
+  if (!username) return { status: 'invalid' };
+  if (found?.username !== username) return { status: 'checking', username };
+  return { status: found.free === null ? 'unknown' : found.free ? 'free' : 'taken', username };
+}
+
+/** How to give out Minca usernames at a domain of your own */
+export const OWN_DOMAIN_HELP =
+  'https://github.com/leifriksheim/minca/blob/main/packages/core/docs/usernames.md#running-one-for-your-domain';

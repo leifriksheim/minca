@@ -6,7 +6,7 @@ import { message, useCopy } from '@minca/app-shared/action';
 import { shapeColours } from '@minca/ui/tokens';
 import { palette, styles } from '../styles';
 import { usernameIdeas } from '@minca/core/inbox';
-import { useFreeUsername } from '@minca/app-shared/usernames';
+import { shortUsername, useFreeUsername } from '@minca/app-shared/usernames';
 import { UsernamePicker } from '@minca/app-shared/UsernamePicker';
 import { AddButton, LinkButton, QuietButton } from './Buttons';
 import { confirmThen } from '../confirm';
@@ -76,20 +76,17 @@ function Claimed({
   const name = useCopy();
   const link = useCopy();
   const [error, setError] = useState<string | null>(null);
-  const domain = username.slice(username.indexOf('@'));
+  // At this app's domain, the name alone is what people type to find you.
+  const shown = shortUsername(username);
   return (
     <>
-      <h2 style={big}>
-        {/* Two pieces, so a narrow screen breaks the line before the @ and never inside a word. */}
-        <span style={{ display: 'inline-block' }}>{username.slice(0, username.indexOf('@'))}</span>
-        <span style={{ display: 'inline-block', color: ink.muted, fontWeight: 600 }}>{domain}</span>
-      </h2>
+      <h2 style={big}>{shown}</h2>
       <p style={hint}>
         Anyone with it can ask to be your contact, and you choose who gets in.
         {until ? ` Renewed for you, so it stays yours.` : ''}
       </p>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 10 }}>
-        <AddButton onClick={() => name.copy(username)} style={{ height: 36 }}>
+        <AddButton onClick={() => name.copy(shown)} style={{ height: 36 }}>
           {name.copied ? 'Copied' : 'Copy username'}
         </AddButton>
         <QuietButton

@@ -84,6 +84,10 @@ minca-auth .wa-username {
 minca-auth .wa-username:focus-within { border-color: var(--minca-muted); box-shadow: 0 0 0 3px rgba(0, 0, 0, .06); }
 minca-auth .wa-username input, minca-auth .wa-username input:focus { flex: 1; min-width: 0; height: 100%; border: none; box-shadow: none; background: transparent; }
 minca-auth .wa-username > span { padding-right: 12px; color: var(--minca-muted); white-space: nowrap; }
+minca-auth .wa-domain { all: unset; padding: 0 12px 0 0; color: var(--minca-muted); white-space: nowrap; cursor: pointer; }
+minca-auth .wa-domain:hover, minca-auth .wa-domain:focus-visible { color: var(--minca-ink); text-decoration: underline; text-underline-offset: 3px; }
+minca-auth .wa-domain[hidden] { display: none; }
+minca-auth .wa-under a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 minca-auth .wa-mark { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin: 0 10px 0 -4px; padding: 0 !important; border-radius: 50%; font-size: 11px; font-weight: 700; }
 minca-auth .wa-mark:empty { display: none; }
 minca-auth .wa-mark[data-name="free"] { background: var(--minca-good); color: #fff !important; }

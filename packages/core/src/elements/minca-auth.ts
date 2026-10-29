@@ -38,6 +38,10 @@ export interface MincaSessionEventDetail {
   readonly session: MincaSession | null;
 }
 
+/** How to give out Minca usernames at a domain of your own */
+const OWN_DOMAIN_HELP =
+  'https://github.com/leifriksheim/minca/blob/main/packages/core/docs/usernames.md#running-one-for-your-domain';
+
 /** Where a username on the create screen stands */
 type NameState = 'empty' | 'checking' | 'free' | 'taken' | 'invalid' | 'unknown';
 
@@ -156,18 +160,24 @@ function subtitle(...text: Child[]): HTMLElement {
   return h('p', { class: 'wa-subtitle' }, ...text);
 }
 
-/** How the username asked for at sign-up is going, above the setup screens that follow */
-function claimLine({ username: claim }: AuthState): HTMLElement | null {
+/** How the username asked for at sign-up is going, above the setup screens that follow; at `domain`, by its name alone */
+function claimLine({ username: claim }: AuthState, domain: string | null): HTMLElement | null {
   if (!claim) return null;
   const states = { claiming: 'checking', claimed: 'free', failed: 'taken' } as const;
+  const shown =
+    domain && claim.username.endsWith(`@${domain}`)
+      ? claim.username.slice(0, -domain.length - 1)
+      : claim.username;
+  // The service's own words, without who refused what: the line says that already.
+  const why = (claim.error ?? 'the name service said no').replace(/^.* refused \S+: /, '');
   return h(
     'p',
     { class: 'wa-small', 'data-name': states[claim.status], 'aria-live': 'polite', style: 'margin:0 0 12px' },
     claim.status === 'claiming'
-      ? `Getting ${claim.username} for you…`
+      ? `Getting ${shown} for you…`
       : claim.status === 'claimed'
-        ? `${claim.username} is yours.`
-        : `${claim.username} couldn't be yours: ${claim.error ?? 'the name service said no'}. Pick another in any app, under Contacts.`,
+        ? `${shown} is your username.`
+        : `${shown} couldn't be yours: ${why}. Pick another in any app, under Contacts.`,
   );
 }
 
@@ -819,32 +829,46 @@ export class MincaAuthElement extends Base {
       autocomplete: 'off',
       autocapitalize: 'none',
       spellcheck: 'false',
-      maxlength: '64',
+      maxlength: '320',
       autofocus: true,
       disabled: busy,
       'aria-label': 'Username',
     });
+    // The whole username: as typed when it names a domain of its own, else at this home's.
+    const typedName = () => username.value.trim().toLowerCase();
+    const fullName = (typed: string) => (typed.includes('@') ? typed : `${typed}@${domain}`);
     const status = h('p', { class: 'wa-small wa-under', 'aria-live': 'polite' });
     // In the field: a tick once it is free, a cross once it is taken.
     const mark = h('span', { class: 'wa-mark', 'aria-hidden': 'true' });
     const show = () => {
       const { state: now } = this.#username;
+      const typed = typedName();
+      const own = typed.includes('@') ? (parseUsername(typed)?.domain ?? null) : null;
       mark.dataset.name = status.dataset.name = now;
       mark.textContent = now === 'free' ? '✓' : now === 'taken' ? '✕' : '';
+      if (now === 'unknown' && own)
+        return status.replaceChildren(
+          `${own} doesn't give out Minca usernames yet. `,
+          h('a', { href: OWN_DOMAIN_HELP, target: '_blank', rel: 'noopener' }, 'Set it up'),
+        );
       status.textContent =
         now === 'taken'
           ? 'Someone has that one. Try another.'
           : now === 'invalid'
-            ? 'Letters, numbers, dots, dashes and underscores.'
+            ? typed.endsWith('@')
+              ? 'Your domain, like you@yourname.com.'
+              : 'Letters, numbers, dots, dashes and underscores.'
             : now === 'unknown'
               ? "Couldn't check it just now. It's tried when you continue."
-              : 'How people find you and add you. You can change it later.';
+              : own && now === 'free'
+                ? `Free at ${own}.`
+                : 'How people find you and add you. You can change it later.';
     };
     // Looks the name up a moment after typing stops.
     const check = () => {
       clearTimeout(this.#usernameTimer);
-      const typed = username.value.trim().toLowerCase();
-      const parsed = typed ? parseUsername(`${typed}@${domain}`) : null;
+      const typed = typedName();
+      const parsed = typed ? parseUsername(fullName(typed)) : null;
       this.#username = { checked: typed, state: !typed ? 'empty' : parsed ? 'checking' : 'invalid' };
       show();
       if (!parsed) return;
@@ -859,8 +883,6 @@ export class MincaAuthElement extends Base {
     username.addEventListener('input', check);
     show();
 
-    const create = (name: string, picked: string) =>
-      void auth.createAccount(name, { username: `${picked}@${domain}` });
     // No username, so nobody finds the account by one: a name to show until it is given its own.
     const skip = () => void auth.createAccount(adHocName());
 
@@ -869,13 +891,13 @@ export class MincaAuthElement extends Base {
       subtitle('Free, and yours. No email or phone number needed.'),
       form(
         () => {
-          const typed = username.value.trim().toLowerCase();
+          const typed = typedName();
           const { state: now } = this.#username;
           if (!typed || now === 'taken' || now === 'invalid' || now === 'checking') return;
-          create(nameFromUsername(typed), typed);
+          void auth.createAccount(nameFromUsername(typed.split('@')[0]!), { username: fullName(typed) });
         },
         {},
-        h('div', { class: 'wa-username' }, username, h('span', null, `@${domain}`), mark),
+        h('div', { class: 'wa-username' }, username, mark),
         status,
         submit(busy, 'Continue', 'Creating…'),
       ),
@@ -902,7 +924,7 @@ export class MincaAuthElement extends Base {
     const account = state.session?.account;
     return card(
       'Your recovery code',
-      claimLine(state),
+      claimLine(state, this.auth.usernames),
       h(
         'p',
         { class: 'wa-hint' },
@@ -1037,7 +1059,7 @@ export class MincaAuthElement extends Base {
 
     return card(
       'How do you want to sign in?',
-      claimLine(state),
+      claimLine(state, this.auth.usernames),
       subtitle(
         'This is what you will use every day.',
         info(

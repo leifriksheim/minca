@@ -35,7 +35,10 @@ knocks by username, and the contact it becomes keeps the username
 
 **At sign-up.** `createMincaAuth({ usernames: 'minca.social' })` makes the
 create screen of `<minca-auth>` one field: the username, with a tick once the
-service says it is free and a cross once it is taken. The account's name
+service says it is free and a cross once it is taken. A bare name is at that
+domain, and is how it is shown and handed out (`leif`); a whole username,
+`leif@example.org`, is checked and claimed at its own domain, and one that
+gives out no Minca usernames says so, with a link to running a service. The account's name
 starts as the username's (`nameFromUsername`: `leif.r` is Leif R) and is
 changed on the account page. "Continue without a username" makes the account with none, so nobody
 finds it by one, and a made-up name to show until it is given one

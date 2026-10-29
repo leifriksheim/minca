@@ -7,7 +7,7 @@ import { Shape } from '@minca/app-shared/shapes';
 import { markFor } from '@minca/ui/shapes';
 import { palette, styles } from '../styles';
 import { invitableRoles, useContacts } from '../contacts';
-import { useUsernameLookup } from '@minca/app-shared/usernames';
+import { shortUsername, useUsernameLookup } from '@minca/app-shared/usernames';
 import { AddButton } from './Buttons';
 import { AddDialog, Handle, PersonRow } from './PeopleParts';
 
@@ -222,7 +222,7 @@ export function AddPeople({
           <PersonRow
             face={found.username}
             name={found.found.inbox.name ?? <Handle username={found.username} />}
-            detail={<>{found.username} · not a contact yet</>}
+            detail={<>@{shortUsername(found.username)} · not a contact yet</>}
           >
             <AddButton
               onClick={() =>
