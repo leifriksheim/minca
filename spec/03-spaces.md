@@ -1021,8 +1021,8 @@ verdict: a peer **MUST** judge the whole version on its own, never by what it
 found for the stub, which was judged without its body.
 
 > **Known defect:** a peer applies step 3 only where it knows the space is
-> one of the account's own (`accountOnly` in
-> `packages/core/src/node/space-runtime.ts`). The account's devices know,
+> one of the account's own (`accountOnly`, read in
+> `packages/core/src/node/space-standing.ts`, `judgeStanding`, and `packages/core/src/node/space-writing.ts`, `write`). The account's devices know,
 > since they derive those ids (§13.1). A peer without the account key, such as
 > a carrier, a host or a mirror reader, may not be able to tell those spaces
 > from any other, and then lets stand a version the account's devices refuse.
