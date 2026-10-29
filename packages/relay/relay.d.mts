@@ -42,4 +42,6 @@ export declare const MAILBOX_LIMITS: MailboxLimits;
 export declare function createRelay(options?: {
   readonly turn?: TurnSettings;
   readonly mailbox?: Partial<MailboxLimits>;
+  /** Blobs a host keeps under a topic for its accounts, handed out first */
+  readonly mailboxFrom?: (topic: string) => ReadonlyArray<string>;
 }): Relay;

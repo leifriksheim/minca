@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from 'react';
 import { Modal } from '@minca/app-shared/Modal';
 import { useCopy } from '@minca/app-shared/action';
-import { styles, palette } from '../styles';
+import { styles, palette, hstack } from '../styles';
+import { LinkButton, PrimaryButton } from './Buttons';
 
 /** What people run: it opens their account home, where they allow it */
 const COMMAND = import.meta.env.VITE_MINCA_CONNECT ?? 'npx @minca/cli connect';
@@ -45,14 +46,9 @@ export function ConnectAgent({
           at={at}
           aside={
             skipped ? null : (
-              <button
-                type="button"
-                onClick={() => setSkipped(true)}
-                data-variant="ghost"
-                style={{ ...styles.linkButton, fontSize: 13, padding: 0 }}
-              >
+              <LinkButton type="button" onClick={() => setSkipped(true)} style={{ fontSize: 13, padding: 0 }}>
                 Already connected
-              </button>
+              </LinkButton>
             )
           }
         >
@@ -62,13 +58,12 @@ export function ConnectAgent({
           </p>
           <div style={commandBox}>
             <code style={commandText}>{COMMAND}</code>
-            <button
+            <PrimaryButton
               onClick={() => copy(COMMAND)}
-              data-variant="primary"
-              style={{ ...styles.button, width: 'auto', height: 32, padding: '0 14px', fontSize: 13 }}
+              style={{ width: 'auto', height: 32, padding: '0 14px', fontSize: 13 }}
             >
               {copied ? '✓ Copied' : 'Copy'}
-            </button>
+            </PrimaryButton>
           </div>
         </AgentStep>
 
@@ -89,13 +84,12 @@ export function ConnectAgent({
                 Start a new session in your agent, or restart it, and it can work in your spaces, even with
                 this tab closed. You can disconnect it any time in your account settings.
               </p>
-              <button
+              <PrimaryButton
                 onClick={onClose}
-                data-variant="primary"
-                style={{ ...styles.button, alignSelf: 'flex-start', width: 'auto', padding: '0 20px' }}
+                style={{ alignSelf: 'flex-start', width: 'auto', padding: '0 20px' }}
               >
                 Done
-              </button>
+              </PrimaryButton>
             </>
           )}
         </AgentStep>
@@ -125,7 +119,7 @@ function AgentStep({
   children?: ReactNode;
 }) {
   return (
-    <li style={{ display: 'flex', gap: 14 }} aria-current={at === 'now' ? 'step' : undefined}>
+    <li style={hstack(14)} aria-current={at === 'now' ? 'step' : undefined}>
       <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
         <span style={marker[at]}>{at === 'done' ? '✓' : n}</span>
         {!last && <span style={{ flex: 1, width: 1.5, minHeight: 16, background: palette.surface.line }} />}

@@ -12,13 +12,14 @@ import {
 import { ideas, ruleWords, type PickedRule } from '../../automations';
 import { Person, usePeopleHere } from '../Person';
 import { Icon } from '../Icon';
-import { styles, palette } from '../../styles';
+import { styles, palette, hstack, stack } from '../../styles';
 import { AutomationBuilder } from './AutomationBuilder';
 import { Empty, SectionHead, iconDot, list, section } from './parts';
 import { SpaceBots } from '@minca/app-shared/CommunitySetup';
 import { useAction } from '@minca/app-shared/action';
 import { useActivityOff } from '../../activity';
-import { ask } from '@minca/app-shared/Ask';
+import { LinkButton, QuietButton } from '../Buttons';
+import { confirmThen } from '../../confirm';
 
 type Open = {
   readonly kind: 'automation';
@@ -79,8 +80,8 @@ export function AutomationsView({
   const act = (work: () => Promise<unknown>) => void run(work);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 36, maxWidth: 760 }}>
-      <header style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div style={{ ...stack(36), maxWidth: 760 }}>
+      <header style={stack(6)}>
         <h2 style={{ ...styles.appTitle, fontSize: 22 }}>Automations</h2>
         <p style={{ fontSize: 14, color: palette.ink.muted, lineHeight: 1.55 }}>
           Let {space.name} look after itself: close a poll once enough people voted, tell the chat when a task
@@ -107,14 +108,9 @@ export function AutomationsView({
             Nobody sees when a bot or agent is working on something here, so its answers arrive unannounced.
           </span>
           {shows.turnOn ? (
-            <button
-              type="button"
-              data-variant="ghost"
-              style={styles.linkButton}
-              onClick={() => shows.turnOn && act(shows.turnOn)}
-            >
+            <LinkButton type="button" onClick={() => shows.turnOn && act(shows.turnOn)}>
               Show it
-            </button>
+            </LinkButton>
           ) : (
             <span>Someone who may add collections can show it.</span>
           )}
@@ -153,7 +149,7 @@ export function AutomationsView({
                     >
                       <Icon name="bolt" size={14} />
                     </span>
-                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    <div style={{ flex: 1, minWidth: 0, ...stack(3) }}>
                       <strong style={{ color: palette.ink.strong, fontSize: 14.5 }}>{automation.name}</strong>
                       <span style={{ fontSize: 14, color: palette.ink.body, lineHeight: 1.5 }}>
                         {ruleWords(automation, collections, who)}
@@ -174,9 +170,9 @@ export function AutomationsView({
                         )}
                       </span>
                     </div>
-                    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    <div style={{ ...hstack(6), flexShrink: 0 }}>
                       {mine && (
-                        <button
+                        <QuietButton
                           onClick={() =>
                             act(() =>
                               node.records.update(space.id, record.key, {
@@ -186,43 +182,33 @@ export function AutomationsView({
                               }),
                             )
                           }
-                          data-variant="quiet"
-                          style={styles.smallButton}
                         >
                           {off ? 'Turn on' : 'Pause'}
-                        </button>
+                        </QuietButton>
                       )}
                       {mine ? (
-                        <button
-                          onClick={() => setOpen({ kind: 'automation', editing: record })}
-                          data-variant="quiet"
-                          style={styles.smallButton}
-                        >
+                        <QuietButton onClick={() => setOpen({ kind: 'automation', editing: record })}>
                           Change
-                        </button>
+                        </QuietButton>
                       ) : (
                         space.writable && (
-                          <button
+                          <QuietButton
                             onClick={() => setOpen({ kind: 'automation', copying: record })}
-                            data-variant="quiet"
                             title="Save it as an automation of your own, which you can change"
-                            style={styles.smallButton}
                           >
                             Make a copy
-                          </button>
+                          </QuietButton>
                         )
                       )}
                       {rules.deletable.has(record.key) && (
                         <button
-                          onClick={() => {
-                            void ask('It stops running, for everyone in the space.', {
-                              title: `Delete the automation “${automation.name}”?`,
-                              yes: 'Delete',
-                              danger: true,
-                            }).then((sure) => {
-                              if (sure) act(() => node.records.delete(space.id, record.key));
-                            });
-                          }}
+                          onClick={() =>
+                            confirmThen(
+                              'It stops running, for everyone in the space.',
+                              { title: `Delete the automation “${automation.name}”?`, yes: 'Delete' },
+                              () => act(() => node.records.delete(space.id, record.key)),
+                            )
+                          }
                           data-variant="danger"
                           aria-label={`Delete ${automation.name}`}
                           style={{ ...styles.smallButton, color: palette.accent.danger }}
@@ -243,10 +229,7 @@ export function AutomationsView({
                       }}
                     >
                       {runs.slice(0, 3).map((run) => (
-                        <li
-                          key={run.key}
-                          style={{ fontSize: 12.5, display: 'flex', gap: 6, color: palette.ink.muted }}
-                        >
+                        <li key={run.key} style={{ fontSize: 12.5, ...hstack(6), color: palette.ink.muted }}>
                           <span style={{ color: run.body?.ok ? palette.accent.good : palette.accent.danger }}>
                             {run.body?.ok ? '✓' : '!'}
                           </span>
@@ -254,11 +237,7 @@ export function AutomationsView({
                           <span style={{ color: palette.ink.faint }}>{ago(run.updatedAt)}</span>
                         </li>
                       ))}
-                      {runs.length > 3 && (
-                        <li style={{ fontSize: 12, color: palette.ink.faint }}>
-                          and {runs.length - 3} earlier
-                        </li>
-                      )}
+                      {runs.length > 3 && <li style={styles.faint}>and {runs.length - 3} earlier</li>}
                     </ul>
                   )}
                 </li>
@@ -269,7 +248,7 @@ export function AutomationsView({
         {error && <p style={{ ...styles.error, fontSize: 13 }}>{error}</p>}
 
         {space.writable && starters.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+          <div style={{ ...stack(8), marginTop: 8 }}>
             <p style={styles.fieldLabel}>Ideas for {space.name}</p>
             <div
               style={{

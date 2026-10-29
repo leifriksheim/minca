@@ -10,12 +10,11 @@
  * there, and WebRTC, since not every browser has it in workers. The worker
  * reaches both by message.
  *
- * In a `SharedWorker`, every tab of a site that opens the same account's
- * stores, signing with the same key, shares one node: one copy in memory, one set of connections, and
- * nothing to tell the other tabs when it writes. Each tab brings its signer
- * and its WebRTC; the node uses the WebRTC of the tab open longest, and moves
- * to the next when that tab goes. It closes when the last tab leaves. A tab
- * that goes without saying so is noticed by a Web Lock it holds while open.
+ * In a `SharedWorker`, the tabs that open the same account's stores with the
+ * same key share one node: one copy in memory, one set of connections. Each
+ * tab brings its signer and its WebRTC; the node uses the WebRTC of the tab
+ * open longest. It closes when the last tab leaves. A tab that goes without
+ * saying so is noticed by a Web Lock it holds while open.
  */
 import type { RootSigner } from '../identity/root-signer.js';
 import type { Delegation } from '../identity/ucan.js';
@@ -95,23 +94,8 @@ export async function startNodeInWorker(
   const connections = new MessageChannel();
   const stopSigner = serveSigner(signer, signing.port1);
   const stopConnections = serveTransport(connections.port1);
+  const letGo = await holdTabLock(tab);
 
-  // Held until this tab lets go of the node, or is gone.
-  let letGo = () => {};
-  const held = locks();
-  if (held) {
-    await new Promise<void>((granted) => {
-      held
-        .request(tabLock(tab), () => {
-          granted();
-          return new Promise<void>((resolve) => {
-            letGo = resolve;
-          });
-        })
-        // Taken from this tab (\`steal\`): the worker has let go of it already.
-        .catch(() => {});
-    });
-  }
   const stop = () => {
     stopSigner();
     stopConnections();
@@ -120,28 +104,7 @@ export async function startNodeInWorker(
     worker.terminate?.();
   };
 
-  const started = new Promise<void>((resolve, reject) => {
-    // A worker that never loads says nothing at all, so the page would wait forever.
-    const giveUp = () => {
-      globalThis.clearTimeout(timer);
-      nodes.port1.removeEventListener('message', onMessage);
-      const error = new Error('The node’s worker did not start.');
-      error.name = WORKER_NOT_STARTED;
-      reject(error);
-    };
-    const timer = globalThis.setTimeout(giveUp, startTimeoutMs);
-    worker.addEventListener?.('error', giveUp);
-    const onMessage = (event: MessageEvent) => {
-      const message: unknown = event.data;
-      if (!isRecord(message) || message[TAG] !== true) return;
-      nodes.port1.removeEventListener('message', onMessage);
-      globalThis.clearTimeout(timer);
-      if (message.ok === true) resolve();
-      else reject(new Error(typeof message.error === 'string' ? message.error : 'The node could not start'));
-    };
-    nodes.port1.addEventListener('message', onMessage);
-    nodes.port1.start();
-  });
+  const started = startedOn(nodes.port1, worker, startTimeoutMs);
   worker.postMessage({ [TAG]: true, kind: 'start', tab, config: sent }, [
     nodes.port2,
     signing.port2,
@@ -165,6 +128,52 @@ export async function startNodeInWorker(
     stop();
     throw error;
   }
+}
+
+/** Holds this tab's lock until the returned function lets go, so the worker learns when the tab is gone */
+async function holdTabLock(tab: string): Promise<() => void> {
+  let letGo = () => {};
+  await new Promise<void>((granted) => {
+    const held = locks();
+    if (!held) return granted();
+    held
+      .request(tabLock(tab), () => {
+        granted();
+        return new Promise<void>((resolve) => {
+          letGo = resolve;
+        });
+      })
+      // Taken from this tab (`steal`): the worker has let go of it already.
+      .catch(() => {});
+  });
+  return () => letGo();
+}
+
+/** Settles once the worker says whether the node started; a worker that never loads says nothing, so it times out */
+function startedOn(port: MessagePort, worker: WorkerLike, timeoutMs: number): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const done = () => {
+      globalThis.clearTimeout(timer);
+      port.removeEventListener('message', onMessage);
+    };
+    const giveUp = () => {
+      done();
+      const error = new Error('The node’s worker did not start.');
+      error.name = WORKER_NOT_STARTED;
+      reject(error);
+    };
+    const onMessage = (event: MessageEvent) => {
+      const message: unknown = event.data;
+      if (!isRecord(message) || message[TAG] !== true) return;
+      done();
+      if (message.ok === true) resolve();
+      else reject(new Error(typeof message.error === 'string' ? message.error : 'The node could not start'));
+    };
+    const timer = globalThis.setTimeout(giveUp, timeoutMs);
+    worker.addEventListener?.('error', giveUp);
+    port.addEventListener('message', onMessage);
+    port.start();
+  });
 }
 
 /** A signer made of every tab's: the newest first, since an app's newest tab holds its freshest grant */
@@ -265,41 +274,22 @@ export function runNodeWorker(
   const openStores = options.openStores ?? workerStores;
   const held = new Map<string, Held>();
 
-  const attach = async (tab: string, sent: unknown, ports: ReadonlyArray<MessagePort>): Promise<void> => {
+  async function attach(tab: string, sent: unknown, ports: ReadonlyArray<MessagePort>): Promise<void> {
     const [nodePort, signerPort, transportPort] = ports;
     if (!nodePort || !signerPort || !transportPort) return;
-    const fail = (error: unknown) =>
-      nodePort.postMessage({
-        [TAG]: true,
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-      });
     let entry: Held | undefined;
     try {
       if (!isWorkerNodeConfig(sent)) throw new Error('The page sent no node config');
       const signer = await remoteSigner(signerPort);
-      const key = nodeKey(
-        signer.did,
-        sent.stores,
-        sent.sessionKey ? await didOf(sent.sessionKey.publicKey) : undefined,
-      );
+      const sessionDid = sent.sessionKey ? await didOf(sent.sessionKey.publicKey) : undefined;
+      const key = nodeKey(signer.did, sent.stores, sessionDid);
       entry = held.get(key) ?? start(key, sent, signer);
-      entry.signers.add(tab, signer);
-      entry.connections.add(tab, remoteTransport(transportPort, entry.iceServers));
       const own = entry;
-      const detach = async () => {
-        const stopServing = own.tabs.get(tab);
-        if (!stopServing) return;
-        own.tabs.delete(tab);
-        stopServing();
-        own.signers.remove(tab);
-        own.connections.remove(tab);
-        if (own.tabs.size > 0) return;
-        held.delete(key);
-        await (await own.node).close();
-      };
+      own.signers.add(tab, signer);
+      own.connections.add(tab, remoteTransport(transportPort, own.iceServers));
       own.tabs.set(tab, () => {});
       const node = await own.node;
+      const detach = () => detachTab(key, own, tab);
       // Said before serving, so it reaches the page ahead of any reply.
       nodePort.postMessage({ [TAG]: true, ok: true });
       // This tab's view: closing it lets go of the node, which others may still use.
@@ -312,16 +302,24 @@ export function runNodeWorker(
         })
         .catch(() => {});
     } catch (error) {
-      if (entry) {
-        entry.tabs.delete(tab);
-        entry.signers.remove(tab);
-        entry.connections.remove(tab);
-      }
-      fail(error);
+      if (entry) forgetTab(entry, tab);
+      const reason = error instanceof Error ? error.message : String(error);
+      nodePort.postMessage({ [TAG]: true, ok: false, error: reason });
     }
-  };
+  }
 
-  const start = (key: string, config: WorkerNodeConfig, signer: RootSigner): Held => {
+  /** Lets go of the node for one tab; the last tab out closes it */
+  async function detachTab(key: string, entry: Held, tab: string): Promise<void> {
+    const stopServing = entry.tabs.get(tab);
+    if (!stopServing) return;
+    forgetTab(entry, tab);
+    stopServing();
+    if (entry.tabs.size > 0) return;
+    held.delete(key);
+    await (await entry.node).close();
+  }
+
+  function start(key: string, config: WorkerNodeConfig, signer: RootSigner): Held {
     const { stores, network, ...rest } = config;
     const signers = createSignerSwitch(signer.did);
     const connections = createTransportSwitch();
@@ -355,7 +353,7 @@ export function runNodeWorker(
       if (held.get(key) === entry) held.delete(key);
     });
     return entry;
-  };
+  }
 
   const listen = (port: { addEventListener: WorkerScope['addEventListener'] }) =>
     port.addEventListener('message', (event: MessageEvent) => {
@@ -373,6 +371,12 @@ export function runNodeWorker(
     }
   });
   listen(scope);
+}
+
+function forgetTab(entry: Held, tab: string): void {
+  entry.tabs.delete(tab);
+  entry.signers.remove(tab);
+  entry.connections.remove(tab);
 }
 
 function isWorkerNodeConfig(value: unknown): value is WorkerNodeConfig {

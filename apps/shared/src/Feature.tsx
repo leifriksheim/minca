@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { Shape } from './shapes';
-import { palette } from './styles';
+import { palette, hstack } from './styles';
 
 /** Line glyphs on a 16-unit grid, drawn with the current colour, like the example's icons */
 const GLYPHS = {
@@ -88,7 +88,7 @@ export function StatusPill({ tone, children }: { tone: Tone; children: ReactNode
 /** A benefit in a list: a small check and one short line */
 export function Benefit({ glyph = 'check', children }: { glyph?: GlyphName; children: ReactNode }) {
   return (
-    <li style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 14, color: palette.ink.body }}>
+    <li style={{ ...hstack(10), alignItems: 'flex-start', fontSize: 14, color: palette.ink.body }}>
       <span
         style={{
           width: 20,

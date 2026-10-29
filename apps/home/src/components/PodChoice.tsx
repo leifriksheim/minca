@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { AuthError, Place, PodContents } from '@minca/core/session';
 import { Modal } from '@minca/app-shared/Modal';
-import { styles, palette } from '../styles';
+import { styles, palette, hstack, stack } from '../styles';
 
 /**
  * Asked after picking a pod while signed in, before anything changes.
@@ -69,11 +69,7 @@ export function PodChoice({
       <p style={text}>
         What should happen to the data {here}?{others}
       </p>
-      <div
-        role="radiogroup"
-        aria-label="What to do with your data"
-        style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
-      >
+      <div role="radiogroup" aria-label="What to do with your data" style={stack(8)}>
         <Choice
           checked={how === 'combine'}
           onSelect={() => setHow('combine')}
@@ -119,8 +115,7 @@ function Choice({
       aria-checked={checked}
       onClick={onSelect}
       style={{
-        display: 'flex',
-        gap: 12,
+        ...hstack(12),
         alignItems: 'flex-start',
         textAlign: 'left',
         padding: 14,
@@ -144,7 +139,7 @@ function Choice({
           background: checked ? palette.accent.base : palette.surface.card,
         }}
       />
-      <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <span style={stack(4)}>
         <span
           style={{
             display: 'flex',

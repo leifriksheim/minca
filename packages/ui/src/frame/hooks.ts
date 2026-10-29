@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { Minca, ScreenRecord } from './minca';
 
 /**
@@ -45,35 +45,51 @@ minca.onChange(() => (people = null));
 /** Everyone in the space who said their name */
 export const usePeople = () => useLoaded(() => (people ??= minca.people()), []) ?? [];
 
+/**
+ * What `load` gives for the current `deps`; null until then, or if it fails.
+ * An answer for older `deps` is dropped.
+ */
+export function useAnswer<T>(load: () => Promise<T>, deps: ReadonlyArray<unknown>): T | null {
+  const [answer, setAnswer] = useState<T | null>(null);
+  useEffect(() => {
+    let current = true;
+    setAnswer(null);
+    load().then(
+      (value) => current && setAnswer(() => value),
+      () => {},
+    );
+    return () => {
+      current = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the caller names what load reads
+  }, deps);
+  return answer;
+}
+
+/** A cache of answers by id: each is asked for once, and a failure is forgotten so it is asked again */
+export function remembered<T>(): (id: string, make: () => Promise<T>) => Promise<T> {
+  const known = new Map<string, Promise<T>>();
+  return (id, make) => {
+    let answer = known.get(id);
+    if (!answer) {
+      answer = make();
+      answer.catch(() => known.delete(id));
+      known.set(id, answer);
+    }
+    return answer;
+  };
+}
+
 /** Pictures by file, asked for once for the life of the screen */
-const files = new Map<string, Promise<string | null>>();
+const files = remembered<string | null>();
 
 /**
  * A picture a record refers to (`{ hash, mime, … }` in its body), as a URL an
  * `<img>` shows; null until it is here, or if it can't be had.
  */
 export function useFile(key: string, ref: { readonly hash: string } | null | undefined): string | null {
-  const [url, setUrl] = useState<string | null>(null);
   const hash = ref?.hash ?? null;
-  useEffect(() => {
-    if (!hash) return setUrl(null);
-    let live = true;
-    let known = files.get(hash);
-    if (!known) {
-      known = minca.file(key, hash);
-      // A file that couldn't be had now, like one still syncing, may be had later: not remembered.
-      known.catch(() => files.delete(hash));
-      files.set(hash, known);
-    }
-    known.then(
-      (found) => live && setUrl(found),
-      () => live && setUrl(null),
-    );
-    return () => {
-      live = false;
-    };
-  }, [key, hash]);
-  return url;
+  return useAnswer(async () => (hash ? files(hash, () => minca.file(key, hash)) : null), [key, hash]);
 }
 
 /**
@@ -82,26 +98,10 @@ export function useFile(key: string, ref: { readonly hash: string } | null | und
  * the screen stops showing it, since whole files can be large.
  */
 export function useBlob(key: string, ref: { readonly hash: string } | null | undefined): string | null {
-  const [url, setUrl] = useState<string | null>(null);
   const hash = ref?.hash ?? null;
-  useEffect(() => {
-    setUrl(null);
-    if (!hash) return;
-    let live = true;
-    let made: string | null = null;
-    minca.blob(key, hash).then(
-      (blob) => {
-        if (!live) return;
-        made = URL.createObjectURL(blob);
-        setUrl(made);
-      },
-      () => {},
-    );
-    return () => {
-      live = false;
-      if (made) URL.revokeObjectURL(made);
-    };
-  }, [key, hash]);
+  const blob = useAnswer(async () => (hash ? minca.blob(key, hash) : null), [key, hash]);
+  const url = useMemo(() => (blob ? URL.createObjectURL(blob) : null), [blob]);
+  useEffect(() => () => url && URL.revokeObjectURL(url), [url]);
   return url;
 }
 

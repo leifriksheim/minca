@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useConnection } from '@minca/react';
 import { Wordmark } from '@minca/app-shared/Wordmark';
 import { styles, palette } from '../styles';
+import { LinkButton, PrimaryButton } from './Buttons';
 
 /** Before the app is connected: one button that opens the account home, where the person signs in */
 export function ConnectScreen() {
@@ -27,41 +28,27 @@ export function ConnectScreen() {
 
         {own === null ? (
           <>
-            <button
-              onClick={() => void connection.connect()}
-              disabled={waiting}
-              data-variant="primary"
-              style={styles.button}
-            >
+            <PrimaryButton onClick={() => void connection.connect()} disabled={waiting}>
               {state.status === 'starting'
                 ? 'Opening your account…'
                 : state.status === 'connecting'
                   ? 'Waiting for your account home…'
                   : 'Connect with Minca'}
-            </button>
+            </PrimaryButton>
             <p style={{ ...styles.errorHint, marginTop: 16 }}>
               Opens <strong style={{ color: palette.ink.strong }}>{home}</strong>, where you sign in. This app
               gets a note signed by your account for its own key — never your password.
             </p>
             <div style={styles.linkRow}>
-              <button
-                onClick={() => setOwn('')}
-                data-variant="ghost"
-                style={{ ...styles.linkButton, paddingLeft: 0 }}
-              >
+              <LinkButton onClick={() => setOwn('')} style={{ paddingLeft: 0 }}>
                 Use your own home
-              </button>
+              </LinkButton>
               {/* Another account connected here works now, without the home. */}
               {state.status !== 'starting' &&
                 others.map((other) => (
-                  <button
-                    key={other.did}
-                    onClick={() => void connection.use(other.did)}
-                    data-variant="ghost"
-                    style={styles.linkButton}
-                  >
+                  <LinkButton key={other.did} onClick={() => void connection.use(other.did)}>
                     Use {other.name}
-                  </button>
+                  </LinkButton>
                 ))}
             </div>
           </>
@@ -84,26 +71,16 @@ export function ConnectScreen() {
               autoCapitalize="off"
               style={styles.input}
             />
-            <button
-              type="submit"
-              disabled={waiting || !own.trim()}
-              data-variant="primary"
-              style={styles.button}
-            >
+            <PrimaryButton type="submit" disabled={waiting || !own.trim()}>
               {state.status === 'connecting' ? 'Waiting for your account home…' : 'Connect'}
-            </button>
+            </PrimaryButton>
             <p style={{ ...styles.errorHint, marginTop: 8 }}>
               The address of the Minca home you run yourself. This app remembers it.
             </p>
             <div style={styles.linkRow}>
-              <button
-                type="button"
-                onClick={() => setOwn(null)}
-                data-variant="ghost"
-                style={{ ...styles.linkButton, paddingLeft: 0 }}
-              >
+              <LinkButton type="button" onClick={() => setOwn(null)} style={{ paddingLeft: 0 }}>
                 Use {home} instead
-              </button>
+              </LinkButton>
             </div>
           </form>
         )}

@@ -187,7 +187,7 @@ While the invite's record has not reached this device, the space is held with
 `joining: true` and the node tries again as records arrive
 ([spec 06 §1.3](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
 
-_Source: `packages/core/src/node/node.ts` (`spaces.invite`, `preview`, `join`, `nodesOf`, `shortInvite`, `resolveInvite`, `keepLinks`), `packages/core/src/space/space-manager.ts` (`previewInvite`, `join`), `packages/core/src/space/invite-link.ts`. Tests: `packages/core/tests/space.test.ts` ("invites"), `packages/core/tests/roles.test.ts` ("invites"), `packages/core/tests/invite-link.test.ts`, `packages/cli/tests/host.test.ts` ("someone invited reaches the space through the inviter’s host…", "a short link: the host keeps it…")._
+_Source: `packages/core/src/node/node.ts` (`spaces.invite`, `preview`, `join`), `packages/core/src/node/node-hosting.ts` (`nodesOf`), `packages/core/src/node/node-carriers.ts` (`inviteTo`, `shortInvite`, `resolveInvite`, `keepLinks`), `packages/core/src/space/space-manager.ts` (`previewInvite`, `join`), `packages/core/src/space/invite-link.ts`. Tests: `packages/core/tests/space.test.ts` ("invites"), `packages/core/tests/roles.test.ts` ("invites"), `packages/core/tests/invite-link.test.ts`, `packages/cli/tests/host.test.ts` ("someone invited reaches the space through the inviter’s host…", "a short link: the host keeps it…")._
 
 ## Keeping a space's keys and relays
 
@@ -263,7 +263,7 @@ publishes nothing
 > whether nicknames for people who are not contacts get a collection of their
 > own. `profile:` keys may also change (spec 03 §8.6).
 
-_Source: `packages/core/src/node/space-runtime.ts` (`loadProfiles`, `publishProfile`), `packages/core/src/node/node.ts` (`publishProfile`, `ownName`, `account.setName`), `packages/core/src/space/account-registry.ts` (`PROFILE_COLLECTION`, `PROFILE_KEY`). Tests: `packages/core/tests/profiles.test.ts`, `packages/core/tests/contacts.test.ts` ("the contact key"), `packages/core/tests/account.test.ts` ("the account name")._
+_Source: `packages/core/src/node/space-runtime.ts` (`loadProfiles`, `publishProfile`), `packages/core/src/node/node-contacts.ts` (`publishProfile`, `ownName`, `account.setName`), `packages/core/src/space/account-registry.ts` (`PROFILE_COLLECTION`, `PROFILE_KEY`). Tests: `packages/core/tests/profiles.test.ts`, `packages/core/tests/contacts.test.ts` ("the contact key"), `packages/core/tests/account.test.ts` ("the account name")._
 
 ## The space manager
 
@@ -315,4 +315,4 @@ is what a carrier's wake matches; the rest is judged only by the app. Without
 one, a carrier wakes the app for every new record of the collection, and the
 app turns down the rest.
 
-_Source: `packages/core/src/space/own-automations.ts` (`checkOwnAutomation`, `notifyOn`, `matchesRecord`), `packages/core/src/query/filter.ts` (`checkFilter`, `matches`), `packages/core/src/node/node.ts` (`automations`), `apps/example/src/notifications.ts`. Tests: `packages/core/tests/carrier.test.ts` ("notifications through a carrier"), `packages/core/tests/topics.test.ts` ("an automation of the account’s own: its where")._
+_Source: `packages/core/src/space/own-automations.ts` (`checkOwnAutomation`, `notifyOn`, `matchesRecord`), `packages/core/src/query/filter.ts` (`checkFilter`, `matches`), `packages/core/src/node/node-carriers.ts` (`automations`), `apps/example/src/notifications.ts`. Tests: `packages/core/tests/carrier.test.ts` ("notifications through a carrier"), `packages/core/tests/topics.test.ts` ("an automation of the account’s own: its where")._

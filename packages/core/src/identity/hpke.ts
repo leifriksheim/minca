@@ -14,7 +14,14 @@
  * ```
  */
 import { p256 } from '@noble/curves/nist.js';
-import { base64UrlDecode, base64UrlEncode, concatBytes, utf8Decode, utf8Encode } from '../utils/encoding.js';
+import {
+  base64UrlDecode,
+  base64UrlEncode,
+  bytesToHex,
+  concatBytes,
+  utf8Decode,
+  utf8Encode,
+} from '../utils/encoding.js';
 import { bufferSource } from '../utils/guards.js';
 import { boundContext, ENVELOPE_VERSION, type Bound } from './envelope.js';
 
@@ -29,6 +36,8 @@ const N_NONCE = 12;
 const TAG_BYTES = 16;
 const MAX_TEXT = 1_000_000;
 const HASH_BYTES = 32;
+const ECDH = { name: 'ECDH', namedCurve: 'P-256' } as const;
+const HMAC = { name: 'HMAC', hash: 'SHA-256' } as const;
 
 const i2osp = (value: number, length: number) => {
   const out = new Uint8Array(length);
@@ -45,13 +54,9 @@ const EMPTY = new Uint8Array(0);
 async function hmac(key: Uint8Array, data: Uint8Array): Promise<Uint8Array<ArrayBuffer>> {
   // An empty HMAC key is the same as a hash-length run of zeros, and Web Crypto refuses empty keys.
   const material = key.length ? key : new Uint8Array(HASH_BYTES);
-  const imported = await globalThis.crypto.subtle.importKey(
-    'raw',
-    bufferSource(material),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
+  const imported = await globalThis.crypto.subtle.importKey('raw', bufferSource(material), HMAC, false, [
+    'sign',
+  ]);
   return new Uint8Array(await globalThis.crypto.subtle.sign('HMAC', imported, bufferSource(data)));
 }
 
@@ -75,16 +80,19 @@ const labeledExpand = (suite: Uint8Array, prk: Uint8Array, label: string, info: 
 
 /** The 32-byte x-coordinate of ECDH between a private key and a public point */
 async function dh(privateKey: CryptoKey, point: Uint8Array): Promise<Uint8Array> {
-  const publicKey = await globalThis.crypto.subtle.importKey(
-    'raw',
-    bufferSource(point),
-    { name: 'ECDH', namedCurve: 'P-256' },
-    false,
-    [],
-  );
+  const publicKey = await globalThis.crypto.subtle.importKey('raw', bufferSource(point), ECDH, false, []);
   return new Uint8Array(
     await globalThis.crypto.subtle.deriveBits({ name: 'ECDH', public: publicKey }, privateKey, 256),
   );
+}
+
+async function ephemeralKeyPair(): Promise<{
+  readonly privateKey: CryptoKey;
+  readonly publicKey: Uint8Array;
+}> {
+  const pair = await globalThis.crypto.subtle.generateKey(ECDH, true, ['deriveBits']);
+  const publicKey = new Uint8Array(await globalThis.crypto.subtle.exportKey('raw', pair.publicKey));
+  return { privateKey: pair.privateKey, publicKey };
 }
 
 /** DHKEM's ExtractAndExpand: the shared secret, bound to both points */
@@ -102,11 +110,10 @@ async function keySchedule(aead: HpkeAead, shared: Uint8Array, info: Uint8Array)
   const secret = await labeledExtract(suite, shared, 'secret', EMPTY);
   const key = await labeledExpand(suite, secret, 'key', context, aead === 0x0001 ? 16 : 32);
   const nonce = await labeledExpand(suite, secret, 'base_nonce', context, N_NONCE);
-  const aesKey = await globalThis.crypto.subtle.importKey('raw', key, 'AES-GCM', false, [
-    'encrypt',
-    'decrypt',
-  ]);
-  return { key: aesKey, nonce };
+  return {
+    key: await globalThis.crypto.subtle.importKey('raw', key, 'AES-GCM', false, ['encrypt', 'decrypt']),
+    nonce,
+  };
 }
 
 const isPoint = (bytes: Uint8Array) => bytes.length === POINT_BYTES && bytes[0] === 0x04;
@@ -126,19 +133,10 @@ export async function hpkeSeal(params: {
   readonly ephemeral?: { readonly privateKey: CryptoKey; readonly publicKey: Uint8Array };
 }): Promise<{ readonly enc: Uint8Array; readonly ciphertext: Uint8Array }> {
   if (!isPoint(params.publicKey)) throw new Error('Not an uncompressed P-256 point');
-  const aead = params.aead ?? 0x0002;
-  const ephemeral =
-    params.ephemeral ??
-    (await (async () => {
-      const pair = await globalThis.crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, [
-        'deriveBits',
-      ]);
-      const publicKey = new Uint8Array(await globalThis.crypto.subtle.exportKey('raw', pair.publicKey));
-      return { privateKey: pair.privateKey, publicKey };
-    })());
+  const ephemeral = params.ephemeral ?? (await ephemeralKeyPair());
   const enc = ephemeral.publicKey;
   const shared = await sharedSecret(await dh(ephemeral.privateKey, params.publicKey), enc, params.publicKey);
-  const { key, nonce } = await keySchedule(aead, shared, params.info);
+  const { key, nonce } = await keySchedule(params.aead ?? 0x0002, shared, params.info);
   const ciphertext = await globalThis.crypto.subtle.encrypt(
     { name: 'AES-GCM', iv: nonce, additionalData: bufferSource(params.aad) },
     key,
@@ -190,7 +188,7 @@ export async function hpkeDeriveKeyPair(
   const prk = await labeledExtract(KEM_SUITE, EMPTY, 'dkp_prk', ikm);
   for (let counter = 0; counter < 256; counter += 1) {
     const candidate = await labeledExpand(KEM_SUITE, prk, 'candidate', new Uint8Array([counter]), 32);
-    const scalar = BigInt(`0x${Array.from(candidate, (b) => b.toString(16).padStart(2, '0')).join('')}`);
+    const scalar = BigInt(`0x${bytesToHex(candidate)}`);
     if (scalar !== 0n && scalar < p256.Point.CURVE().n)
       return { privateKey: candidate, publicKey: p256.getPublicKey(candidate, false) };
   }

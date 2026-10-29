@@ -1,6 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
-import { matches, type Filter, type NodeCollection, type NodeRecord, type SpaceSummary } from '@minca/core';
-import { useAccount, useNode } from '@minca/react';
+import { useMemo, useState } from 'react';
+import {
+  matches,
+  type Filter,
+  type NodeCollection,
+  type NodeRecord,
+  type P2PNode,
+  type SpaceSummary,
+} from '@minca/core';
+import { useAccount, useAsync, useNode } from '@minca/react';
 import { ME } from '@minca/core/schemas';
 import { Modal } from '@minca/app-shared/Modal';
 import { Loader } from '@minca/app-shared/Loader';
@@ -11,9 +18,10 @@ import { nameOf } from '../../derive/people';
 import { ago } from '@minca/ui/time';
 import { useAsk } from '../../notifications';
 import { usePeopleHere } from '../Person';
-import { styles, palette } from '../../styles';
+import { styles, palette, hstack, stack } from '../../styles';
 import { places, type Within } from '../../automations';
 import { ClauseList, Pill, PlacePill, Sentence, Step, card, previewBox } from './parts';
+import { PrimaryButton, QuietButton } from '../Buttons';
 
 type Who = 'others' | 'anyone';
 type Where = 'space' | 'all';
@@ -92,30 +100,14 @@ export function WatchBuilder({
 
   // What it would have caught lately, in this space.
   const looking = JSON.stringify([collection, clauses, within, who]);
-  const [found, setFound] = useState<{ for: string; matched: NodeRecord[]; looked: number } | null>(null);
-  const preview = found?.for === looking ? found : null;
-  useEffect(() => {
-    if (!collection) return;
-    let live = true;
+  const lookup = useAsync(async () => {
+    if (!collection) return null;
     const condition = allOf([whereOf(clauses, did), ...within.map(linkedTo)].filter((c) => c !== undefined));
-    // A query, so a condition on a computed field reads what this device works out.
-    void node.records
-      .query(space.id, { collection, sort: { '@createdAt': 'desc' }, limit: LOOK_BACK })
-      .then(async ({ records }) => {
-        const matched: NodeRecord[] = [];
-        for (const record of records) {
-          if (!record.verified || record.body === null) continue;
-          if (who === 'others' && record.createdBy === did) continue;
-          if (condition !== undefined && !matches(record, condition)) continue;
-          matched.push(record);
-        }
-        if (live) setFound({ for: looking, matched, looked: records.length });
-      })
-      .catch(() => live && setFound({ for: looking, matched: [], looked: 0 }));
-    return () => {
-      live = false;
-    };
-  }, [node, space.id, collection, clauses, within, who, did, looking]);
+    const caught = await recentlyCaught(node, space.id, collection, condition, who === 'others' ? did : null);
+    return { for: looking, ...caught };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `looking` names what it reads
+  }, [node, space.id, did, looking]);
+  const preview = lookup.status === 'done' && lookup.value?.for === looking ? lookup.value : null;
 
   const submit = () => {
     if (!chosen) return;
@@ -141,9 +133,7 @@ export function WatchBuilder({
           “{shown}” is on. This app lets you know while it's open, in a tab or installed. You can pause or
           remove it any time in your account.
         </p>
-        <button onClick={onClose} data-variant="primary" style={styles.button}>
-          Done
-        </button>
+        <PrimaryButton onClick={onClose}>Done</PrimaryButton>
       </Modal>
     );
 
@@ -243,14 +233,14 @@ export function WatchBuilder({
               <span style={{ color: palette.ink.muted }}>
                 Lately, this would have told you about {preview.matched.length} of the last {preview.looked}:
               </span>
-              <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <ul style={{ listStyle: 'none', ...stack(4) }}>
                 {preview.matched.slice(0, 4).map((record) => (
-                  <li key={record.key} style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
+                  <li key={record.key} style={{ ...hstack(8), alignItems: 'baseline' }}>
                     <span style={{ color: palette.ink.faint }}>●</span>
                     <span style={{ flex: 1, minWidth: 0, color: palette.ink.strong }}>
                       {recordLabel(record, chosen.schema)}
                     </span>
-                    <span style={{ fontSize: 12, color: palette.ink.faint }}>{ago(record.createdAt)}</span>
+                    <span style={styles.faint}>{ago(record.createdAt)}</span>
                   </li>
                 ))}
               </ul>
@@ -260,7 +250,7 @@ export function WatchBuilder({
       )}
 
       {chosen && (
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <label style={stack(6)}>
           <span style={styles.fieldLabel}>The notification says</span>
           <input
             value={shown}
@@ -278,19 +268,37 @@ export function WatchBuilder({
       )}
       {error && <p style={{ ...styles.errorHint, marginTop: 0, color: palette.accent.danger }}>{error}</p>}
 
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <button onClick={onClose} data-variant="quiet" style={{ ...styles.smallButton, height: 40 }}>
+      <div style={{ ...hstack(8), justifyContent: 'flex-end' }}>
+        <QuietButton onClick={onClose} style={{ height: 40 }}>
           Cancel
-        </button>
-        <button
-          onClick={submit}
-          disabled={!chosen || asking}
-          data-variant="primary"
-          style={{ ...styles.button, width: 'auto' }}
-        >
+        </QuietButton>
+        <PrimaryButton onClick={submit} disabled={!chosen || asking} style={{ width: 'auto' }}>
           {asking ? 'Confirm in your account…' : 'Notify me'}
-        </button>
+        </PrimaryButton>
       </div>
     </Modal>
   );
+}
+
+/** The newest records of a collection a watch would have told you about, leaving out your own when `notBy` names you */
+async function recentlyCaught(
+  node: P2PNode,
+  spaceId: string,
+  collection: string,
+  condition: Filter | undefined,
+  notBy: string | null,
+): Promise<{ matched: NodeRecord[]; looked: number }> {
+  // A query, so a condition on a computed field reads what this device works out.
+  const found = await node.records
+    .query(spaceId, { collection, sort: { '@createdAt': 'desc' }, limit: LOOK_BACK })
+    .catch(() => null);
+  if (!found) return { matched: [], looked: 0 };
+  const matched = found.records.filter(
+    (record) =>
+      record.verified &&
+      record.body !== null &&
+      record.createdBy !== notBy &&
+      (condition === undefined || matches(record, condition)),
+  );
+  return { matched, looked: found.records.length };
 }

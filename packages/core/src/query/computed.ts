@@ -30,6 +30,7 @@ import { INT, STRING, typeOfCel, typeOfSchema, versionType, type CelType } from 
 import { versionValue } from '../records/contracts.js';
 import { LINK_REL_PATTERN } from '../records/links.js';
 import { isRecord } from '../utils/guards.js';
+import { getOrAdd } from '../utils/map.js';
 
 /** As stored: each field's CEL, by name */
 export type ComputedFields = Readonly<Record<string, string>>;
@@ -60,7 +61,11 @@ const NAMES = new Set([
   'updatedAt',
 ]);
 
+/** A `linked(collection, rel)` call's key in a map */
+const linkedKey = (collection: string | undefined, rel: string | undefined) => `${collection}\u0000${rel}`;
+
 const parsed = new Map<string, CelNode>();
+/** An expression's parse, cached; or why it doesn't parse */
 function parse(source: string): CelNode | string {
   const cached = parsed.get(source);
   if (cached) return cached;
@@ -81,20 +86,24 @@ export function checkComputed(computed: unknown, at = 'computed'): string | null
   if (entries.length > MAX_COMPUTED) return `${at}: at most ${MAX_COMPUTED} computed fields`;
   const count = { nodes: 0 };
   for (const [name, source] of entries) {
-    const here = `${at}.${name}`;
-    if (!NAME.test(name)) return `${here}: a name is lower camel case, like "done" or "thumbsUp"`;
-    if (typeof source !== 'string' || !source.trim() || source.length > MAX_LENGTH)
-      return `${here} is a CEL expression, at most ${MAX_LENGTH} characters`;
-    const node = parse(source);
-    if (typeof node === 'string') return `${here}: ${node}`;
-    const problem = checkCel(node, { names: NAMES, linked: true, linkRel: LINK_REL_PATTERN }, count);
-    if (problem) return `${here}: ${problem}`;
-    for (const [collection] of linkedCalls(node)) {
-      if (!COLLECTION.test(collection))
-        return `${here}: linked() takes a collection name, like "app.reaction"; "${collection}" is not one`;
-    }
+    const problem = checkField(name, source, count);
+    if (problem) return `${at}.${name}${problem}`;
     if (count.nodes > MAX_NODES) return `${at}: computed fields are too large (at most ${MAX_NODES} parts)`;
   }
+  return null;
+}
+
+/** Why one computed field can't be used, said after its name; `count` adds up the parts of all of them */
+function checkField(name: string, source: unknown, count: { nodes: number }): string | null {
+  if (!NAME.test(name)) return ': a name is lower camel case, like "done" or "thumbsUp"';
+  if (typeof source !== 'string' || !source.trim() || source.length > MAX_LENGTH)
+    return ` is a CEL expression, at most ${MAX_LENGTH} characters`;
+  const node = parse(source);
+  if (typeof node === 'string') return `: ${node}`;
+  const problem = checkCel(node, { names: NAMES, linked: true, linkRel: LINK_REL_PATTERN }, count);
+  if (problem) return `: ${problem}`;
+  const bad = linkedCalls(node).find(([collection]) => !COLLECTION.test(collection));
+  if (bad) return `: linked() takes a collection name, like "app.reaction"; "${bad[0]}" is not one`;
   return null;
 }
 
@@ -144,13 +153,30 @@ function typesOfComputed(
 ): Readonly<Record<string, CelType>> | string {
   const clash = computedClash(computed, schema, at);
   if (clash) return clash;
-  const body = typeOfSchema(schema);
-  const version = versionType(body);
-  const fields = version.t === 'object' ? version.fields : {};
-  const names = new Map<string, CelType>(Object.entries(fields));
-  for (const n of ['id', 'deleted']) names.delete(n);
-  names.set('creator', STRING).set('updatedAt', STRING).set('seq', INT);
-  const linked = (collection: string, rel: string): CelType | string => {
+  const names = namesOf(schema);
+  const linked = linkedType(name, definitionOf);
+  const types: Record<string, CelType> = {};
+  for (const [field, source] of Object.entries(computed)) {
+    const node = parse(source);
+    const type = typeof node === 'string' ? node : typeOfCel(node, names, linked);
+    if (typeof type === 'string') return `${at}.${field}: ${type}`;
+    types[field] = type;
+  }
+  return types;
+}
+
+/** The types of what a computed field reads of its record */
+function namesOf(schema: unknown): Map<string, CelType> {
+  const version = versionType(typeOfSchema(schema));
+  const names = new Map<string, CelType>(Object.entries(version.t === 'object' ? version.fields : {}));
+  names.delete('id');
+  names.delete('deleted');
+  return names.set('creator', STRING).set('updatedAt', STRING).set('seq', INT);
+}
+
+/** The type of a `linked(collection, rel)` from collection `name`, or why it can't be called */
+function linkedType(name: string, definitionOf: (collection: string) => LinkingCollection | null) {
+  return (collection: string, rel: string): CelType | string => {
     const linking = definitionOf(collection);
     if (!linking) {
       return collection.startsWith('std.')
@@ -158,46 +184,34 @@ function typesOfComputed(
         : `${collection} is not defined in this space: define it first`;
     }
     const declared = linking.links ?? {};
-    const roles = Object.keys(declared);
     const role = Object.hasOwn(declared, rel) ? declared[rel] : undefined;
-    if (!role)
-      return `${collection} declares no link role "${rel}"; ${roles.length ? `it declares ${roles.map((r) => `"${r}"`).join(', ')}` : 'it declares none'}`;
+    if (!role) return `${collection} declares no link role "${rel}"; ${declaredRoles(declared)}`;
     if (role.to !== '*' && !role.to.includes(name))
       return `${collection}'s "${rel}" links point at ${role.to.join(', ')}, not ${name}`;
     return typeOfSchema(linking.schema);
   };
-  const types: Record<string, CelType> = {};
-  for (const [field, source] of Object.entries(computed)) {
-    const node = parse(source);
-    if (typeof node === 'string') return `${at}.${field}: ${node}`;
-    const type = typeOfCel(node, names, linked);
-    if (typeof type === 'string') return `${at}.${field}: ${type}`;
-    types[field] = type;
-  }
-  return types;
 }
+
+function declaredRoles(declared: Readonly<Record<string, unknown>>): string {
+  const roles = Object.keys(declared);
+  return roles.length ? `it declares ${roles.map((r) => `"${r}"`).join(', ')}` : 'it declares none';
+}
+
+const JSON_TYPES: Readonly<Partial<Record<CelType['t'], string>>> = {
+  bool: 'boolean',
+  int: 'integer',
+  uint: 'integer',
+  double: 'number',
+  string: 'string',
+  null: 'null',
+  object: 'object',
+};
 
 /** The JSON Schema of a value of this type, as far as it says */
 function schemaOfType(type: CelType): Record<string, unknown> {
-  switch (type.t) {
-    case 'bool':
-      return { type: 'boolean' };
-    case 'int':
-    case 'uint':
-      return { type: 'integer' };
-    case 'double':
-      return { type: 'number' };
-    case 'string':
-      return { type: 'string' };
-    case 'null':
-      return { type: 'null' };
-    case 'list':
-      return { type: 'array', items: schemaOfType(type.item) };
-    case 'object':
-      return { type: 'object' };
-    default:
-      return {};
-  }
+  if (type.t === 'list') return { type: 'array', items: schemaOfType(type.item) };
+  const name = JSON_TYPES[type.t];
+  return name ? { type: name } : {};
 }
 
 /**
@@ -212,11 +226,10 @@ export function computedSchemas(
 ): Readonly<Record<string, Readonly<Record<string, unknown>>>> {
   const computed = definition.computed ?? {};
   const types = typesOfComputed(definition.name, computed, definition.schema, definitionOf);
+  const schemaOf = (field: string) =>
+    typeof types === 'string' ? {} : schemaOfType(types[field] ?? { t: 'dyn' });
   return Object.fromEntries(
-    Object.keys(computed).map((field) => [
-      field,
-      { ...(typeof types === 'string' ? {} : schemaOfType(types[field] ?? { t: 'dyn' })), readOnly: true },
-    ]),
+    Object.keys(computed).map((field) => [field, { ...schemaOf(field), readOnly: true }]),
   );
 }
 
@@ -227,11 +240,9 @@ export function computedSchemas(
 function computedClash(computed: ComputedFields, schema: unknown, at = 'computed'): string | null {
   const body = typeOfSchema(schema);
   if (body.t !== 'object') return null;
-  for (const field of Object.keys(computed)) {
-    if (Object.hasOwn(body.fields, field))
-      return `${at}.${field}: the body has a field "${field}" too; give the computed field another name`;
-  }
-  return null;
+  const field = Object.keys(computed).find((name) => Object.hasOwn(body.fields, name));
+  if (field === undefined) return null;
+  return `${at}.${field}: the body has a field "${field}" too; give the computed field another name`;
 }
 
 /**
@@ -296,7 +307,7 @@ export function linkedReads(fields: ComputedFields): ReadonlyArray<LinkedRead> {
     const node = parse(source);
     if (typeof node === 'string') continue;
     for (const [collection, rel] of linkedCalls(node))
-      reads.set(`${collection}\u0000${rel}`, { collection, rel });
+      reads.set(linkedKey(collection, rel), { collection, rel });
   }
   return [...reads.values()];
 }
@@ -322,15 +333,13 @@ export async function causeOf(
   // Each collection and role looked up once; taking records away filters what was found.
   const found = new Map<string, ReadonlyArray<NodeRecord>>();
   for (const { collection, rel } of linkedReads(fields)) {
-    found.set(
-      `${collection}\u0000${rel}`,
-      (await source.linked(record.key, { rel, collection })).filter(readable),
-    );
+    const linking = await source.linked(record.key, { rel, collection });
+    found.set(linkedKey(collection, rel), linking.filter(readable));
   }
   const gone = new Set<string>();
   const without: LinkedSource = {
     linked: async (_key, { rel, collection }) =>
-      (found.get(`${collection}\u0000${rel}`) ?? []).filter((r) => !gone.has(r.key)),
+      (found.get(linkedKey(collection, rel)) ?? []).filter((r) => !gone.has(r.key)),
   };
   if (!holds(await computeValues(without, record, fields))) return null;
   const byKey = new Map([...found.values()].flat().map((r) => [r.key, r]));
@@ -384,17 +393,11 @@ export async function computeValues(
   ]);
   // Fields often read the same links: each is looked up once per record.
   const found = new Map<string, Promise<CelValue>>();
-  const linked = (collection: string, rel: string): Promise<CelValue> => {
-    const at = `${collection}\u0000${rel}`;
-    let list = found.get(at);
-    if (!list) {
-      list = source
-        .linked(record.key, { rel, collection })
-        .then((records) => records.filter(readable).map(asVersion));
-      found.set(at, list);
-    }
-    return list;
-  };
+  const linked = (collection: string, rel: string): Promise<CelValue> =>
+    getOrAdd(found, linkedKey(collection, rel), async () => {
+      const linking = await source.linked(record.key, { rel, collection });
+      return linking.filter(readable).map(asVersion);
+    });
   const values: Record<string, unknown> = {};
   for (const [name, source] of Object.entries(fields)) {
     const node = parse(source);

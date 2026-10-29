@@ -13,10 +13,12 @@ const header = (headers: IncomingMessage['headers'], name: string) => {
   return Array.isArray(value) ? value[0] : value;
 };
 
-export function githubConnector(app: GitHubApp): HostConnector {
-  const installationOf = (data: Readonly<Record<string, unknown>>) =>
-    typeof data.installation === 'number' ? data.installation : null;
+const installationOf = (data: Readonly<Record<string, unknown>>) =>
+  typeof data.installation === 'number' ? data.installation : null;
 
+const NOTHING: ServiceChange = { kind: 'nothing', said: 'nothing to do' };
+
+export function githubConnector(app: GitHubApp): HostConnector {
   return Object.freeze({
     id: 'github',
     name: 'GitHub',
@@ -59,35 +61,32 @@ export function githubConnector(app: GitHubApp): HostConnector {
       ? {
           async hook(body: string, headers: IncomingMessage['headers']): Promise<ServiceChange> {
             if (!app.signed(body, header(headers, 'x-hub-signature-256'))) return { kind: 'unsigned' };
-            const event = header(headers, 'x-github-event') ?? '';
             const payload: unknown = JSON.parse(body);
-            const installation =
-              isRecord(payload) && isRecord(payload.installation) ? payload.installation.id : null;
-            if (typeof installation !== 'number' || !isRecord(payload))
-              return { kind: 'nothing', said: 'nothing to do' };
-            const which = (data: Readonly<Record<string, unknown>>) => installationOf(data) === installation;
-            // Uninstalled or suspended on GitHub: the bots it reached are connected no more.
-            if (event === 'installation' && (payload.action === 'deleted' || payload.action === 'suspend'))
-              return {
-                kind: 'forget',
-                which,
-                said: `installation ${installation} ${String(payload.action)}`,
-              };
-            if (
-              event === 'installation_repositories' ||
-              (event === 'installation' && payload.action === 'unsuspend')
-            ) {
-              const reaches = await app.repos(installation);
-              return {
-                kind: 'reaches',
-                which,
-                reaches,
-                said: `installation ${installation}: ${reaches.length} repositories`,
-              };
-            }
-            return { kind: 'nothing', said: 'nothing to do' };
+            return changeFrom(app, header(headers, 'x-github-event') ?? '', payload);
           },
         }
       : {}),
   });
+}
+
+/** What a webhook call from GitHub changes for the connections on its installation */
+async function changeFrom(app: GitHubApp, event: string, payload: unknown): Promise<ServiceChange> {
+  if (!isRecord(payload) || !isRecord(payload.installation)) return NOTHING;
+  const installation = payload.installation.id;
+  if (typeof installation !== 'number') return NOTHING;
+  const which = (data: Readonly<Record<string, unknown>>) => installationOf(data) === installation;
+  const { action } = payload;
+  // Uninstalled or suspended on GitHub: the bots it reached are connected no more.
+  if (event === 'installation' && (action === 'deleted' || action === 'suspend'))
+    return { kind: 'forget', which, said: `installation ${installation} ${String(action)}` };
+  if (event === 'installation_repositories' || (event === 'installation' && action === 'unsuspend')) {
+    const reaches = await app.repos(installation);
+    return {
+      kind: 'reaches',
+      which,
+      reaches,
+      said: `installation ${installation}: ${reaches.length} repositories`,
+    };
+  }
+  return NOTHING;
 }

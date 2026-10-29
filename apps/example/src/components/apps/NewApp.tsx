@@ -6,7 +6,8 @@ import type { useSpaceApps } from './entries';
 import { AppIcon } from './AppIcon';
 import { addTemplate } from './launcher';
 import { Icon } from '../Icon';
-import { styles, palette } from '../../styles';
+import { styles, palette, stack } from '../../styles';
+import { QuietButton } from '../Buttons';
 
 /**
  * Adding an app to a space: first one of your own, asked of an agent
@@ -50,13 +51,13 @@ export function NewApp({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div style={stack(14)}>
       {space.writable && (
         <button onClick={onOwn} className="app-card" style={ownCard}>
           <span style={ownIcon}>
             <Icon name="sparkle" size={22} />
           </span>
-          <span style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 0 }}>
+          <span style={{ ...stack(4), flex: 1, minWidth: 0 }}>
             <strong style={{ ...styles.appTitle, fontSize: 19 }}>Add your own</strong>
             <span style={{ fontSize: 14, lineHeight: 1.5, color: palette.ink.body }}>
               Say what {space.name} needs in your own words, and your agent builds it. You add it once it
@@ -69,7 +70,7 @@ export function NewApp({
         </button>
       )}
       <h2 style={{ ...styles.sectionTitle, marginTop: 18 }}>Ready-made</h2>
-      <p style={{ fontSize: 13, color: palette.ink.muted }}>
+      <p style={styles.quiet}>
         {ready.length === 0
           ? `${space.name} has every ready-made app.`
           : mayDefine
@@ -86,21 +87,18 @@ export function NewApp({
                 <p style={cardText}>{app.description}</p>
               </div>
               {mayDefine && (
-                <button
+                <QuietButton
                   onClick={() => add(app)}
                   disabled={busy}
                   aria-label={`Add ${app.title}`}
-                  data-variant="quiet"
-                  style={{ ...styles.smallButton, flexShrink: 0 }}
+                  style={{ flexShrink: 0 }}
                 >
                   {busy && adding?.id === app.id ? 'Adding…' : 'Add'}
-                </button>
+                </QuietButton>
               )}
             </div>
             <details style={{ marginTop: 6 }}>
-              <summary style={{ fontSize: 12, color: palette.ink.faint, paddingLeft: 52 }}>
-                What it stores
-              </summary>
+              <summary style={{ ...styles.faint, paddingLeft: 52 }}>What it stores</summary>
               <SchemaList app={app} collections={collections} />
             </details>
           </div>

@@ -1,11 +1,11 @@
 /**
  * @module indexeddb-adapter
- * IndexedDB implementation of StorageAdapter for P2P network.
+ * The browser's StorageAdapter: a key-value store and a store of versions by id.
  */
 
 import type { StorageAdapter, BatchOp, Version } from '../types.js';
 import { isStoredVersion } from '../utils/guards.js';
-import { requestResult as idbRequest, transactionDone } from '../identity/idb.js';
+import { requestResult, transactionDone } from '../identity/idb.js';
 
 /**
  * Bumped whenever the object stores change. Opening a database made at an
@@ -13,98 +13,43 @@ import { requestResult as idbRequest, transactionDone } from '../identity/idb.js
  */
 const DB_VERSION = 4;
 
-/** A stored version, or null for a miss */
-async function readVersion(request: IDBRequest<unknown>): Promise<Version | null> {
-  const value = await idbRequest(request);
-  return isStoredVersion(value) ? value : null;
-}
-
-/** A transaction, and a promise that settles when it commits */
-function idbTransaction(
-  db: IDBDatabase,
-  stores: string[],
-  mode: IDBTransactionMode,
-): { tx: IDBTransaction; complete: Promise<void> } {
-  const tx = db.transaction(stores, mode);
-  return { tx, complete: transactionDone(tx) };
-}
-
-/**
- * Creates an IndexedDB backed storage adapter.
- * @param dbName The name of the database (defaults to 'minca-storage')
- * @returns A promise resolving to the StorageAdapter
- */
+/** Creates an IndexedDB backed storage adapter */
 export async function createIndexedDBAdapter(dbName = 'minca-storage'): Promise<StorageAdapter> {
-  const db = await new Promise<IDBDatabase>((resolve, reject) => {
-    const request = globalThis.indexedDB.open(dbName, DB_VERSION);
+  const db = await openDatabase(dbName);
 
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      for (const name of Array.from(db.objectStoreNames)) db.deleteObjectStore(name);
-      // Key-value: which version is current, what sync compares, space records
-      db.createObjectStore('kv');
-      // Versions by id
-      db.createObjectStore('versions', { keyPath: 'id' });
-    };
+  const reading = (name: string) => db.transaction([name], 'readonly').objectStore(name);
 
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error(`Could not open ${dbName}`));
-  });
+  /** Runs `work` in one read-write transaction, settling once it commits */
+  async function writing(names: string[], work: (tx: IDBTransaction) => void): Promise<void> {
+    const tx = db.transaction(names, 'readwrite');
+    const complete = transactionDone(tx);
+    work(tx);
+    await complete;
+  }
 
   return Object.freeze({
     async get(key: string): Promise<Uint8Array | null> {
-      const { tx } = idbTransaction(db, ['kv'], 'readonly');
-      const store = tx.objectStore('kv');
-      const result = await idbRequest<unknown>(store.get(key));
+      const result = await requestResult<unknown>(reading('kv').get(key));
       return result instanceof ArrayBuffer ? new Uint8Array(result) : null;
     },
 
-    async put(key: string, value: Uint8Array): Promise<void> {
-      const { tx, complete } = idbTransaction(db, ['kv'], 'readwrite');
-      const store = tx.objectStore('kv');
-      store.put(value.buffer, key);
-      await complete;
-    },
+    put: (key: string, value: Uint8Array) =>
+      writing(['kv'], (tx) => tx.objectStore('kv').put(value.buffer, key)),
 
-    async delete(key: string): Promise<void> {
-      const { tx, complete } = idbTransaction(db, ['kv'], 'readwrite');
-      const store = tx.objectStore('kv');
-      store.delete(key);
-      await complete;
-    },
+    delete: (key: string) => writing(['kv'], (tx) => tx.objectStore('kv').delete(key)),
 
     async list(prefix = ''): Promise<string[]> {
-      const { tx } = idbTransaction(db, ['kv'], 'readonly');
-      const store = tx.objectStore('kv');
-      const keys: string[] = [];
-
-      const request = prefix
-        ? store.openCursor(IDBKeyRange.bound(prefix, prefix + '\uFFFF', false, false))
-        : store.openCursor();
-
-      await new Promise<void>((resolve, reject) => {
-        request.onsuccess = () => {
-          const cursor = request.result;
-          if (cursor) {
-            if (typeof cursor.key === 'string') keys.push(cursor.key);
-            cursor.continue();
-          } else {
-            resolve();
-          }
-        };
-        request.onerror = () => reject(request.error ?? new Error('IndexedDB request failed'));
-      });
-      return keys;
+      const store = reading('kv');
+      const keys = await requestResult(prefix ? store.getAllKeys(under(prefix)) : store.getAllKeys());
+      return keys.filter((key) => typeof key === 'string');
     },
 
     async entries(prefix: string): Promise<ReadonlyArray<readonly [string, Uint8Array]>> {
-      const { tx } = idbTransaction(db, ['kv'], 'readonly');
-      const store = tx.objectStore('kv');
-      const range = IDBKeyRange.bound(prefix, prefix + '\uFFFF', false, false);
+      const store = reading('kv');
       // Both in key order, from one transaction: they line up.
       const [keys, values] = await Promise.all([
-        idbRequest(store.getAllKeys(range)),
-        idbRequest(store.getAll(range)),
+        requestResult(store.getAllKeys(under(prefix))),
+        requestResult(store.getAll(under(prefix))),
       ]);
       return keys.flatMap((key, i) => {
         const value: unknown = values[i];
@@ -114,64 +59,66 @@ export async function createIndexedDBAdapter(dbName = 'minca-storage'): Promise<
       });
     },
 
-    async commit(write: {
+    commit: (write: {
       readonly store: ReadonlyArray<Version>;
       readonly ops: ReadonlyArray<BatchOp>;
       readonly remove: ReadonlyArray<string>;
-    }): Promise<void> {
-      const { tx, complete } = idbTransaction(db, ['kv', 'versions'], 'readwrite');
-      const versions = tx.objectStore('versions');
-      const kv = tx.objectStore('kv');
-      for (const version of write.store) versions.put(version);
-      for (const op of write.ops) {
-        if (op.type === 'put') kv.put(op.value.buffer, op.key);
-        else kv.delete(op.key);
-      }
-      for (const id of write.remove) versions.delete(id);
-      await complete;
-    },
+    }) =>
+      writing(['kv', 'versions'], (tx) => {
+        const versions = tx.objectStore('versions');
+        for (const version of write.store) versions.put(version);
+        applyOps(tx.objectStore('kv'), write.ops);
+        for (const id of write.remove) versions.delete(id);
+      }),
 
     async getVersions(ids: ReadonlyArray<string>): Promise<ReadonlyArray<Version | null>> {
       if (ids.length === 0) return [];
-      const { tx } = idbTransaction(db, ['versions'], 'readonly');
-      const store = tx.objectStore('versions');
+      const store = reading('versions');
       return Promise.all(ids.map((id) => readVersion(store.get(id))));
     },
 
-    async putVersion(version: Version): Promise<void> {
-      const { tx, complete } = idbTransaction(db, ['versions'], 'readwrite');
-      const store = tx.objectStore('versions');
-      store.put(version);
-      await complete;
-    },
+    putVersion: (version: Version) => writing(['versions'], (tx) => tx.objectStore('versions').put(version)),
 
-    async getVersion(id: string): Promise<Version | null> {
-      const { tx } = idbTransaction(db, ['versions'], 'readonly');
-      return readVersion(tx.objectStore('versions').get(id));
-    },
+    getVersion: (id: string) => readVersion(reading('versions').get(id)),
 
-    async deleteVersion(id: string): Promise<void> {
-      const { tx, complete } = idbTransaction(db, ['versions'], 'readwrite');
-      const store = tx.objectStore('versions');
-      store.delete(id);
-      await complete;
-    },
+    deleteVersion: (id: string) => writing(['versions'], (tx) => tx.objectStore('versions').delete(id)),
 
-    async batch(ops: ReadonlyArray<BatchOp>): Promise<void> {
-      const { tx, complete } = idbTransaction(db, ['kv'], 'readwrite');
-      const store = tx.objectStore('kv');
-      for (const op of ops) {
-        if (op.type === 'put') {
-          store.put(op.value.buffer, op.key);
-        } else if (op.type === 'delete') {
-          store.delete(op.key);
-        }
-      }
-      await complete;
-    },
+    batch: (ops: ReadonlyArray<BatchOp>) => writing(['kv'], (tx) => applyOps(tx.objectStore('kv'), ops)),
 
     async close(): Promise<void> {
       db.close();
     },
   });
+}
+
+/** Opens the database, wiping one made at an earlier version */
+function openDatabase(dbName: string): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = globalThis.indexedDB.open(dbName, DB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      for (const name of Array.from(db.objectStoreNames)) db.deleteObjectStore(name);
+      // Which version is current, what sync compares, space records
+      db.createObjectStore('kv');
+      db.createObjectStore('versions', { keyPath: 'id' });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error(`Could not open ${dbName}`));
+  });
+}
+
+/** Every key starting with `prefix` */
+const under = (prefix: string) => IDBKeyRange.bound(prefix, prefix + '￿', false, false);
+
+function applyOps(kv: IDBObjectStore, ops: ReadonlyArray<BatchOp>): void {
+  for (const op of ops) {
+    if (op.type === 'put') kv.put(op.value.buffer, op.key);
+    else kv.delete(op.key);
+  }
+}
+
+/** A stored version, or null for a miss */
+async function readVersion(request: IDBRequest<unknown>): Promise<Version | null> {
+  const value = await requestResult(request);
+  return isStoredVersion(value) ? value : null;
 }

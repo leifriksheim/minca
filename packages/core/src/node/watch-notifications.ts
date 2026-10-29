@@ -3,17 +3,14 @@
  * An app showing its own notifications: the automations the person kept for
  * it, matched against records as they arrive.
  *
- * They live in the account registry (`space/own-automations.ts`), which a
- * node given the whole account can open. This reads the ones naming the app,
- * follows every space they look at, and hands each record that comes to
- * match to the app — which decides how to show it. A record comes to match
- * when it is written, or when something its computed fields read is: a new
- * 👍 can make a todo done. Each record is news once per automation, however
- * often it is edited out and back in. What already matched when it started is
- * never news.
+ * They live in the account registry (`space/own-automations.ts`). This reads
+ * the ones naming the app, follows the spaces they look at, and hands the app
+ * each record that comes to match: when it is written, or when something its
+ * computed fields read is (a new 👍 can make a todo done). Each record is news
+ * once per automation; what matched when it started never is.
  */
 import { holdsFor, ownQuery, setsOff, type Trigger } from '../space/own-automations.js';
-import { causeOf, linkedReads, namedComputed } from '../query/computed.js';
+import { causeOf, linkedReads, namedComputed, type ComputedFields } from '../query/computed.js';
 import type { NodeRecord, OwnAutomationView, P2PNode } from './types.js';
 import { serial } from '../utils/serial.js';
 
@@ -63,44 +60,55 @@ export function watchNotifications(node: P2PNode, options: WatchNotificationsOpt
     const fields = (await node.collections.list(space)).find((c) => c.name === collection)?.computed ?? {};
     // Only the fields the filter names: what the others read can't change whether it holds.
     const named = namedComputed(fields, where);
-    const reads = Object.keys(named).length > 0;
-    // The newest records, and those the newest of what their computed fields read link to.
-    const newest = (name: string) =>
-      node.records.list(space, { collection: name, newestFirst: true, limit: LOOK_BACK });
-    const keys = new Set((await newest(collection)).map((r) => r.key));
-    for (const { collection: from, rel } of linkedReads(named)) {
-      for (const r of await newest(from)) for (const link of r.links) if (link.rel === rel) keys.add(link.to);
-    }
+    const keys = await recentKeys(space, collection, named);
     if (keys.size === 0) return;
     const { records } = await node.records.query(space, {
       collection,
       where: { '@key': { $in: [...keys] } },
     });
-    const linked = (key: string, o: { rel?: string; collection?: string }) =>
-      node.records.linked(space, key, o);
     for (const record of records) {
       if (stopped) return;
       if (!holdsFor(own, record, node.did) || held.has(record.key)) continue;
       held.add(record.key);
       if (first) continue;
-      // What made it hold, not what came last: a 😡 after the second 👍 tells no one anything.
-      const cause = reads
-        ? await causeOf({ linked }, record, named, (computed) =>
-            holdsFor(own, { ...record, computed }, node.did),
-          )
-        : record;
-      if (!cause) continue;
-      const trigger: Trigger =
-        cause === record ? record : { createdAt: cause.updatedAt, createdBy: cause.root ?? cause.createdBy };
-      if (setsOff(own, space, trigger, node.did)) options.onNotify({ automation: own, record });
+      const trigger = await triggerOf(space, own, record, named);
+      if (trigger && setsOff(own, space, trigger, node.did)) options.onNotify({ automation: own, record });
     }
+  }
+
+  /** The newest records, and those the newest of what their computed fields read link to */
+  async function recentKeys(space: string, collection: string, named: ComputedFields): Promise<Set<string>> {
+    const newest = (name: string) =>
+      node.records.list(space, { collection: name, newestFirst: true, limit: LOOK_BACK });
+    const keys = new Set((await newest(collection)).map((r) => r.key));
+    for (const { collection: from, rel } of linkedReads(named))
+      for (const r of await newest(from)) for (const link of r.links) if (link.rel === rel) keys.add(link.to);
+    return keys;
+  }
+
+  /** What made a record hold, not what came last: a 😡 after the second 👍 tells no one anything */
+  async function triggerOf(
+    space: string,
+    own: OwnAutomationView,
+    record: NodeRecord,
+    named: ComputedFields,
+  ): Promise<Trigger | null> {
+    if (Object.keys(named).length === 0) return record;
+    const linked = (key: string, o: { rel?: string; collection?: string }) =>
+      node.records.linked(space, key, o);
+    const cause = await causeOf({ linked }, record, named, (computed) =>
+      holdsFor(own, { ...record, computed }, node.did),
+    );
+    if (!cause) return null;
+    return cause === record
+      ? record
+      : { createdAt: cause.updatedAt, createdBy: cause.root ?? cause.createdBy };
   }
 
   async function reload(): Promise<void> {
     automations = (await node.automations.list()).filter((own) => !own.paused && own.app?.origin === origin);
     spaces = new Set((await node.spaces.list()).map((space) => space.id));
-    // Anything newly looked at starts from what is there now. What was looked at before still
-    // reports what arrived since: the account changes all the time, and that is no reason to drop news.
+    // Something newly looked at starts from what is there now; the rest still report what arrived since.
     for (const space of spaces) for (const own of lookingAt(space)) await look(space, own);
   }
 

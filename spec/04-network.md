@@ -234,7 +234,7 @@ socket that watches one. A relay MAY hand one username to every socket of one
 network, so that coturn's per-user quota caps a network rather than each
 request; the reference relay does. A relay without TURN never answers `ice`.
 
-_Source: `packages/relay/relay.mjs` (`upgrade`, `clientIp`, `handleMessage`, `handleMail`, `watch`, `offerTurn`, `turnFromEnv`, `networkOf`, `withinBudget`, heartbeat), `packages/relay/signaling-server.mjs`, `packages/cli/src/serve.ts` (`serve`), `packages/core/src/network/relay-minca.ts`. Tests: `packages/core/tests/rendezvous.test.ts` ("the relay keeps nothing dropped with ttl 0"), `packages/core/tests/relay-turn.test.ts`, `packages/core/tests/inbox.test.ts`, `packages/cli/tests/cli.test.ts` ("answers /health…", "is a relay too…")._
+_Source: `packages/relay/relay.mjs` (`upgrade`, `clientIp`, `handleMessage`, `fetchMail`, `dropMail`, `watch`, `offerTurn`, `turnFromEnv`, `networkOf`, `withinBudget`, heartbeat), `packages/relay/signaling-server.mjs`, `packages/cli/src/serve.ts` (`serve`), `packages/core/src/network/relay-minca.ts`. Tests: `packages/core/tests/rendezvous.test.ts` ("the relay keeps nothing dropped with ttl 0"), `packages/core/tests/relay-turn.test.ts`, `packages/core/tests/inbox.test.ts`, `packages/cli/tests/cli.test.ts` ("answers /health…", "is a relay too…")._
 
 ### 1.5 A Nostr relay
 
@@ -409,7 +409,7 @@ _Source: `packages/core/src/network/rendezvous.ts` (`createRendezvous`, `rendezv
 How often the reference client redials, and how it reports each relay's
 state, is in [the node's docs](../packages/core/docs/node.md#the-network).
 
-_Source: `packages/core/src/network/relay-socket.ts` (`createRelaySocket`, `iceFrom`, `SEND_PER_SECOND`), `packages/core/src/network/relay-minca.ts`, `packages/core/src/network/relay-nostr.ts`. Tests: `packages/core/tests/relay-socket.test.ts`, `packages/core/tests/rendezvous.test.ts` ("a node in 60 rooms keeps its relay…")._
+_Source: `packages/core/src/network/relay-socket.ts` (`createRelaySocket`, `iceFrom`, `SEND_PER_SECOND`), `packages/core/src/network/relay-link.ts` (`createTopicLink`), `packages/core/src/network/relay-minca.ts`, `packages/core/src/network/relay-nostr.ts`. Tests: `packages/core/tests/relay-socket.test.ts`, `packages/core/tests/rendezvous.test.ts` ("a node in 60 rooms keeps its relay…")._
 
 ---
 
@@ -462,7 +462,7 @@ room's topic on the new relays and stops on relays no longer named.
 How the reference node closes sockets no room needs, and names relays for a
 space it manages, is in [the node's docs](../packages/core/docs/node.md#the-network).
 
-_Source: `packages/core/src/space/roles.ts` (`RELAYS_COLLECTION`, `MAX_RELAYS`, `checkRelays`), `packages/core/src/space/space-access.ts` (`SPACE_RELAYS_RECORD`), `packages/core/src/node/space-runtime.ts` (`useRelays`, `nameRelays`, `setRelays`), `packages/core/src/network/rendezvous.ts` (`join`, `release`), `packages/core/src/network/mesh.ts` (`useRelays`). Tests: `packages/core/tests/space-relays.test.ts`, `packages/core/tests/network-manager.test.ts` ("a room that names its own relay…")._
+_Source: `packages/core/src/space/roles.ts` (`RELAYS_COLLECTION`, `MAX_RELAYS`, `checkRelays`), `packages/core/src/space/space-access.ts` (`SPACE_RELAYS_RECORD`), `packages/core/src/node/space-runtime.ts` (`useRelays`, `setRelays`, `nameRelays`), `packages/core/src/network/rendezvous.ts` (`join`, `release`), `packages/core/src/network/mesh.ts` (`useRelays`). Tests: `packages/core/tests/space-relays.test.ts`, `packages/core/tests/network-manager.test.ts` ("a room that names its own relay…")._
 
 ---
 
@@ -574,7 +574,7 @@ The proof fields and what is signed are in §6.1. The client:
 
 How the reference client redials is in [the node's docs](../packages/core/docs/node.md#the-network).
 
-_Source: `packages/core/src/network/ws-transport.ts` (`nodeAddress`), `packages/core/src/network/peer-auth.ts` (`checkPin`, `pinned`), `packages/core/src/node/node.ts` (`pinnedTo`, `peerOf`), `packages/core/src/node/space-runtime.ts` (`nodeNetwork`), `packages/core/src/network/network-manager.ts`. Tests: `packages/core/tests/ws-transport.test.ts` ("pinning the node", "only a note for everything about the account pins…"), `packages/cli/tests/host.test.ts`, `packages/cli/tests/cli.test.ts` ("a device that pins the node by its account…")._
+_Source: `packages/core/src/network/ws-transport.ts` (`nodeAddress`), `packages/core/src/network/peer-auth.ts` (`checkPin`, `pinned`), `packages/core/src/node/node-hosting.ts` (`pinnedTo`, `peerOf`), `packages/core/src/node/space-runtime.ts` (`nodeNetwork`), `packages/core/src/network/network-manager.ts`. Tests: `packages/core/tests/ws-transport.test.ts` ("pinning the node", "only a note for everything about the account pins…"), `packages/cli/tests/host.test.ts`, `packages/cli/tests/cli.test.ts` ("a device that pins the node by its account…")._
 
 ### 5.3 The `/peer` endpoint (node side)
 
@@ -797,7 +797,7 @@ when her node redials with K0 and her note, step 4 refuses her.
 > are behind, a node that missed a key change could never reconnect, since
 > the peers that could tell it about the change refuse it.
 
-_Source: `packages/core/src/network/peer-auth.ts` (`proveRead`, `checkRead`, `MAX_EARLIER_READ_KEYS`), `packages/core/src/node/space-runtime.ts` (`readAccess`, `letGoOfOutsiders`, `formerMembers`, `cutOff`), `packages/core/src/network/mesh.ts` (`drop`), `packages/core/src/network/network-manager.ts` (`drop`), `packages/core/src/privacy/space-encryption.ts` (`MEMBERSHIP_LABEL`), `packages/core/src/identity/envelope.ts` (`sealValue`, `openValue`). Tests: `packages/core/tests/key-change.test.ts` ("with nobody here to change the key…", "proving you may read, while a new key is due"), `packages/core/tests/ws-transport.test.ts` ("a private space"), `packages/core/tests/network-manager.test.ts` ("in a private space, a peer without its key never becomes a peer"; "after the space key changed"; "letting a peer go in one room…"), `packages/cli/tests/cli.test.ts` ("lets go of someone removed from a private space…"), `packages/cli/tests/serve.test.ts` ("a node behind on the space key admits a reader…")._
+_Source: `packages/core/src/network/peer-auth.ts` (`proveRead`, `checkRead`, `MAX_EARLIER_READ_KEYS`), `packages/core/src/node/space-runtime.ts` (`readAccess`, `letGoOfOutsiders`, `cutOff`, `formerMembers`), `packages/core/src/network/mesh.ts` (`drop`), `packages/core/src/network/network-manager.ts` (`drop`), `packages/core/src/privacy/space-encryption.ts` (`MEMBERSHIP_LABEL`), `packages/core/src/identity/envelope.ts` (`sealValue`, `openValue`). Tests: `packages/core/tests/key-change.test.ts` ("with nobody here to change the key…", "proving you may read, while a new key is due"), `packages/core/tests/ws-transport.test.ts` ("a private space"), `packages/core/tests/network-manager.test.ts` ("in a private space, a peer without its key never becomes a peer"; "after the space key changed"; "letting a peer go in one room…"), `packages/cli/tests/cli.test.ts` ("lets go of someone removed from a private space…"), `packages/cli/tests/serve.test.ts` ("a node behind on the space key admits a reader…")._
 
 ### 6.4 The account behind a session
 
@@ -1011,7 +1011,7 @@ sig = base64url( ECDSA-P256-SHA256( the key `origin` names,
 > anyway; so the description goes as it is. Signed by its origin, nobody can
 > pass one on in another's name.
 
-_Source: `packages/core/src/network/introductions.ts` (`introductionLabel`), `packages/core/src/network/mesh.ts` (`handlePeerList`, `floodSignal`, `throughMesh`, `onRelayedSignal`, `isNewSignal`). Tests: `packages/core/tests/introductions.test.ts`, `packages/core/tests/network-manager.test.ts` ("a relay connects the first pair, and a peer introduces the rest", "a signal passed on in someone else’s name is ignored, and a genuine one is acted on once", "a signal is taken only from a peer admitted in its room")._
+_Source: `packages/core/src/network/introductions.ts` (`introductionLabel`), `packages/core/src/network/mesh.ts` (`onPeerList`, `floodSignal`, `throughMesh`, `onRelayedSignal`, `isNewSignal`). Tests: `packages/core/tests/introductions.test.ts`, `packages/core/tests/network-manager.test.ts` ("a relay connects the first pair, and a peer introduces the rest", "a signal passed on in someone else’s name is ignored, and a genuine one is acted on once", "a signal is taken only from a peer admitted in its room")._
 
 ---
 

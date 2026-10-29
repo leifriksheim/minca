@@ -17,7 +17,7 @@ import { CallLayer } from './components/calls/Calls';
 import { Wordmark } from '@minca/app-shared/Wordmark';
 
 import { takeBack } from './contacts';
-import { styles, palette } from './styles';
+import { styles, palette, hstack } from './styles';
 import { ask } from '@minca/app-shared/Ask';
 import { Notices, useWorkspace, WorkspaceContext, type Workspace as WorkspaceValue } from './workspace';
 
@@ -124,7 +124,7 @@ export function HomeLayout() {
             <AccountMenu />
           </span>
         </header>
-        <nav role="tablist" aria-label="Home" style={{ display: 'flex', gap: 20, marginBottom: 20 }}>
+        <nav role="tablist" aria-label="Home" style={{ ...hstack(20), marginBottom: 20 }}>
           <Link
             to="/"
             role="tab"

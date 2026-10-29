@@ -69,17 +69,23 @@ const MAX_GRANTS = 64;
 const MAX_NESTS = 16;
 
 const NONCE = /^[A-Za-z0-9_-]{1,64}$/;
+const ROLE_FIELDS = ['name', 'title', 'grants', 'nests'];
+const PAYLOAD_FIELDS = ['iss', 'aud', 'sub', 'cmd', 'pol', 'nonce', 'meta'];
 
 /** The audience a grant to a role names */
 const roleAudience = (name: string) => `role:${name}`;
 /** The subject a grant in a space names */
 const spaceSubject = (spaceId: string) => `space:${spaceId}`;
 
+/** A field of `record` not in `allowed`, if any */
+const strayField = (record: Record<string, unknown>, allowed: ReadonlyArray<string>) =>
+  Object.keys(record).find((field) => !allowed.includes(field));
+
 /** Why a constitution grant is malformed, or null: exactly `cmd` and `pol` */
 function grantProblem(grant: unknown): string | null {
   if (!isRecord(grant)) return 'A grant is an object';
-  for (const field of Object.keys(grant))
-    if (field !== 'cmd' && field !== 'pol') return `A founding grant has only cmd and pol, not ${field}`;
+  const stray = strayField(grant, ['cmd', 'pol']);
+  if (stray !== undefined) return `A founding grant has only cmd and pol, not ${stray}`;
   if (!isCommand(grant.cmd)) return 'A grant names a command path';
   return policyProblem(grant.pol);
 }
@@ -99,29 +105,23 @@ function partsProblem(name: string, title: unknown, nests: unknown): string | nu
 /** Why a founding role is malformed, or null */
 export function checkFoundingRole(role: unknown): string | null {
   if (!isRecord(role)) return 'A role must be an object';
-  for (const field of Object.keys(role))
-    if (!['name', 'title', 'grants', 'nests'].includes(field)) return `A role has no field ${field}`;
+  const stray = strayField(role, ROLE_FIELDS);
+  if (stray !== undefined) return `A role has no field ${stray}`;
   if (typeof role.name !== 'string' || !ROLE_NAME_PATTERN.test(role.name))
     return 'A role name is 1–40 characters of a–z, 0–9 and . _ -';
   const parts = partsProblem(role.name, role.title, role.nests);
   if (parts) return parts;
   if (!Array.isArray(role.grants) || role.grants.length > MAX_GRANTS)
     return `A role holds a list of at most ${MAX_GRANTS} grants`;
-  for (const grant of role.grants) {
-    const problem = grantProblem(grant);
-    if (problem) return problem;
-  }
-  return null;
+  return role.grants.map(grantProblem).find((problem) => problem !== null) ?? null;
 }
 
 /** Why a space's founding roles are malformed, or null: at most 64, names unique */
 export function checkFoundingRoles(roles: unknown): string | null {
   if (!Array.isArray(roles) || roles.length > MAX_FOUNDING_ROLES)
     return `A space starts with at most ${MAX_FOUNDING_ROLES} roles`;
-  for (const role of roles) {
-    const problem = checkFoundingRole(role);
-    if (problem) return problem;
-  }
+  const problem = roles.map(checkFoundingRole).find((found) => found !== null);
+  if (problem) return problem;
   const names = roles.map((role: { readonly name: string }) => role.name);
   return new Set(names).size === names.length ? null : 'Two founding roles share a name';
 }
@@ -136,27 +136,16 @@ export function readDefinition(
   body: unknown,
   context: { readonly root: string; readonly spaceId: string },
 ): DefinedRole | null {
-  if (!isRecord(body)) return null;
-  for (const field of Object.keys(body))
-    if (!['name', 'title', 'grants', 'nests'].includes(field)) return null;
+  if (!isRecord(body) || strayField(body, ROLE_FIELDS) !== undefined) return null;
   const { name, title, nests } = body;
   if (typeof name !== 'string' || !ROLE_NAME_PATTERN.test(name)) return null;
   if (partsProblem(name, title, nests ?? []) !== null) return null;
   if (!Array.isArray(body.grants) || body.grants.length > MAX_GRANTS) return null;
   const grants: Grant[] = [];
   for (const payload of body.grants) {
-    if (!isRecord(payload)) return null;
-    for (const field of Object.keys(payload))
-      if (!['iss', 'aud', 'sub', 'cmd', 'pol', 'nonce', 'meta'].includes(field)) return null;
-    if (payload.iss !== context.root) return null;
-    if (payload.aud !== roleAudience(name)) return null;
-    if (payload.sub !== spaceSubject(context.spaceId)) return null;
-    if (!isCommand(payload.cmd) || policyProblem(payload.pol) !== null || !Array.isArray(payload.pol))
-      return null;
-    if (typeof payload.nonce !== 'string' || !NONCE.test(payload.nonce)) return null;
-    if ('meta' in payload && !(isRecord(payload.meta) && isJson(payload.meta))) return null;
-    const pol: Grant['pol'] = payload.pol;
-    grants.push(Object.freeze({ cmd: payload.cmd, pol }));
+    const grant = readGrant(payload, name, context);
+    if (!grant) return null;
+    grants.push(grant);
   }
   return Object.freeze({
     name,
@@ -164,6 +153,24 @@ export function readDefinition(
     grants: Object.freeze(grants),
     nests: Object.freeze(Array.isArray(nests) ? nests.filter((n) => typeof n === 'string') : []),
   });
+}
+
+/** The grant a delegation payload in role `name`'s definition holds, or null when it isn't one */
+function readGrant(
+  payload: unknown,
+  name: string,
+  context: { readonly root: string; readonly spaceId: string },
+): Grant | null {
+  if (!isRecord(payload) || strayField(payload, PAYLOAD_FIELDS) !== undefined) return null;
+  if (payload.iss !== context.root) return null;
+  if (payload.aud !== roleAudience(name)) return null;
+  if (payload.sub !== spaceSubject(context.spaceId)) return null;
+  if (!isCommand(payload.cmd) || policyProblem(payload.pol) !== null || !Array.isArray(payload.pol))
+    return null;
+  if (typeof payload.nonce !== 'string' || !NONCE.test(payload.nonce)) return null;
+  if ('meta' in payload && !(isRecord(payload.meta) && isJson(payload.meta))) return null;
+  const pol: Grant['pol'] = payload.pol;
+  return Object.freeze({ cmd: payload.cmd, pol });
 }
 
 /** The body of a definition `root` writes for a role: each grant as a delegation payload */

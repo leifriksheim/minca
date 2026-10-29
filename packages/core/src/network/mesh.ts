@@ -3,13 +3,13 @@
  *
  * A node holds one socket per relay and one WebRTC connection per peer, however
  * many spaces the two share. Each space is a room: it joins the room on the
- * relays, and on every connection it proves itself separately (`peer-auth.ts`)
- * before a byte of it crosses. So sharing the connection shares nothing else:
- * a peer you share one space with is a peer only in that one.
+ * relays, and on every connection proves itself separately (`peer-auth.ts`)
+ * before a byte of it crosses. A peer you share one space with is a peer only
+ * in that one.
  *
  * Everything on a connection is a JSON frame `{ room?, type, from, payload }`.
- * Frames about a space carry its room; the offers peers carry for each other
- * (`introductions.ts`) do not, since a connection belongs to no one space.
+ * The offers peers carry for each other (`introductions.ts`) carry no room of
+ * their own beyond the signal's.
  *
  * ```
  * A → B   { room, __auth-hello, { nonce: Nₐ } }        either side, once it knows the other is in the room
@@ -20,6 +20,7 @@
  *
  * A connection that ends up in no room is closed.
  */
+import { getOrAdd } from '../utils/map.js';
 import type { PeerInfo, NetworkMessage } from '../types.js';
 import { utf8Encode, utf8Decode } from '../utils/encoding.js';
 import { createEmitter, type Emitter } from '../utils/events.js';
@@ -49,20 +50,16 @@ import {
 
 export interface MeshConfig {
   readonly did: string;
-  /** The private half of the key `did` names: it signs what this node says in a room (`rendezvous.ts`) */
+  /** The private half of the key `did` names: it signs what this node says in a room */
   readonly key: CryptoKey;
   /** Relays of any kind, used all at once (`rendezvous.ts`) */
   readonly relays: ReadonlyArray<string>;
   readonly iceServers?: ReadonlyArray<RTCIceServer>;
-  /**
-   * Let connected peers introduce the peers they know, so the relay is only
-   * needed for the first connection. On by default.
-   */
+  /** Let connected peers introduce the peers they know, so a relay is needed only for the first. On by default. */
   readonly introductions?: boolean;
   /**
-   * How connections are made, given the ICE servers each should use (they
-   * change as a relay hands out TURN passwords). WebRTC on this thread by
-   * default; a node in a worker uses the page's (`remoteTransport`).
+   * How connections are made, given the ICE servers each should use. WebRTC on
+   * this thread by default; a node in a worker uses the page's (`remoteTransport`).
    */
   readonly createTransport?: (iceServers: () => ReadonlyArray<RTCIceServer>) => SignalledTransport;
   /** How long a peer has to prove itself in a room. Default 10 s. */
@@ -72,24 +69,15 @@ export interface MeshConfig {
 export interface Mesh {
   /**
    * A space's share of the mesh: the peers that proved themselves in its room.
-   * `connect()` enters the room and `disconnect()` leaves it; the relays and
-   * connections are held while any room is.
+   * `connect()` enters the room and `disconnect()` leaves it.
    *
    * @param room The space's room — a hash of its id
    * @param auth What peers must prove here; null lets anyone in the room in
    */
   join(room: string, auth?: MeshAuth | null): NetworkManager;
-  /**
-   * The relays a room's space names as its own (`sys.relays`), joined for
-   * that room on top of the mesh's — so members whose apps use different
-   * relays meet there. Called again when the space changes them.
-   */
+  /** The relays a room's space names as its own (`sys.relays`), joined for that room on top of the mesh's */
   useRelays(room: string, relays: ReadonlyArray<string>): void;
-  /**
-   * The ICE servers for a WebRTC connection: the configured ones (STUN by
-   * default), and TURN servers a relay offered, with passwords fresh for at
-   * least a while. For connections of the application's own — a call's.
-   */
+  /** The ICE servers for a WebRTC connection of the application's own: the configured ones, and fresh TURN from a relay */
   iceServers(): Promise<ReadonlyArray<RTCIceServer>>;
   /** The relays, the connections open and the ones being made, as they are now */
   status(): MeshStatus;
@@ -123,23 +111,20 @@ const ICE_REFRESH_MS = 10 * 60_000;
 /** How long to wait for them before going ahead with what there is */
 const ICE_WAIT_MS = 1500;
 /**
- * How long a connection has to open before it is given up. An offer that is
- * never answered leaves a connection that never fails either, and a peer
- * marked as tried is not offered to again, so without this it is lost until
- * one side restarts. Once given up, the peer's next hello brings the next
- * offer. Each try waits twice as long, up to the cap.
+ * How long a connection has to open before it is given up, doubling with each
+ * try up to the cap. An unanswered offer never fails on its own.
  */
 const CONNECT_TIMEOUT_MS = 20_000;
 const MAX_CONNECT_TIMEOUT_MS = 5 * 60_000;
 /** A relayed signal older or newer than this is a replay, or a clock too far off */
 const SIGNAL_WINDOW_MS = 120_000;
-/** Signals from one origin a room acts on within that window: far more than an honest peer sends */
+/** Signals from one origin a room acts on within that window */
 const MAX_SIGNALS_ACTED = 256;
-/** Origins whose times are held at once, across rooms: made-up ones can't grow it without end */
+/** Origins whose times are held at once, across rooms */
 const MAX_ORIGINS_HELD = 1024;
 /** A relayed description longer than this is not taken: one with its candidates is a few KB */
 const MAX_SDP_CHARS = 32_000;
-/** Peers whose failed tries are remembered, for the wait before the next */
+/** Peers whose failed tries are remembered */
 const MAX_TRIED = 512;
 
 interface Handshake {
@@ -156,6 +141,12 @@ interface Room {
   readonly events: Emitter<NetworkEvents>;
 }
 
+interface Frame {
+  readonly room?: string;
+  readonly type: string;
+  readonly payload?: unknown;
+}
+
 type Deliver = (kind: SignalKind, data: unknown) => void;
 
 export function createMesh(config: MeshConfig): Mesh {
@@ -164,91 +155,96 @@ export function createMesh(config: MeshConfig): Mesh {
   const configuredIce = config.iceServers ?? DEFAULT_ICE_SERVERS;
   let relayIce: { servers: ReadonlyArray<RTCIceServer>; expiresAt: number } | null = null;
   let iceAskedAt = 0;
-  signaling.on('ice', (servers, expiresAt) => {
-    relayIce = { servers, expiresAt };
-    iceAskedAt = 0;
-    changed();
-  });
+  const hasTurn = () => relayIce !== null && relayIce.expiresAt > Date.now();
   const currentIce = (): ReadonlyArray<RTCIceServer> =>
-    relayIce && relayIce.expiresAt > Date.now() ? [...configuredIce, ...relayIce.servers] : configuredIce;
+    relayIce && hasTurn() ? [...configuredIce, ...relayIce.servers] : configuredIce;
   const transport = config.createTransport?.(currentIce) ?? createRTCTransport({ iceServers: currentIce });
   const introduce = config.introductions !== false;
   const authTimeoutMs = config.authTimeoutMs ?? 10_000;
+  const provider = createP256Provider();
 
   const rooms = new Map<string, Room>();
   /** Relays each room's space names, for its room only */
   const roomRelays = new Map<string, ReadonlyArray<string>>();
   /** Connections that are open */
   const links = new Set<string>();
-  /** Peers a connection has been started with, so hearing of one twice does not open it twice */
+  /** Peers a connection has been started with, so it is not opened twice */
   const attempted = new Set<string>();
   /** Rooms to greet a peer in once its connection opens */
   const expected = new Map<string, Set<string>>();
-  /** Connections waiting to be put to use in some room, or closed */
+  /** Open connections waiting to be put to use in some room, or closed */
   const idle = new Map<string, ReturnType<typeof setTimeout>>();
   /** Connections started and not yet open, each with the timer that gives up on it */
   const pending = new Map<string, { since: number; tries: number; timer: ReturnType<typeof setTimeout> }>();
-  /** Failed tries per peer, so each wait is longer; forgotten once a connection opens */
+  /** Failed tries per peer; forgotten once a connection opens */
   const tries = new Map<string, number>();
   const seenSignals = createSeenSignals();
-  const provider = createP256Provider();
+  /** The times of signals acted on, by `room origin`, within the window */
+  const actedOn = new Map<string, Set<number>>();
   /** When this node last sent a signal over the mesh: each later than the one before */
   let introducedAt = 0;
-  /** The times of signals acted on from each origin in each room, within the two minutes, by `room origin` */
-  const actedOn = new Map<string, Set<number>>();
   let started: Promise<void> | null = null;
+
   const changes = new Set<() => void>();
   const changed = (): void => {
     for (const listener of [...changes]) listener();
   };
+
   signaling.on('status', changed);
-
-  /** Gives an attempt a deadline; past it the connection is closed and the peer forgotten until heard of again. */
-  const watch = (peer: string): void => {
-    const held = pending.get(peer);
-    if (held) clearTimeout(held.timer);
-    const tried = tries.get(peer) ?? 0;
-    const wait = Math.min(CONNECT_TIMEOUT_MS * 2 ** tried, MAX_CONNECT_TIMEOUT_MS);
-    const timer = setTimeout(() => {
-      pending.delete(peer);
-      if (links.has(peer)) return;
-      tries.delete(peer);
-      tries.set(peer, tried + 1);
-      // A map iterates in insertion order: the first is the oldest.
-      if (tries.size > MAX_TRIED) tries.delete(tries.keys().next().value ?? peer);
-      transport.close(peer);
-      attempted.delete(peer);
-      expected.delete(peer);
-      changed();
-    }, wait);
-    pending.set(peer, { since: held?.since ?? Date.now(), tries: tried, timer });
+  signaling.on('ice', (servers, expiresAt) => {
+    relayIce = { servers, expiresAt };
+    iceAskedAt = 0;
     changed();
-  };
+  });
 
-  const unwatch = (peer: string): void => {
-    const held = pending.get(peer);
-    if (held) clearTimeout(held.timer);
-    if (pending.delete(peer)) changed();
-  };
+  const roomList = () => [...rooms.values()];
+  /** Peers proved in at least one room: the only ones anything but a handshake is taken from */
+  const isAdmitted = (peer: string) => roomList().some((room) => room.peers.has(peer));
+  const isInUse = (peer: string) =>
+    roomList().some((room) => room.peers.has(peer) || room.handshakes.has(peer));
 
   const fail = (error: unknown) => {
     const err = error instanceof Error ? error : new Error(String(error));
     for (const room of rooms.values()) room.events.emit('error', err);
   };
 
-  const sendFrame = (peer: string, frame: { room?: string; type: string; payload?: unknown }): void => {
+  const sendFrame = (peer: string, frame: Frame): void => {
     try {
       transport.send(peer, utf8Encode(JSON.stringify({ ...frame, from: did })));
     } catch {
-      // The channel closed between listing the peer and writing to it. The
-      // disconnect event will tidy up.
+      // Closed since it was listed; the disconnect tidies up.
     }
   };
 
-  /** Peers proved in at least one room — the only ones anything but a handshake is taken from */
-  const isAdmitted = (peer: string) => [...rooms.values()].some((room) => room.peers.has(peer));
+  // ─── Connection attempts ────────────────────────────────────────────
 
-  /** Forgets a connection — closed by either side. */
+  /** Gives an attempt a deadline, after which the peer is forgotten until heard of again. */
+  const watch = (peer: string): void => {
+    const held = pending.get(peer);
+    if (held) clearTimeout(held.timer);
+    const tried = tries.get(peer) ?? 0;
+    const wait = Math.min(CONNECT_TIMEOUT_MS * 2 ** tried, MAX_CONNECT_TIMEOUT_MS);
+    const timer = setTimeout(() => giveUp(peer, tried), wait);
+    pending.set(peer, { since: held?.since ?? Date.now(), tries: tried, timer });
+    changed();
+  };
+
+  const giveUp = (peer: string, tried: number): void => {
+    pending.delete(peer);
+    if (links.has(peer)) return;
+    setNewest(tries, peer, tried + 1, MAX_TRIED);
+    transport.close(peer);
+    attempted.delete(peer);
+    expected.delete(peer);
+    changed();
+  };
+
+  const unwatch = (peer: string): void => {
+    clearTimeout(pending.get(peer)?.timer);
+    if (pending.delete(peer)) changed();
+  };
+
+  /** Forgets a connection, closed by either side. */
   const lost = (peer: string): void => {
     clearTimeout(idle.get(peer));
     idle.delete(peer);
@@ -259,10 +255,8 @@ export function createMesh(config: MeshConfig): Mesh {
     for (const room of rooms.values()) drop(room, peer);
   };
 
-  /** Closes a connection that no room has a use for. */
   const closeIfIdle = (peer: string): void => {
-    if (!links.has(peer)) return;
-    if ([...rooms.values()].some((room) => room.peers.has(peer) || room.handshakes.has(peer))) return;
+    if (!links.has(peer) || isInUse(peer)) return;
     transport.close(peer);
     // Closing it here is not always reported back as a disconnect.
     lost(peer);
@@ -271,8 +265,7 @@ export function createMesh(config: MeshConfig): Mesh {
   // ─── Proving, per room ──────────────────────────────────────────────
 
   const endHandshake = (room: Room, peer: string) => {
-    const handshake = room.handshakes.get(peer);
-    if (handshake) clearTimeout(handshake.timer);
+    clearTimeout(room.handshakes.get(peer)?.timer);
     room.handshakes.delete(peer);
   };
 
@@ -285,46 +278,57 @@ export function createMesh(config: MeshConfig): Mesh {
   const greet = (name: string, peer: string): Handshake | null => {
     const room = rooms.get(name);
     if (!room || room.peers.has(peer)) return null;
-    let handshake = room.handshakes.get(peer);
-    if (!handshake) {
-      handshake = {
-        nonce: peerNonce(),
-        proved: false,
-        verified: room.auth === null,
-        timer: setTimeout(() => refuse(room, peer), authTimeoutMs),
-      };
-      room.handshakes.set(peer, handshake);
-      sendFrame(peer, { room: name, type: AUTH_HELLO_MESSAGE, payload: { nonce: handshake.nonce } });
-    }
+    const held = room.handshakes.get(peer);
+    if (held) return held;
+    const handshake: Handshake = {
+      nonce: peerNonce(),
+      proved: false,
+      verified: room.auth === null,
+      timer: setTimeout(() => refuse(room, peer), authTimeoutMs),
+    };
+    room.handshakes.set(peer, handshake);
+    sendFrame(peer, { room: name, type: AUTH_HELLO_MESSAGE, payload: { nonce: handshake.nonce } });
     return handshake;
+  };
+
+  /** Their hello: prove ourselves over their nonce. */
+  const onHello = async (name: string, room: Room, peer: string, payload: unknown): Promise<void> => {
+    const handshake = greet(name, peer);
+    const nonce = isObject(payload) ? payload.nonce : undefined;
+    if (!handshake || handshake.proved || typeof nonce !== 'string') return;
+    handshake.proved = true;
+    if (!room.auth) return;
+    const proof = await room.auth.prove(peer, nonce, transport.binding?.(peer) ?? null);
+    sendFrame(peer, { room: name, type: AUTH_PROOF_MESSAGE, payload: proof });
+  };
+
+  /** Their proof: check it over our nonce */
+  const onProof = async (
+    room: Room,
+    peer: string,
+    payload: unknown,
+  ): Promise<'ignored' | 'refused' | 'verified'> => {
+    const handshake = room.handshakes.get(peer);
+    if (!handshake || handshake.verified || !room.auth) return 'ignored';
+    const binding = transport.binding?.(peer) ?? null;
+    if (!(await room.auth.check(peer, handshake.nonce, binding, payload))) return 'refused';
+    handshake.verified = true;
+    return 'verified';
   };
 
   const onHandshake = async (name: string, peer: string, type: string, payload: unknown): Promise<void> => {
     const room = rooms.get(name);
     if (!room) return;
-    const binding = transport.binding?.(peer) ?? null;
-    if (type === AUTH_HELLO_MESSAGE) {
-      const handshake = greet(name, peer);
-      const nonce = isObject(payload) ? payload.nonce : undefined;
-      if (!handshake || handshake.proved || typeof nonce !== 'string') return;
-      handshake.proved = true;
-      if (room.auth)
-        sendFrame(peer, {
-          room: name,
-          type: AUTH_PROOF_MESSAGE,
-          payload: await room.auth.prove(peer, nonce, binding),
-        });
-    } else {
-      const handshake = room.handshakes.get(peer);
-      if (!handshake || handshake.verified || !room.auth) return;
-      if (!(await room.auth.check(peer, handshake.nonce, binding, payload))) return refuse(room, peer);
-      handshake.verified = true;
+    if (type === AUTH_HELLO_MESSAGE) await onHello(name, room, peer, payload);
+    else {
+      const outcome = await onProof(room, peer, payload);
+      if (outcome === 'ignored') return;
+      if (outcome === 'refused') return refuse(room, peer);
     }
     const handshake = room.handshakes.get(peer);
-    if (handshake?.proved && handshake.verified && rooms.get(name) === room) {
-      endHandshake(room, peer);
-      admit(name, room, peer);
-    }
+    if (!handshake?.proved || !handshake.verified || rooms.get(name) !== room) return;
+    endHandshake(room, peer);
+    admit(name, room, peer);
   };
 
   /** A connection becomes a peer in a room: announced, and introduced to the room's others. */
@@ -333,10 +337,8 @@ export function createMesh(config: MeshConfig): Mesh {
     room.peers.set(peer, info);
     room.events.emit('peer-connected', info);
     changed();
-
     if (!introduce) return;
-    // Introduce in both directions. Telling only the newcomer would leave the
-    // side with the higher identifier waiting for an offer nobody will send.
+    // Both ways: told only the newcomer, the higher DID would wait for an offer nobody sends.
     const others = [...room.peers.keys()].filter((other) => other !== peer);
     if (others.length === 0) return;
     sendFrame(peer, { room: name, type: PEERS_MESSAGE, payload: others });
@@ -346,47 +348,36 @@ export function createMesh(config: MeshConfig): Mesh {
   const drop = (room: Room, peer: string): void => {
     endHandshake(room, peer);
     const info = room.peers.get(peer);
-    if (info && room.peers.delete(peer)) {
-      room.events.emit('peer-disconnected', info);
-      changed();
-    }
+    if (!info || !room.peers.delete(peer)) return;
+    room.events.emit('peer-disconnected', info);
+    changed();
   };
 
   // ─── Connecting ─────────────────────────────────────────────────────
   //
-  // A relay gets you your first connection. After that the peers you can
-  // already reach are the best source of the ones you cannot: their data
-  // channels carry connection offers just as happily as they carry todos.
+  // A relay gets you your first connection; after that, the peers you reach
+  // carry offers to the ones you don't.
 
-  /** Pushes somebody's signaling out to the room's other peers, skipping where it came from. */
+  /** Pushes a signal out to the room's other peers, skipping where it came from. */
   const floodSignal = (name: string, signal: RelayedSignal, except?: string): void => {
-    for (const peer of rooms.get(name)?.peers.keys() ?? []) {
+    for (const peer of rooms.get(name)?.peers.keys() ?? [])
       if (peer !== except) sendFrame(peer, { room: name, type: SIGNAL_MESSAGE, payload: signal });
-    }
   };
 
-  /** Through the room's peers: signed by this node, so nobody passing it on can put another's words in its place */
+  /** Through the room's peers, signed by this node so nobody passing it on can change it */
   const throughMesh =
     (target: string, name: string): Deliver =>
     (kind, data) => {
       if (!isObject(data) || typeof data.sdp !== 'string') return;
-      const at = (introducedAt = Math.max(Date.now(), introducedAt + 1));
       const { sdp } = data;
-      void signLabel(provider, config.key, introductionLabel(name, { origin: did, target, kind, at, sdp }))
-        .then((sig) =>
-          floodSignal(name, {
-            origin: did,
-            target,
-            kind,
-            data: { type: kind, sdp },
-            at,
-            sig,
-            hops: MAX_HOPS,
-          }),
-        )
+      const at = (introducedAt = Math.max(Date.now(), introducedAt + 1));
+      const fields = { origin: did, target, kind, at, sdp };
+      void signLabel(provider, config.key, introductionLabel(name, fields))
+        .then((sig) => floodSignal(name, relayedSignal(fields, sig, MAX_HOPS)))
         .catch(() => {});
     };
-  /** Through the relays, in one room: where the peer's hello came, or its offer, and to the box it came with */
+
+  /** Through the relays, in one room, to the box the peer's message came with */
   const throughRelay =
     (target: string, room: string, box?: string): Deliver =>
     (kind, data) =>
@@ -403,20 +394,15 @@ export function createMesh(config: MeshConfig): Mesh {
 
   /** Acts on a peer's offer or answer, sending the answer back the way the offer came. */
   const onSignal = async (peer: string, kind: SignalKind, data: unknown, deliver: Deliver): Promise<void> => {
-    // A connection that has proved itself is not replaced by an offer that has
-    // not: anyone can put someone else's name on one.
+    // A proved connection is not replaced by an unproved offer: anyone can put someone's name on one.
     if (!data || typeof data !== 'object' || isAdmitted(peer)) return;
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- setRemoteDescription checks it and throws into the catch below
+    const description = data as RTCSessionDescriptionInit;
     try {
-      if (kind === 'offer') {
-        attempted.add(peer);
-        // Either side lets go of what never opened; the next hello starts again.
-        watch(peer);
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- setRemoteDescription checks it and throws into the catch below
-        deliver('answer', await transport.handleOffer(peer, data as RTCSessionDescriptionInit));
-      } else {
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- setRemoteDescription checks it and throws into the catch below
-        await transport.handleAnswer(peer, data as RTCSessionDescriptionInit);
-      }
+      if (kind === 'answer') return await transport.handleAnswer(peer, description);
+      attempted.add(peer);
+      watch(peer);
+      deliver('answer', await transport.handleOffer(peer, description));
     } catch (err) {
       fail(err);
     }
@@ -429,47 +415,33 @@ export function createMesh(config: MeshConfig): Mesh {
       greet(name, peer);
       return;
     }
-    (expected.get(peer) ?? expected.set(peer, new Set()).get(peer)!).add(name);
-    if (offer && !attempted.has(peer)) {
-      attempted.add(peer);
-      void offerTo(peer, offer);
-    }
+    getOrAdd(expected, peer, () => new Set()).add(name);
+    if (!offer || attempted.has(peer)) return;
+    attempted.add(peer);
+    void offerTo(peer, offer);
   };
 
-  // Both sides hear each other's hello, so one rule says who offers: the same as for introductions.
+  // Both sides hear each other's hello; one rule says who offers.
   signaling.on('peer-joined', (peer, room) =>
     meet(room, peer, shouldInitiate(did, peer) ? throughRelay(peer, room) : null),
   );
-  signaling.on(
-    'signal',
-    (message) =>
-      void onSignal(
-        message.from,
-        message.type,
-        message.payload,
-        throughRelay(message.from, message.room, message.box),
-      ),
-  );
+  signaling.on('signal', ({ from, type, payload, room, box }) => {
+    void onSignal(from, type, payload, throughRelay(from, room, box));
+  });
 
-  /** Acts on somebody's introduction of the peers in a room. */
-  const handlePeerList = (name: string, peers: unknown): void => {
+  const onPeerList = (name: string, peers: unknown): void => {
     if (!introduce || !Array.isArray(peers)) return;
-    for (const peer of peers.slice(0, MAX_INTRODUCED)) {
-      if (!isPeerDid(peer)) continue;
-      // Both sides are told about each other at the same moment, so without a
-      // rule both would offer and there would be two half-open connections to
-      // unpick. Comparing identifiers is free and both sides always agree.
-      meet(name, peer, shouldInitiate(did, peer) ? throughMesh(peer, name) : null);
-    }
+    for (const peer of peers.slice(0, MAX_INTRODUCED))
+      if (isPeerDid(peer)) meet(name, peer, shouldInitiate(did, peer) ? throughMesh(peer, name) : null);
   };
 
   /** Whether a signal from an origin in a room is new: none from it there was acted on with this time */
   const isNewSignal = (name: string, origin: string, at: number): boolean => {
+    const old = Date.now() - SIGNAL_WINDOW_MS;
     const times = actedOn.get(`${name} ${origin}`);
     if (!times) {
       if (actedOn.size < MAX_ORIGINS_HELD) return true;
-      // Full: let go of origins whose times are all past the window, and refuse a new one if none was.
-      const old = Date.now() - SIGNAL_WINDOW_MS;
+      // Full: let go of origins whose times are all past the window.
       for (const [key, held] of actedOn) if ([...held].every((time) => time < old)) actedOn.delete(key);
       return actedOn.size < MAX_ORIGINS_HELD;
     }
@@ -478,39 +450,51 @@ export function createMesh(config: MeshConfig): Mesh {
     return !times.has(at) && times.size < MAX_SIGNALS_ACTED;
   };
 
-  const onRelayedSignal = async (from: string, name: string, signal: unknown): Promise<void> => {
-    if (!isObject(signal) || !isObject(signal.data)) return;
-    const { origin, target, kind, at, sig, hops } = signal;
-    const { sdp } = signal.data;
-    if (!isPeerDid(origin) || origin === did || !isPeerDid(target) || !isSignalKind(kind)) return;
-    if (signal.data.type !== kind || typeof sdp !== 'string' || sdp.length > MAX_SDP_CHARS) return;
-    if (typeof at !== 'number' || !Number.isSafeInteger(at) || Math.abs(Date.now() - at) > SIGNAL_WINDOW_MS)
-      return;
-    // Checked before the signature, so a copy arriving again costs nothing: for this node, by
-    // its origin's time; to pass on, by the same, recorded only once its signature checks out.
+  const onRelayedSignal = async (from: string, name: string, payload: unknown): Promise<void> => {
+    const signal = readSignal(payload);
+    if (!signal || signal.origin === did) return;
+    const { origin, target, kind, at, sdp, sig, hops } = signal;
+    const forUs = target === did;
+    // Checked before the signature, so a copy arriving again costs nothing.
     const passed = `${name}|${origin}|${at}`;
-    if (target === did ? !isNewSignal(name, origin, at) : seenSignals.has(passed)) return;
-    // Signed by its origin, in this room: nobody passes on, or makes, an offer in another's name.
-    if (!(await verifyBy(provider, origin, sig, introductionLabel(name, { origin, target, kind, at, sdp }))))
-      return;
-    if (target === did) {
+    if (forUs ? !isNewSignal(name, origin, at) : seenSignals.has(passed)) return;
+    if (!(await verifyBy(provider, origin, sig, introductionLabel(name, signal)))) return;
+    if (forUs) {
       if (!isNewSignal(name, origin, at)) return;
-      const key = `${name} ${origin}`;
-      (actedOn.get(key) ?? actedOn.set(key, new Set()).get(key)!).add(at);
+      getOrAdd(actedOn, `${name} ${origin}`, () => new Set()).add(at);
       void onSignal(origin, kind, { type: kind, sdp }, throughMesh(origin, name));
-    } else if (
-      typeof hops === 'number' &&
-      hops > 0 &&
-      typeof sig === 'string' &&
-      seenSignals.accept(passed)
-    ) {
-      // The sender says how far it may go; never further than we would send it.
-      floodSignal(
-        name,
-        { origin, target, kind, data: { type: kind, sdp }, at, sig, hops: Math.min(hops, MAX_HOPS) - 1 },
-        from,
-      );
+      return;
     }
+    if (typeof hops !== 'number' || hops <= 0 || typeof sig !== 'string' || !seenSignals.accept(passed))
+      return;
+    // Never further than we would send it ourselves.
+    floodSignal(name, relayedSignal(signal, sig, Math.min(hops, MAX_HOPS) - 1), from);
+  };
+
+  const onFrame = (peer: string, frame: Record<string, unknown>): void => {
+    const { type, payload } = frame;
+    const name = typeof frame.room === 'string' ? frame.room : null;
+    if (typeof type !== 'string') return;
+    // Before a peer has proved itself somewhere, the handshake is all there is.
+    if (type === AUTH_HELLO_MESSAGE || type === AUTH_PROOF_MESSAGE) {
+      if (!name) return;
+      void onHandshake(name, peer, type, payload).catch(() => {
+        const room = rooms.get(name);
+        if (room) refuse(room, peer);
+      });
+      return;
+    }
+    if (!isAdmitted(peer)) return;
+    const room = name ? rooms.get(name) : undefined;
+    if (!name || !room?.peers.has(peer)) return;
+    if (type === SIGNAL_MESSAGE) return void onRelayedSignal(peer, name, payload).catch(() => {});
+    if (type === PEERS_MESSAGE) return onPeerList(name, payload);
+    if (type === LEAVE_MESSAGE) {
+      drop(room, peer);
+      return closeIfIdle(peer);
+    }
+    // The sender is the connection it arrived on, not whatever the frame claims.
+    if (!isControlMessage(type)) room.events.emit('message', { type, from: peer, payload });
   };
 
   transport.on('connected', (peer) => {
@@ -522,13 +506,11 @@ export function createMesh(config: MeshConfig): Mesh {
     for (const name of expected.get(peer) ?? []) greet(name, peer);
     expected.delete(peer);
     // The other side greets in the rooms it knows we share; if none does, the connection has no use.
-    idle.set(
-      peer,
-      setTimeout(() => {
-        idle.delete(peer);
-        closeIfIdle(peer);
-      }, authTimeoutMs),
-    );
+    const timer = setTimeout(() => {
+      idle.delete(peer);
+      closeIfIdle(peer);
+    }, authTimeoutMs);
+    idle.set(peer, timer);
   });
 
   transport.on('disconnected', lost);
@@ -540,33 +522,7 @@ export function createMesh(config: MeshConfig): Mesh {
     } catch {
       return fail(new Error('Failed to parse incoming message'));
     }
-    if (!isObject(frame)) return;
-    const { type, payload } = frame;
-    const name = typeof frame.room === 'string' ? frame.room : null;
-    if (typeof type !== 'string') return;
-
-    // Before a peer has proved itself somewhere, the handshake is all there is.
-    if (type === AUTH_HELLO_MESSAGE || type === AUTH_PROOF_MESSAGE) {
-      if (name)
-        void onHandshake(name, peer, type, payload).catch(() => {
-          const room = rooms.get(name);
-          if (room) refuse(room, peer);
-        });
-      return;
-    }
-    if (!isAdmitted(peer)) return;
-
-    const room = name ? rooms.get(name) : undefined;
-    if (!name || !room?.peers.has(peer)) return;
-    if (type === SIGNAL_MESSAGE) return void onRelayedSignal(peer, name, payload).catch(() => {});
-    if (type === PEERS_MESSAGE) return handlePeerList(name, payload);
-    if (type === LEAVE_MESSAGE) {
-      drop(room, peer);
-      return closeIfIdle(peer);
-    }
-    // Mesh housekeeping never reaches the space. The sender is the connection
-    // it arrived on, not whatever the frame claims.
-    if (!isControlMessage(type)) room.events.emit('message', { type, from: peer, payload });
+    if (isObject(frame)) onFrame(peer, frame);
   });
 
   transport.on('error', (peer, error) =>
@@ -583,15 +539,39 @@ export function createMesh(config: MeshConfig): Mesh {
     return started;
   };
 
+  /** The last room is gone: let go of every timer and the relays. */
+  const stop = (): void => {
+    for (const timer of idle.values()) clearTimeout(timer);
+    idle.clear();
+    for (const { timer } of pending.values()) clearTimeout(timer);
+    pending.clear();
+    tries.clear();
+    signaling.disconnect();
+    started = null;
+  };
+
+  /** Waits for a relay's TURN offer, briefly: relays without TURN never answer. */
+  const askForIce = (): Promise<void> =>
+    new Promise<void>((resolve) => {
+      const done = () => {
+        clearTimeout(timer);
+        signaling.off('ice', done);
+        resolve();
+      };
+      const timer = setTimeout(done, ICE_WAIT_MS);
+      signaling.on('ice', done);
+      signaling.requestIce();
+    });
+
   return {
     status: (): MeshStatus => ({
       relays: signaling.relays(),
       links: [...links].map((peer) => ({
         peer,
-        rooms: [...rooms.values()].filter((room) => room.peers.has(peer)).length,
+        rooms: roomList().filter((room) => room.peers.has(peer)).length,
       })),
       connecting: [...pending].map(([peer, { since, tries: tried }]) => ({ peer, since, tries: tried })),
-      turn: relayIce !== null && relayIce.expiresAt > Date.now(),
+      turn: hasTurn(),
     }),
 
     subscribe(listener) {
@@ -606,17 +586,7 @@ export function createMesh(config: MeshConfig): Mesh {
       // A relay that did not answer last time has no TURN; don't wait on it every call.
       if (signaling.isConnected() && stale && Date.now() - iceAskedAt > ICE_REFRESH_MS) {
         iceAskedAt = Date.now();
-        // Relays without TURN never answer; a short wait costs a call's first second at most.
-        await new Promise<void>((resolve) => {
-          const done = () => {
-            clearTimeout(timer);
-            signaling.off('ice', done);
-            resolve();
-          };
-          const timer = setTimeout(done, ICE_WAIT_MS);
-          signaling.on('ice', done);
-          signaling.requestIce();
-        });
+        await askForIce();
       }
       return currentIce();
     },
@@ -629,12 +599,8 @@ export function createMesh(config: MeshConfig): Mesh {
     },
 
     join(name: string, auth: MeshAuth | null = null): NetworkManager {
-      const room: Room = {
-        auth,
-        peers: new Map(),
-        handshakes: new Map(),
-        events: createEmitter<NetworkEvents>(),
-      };
+      const room: Room = { auth, peers: new Map(), handshakes: new Map(), events: createEmitter() };
+      const isCurrent = () => rooms.get(name) === room;
       const send = (peer: string, message: NetworkMessage) => {
         if (room.peers.has(peer))
           sendFrame(peer, { room: name, type: message.type, payload: message.payload });
@@ -648,29 +614,21 @@ export function createMesh(config: MeshConfig): Mesh {
           await start();
         },
         disconnect() {
-          if (rooms.get(name) !== room) return;
+          if (!isCurrent()) return;
           for (const peer of room.peers.keys()) sendFrame(peer, { room: name, type: LEAVE_MESSAGE });
           for (const peer of [...room.handshakes.keys()]) endHandshake(room, peer);
           room.peers.clear();
           rooms.delete(name);
           signaling.leave(name);
           for (const peer of [...links]) closeIfIdle(peer);
-          if (rooms.size === 0) {
-            for (const timer of idle.values()) clearTimeout(timer);
-            idle.clear();
-            for (const { timer } of pending.values()) clearTimeout(timer);
-            pending.clear();
-            tries.clear();
-            signaling.disconnect();
-            started = null;
-          }
+          if (rooms.size === 0) stop();
         },
         send,
         broadcast: (message: NetworkMessage) => {
           for (const peer of room.peers.keys()) send(peer, message);
         },
         drop(peer: string) {
-          if (rooms.get(name) !== room || !room.peers.has(peer)) return;
+          if (!isCurrent() || !room.peers.has(peer)) return;
           // Only this room: the connection may still serve spaces the two share.
           sendFrame(peer, { room: name, type: LEAVE_MESSAGE });
           drop(room, peer);
@@ -679,10 +637,38 @@ export function createMesh(config: MeshConfig): Mesh {
         getPeers: () => [...room.peers.values()],
         on: room.events.on,
         off: room.events.off,
-        // Connected means reachable, which after the first introduction no longer
-        // depends on a relay being up.
+        // Reachable: after the first introduction that no longer depends on a relay.
         isConnected: () => signaling.isConnected() || room.peers.size > 0,
       });
     },
   };
+}
+
+/** A relayed signal's fields, if it has the shape of one and is within the window */
+function readSignal(signal: unknown) {
+  if (!isObject(signal) || !isObject(signal.data)) return null;
+  const { origin, target, kind, at, sig, hops } = signal;
+  const { sdp } = signal.data;
+  if (!isPeerDid(origin) || !isPeerDid(target) || !isSignalKind(kind)) return null;
+  if (signal.data.type !== kind || typeof sdp !== 'string' || sdp.length > MAX_SDP_CHARS) return null;
+  if (typeof at !== 'number' || !Number.isSafeInteger(at) || Math.abs(Date.now() - at) > SIGNAL_WINDOW_MS)
+    return null;
+  return { origin, target, kind, at, sdp, sig, hops };
+}
+
+function relayedSignal(
+  fields: { origin: string; target: string; kind: SignalKind; at: number; sdp: string },
+  sig: string,
+  hops: number,
+): RelayedSignal {
+  const { origin, target, kind, at, sdp } = fields;
+  return { origin, target, kind, data: { type: kind, sdp }, at, sig, hops };
+}
+
+/** Sets `key` as the newest entry, letting the oldest go past `limit` */
+function setNewest<K, V>(map: Map<K, V>, key: K, value: V, limit: number): void {
+  map.delete(key);
+  map.set(key, value);
+  // A map iterates in insertion order: the first is the oldest.
+  if (map.size > limit) map.delete(map.keys().next().value ?? key);
 }

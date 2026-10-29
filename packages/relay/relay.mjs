@@ -109,6 +109,19 @@ export function createRelay(options = {}) {
   let mailChars = 0;
   let mailSeq = 0;
 
+  /** What each message type does; the mailbox's take a topic */
+  const handlers = new Map([
+    // A browser can't see WebSocket pings, so a client asks in a message whether its socket still reaches us.
+    ['ping', (client) => send(client, '{"type":"pong"}')],
+    // TURN is for peers meeting here: sockets that watch a topic.
+    ['ice', (client) => client.watching.size > 0 && offerTurn(client)],
+    ['challenge', challenge],
+    ['fetch', withTopic(fetchMail)],
+    ['drop', withTopic(dropMail)],
+    ['unwatch', withTopic((client, { topic }) => unwatch(client, topic))],
+    ['purge', withTopic(purge)],
+  ]);
+
   /** Admits one socket. It never says who it is. */
   function accept(ws, ip) {
     const client = {
@@ -120,169 +133,116 @@ export function createRelay(options = {}) {
       tokens: RATE_BURST,
       refilled: Date.now(),
     };
-
     clients.add(client);
     perIp.set(ip, (perIp.get(ip) ?? 0) + 1);
 
     ws.on('pong', () => (client.alive = true));
     ws.on('message', (data, isBinary) => {
-      if (!withinBudget(client)) {
-        ws.terminate(); // a flood gets no goodbye
-        return;
-      }
+      if (!withinBudget(client)) return ws.terminate(); // a flood gets no goodbye
       if (!isBinary) handleMessage(client, data.toString('utf8'));
     });
-
-    let dropped = false;
-    const drop = () => {
-      if (dropped) return;
-      dropped = true;
-      clients.delete(client);
-      const left = (perIp.get(ip) ?? 1) - 1;
-      if (left > 0) perIp.set(ip, left);
-      else perIp.delete(ip);
-      for (const topic of [...client.watching]) unwatch(client, topic);
-    };
-
-    // `ws` closes the socket itself on an oversized or malformed frame
-    // (unmasked, bad opcode, bad UTF-8); both paths end here.
-    ws.on('close', drop);
+    // `ws` closes the socket itself on an oversized or malformed frame; both paths end here.
+    ws.once('close', () => forget(client));
     ws.on('error', () => ws.terminate());
   }
 
-  /** One message: the mailbox's, a request for TURN, or a ping. */
+  function forget(client) {
+    clients.delete(client);
+    const left = (perIp.get(client.ip) ?? 1) - 1;
+    if (left > 0) perIp.set(client.ip, left);
+    else perIp.delete(client.ip);
+    for (const topic of [...client.watching]) unwatch(client, topic);
+  }
+
   function handleMessage(client, raw) {
-    let message;
-    try {
-      message = JSON.parse(raw);
-    } catch {
-      return;
-    }
-    if (!message || typeof message.type !== 'string') return;
-    if (['drop', 'fetch', 'unwatch', 'challenge', 'purge'].includes(message.type)) {
-      handleMail(client, message);
-      return;
-    }
-    // A browser can't see WebSocket pings, so a client asks in a message whether its socket still reaches us.
-    if (message.type === 'ping') {
-      send(client, '{"type":"pong"}');
-      return;
-    }
-    // TURN is for peers meeting here: sockets that watch a topic.
-    if (message.type === 'ice' && client.watching.size > 0) offerTurn(client);
+    const message = parseJson(raw);
+    if (typeof message?.type !== 'string') return;
+    handlers.get(message.type)?.(client, message);
+  }
+
+  function challenge(client) {
+    client.nonce = randomBytes(18).toString('base64url');
+    reply(client, { type: 'challenge', nonce: client.nonce });
   }
 
   /**
-   * The mailbox: `drop` leaves a sealed blob under a topic, kept, or with
-   * `ttl: 0` only handed to whoever watches it; `fetch` reads a topic's kept
-   * blobs after a sequence number (and, with `watch`, hears of new ones as
-   * they come); `unwatch` stops that.
+   * Reads a topic's kept blobs after a sequence number, a page at a time; with
+   * `watch`, hears of new ones as they come.
    */
-  function handleMail(client, message) {
-    if (message.type === 'challenge') {
-      client.nonce = randomBytes(18).toString('base64url');
-      send(client, JSON.stringify({ type: 'challenge', nonce: client.nonce }));
-      return;
-    }
+  function fetchMail(client, message) {
     const { topic } = message;
-    if (typeof topic !== 'string' || !TOPIC_PATTERN.test(topic)) return;
-
-    if (message.type === 'unwatch') {
-      unwatch(client, topic);
-      return;
-    }
-
-    if (message.type === 'purge') {
-      purge(client, message);
-      return;
-    }
-
-    if (message.type === 'fetch') {
-      const after = Number.isSafeInteger(message.after) ? message.after : 0;
-      if (message.watch === true) watch(client, topic);
-      const now = Date.now();
-      const items = [];
-      let chars = 0;
-      let more = false;
-      // What a host keeps under the topic for its accounts comes first, on the first page, as sequence 0.
-      if (after === 0)
-        for (const blob of options.mailboxFrom?.(topic) ?? []) {
-          const id = createHash('sha256').update(blob).digest('base64url');
-          items.push({ seq: 0, id, blob });
-          chars += blob.length;
-        }
-      for (const item of mailbox.get(topic) ?? []) {
-        if (item.seq <= after || item.expires <= now) continue;
-        if (items.length >= MAX_PAGE_ITEMS || chars + item.blob.length > MAX_PAGE_CHARS) {
-          more = true;
-          break;
-        }
-        items.push(mailItem(item));
-        chars += item.blob.length;
-      }
-      send(client, JSON.stringify({ type: 'mail', topic, items, more }));
-      return;
-    }
-
-    // drop
-    const refuse = (reason) => send(client, JSON.stringify({ type: 'refused', topic, reason }));
-    const { blob } = message;
-    if (
-      typeof blob !== 'string' ||
-      blob.length === 0 ||
-      blob.length > MAX_BLOB_LENGTH ||
-      !/^[A-Za-z0-9_-]+$/.test(blob)
-    ) {
-      refuse('A blob is base64url, at most 12000 characters');
-      return;
-    }
-    // Kept by nobody: handed to whoever watches the topic now, and that is all.
-    // Only from a socket watching the topic, so a sender takes one of its 64 places.
-    if (message.ttl === 0) {
-      if (!client.watching.has(topic)) return;
-      const news = JSON.stringify({ type: 'mail', topic, items: [{ blob }], more: false });
-      for (const watcher of watchers.get(topic) ?? []) if (watcher !== client) send(watcher, news);
-      return;
-    }
-    const id = createHash('sha256').update(blob).digest('base64url');
-    const held = mailbox.get(topic) ?? [];
+    const after = Number.isSafeInteger(message.after) ? message.after : 0;
+    if (message.watch === true) watch(client, topic);
+    // What a host keeps under the topic for its accounts comes first, on the first page, as sequence 0.
+    const hosted = after === 0 ? (options.mailboxFrom?.(topic) ?? []) : [];
+    const items = hosted.map((blob) => ({ seq: 0, id: hashOf(blob), blob }));
+    let chars = sumChars(items);
+    let more = false;
     const now = Date.now();
-    // The same knock twice is one knock: a sender retrying costs nothing. An
-    // expired copy the sweep has not taken yet is no longer held, so it is
-    // dropped again rather than answered for.
-    if (held.some((item) => item.id === id && item.expires > now)) {
-      send(client, JSON.stringify({ type: 'dropped', topic, id }));
-      return;
+    for (const item of mailbox.get(topic) ?? []) {
+      if (item.seq <= after || item.expires <= now) continue;
+      if (items.length >= MAX_PAGE_ITEMS || chars + item.blob.length > MAX_PAGE_CHARS) {
+        more = true;
+        break;
+      }
+      items.push(mailItem(item));
+      chars += item.blob.length;
     }
-    const network = networkOf(client.ip);
-    const here = countOf(`${network}|${topic}`, now);
-    const everywhere = countOf(network, now);
-    if (here >= limits.dropsPerNetworkPerTopic)
-      return refuse('Too many knocks on this inbox from here; try later');
-    if (everywhere >= limits.dropsPerNetwork) return refuse('Too many knocks from here; try later');
-    if (held.length >= MAX_MAIL_PER_TOPIC) return refuse('This inbox is full');
-    if (!mailbox.has(topic) && mailbox.size >= limits.maxTopics) return refuse('The mailbox is full');
-    const room = held.length < RESERVED_PER_TOPIC ? limits.maxChars + limits.reserveChars : limits.maxChars;
-    if (mailChars + blob.length > room) return refuse('The mailbox is full');
-
-    const ttl =
-      Number.isFinite(message.ttl) && message.ttl > 0
-        ? Math.min(message.ttl, limits.ttlSeconds)
-        : limits.ttlSeconds;
-    const item = { seq: ++mailSeq, id, expires: now + ttl * 1000, blob };
-    held.push(item);
-    mailbox.set(topic, held);
-    mailChars += blob.length;
-    counted(`${network}|${topic}`, now);
-    counted(network, now);
-    send(client, JSON.stringify({ type: 'dropped', topic, id }));
-    const news = JSON.stringify({ type: 'mail', topic, items: [mailItem(item)], more: false });
-    for (const watcher of watchers.get(topic) ?? []) {
-      if (watcher !== client) send(watcher, news);
-    }
+    reply(client, { type: 'mail', topic, items, more });
   }
 
-  const mailItem = ({ seq, id, blob }) => ({ seq, id, blob });
+  /**
+   * Leaves a sealed blob under a topic: kept for its ttl, or with `ttl: 0`
+   * only handed to whoever watches the topic now.
+   */
+  function dropMail(client, { topic, blob, ttl }) {
+    const refuse = (reason) => reply(client, { type: 'refused', topic, reason });
+    if (!isBlob(blob)) return refuse('A blob is base64url, at most 12000 characters');
+    // Only from a socket watching the topic, so a sender takes one of its 64 places.
+    if (ttl === 0) return client.watching.has(topic) && tellWatchers(client, topic, [{ blob }]);
+
+    const id = hashOf(blob);
+    const held = mailbox.get(topic) ?? [];
+    const now = Date.now();
+    // The same knock twice is one knock, so a retry costs nothing. An expired copy is not held.
+    if (held.some((item) => item.id === id && item.expires > now))
+      return reply(client, { type: 'dropped', topic, id });
+    const refusal = dropRefusal(client, topic, blob, held, now);
+    if (refusal) return refuse(refusal);
+
+    const item = { seq: ++mailSeq, id, expires: now + keptFor(ttl) * 1000, blob };
+    mailbox.set(topic, [...held, item]);
+    mailChars += blob.length;
+    const network = networkOf(client.ip);
+    counted(`${network}|${topic}`, now);
+    counted(network, now);
+    reply(client, { type: 'dropped', topic, id });
+    tellWatchers(client, topic, [mailItem(item)]);
+  }
+
+  /** Why a drop can't be kept, if it can't */
+  function dropRefusal(client, topic, blob, held, now) {
+    const network = networkOf(client.ip);
+    if (countOf(`${network}|${topic}`, now) >= limits.dropsPerNetworkPerTopic)
+      return 'Too many knocks on this inbox from here; try later';
+    if (countOf(network, now) >= limits.dropsPerNetwork) return 'Too many knocks from here; try later';
+    if (held.length >= MAX_MAIL_PER_TOPIC) return 'This inbox is full';
+    if (!mailbox.has(topic) && mailbox.size >= limits.maxTopics) return 'The mailbox is full';
+    // A reserve past `maxChars` keeps a knock or two open on every inbox.
+    const room = held.length < RESERVED_PER_TOPIC ? limits.maxChars + limits.reserveChars : limits.maxChars;
+    if (mailChars + blob.length > room) return 'The mailbox is full';
+    return null;
+  }
+
+  /** A client may ask to keep a blob for less than the limit, never more */
+  function keptFor(ttl) {
+    return Number.isFinite(ttl) && ttl > 0 ? Math.min(ttl, limits.ttlSeconds) : limits.ttlSeconds;
+  }
+
+  function tellWatchers(sender, topic, items) {
+    const news = JSON.stringify({ type: 'mail', topic, items, more: false });
+    for (const watcher of watchers.get(topic) ?? []) if (watcher !== sender) send(watcher, news);
+  }
 
   /** Drops counted under a key in the current hour */
   function countOf(key, now) {
@@ -303,53 +263,24 @@ export function createRelay(options = {}) {
    */
   function purge(client, message) {
     const { topic, sign, sig } = message;
-    const refuse = (reason) => send(client, JSON.stringify({ type: 'refused', topic, reason }));
+    const ids = message.ids ?? null;
+    const refuse = (reason) => reply(client, { type: 'refused', topic, reason });
     const nonce = client.nonce;
     client.nonce = null;
-    const ids = message.ids === undefined ? null : message.ids;
     if (!nonce) return refuse('Ask for a challenge first');
-    if (
-      typeof sign !== 'string' ||
-      !/^[A-Za-z0-9_-]{44}$/.test(sign) ||
-      typeof sig !== 'string' ||
-      sig.length > 200
-    )
-      return refuse('Not a purge');
-    if (
-      ids !== null &&
-      (!Array.isArray(ids) ||
-        ids.length > MAX_MAIL_PER_TOPIC ||
-        !ids.every((id) => typeof id === 'string' && id.length <= 64))
-    ) {
-      return refuse('Not a purge');
-    }
-    if (createHash('sha256').update(`minca/inbox-topic/v1|${sign}`).digest('base64url') !== topic)
-      return refuse('That key is not this inbox’s');
-    let good = false;
-    try {
-      const key = createPublicKey({
-        key: Buffer.concat([PURGE_SPKI_PREFIX, Buffer.from(sign, 'base64url')]),
-        format: 'der',
-        type: 'spki',
-      });
-      const signed = `minca/inbox-purge/v1|${topic}|${nonce}|${ids ? [...ids].sort().join(',') : '*'}`;
-      good = verify(
-        'sha256',
-        Buffer.from(signed),
-        { key, dsaEncoding: 'ieee-p1363' },
-        Buffer.from(sig, 'base64url'),
-      );
-    } catch {
-      good = false;
-    }
-    if (!good) return refuse('The signature does not check out');
+    if (!isPurge(sign, sig, ids)) return refuse('Not a purge');
+    if (hashOf(`minca/inbox-topic/v1|${sign}`) !== topic) return refuse('That key is not this inbox’s');
+    const signed = `minca/inbox-purge/v1|${topic}|${nonce}|${ids ? [...ids].sort().join(',') : '*'}`;
+    if (!verifiesP256(sign, signed, sig)) return refuse('The signature does not check out');
+
     const held = mailbox.get(topic) ?? [];
-    const gone = ids === null ? held : held.filter((item) => ids.includes(item.id));
-    for (const item of gone) mailChars -= item.blob.length;
-    const kept = ids === null ? [] : held.filter((item) => !ids.includes(item.id));
+    const goes = (item) => ids === null || ids.includes(item.id);
+    const gone = held.filter(goes);
+    const kept = held.filter((item) => !goes(item));
+    mailChars -= sumChars(gone);
     if (kept.length === 0) mailbox.delete(topic);
     else mailbox.set(topic, kept);
-    send(client, JSON.stringify({ type: 'purged', topic, count: gone.length }));
+    reply(client, { type: 'purged', topic, count: gone.length });
   }
 
   /** Hears of what is dropped under a topic from now on; the first watch also offers TURN */
@@ -359,8 +290,8 @@ export function createRelay(options = {}) {
     if (watching ? watching.size >= MAX_WATCHERS_PER_TOPIC : watchers.size >= MAX_WATCHED_TOPICS) return;
     const first = client.watching.size === 0;
     client.watching.add(topic);
-    if (!watching) watchers.set(topic, new Set([client]));
-    else watching.add(client);
+    if (watching) watching.add(client);
+    else watchers.set(topic, new Set([client]));
     if (first) offerTurn(client);
   }
 
@@ -371,18 +302,18 @@ export function createRelay(options = {}) {
     if (watching?.size === 0) watchers.delete(topic);
   }
 
-  /** Lets go of knocks past their time, and of drop counts past their hour */
-  function sweepMail() {
+  /** Lets go of knocks past their time, of drop counts past their hour, and of expired TURN passwords */
+  function sweep() {
     const now = Date.now();
     for (const [topic, held] of mailbox) {
       const kept = held.filter((item) => item.expires > now);
-      for (const item of held) if (item.expires <= now) mailChars -= item.blob.length;
+      mailChars -= sumChars(held) - sumChars(kept);
       if (kept.length === 0) mailbox.delete(topic);
       else if (kept.length !== held.length) mailbox.set(topic, kept);
     }
-    for (const [key, recent] of dropsBy) {
-      if (now - recent.since >= DROP_WINDOW_MS) dropsBy.delete(key);
-    }
+    for (const [key, recent] of dropsBy) if (now - recent.since >= DROP_WINDOW_MS) dropsBy.delete(key);
+    for (const [network, held] of turnByNetwork)
+      if (held.expires <= now / 1000) turnByNetwork.delete(network);
   }
 
   /**
@@ -396,29 +327,19 @@ export function createRelay(options = {}) {
     let held = turnByNetwork.get(network);
     if (!held || held.expires - now < turn.ttlSeconds / 2) {
       if (!held && turnByNetwork.size >= MAX_TURN_ADDRESSES) return;
-      const expires = now + turn.ttlSeconds;
-      // coturn reads the part before the colon as the expiry; the rest names the holder, not who they are.
-      const username = `${expires}:${randomBytes(9).toString('base64url')}`;
-      const credential = createHmac('sha1', turn.secret).update(username).digest('base64');
-      held = { username, credential, expires };
+      held = turnPassword(turn, now + turn.ttlSeconds);
       turnByNetwork.set(network, held);
     }
     const { username, credential, expires } = held;
-    send(
-      client,
-      JSON.stringify({
-        type: 'ice',
-        payload: { servers: [{ urls: turn.urls, username, credential }], expiresAt: expires * 1000 },
-      }),
-    );
+    const servers = [{ urls: turn.urls, username, credential }];
+    reply(client, { type: 'ice', payload: { servers, expiresAt: expires * 1000 } });
   }
+
+  const reply = (client, message) => send(client, JSON.stringify(message));
 
   function send(peer, text) {
     if (peer.ws.readyState !== peer.ws.OPEN) return;
-    if (peer.ws.bufferedAmount > MAX_BUFFERED_BYTES) {
-      peer.ws.terminate();
-      return;
-    }
+    if (peer.ws.bufferedAmount > MAX_BUFFERED_BYTES) return peer.ws.terminate();
     peer.ws.send(text);
   }
 
@@ -432,14 +353,17 @@ export function createRelay(options = {}) {
     return true;
   }
 
-  // Heartbeat: ping everyone, and drop whoever did not answer the last ping.
-  // This also frees watches held by sockets that died without a close.
+  /** The refusal for a new socket from this address, if any */
+  function refusalFor(ip) {
+    if (clients.size >= MAX_CONNECTIONS) return '503 Relay full';
+    if ((perIp.get(ip) ?? 0) >= MAX_CONNECTIONS_PER_IP) return '429 Too many connections';
+    return null;
+  }
+
+  // Ping everyone, and drop whoever did not answer the last ping: this also
+  // frees watches held by sockets that died without a close.
   const heartbeat = setInterval(() => {
-    const now = Date.now() / 1000;
-    for (const [network, held] of turnByNetwork) {
-      if (held.expires <= now) turnByNetwork.delete(network);
-    }
-    sweepMail();
+    sweep();
     for (const client of clients) {
       if (!client.alive) {
         client.ws.terminate();
@@ -461,14 +385,9 @@ export function createRelay(options = {}) {
     upgrade(wss, req, socket, head) {
       socket.on('error', () => socket.destroy());
       const ip = clientIp(req);
-      const refusal =
-        clients.size >= MAX_CONNECTIONS
-          ? [503, 'Relay full']
-          : (perIp.get(ip) ?? 0) >= MAX_CONNECTIONS_PER_IP
-            ? [429, 'Too many connections']
-            : null;
+      const refusal = refusalFor(ip);
       if (refusal) {
-        socket.end(`HTTP/1.1 ${refusal[0]} ${refusal[1]}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
+        socket.end(`HTTP/1.1 ${refusal}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
         return;
       }
       wss.handleUpgrade(req, socket, head, (ws) => accept(ws, ip));
@@ -480,6 +399,70 @@ export function createRelay(options = {}) {
       for (const client of clients) client.ws.terminate();
     },
   };
+}
+
+/** Wraps a mailbox handler so it only sees messages naming a well-formed topic */
+function withTopic(handler) {
+  return (client, message) => {
+    if (typeof message.topic === 'string' && TOPIC_PATTERN.test(message.topic)) handler(client, message);
+  };
+}
+
+function parseJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+const hashOf = (text) => createHash('sha256').update(text).digest('base64url');
+const sumChars = (items) => items.reduce((sum, item) => sum + item.blob.length, 0);
+const mailItem = ({ seq, id, blob }) => ({ seq, id, blob });
+
+function isBlob(blob) {
+  return (
+    typeof blob === 'string' &&
+    blob.length > 0 &&
+    blob.length <= MAX_BLOB_LENGTH &&
+    /^[A-Za-z0-9_-]+$/.test(blob)
+  );
+}
+
+/** A purge's shape: a compressed P-256 key, a signature, and all ids or a list of some */
+function isPurge(sign, sig, ids) {
+  const isId = (id) => typeof id === 'string' && id.length <= 64;
+  const idsOk = ids === null || (Array.isArray(ids) && ids.length <= MAX_MAIL_PER_TOPIC && ids.every(isId));
+  return (
+    typeof sign === 'string' &&
+    /^[A-Za-z0-9_-]{44}$/.test(sign) &&
+    typeof sig === 'string' &&
+    sig.length <= 200 &&
+    idsOk
+  );
+}
+
+/** Whether `sig` is a P-256 signature of `text` by the compressed key `sign` (both base64url) */
+function verifiesP256(sign, text, sig) {
+  try {
+    const der = Buffer.concat([PURGE_SPKI_PREFIX, Buffer.from(sign, 'base64url')]);
+    const key = createPublicKey({ key: der, format: 'der', type: 'spki' });
+    return verify(
+      'sha256',
+      Buffer.from(text),
+      { key, dsaEncoding: 'ieee-p1363' },
+      Buffer.from(sig, 'base64url'),
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** A coturn REST password: coturn reads the part before the colon as the expiry; the rest names the holder, not who they are. */
+function turnPassword(turn, expires) {
+  const username = `${expires}:${randomBytes(9).toString('base64url')}`;
+  const credential = createHmac('sha1', turn.secret).update(username).digest('base64');
+  return { username, credential, expires };
 }
 
 /**

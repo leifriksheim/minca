@@ -683,7 +683,7 @@ can ask any peer for one it lacks, by id (§4). What no line names yet, a
 writer's newest versions, it learns only from the peers it syncs with:
 withholding those needs every one of them to.
 
-_Source: `packages/core/src/node/space-runtime.ts` ("Holding part of the space"),
+_Source: `packages/core/src/node/space-holding.ts` (`openSpaceHolding`),
 `packages/core/src/space/roles.ts` (`Keeper`, `checkKeepers`). Tests: `packages/core/tests/caches.test.ts`, `packages/core/tests/reconcile.test.ts`
 ("holding part of a space")._
 

@@ -31,12 +31,13 @@ import {
   type Query,
   type QueryRecord,
 } from '../query/types.js';
-import { checkFilter, checkQuery, matches } from '../query/filter.js';
+import { checkFilter, checkQuery, matches, type FilterSubject } from '../query/filter.js';
 import { causeOf, namedComputed } from '../query/computed.js';
 import { quickAddBody } from '../schema/quick-add.js';
 import { schemaProblem, type JsonSchema } from '../schema/collection-def.js';
 import { isObject } from '../utils/guards.js';
 import { checkCron, cronMatches } from './cron.js';
+import { definedNames } from './defined.js';
 import { about, define, one, person, text, typed, when as moment, words } from './fragments.js';
 
 /** A link an automation's new record carries: to a record by key, or to `$it`, the record the automation holds for */
@@ -209,13 +210,9 @@ export async function setActivity(
   state: ActivityState,
   label?: string,
 ): Promise<NodeRecord | null> {
-  if (!(await node.collections.list(space)).some((c) => c.name === activity.name && c.version !== null))
-    return null;
-  const kept =
-    label ??
-    (await node.records.linked<Activity>(space, on, { rel: 'about', collection: activity.name })).find(
-      (record) => record.root === node.did && !record.deleted,
-    )?.body?.label;
+  if (!(await definedNames(node, space)).has(activity.name)) return null;
+  const mine = await node.records.linked<Activity>(space, on, { rel: 'about', collection: activity.name });
+  const kept = label ?? mine.find((record) => record.root === node.did && !record.deleted)?.body?.label;
   const body: Activity = {
     state,
     ...(kept ? { label: kept.slice(0, 120) } : {}),
@@ -303,37 +300,34 @@ export function checkAutomation(value: unknown): string | null {
     return 'An automation that changes a record needs a when';
   if (typeof value.since !== 'string' || !Number.isFinite(Date.parse(value.since)))
     return 'since must be a date';
-  if (value.open !== undefined && (typeof value.open !== 'string' || !isWebAddress(value.open)))
-    return 'open must be an https:// address';
-  if (isObject(value.app) && (typeof value.app.origin !== 'string' || !isOrigin(value.app.origin)))
-    return 'app.origin must be a web origin';
+  if (value.open !== undefined && !isWebAddress(value.open)) return 'open must be an https:// address';
+  if (isObject(value.app) && !isOrigin(value.app.origin)) return 'app.origin must be a web origin';
   return null;
 }
 
 /** An https:// address, or http:// on this machine */
-function isWebAddress(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return (
-      url.protocol === 'https:' ||
-      (url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname))
-    );
-  } catch {
-    return false;
-  }
+function isWebAddress(value: unknown): boolean {
+  const url = parseUrl(value);
+  return url?.protocol === 'https:' || (url?.protocol === 'http:' && LOCAL_HOSTS.includes(url.hostname));
 }
 
-/**
- * `https://chat.example`, nothing after it: what a browser reports as a
- * message's origin. A browser extension's origin (`chrome-extension://<id>`)
- * is one too, though `URL` gives it none.
- */
-function isOrigin(value: string): boolean {
-  if (/^(chrome|moz|safari-web)-extension:\/\/[a-z0-9-]{1,64}$/i.test(value)) return true;
+const LOCAL_HOSTS = ['localhost', '127.0.0.1'];
+
+/** A browser extension's origin, which `URL` gives none */
+const EXTENSION_ORIGIN = /^(chrome|moz|safari-web)-extension:\/\/[a-z0-9-]{1,64}$/i;
+
+/** `https://chat.example`, nothing after it: what a browser reports as a message's origin */
+function isOrigin(value: unknown): boolean {
+  if (typeof value !== 'string') return false;
+  return EXTENSION_ORIGIN.test(value) || parseUrl(value)?.origin === value;
+}
+
+function parseUrl(value: unknown): URL | null {
+  if (typeof value !== 'string') return null;
   try {
-    return new URL(value).origin === value;
+    return new URL(value);
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -354,19 +348,17 @@ export interface AutomationMatch {
   readonly record: QueryRecord;
   /** What its query's `include` found, as the condition read it: a count as a number */
   readonly included: Readonly<Record<string, unknown>>;
-  /**
-   * When it came to hold, as far as can be told: its last change, the newest
-   * record an include found, or the newest its computed fields read
-   */
+  /** When it came to hold: its last change, or the newest record an include found or its computed fields read */
   readonly moment: number;
   /**
-   * What made it hold: the record itself, or, for a filter on a computed
-   * field, the record that field read whose coming made it hold (`causeOf`).
-   * `from`, `others` and "not by the runner's own agent" judge this one's
-   * writer. Absent: the record.
+   * What made it hold: the record itself, or the record a computed field read
+   * (`causeOf`). `from`, `others` and "not by the runner's own agent" judge its writer.
+   * Absent: the record.
    */
   readonly cause?: NodeRecord;
 }
+
+type Included = Record<string, unknown>;
 
 /**
  * The records an automation holds for now, most recently changed first, for `me`,
@@ -382,57 +374,81 @@ export async function matching(
 ): Promise<ReadonlyArray<AutomationMatch>> {
   const when = asRunner(ruleWhen, me);
   const query = plainQuery(when.query);
-  const counted = new Set<string>();
-  const include = Object.fromEntries(
-    Object.entries(query.include ?? {}).map(([name, found]) => {
-      if (!found.count) return [name, found];
-      counted.add(name);
-      const { count: _count, limit: _limit, ...listed } = found;
-      return [name, listed];
-    }),
-  );
+  const { include, counted } = countsAsLists(query.include ?? {});
   const { records } = await node.records.query(space, {
     ...query,
     include,
     sort: query.sort ?? { '@updatedAt': 'desc' },
     limit: query.limit ?? limit,
   });
-  // A computed field the automation reads changes when what it reads is written: a 👍 can make a todo done.
+  const holds = (subject: FilterSubject) => when.holds === undefined || matches(subject, when.holds);
+  const causeIn = await causeFinder(node, space, query, when.holds, holds);
+  const found: AutomationMatch[] = [];
+  for (const record of records) {
+    const { included, newest } = readIncluded(record, counted);
+    if (!holds({ ...record, included })) continue;
+    const cause = await causeIn(record, included);
+    // What made it hold can't be told: better quiet than set off by the wrong one.
+    if (!cause) continue;
+    const moment = cause === record ? newest : Math.max(newest, Date.parse(cause.updatedAt));
+    found.push({ record, included, moment, cause });
+  }
+  return found;
+}
+
+/** A query's includes, with those that count turned into lists, and the names of those */
+function countsAsLists(include: NonNullable<Query['include']>) {
+  const counted = new Set<string>();
+  const lists = Object.fromEntries(
+    Object.entries(include).map(([name, found]) => {
+      if (!found.count) return [name, found];
+      counted.add(name);
+      const { count: _count, limit: _limit, ...listed } = found;
+      return [name, listed];
+    }),
+  );
+  return { include: lists, counted };
+}
+
+/** What a record's includes found, counted ones as numbers, and the newest moment among it and them */
+function readIncluded(record: QueryRecord, counted: ReadonlySet<string>) {
+  let newest = Date.parse(record.updatedAt);
+  const included: Included = {};
+  for (const [name, value] of Object.entries(record.included)) {
+    if (typeof value === 'number') {
+      included[name] = value;
+      continue;
+    }
+    for (const one of value) newest = Math.max(newest, Date.parse(one.createdAt));
+    included[name] = counted.has(name) ? value.length : value;
+  }
+  return { included, newest };
+}
+
+/**
+ * How to tell what made a record hold. A computed field the automation reads
+ * changes when what it reads is written: a 👍 can make a todo done. It is what
+ * made it hold, not what came last: a 😡 after the second 👍 sets nothing off.
+ */
+async function causeFinder(
+  node: P2PNode,
+  space: string,
+  query: Query,
+  holdsFilter: Filter | undefined,
+  holds: (subject: FilterSubject) => boolean,
+): Promise<(record: QueryRecord, included: Included) => Promise<NodeRecord | null>> {
   const name = nameOf(query.collection);
   const fields = (await node.collections.list(space)).find((c) => c.name === name)?.computed ?? {};
-  const named = { ...namedComputed(fields, query.where), ...namedComputed(fields, when.holds) };
-  const reads = Object.keys(named).length > 0;
+  const read = { ...namedComputed(fields, query.where), ...namedComputed(fields, holdsFilter) };
+  if (Object.keys(read).length === 0) return async (record) => record;
   const source = {
     linked: (key: string, o: { rel?: string; collection?: string }) => node.records.linked(space, key, o),
   };
-  const found: AutomationMatch[] = [];
-  for (const record of records) {
-    let latest = Date.parse(record.updatedAt);
-    const included: Record<string, unknown> = {};
-    for (const [name, value] of Object.entries(record.included)) {
-      if (typeof value === 'number') {
-        included[name] = value;
-        continue;
-      }
-      for (const one of value) latest = Math.max(latest, Date.parse(one.createdAt));
-      included[name] = counted.has(name) ? value.length : value;
-    }
-    if (when.holds !== undefined && !matches({ ...record, included }, when.holds)) continue;
-    // What made it hold, not what came last: a 😡 after the second 👍 sets nothing off.
-    const cause = reads
-      ? await causeOf(source, record, named, (computed) => {
-          const subject = { ...record, included, computed };
-          return (
-            matches(subject, query.where ?? {}) && (when.holds === undefined || matches(subject, when.holds))
-          );
-        })
-      : record;
-    // What made it hold can't be told: better quiet than set off by the wrong one.
-    if (!cause) continue;
-    if (cause !== record) latest = Math.max(latest, Date.parse(cause.updatedAt));
-    found.push({ record, included, moment: latest, cause });
-  }
-  return found;
+  return (record, included) =>
+    causeOf(source, record, read, (computed) => {
+      const subject = { ...record, included, computed };
+      return matches(subject, query.where ?? {}) && holds(subject);
+    });
 }
 
 /** What a record is called, for `{title}`: its first text among the usual names, or its key */
@@ -510,26 +526,25 @@ export async function act(
   options: RunAutomationsOptions = {},
 ): Promise<AutomationRun> {
   const { automation: active, match } = trigger;
-  const space = active.space;
-  const body = active.body;
   const at = new Date().toISOString();
-  const text = (template: string) => fillAutomationText(template, match, options.title);
-  const then = body.then;
+  const fill = (template: string) => fillAutomationText(template, match, options.title);
+  const space = active.space;
+  const then = active.body.then;
   try {
     switch (then.kind) {
       case 'notify': {
-        const shown = options.notify?.(body.name, text(then.text), match?.record) ?? false;
-        return { did: shown ? `Notified: ${text(then.text)}` : 'Nothing here could notify', ok: shown, at };
+        const text = fill(then.text);
+        const shown = options.notify?.(active.body.name, text, match?.record) ?? false;
+        return { did: shown ? `Notified: ${text}` : 'Nothing here could notify', ok: shown, at };
       }
-      case 'ask': {
+      case 'ask':
         if (!options.ask) return { did: 'Nothing here can ask an agent', ok: false, at };
         return { ...(await options.ask(trigger)), at };
-      }
       case 'add': {
         const collections = await node.collections.list(space);
         const target = collections.find((c) => c.name === then.collection && c.version !== null);
         const thing = (target?.title ?? then.collection.split('.').pop() ?? then.collection).toLowerCase();
-        const fresh = target ? quickAddBody(target.schema, text(then.text)) : null;
+        const fresh = target ? quickAddBody(target.schema, fill(then.text)) : null;
         if (!target || !fresh)
           return { did: `This space can't add a ${thing} from a line of text`, ok: false, at };
         // Without a record, as when the time set it off, a link to it has nothing to point at.
@@ -537,7 +552,7 @@ export async function act(
           l.to !== IT ? [l] : match ? [{ rel: l.rel, to: match.record.key }] : [],
         );
         const made = await node.records.put(space, target.name, fresh, { links });
-        return { did: `Added a ${thing}: ${text(then.text)}`, ok: true, at, made: made.key };
+        return { did: `Added a ${thing}: ${fill(then.text)}`, ok: true, at, made: made.key };
       }
       case 'set': {
         const current = match ? await node.records.get(space, match.record.key) : null;
@@ -546,7 +561,7 @@ export async function act(
         if (!(await node.records.can(space, 'edit', current.key)))
           return { did: 'Only whoever made it can change it', ok: false, at };
         await node.records.update(space, current.key, { ...was, [then.field]: then.value });
-        return { did: `${text('“{title}”')}: set ${then.field} to ${String(then.value)}`, ok: true, at };
+        return { did: `${fill('“{title}”')}: set ${then.field} to ${String(then.value)}`, ok: true, at };
       }
     }
   } catch (error) {
@@ -557,11 +572,13 @@ export async function act(
 /** Whether someone holds one of these roles; `member` is any place at all, and a founder holds every role's power */
 const holdsOneOf = (access: SpaceAccess | undefined, did: string, names: ReadonlyArray<string>) => {
   const member = access?.members.find((one) => one.did === did);
-  return (
-    !!member &&
-    (member.founder || names.includes('member') || member.roles.some((role) => names.includes(role)))
-  );
+  if (!member) return false;
+  return member.founder || names.includes('member') || member.roles.some((role) => names.includes(role));
 };
+
+/** Whether an automation can run where `options` are: one that asks needs an agent */
+const runnable = (active: ActiveAutomation, options: RunAutomationsOptions) =>
+  active.body.then.kind !== 'ask' || !!options.ask;
 
 /**
  * The automations in a space that `account` runs, none paused and none whose
@@ -581,16 +598,26 @@ export async function automationsFor(
     const body = automationOf(record);
     // A key given records only, an agent's, may suggest an automation; it runs once the person saves it themselves.
     if (!record.verified || record.recordsOnly || !maker || !body || body.paused) continue;
-    const runs =
-      body.by === undefined
-        ? maker === account
-        : body.by === account &&
-          (maker === account ||
-            (!!access?.members.some((member) => member.did === maker) &&
-              (await node.spaces.may(space, INSTRUCT, {}, maker))));
-    if (runs) active.push({ space, key: record.key, maker, body });
+    if (await runsIt(node, space, account, maker, body.by, access))
+      active.push({ space, key: record.key, maker, body });
   }
   return active;
+}
+
+/** Whether `account` runs an automation: its own without `by`, or one naming it whose maker may instruct it */
+async function runsIt(
+  node: P2PNode,
+  space: string,
+  account: string,
+  maker: string,
+  by: string | undefined,
+  access: SpaceAccess | undefined,
+): Promise<boolean> {
+  if (by === undefined) return maker === account;
+  if (by !== account) return false;
+  if (maker === account) return true;
+  const isMember = access?.members.some((member) => member.did === maker) ?? false;
+  return isMember && node.spaces.may(space, INSTRUCT, {}, maker);
 }
 
 /** How many automations in a space an agent wrote for `account`, waiting for the person to save them */
@@ -599,21 +626,20 @@ export async function suggestedAutomations(node: P2PNode, space: string, account
   return records.filter((record) => record.createdBy === account && record.recordsOnly).length;
 }
 
+const linkTo = (record: Pick<NodeRecord, 'links'>, rel: string) =>
+  record.links.find((l) => l.rel === rel)?.to;
+
 /** The records each automation has run for, by automation key, and the records automations wrote */
-async function runsIn(
-  node: P2PNode,
-  space: string,
-): Promise<{ by: Map<string, Set<string>>; made: Set<string> }> {
+async function runsIn(node: P2PNode, space: string) {
   const by = new Map<string, Set<string>>();
   const made = new Set<string>();
   for (const run of await node.records.list(space, { collection: automationRun.name })) {
     if (isObject(run.body) && typeof run.body.made === 'string') made.add(run.body.made);
-    const ran = run.links.find((l) => l.rel === 'automation')?.to;
-    const on = run.links.find((l) => l.rel === 'about')?.to;
+    const ran = linkTo(run, 'automation');
+    const on = linkTo(run, 'about');
     if (!ran || !on) continue;
     const seen = by.get(ran) ?? new Set<string>();
-    seen.add(on);
-    by.set(ran, seen);
+    by.set(ran, seen.add(on));
   }
   return { by, made };
 }
@@ -623,16 +649,15 @@ async function runsIn(
  * claim a record before either hears the other; after a wait, the earlier
  * claim (by time, then key) acts and the later is taken back.
  */
-async function first(node: P2PNode, space: string, mine: NodeRecord, wait: number): Promise<boolean> {
+async function actsFirst(node: P2PNode, space: string, mine: NodeRecord, wait: number): Promise<boolean> {
   if (wait <= 0) return true;
   await new Promise((resolve) => setTimeout(resolve, wait));
-  const ran = mine.links.find((l) => l.rel === 'automation')?.to;
-  const on = mine.links.find((l) => l.rel === 'about')?.to;
+  const ran = linkTo(mine, 'automation');
+  const on = linkTo(mine, 'about');
   if (!ran || !on) return true;
-  const claims = (
-    await node.records.linked(space, on, { rel: 'about', collection: automationRun.name })
-  ).filter((run) => run.links.some((l) => l.rel === 'automation' && l.to === ran));
-  const earliest = [...claims].sort(
+  const runs = await node.records.linked(space, on, { rel: 'about', collection: automationRun.name });
+  const claims = runs.filter((run) => run.links.some((l) => l.rel === 'automation' && l.to === ran));
+  const earliest = claims.sort(
     (a, b) => a.createdAt.localeCompare(b.createdAt) || a.key.localeCompare(b.key),
   )[0];
   if (!earliest || earliest.key === mine.key) return true;
@@ -641,9 +666,9 @@ async function first(node: P2PNode, space: string, mine: NodeRecord, wait: numbe
 }
 
 /**
- * Runs, once, every automation `account` runs in a space: acts for each record a
- * automation newly holds for, and leaves a run for it. `startAutomations` calls it when
- * records change; a device can call it itself.
+ * Runs, once, every automation `account` runs in a space: acts for each record
+ * an automation newly holds for, and leaves a run for it. `startAutomations`
+ * calls it when records change; a device can call it itself.
  */
 export async function runAutomations(
   node: P2PNode,
@@ -651,55 +676,27 @@ export async function runAutomations(
   account: string,
   options: RunAutomationsOptions = {},
 ): Promise<void> {
-  const collections = await node.collections.list(space);
-  const defined = (name: string) => collections.some((c) => c.name === name && c.version !== null);
-  if (!defined(automation.name) || !defined(automationRun.name)) return;
+  const defined = await definedNames(node, space);
+  if (!defined.has(automation.name) || !defined.has(automationRun.name)) return;
   const access = await node.spaces.access(space).catch(() => undefined);
   const rules = (await automationsFor(node, space, account, access)).filter(
-    (r) => r.body.when && (r.body.then.kind !== 'ask' || options.ask),
+    (r) => r.body.when && runnable(r, options),
   );
   if (rules.length === 0) return;
   const busy = options.busy ?? new Set<string>();
   const { by: runs, made } = await runsIn(node, space);
   for (const active of rules) {
-    const when = active.body.when!;
-    if (!defined(nameOf(when.query.collection))) continue;
+    const when = active.body.when;
+    if (!when || !defined.has(nameOf(when.query.collection))) continue;
     const since = Date.parse(active.body.since);
     for (const match of await matching(node, space, when, account)) {
-      const record = match.record;
-      const cause = match.cause ?? record;
-      const by = cause.createdBy ?? cause.root;
-      const claim = `${active.key} ${record.key}`;
-      if (
-        match.moment < since ||
-        made.has(record.key) ||
-        runs.get(active.key)?.has(record.key) ||
-        busy.has(claim)
-      )
-        continue;
-      // What the runner's agent, or the bot, wrote itself never sets an automation off: an agent asked to act can't set itself off.
-      if (by === account && (cause.recordsOnly || options.bot)) continue;
-      if (when.from && !holdsOneOf(access, by ?? '', when.from)) continue;
-      if (when.others && by === account) continue;
+      const key = match.record.key;
+      const claim = `${active.key} ${key}`;
+      const handled = made.has(key) || runs.get(active.key)?.has(key) || busy.has(claim);
+      if (match.moment < since || handled || !setsOff(match, when, account, access, options.bot)) continue;
       busy.add(claim);
       try {
-        const links = [
-          { rel: 'automation', to: active.key },
-          { rel: 'about', to: record.key },
-        ];
-        // Claimed first, so a second look while this acts leaves it alone.
-        const run = await node.records.put(
-          space,
-          automationRun.name,
-          { did: 'Running…', ok: true, at: new Date().toISOString() },
-          { links },
-        );
-        if (!(await first(node, space, run, options.claimMs ?? 0))) continue;
-        const trigger = { automation: active, match };
-        const done = await act(node, trigger, options);
-        if (done.made) made.add(done.made);
-        await node.records.update(space, run.key, done, { links });
-        options.onRun?.(trigger, done);
+        await claimAndAct(node, active, match, options, made);
       } finally {
         busy.delete(claim);
       }
@@ -707,13 +704,49 @@ export async function runAutomations(
   }
 }
 
+/** Whether whoever made a match hold may set the automation off for its runner */
+function setsOff(
+  match: AutomationMatch,
+  when: AutomationWhen,
+  account: string,
+  access: SpaceAccess | undefined,
+  bot: boolean | undefined,
+): boolean {
+  const cause = match.cause ?? match.record;
+  const by = cause.createdBy ?? cause.root;
+  // What the runner's agent, or the bot, wrote itself never sets an automation off: it would set itself off.
+  if (by === account && (cause.recordsOnly || bot)) return false;
+  if (when.from && !holdsOneOf(access, by ?? '', when.from)) return false;
+  return !(when.others && by === account);
+}
+
+/** Claims the record with a run first, so a second look leaves it alone, then acts and fills the run in */
+async function claimAndAct(
+  node: P2PNode,
+  active: ActiveAutomation,
+  match: AutomationMatch,
+  options: RunAutomationsOptions,
+  made: Set<string>,
+): Promise<void> {
+  const space = active.space;
+  const links = [
+    { rel: 'automation', to: active.key },
+    { rel: 'about', to: match.record.key },
+  ];
+  const claim = { did: 'Running…', ok: true, at: new Date().toISOString() };
+  const run = await node.records.put(space, automationRun.name, claim, { links });
+  if (!(await actsFirst(node, space, run, options.claimMs ?? 0))) return;
+  const trigger = { automation: active, match };
+  const done = await act(node, trigger, options);
+  if (done.made) made.add(done.made);
+  await node.records.update(space, run.key, done, { links });
+  options.onRun?.(trigger, done);
+}
+
 export interface StartAutomationsOptions extends RunAutomationsOptions {
   /** The account running them: a person's, for their app or agent, or a bot's own */
   readonly account: string;
-  /**
-   * Whether automations run at the times they name. An app open now and then leaves
-   * that to a runner that is always on. Default true.
-   */
+  /** Whether automations run at the times they name; an app open now and then leaves that to an always-on runner. Default true. */
   readonly timed?: boolean;
   /** Called with the automations it runs, whenever they change */
   readonly onRules?: (rules: ReadonlyArray<ActiveAutomation>) => void;
@@ -734,6 +767,7 @@ export function startAutomations(node: P2PNode, options: StartAutomationsOptions
   const now = options.now ?? (() => new Date());
   let stopped = false;
   let spaces: ReadonlyArray<string> = [];
+  /** The automations it runs, by space */
   const kept = new Map<string, ReadonlyArray<ActiveAutomation>>();
   let shown: string | null = null;
   let running: Promise<void> | null = null;
@@ -741,34 +775,47 @@ export function startAutomations(node: P2PNode, options: StartAutomationsOptions
   const dirty = new Set<string | null>([null]);
   /** The minute each timed automation last ran, so it runs once in it */
   const ranAt = new Map<string, string>();
-  const runnable = (r: ActiveAutomation) => r.body.then.kind !== 'ask' || !!options.ask;
+  const allKept = () => [...kept.values()].flat();
 
   async function run(): Promise<void> {
     while (dirty.size && !stopped) {
       const changed = [...dirty];
       dirty.clear();
       try {
-        if (changed.includes(null)) spaces = (await node.spaces.list()).map((space) => space.id);
-        for (const space of kept.keys()) if (!spaces.includes(space)) kept.delete(space);
-        const looking = changed.includes(null)
-          ? spaces
-          : changed.filter((s): s is string => !!s && spaces.includes(s));
-        for (const space of looking) {
-          if (stopped) return;
-          const access = await node.spaces.access(space).catch(() => undefined);
-          kept.set(space, (await automationsFor(node, space, account, access)).filter(runnable));
-          await runAutomations(node, space, account, { ...options, busy });
-        }
-        const all = [...kept.values()].flat();
-        const names = all.map((r) => `${r.space}/${r.key}/${r.body.name}`).join();
-        if (names !== shown) {
-          shown = names;
-          options.onRules?.(all);
-        }
+        if (!(await look(changed))) return;
+        announce();
       } catch (error) {
         options.onError?.(error);
       }
     }
+  }
+
+  /** Runs the automations of the spaces that changed; false when stopped part way */
+  async function look(changed: ReadonlyArray<string | null>): Promise<boolean> {
+    const everySpace = changed.includes(null);
+    if (everySpace) spaces = (await node.spaces.list()).map((space) => space.id);
+    for (const space of kept.keys()) if (!spaces.includes(space)) kept.delete(space);
+    const looking = everySpace ? spaces : changed.filter((s): s is string => !!s && spaces.includes(s));
+    for (const space of looking) {
+      if (stopped) return false;
+      const access = await node.spaces.access(space).catch(() => undefined);
+      const rules = await automationsFor(node, space, account, access);
+      kept.set(
+        space,
+        rules.filter((r) => runnable(r, options)),
+      );
+      await runAutomations(node, space, account, { ...options, busy });
+    }
+    return true;
+  }
+
+  /** Tells `onRules` the automations it runs, when they changed */
+  function announce(): void {
+    const all = allKept();
+    const names = all.map((r) => `${r.space}/${r.key}/${r.body.name}`).join();
+    if (names === shown) return;
+    shown = names;
+    options.onRules?.(all);
   }
 
   function kick(): void {
@@ -778,6 +825,23 @@ export function startAutomations(node: P2PNode, options: StartAutomationsOptions
     });
   }
 
+  /** Runs each timed automation that names this minute, once in it */
+  function tick(): void {
+    const at = now();
+    const minute = `${at.getFullYear()}-${at.getMonth()}-${at.getDate()} ${at.getHours()}:${at.getMinutes()}`;
+    for (const active of allKept()) {
+      const every = active.body.every;
+      const id = `${active.space}/${active.key}`;
+      if (!every || ranAt.get(id) === minute || !cronMatches(every, at)) continue;
+      ranAt.set(id, minute);
+      const trigger = { automation: active, at };
+      void act(node, trigger, options).then(
+        (done) => options.onRun?.(trigger, done),
+        (error: unknown) => options.onError?.(error),
+      );
+    }
+  }
+
   const unsubscribe = node.subscribe((event) => {
     if (event.type === 'spaces' || event.type === 'account') dirty.add(null);
     else if (event.type === 'records') dirty.add(spaces.includes(event.space) ? event.space : null);
@@ -785,29 +849,11 @@ export function startAutomations(node: P2PNode, options: StartAutomationsOptions
     kick();
   });
   kick();
-
-  const tick =
-    options.timed === false
-      ? undefined
-      : setInterval(() => {
-          const at = now();
-          const minute = `${at.getFullYear()}-${at.getMonth()}-${at.getDate()} ${at.getHours()}:${at.getMinutes()}`;
-          for (const active of [...kept.values()].flat()) {
-            const every = active.body.every;
-            const id = `${active.space}/${active.key}`;
-            if (!every || ranAt.get(id) === minute || !cronMatches(every, at)) continue;
-            ranAt.set(id, minute);
-            const trigger = { automation: active, at };
-            void act(node, trigger, options).then(
-              (done) => options.onRun?.(trigger, done),
-              (error: unknown) => options.onError?.(error),
-            );
-          }
-        }, options.tickMs ?? 15_000);
+  const timer = options.timed === false ? undefined : setInterval(tick, options.tickMs ?? 15_000);
 
   return () => {
     stopped = true;
-    if (tick) clearInterval(tick);
+    if (timer) clearInterval(timer);
     unsubscribe();
   };
 }

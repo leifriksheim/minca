@@ -16,7 +16,7 @@ import {
 } from '@minca/core/schemas';
 import { useMay } from './may';
 import { useAction } from './action';
-import { styles, palette } from './styles';
+import { styles, palette, hstack, stack } from './styles';
 
 /**
  * A hosted bot's connectors: the services its host offers, each connected
@@ -100,7 +100,7 @@ export function BotConnectors({
     });
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '0 14px 10px 54px' }}>
+    <div style={{ ...stack(4), padding: '0 14px 10px 54px' }}>
       {host.connectors.map(({ id, name }) => {
         const connected = said?.get(id);
         return (
@@ -115,31 +115,21 @@ export function BotConnectors({
                 `Not connected to ${name}`
               )}
             </span>
-            {instructs &&
-              (connected ? (
-                <button
-                  onClick={() => disconnect(id)}
-                  disabled={busy}
-                  data-variant="quiet"
-                  style={styles.smallButton}
-                >
-                  Disconnect
-                </button>
-              ) : (
-                <button
-                  onClick={() => connectTo(id)}
-                  disabled={busy}
-                  data-variant="quiet"
-                  style={styles.smallButton}
-                >
-                  Connect {name}
-                </button>
-              ))}
+            {instructs && (
+              <button
+                onClick={() => (connected ? disconnect(id) : connectTo(id))}
+                disabled={busy}
+                data-variant="quiet"
+                style={styles.smallButton}
+              >
+                {connected ? 'Disconnect' : `Connect ${name}`}
+              </button>
+            )}
           </div>
         );
       })}
       {instructs && (
-        <p style={{ fontSize: 12, color: palette.ink.faint }}>
+        <p style={styles.faint}>
           Anyone here who can set the bot off can ask about what it reaches, and set off what your automations
           do there. {host.name} keeps what reaches each service.
         </p>
@@ -203,7 +193,7 @@ export function BotInstructions({
     });
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '0 14px 10px 54px' }}>
+    <div style={{ ...stack(6), padding: '0 14px 10px 54px' }}>
       {draft === null ? (
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
           <p
@@ -232,7 +222,7 @@ export function BotInstructions({
             placeholder="You are Ferris, the team’s helper. Answer briefly, and link issues as #N."
             style={{ ...styles.input, resize: 'vertical' }}
           />
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <div style={{ ...hstack(8), justifyContent: 'flex-end' }}>
             <button onClick={() => setDraft(null)} data-variant="quiet" style={styles.smallButton}>
               Cancel
             </button>
@@ -240,7 +230,7 @@ export function BotInstructions({
               Save
             </button>
           </div>
-          <p style={{ fontSize: 12, color: palette.ink.faint }}>
+          <p style={styles.faint}>
             Everyone here can read these. The bot follows them after its own rules, which they can’t change.
           </p>
         </>

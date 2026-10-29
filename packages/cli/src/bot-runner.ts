@@ -25,6 +25,7 @@ import {
 } from './agent-chat.js';
 import { openTrigger, ruleContext, triggerPrompt, writerInstructs } from './agent-automations.js';
 import { isRecord, messageOf } from './json.js';
+import { queue } from './queue.js';
 
 export interface RuleRunnerOptions {
   readonly node: P2PNode;
@@ -135,7 +136,7 @@ export function runAutomations(options: RuleRunnerOptions): () => void {
       })
       .catch(() => null);
 
-  let queue: Promise<unknown> = Promise.resolve();
+  const oneAtATime = queue();
   const answer = async (sealed: AutomationTrigger): Promise<{ did: string; ok: boolean }> => {
     const trigger = await openTrigger(node, sealed);
     const name = trigger.automation.body.name;
@@ -227,12 +228,10 @@ export function runAutomations(options: RuleRunnerOptions): () => void {
     ask: (trigger) => {
       // Queued behind another: waiting, until its turn comes.
       const waiting = mark(trigger, 'waiting');
-      const turn = queue.then(async () => {
+      return oneAtATime(async () => {
         await waiting;
         return answer(trigger);
       });
-      queue = turn.catch(() => {});
-      return turn;
     },
     onRules: (rules) => options.onRules?.(rules.map((rule) => rule.body.name)),
     onRun: (trigger, run) => {

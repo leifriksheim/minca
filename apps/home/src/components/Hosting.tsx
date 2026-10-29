@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useSession } from '@minca/react';
+import { useAsync, useSession } from '@minca/react';
 import { describeHost, type HostDescription, type OverSpace } from '@minca/core';
 import type { HostingView, P2PNode } from '@minca/core/node';
 import { DEFAULT_HOST } from '@minca/app-shared/relay';
@@ -19,7 +19,7 @@ import {
 import { ChipIn, RemindMe, dollars } from '@minca/app-shared/Payment';
 import { Benefit, FeatureIcon, StatusPill, shortDate, timeLeft, type Tone } from '@minca/app-shared/Feature';
 import { message, useAction } from '@minca/app-shared/action';
-import { styles, palette } from '../styles';
+import { styles, palette, hstack, stack } from '../styles';
 
 const DAY = 86_400;
 /** A balance is worth topping up this long before it runs out */
@@ -78,7 +78,7 @@ export function Hosting({ node }: { node: P2PNode }) {
         <Offer offer={offer} onTurnOn={() => setDialog({ url: null })} />
       )}
 
-      {error && <p style={{ fontSize: 13, color: palette.accent.danger }}>{error}</p>}
+      {error && <p style={styles.dangerText}>{error}</p>}
 
       {dialog && (
         <HostingDialog
@@ -108,17 +108,17 @@ export function Hosting({ node }: { node: P2PNode }) {
 /** Off: what it gives, the price, and one button */
 function Offer({ offer, onTurnOn }: { offer: HostDescription | null; onTurnOn: () => void }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+    <div style={stack(16)}>
+      <div style={{ ...hstack(14), alignItems: 'center' }}>
         <FeatureIcon kind="online" size={44} />
         <div style={{ flex: 1 }}>
           <h2 style={styles.sectionHeading}>Keep your spaces online</h2>
-          <p style={{ fontSize: 13, color: palette.ink.muted, marginTop: 2 }}>
+          <p style={{ ...styles.quiet, marginTop: 2 }}>
             {offer ? `${offer.name} · ${hostTerms(offer)}` : 'With a host you choose'}
           </p>
         </div>
       </div>
-      <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <ul style={{ listStyle: 'none', ...stack(10) }}>
         <Benefit glyph="clock">Reachable when all your devices are off</Benefit>
         <Benefit glyph="restore">Everything back on a new device, from your recovery code alone</Benefit>
         <Benefit glyph="shield">Encrypted end to end: the host keeps it and can't read it</Benefit>
@@ -156,8 +156,8 @@ function HostRow({
       ? Math.min(1, status.bytes / status.quota)
       : null;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+    <div style={stack(12)}>
+      <div style={{ ...hstack(14), alignItems: 'center', flexWrap: 'wrap' }}>
         <HostStatusRow size={40} name={host.name} pill={state} line={state.line}>
           {!host.live && (
             <button
@@ -184,7 +184,7 @@ function HostRow({
         </HostStatusRow>
       </div>
       {room !== null && status?.bytes !== undefined && status.quota !== undefined && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={stack(6)}>
           <div
             style={{
               height: 4,
@@ -201,7 +201,7 @@ function HostRow({
               }}
             />
           </div>
-          <p style={{ fontSize: 12, color: palette.ink.faint }}>
+          <p style={styles.faint}>
             {size(status.bytes)} of {size(status.quota)} used
             {status.full
               ? stillFree(status.full)
@@ -214,7 +214,7 @@ function HostRow({
         </div>
       )}
       {room === null && status?.bytes !== undefined && status.daily !== undefined && status.daily > 0 && (
-        <p style={{ fontSize: 12, color: palette.ink.faint }}>
+        <p style={styles.faint}>
           {size(status.bytes)} kept · about {dollars(status.daily * 30)} a month as they are now
         </p>
       )}
@@ -234,15 +234,10 @@ function HostRow({
  * which its members start in the space. Nothing leaves anyone's devices.
  */
 function OverSpaces({ node, host, over }: { node: P2PNode; host: string; over: ReadonlyArray<OverSpace> }) {
-  const [names, setNames] = useState<ReadonlyMap<string, string>>(new Map());
-  useEffect(() => {
-    void node.spaces.list().then(
-      (spaces) => setNames(new Map(spaces.map((space) => [space.id, space.name]))),
-      () => {},
-    );
-  }, [node]);
+  const spaces = useAsync(() => node.spaces.list(), [node]);
+  const names = new Map(spaces.status === 'done' ? spaces.value.map((space) => [space.id, space.name]) : []);
   return (
-    <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <ul style={styles.todoList}>
       {over.map((one) => (
         <li
           key={one.space}
@@ -304,12 +299,12 @@ function HostingDialog({
 
   return (
     <Modal title="Keep your spaces online" onClose={onClose} width={460}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-        <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+      <div style={stack(18)}>
+        <div style={{ ...hstack(14), alignItems: 'center' }}>
           <FeatureIcon kind="online" size={44} />
           <div>
             <p style={styles.sectionHeading}>{host ? host.name : 'Always online'}</p>
-            <p style={{ fontSize: 13, color: palette.ink.muted }}>
+            <p style={styles.quiet}>
               {host
                 ? `$${host.fund?.perGb ?? ''} a GB a month, from what you add`
                 : 'Your spaces, reachable around the clock'}
@@ -341,11 +336,11 @@ function HostingDialog({
           />
         )}
         {problem && (
-          <p role="alert" style={{ fontSize: 13, color: palette.accent.danger }}>
+          <p role="alert" style={styles.dangerText}>
             {problem}
           </p>
         )}
-        <p style={{ fontSize: 12, color: palette.ink.faint, lineHeight: 1.5, textAlign: 'center' }}>
+        <p style={{ ...styles.faint, lineHeight: 1.5, textAlign: 'center' }}>
           The host sees which spaces exist, how big they are and when they change, never what's in them.
         </p>
       </div>
@@ -361,7 +356,7 @@ function StopDialog({ node, host, onClose }: { node: P2PNode; host: HostingView;
   const said = { fontSize: 14, color: palette.ink.body, lineHeight: 1.5 };
   return (
     <Modal title={`Stop using ${host.name}?`} onClose={onClose} width={460}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={stack(12)}>
         <p style={said}>
           {host.name} forgets your spaces. They stay on your devices, and are reachable only while one of them
           is online.
@@ -395,22 +390,17 @@ function StopDialog({ node, host, onClose }: { node: P2PNode; host: HostingView;
 
 /** Above everything else, when a balance runs out soon or has: from the host's signed `paidUntil` */
 export function HostingDue() {
-  const session = useSession();
-  const [due, setDue] = useState<ReadonlyArray<HostingView>>([]);
-  useEffect(() => {
-    void session.node.hosting.list().then(
-      (hosts) =>
-        setDue(
-          hosts.filter((host) => {
-            const status = host.status;
-            // On a free plan nothing runs out: a balance ending only means less room.
-            if (!status || status.paidUntil === 0 || status.plan === 'free') return false;
-            return status.state === 'grace' || status.paidUntil - Date.now() / 1000 < DUE_DAYS * DAY;
-          }),
-        ),
-      () => {},
-    );
-  }, [session]);
+  const { node } = useSession();
+  const asked = useAsync(async () => {
+    const now = Date.now() / 1000;
+    return (await node.hosting.list()).filter((host) => {
+      const status = host.status;
+      // On a free plan nothing runs out: a balance ending only means less room.
+      if (!status || status.paidUntil === 0 || status.plan === 'free') return false;
+      return status.state === 'grace' || status.paidUntil - now < DUE_DAYS * DAY;
+    });
+  }, [node]);
+  const due = asked.status === 'done' ? asked.value : [];
   return due.map((host) => {
     const state = standing(host);
     return (

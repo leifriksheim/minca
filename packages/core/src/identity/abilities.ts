@@ -79,6 +79,10 @@ export function noteGrants(proof: unknown, required: Requirement): boolean {
 /** Whether a proof lets its key act as the account itself (spec 01 §8). True with no proof: the account signed. */
 export const actsForAccount = (proof: unknown): boolean => noteGrants(proof, ACCOUNT_REQUIREMENT);
 
+/** Whether a proof lets its key do more in a space than write records: define a collection, or change access */
+export const grantsBeyondRecords = (proof: unknown, spaceId: string, cmd: string) =>
+  noteGrants(proof, { space: spaceId, cmd, args: { space: spaceId } });
+
 /** Whether a note lets its key write records somewhere. False for anything unreadable. */
 export function writesRecords(note: unknown): boolean {
   const cmd = parseDelegation(note)?.payload.cmd;

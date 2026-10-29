@@ -26,6 +26,7 @@
  */
 import type { BlobStore, StorageAdapter } from '@minca/core';
 import { isRecord } from './json.js';
+import { queue } from './queue.js';
 
 export interface FundState {
   /** Millionths of a dollar; below zero by what its grace and a bot's last call took, owed */
@@ -180,12 +181,9 @@ export function createFunds(options: {
     Object.fromEntries(Object.entries(spent).filter(([when]) => now() - Date.parse(when) / 1000 < 14 * DAY));
 
   // One change at a time: two payments landing together must both count.
-  let queue: Promise<unknown> = Promise.resolve();
-  const change = (id: string, work: (state: FundState) => FundState): Promise<FundState> => {
-    const next = queue.then(async () => write(id, work(settled(id, await read(id)))));
-    queue = next.catch(() => {});
-    return next;
-  };
+  const oneAtATime = queue();
+  const change = (id: string, work: (state: FundState) => FundState): Promise<FundState> =>
+    oneAtATime(async () => write(id, work(settled(id, await read(id)))));
 
   return Object.freeze({
     get: read,
@@ -198,14 +196,11 @@ export function createFunds(options: {
       );
       return [...new Set([...here, ...kept])];
     },
-    resume: (id: string) => {
-      const next = queue.then(async () => {
+    resume: (id: string) =>
+      oneAtATime(async () => {
         const state = await read(id);
         return now() - state.at <= HOUR ? state : write(id, { ...state, at: now() });
-      });
-      queue = next.catch(() => {});
-      return next;
-    },
+      }),
     add: (id: string, micros: number) =>
       // What its grace took is paid first; above zero again, it has not run out.
       change(id, (state) => {

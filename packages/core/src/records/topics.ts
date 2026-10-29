@@ -19,7 +19,8 @@
  */
 import { canonicalize } from '../schema/version.js';
 import { base64UrlEncode, utf8Encode } from '../utils/encoding.js';
-import { bufferSource, isRecord } from '../utils/guards.js';
+import { isRecord } from '../utils/guards.js';
+import { hkdfHmacKey, hmacPrefix } from '../utils/hmac.js';
 import type { Link } from '../types.js';
 import { LINK_FIELD_PATTERN } from './links.js';
 
@@ -59,38 +60,31 @@ export function topicValues(
     const rel = topic.slice('link:'.length);
     return links.filter((link) => link.rel === rel).map((link) => link.to);
   }
-  let value: unknown = body;
-  for (const part of topic.split('.')) {
-    if (!isRecord(value)) return [];
+  const value = fieldAt(body, topic.split('.'));
+  if (Array.isArray(value)) return value.filter(isScalar);
+  return isScalar(value) ? [value] : [];
+}
+
+/** The value at a dotted path, or undefined when something on the way is not an object */
+function fieldAt(body: unknown, path: ReadonlyArray<string>): unknown {
+  let value = body;
+  for (const part of path) {
+    if (!isRecord(value)) return undefined;
     value = value[part];
   }
-  const scalar = (v: unknown): v is string | number | boolean =>
-    typeof v === 'string' || typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v));
-  if (Array.isArray(value)) return value.filter(scalar);
-  return scalar(value) ? [value] : [];
+  return value;
 }
+
+const isScalar = (v: unknown): v is string | number | boolean =>
+  typeof v === 'string' || typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v));
 
 /** What a space's tags are keyed with: from its raw key in a private space, from its id in a public one */
 export async function topicKey(
   material: { readonly spaceKey: Uint8Array } | { readonly spaceId: string },
 ): Promise<CryptoKey> {
   const secret =
-    'spaceKey' in material
-      ? bufferSource(material.spaceKey)
-      : utf8Encode(`minca/public-topics/v1|${material.spaceId}`);
-  const base = await globalThis.crypto.subtle.importKey('raw', secret, 'HKDF', false, ['deriveKey']);
-  return globalThis.crypto.subtle.deriveKey(
-    {
-      name: 'HKDF',
-      hash: 'SHA-256',
-      salt: new Uint8Array(0),
-      info: utf8Encode('minca/topic-tags/v1'),
-    },
-    base,
-    { name: 'HMAC', hash: 'SHA-256', length: 256 },
-    false,
-    ['sign'],
-  );
+    'spaceKey' in material ? material.spaceKey : utf8Encode(`minca/public-topics/v1|${material.spaceId}`);
+  return hkdfHmacKey(secret, 'minca/topic-tags/v1');
 }
 
 /** The tag for one value of one topic of a collection */
@@ -101,9 +95,8 @@ export async function topicTag(
   value: string | number | boolean,
 ): Promise<string> {
   // Collection and topic go in too, so one value in two places is two tags.
-  const input = utf8Encode(`${collection}\u0000${topic}\u0000${canonicalize(value)}`);
-  const mac = new Uint8Array(await globalThis.crypto.subtle.sign('HMAC', key, input));
-  return base64UrlEncode(mac.subarray(0, TAG_BYTES));
+  const mac = await hmacPrefix(key, `${collection}\u0000${topic}\u0000${canonicalize(value)}`, TAG_BYTES);
+  return base64UrlEncode(mac);
 }
 
 /** Every tag a record carries under a collection's topics: sorted, each once, at most `MAX_TAGS` */
@@ -115,10 +108,9 @@ export async function tagsFor(
   links: ReadonlyArray<Link> = [],
 ): Promise<string[]> {
   const tags = new Set<string>();
-  for (const topic of topics) {
+  for (const topic of topics)
     for (const value of topicValues(body, topic, links))
       tags.add(await topicTag(key, collection, topic, value));
-  }
   return [...tags].sort().slice(0, MAX_TAGS);
 }
 

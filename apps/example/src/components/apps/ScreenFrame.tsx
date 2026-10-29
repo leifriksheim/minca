@@ -9,7 +9,8 @@ import { PersonCardHere } from '../Person';
 import { RecordFinder } from '../RecordFinder';
 import { saveFile } from '../../files';
 import { isObject } from '../../derive/schema-ui';
-import { styles, palette } from '../../styles';
+import { styles, palette, hstack } from '../../styles';
+import { LinkButton, QuietButton } from '../Buttons';
 
 /**
  * An app's own screen, run sealed: a sandboxed frame with no network, talking to this app's collections
@@ -206,13 +207,9 @@ export function ScreenFrame({
           It runs as you, so it could send there anything you can see in it. Nothing else on the internet is
           reachable. Without it, the screen runs sealed and may do less.
         </p>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => answerWith('yes')} data-variant="quiet" style={styles.smallButton}>
-            Allow
-          </button>
-          <button onClick={() => answerWith('no')} data-variant="quiet" style={styles.smallButton}>
-            Keep it sealed
-          </button>
+        <div style={hstack(8)}>
+          <QuietButton onClick={() => answerWith('yes')}>Allow</QuietButton>
+          <QuietButton onClick={() => answerWith('no')}>Keep it sealed</QuietButton>
         </div>
       </div>
     );
@@ -233,13 +230,9 @@ export function ScreenFrame({
         <p style={styles.errorHint}>
           It can't reach your data from there. Reload it to try again, or show the records as lists instead.
         </p>
-        <button
-          onClick={() => setGeneration((n) => n + 1)}
-          data-variant="quiet"
-          style={{ ...styles.smallButton, alignSelf: 'flex-start' }}
-        >
+        <QuietButton onClick={() => setGeneration((n) => n + 1)} style={{ alignSelf: 'flex-start' }}>
           Reload the screen
-        </button>
+        </QuietButton>
       </div>
     );
   }
@@ -261,13 +254,12 @@ export function ScreenFrame({
           }}
         >
           {answer === 'yes' ? `Connects to ${hosts}.` : `Sealed: not connecting to ${hosts}.`}
-          <button
+          <LinkButton
             onClick={() => answerWith(answer === 'yes' ? 'no' : 'yes')}
-            data-variant="ghost"
-            style={{ ...styles.linkButton, fontSize: 12, padding: 0 }}
+            style={{ fontSize: 12, padding: 0 }}
           >
             {answer === 'yes' ? 'Seal it' : 'Allow'}
-          </button>
+          </LinkButton>
         </p>
       )}
       <iframe
@@ -311,9 +303,7 @@ function SharePicker({
   const collections = useLive(spaceId, (n) => n.collections.list(spaceId), [spaceId]) ?? [];
   return (
     <Modal title={`Share with ${app}`} onClose={() => onDone(null)}>
-      <p style={{ fontSize: 13, color: palette.ink.muted, lineHeight: 1.5 }}>
-        {app} gets only the one you choose.
-      </p>
+      <p style={{ ...styles.quiet, lineHeight: 1.5 }}>{app} gets only the one you choose.</p>
       <RecordFinder
         spaceId={spaceId}
         collections={collections}

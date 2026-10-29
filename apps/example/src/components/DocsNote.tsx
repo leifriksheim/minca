@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
-import { palette } from '../styles';
+import { palette, styles } from '../styles';
 
 const REPO = 'https://github.com/leifriksheim/minca/blob/main/';
 
@@ -14,7 +14,7 @@ export function DocsNote({
   children: ReactNode;
 }) {
   return (
-    <p style={{ fontSize: 13, color: palette.ink.muted, lineHeight: 1.6, margin: 0, ...style }}>
+    <p style={{ ...styles.quiet, lineHeight: 1.6, margin: 0, ...style }}>
       {children}{' '}
       <a href={REPO + path} target="_blank" rel="noreferrer" style={{ color: palette.ink.body }}>
         How it works

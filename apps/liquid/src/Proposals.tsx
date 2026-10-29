@@ -38,7 +38,7 @@ import {
   ago,
 } from './ui';
 import { useAction } from '@minca/app-shared/action';
-import { palette, tone } from './styles';
+import { palette, tone, hstack, stack } from './styles';
 
 type Sort = 'top' | 'new' | 'decided';
 
@@ -61,9 +61,9 @@ export function Proposals({ a, writable }: { a: Assembly; writable: boolean }) {
     );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={stack(16)}>
       <div className="lq-toolbar" style={{ justifyContent: 'space-between' }}>
-        <div role="group" aria-label="Sort" style={{ display: 'flex', gap: 4 }}>
+        <div role="group" aria-label="Sort" style={hstack(4)}>
           {(
             [
               ['top', 'Top'],
@@ -121,7 +121,7 @@ export function Proposals({ a, writable }: { a: Assembly; writable: boolean }) {
           )}
         </Empty>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={stack(10)}>
           {shown.map((p, i) => (
             <ProposalCard
               key={p.key}
@@ -151,18 +151,23 @@ export function Proposals({ a, writable }: { a: Assembly; writable: boolean }) {
 }
 
 /** Supporting a proposal, or taking it back */
-function useSupport(a: Assembly, p: ProposalView) {
+function Support({ a, p, writable }: { a: Assembly; p: ProposalView; writable: boolean }) {
   const node = useNode();
   const action = useAction();
-  return {
-    toggle: () =>
-      void action.run(() =>
-        p.mySupportKey
-          ? node.records.delete(a.spaceId, p.mySupportKey)
-          : node.records.put(a.spaceId, support, {}, { links: [{ rel: 'about', to: p.key }] }),
-      ),
-    busy: action.busy,
-  };
+  const toggle = () =>
+    void action.run(() =>
+      p.mySupportKey
+        ? node.records.delete(a.spaceId, p.mySupportKey)
+        : node.records.put(a.spaceId, support, {}, { links: [{ rel: 'about', to: p.key }] }),
+    );
+  return (
+    <Upvote
+      count={p.supporters.size}
+      pressed={p.mySupportKey !== null}
+      disabled={!writable || action.busy || p.result !== 'open'}
+      onToggle={toggle}
+    />
+  );
 }
 
 function ProposalCard({
@@ -178,7 +183,6 @@ function ProposalCard({
   index: number;
   onOpen: () => void;
 }) {
-  const supportIt = useSupport(a, p);
   const totals = a.countOf(p);
   const topic = a.topicOf(p.topic);
 
@@ -192,13 +196,8 @@ function ProposalCard({
       tabIndex={0}
       aria-label={p.title}
     >
-      <Upvote
-        count={p.supporters.size}
-        pressed={p.mySupportKey !== null}
-        disabled={!writable || supportIt.busy || p.result !== 'open'}
-        onToggle={supportIt.toggle}
-      />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
+      <Support a={a} p={p} writable={writable} />
+      <div style={{ ...stack(10), minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12.5 }}>
           {topic && <TopicChip topic={topic} />}
           <span className="lq-faint">
@@ -312,7 +311,6 @@ function ProposalPage({
   onBack: () => void;
 }) {
   const node = useNode();
-  const supportIt = useSupport(a, p);
   const action = useAction();
   const [confirming, setConfirming] = useState<Choice | null>(null);
   const topic = a.topicOf(p.topic);
@@ -324,7 +322,7 @@ function ProposalPage({
     });
 
   return (
-    <div className="lq-fade" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div className="lq-fade" style={stack(20)}>
       <button
         className="lq-btn"
         data-variant="ghost"
@@ -334,15 +332,10 @@ function ProposalPage({
         ← All proposals
       </button>
       <div className="lq-two">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
-          <div style={{ display: 'flex', gap: 14 }}>
-            <Upvote
-              count={p.supporters.size}
-              pressed={p.mySupportKey !== null}
-              disabled={!writable || supportIt.busy || p.result !== 'open'}
-              onToggle={supportIt.toggle}
-            />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
+        <div style={{ ...stack(20), minWidth: 0 }}>
+          <div style={hstack(14)}>
+            <Support a={a} p={p} writable={writable} />
+            <div style={{ ...stack(8), minWidth: 0 }}>
               <div
                 style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12.5 }}
               >
@@ -390,7 +383,7 @@ function ProposalPage({
           <Breakdown a={a} p={p} />
         </div>
 
-        <aside className="lq-aside" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <aside className="lq-aside" style={stack(12)}>
           <Results a={a} p={p} />
         </aside>
       </div>
@@ -445,7 +438,7 @@ function VotePanel({
     );
 
   return (
-    <section className="lq-card" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <section className="lq-card" style={{ padding: 18, ...stack(14) }}>
       <p className="lq-display" style={{ fontSize: 19 }}>
         Your vote
       </p>
@@ -498,7 +491,7 @@ function PathNote({
 }) {
   return (
     <div className="lq-note" data-tone={warn ? 'warn' : undefined}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={stack(8)}>
         <PathView path={path} a={a} from={a.me} />
         <span>{children}</span>
       </div>
@@ -572,7 +565,7 @@ const NEXT_SAYS = {
 function Disputes({ a, p }: { a: Assembly; p: ProposalView }) {
   return (
     <div className="lq-note" data-tone="warn" style={{ fontSize: 13, lineHeight: 1.55 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={stack(8)}>
         <span>
           <b>Disputed.</b> Someone signed two different versions of something this proposal counts. Every
           device shows it as disputed, whatever the count says:
@@ -610,7 +603,7 @@ function Results({ a, p }: { a: Assembly; p: ProposalView }) {
   const own = p.votes.size - followed;
   const comingCount = coming.for + coming.against + coming.abstain;
   return (
-    <section className="lq-card" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <section className="lq-card" style={{ padding: 18, ...stack(14) }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
         <p className="lq-display" style={{ fontSize: 17 }}>
           {p.result === 'open' ? 'Standing now' : 'Result'}
@@ -672,7 +665,7 @@ function PartyStands({ a, p }: { a: Assembly; p: ProposalView }) {
   });
   if (rolls.length === 0) return null;
   return (
-    <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <section style={stack(10)}>
       <p className="lq-section-title">Parties</p>
       <div className="lq-card">
         {rolls.map(({ party, roll, stand }) => (
@@ -719,7 +712,7 @@ function Breakdown({ a, p }: { a: Assembly; p: ProposalView }) {
     );
 
   return (
-    <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <section style={stack(10)}>
       <p className="lq-section-title">How the votes came in</p>
       <div className="lq-card">
         {rows.map(({ did, cast, path }) => (
@@ -770,19 +763,11 @@ function Compose({
 
   const byName = (x: string, y: string) =>
     x === a.me ? -1 : y === a.me ? 1 : a.name(x).localeCompare(a.name(y));
-  const people = a.members
-    .map((m) => m.did)
-    .filter((did) => !a.bots.has(did))
-    .sort(byName);
-  const bots = a.members
-    .map((m) => m.did)
-    .filter((did) => a.bots.has(did))
-    .sort(byName);
+  const everyone = a.members.map((m) => m.did);
+  const people = everyone.filter((did) => !a.bots.has(did)).sort(byName);
+  const bots = everyone.filter((did) => a.bots.has(did)).sort(byName);
   const picks = (did: string) => (a.bots.has(did) ? added.has(did) : !left.has(did));
-  const voters = a.members
-    .map((m) => m.did)
-    .filter(picks)
-    .sort();
+  const voters = everyone.filter(picks).sort();
   const n = voters.length;
   const toPass =
     rule === 'custom'
@@ -810,7 +795,7 @@ function Compose({
   return (
     <Modal title="New proposal" onClose={onClose} width={560}>
       <form
-        style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+        style={stack(16)}
         onSubmit={(event) => {
           event.preventDefault();
           if (!title.trim() || problem) return;

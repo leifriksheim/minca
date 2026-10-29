@@ -3,7 +3,7 @@ import { message, useAction, useCopy } from './action';
 import qrcode from 'qrcode-generator';
 import type { FundOffer, FundPayment, PayAnswer } from '@minca/core';
 import { Glyph } from './Feature';
-import { styles, palette } from './styles';
+import { styles, palette, hstack, stack } from './styles';
 
 type Request = Extract<PayAnswer, { request: unknown }>['request'];
 
@@ -86,7 +86,7 @@ function PayingSteps({ paying, onDone }: { paying: ReturnType<typeof usePaying>;
           <Glyph name="check" size={22} style={{ strokeWidth: 2 }} />
         </span>
         <p style={{ fontSize: 16, fontWeight: 600, color: palette.ink.strong }}>Payment received</p>
-        <p style={{ fontSize: 13, color: palette.ink.muted }}>Thank you. It's already working.</p>
+        <p style={styles.quiet}>Thank you. It's already working.</p>
         {onDone && (
           <button onClick={onDone} data-variant="primary" style={{ ...styles.button, marginTop: 8 }}>
             Done
@@ -121,15 +121,12 @@ export function ChipIn({
   start,
   paid,
   onDone,
-  cta,
   rate,
 }: {
   fund: FundOffer;
   start: (payment: FundPayment) => Promise<PayAnswer>;
   paid: () => Promise<boolean>;
   onDone?: () => void;
-  /** The button's words before the amount: "Add" */
-  cta?: string;
   /**
    * What the balance spends now, from the host's status: its daily rate in
    * millionths of a dollar, what is in it (below zero: owed), and the bots it
@@ -170,8 +167,8 @@ export function ChipIn({
     boxShadow: on ? `0 0 0 1px ${palette.ink.strong}` : 'none',
   });
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div role="radiogroup" aria-label="Amount" style={{ display: 'flex', gap: 8 }}>
+    <div style={stack(14)}>
+      <div role="radiogroup" aria-label="Amount" style={hstack(8)}>
         {AMOUNTS.map((dollars) => (
           <button
             key={dollars}
@@ -238,9 +235,7 @@ export function ChipIn({
         </div>
       )}
       {fund.recurring && method === 'checkout' && (
-        <label
-          style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, color: palette.ink.body }}
-        >
+        <label style={{ ...hstack(8), alignItems: 'center', fontSize: 13, color: palette.ink.body }}>
           <input type="checkbox" checked={monthly} onChange={(event) => setMonthly(event.target.checked)} />
           Add this every month
         </label>
@@ -257,9 +252,9 @@ export function ChipIn({
       >
         {paying.busy
           ? 'One moment…'
-          : `${cta ?? 'Add'} ${valid ? `$${amount}` : ''}${monthly && method === 'checkout' ? ' a month' : ''}`}
+          : `Add ${valid ? `$${amount}` : ''}${monthly && method === 'checkout' ? ' a month' : ''}`}
       </button>
-      <p style={{ fontSize: 12, color: palette.ink.faint, textAlign: 'center' }}>
+      <p style={{ ...styles.faint, textAlign: 'center' }}>
         {valid && owed > 0
           ? Number(amount) * 1e6 <= owed
             ? `Pays ${dollars(Number(amount) * 1e6)} of the ${dollars(owed)} owed: it turns on past that.`
@@ -272,7 +267,7 @@ export function ChipIn({
                 : `Keeps it online for about ${lastsFor(months)}.`
             : `At least $${fund.min}.`}
       </p>
-      {paying.problem && <p style={{ fontSize: 13, color: palette.accent.danger }}>{paying.problem}</p>}
+      {paying.problem && <p style={styles.dangerText}>{paying.problem}</p>}
     </div>
   );
 }
@@ -306,7 +301,7 @@ function Waiting({ title, detail, onBack }: { title: string; detail: string; onB
     >
       <Pulse />
       <p style={{ fontSize: 15, fontWeight: 600, color: palette.ink.strong }}>{title}</p>
-      <p style={{ fontSize: 13, color: palette.ink.muted, textAlign: 'center' }}>{detail}</p>
+      <p style={{ ...styles.quiet, textAlign: 'center' }}>{detail}</p>
       <button onClick={onBack} style={{ ...styles.linkButton, marginTop: 4 }}>
         Choose another way to pay
       </button>
@@ -340,8 +335,7 @@ export function RemindMe({ remind }: { remind: (email: string) => Promise<void> 
   const [email, setEmail] = useState('');
   const [asked, setAsked] = useState(false);
   const { run, busy, error: problem } = useAction();
-  if (asked)
-    return <p style={{ fontSize: 13, color: palette.ink.muted }}>Check your inbox for a link to confirm.</p>;
+  if (asked) return <p style={styles.quiet}>Check your inbox for a link to confirm.</p>;
   if (!open)
     return (
       <button onClick={() => setOpen(true)} style={{ ...styles.linkButton, padding: 0 }}>
@@ -354,9 +348,9 @@ export function RemindMe({ remind }: { remind: (email: string) => Promise<void> 
         event.preventDefault();
         void run(() => remind(email.trim()).then(() => setAsked(true)));
       }}
-      style={{ display: 'flex', flexDirection: 'column', gap: 6 }}
+      style={stack(6)}
     >
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div style={hstack(8)}>
         <input
           type="email"
           value={email}
@@ -376,7 +370,7 @@ export function RemindMe({ remind }: { remind: (email: string) => Promise<void> 
           Remind me
         </button>
       </div>
-      {problem && <p style={{ fontSize: 13, color: palette.accent.danger }}>{problem}</p>}
+      {problem && <p style={styles.dangerText}>{problem}</p>}
     </form>
   );
 }
@@ -408,8 +402,8 @@ function PaymentRequest({ request, onBack }: { request: Request; onBack: () => v
   const to = request.evm?.to;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
+    <div style={stack(16)}>
+      <div style={{ ...hstack(20), alignItems: 'center', flexWrap: 'wrap' }}>
         <div
           style={{
             padding: 8,
@@ -420,7 +414,7 @@ function PaymentRequest({ request, onBack }: { request: Request; onBack: () => v
         >
           <QrCode text={request.uri} />
         </div>
-        <div style={{ flex: 1, minWidth: 180, display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ flex: 1, minWidth: 180, ...stack(4) }}>
           <span
             style={{ fontSize: 12, color: palette.ink.muted, textTransform: 'uppercase', letterSpacing: 0.5 }}
           >
@@ -431,7 +425,7 @@ function PaymentRequest({ request, onBack }: { request: Request; onBack: () => v
           >
             {amount}
           </span>
-          {network && <span style={{ fontSize: 13, color: palette.ink.muted }}>on {network}</span>}
+          {network && <span style={styles.quiet}>on {network}</span>}
           {to && (
             <button
               onClick={() => copy(to)}
@@ -442,7 +436,7 @@ function PaymentRequest({ request, onBack }: { request: Request; onBack: () => v
           )}
         </div>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={stack(8)}>
         {wallet && request.evm && (
           <button
             onClick={() => void send()}
@@ -475,13 +469,11 @@ function PaymentRequest({ request, onBack }: { request: Request; onBack: () => v
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
         <Pulse />
-        <span style={{ fontSize: 13, color: palette.ink.muted }}>
+        <span style={styles.quiet}>
           {sending === 'sent' ? 'Sent. ' : ''}Waiting for it to arrive. The last digits mark it as yours.
         </span>
       </div>
-      {problem && (
-        <p style={{ fontSize: 13, color: palette.accent.danger, textAlign: 'center' }}>{problem}</p>
-      )}
+      {problem && <p style={{ ...styles.dangerText, textAlign: 'center' }}>{problem}</p>}
       <button onClick={onBack} style={{ ...styles.linkButton, alignSelf: 'center' }}>
         Choose another way to pay
       </button>

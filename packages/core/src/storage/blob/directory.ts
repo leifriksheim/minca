@@ -50,51 +50,56 @@ async function find(
 export function createDirectoryBlobStore(root: DirectoryHandleLike, path = ''): BlobStore {
   const baseNames = path.split('/').filter(Boolean).map(encodeKey);
 
+  /** The names of the directories a key's file sits in, and of the file */
+  function locate(key: string): { dirs: string[]; file: string } {
+    const parts = partsOf(key);
+    const file = parts.pop()!;
+    return { dirs: [...baseNames, ...parts], file };
+  }
+
   return Object.freeze({
     async get(key: string) {
-      const parts = partsOf(key);
-      const dir = await find(root, [...baseNames, ...parts.slice(0, -1)]);
-      return dir ? readFolderFile(dir, parts.at(-1)!) : null;
+      const { dirs, file } = locate(key);
+      const dir = await find(root, dirs);
+      return dir ? readFolderFile(dir, file) : null;
     },
 
     async put(key: string, bytes: Uint8Array) {
-      const parts = partsOf(key);
-      await writeFolderFile(
-        await resolvePath(root, [...baseNames, ...parts.slice(0, -1)]),
-        parts.at(-1)!,
-        bytes,
-      );
+      const { dirs, file } = locate(key);
+      await writeFolderFile(await resolvePath(root, dirs), file, bytes);
     },
 
     async delete(key: string) {
-      const parts = partsOf(key);
-      const dir = await find(root, [...baseNames, ...parts.slice(0, -1)]);
-      if (dir) await removeFile(dir, parts.at(-1)!);
+      const { dirs, file } = locate(key);
+      const dir = await find(root, dirs);
+      if (dir) await removeFile(dir, file);
     },
 
     async list(prefix: string) {
-      const cut = prefix.lastIndexOf('/');
-      const dirKey = prefix.slice(0, cut + 1);
+      const dirKey = prefix.slice(0, prefix.lastIndexOf('/') + 1);
       const start = await find(root, [...baseNames, ...(dirKey ? partsOf(dirKey.slice(0, -1)) : [])]);
       const keys: string[] = [];
-      const walk = async (dir: DirectoryHandleLike, at: string): Promise<void> => {
-        for await (const entry of dir.values()) {
-          // Another writer's file mid-write is not an entry yet.
-          if (entry.name.endsWith('.tmp')) continue;
-          const part = decodeKey(entry.name);
-          // A name no key could have made (planted, or another program's) is not one of ours.
-          if (!isKeyPart(part)) continue;
-          const key = at + part;
-          if (entry.kind === 'file') {
-            if (key.startsWith(prefix)) keys.push(key);
-          } else if (`${key}/`.startsWith(prefix)) {
-            const child = await find(dir, [entry.name]);
-            if (child) await walk(child, `${key}/`);
-          }
-        }
-      };
-      if (start) await walk(start, dirKey);
+      if (start) await collect(start, dirKey, prefix, keys);
       return keys;
     },
   });
+}
+
+/** Adds to `keys` every key under `dir` (named `at`) that starts with `prefix` */
+async function collect(dir: DirectoryHandleLike, at: string, prefix: string, keys: string[]): Promise<void> {
+  for await (const entry of dir.values()) {
+    // Another writer's file mid-write is not an entry yet.
+    if (entry.name.endsWith('.tmp')) continue;
+    const part = decodeKey(entry.name);
+    // A name no key could have made is not one of ours.
+    if (!isKeyPart(part)) continue;
+    const key = at + part;
+    if (entry.kind === 'file') {
+      if (key.startsWith(prefix)) keys.push(key);
+      continue;
+    }
+    if (!`${key}/`.startsWith(prefix)) continue;
+    const child = await find(dir, [entry.name]);
+    if (child) await collect(child, `${key}/`, prefix, keys);
+  }
 }

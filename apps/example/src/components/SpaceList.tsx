@@ -9,9 +9,10 @@ import { markFor } from '@minca/ui/shapes';
 import type { ShapeColour } from '@minca/ui/tokens';
 import { useMyName } from '@minca/react';
 import { NameField } from './NameField';
-import { styles, palette } from '../styles';
+import { styles, palette, stack, ui } from '../styles';
 import { useSpaceUnread } from '../seen';
-import { Loader } from '@minca/app-shared/Loader';
+import { Loading } from './Loading';
+import { LinkButton, PrimaryButton } from './Buttons';
 
 /** How a space is described once it exists: who can read it, and what you are in it. */
 function spaceBadges(space: Pick<SpaceSummary, 'visibility' | 'role' | 'joining'>): string {
@@ -88,11 +89,7 @@ export function SpaceList({
 
   return (
     <>
-      {loading && spaces.length === 0 && (
-        <p style={styles.emptyState}>
-          <Loader label="Opening your spaces" showLabel />
-        </p>
-      )}
+      {loading && spaces.length === 0 && <Loading label="Opening your spaces" style={styles.emptyState} />}
 
       {!(loading && spaces.length === 0) && (
         <div className="space-grid">
@@ -100,17 +97,8 @@ export function SpaceList({
             <div key={space.id} data-tile style={tile}>
               <button onClick={() => onOpen(space)} style={tileButton}>
                 <SpaceMark space={space} />
-                <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-                  <span
-                    style={{
-                      ...styles.todoText,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {space.name}
-                  </span>
+                <span style={{ ...stack(2), minWidth: 0 }}>
+                  <span style={{ ...styles.todoText, ...ui.ellipsis }}>{space.name}</span>
                   <span style={{ ...styles.todoMeta, marginTop: 0 }}>
                     {spaceBadges(space)}
                     <NewIn space={space} />
@@ -138,13 +126,9 @@ export function SpaceList({
       )}
 
       <div style={{ ...styles.linkRow, marginTop: 12 }}>
-        <button
-          onClick={() => setDialog('join')}
-          data-variant="ghost"
-          style={{ ...styles.linkButton, paddingLeft: 0 }}
-        >
+        <LinkButton onClick={() => setDialog('join')} style={{ paddingLeft: 0 }}>
           Have an invite? Join with a link
-        </button>
+        </LinkButton>
       </div>
 
       {error && <p style={{ ...styles.error, marginTop: 10 }}>{error}</p>}
@@ -258,17 +242,12 @@ export function SpaceDialog({
             </Info>
           </p>
           <NameField value={me.name} onChange={me.setName} />
-          <button type="submit" disabled={!invite.trim()} data-variant="primary" style={styles.button}>
+          <PrimaryButton type="submit" disabled={!invite.trim()}>
             Join
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode('new')}
-            data-variant="ghost"
-            style={{ ...styles.linkButton, alignSelf: 'center' }}
-          >
+          </PrimaryButton>
+          <LinkButton type="button" onClick={() => setMode('new')} style={{ alignSelf: 'center' }}>
             Make a new space instead
-          </button>
+          </LinkButton>
         </form>
       </Modal>
     );
@@ -301,17 +280,12 @@ export function SpaceDialog({
 
         <NameField value={me.name} onChange={me.setName} />
 
-        <button type="submit" disabled={!name.trim()} data-variant="primary" style={styles.button}>
+        <PrimaryButton type="submit" disabled={!name.trim()}>
           Create space
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode('join')}
-          data-variant="ghost"
-          style={{ ...styles.linkButton, alignSelf: 'center' }}
-        >
+        </PrimaryButton>
+        <LinkButton type="button" onClick={() => setMode('join')} style={{ alignSelf: 'center' }}>
           Have an invite link? Join instead
-        </button>
+        </LinkButton>
       </form>
     </Modal>
   );

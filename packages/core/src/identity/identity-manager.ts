@@ -28,8 +28,7 @@ export function createIdentityManager(config?: { readonly provider?: CryptoProvi
     },
 
     async fromSeed(seed: Uint8Array): Promise<Identity> {
-      // The seed already carries 128 bits of entropy, so the provider's one KDF
-      // step is enough: no password stretching for what is not a password.
+      // The seed is random, not a password: one KDF step, no stretching.
       const { publicKey, privateKey } = await provider.deriveKeyPairFromSeed(seed);
       const publicKeyBytes = await provider.exportPublicKey(publicKey);
       return Object.freeze({

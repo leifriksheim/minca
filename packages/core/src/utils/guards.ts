@@ -76,3 +76,6 @@ export function readField(value: unknown, key: string): unknown {
 export function isStoredVersion(value: unknown): value is Version {
   return isObject(value) && typeof value.id === 'string';
 }
+
+export const isStringList = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((v) => typeof v === 'string');

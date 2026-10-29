@@ -25,7 +25,6 @@ import { errorCode, isRecord } from './json.js';
 const MAX_SLOTS = 32;
 /** The envelope label of a writer key on disk; bound to `{ did, slot }` */
 const WRITER_KEY_LABEL = 'minca/writer-key/v1';
-const algorithm = { name: 'ECDSA', namedCurve: 'P-256' };
 
 /** Whether a process is still running */
 function alive(pid: number): boolean {
@@ -166,27 +165,15 @@ async function openKey(where: Slot, bytes: Uint8Array): Promise<string> {
 
 /** The slot's key pair: made on first claim, then the same every time */
 async function keyPair(file: string, where: Slot): Promise<CryptoKeyPair> {
-  const subtle = globalThis.crypto.subtle;
   try {
-    const stored: unknown = JSON.parse(await openKey(where, new Uint8Array(await readFile(file))));
-    if (isRecord(stored) && isRecord(stored.privateKey) && isRecord(stored.publicKey))
-      return {
-        privateKey: await subtle.importKey('jwk', stored.privateKey, algorithm, false, ['sign']),
-        publicKey: await subtle.importKey('jwk', stored.publicKey, algorithm, true, ['verify']),
-      };
+    const kept = await importKeyJwk(JSON.parse(await openKey(where, new Uint8Array(await readFile(file)))));
+    if (kept) return kept;
   } catch (error) {
     if (errorCode(error) !== 'ENOENT') throw error;
   }
-  const made = await subtle.generateKey(algorithm, true, ['sign', 'verify']);
-  const jwk = {
-    privateKey: await subtle.exportKey('jwk', made.privateKey),
-    publicKey: await subtle.exportKey('jwk', made.publicKey),
-  };
-  await writeFile(file, await sealKey(where, JSON.stringify(jwk)), { mode: 0o600 });
-  return {
-    privateKey: await subtle.importKey('jwk', jwk.privateKey, algorithm, false, ['sign']),
-    publicKey: made.publicKey,
-  };
+  const made = await newKey();
+  await writeFile(file, await sealKey(where, JSON.stringify(made.jwk)), { mode: 0o600 });
+  return made.keys;
 }
 
 /** Each place in its own file, written whole or not at all */
@@ -258,4 +245,31 @@ export function fileWriterKeys(dir: string, localKey: CryptoKey, did: string): W
       return null;
     },
   });
+}
+
+const ALGORITHM = { name: 'ECDSA', namedCurve: 'P-256' };
+
+/** A new P-256 key pair: the JWK a file keeps of it, and the keys, the private one not exportable */
+export async function newKey(): Promise<{
+  jwk: Record<'privateKey' | 'publicKey', JsonWebKey>;
+  keys: CryptoKeyPair;
+}> {
+  const subtle = globalThis.crypto.subtle;
+  const made = await subtle.generateKey(ALGORITHM, true, ['sign', 'verify']);
+  const jwk = {
+    privateKey: await subtle.exportKey('jwk', made.privateKey),
+    publicKey: await subtle.exportKey('jwk', made.publicKey),
+  };
+  const privateKey = await subtle.importKey('jwk', jwk.privateKey, ALGORITHM, false, ['sign']);
+  return { jwk, keys: { privateKey, publicKey: made.publicKey } };
+}
+
+/** A kept key pair, used here only as a key that can't be exported; null when it isn't one. importKey checks the rest. */
+export async function importKeyJwk(stored: unknown): Promise<CryptoKeyPair | null> {
+  if (!isRecord(stored) || !isRecord(stored.privateKey) || !isRecord(stored.publicKey)) return null;
+  const subtle = globalThis.crypto.subtle;
+  return {
+    privateKey: await subtle.importKey('jwk', stored.privateKey, ALGORITHM, false, ['sign']),
+    publicKey: await subtle.importKey('jwk', stored.publicKey, ALGORITHM, true, ['verify']),
+  };
 }

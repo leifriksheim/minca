@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useAccount, useNode } from './context.js';
+import { useAsync } from './use-async.js';
 
 /**
  * The name others see, for asking where it matters: making or joining a
@@ -10,25 +11,11 @@ import { useAccount, useNode } from './context.js';
 export function useMyName(): { name: string; setName: (name: string) => void; save: () => Promise<void> } {
   const node = useNode();
   const account = useAccount();
-  const [saved, setSaved] = useState<string | null>(null);
-  const [name, setName] = useState(account.name);
+  const profile = useAsync(() => node.account.profile(), [node, account.name]);
+  const saved = profile.status === 'done' ? (profile.value?.name ?? null) : null;
+  const [typed, setName] = useState<string | null>(null);
+  const name = typed ?? saved ?? account.name;
 
-  useEffect(() => {
-    let live = true;
-    void node.account
-      .profile()
-      .then((profile) => {
-        if (!live || !profile) return;
-        setSaved(profile.name);
-        setName((current) => (current === account.name ? profile.name : current));
-      })
-      .catch(() => {});
-    return () => {
-      live = false;
-    };
-  }, [node, account.name]);
-
-  /** Keeps the name on the account, unless it is empty or already there */
   const save = async () => {
     const trimmed = name.trim();
     if (!trimmed || trimmed === saved) return;

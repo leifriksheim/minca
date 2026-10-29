@@ -328,7 +328,7 @@ spaces cannot be left.
 
 `contacts.remove` and `contacts.block` leave the space for two this way.
 
-_Source: `packages/core/src/node/node.ts` (`spaces.leave`, `giveUpPlace`, `forget`, `LEAVE_WAIT_MS`), `packages/core/src/node/space-runtime.ts` (`giveUpPlace`). Tests: `packages/core/tests/key-change.test.ts` ("leaving a private space"), `packages/core/tests/contacts.test.ts` ("removing a contact gives up your place"), `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/carrier.test.ts` ("its carry space cannot be left…")._
+_Source: `packages/core/src/node/node.ts` (`spaces.leave`, `giveUpPlace`, `forget`, `LEAVE_WAIT_MS`), `packages/core/src/node/space-runtime.ts` (`giveUpPlace`, `writeUntilStored`). Tests: `packages/core/tests/key-change.test.ts` ("leaving a private space"), `packages/core/tests/contacts.test.ts` ("removing a contact gives up your place"), `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/carrier.test.ts` ("its carry space cannot be left…")._
 
 ## Holding part of a space
 
@@ -381,7 +381,7 @@ with to do it.
 The account registry, the contacts space and carry spaces are always held
 whole. Apps connected to an account home use `cache: {}` by default ([the app-side client](#the-app-side-client)).
 
-_Source: `packages/core/src/node/space-runtime.ts` ("Holding part of the space"), `packages/core/src/node/types.ts` (`CacheConfig`). Tests: `packages/core/tests/caches.test.ts`, `packages/core/tests/reconcile.test.ts` ("holding part of a space")._
+_Source: `packages/core/src/node/space-holding.ts` (`openSpaceHolding`), `packages/core/src/node/types.ts` (`CacheConfig`). Tests: `packages/core/tests/caches.test.ts`, `packages/core/tests/reconcile.test.ts` ("holding part of a space")._
 
 ### Planned: caches that widen and trim
 
@@ -461,7 +461,7 @@ invite record has not reached this device yet, the space is held with
 then deletes the `sys.joined` record, closes the space and forgets it with its
 key ([leaving a space](#leaving-a-space)).
 
-_Source: `packages/core/src/node/node.ts` (`reconcileOnce`, `remember`, `forget`, `finishJoining`, `publishProfile`, `spaces`), `packages/core/src/space/space-manager.ts`. Tests: `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/profiles.test.ts`, `packages/core/tests/space-access.test.ts`._
+_Source: `packages/core/src/node/node.ts` (`reconcileOnce`, `remember`, `forget`, `finishJoining`, `spaces`), `packages/core/src/node/node-contacts.ts` (`publishProfile`), `packages/core/src/space/space-manager.ts`. Tests: `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/profiles.test.ts`, `packages/core/tests/space-access.test.ts`._
 
 ## Events
 
@@ -552,7 +552,7 @@ A received live message is emitted as a `message` event,
 > Rationale: a peer's key does not say whose it is, but only the account's own
 > devices and apps can read its registry, so a peer there is one of ours.
 
-_Source: `packages/core/src/node/node.ts` (`spaces.send`, `spaces.status`), `packages/core/src/node/space-runtime.ts` ("Live messages", `status`, `send`). Tests: `packages/core/tests/live.test.ts`._
+_Source: `packages/core/src/node/node.ts` (`spaces.send`, `spaces.status`), `packages/core/src/node/space-runtime.ts` (`send`, `onLive`, `status`). Tests: `packages/core/tests/live.test.ts`._
 
 ## The rest of the node's surface
 
@@ -735,7 +735,7 @@ account's knocks, in shared spaces and in its inbox ([inbox.md](inbox.md)).
 
 Which of these each method of the node is — passed through, held to the note's spaces, or refused — is one table, `API` in `packages/core/src/node/api.ts`; a new method does not type-check until it is decided there. The same table lists what `remoteNode` forwards.
 
-_Source: `packages/core/src/node/node.ts` (`asAgent`), `packages/core/src/node/api.ts` (`API`). Tests: `packages/core/tests/records-only.test.ts` ("an agent acting for a person"), `packages/core/tests/remote.test.ts` ("no agent is started across the port…")._
+_Source: `packages/core/src/node/node-records.ts` (`startAgent`), `packages/core/src/node/api.ts` (`API`). Tests: `packages/core/tests/records-only.test.ts` ("an agent acting for a person"), `packages/core/tests/remote.test.ts` ("no agent is started across the port…")._
 
 ## The app-side client
 
@@ -909,7 +909,7 @@ genesis and any invite opened before the call. It says whether it was: false
 at once when no carrier is connected. `contacts.ask` and `inbox.knock` wait on it before the knock goes
 out, and pass what it said on as `carried`, for the app to tell the person.
 
-_Source: `packages/core/src/node/node.ts` (`spaces.carried`, `makePair`). Tests: `packages/core/tests/carrier.test.ts` ("a space made just now, carried before its invite goes out…", "carried is false at once with no carrier…")._
+_Source: `packages/core/src/node/node.ts` (`spaces.carried`), `packages/core/src/node/node-contacts.ts` (`makePair`). Tests: `packages/core/tests/carrier.test.ts` ("a space made just now, carried before its invite goes out…", "carried is false at once with no carrier…")._
 
 **The account's own automations.** `node.automations` (needs the account
 key) lists, adds, updates (`name`, `paused`) and removes the account's own
@@ -975,7 +975,7 @@ hour (`evaluate`) holds each to the free line. Past a space's `until`, every
 account's carry space stops carrying it (`skip`, in `createCarryCore`), while
 its own subscription still may. Each change is a line in the host's log.
 
-_Source: `packages/core/src/node/node.ts` (`carriers`, `notifications`, `hosting`), `packages/core/src/node/carrier.ts` (`arrived`, `skip`, `onArrived`), `packages/core/src/node/host.ts` (`evaluate`), `packages/core/src/session/hosting.ts`, `packages/cli/src/host.ts`. Tests: `packages/core/tests/carrier.test.ts`, `packages/core/tests/host-limits.test.ts`, `packages/cli/tests/host.test.ts`._
+_Source: `packages/core/src/node/node-carriers.ts` (`carriers`), `packages/core/src/node/node-hosting.ts` (`hosting`), `packages/core/src/node/carrier.ts` (`arrived`, `skip`, `onArrived`), `packages/core/src/node/host.ts` (`evaluate`), `packages/core/src/session/hosting.ts`, `packages/cli/src/host.ts`. Tests: `packages/core/tests/carrier.test.ts`, `packages/core/tests/host-limits.test.ts`, `packages/cli/tests/host.test.ts`._
 
 ### A space paying for itself
 
@@ -1017,7 +1017,7 @@ has, so it keeps that, unreadable, for as long as the space's subscription is
 paid, and what is in the fund stays there
 ([#220](https://github.com/leifriksheim/minca/issues/220)).
 
-_Source: `packages/core/src/node/node.ts` (`keepSpaceHosts`, `askSpaceHost`, `hosting.space`), `packages/core/src/session/hosting.ts` (`describeHost`, `HostError`). Tests: `packages/cli/tests/host.test.ts` ("a space paying for itself", "an address that is not a host, or one that is down", "bots a host runs": the two on stopping a space's host)._
+_Source: `packages/core/src/node/node-hosting.ts` (`keepSpaceHosts`, `askSpaceHost`, `hosting.space`), `packages/core/src/session/hosting.ts` (`describeHost`, `HostError`). Tests: `packages/cli/tests/host.test.ts` ("a space paying for itself", "an address that is not a host, or one that is down", "bots a host runs": the two on stopping a space's host)._
 
 ## The inbox
 

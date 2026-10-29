@@ -178,6 +178,57 @@ const reviewLine = ({
   ...(usedBy.length ? { usedBy } : {}),
 });
 
+/** A standard collection as it is stored, with what it allows */
+function standardInFull(name: string) {
+  const definition = standardDefinition(name);
+  if (!definition) throw new Error(`${name} is not in the standard library`);
+  const { schema, contract: _built, computed: _derived, ...rest } = definition;
+  const contract = storedContract(definition);
+  const computed = storedComputed(definition);
+  const stored = {
+    ...rest,
+    schema: toJsonSchema(schema),
+    ...(contract !== undefined ? { contract } : {}),
+    ...(computed !== undefined ? { computed } : {}),
+  };
+  return { ...stored, summary: describeCollection(stored) };
+}
+
+function examplesOf(value: unknown): ContractExample[] {
+  const given: unknown[] = Array.isArray(value) ? value : [];
+  const wrong = given.findIndex((example) => !isExample(example));
+  if (wrong >= 0) throw new Error(`examples[${wrong}] must be ${EXAMPLE_SHAPE}`);
+  return given.filter(isExample);
+}
+
+/** What a person should hear before a proposal is applied */
+function proposalWarnings(
+  body: Blueprint,
+  review: ReturnType<typeof reviewBlueprint>,
+  examples: ReadonlyArray<ContractExample>,
+): string[] {
+  const breaks = body.updates ? [] : review.collections.filter((one) => one.usedBy.length);
+  const untried = body.collections.filter(
+    (c) => c.contract?.check?.length && !examples.some((e) => e.collection === c.name),
+  );
+  return [
+    ...breaks.map(
+      (one) =>
+        `This changes ${one.definition.name}, which ${one.usedBy.join(' and ')} uses as it is. ` +
+        'If this is a new version of that blueprint, propose it again with its key as "updates"; otherwise use the ' +
+        'collection as it is, or give yours a name of its own.',
+    ),
+    // A twin of a standard collection splits the space's records between apps that can't read each other's.
+    ...body.collections.flatMap(lookalikes),
+    // A contract nobody tried may refuse every fair move, or let a cheat count.
+    ...untried.map(
+      (c) =>
+        `No example tried ${c.name}'s contract. Propose it again with "examples": a version that must count and ` +
+        'one that must not.',
+    ),
+  ];
+}
+
 type ActionDefinition = Omit<NodeAction, 'readOnly'> & { readonly readOnly?: true };
 
 const ACTIONS: ReadonlyArray<ActionDefinition> = [
@@ -245,12 +296,15 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
     run: async (node, input) => ({
       invite: await node.spaces.invite(
         str(input, 'space'),
-        // A short link, for a person to paste: it falls back to the long form where no mailbox takes it.
-        input.viewOnly === true
-          ? { write: false, short: true }
-          : typeof input.role === 'string'
-            ? { role: input.role, short: true }
-            : { short: true },
+        // A short link, for a person to paste: the long form where no mailbox takes it.
+        {
+          short: true,
+          ...(input.viewOnly === true
+            ? { write: false }
+            : typeof input.role === 'string'
+              ? { role: input.role }
+              : {}),
+        },
       ),
     }),
   },
@@ -466,20 +520,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
           })),
         };
       }
-      return names.map((name) => {
-        const definition = standardDefinition(name);
-        if (!definition) throw new Error(`${name} is not in the standard library`);
-        const { schema, contract: _built, computed: _derived, ...rest } = definition;
-        const contract = storedContract(definition);
-        const computed = storedComputed(definition);
-        const stored = {
-          ...rest,
-          schema: toJsonSchema(schema),
-          ...(contract !== undefined ? { contract } : {}),
-          ...(computed !== undefined ? { computed } : {}),
-        };
-        return { ...stored, summary: describeCollection(stored) };
-      });
+      return names.map(standardInFull);
     },
   },
   {
@@ -625,10 +666,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
         collections: standardCollections(input.collections),
       };
       if (!isBlueprint(body)) throw new Error(checkBlueprint(body) ?? 'Not a blueprint');
-      const given: unknown[] = Array.isArray(input.examples) ? input.examples : [];
-      const examples = given.filter(isExample);
-      if (examples.length < given.length)
-        throw new Error(`examples[${given.findIndex((e) => !isExample(e))}] must be ${EXAMPLE_SHAPE}`);
+      const examples = examplesOf(input.examples);
       const members = (await node.spaces.access(spaceId)).members;
       const wrong = await tryContracts(body, examples, {
         proposer: node.did,
@@ -641,25 +679,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
         blueprints,
         key: record.key,
       });
-      const breaks = body.updates ? [] : review.collections.filter((one) => one.usedBy.length);
-      const warnings = [
-        ...breaks.map(
-          (one) =>
-            `This changes ${one.definition.name}, which ${one.usedBy.join(' and ')} uses as it is. ` +
-            'If this is a new version of that blueprint, propose it again with its key as "updates"; otherwise use the ' +
-            'collection as it is, or give yours a name of its own.',
-        ),
-        // A twin of a standard collection splits the space's records between apps that can't read each other's.
-        ...body.collections.flatMap(lookalikes),
-        // A contract nobody tried may refuse every fair move, or let a cheat count.
-        ...body.collections
-          .filter((c) => c.contract?.check?.length && !examples.some((e) => e.collection === c.name))
-          .map(
-            (c) =>
-              `No example tried ${c.name}'s contract. Propose it again with "examples": a version that must count and ` +
-              'one that must not.',
-          ),
-      ];
+      const warnings = proposalWarnings(body, review, examples);
       return {
         key: record.key,
         proposed: true,

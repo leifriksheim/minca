@@ -126,8 +126,7 @@ export async function configureClients(server: ServerCommand): Promise<ReadonlyA
 /**
  * Takes the server out of every agent on this computer that connecting added
  * it to, as `minca disconnect` does. Only an entry that starts `minca mcp` for
- * this home goes: one added by hand, such as `minca mcp --account`, or one for
- * another home, stays.
+ * this home goes: one added by hand, or one for another home, stays.
  */
 export async function unconfigureClients(home: string): Promise<ReadonlyArray<Configured>> {
   const { listInstalledServers, removeServer } = await import('add-mcp');

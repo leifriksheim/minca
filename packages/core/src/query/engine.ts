@@ -1,13 +1,13 @@
 /**
  * Runs a query: narrow by collection, filter, sort, page, then follow links.
  *
- * Deliberately no planner. A browser holds a replica, not a warehouse; at that
- * scale an optimiser would be more code than it saves. Filtering happens after
- * records are opened, so in a private space it sees decrypted bodies — and a
- * record this device cannot open is left out, here and in every `include`.
+ * Deliberately no planner: a browser holds a replica, not a warehouse. Records
+ * are filtered after they are opened, so a private space is filtered on its
+ * decrypted bodies, and a record this device cannot open is left out.
  */
 import type { NodeRecord } from '../node/types.js';
 import { checkQuery, fieldValue, matches } from './filter.js';
+import { getOrAdd } from '../utils/map.js';
 import {
   computeValues,
   readable,
@@ -19,6 +19,7 @@ import {
   nameOf,
   plainQuery,
   type CollectionRef,
+  type Filter,
   type Include,
   type IncludeMap,
   type Query,
@@ -38,100 +39,10 @@ export interface QuerySource {
 
 /** A record with its computed values: none when its collection has none */
 type Computed = NodeRecord & { readonly computed: ComputedValues };
+type Compute = ReturnType<typeof computer>;
 
 const NONE: ComputedValues = Object.freeze({});
 const NO_FIELDS: ComputedFields = Object.freeze({});
-
-/** Orders two values of a field: missing sorts first, then numbers and strings by value. */
-function compareValues(a: unknown, b: unknown): number {
-  if (a === b) return 0;
-  if (a === undefined || a === null) return -1;
-  if (b === undefined || b === null) return 1;
-  if (typeof a === 'number' && typeof b === 'number') return a - b;
-  if (typeof a === 'boolean' && typeof b === 'boolean') return Number(a) - Number(b);
-  // eslint-disable-next-line @typescript-eslint/no-base-to-string -- every node must order mixed values the same way, so the stringification stays as it was
-  return String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0;
-}
-
-/**
- * A total order. Ties always break on the key — stable on every node,
- * so paging neither skips nor repeats between peers holding the same data.
- */
-function sortRecords<T extends NodeRecord>(records: T[], sort: Query['sort']): T[] {
-  const fields = Object.entries(sort ?? { '@createdAt': 'asc' });
-  return records.sort((a, b) => {
-    for (const [field, direction] of fields) {
-      const order = compareValues(fieldValue(a, field), fieldValue(b, field));
-      if (order !== 0) return direction === 'desc' ? -order : order;
-    }
-    return a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
-  });
-}
-
-/** The records an include finds for one record, before its `where` */
-async function related(source: QuerySource, record: NodeRecord, include: Include): Promise<NodeRecord[]> {
-  const from = include.from === undefined ? undefined : nameOf(include.from);
-  if (include.direction === 'out') {
-    const targets = await Promise.all(
-      record.links.filter((l) => l.rel === include.rel).map((l) => source.get(l.to)),
-    );
-    // A link to a record not held here is normal; it simply finds nothing.
-    return targets.filter((r): r is NodeRecord => readable(r) && (!from || r.collection === from));
-  }
-  return (
-    await source.linked(record.key, { rel: include.rel, ...(from ? { collection: from } : {}) })
-  ).filter(readable);
-}
-
-/** Works out computed fields, each collection's definition read once per query */
-function computer(source: QuerySource) {
-  const fieldsOf = new Map<string, Promise<ComputedFields>>();
-  const fields = (collection: string) => {
-    let found = fieldsOf.get(collection);
-    if (!found) {
-      found = (source.computed?.(collection) ?? Promise.resolve(undefined)).then((f) => f ?? NO_FIELDS);
-      fieldsOf.set(collection, found);
-    }
-    return found;
-  };
-  const withComputed = async (r: NodeRecord | Computed): Promise<Computed> => {
-    if ('computed' in r) return r;
-    const of = await fields(r.collection);
-    return { ...r, computed: Object.keys(of).length ? await computeValues(source, r, of) : NONE };
-  };
-  return { fields, withComputed };
-}
-
-async function expand(
-  source: QuerySource,
-  compute: ReturnType<typeof computer>,
-  given: NodeRecord | Computed,
-  includes: Query['include'],
-): Promise<QueryRecord> {
-  const record = await compute.withComputed(given);
-  if (!includes) return { ...record, included: {} };
-  const included: Record<string, ReadonlyArray<QueryRecord> | number> = {};
-  for (const [name, include] of Object.entries(includes)) {
-    let found: ReadonlyArray<NodeRecord | Computed> = await related(source, record, include);
-    if (include.where) {
-      const where = include.where;
-      // A record whose collection's computed fields the filter names is matched on them.
-      found = await Promise.all(
-        found.map(async (r) =>
-          readsComputed(await compute.fields(r.collection), where) ? compute.withComputed(r) : r,
-        ),
-      );
-      found = found.filter((r) => matches(r, where));
-    }
-    if (include.count) {
-      included[name] = found.length;
-      continue;
-    }
-    const page = include.limit === undefined ? found : found.slice(0, include.limit);
-    included[name] = await Promise.all(page.map((r) => expand(source, compute, r, include.include)));
-  }
-  return { ...record, included };
-}
 
 /**
  * Runs a query against a space.
@@ -154,23 +65,130 @@ export async function runQuery<
   // Filtering or sorting on a computed field needs it for every candidate; otherwise only the page pays.
   if (readsComputed(fields, query.where, query.sort))
     candidates = await Promise.all(candidates.map(compute.withComputed));
-  const filtered = query.where ? candidates.filter((r) => matches(r, query.where!)) : candidates;
+  const filtered = query.where ? candidates.filter(matching(query.where)) : candidates;
   const sorted = sortRecords(filtered, query.sort);
 
-  // The cursor is the key of the last record of the previous page. If that
-  // record has since gone, start from where it would have been.
-  let start = 0;
-  if (query.cursor) {
-    const at = sorted.findIndex((r) => r.key === query.cursor);
-    start = at >= 0 ? at + 1 : 0;
-  }
-  const page = query.limit === undefined ? sorted.slice(start) : sorted.slice(start, start + query.limit);
+  const start = startAfter(sorted, query.cursor);
+  const end = query.limit === undefined ? undefined : start + query.limit;
+  const page = sorted.slice(start, end);
   const records = await Promise.all(page.map((r) => expand(source, compute, r, query.include)));
-  const more = start + page.length < sorted.length && page.length > 0;
+  const more = page.length > 0 && start + page.length < sorted.length;
   return {
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- T is the caller's promise about bodies (see Typed); reading does not check it
     records: records as ReadonlyArray<QueryRecord<T>>,
-    cursor: more ? page[page.length - 1]!.key : null,
+    cursor: more ? page.at(-1)!.key : null,
     complete: true,
   };
+}
+
+/** Where a page starts: after the cursor's record, or from the top if that record has gone */
+function startAfter(sorted: ReadonlyArray<NodeRecord>, cursor: string | undefined): number {
+  if (!cursor) return 0;
+  return sorted.findIndex((r) => r.key === cursor) + 1;
+}
+
+const matching = (where: Filter) => (record: NodeRecord) => matches(record, where);
+
+/**
+ * A total order. Ties always break on the key — stable on every node,
+ * so paging neither skips nor repeats between peers holding the same data.
+ */
+function sortRecords<T extends NodeRecord>(records: T[], sort: Query['sort']): T[] {
+  const fields = Object.entries(sort ?? { '@createdAt': 'asc' });
+  return records.sort((a, b) => {
+    for (const [field, direction] of fields) {
+      const order = compareValues(fieldValue(a, field), fieldValue(b, field));
+      if (order !== 0) return direction === 'desc' ? -order : order;
+    }
+    return compareText(a.key, b.key);
+  });
+}
+
+/** Orders two values of a field: missing sorts first, then numbers and strings by value. */
+function compareValues(a: unknown, b: unknown): number {
+  if (a === b) return 0;
+  if (a === undefined || a === null) return -1;
+  if (b === undefined || b === null) return 1;
+  if (typeof a === 'number' && typeof b === 'number') return a - b;
+  if (typeof a === 'boolean' && typeof b === 'boolean') return Number(a) - Number(b);
+  // eslint-disable-next-line @typescript-eslint/no-base-to-string -- every node must order mixed values the same way, so the stringification stays as it was
+  return compareText(String(a), String(b));
+}
+
+const compareText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+/** Works out computed fields, each collection's definition read once per query */
+function computer(source: QuerySource) {
+  const fieldsOf = new Map<string, Promise<ComputedFields>>();
+  const fields = (collection: string): Promise<ComputedFields> =>
+    getOrAdd(fieldsOf, collection, () => readFields(source, collection));
+  const withComputed = async (record: NodeRecord | Computed): Promise<Computed> => {
+    if ('computed' in record) return record;
+    const of = await fields(record.collection);
+    const computed = Object.keys(of).length ? await computeValues(source, record, of) : NONE;
+    return { ...record, computed };
+  };
+  return { fields, withComputed };
+}
+
+async function readFields(source: QuerySource, collection: string): Promise<ComputedFields> {
+  return (await source.computed?.(collection)) ?? NO_FIELDS;
+}
+
+/** A record with its computed values and what its includes find */
+async function expand(
+  source: QuerySource,
+  compute: Compute,
+  given: NodeRecord | Computed,
+  includes: Query['include'],
+): Promise<QueryRecord> {
+  const record = await compute.withComputed(given);
+  const included: Record<string, ReadonlyArray<QueryRecord> | number> = {};
+  for (const [name, include] of Object.entries(includes ?? {}))
+    included[name] = await runInclude(source, compute, record, include);
+  return { ...record, included };
+}
+
+/** What one include finds for a record: its records, or how many there are */
+async function runInclude(
+  source: QuerySource,
+  compute: Compute,
+  record: NodeRecord,
+  include: Include,
+): Promise<ReadonlyArray<QueryRecord> | number> {
+  let found: ReadonlyArray<NodeRecord | Computed> = await related(source, record, include);
+  if (include.where) found = await filterIncluded(compute, found, include.where);
+  if (include.count) return found.length;
+  const page = found.slice(0, include.limit);
+  return Promise.all(page.map((r) => expand(source, compute, r, include.include)));
+}
+
+/** A record whose collection's computed fields the filter names is matched on them */
+async function filterIncluded(
+  compute: Compute,
+  records: ReadonlyArray<NodeRecord>,
+  where: Filter,
+): Promise<Array<NodeRecord | Computed>> {
+  const withFields = await Promise.all(
+    records.map(async (r) =>
+      readsComputed(await compute.fields(r.collection), where) ? compute.withComputed(r) : r,
+    ),
+  );
+  return withFields.filter(matching(where));
+}
+
+/** The records an include finds for one record, before its `where` */
+async function related(source: QuerySource, record: NodeRecord, include: Include): Promise<NodeRecord[]> {
+  const from = include.from === undefined ? undefined : nameOf(include.from);
+  if (include.direction !== 'out') {
+    const linking = await source.linked(record.key, {
+      rel: include.rel,
+      ...(from ? { collection: from } : {}),
+    });
+    return linking.filter(readable);
+  }
+  const outgoing = record.links.filter((link) => link.rel === include.rel);
+  const targets = await Promise.all(outgoing.map((link) => source.get(link.to)));
+  // A link to a record not held here is normal; it simply finds nothing.
+  return targets.filter((r): r is NodeRecord => readable(r) && (!from || r.collection === from));
 }

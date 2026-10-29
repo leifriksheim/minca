@@ -50,7 +50,8 @@ import {
 import { openFsDirectory, writeWhole } from './fs-directory.js';
 import { nodeFor, type Unlocked } from './home.js';
 import { commaList, errorCode, isRecord, messageOf } from './json.js';
-import { holdLock } from './writer-keys.js';
+import { queue } from './queue.js';
+import { holdLock, importKeyJwk, newKey } from './writer-keys.js';
 
 /** The relay the apps meet on unless told otherwise */
 const DEFAULT_RELAYS: ReadonlyArray<string> = ['wss://minca.fly.dev'];
@@ -89,36 +90,12 @@ interface Stored {
   readonly did: string;
 }
 
-const ALGORITHM = { name: 'ECDSA', namedCurve: 'P-256' };
-
-/** A new agent key, and the JWK `key.json` keeps of it. Used here only as a key that can't be exported. */
-async function makeAgentKey(): Promise<Stored & { readonly jwk: string }> {
-  const subtle = globalThis.crypto.subtle;
-  const made = await subtle.generateKey(ALGORITHM, true, ['sign', 'verify']);
-  const stored = {
-    privateKey: await subtle.exportKey('jwk', made.privateKey),
-    publicKey: await subtle.exportKey('jwk', made.publicKey),
-  };
-  const keys = {
-    privateKey: await subtle.importKey('jwk', stored.privateKey, ALGORITHM, false, ['sign']),
-    publicKey: made.publicKey,
-  };
-  return { keys, did: await didOf(keys.publicKey), jwk: `${JSON.stringify(stored)}\n` };
-}
-
 /** A slot's key, from its `key.json`; null before it was connected */
 async function readAgentKey(slot: string): Promise<Stored | null> {
   const file = path.join(slot, 'key.json');
-  const subtle = globalThis.crypto.subtle;
   try {
-    const stored: unknown = JSON.parse(await readFile(file, 'utf8'));
-    // importKey checks the rest of each key.
-    if (!isRecord(stored) || !isRecord(stored.privateKey) || !isRecord(stored.publicKey))
-      throw new Error('not a key pair');
-    const keys = {
-      privateKey: await subtle.importKey('jwk', stored.privateKey, ALGORITHM, false, ['sign']),
-      publicKey: await subtle.importKey('jwk', stored.publicKey, ALGORITHM, true, ['verify']),
-    };
+    const keys = await importKeyJwk(JSON.parse(await readFile(file, 'utf8')));
+    if (!keys) throw new Error('not a key pair');
     return { keys, did: await didOf(keys.publicKey) };
   } catch (error) {
     if (errorCode(error) === 'ENOENT') return null;
@@ -218,14 +195,15 @@ export async function connectAgent(params: {
   const connect = params.connect ?? connectWithCode;
   if (!params.connect) await enableWebRTC();
   // A new key each time: one the home revoked can't write again, whatever note it is given.
-  const key = await makeAgentKey();
+  const made = await newKey();
+  const key = { keys: made.keys, did: await didOf(made.keys.publicKey) };
   const code = newConnectCode();
   params.onLink(connectCodeUrl(params.accountHome, code));
   const grant = await connect({
     home: params.accountHome,
     check: params.check,
     code,
-    key: { keys: key.keys, did: key.did },
+    key,
     name: params.name,
     network: { relays: params.relays },
   });
@@ -243,7 +221,7 @@ export async function connectAgent(params: {
   const kept = { ...grant, relays: [...new Set([...(grant.relays ?? []), ...params.relays])] };
   await mkdir(params.slot, { recursive: true, mode: 0o700 });
   // The key, then the grant made out to it: a running agent reloads when the grant changes.
-  await writeWhole(path.join(params.slot, 'key.json'), key.jwk);
+  await writeWhole(path.join(params.slot, 'key.json'), `${JSON.stringify(made.jwk)}\n`);
   await writeWhole(path.join(params.slot, 'grant.json'), `${JSON.stringify(kept, null, 2)}\n`);
   return kept;
 }
@@ -371,12 +349,7 @@ export async function startAgentNode(
   let unlisten = listen(current.node);
   let closed = false;
   // One reload at a time, and none once closed: each closes the node before starting the next on the same folder.
-  let queue: Promise<unknown> = Promise.resolve();
-  const exclusive = <T>(work: () => Promise<T>): Promise<T> => {
-    const next = queue.then(work);
-    queue = next.catch(() => {});
-    return next;
-  };
+  const exclusive = queue();
 
   return Object.freeze({
     get node() {

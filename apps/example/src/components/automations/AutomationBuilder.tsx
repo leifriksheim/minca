@@ -6,7 +6,7 @@ import {
   type NodeRecord,
   type SpaceSummary,
 } from '@minca/core';
-import { useAccount, useNode } from '@minca/react';
+import { useAccount, useAsync, useNode } from '@minca/react';
 import { useMay, useMayDefine } from '@minca/app-shared/may';
 import { Modal } from '@minca/app-shared/Modal';
 import { AddBotDialog, useSpaceBots } from '@minca/app-shared/CommunitySetup';
@@ -28,7 +28,6 @@ import {
   automationRun as runCollection,
   type Automation,
   type AutomationAction,
-  type AutomationMatch,
 } from '@minca/core/schemas';
 import {
   ACTIONS,
@@ -50,8 +49,9 @@ import {
   type Within,
 } from '../../automations';
 import { usePeopleHere } from '../Person';
-import { styles, palette } from '../../styles';
+import { styles, palette, hstack, stack } from '../../styles';
 import { ClauseList, Pill, PlacePill, Sentence, Step, ValueInput, card, chip, previewBox } from './parts';
+import { PrimaryButton, QuietButton } from '../Buttons';
 
 /** In the schedule picker, a time of one's own */
 const OTHER = 'other';
@@ -172,23 +172,13 @@ export function AutomationBuilder({
   const onlyTheirs = !!chosen && !changesOthers;
 
   // What it holds for right now: shown, never acted on — an automation acts on what changes after it's made.
-  const [found, setFound] = useState<{ for: typeof when; matches: ReadonlyArray<AutomationMatch> } | null>(
-    null,
-  );
-  const preview = found?.for === when ? found.matches : null;
-  useEffect(() => {
-    if (!when.collection) return;
-    let live = true;
-    const timer = setTimeout(() => {
-      void matching(node, space.id, compile(when), did, 100)
-        .then((matches) => live && setFound({ for: when, matches }))
-        .catch(() => live && setFound({ for: when, matches: [] }));
-    }, 250);
-    return () => {
-      live = false;
-      clearTimeout(timer);
-    };
-  }, [node, space.id, when, did]);
+  const settled = useSettled(when, 250);
+  const lookup = useAsync(async () => {
+    if (!settled.collection) return null;
+    const matches = await matching(node, space.id, compile(settled), did, 100).catch(() => []);
+    return { for: settled, matches };
+  }, [node, space.id, settled, did]);
+  const preview = lookup.status === 'done' && lookup.value?.for === when ? lookup.value.matches : null;
 
   const save = async () => {
     if (!chosen && !timed) return;
@@ -240,7 +230,7 @@ export function AutomationBuilder({
 
         <div style={card}>
           <Step label="When">
-            <div style={{ display: 'flex', gap: 6 }}>
+            <div style={hstack(6)}>
               {[
                 { value: false, label: 'Something happens' },
                 { value: true, label: 'At set times' },
@@ -286,7 +276,7 @@ export function AutomationBuilder({
                   />
                 </Sentence>
                 {ownTime && (
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <label style={stack(4)}>
                     <input
                       aria-label="Minute hour day month weekday"
                       value={every}
@@ -413,7 +403,7 @@ export function AutomationBuilder({
                 )}
                 {count && countFields.length > 0 && (
                   <details open={!!count.clauses?.length}>
-                    <summary style={{ fontSize: 13, color: palette.ink.muted }}>
+                    <summary style={styles.quiet}>
                       Count only some {noun(collections, count.collection, true)}
                     </summary>
                     <div style={{ marginTop: 8 }}>
@@ -597,7 +587,7 @@ export function AutomationBuilder({
           )
         )}
 
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <label style={stack(6)}>
           <span style={styles.fieldLabel}>Name</span>
           <input
             value={shownName}
@@ -617,18 +607,17 @@ export function AutomationBuilder({
         </p>
         {error && <p style={{ ...styles.error, fontSize: 13 }}>{error}</p>}
 
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button onClick={onClose} data-variant="quiet" style={{ ...styles.smallButton, height: 40 }}>
+        <div style={{ ...hstack(8), justifyContent: 'flex-end' }}>
+          <QuietButton onClick={onClose} style={{ height: 40 }}>
             Cancel
-          </button>
-          <button
+          </QuietButton>
+          <PrimaryButton
             onClick={() => void save()}
             disabled={(!chosen && !timed) || busy}
-            data-variant="primary"
-            style={{ ...styles.button, width: 'auto' }}
+            style={{ width: 'auto' }}
           >
             {busy ? 'Saving…' : editing ? 'Save automation' : 'Turn on automation'}
-          </button>
+          </PrimaryButton>
         </div>
       </Modal>
       {addingBot && (
@@ -711,7 +700,7 @@ function ActionDetail({
     onChange({ ...then, text: `${then.text}${then.text.endsWith(' ') || !then.text ? '' : ' '}${token}` });
   const target = then.kind === 'add' ? targets.find((t) => t.collection.name === then.collection) : undefined;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div style={stack(6)}>
       {then.kind === 'add' && (
         <Sentence>
           <span>Add a</span>
@@ -755,9 +744,7 @@ function ActionDetail({
         style={styles.input}
       />
       {about && (
-        <div
-          style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: palette.ink.faint }}
-        >
+        <div style={{ ...hstack(6), alignItems: 'center', fontSize: 12, color: palette.ink.faint }}>
           Insert
           <button type="button" onClick={() => insert('{title}')} data-variant="quiet" style={token}>
             its name
@@ -796,3 +783,13 @@ const tile = {
 } as const;
 
 const token = { ...styles.smallButton, height: 24, padding: '0 8px', fontSize: 12 } as const;
+
+/** The value once it has stopped changing for `ms` */
+function useSettled<T>(value: T, ms: number): T {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(value), ms);
+    return () => clearTimeout(timer);
+  }, [value, ms]);
+  return settled;
+}

@@ -50,11 +50,6 @@ export interface BodyPlace {
   readonly key: string;
 }
 
-/** A space key's id, from its raw bytes */
-async function spaceKeyId(raw: Uint8Array): Promise<string> {
-  return base64UrlEncode(await hkdf(raw, KEY_ID_INFO, KEY_ID_BYTES));
-}
-
 /**
  * A space key from its raw bytes. Its id is derived from them, so a key
  * handed over (in an invite, a box) can be checked against the id a space or
@@ -67,7 +62,7 @@ export async function spaceKeyFromRaw(
   if (raw.length !== SPACE_KEY_BYTES) throw new Error('A space key is 32 bytes');
   const bytes = new Uint8Array(raw);
   return Object.freeze({
-    id: await spaceKeyId(bytes),
+    id: base64UrlEncode(await hkdf(bytes, KEY_ID_INFO, KEY_ID_BYTES)),
     raw: bytes,
     seal: await hkdfAesKey(bytes, SEAL_INFO),
     createdAt,
@@ -80,10 +75,10 @@ export function generateSpaceKey(): Promise<SpaceKey> {
   return spaceKeyFromRaw(globalThis.crypto.getRandomValues(new Uint8Array(SPACE_KEY_BYTES)));
 }
 
-const bodyBound = (place: BodyPlace, keyId: string) => ({
-  space: place.space,
-  collection: place.collection,
-  key: place.key,
+const bodyBound = ({ space, collection, key }: BodyPlace, keyId: string) => ({
+  space,
+  collection,
+  key,
   keyId,
 });
 

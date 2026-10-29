@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '@minca/react';
-import { palette, styles } from '../styles';
+import { palette, styles, hstack, stack } from '../styles';
 
 /**
  * Proof that the person at this screen is the account's owner, before
@@ -34,7 +34,7 @@ export function ConfirmItsYou({
   };
 
   return (
-    <div style={{ ...styles.note, display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div style={{ ...styles.note, ...stack(10) }}>
       <p style={{ fontSize: 14, fontWeight: 600, color: palette.ink.strong }}>Confirm it’s you to {why}.</p>
       {hasPasskey && !byCode && (
         <button
@@ -52,7 +52,7 @@ export function ConfirmItsYou({
             event.preventDefault();
             if (answer) void confirm(byCode ? { code: answer.trim() } : { password: answer });
           }}
-          style={{ display: 'flex', gap: 6 }}
+          style={hstack(6)}
         >
           <input
             type={byCode ? 'text' : 'password'}
@@ -75,7 +75,7 @@ export function ConfirmItsYou({
         </form>
       )}
       {wrong && <p style={styles.error}>{wrong}</p>}
-      <div style={{ display: 'flex', gap: 12 }}>
+      <div style={hstack(12)}>
         {(hasPasskey || hasPassword) && (
           <button
             onClick={() => {

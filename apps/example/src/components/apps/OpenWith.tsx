@@ -1,5 +1,5 @@
 import { Modal } from '@minca/app-shared/Modal';
-import { palette } from '../../styles';
+import { palette, styles, ui } from '../../styles';
 import { AppIcon } from './AppIcon';
 import type { AppEntry } from './entries';
 
@@ -24,9 +24,7 @@ export function OpenWith({
             <AppIcon id={app.id} size={28} />
             <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
               <span style={{ fontWeight: 600 }}>{app.title}</span>
-              {app.description && (
-                <span style={{ fontSize: 12, color: palette.ink.faint, ...ellipsis }}>{app.description}</span>
-              )}
+              {app.description && <span style={{ ...styles.faint, ...ui.ellipsis }}>{app.description}</span>}
             </span>
           </button>
         ))}
@@ -47,4 +45,3 @@ const row = {
   fontSize: 14,
   width: '100%',
 };
-const ellipsis = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as const;

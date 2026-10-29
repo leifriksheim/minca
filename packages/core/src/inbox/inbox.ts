@@ -108,6 +108,9 @@ export function clip(text: string, max: number): string {
   return chars.length <= max ? text : chars.slice(0, max).join('');
 }
 
+const isText = (value: unknown, max: number): value is string =>
+  typeof value === 'string' && Array.from(value).length <= max;
+
 /** The did:key of an inbox's signing key: who an inbox is signed by */
 export const inboxAuthor = (sign: string): string => publicKeyToDid(base64UrlDecode(sign), P256_MULTICODEC);
 
@@ -125,7 +128,7 @@ export function inboxProblem(body: unknown): string | null {
     return `it names 1–${MAX_INBOX_PLACES} mailboxes`;
   const places = checkRelays(body.places);
   if (places) return places;
-  if (body.name !== undefined && (typeof body.name !== 'string' || Array.from(body.name).length > MAX_NAME))
+  if (body.name !== undefined && !isText(body.name, MAX_NAME))
     return `its name is text of at most ${MAX_NAME} characters`;
   return null;
 }
@@ -250,49 +253,67 @@ export async function openKnock(
   blob: string,
   provider: CryptoProvider,
 ): Promise<OpenedKnock | null> {
-  let opened: unknown = null;
-  let to = '';
-  for (const key of keys) {
-    to = contactPublicKey(key);
-    opened = await openValueFrom(await contactKeyPair(key), MAIL_LABEL, { to }, blob);
-    if (opened !== null) break;
-  }
-  if (!isRecord(opened) || opened.to !== to) return null;
+  const opened = await openSealed(keys, blob);
+  if (!opened) return null;
   const checked = await checkLoose(opened, KNOCK_COLLECTION, provider);
   if (!checked) return null;
   // Knocking makes a space and hands out its invite: only the account, or a
-  // note that may write for the whole account, may. An app given one space,
-  // or a key the account trusts less, may not.
+  // note that may write for the whole account, may.
   if (checked.note && !noteCovers(checked.note, ACCOUNT_REQUIREMENT)) return null;
-
-  // Signed within the knock's life, and not in the future: wherever it waited, its note is judged then.
-  const at = Math.floor(checked.at / 1000);
-  const now = Math.floor(Date.now() / 1000);
-  if (at < now - KNOCK_TTL_SECONDS || at > now + UCAN_CLOCK_SKEW_SECONDS) return null;
+  if (!isRecent(checked.at)) return null;
 
   const body = checked.version.body;
-  if (!isRecord(body)) return null;
-  if (typeof body.name !== 'string' || Array.from(body.name).length > MAX_NAME) return null;
-  if (body.note !== undefined && (typeof body.note !== 'string' || Array.from(body.note).length > MAX_NOTE))
-    return null;
-  if (typeof body.secret !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(body.secret)) return null;
-
-  // An invitation from the same account, to a private space it alone founded, with its key and a role.
-  if ((await checkInvitation(body.invite, provider, body.secret)) !== null || !isRecord(body.invite))
-    return null;
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- checkInvitation checked it through
-  const invite = body.invite as unknown as Version & { readonly body: InvitationBody };
+  if (!isKnockBody(body)) return null;
+  const invite = await readPairInvite(body, provider);
+  if (!invite || invitedByOf(invite) !== checked.root) return null;
   const { space, key, role } = invite.body;
-  if (invitedByOf(invite) !== checked.root) return null;
   if (soleFounder(space) !== checked.root || space.visibility !== 'private' || !key || !role) return null;
   if ((await checkSpace(space)) !== null) return null;
 
   return Object.freeze({
     from: checked.root,
     name: clip(body.name, MAX_NAME) || 'Someone',
-    ...(typeof body.note === 'string' && body.note ? { note: body.note } : {}),
+    ...(body.note ? { note: body.note } : {}),
     invite: writeInvitation(invite, base64UrlDecode(body.secret)),
     pairSpace: space.id,
     at: checked.at,
   });
+}
+
+/** The knock sealed to one of these keys and naming it, or null */
+async function openSealed(keys: ReadonlyArray<Uint8Array>, blob: string) {
+  for (const key of keys) {
+    const to = contactPublicKey(key);
+    const opened = await openValueFrom(await contactKeyPair(key), MAIL_LABEL, { to }, blob);
+    if (opened !== null) return isRecord(opened) && opened.to === to ? opened : null;
+  }
+  return null;
+}
+
+/** Signed within a knock's life and not in the future: wherever it waited, its note is judged then */
+function isRecent(signedAt: number): boolean {
+  const at = Math.floor(signedAt / 1000);
+  const now = Math.floor(Date.now() / 1000);
+  return at >= now - KNOCK_TTL_SECONDS && at <= now + UCAN_CLOCK_SKEW_SECONDS;
+}
+
+/** A knock's fields, before its invitation is checked */
+type KnockFields = Omit<KnockBody, 'invite'> & { readonly invite: unknown };
+
+function isKnockBody(body: unknown): body is KnockFields {
+  return (
+    isRecord(body) &&
+    isText(body.name, MAX_NAME) &&
+    (body.note === undefined || isText(body.note, MAX_NOTE)) &&
+    typeof body.secret === 'string' &&
+    /^[A-Za-z0-9_-]{43}$/.test(body.secret)
+  );
+}
+
+/** The knock's invitation, when it checks out with its secret */
+async function readPairInvite(body: KnockFields, provider: CryptoProvider) {
+  if ((await checkInvitation(body.invite, provider, body.secret)) !== null || !isRecord(body.invite))
+    return null;
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- checkInvitation checked it through
+  return body.invite as unknown as Version & { readonly body: InvitationBody };
 }

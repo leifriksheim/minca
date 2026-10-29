@@ -3,21 +3,16 @@
  * A key's writes in each collection of a space form one line: its log
  * (spec 02 §4.10).
  *
- * Each version a key signs in a space takes the next place in that key's line
- * for its collection there, naming the one before. Two versions at one place are a fork, which
- * only a key used in two places at once can make: a stolen key, or one copied
- * where it shouldn't be. So a node hands out each place once, one write at a
- * time per key and space, and remembers the last place it gave before the
- * version leaves it.
+ * Each version takes the next place in its key's line for its collection,
+ * naming the one before. Two versions at one place are a fork, which only a
+ * key used in two places at once can make. So a node hands out each place
+ * once, one write at a time per key and space, and remembers it before the
+ * version leaves.
  *
- * A key made for this run lives as long as the node that made it, so its
- * places can be kept in memory: when the node stops, the key is gone with
- * them. A key that outlives the node — a claimed writer key, an agent's, an
- * app's, a host's — keeps its places beside it, or a restart would hand out a
- * place a second time. Such a key can be signing in more than one node at a
- * time: every tab of an app signs with the app's key. So each place is taken
- * under a lock shared by every tab and worker of the origin, and read afresh
- * from where it is kept, never from a copy in memory another tab has moved on.
+ * A key made for this run keeps its places in memory: they go with it. A key
+ * that outlives the node keeps them beside it, or a restart would reuse a
+ * place. Such a key can sign in several tabs at once, so each place is taken
+ * under a lock every tab and worker shares, and read afresh where it is kept.
  */
 import type { Version, WriterLog } from '../types.js';
 import type { HeadStore } from './writer-keys.js';
@@ -32,11 +27,9 @@ interface Head {
 
 export interface Writers {
   /**
-   * Signs the next version of `did`'s log in a space, in a collection. `sign`
-   * is given its place in the collection's line and returns the version, or
-   * throws to give it back. Writes by one key in one
-   * space go one at a time; the place is remembered before this returns, so
-   * before the version can leave the node.
+   * Signs the next version of `did`'s log in a space's collection. `sign` gets
+   * the place and returns the version, or throws to give it back. The place is
+   * remembered before this returns.
    */
   append(
     did: string,
@@ -51,11 +44,7 @@ interface Places {
   readonly collections: Readonly<Record<string, Head>>;
 }
 
-/**
- * Where a key's places in a space are kept. `head/` held them while a key had
- * one line across a space's collections, whose places no peer accepts any
- * more, so a key carried over from then starts each line afresh.
- */
+/** Where a key's places in a space are kept. (The old `head/` keys held places no peer accepts any more.) */
 const headKey = (did: string, spaceId: string) => `lines/${did}/${spaceId}`;
 
 const isHead = (value: unknown): value is Head =>
@@ -81,11 +70,9 @@ function readPlaces(bytes: Uint8Array | null): Places | null {
 const held = new Map<string, Promise<unknown>>();
 
 /**
- * Runs `work` holding a lock every context of this origin shares — tabs,
- * workers — where there are Web Locks. Where there are none (Node before 24),
- * every node in the process shares this one instead: the only nodes that can
- * share a key there are in one process, since the CLI locks its keys per
- * process.
+ * Runs `work` under a lock every tab and worker of this origin shares. Without
+ * Web Locks (Node before 24) the lock is per process, which is enough: the CLI
+ * locks its keys per process.
  */
 function exclusively<T>(name: string, work: () => Promise<T>): Promise<T> {
   const locks = globalThis.navigator?.locks;
@@ -111,12 +98,11 @@ export function createWriters(storeOf: (did: string) => HeadStore | null): Write
   async function placesOf(did: string, spaceId: string): Promise<Places | null> {
     const key = headKey(did, spaceId);
     const store = storeOf(did);
-    // A kept key's places are read where they are kept, every time: another node may share the key.
     if (!store) return kept.get(key) ?? null;
+    // Read afresh every time: another node may share the key.
     const stored = readPlaces(await store.get(key));
-    // Never behind what this node took itself: a store emptied under it (site
-    // data cleared) would hand out places already used, and the fork withdraws
-    // what the key wrote. Better to sign nothing.
+    // Behind what this node took itself means the store was emptied under it:
+    // signing on would fork the line, so sign nothing.
     for (const [collection, head] of Object.entries(kept.get(key)?.collections ?? {}))
       if ((stored?.collections[collection]?.n ?? -1) < head.n)
         throw new Error('This key’s places were lost while it was signing, so it signs nothing more.');
@@ -140,7 +126,6 @@ export function createWriters(storeOf: (did: string) => HeadStore | null): Write
       };
       const run = (queues.get(key) ?? Promise.resolve())
         .catch(() => {})
-        // A key kept where other nodes can reach it takes each place under the lock they share.
         .then(() => (storeOf(did) ? exclusively(`minca-writer:${key}`, take) : take()));
       queues.set(key, run);
       return run;

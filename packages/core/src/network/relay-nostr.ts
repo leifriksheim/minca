@@ -16,11 +16,11 @@
  */
 import { schnorr } from '@noble/curves/secp256k1.js';
 import { sha256 } from '@noble/hashes/sha2.js';
-import { createEmitter } from '../utils/events.js';
 import { base64UrlEncode, bytesToHex, utf8Encode } from '../utils/encoding.js';
 import { isObject } from '../utils/guards.js';
-import { converse, createRelaySocket, dialOf } from './relay-socket.js';
-import type { MailboxOptions, MailItem, RelayLink, RelayLinkEvents, RelayMailbox } from './relays.js';
+import { createTopicLink } from './relay-link.js';
+import { converse, dialOf } from './relay-socket.js';
+import type { MailboxOptions, MailItem, RelayLink, RelayMailbox } from './relays.js';
 
 /** Ephemeral: relays pass it on and keep nothing (NIP-01, 20000–29999) */
 export const NOSTR_EPHEMERAL_KIND = 24733;
@@ -118,72 +118,38 @@ function createNostrLink(url: string): RelayLink {
   const dial = dialOf(url);
   // Answers the relay's challenge; each event gets a key of its own, so nothing ties one room's to another's.
   const secret = throwawayKey();
-  const topics = new Set<string>();
-  const { on, off, emit } = createEmitter<RelayLinkEvents>();
-  const subscribe = (send: (message: unknown) => void, topic: string) =>
-    send([
-      'REQ',
-      subscriptionOf(topic),
-      // A little back, for a peer whose clock is behind; a copy seen before is dropped by its id.
-      {
-        kinds: [NOSTR_EPHEMERAL_KIND],
-        [`#${TOPIC_TAG}`]: [topic],
-        since: Math.floor(Date.now() / 1000) - 120,
-      },
-    ]);
-  const socket = createRelaySocket({
-    url,
+  return createTopicLink(url, {
     dial,
-    opened: (send) => {
-      for (const topic of topics) subscribe(send, topic);
-    },
-    heard: (message, send) => {
+    watch: (send, topic) =>
+      send([
+        'REQ',
+        subscriptionOf(topic),
+        // A little back, for a peer whose clock is behind; a copy seen before is dropped by its id.
+        {
+          kinds: [NOSTR_EPHEMERAL_KIND],
+          [`#${TOPIC_TAG}`]: [topic],
+          since: Math.floor(Date.now() / 1000) - 120,
+        },
+      ]),
+    unwatch: (send, topic) => send(['CLOSE', subscriptionOf(topic)]),
+    publish: (topic, blob) => [
+      'EVENT',
+      signNostrEvent(throwawayKey(), NOSTR_EPHEMERAL_KIND, [[TOPIC_TAG, topic]], blob),
+    ],
+    heard: (message, { send, emit, watching, rewatch }) => {
       if (!Array.isArray(message)) return;
       if (message[0] === 'AUTH' && typeof message[1] === 'string') {
         send(['AUTH', authEvent(secret, dial, message[1])]);
         // A relay that wanted authentication may have closed the subscriptions made before it.
-        for (const topic of topics) subscribe(send, topic);
+        rewatch();
         return;
       }
       if (message[0] !== 'EVENT') return;
       // The signature is a throwaway key's and proves nothing; what counts is whether the blob opens.
       const found = topicOf(message[2], NOSTR_EPHEMERAL_KIND);
-      if (found && topics.has(found.topic) && message[1] === subscriptionOf(found.topic))
+      if (found && watching(found.topic) && message[1] === subscriptionOf(found.topic))
         emit('blob', found.topic, found.content);
     },
-  });
-  socket.on('connected', () => emit('connected'));
-  socket.on('disconnected', () => emit('disconnected'));
-  socket.on('status', (status) => emit('status', status));
-
-  return Object.freeze({
-    url,
-    connect: socket.connect,
-    disconnect: () => {
-      topics.clear();
-      socket.disconnect();
-    },
-    reconnect: socket.reconnect,
-    watch: (topic: string) => {
-      if (topics.has(topic)) return;
-      topics.add(topic);
-      subscribe(socket.send, topic);
-      socket.count(topics.size);
-    },
-    unwatch: (topic: string) => {
-      if (!topics.delete(topic)) return;
-      socket.send(['CLOSE', subscriptionOf(topic)]);
-      socket.count(topics.size);
-    },
-    publish: (topic: string, blob: string) =>
-      socket.send([
-        'EVENT',
-        signNostrEvent(throwawayKey(), NOSTR_EPHEMERAL_KIND, [[TOPIC_TAG, topic]], blob),
-      ]),
-    isConnected: socket.isConnected,
-    status: socket.status,
-    on,
-    off,
   });
 }
 
@@ -192,11 +158,6 @@ const DEFAULT_TTL_SECONDS = 14 * 24 * 3600;
 
 /** A Nostr relay as a mailbox: each call opens its own socket, under a key used once */
 function createNostrMailbox(options: MailboxOptions = {}): RelayMailbox {
-  const talk = {
-    timeoutMs: options.timeoutMs ?? 8000,
-    ...(options.WebSocket ? { WebSocket: options.WebSocket } : {}),
-  };
-
   const client: RelayMailbox = {
     drop(relay: string, topic: string, blob: string, ttlSeconds?: number) {
       const dial = dialOf(relay);
@@ -215,7 +176,7 @@ function createNostrMailbox(options: MailboxOptions = {}): RelayMailbox {
       let authed = false;
       return converse(
         dial,
-        talk,
+        options,
         (send) => send(['EVENT', event]),
         (answer, send) => {
           if (!Array.isArray(answer)) return undefined;
@@ -250,7 +211,7 @@ function createNostrMailbox(options: MailboxOptions = {}): RelayMailbox {
       };
       return converse(
         dial,
-        talk,
+        options,
         (send) => send(['REQ', subscription, filter]),
         (answer, send) => {
           if (Array.isArray(answer) && answer[0] === 'AUTH' && typeof answer[1] === 'string' && !authed) {

@@ -2,15 +2,10 @@
  * @module session/credentials
  * Getting a password manager to actually keep something.
  *
- * Managers decide whether to offer saving by guessing, from the shape of a
- * form and from a navigation that usually follows submitting one. A page that
- * submits nothing and never navigates — which is every sign-in form here —
- * often gets no prompt at all, and a field hidden with `display: none` is
- * generally not counted as a username, so hiding one makes the guess worse
- * rather than better.
- *
- * So the forms stay honest — a real username field, visible or at least laid
- * out — and this asks outright as well, where the browser supports being asked.
+ * Managers guess whether to offer saving from the shape of a form and the
+ * navigation that follows submitting it. Sign-in here submits nothing and never
+ * navigates, so the forms keep a real, laid-out username field, and this asks
+ * outright where the browser supports being asked.
  */
 
 /** The Credential Management API, which only Chromium browsers implement. */
@@ -23,11 +18,8 @@ function isPasswordCredentialConstructor(value: unknown): value is PasswordCrede
 }
 
 /**
- * Offers a credential to the browser's password manager.
- *
- * Best effort by design: Firefox and Safari have no such API, and a manager may
- * decline. The password works either way — this only decides whether the user
- * has to copy it somewhere themselves.
+ * Offers a credential to the browser's password manager. Best effort: Firefox
+ * and Safari have no such API, and a manager may decline.
  *
  * @param id What to file it under, which is what the user will see in the vault
  * @param name A longer label, where the manager shows one
@@ -36,41 +28,25 @@ function isPasswordCredentialConstructor(value: unknown): value is PasswordCrede
 export async function offerToSave(id: string, password: string, name?: string): Promise<boolean> {
   const Ctor: unknown = Reflect.get(globalThis, 'PasswordCredential');
   if (!isPasswordCredentialConstructor(Ctor)) return false;
-
   try {
     await globalThis.navigator.credentials.store(new Ctor({ id, password, ...(name ? { name } : {}) }));
     return true;
   } catch {
-    // Declined, or blocked by policy. Not worth surfacing.
+    // Declined, or blocked by policy.
     return false;
   }
 }
 
-/**
- * What a password manager should file the account's password under.
- *
- * The account's own name, so the vault entry says which account it opens —
- * useful the moment there is more than one.
- */
+/** What a password manager should file the account's password under: the account's own name */
 export function accountCredentialName(name: string): string {
   return name;
 }
 
-/**
- * The recovery code as a file to keep.
- *
- * Plain text, so it opens anywhere and prints as it is. It names the account
- * and its DID, so a drawer with two of these says which is which.
- */
+/** The recovery code as a plain text file to keep, naming the account and its DID */
 export function recoveryKit({ code, name, did }: { code: string; name: string; did: string }): {
   filename: string;
   text: string;
 } {
-  const slug =
-    name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '') || 'account';
   const text = [
     'Minca recovery code',
     '',
@@ -88,5 +64,11 @@ export function recoveryKit({ code, name, did }: { code: string; name: string; d
     `Made ${new Date().toISOString().slice(0, 10)}.`,
     '',
   ].join('\n');
-  return { filename: `minca-recovery-${slug}.txt`, text };
+  return { filename: `minca-recovery-${slugOf(name)}.txt`, text };
 }
+
+const slugOf = (name: string) =>
+  name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '') || 'account';

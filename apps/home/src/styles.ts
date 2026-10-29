@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
-import { baseCss, hoverCss, palette, styles as shared } from '@minca/app-shared/styles';
+import { baseCss, hoverCss, hstack, palette, stack, styles as shared } from '@minca/app-shared/styles';
 
-export { palette };
+export { hstack, palette, stack };
 
 const { ink, surface, accent, radius, display, mono, shadow } = palette;
 

@@ -36,7 +36,7 @@ export type {
 } from './types.js';
 export { ok, err } from './types.js';
 
-// Phase 1: Identity & Key Management
+// Identity & Key Management
 export { createP256Provider } from './identity/crypto-p256.js';
 export {
   registerPasskey,
@@ -148,14 +148,14 @@ export {
 } from './identity/abilities.js';
 export type { NoteTerms } from './identity/abilities.js';
 
-// Phase 2: Schema & Data Structures
+// Schema & Data Structures
 export { createSchemaEngine } from './schema/schema-engine.js';
 export type { SchemaEngine, ValidationResult } from './schema/schema-engine.js';
 export { createSigner } from './schema/signer.js';
 export type { Signer } from './schema/signer.js';
 export { createVersion, canonicalize, getVersionId, signedPart } from './schema/version.js';
 
-// Phase 3: Local Storage & State
+// Local Storage & State
 export { createIndexedDBAdapter } from './storage/indexeddb-adapter.js';
 export { createStorageProvider } from './storage/storage-provider.js';
 export type { StorageProvider } from './storage/storage-provider.js';
@@ -290,7 +290,7 @@ export { displayName } from './space/names.js';
 export type { RolePreset } from './space/presets.js';
 export type { SpaceKeyPair } from './space/space-access.js';
 
-// Phase 4: P2P Networking
+// P2P Networking
 export { createRendezvous, rendezvousKeys } from './network/rendezvous.js';
 export type { Rendezvous, RendezvousEvents, SignalKind } from './network/rendezvous.js';
 export { createRelayLink, relayKind } from './network/relays.js';
@@ -318,7 +318,7 @@ export type { Mesh, MeshConfig, MeshStatus, PendingConnection } from './network/
 export { createNetworkManager } from './network/network-manager.js';
 export type { NetworkManager, NetworkManagerConfig, NetworkEvents } from './network/network-manager.js';
 
-// Phase 5: Gossip/Sync Protocol
+// Gossip/Sync Protocol
 export { parseSyncMessage, SYNC_PROTOCOL_VERSION } from './sync/sync-messages.js';
 export type { SyncMessage } from './sync/sync-messages.js';
 export { createReconciler, ItemSet, fingerprintOf } from './sync/negentropy.js';
@@ -326,13 +326,13 @@ export type { Item, Round, Sum } from './sync/negentropy.js';
 export { createSyncEngine } from './sync/sync-engine.js';
 export type { SyncEngine, SyncEngineConfig, IncomingValidation } from './sync/sync-engine.js';
 
-// Phase 6: Validation
+// Validation
 export { createCryptoGate } from './validation/crypto-gate.js';
 export { createCapabilityGate } from './validation/capability-gate.js';
 export type { CapabilityGate, CapabilityGateConfig } from './validation/capability-gate.js';
 export { createVersionCheck } from './validation/check-version.js';
 
-// Phase 7: Encryption & Privacy
+// Encryption & Privacy
 export {
   generateSpaceKey,
   spaceKeyFromRaw,
@@ -388,10 +388,7 @@ export {
   NotAllowedError,
   watchNotifications,
 } from './node/index.js';
-/** How many automations one proposal to the home may offer */
-export { MAX_PROPOSALS } from './space/own-automations.js';
-/** Why an app's "worth hearing about" entry can't be offered, or null */
-export { checkAppAutomation, checkOwnAutomation, ownQuery } from './space/own-automations.js';
+export { MAX_PROPOSALS, checkAppAutomation, checkOwnAutomation, ownQuery } from './space/own-automations.js';
 export type {
   StoreFactory,
   WriterKeySource,

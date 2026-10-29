@@ -1,7 +1,8 @@
 /** What is new: records others wrote in an app since you last opened it, tracked in this browser only. */
-import { useSyncExternalStore } from 'react';
+import { useEffect } from 'react';
 import type { SpaceSummary } from '@minca/core';
 import { useAccount, useCollections, useLive } from '@minca/react';
+import { accountStore } from './kept';
 import { namesMe, useSpaceApps, type AppEntry } from './components/apps/entries';
 
 interface Seen {
@@ -10,11 +11,6 @@ interface Seen {
   /** Per space, per app: when it was last open */
   readonly at: Readonly<Record<string, Readonly<Record<string, string>>>>;
 }
-
-const keyOf = (did: string) => `minca.seen:${did}`;
-const cache = new Map<string, Seen>();
-const listeners = new Set<() => void>();
-const changed = () => listeners.forEach((listener) => listener());
 
 function isSeen(value: unknown): value is Seen {
   return (
@@ -28,63 +24,45 @@ function isSeen(value: unknown): value is Seen {
   );
 }
 
-function read(did: string): Seen {
-  const cached = cache.get(did);
-  if (cached) return cached;
-  let seen: Seen | null = null;
-  try {
-    const stored: unknown = JSON.parse(globalThis.localStorage?.getItem(keyOf(did)) ?? 'null');
-    if (isSeen(stored)) seen = stored;
-  } catch {
-    // Storage off or unreadable: start from now, and keep it for this page.
-  }
-  if (!seen) {
-    seen = { since: new Date().toISOString(), at: {} };
-    save(did, seen);
-  }
-  cache.set(did, seen);
-  return seen;
-}
-
-function save(did: string, seen: Seen) {
-  try {
-    globalThis.localStorage?.setItem(keyOf(did), JSON.stringify(seen));
-  } catch {
-    // Kept for this page only.
-  }
-}
-
-// Another tab looked at something: take its word.
-globalThis.addEventListener?.('storage', (event) => {
-  if (!event.key?.startsWith('minca.seen:')) return;
-  cache.delete(event.key.slice('minca.seen:'.length));
-  changed();
-});
+// With nothing kept, or storage off, it starts from now.
+const kept = accountStore<Seen>(
+  'minca.seen',
+  (stored) => (isSeen(stored) ? stored : null),
+  () => ({ since: new Date().toISOString(), at: {} }),
+);
 
 /** Marks an app in a space as looked at, now */
-export function markSeen(did: string, space: string, app: string): void {
-  const seen = read(did);
-  const next: Seen = {
+function markSeen(did: string, space: string, app: string): void {
+  const seen = kept.read(did);
+  kept.write(did, {
     since: seen.since,
     at: { ...seen.at, [space]: { ...seen.at[space], [app]: new Date().toISOString() } },
-  };
-  cache.set(did, next);
-  save(did, next);
-  changed();
+  });
+}
+
+/**
+ * Keeps an app in a space looked at while it is open and the page is shown,
+ * so what arrives meanwhile counts as seen; `arrived` changes when it does.
+ */
+export function useLookingAt(space: string, app: string | undefined, arrived: number): void {
+  const { did } = useAccount();
+  useEffect(() => {
+    if (!app) return;
+    const look = () => {
+      if (globalThis.document.visibilityState === 'visible') markSeen(did, space, app);
+    };
+    look();
+    globalThis.document.addEventListener('visibilitychange', look);
+    return () => globalThis.document.removeEventListener('visibilitychange', look);
+  }, [did, space, app, arrived]);
 }
 
 /** When an app in a space was last looked at, or when this browser started keeping track */
 export const seenAt = (seen: Seen, space: string, app: string): string => seen.at[space]?.[app] ?? seen.since;
 
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
 /** What this browser has seen, for the account */
 export function useSeen(): Seen {
-  const { did } = useAccount();
-  return useSyncExternalStore(subscribe, () => read(did));
+  return kept.use(useAccount().did);
 }
 
 /** What is new in an app: everything, and how much of it names you — a mention, a reply */
@@ -138,10 +116,10 @@ const EMPTY: ReadonlyMap<string, Unread> = new Map();
 export const unreadOf = (unread: ReadonlyMap<string, Unread>, id: string): Unread => unread.get(id) ?? NONE;
 
 /** Everything new across some apps */
-export function totalOf(unread: ReadonlyMap<string, Unread>): Unread {
+export function totalOf(unread: Iterable<Unread>): Unread {
   let count = 0;
   let forMe = 0;
-  for (const one of unread.values()) {
+  for (const one of unread) {
     count += one.count;
     forMe += one.forMe;
   }
@@ -152,5 +130,5 @@ export function totalOf(unread: ReadonlyMap<string, Unread>): Unread {
 export function useSpaceUnread(space: SpaceSummary): Unread {
   const collections = useCollections(space.id);
   const { ready } = useSpaceApps(space, collections);
-  return totalOf(useUnread(space.id, ready));
+  return totalOf(useUnread(space.id, ready).values());
 }

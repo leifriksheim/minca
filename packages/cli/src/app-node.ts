@@ -49,7 +49,7 @@ import {
 import { openFsDirectory, writeWhole } from './fs-directory.js';
 import { configuredRelays, enableWebRTC } from './agent.js';
 import { isRecord, messageOf } from './json.js';
-import { holdLock } from './writer-keys.js';
+import { holdLock, importKeyJwk, newKey } from './writer-keys.js';
 
 /** How long the shell asks a note to last: the home decides, and the key is sealed by the keychain */
 export const DESKTOP_GRANT_DAYS = 30;
@@ -162,54 +162,15 @@ async function appNodeKey(
   folder: string,
   seal: CryptoKey,
 ): Promise<{ keys: CryptoKeyPair; did: string } | null> {
-  const text = await readFile(path.join(folder, 'key.sealed'), 'utf8').catch(() => null);
+  const file = path.join(folder, 'key.sealed');
+  const text = await readFile(file, 'utf8').catch(() => null);
   if (text !== null) {
-    const jwk = await openValue(seal, KEY_LABEL, { file: 'key.sealed' }, text.trim());
-    if (!isRecord(jwk)) return null;
-    if (!isRecord(jwk.privateKey) || !isRecord(jwk.publicKey)) return null;
-    return importKey(jwk.privateKey, jwk.publicKey);
+    const keys = await importKeyJwk(await openValue(seal, KEY_LABEL, { file: 'key.sealed' }, text.trim()));
+    return keys && { keys, did: await didOf(keys.publicKey) };
   }
   const made = await newKey();
-  await made.keep(folder, seal);
-  return made.key;
-}
-
-async function importKey(
-  privateJwk: Record<string, unknown>,
-  publicJwk: Record<string, unknown>,
-): Promise<{ keys: CryptoKeyPair; did: string }> {
-  const subtle = globalThis.crypto.subtle;
-  const algorithm = { name: 'ECDSA', namedCurve: 'P-256' };
-  const keys = {
-    privateKey: await subtle.importKey('jwk', privateJwk, algorithm, false, ['sign']),
-    publicKey: await subtle.importKey('jwk', publicJwk, algorithm, true, ['verify']),
-  };
-  return { keys, did: await didOf(keys.publicKey) };
-}
-
-/** A new key for the app, not yet kept: `keep` seals it into the folder, in place of the last */
-async function newKey() {
-  const subtle = globalThis.crypto.subtle;
-  const made = await subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
-  const jwk = {
-    privateKey: await subtle.exportKey('jwk', made.privateKey),
-    publicKey: await subtle.exportKey('jwk', made.publicKey),
-  };
-  // Used only as a key that can't be exported; the sealed copy is the one way to it.
-  const algorithm = { name: 'ECDSA', namedCurve: 'P-256' };
-  const keys = {
-    privateKey: await subtle.importKey('jwk', jwk.privateKey, algorithm, false, ['sign']),
-    publicKey: await subtle.importKey('jwk', jwk.publicKey, algorithm, true, ['verify']),
-  };
-  const key = { keys, did: await didOf(keys.publicKey) };
-  return {
-    key,
-    keep: async (folder: string, seal: CryptoKey) =>
-      writeWhole(
-        path.join(folder, 'key.sealed'),
-        `${await sealValue(seal, KEY_LABEL, { file: 'key.sealed' }, jwk)}\n`,
-      ),
-  };
+  await writeWhole(file, `${await sealValue(seal, KEY_LABEL, { file: 'key.sealed' }, made.jwk)}\n`);
+  return { keys: made.keys, did: await didOf(made.keys.publicKey) };
 }
 
 async function loadGrant(

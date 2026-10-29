@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { itemKindOf, labelOf, textOf, valueKindOf, type Field, type LinkedByRel } from '../derive/schema-ui';
 import { byKind, PeopleValue } from './KindValue';
-import { styles, palette } from '../styles';
+import { palette, stack } from '../styles';
+import { LinkButton } from './Buttons';
 
 /** Text longer than this folds away behind "Show": a screen's HTML is a field too */
 const LONG = 400;
@@ -44,13 +45,13 @@ export function Value({
 
 function Plain({
   value,
-  compact,
-  longText,
+  compact = false,
+  longText = false,
   depth,
 }: {
   value: unknown;
-  compact: boolean;
-  longText: boolean;
+  compact?: boolean;
+  longText?: boolean;
   depth: number;
 }) {
   if (value === undefined || value === null || value === '') return <span style={{ opacity: 0.4 }}>—</span>;
@@ -58,15 +59,7 @@ function Plain({
   if (Array.isArray(value) && value.every((v) => v === null || typeof v !== 'object'))
     return <span>{value.join(', ')}</span>;
   if (typeof value === 'object') {
-    const count = Array.isArray(value) ? value.length : Object.keys(value).length;
-    if (compact)
-      return (
-        <span style={{ color: palette.ink.muted }}>
-          {Array.isArray(value)
-            ? `${count} ${count === 1 ? 'item' : 'items'}`
-            : `${count} ${count === 1 ? 'field' : 'fields'}`}
-        </span>
-      );
+    if (compact) return <span style={{ color: palette.ink.muted }}>{sizeOf(value)}</span>;
     if (depth >= DEEPEST) {
       return (
         <code style={{ fontSize: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
@@ -122,14 +115,14 @@ function Fields({ entries, depth }: { entries: ReadonlyArray<[string, unknown]>;
               <span style={{ color: palette.ink.faint }}>{sizeOf(value)}</span>
             </summary>
             <div style={inner}>
-              <Plain value={value} compact={false} longText={false} depth={depth + 1} />
+              <Plain value={value} depth={depth + 1} />
             </div>
           </details>
         ) : (
           <div key={key} style={{ display: 'contents' }}>
             <span style={name}>{key}</span>
             <span style={{ minWidth: 0, wordBreak: 'break-word' }}>
-              <Plain value={value} compact={false} longText={false} depth={depth + 1} />
+              <Plain value={value} depth={depth + 1} />
             </span>
           </div>
         ),
@@ -159,13 +152,13 @@ const inner = {
 /** A list of objects, each set apart by a rule on its left */
 function Items({ items, depth }: { items: ReadonlyArray<unknown>; depth: number }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
+    <div style={{ ...stack(10), minWidth: 0 }}>
       {items.map((item, i) => (
         <div
           key={i}
           style={{ borderLeft: `2px solid ${palette.surface.line}`, paddingLeft: 10, minWidth: 0 }}
         >
-          <Plain value={item} compact={false} longText={false} depth={depth + 1} />
+          <Plain value={item} depth={depth + 1} />
         </div>
       ))}
     </div>
@@ -178,16 +171,12 @@ function LongText({ text }: { text: string }) {
   const size = new TextEncoder().encode(text).length;
   const kb = size >= 1024 ? `${Math.round(size / 1024)} KB` : `${size} bytes`;
   return (
-    <span style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+    <span style={{ ...stack(4), minWidth: 0 }}>
       <span style={{ color: palette.ink.muted }}>
         {open ? null : `${text.slice(0, 120).replace(/\s+/g, ' ')}…`}{' '}
-        <button
-          onClick={() => setOpen((was) => !was)}
-          data-variant="ghost"
-          style={{ ...styles.linkButton, padding: 0, fontSize: 12 }}
-        >
+        <LinkButton onClick={() => setOpen((was) => !was)} style={{ padding: 0, fontSize: 12 }}>
           {open ? 'Hide' : `Show (${kb})`}
-        </button>
+        </LinkButton>
       </span>
       {open && (
         <pre

@@ -246,13 +246,6 @@ export function globMatch(pattern: string, text: string): boolean {
 /** True, false, or no data */
 type Outcome = boolean | null;
 
-const COMPARE: Readonly<Record<string, (a: number, b: number) => boolean>> = {
-  '<': (a, b) => a < b,
-  '<=': (a, b) => a <= b,
-  '>': (a, b) => a > b,
-  '>=': (a, b) => a >= b,
-};
-
 /** `and` over outcomes: any false is false; else any no data is no data */
 function every(outcomes: Iterable<Outcome>): Outcome {
   let missing = false;
@@ -273,59 +266,50 @@ function some(outcomes: Iterable<Outcome>): Outcome {
   return missing ? null : false;
 }
 
+const numbers =
+  (compare: (a: number, b: number) => boolean) =>
+  (value: unknown, operand: unknown): Outcome =>
+    typeof value === 'number' && typeof operand === 'number' && compare(value, operand);
+
+/** `all` and `any`: the inner statement over each item of a list or each value of an object */
+const quantifier =
+  (combine: (outcomes: Iterable<Outcome>) => Outcome) =>
+  (value: unknown, inner: unknown): Outcome => {
+    const items = Array.isArray(value) ? value : isRecord(value) ? Object.values(value) : null;
+    return items === null ? false : combine(items.map((item) => evaluate(asStatement(inner), item)));
+  };
+
+/** The operators that test what a selector picks, by the value picked and the statement's operand */
+const TESTS = new Map<unknown, (value: unknown, operand: unknown) => Outcome>([
+  ['==', (value, operand) => jsonEqual(value, operand)],
+  ['!=', (value, operand) => !jsonEqual(value, operand)],
+  ['<', numbers((a, b) => a < b)],
+  ['<=', numbers((a, b) => a <= b)],
+  ['>', numbers((a, b) => a > b)],
+  ['>=', numbers((a, b) => a >= b)],
+  [
+    'like',
+    (value, pattern) => typeof value === 'string' && typeof pattern === 'string' && globMatch(pattern, value),
+  ],
+  ['all', quantifier(every)],
+  ['any', quantifier(some)],
+]);
+
 function evaluate(statement: Statement, args: unknown): Outcome {
   const [op, first, second] = statement;
-  switch (op) {
-    case '==':
-    case '!=': {
-      const picked = select(String(first), args);
-      if (!picked.found) return null;
-      const equal = jsonEqual(picked.value, second);
-      return op === '==' ? equal : !equal;
-    }
-    case '<':
-    case '<=':
-    case '>':
-    case '>=': {
-      const picked = select(String(first), args);
-      if (!picked.found) return null;
-      return typeof picked.value === 'number' && typeof second === 'number'
-        ? COMPARE[op]!(picked.value, second)
-        : false;
-    }
-    case 'like': {
-      const picked = select(String(first), args);
-      if (!picked.found) return null;
-      return typeof picked.value === 'string' && typeof second === 'string'
-        ? globMatch(second, picked.value)
-        : false;
-    }
-    case 'not': {
-      const inner = evaluate(asStatement(first), args);
-      return inner === null ? null : !inner;
-    }
-    case 'and':
-      return every(asStatements(first).map((each) => evaluate(each, args)));
-    case 'or': {
-      const each = asStatements(first);
-      return each.length === 0 ? true : some(each.map((one) => evaluate(one, args)));
-    }
-    case 'all':
-    case 'any': {
-      const picked = select(String(first), args);
-      if (!picked.found) return null;
-      const items = Array.isArray(picked.value)
-        ? picked.value
-        : isRecord(picked.value)
-          ? Object.values(picked.value)
-          : null;
-      if (items === null) return false;
-      const outcomes = items.map((item) => evaluate(asStatement(second), item));
-      return op === 'all' ? every(outcomes) : some(outcomes);
-    }
-    default:
-      return false;
+  if (op === 'not') {
+    const inner = evaluate(asStatement(first), args);
+    return inner === null ? null : !inner;
   }
+  if (op === 'and') return every(asStatements(first).map((each) => evaluate(each, args)));
+  if (op === 'or') {
+    const each = asStatements(first);
+    return each.length === 0 ? true : some(each.map((one) => evaluate(one, args)));
+  }
+  const test = TESTS.get(op);
+  if (!test) return false;
+  const picked = select(String(first), args);
+  return picked.found ? test(picked.value, second) : null;
 }
 
 /** A nested statement, as `policyProblem` already checked it is one */

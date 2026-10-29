@@ -11,7 +11,7 @@
 import type { Version } from '../types.js';
 import { isObject } from '../utils/guards.js';
 
-/** 6 since who may do what is grants held by roles (spec 03 §2), in a new access history */
+/** The sync protocol version this peer speaks */
 export const SYNC_PROTOCOL_VERSION = 8;
 
 type V = { readonly v: typeof SYNC_PROTOCOL_VERSION };

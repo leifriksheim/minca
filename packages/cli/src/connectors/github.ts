@@ -74,13 +74,16 @@ export function createGitHubApp(
     return res.json();
   }
 
+  const get = (url: string, authorization: string) => json(url, { headers: { ...HEADERS, authorization } });
+
   /** Every item of a list GitHub pages, up to ten pages of a hundred */
   async function pages(url: string, field: string, authorization: string): Promise<ReadonlyArray<unknown>> {
     const all: unknown[] = [];
     for (let page = 1; page <= 10; page++) {
-      const answer = await json(`${url}${url.includes('?') ? '&' : '?'}per_page=100&page=${page}`, {
-        headers: { ...HEADERS, authorization },
-      });
+      const answer = await get(
+        `${url}${url.includes('?') ? '&' : '?'}per_page=100&page=${page}`,
+        authorization,
+      );
       const items: ReadonlyArray<unknown> =
         isRecord(answer) && Array.isArray(answer[field]) ? answer[field] : [];
       all.push(...items);
@@ -96,6 +99,28 @@ export function createGitHubApp(
       body: JSON.stringify({ client_id: config.clientId, client_secret: config.clientSecret, code }),
     });
     return isRecord(answer) && typeof answer.access_token === 'string' ? answer.access_token : null;
+  }
+
+  async function myLogin(auth: string): Promise<string | null> {
+    const me = await get(`${API}/user`, auth);
+    return isRecord(me) && typeof me.login === 'string' ? me.login : null;
+  }
+
+  /** The account an installation is on, among those this user reaches */
+  async function installedOn(installation: number, auth: string) {
+    const found = (await pages(`${API}/user/installations`, 'installations', auth)).find(
+      (one) => isRecord(one) && one.id === installation,
+    );
+    const account = isRecord(found) && isRecord(found.account) ? found.account : null;
+    if (!account || typeof account.login !== 'string') return null;
+    return { login: account.login, type: account.type };
+  }
+
+  async function isOrgAdmin(org: string, auth: string): Promise<boolean> {
+    const membership = await get(`${API}/user/memberships/orgs/${encodeURIComponent(org)}`, auth).catch(
+      () => null,
+    );
+    return isRecord(membership) && membership.state === 'active' && membership.role === 'admin';
   }
 
   /** A token acting as the App on an installation, kept until a minute before it lapses */
@@ -120,24 +145,15 @@ export function createGitHubApp(
       const user = await userToken(code);
       if (!user) return null;
       const auth = `Bearer ${user}`;
-      const me = await json(`${API}/user`, { headers: { ...HEADERS, authorization: auth } });
-      const login = isRecord(me) && typeof me.login === 'string' ? me.login : null;
-      if (!login) return null;
-      const found = (await pages(`${API}/user/installations`, 'installations', auth)).find(
-        (one) => isRecord(one) && one.id === installation,
-      );
-      const account = isRecord(found) && isRecord(found.account) ? found.account : null;
-      if (!account || typeof account.login !== 'string') return null;
+      const login = await myLogin(auth);
+      const account = login ? await installedOn(installation, auth) : null;
+      if (!login || !account) return null;
       // Their own account; or an organisation, which only its admins may hand to a bot.
-      if (account.type === 'User')
-        return account.login.toLowerCase() === login.toLowerCase() ? { account: account.login } : null;
-      if (account.type !== 'Organization') return null;
-      const membership = await json(`${API}/user/memberships/orgs/${encodeURIComponent(account.login)}`, {
-        headers: { ...HEADERS, authorization: auth },
-      }).catch(() => null);
-      return isRecord(membership) && membership.state === 'active' && membership.role === 'admin'
-        ? { account: account.login }
-        : null;
+      const mayDecide =
+        account.type === 'User'
+          ? account.login.toLowerCase() === login.toLowerCase()
+          : account.type === 'Organization' && (await isOrgAdmin(account.login, auth));
+      return mayDecide ? { account: account.login } : null;
     },
 
     async repos(installation: number) {

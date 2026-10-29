@@ -8,20 +8,18 @@ import { palette, styles } from '../../styles';
 
 const QUICK = ['👍', '❤️', '🎉', '😂', '👀', '🙏'];
 
-/** `std.reaction` on a record: each emoji with its count, yours highlighted; `compact` is only the picker button. */
+/** `std.reaction` on a record: each emoji with its count, yours highlighted. */
 export function Reactions({
   space,
   target,
   targetAuthor,
   reactions,
-  compact = false,
 }: {
   space: SpaceSummary;
   target: string;
   /** Who wrote what is reacted to, told through `respondingTo` */
   targetAuthor: string | null;
   reactions: ReadonlyArray<NodeRecord>;
-  compact?: boolean;
 }) {
   const node = useNode();
   const { did: rootDid } = useAccount();
@@ -70,38 +68,22 @@ export function Reactions({
           </button>
         );
       })}
-      {space.writable &&
-        (compact ? (
-          <button
-            onClick={() => setPicking((was) => !was)}
-            aria-label="Add a reaction"
-            data-row-action
-            data-variant="ghost"
-            style={{
-              border: 'none',
-              background: 'none',
-              fontSize: 12,
-              color: palette.ink.faint,
-              padding: '2px 4px',
-            }}
-          >
-            ☺︎+
-          </button>
-        ) : (
-          <button
-            onClick={() => setPicking((was) => !was)}
-            aria-label="Add a reaction"
-            style={{ ...pill, color: palette.ink.muted }}
-          >
-            ☺︎+
-          </button>
-        ))}
+      {space.writable && (
+        <button
+          onClick={() => setPicking((was) => !was)}
+          aria-label="Add a reaction"
+          style={{ ...pill, color: palette.ink.muted }}
+        >
+          ☺︎+
+        </button>
+      )}
       {picking && (
         <div
           role="menu"
           style={{
             position: 'absolute',
-            ...(compact ? { top: '100%', right: 0 } : { top: 34, left: 0 }),
+            top: 34,
+            left: 0,
             zIndex: 5,
             ...styles.float,
             display: 'flex',

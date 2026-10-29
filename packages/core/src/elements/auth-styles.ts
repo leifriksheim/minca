@@ -151,7 +151,6 @@ minca-auth .wa-secondary {
 minca-auth .wa-secondary:not(:disabled):hover { background: var(--minca-sunken); }
 minca-auth .wa-check { display: flex; align-items: flex-start; gap: 10px; margin: 20px 0 16px; font-size: 14px; line-height: 1.5; color: var(--minca-body); cursor: pointer; }
 minca-auth .wa-check input { width: 16px; height: 16px; margin: 3px 0 0; padding: 0; flex-shrink: 0; accent-color: var(--minca-accent); box-shadow: none; }
-minca-auth .wa-label { font-size: 13px; color: var(--minca-muted); }
 minca-auth .wa-steps { margin: 0 0 20px; padding-left: 20px; font-size: 14px; line-height: 1.6; color: var(--minca-body); }
 
 minca-auth .wa-info { position: relative; display: inline; }

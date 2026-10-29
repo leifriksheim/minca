@@ -20,7 +20,7 @@ import {
 import { ChipIn, RemindMe, dollars, lastsFor, perReply } from './Payment';
 import { Benefit, FeatureIcon, Glyph, shortDate, timeLeft, type Tone } from './Feature';
 import { useAction } from './action';
-import { styles, palette } from './styles';
+import { styles, palette, hstack, stack } from './styles';
 
 /** A GB as hosts count it, 10⁹ bytes: a community's fund pays for one at least */
 const GB = 1e9;
@@ -147,7 +147,7 @@ export function SpaceHosting({ spaceId, writable }: { spaceId: string; writable:
     look();
   };
   return (
-    <section aria-label="Always online" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <section aria-label="Always online" style={stack(10)}>
       <h3 style={styles.sectionTitle}>Always online</h3>
       <div
         style={{
@@ -208,7 +208,11 @@ export function SpaceHosting({ spaceId, writable }: { spaceId: string; writable:
           onStart={() => setDialog('keep')}
         />
       )}
-      {dialog === 'keep' && <KeepOnlineDialog spaceId={spaceId} writable={writable} onClose={close} />}
+      {dialog === 'keep' && (
+        <Modal title="Keep it online" onClose={close} width={460}>
+          <KeepOnline spaceId={spaceId} writable={writable} onClose={close} />
+        </Modal>
+      )}
       {dialog === 'stop' && host && (
         <Modal title={`Stop using ${host.name}?`} onClose={close} width={460}>
           <StopHost spaceId={spaceId} host={host} onKeep={close} onStopped={close} />
@@ -258,11 +262,11 @@ function Outgrown({
         background: palette.surface.sunken,
       }}
     >
-      <div style={{ flex: 1, minWidth: 200, display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ flex: 1, minWidth: 200, ...stack(4) }}>
         <p style={{ fontSize: 14, fontWeight: 600, color: palette.ink.strong }}>
           {ahead ? `Free until ${shortDate(first.over.until)}` : 'Outgrown free hosting'}
         </p>
-        <p style={{ fontSize: 13, color: palette.ink.muted, lineHeight: 1.5 }}>
+        <p style={{ ...styles.quiet, lineHeight: 1.5 }}>
           {first.over.reasons.includes('writers')
             ? `More people write here than ${first.name} keeps for free.`
             : `This community is bigger than ${first.name} keeps for free.`}{' '}
@@ -275,7 +279,7 @@ function Outgrown({
           Start a fund
         </button>
       ) : (
-        <p style={{ fontSize: 12, color: palette.ink.faint }}>Whoever manages the space can start one.</p>
+        <p style={styles.faint}>Whoever manages the space can start one.</p>
       )}
     </div>
   );
@@ -311,7 +315,7 @@ function StopHost({
   const stop = () => void run(() => node.hosting.stopForSpace(spaceId, host.url).then(onStopped));
   const said = { fontSize: 14, color: palette.ink.body, lineHeight: 1.5 };
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div style={stack(12)}>
       <p style={said}>
         Members' devices stop handing this community to {host.name}, so it is reachable only while one of them
         is online.
@@ -363,23 +367,6 @@ function StopHost({
       )}
       <StopFooter name={host.name} busy={busy} error={error} onKeep={onKeep} onStop={stop} />
     </div>
-  );
-}
-
-/** The dialog for keeping a space online: choosing a host, then its fund */
-export function KeepOnlineDialog({
-  spaceId,
-  writable,
-  onClose,
-}: {
-  spaceId: string;
-  writable: boolean;
-  onClose: () => void;
-}) {
-  return (
-    <Modal title="Keep it online" onClose={onClose} width={460}>
-      <KeepOnline spaceId={spaceId} writable={writable} onClose={onClose} />
-    </Modal>
   );
 }
 
@@ -435,15 +422,15 @@ export function KeepOnline({
   const balance = host?.status?.balance ?? 0;
   const settling = chosen !== null && !host;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+    <div style={stack(18)}>
       {hero && !stopping && (
-        <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+        <div style={{ ...hstack(14), alignItems: 'center' }}>
           <FeatureIcon kind="online" size={44} />
           <div style={{ minWidth: 0 }}>
             <p style={{ fontSize: 16, fontWeight: 600, color: palette.ink.strong }}>
               {host ? host.name : 'Around the clock'}
             </p>
-            <p style={{ fontSize: 13, color: palette.ink.muted, overflowWrap: 'anywhere' }}>
+            <p style={{ ...styles.quiet, overflowWrap: 'anywhere' }}>
               {host ? standing(host).line : 'Paid from a fund anyone in the community can add to'}
             </p>
           </div>
@@ -451,7 +438,7 @@ export function KeepOnline({
       )}
 
       {hosts === null || settling ? (
-        <p role="status" style={{ fontSize: 13, color: palette.ink.muted }}>
+        <p role="status" style={styles.quiet}>
           One moment…
         </p>
       ) : host && stopping ? (
@@ -473,7 +460,7 @@ export function KeepOnline({
       ) : !host ? (
         <>
           {hero && (
-            <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <ul style={{ listStyle: 'none', ...stack(10) }}>
               <Benefit glyph="clock">
                 Reachable when everyone is offline, so new members get in at once
               </Benefit>
@@ -482,11 +469,9 @@ export function KeepOnline({
             </ul>
           )}
           {!mayChoose ? (
-            <p style={{ fontSize: 13, color: palette.ink.muted }}>
-              Whoever manages this community can turn it on.
-            </p>
+            <p style={styles.quiet}>Whoever manages this community can turn it on.</p>
           ) : !offerAsked ? (
-            <p role="status" style={{ fontSize: 13, color: palette.ink.muted }}>
+            <p role="status" style={styles.quiet}>
               One moment…
             </p>
           ) : (
@@ -540,7 +525,7 @@ export function KeepOnline({
             }}
             onDone={onClose}
           />
-          <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <div style={{ ...hstack(16), justifyContent: 'center', flexWrap: 'wrap' }}>
             {host.reminds && (
               <RemindMe remind={(email) => node.hosting.remindForSpace(spaceId, host.url, email)} />
             )}
@@ -570,7 +555,7 @@ export function KeepOnline({
       )}
 
       {problem && (
-        <p role="alert" style={{ fontSize: 13, color: palette.accent.danger }}>
+        <p role="alert" style={styles.dangerText}>
           {problem}
         </p>
       )}
@@ -593,7 +578,7 @@ export function KeepOnline({
  * about to start, a usual reply, and the model they think with. Lines the
  * host adds that this doesn't place are shown as they come.
  */
-export function FundPaysFor({
+function FundPaysFor({
   fund,
   bots,
   bytes,
@@ -627,7 +612,7 @@ export function FundPaysFor({
         {label}
         {note && <span style={{ display: 'block', fontSize: 12, color: palette.ink.faint }}>{note}</span>}
       </span>
-      <span style={{ fontSize: 13, color: palette.ink.muted, textAlign: 'right' }}>{price}</span>
+      <span style={{ ...styles.quiet, textAlign: 'right' }}>{price}</span>
     </li>
   );
   const lines = fund.lines ?? [];
@@ -649,7 +634,7 @@ export function FundPaysFor({
       <p style={{ fontSize: 12, fontWeight: 500, color: palette.ink.muted, marginBottom: 8 }}>
         This fund pays for
       </p>
-      <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <ul style={styles.todoList}>
         {line(
           'hosting',
           'Always online, encrypted end to end',
@@ -676,7 +661,7 @@ export function FundPaysFor({
           .filter((one) => one.for !== 'hosting' && one.for !== 'bots')
           .map((one, index) => line(`line-${index}`, one.name, one.price))}
       </ul>
-      <p style={{ fontSize: 12, color: palette.ink.faint, marginTop: 10 }}>
+      <p style={{ ...styles.faint, marginTop: 10 }}>
         Anyone in the community can chip in, once or every month.
       </p>
     </div>

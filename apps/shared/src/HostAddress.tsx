@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { styles, palette } from './styles';
+import { styles, palette, hstack, stack } from './styles';
 import { message } from './action';
 
 /**
@@ -101,9 +101,9 @@ export function HostAddressForm({
         event.preventDefault();
         void submit();
       }}
-      style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
+      style={stack(8)}
     >
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div style={hstack(8)}>
         <input
           value={address}
           onChange={(event) => {
@@ -130,7 +130,7 @@ export function HostAddressForm({
         </button>
       </div>
       {asking && (
-        <p role="status" style={{ fontSize: 13, color: palette.ink.muted }}>
+        <p role="status" style={styles.quiet}>
           Asking {asking}…{' '}
           <button
             type="button"
@@ -142,7 +142,7 @@ export function HostAddressForm({
         </p>
       )}
       {problem && (
-        <p role="alert" style={{ fontSize: 13, color: palette.accent.danger }}>
+        <p role="alert" style={styles.dangerText}>
           {problem}
         </p>
       )}
