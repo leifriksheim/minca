@@ -15,7 +15,7 @@
  */
 import { sha256 } from '@noble/hashes/sha2.js';
 import type { CryptoProvider } from '../types.js';
-import { contactPublicKey, signWithScalar } from '../identity/contact-key.js';
+import { contactPublicKey, deriveNameKeyBytes, signWithScalar } from '../identity/contact-key.js';
 import { isObject } from '../utils/guards.js';
 import { utf8Encode } from '../utils/encoding.js';
 import { readInbox, type InboxBody } from './inbox.js';
@@ -28,13 +28,17 @@ export interface Username {
 
 const NAME = /^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/;
 const LABEL = '[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?';
+/** The last label of a hostname has a letter: `10.0.0.1` is an address, not a domain */
+const TOP = '[a-z0-9-]*[a-z][a-z0-9-]*';
 /** A hostname with at least one dot, or `localhost` with a port, for trying it out */
-const DOMAIN = new RegExp(`^(?:${LABEL}(?:\\.${LABEL})+|localhost(?::\\d{1,5})?)$`);
+const DOMAIN = new RegExp(`^(?:(?:${LABEL}\\.)+${TOP}|localhost(?::\\d{1,5})?)$`);
 const LOCAL = /^localhost(?::\d{1,5})?$/;
 /** Where a domain answers for its names */
 const WELL_KNOWN = '/.well-known/minca.json';
 /** An answer larger than this is not read: a file listing every name at a domain fits well inside it */
-const MAX_ANSWER = 1024 * 1024;
+const MAX_ANSWER_BYTES = 1024 * 1024;
+/** How long a domain has to answer */
+const LOOKUP_TIMEOUT_MS = 10_000;
 
 /** A username from what someone typed, `leif@minca.social` or `@leif@minca.social`, or null */
 export function parseUsername(text: string): Username | null {
@@ -80,15 +84,44 @@ export async function resolveUsername(
   return Object.freeze({ code, inbox: await readInbox(code, provider) });
 }
 
-/** The domain's answer for a name, or null when it gave none worth reading */
-async function lookUp(username: Username, fetcher: typeof fetch): Promise<unknown> {
+/**
+ * The domain's answer for a name, or null when it gave none worth reading: no
+ * 2xx, a redirect, too slow, or too large. A 404 is read too, for where claims go.
+ */
+async function lookUp(username: Username, fetcher: typeof fetch, take404 = false): Promise<unknown> {
   const answer = await fetcher(usernameUrl(username), {
     redirect: 'error',
     headers: { accept: 'application/json' },
+    signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS),
   }).catch(() => null);
-  if (!answer) return null;
-  const body = await answer.text().catch(() => '');
-  return body.length <= MAX_ANSWER ? parseJson(body) : null;
+  if (!answer || !(answer.ok || (take404 && answer.status === 404))) return null;
+  const body = await readCapped(answer, MAX_ANSWER_BYTES).catch(() => null);
+  return body === null ? null : parseJson(body);
+}
+
+/** A response's body as text, or null once it passes `max` bytes */
+async function readCapped(answer: Response, max: number): Promise<string | null> {
+  if (!answer.body) return '';
+  const reader = answer.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const all = new Uint8Array(size);
+  let at = 0;
+  for (const chunk of chunks) {
+    all.set(chunk, at);
+    at += chunk.length;
+  }
+  return new TextDecoder().decode(all);
 }
 
 function parseJson(text: string): unknown {
@@ -129,21 +162,23 @@ async function doWork(username: Username, key: string, at: number, bits: number)
 /**
  * Claims a username on its domain's name service, pointing it at an inbox
  * code, or gives it up with `code` null. Claiming again renews it. Only the
- * name key that holds a name can change it.
- * @param nameKey The name key's private scalar (`deriveNameKeyBytes`)
+ * name key that holds a name can change it; it is derived here, from the
+ * name as parsed, so every device and every spelling signs with the same one.
+ * @param contactKey The contact key's private scalar
  * @returns When the name lapses unless claimed again, ms
  * @throws When the domain names no name service, or the service refuses
  */
 export async function claimUsername(
   text: string,
-  nameKey: Uint8Array,
+  contactKey: Uint8Array,
   code: string | null,
   fetcher: typeof fetch = globalThis.fetch,
 ): Promise<number> {
   const username = parseUsername(text);
   if (!username) throw new Error('That is not a username, like leif@minca.social');
   const shown = formatUsername(username);
-  const found = await lookUp(username, fetcher);
+  const nameKey = await deriveNameKeyBytes(contactKey, shown);
+  const found = await lookUp(username, fetcher, true);
   const service = isObject(found) && typeof found.claim === 'string' ? found.claim : null;
   const bits = isObject(found) ? found.work : null;
   if (!service || typeof bits !== 'number' || !Number.isInteger(bits) || bits < 0 || bits > MAX_WORK_BITS)

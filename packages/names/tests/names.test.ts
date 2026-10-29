@@ -1,7 +1,8 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, type Server } from 'node:http';
-import { mkdtempSync } from 'node:fs';
+import { chmodSync, mkdtempSync } from 'node:fs';
+import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash, createPrivateKey, sign } from 'node:crypto';
@@ -127,10 +128,15 @@ describe('a username', () => {
     assert.match(url('localhostclub.org'), /^https:/);
   });
 
-  test("has a name key of its own: the same for every spelling, another for every username, and none of the inbox's", async () => {
+  test('is never an address: a domain ends in a label with a letter', () => {
+    for (const bad of ['x@10.0.0.1', 'x@169.254.169.254', 'x@1.2.3.4'])
+      assert.equal(parseUsername(bad), null, bad);
+    assert.deepEqual(parseUsername('x@1password.com'), { name: 'x', domain: '1password.com' });
+  });
+
+  test("has a name key of its own: another for every username, and none of the inbox's", async () => {
     const contact = await deriveContactKeyBytes(generateSeed());
     const leif = contactPublicKey(await deriveNameKeyBytes(contact, 'leif@minca.social'));
-    assert.equal(contactPublicKey(await deriveNameKeyBytes(contact, 'Leif@Minca.Social')), leif);
     assert.notEqual(contactPublicKey(await deriveNameKeyBytes(contact, 'leif@example.org')), leif);
     assert.notEqual(contactPublicKey(await deriveInboxSignKeyBytes(contact, 0)), leif);
     assert.notEqual(contactPublicKey(contact), leif);
@@ -146,7 +152,7 @@ describe('a name service', () => {
 
   test('a claimed name leads to its inbox code, to any page, and names where claims go', async () => {
     const leif = await someone(names.at('leif'));
-    const until = await claimUsername(names.at('leif'), leif.nameKey, leif.code);
+    const until = await claimUsername(names.at('leif'), leif.contact, leif.code);
     assert.ok(until > Date.now() + 360 * 24 * 3600_000, 'held for a year');
 
     const answer = await fetch(usernameUrl({ name: 'leif', domain: names.domain }));
@@ -162,17 +168,17 @@ describe('a name service', () => {
     const username = names.at('anna');
     const anna = await someone(username);
     const mallory = await someone(username);
-    await claimUsername(username, anna.nameKey, anna.code);
+    await claimUsername(username, anna.contact, anna.code);
 
-    await assert.rejects(claimUsername(username, mallory.nameKey, mallory.code), /taken/);
-    await assert.rejects(claimUsername(username, mallory.nameKey, null), /taken/);
+    await assert.rejects(claimUsername(username, mallory.contact, mallory.code), /taken/);
+    await assert.rejects(claimUsername(username, mallory.contact, null), /taken/);
     assert.equal((await resolveUsername(username, provider)).code, anna.code);
 
     // A new inbox keeps the name: the name key doesn't change with the inbox's gen.
-    await claimUsername(username, anna.nameKey, await inboxCode(anna.contact, 1));
+    await claimUsername(username, anna.contact, await inboxCode(anna.contact, 1));
     assert.equal((await resolveUsername(username, provider)).inbox.gen, 1);
 
-    await claimUsername(username, anna.nameKey, null);
+    await claimUsername(username, anna.contact, null);
     await assert.rejects(resolveUsername(username, provider), /doesn't know/);
   });
 
@@ -243,7 +249,7 @@ describe('a name service', () => {
       sig: signAs(dora.nameKey, `minca/name-claim/v1|${username}|${at}|${dora.code}`),
     };
     assert.equal((await post(names.url, earlier)).status, 200);
-    await claimUsername(username, dora.nameKey, null);
+    await claimUsername(username, dora.contact, null);
     assert.equal((await post(names.url, earlier)).status, 409);
     await assert.rejects(resolveUsername(username, provider), /doesn't know/);
   });
@@ -251,14 +257,110 @@ describe('a name service', () => {
   test("a code that doesn't check out, or is larger than an inbox code can be, is refused", async () => {
     const username = names.at('junk');
     const junk = await someone(username);
-    await claimUsername(username, junk.nameKey, 'AAAA');
+    await claimUsername(username, junk.contact, 'AAAA');
     await assert.rejects(resolveUsername(username, provider), /inbox code/);
-    await assert.rejects(claimUsername(username, junk.nameKey, 'A'.repeat(5000)), /Not a claim/);
+    await assert.rejects(claimUsername(username, junk.contact, 'A'.repeat(5000)), /Not a claim/);
   });
 
   test('names that pass for whoever runs the service are refused', async () => {
     const them = await someone(names.at('support'));
-    await assert.rejects(claimUsername(names.at('support'), them.nameKey, them.code), /taken/);
+    await assert.rejects(claimUsername(names.at('support'), them.contact, them.code), /taken/);
+  });
+});
+
+describe('a name service, against what anyone can send', () => {
+  test('a request target nothing can parse is answered, and the service goes on', async () => {
+    const names = await startNames();
+    try {
+      for (const target of ['//', '/\\', '//[', '/.well-known/minca.json?name=%E0%A4%A'])
+        await new Promise<void>((resolve) => {
+          const port = Number(names.domain.split(':')[1]);
+          request({ host: '127.0.0.1', port, path: target }, (res) => {
+            res.resume();
+            res.on('end', resolve);
+          })
+            .on('error', () => resolve())
+            .end();
+        });
+      const leif = await someone(names.at('leif'));
+      await claimUsername(names.at('leif'), leif.contact, leif.code);
+    } finally {
+      names.close();
+    }
+  });
+
+  test('a claim it cannot write is refused, and the service goes on', async () => {
+    const names = await startNames();
+    chmodSync(names.dir, 0o500);
+    try {
+      const leif = await someone(names.at('leif'));
+      await assert.rejects(claimUsername(names.at('leif'), leif.contact, leif.code), /went wrong/);
+      chmodSync(names.dir, 0o700);
+      await claimUsername(names.at('leif'), leif.contact, leif.code);
+    } finally {
+      chmodSync(names.dir, 0o700);
+      names.close();
+    }
+  });
+
+  test('every spelling a reader takes claims with the same key, so devices never lock each other out', async () => {
+    const names = await startNames();
+    try {
+      const leif = await someone(names.at('leif'));
+      await claimUsername(`@Leif@${names.domain}`, leif.contact, leif.code);
+      await claimUsername(names.at('leif'), leif.contact, await inboxCode(leif.contact, 1));
+      assert.equal((await resolveUsername(names.at('leif'), provider)).inbox.gen, 1);
+    } finally {
+      names.close();
+    }
+  });
+
+  test('a claim made ahead of its clock is no way back to a name given up', async () => {
+    const names = await startNames({ clockSkewMs: 1000 });
+    try {
+      const username = names.at('eve');
+      const eve = await someone(username);
+      const key = contactPublicKey(eve.nameKey);
+      const at = Date.now() + 900;
+      const ahead = {
+        name: 'eve',
+        key,
+        at,
+        work: workFor(username, key, at, 4),
+        code: eve.code,
+        sig: signAs(eve.nameKey, `minca/name-claim/v1|${username}|${at}|${eve.code}`),
+      };
+      assert.equal((await post(names.url, ahead)).status, 200);
+      await new Promise((resolve) => setTimeout(resolve, 950));
+      await claimUsername(username, eve.contact, null);
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+      assert.notEqual((await post(names.url, ahead)).status, 200);
+      await assert.rejects(resolveUsername(username, provider), /doesn't know/);
+    } finally {
+      names.close();
+    }
+  });
+
+  test('a reader takes an answer only with 2xx, and only so large', async () => {
+    const leif = await someone('leif@localhost');
+    let status = 500;
+    let body = JSON.stringify({ names: { leif: leif.code } });
+    const server = createServer((_req, res) => res.writeHead(status).end(body));
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    const address = server.address();
+    const at = `leif@localhost:${typeof address === 'object' && address ? address.port : 0}`;
+    try {
+      for (const refused of [500, 404, 302]) {
+        status = refused;
+        await assert.rejects(resolveUsername(at, provider), /doesn't know/, String(refused));
+      }
+      status = 200;
+      assert.equal((await resolveUsername(at, provider)).code, leif.code);
+      body = JSON.stringify({ names: { leif: leif.code }, pad: 'x'.repeat(1024 * 1024) });
+      await assert.rejects(resolveUsername(at, provider), /doesn't know/);
+    } finally {
+      server.close();
+    }
   });
 });
 
@@ -267,12 +369,12 @@ describe('a name service, kept', () => {
     const names = await startNames({ newNamesPerNetwork: 2 });
     try {
       const one = await someone(names.at('one'));
-      await claimUsername(names.at('one'), one.nameKey, one.code);
+      await claimUsername(names.at('one'), one.contact, one.code);
       const two = await someone(names.at('two'));
-      await claimUsername(names.at('two'), two.nameKey, two.code);
+      await claimUsername(names.at('two'), two.contact, two.code);
       const three = await someone(names.at('three'));
-      await assert.rejects(claimUsername(names.at('three'), three.nameKey, three.code), /Too many/);
-      await claimUsername(names.at('one'), one.nameKey, one.code);
+      await assert.rejects(claimUsername(names.at('three'), three.contact, three.code), /Too many/);
+      await claimUsername(names.at('one'), one.contact, one.code);
     } finally {
       names.close();
     }
@@ -282,9 +384,9 @@ describe('a name service, kept', () => {
     const names = await startNames({ maxNames: 1, newNamesPerNetwork: 10 });
     try {
       const one = await someone(names.at('one'));
-      await claimUsername(names.at('one'), one.nameKey, one.code);
+      await claimUsername(names.at('one'), one.contact, one.code);
       const two = await someone(names.at('two'));
-      await assert.rejects(claimUsername(names.at('two'), two.nameKey, two.code), /No more names/);
+      await assert.rejects(claimUsername(names.at('two'), two.contact, two.code), /No more names/);
     } finally {
       names.close();
     }
@@ -293,7 +395,7 @@ describe('a name service, kept', () => {
   test('names outlive a restart, and lapse when their year is up', async () => {
     const first = await startNames({ lifetimeMs: 1500 });
     const kept = await someone(first.at('kept'));
-    await claimUsername(first.at('kept'), kept.nameKey, kept.code);
+    await claimUsername(first.at('kept'), kept.contact, kept.code);
     first.close();
 
     const second = await startNames({}, first.dir);
@@ -305,7 +407,7 @@ describe('a name service, kept', () => {
       await assert.rejects(resolveUsername(second.at('kept'), provider), /doesn't know/);
       // Lapsed, it is anyone's.
       const next = await someone(second.at('kept'));
-      await claimUsername(second.at('kept'), next.nameKey, next.code);
+      await claimUsername(second.at('kept'), next.contact, next.code);
     } finally {
       second.close();
     }

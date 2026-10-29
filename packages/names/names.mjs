@@ -26,8 +26,12 @@ export const NAMES_PATH = '/.well-known/minca.json';
 
 /** The service's limits; an operator may change them (`createNames({ limits })`) */
 export const NAMES_LIMITS = Object.freeze({
-  /** Names held at once, given up ones for a few minutes included */
-  maxNames: 200_000,
+  /**
+   * Names held at once, given up ones for a few minutes included. Each is a
+   * file of up to 8 KB on disk, so a 1 GB volume holds this many with room,
+   * inodes included.
+   */
+  maxNames: 50_000,
   /** New names one address may claim a day: claiming many takes many addresses */
   newNamesPerNetwork: 3,
   /** Leading zero bits a claim's work must reach, said in every answer: a few seconds on a phone */
@@ -147,7 +151,8 @@ export function createNames({ domain, claim, dir, limits: given }) {
     const entry = read(name);
     const live = entry !== null && entry.until > now;
     if (live && entry.key !== key) return refuse(409, 'That name is taken');
-    if (live && at <= entry.at) return refuse(409, 'A newer claim is already held');
+    // Even once lapsed or given up: a key's earlier claim is never taken again.
+    if (entry?.key === key && at <= entry.at) return refuse(409, 'A newer claim is already held');
     if (!live) {
       if (code === undefined) return refuse(404, 'That name is not held');
       if (RESERVED_NAMES.has(name)) return refuse(409, 'That name is taken');
@@ -179,9 +184,12 @@ export function createNames({ domain, claim, dir, limits: given }) {
      * @returns {boolean} false for any other path, which the caller answers
      */
     handle(req, res) {
-      const url = new URL(req.url ?? '/', 'http://names');
-      if (url.pathname !== NAMES_PATH) return false;
+      // Only the path and the one query parameter are read, by hand: a request
+      // target `new URL` can't parse must not throw.
+      const [path = '', query = ''] = (req.url ?? '').split('?', 2);
+      if (path !== NAMES_PATH) return false;
       const send = (status, body) => {
+        if (res.headersSent) return;
         res.writeHead(status, {
           'access-control-allow-origin': '*',
           'access-control-allow-methods': 'GET, POST',
@@ -190,18 +198,26 @@ export function createNames({ domain, claim, dir, limits: given }) {
         });
         res.end(body === undefined ? undefined : JSON.stringify(body));
       };
-      if (req.method === 'OPTIONS') send(204);
-      else if (req.method === 'GET') {
-        const name = url.searchParams.get('name') ?? '';
-        const code = codeOf(name, Date.now());
-        send(code ? 200 : 404, { names: code ? { [name]: code } : {}, claim, work: limits.workBits });
-      } else if (req.method === 'POST')
-        readBody(req).then((text) => {
-          const message = text === null ? null : parseJson(text);
-          const { status, body } = claimName(message, networkOf(clientIp(req)), Date.now());
-          send(status, body);
-        });
-      else send(405, { error: 'GET or POST' });
+      // Whatever goes wrong answers this request, and never stops the service.
+      const failed = () => send(500, { error: 'Something went wrong here' });
+      try {
+        if (req.method === 'OPTIONS') send(204);
+        else if (req.method === 'GET') {
+          const name = new URLSearchParams(query).get('name') ?? '';
+          const code = codeOf(name, Date.now());
+          send(code ? 200 : 404, { names: code ? { [name]: code } : {}, claim, work: limits.workBits });
+        } else if (req.method === 'POST')
+          readBody(req)
+            .then((text) => {
+              const message = text === null ? null : parseJson(text);
+              const { status, body } = claimName(message, networkOf(clientIp(req)), Date.now());
+              send(status, body);
+            })
+            .catch(failed);
+        else send(405, { error: 'GET or POST' });
+      } catch {
+        failed();
+      }
       return true;
     },
 

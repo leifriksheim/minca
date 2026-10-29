@@ -90,10 +90,10 @@ export function deriveInboxSignKeyBytes(contactKey: Uint8Array, gen: number): Pr
  * A username's name key, which claims it on a Minca name service
  * (`packages/core/docs/usernames.md`). One per username, and nothing ties it
  * to the account or to an inbox, so a new inbox keeps the name.
- * @param username `name@domain`; taken in lower case, so every spelling gives one key
+ * @param username `name@domain`, as `formatUsername` writes it (`claimUsername` derives it so)
  */
 export function deriveNameKeyBytes(contactKey: Uint8Array, username: string): Promise<Uint8Array> {
-  return deriveScalar(contactKey, `${NAME_KEY_INFO}|${username.trim().toLowerCase()}`);
+  return deriveScalar(contactKey, `${NAME_KEY_INFO}|${username}`);
 }
 
 /** A private scalar as an ECDSA signing key */

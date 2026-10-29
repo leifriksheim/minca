@@ -392,7 +392,8 @@ where this one's knocks go.
 username = name "@" domain
 name     = 1–64 of a–z 0–9 . _ -, starting and ending with a letter or digit
 domain   = a hostname with at least one dot, ≤253 characters, labels of a–z 0–9 -
-           not starting or ending with -; or localhost[:port], for trying it out
+           not starting or ending with -, the last with a letter (so never an IP
+           address); or localhost[:port], for trying it out
 ```
 
 A reader MUST compare usernames in lower case, and MAY accept one written with
@@ -410,7 +411,8 @@ MUST refuse a username unless:
 2. the answer is a JSON object whose `names` holds a string under `name`;
 3. that string is an inbox code a reader accepts (§3).
 
-A reader ignores other members, and MAY refuse an answer larger than 1 MiB. A
+A reader ignores other members, and MAY refuse an answer larger than 1 MiB,
+or one that takes too long. A
 domain that answers for names MUST send `Access-Control-Allow-Origin: *`, so
 that a page anywhere can look a name up, and answers `404` for a name it
 doesn't hold. A file served as it is, listing every name, answers correctly:
@@ -430,7 +432,7 @@ for later ([#340](https://github.com/leifriksheim/minca/issues/340)).
 > Rationale: the lookup is NIP-05's, so a domain with only a static web
 > server can answer for its people.
 
-_Source: `packages/core/src/inbox/names.ts` (`parseUsername`, `usernameUrl`, `resolveUsername`). Tests: `packages/names/tests/names.test.ts` ("a username", "a lookup that is redirected is refused…", "a code that doesn't check out…")._
+_Source: `packages/core/src/inbox/names.ts` (`parseUsername`, `usernameUrl`, `resolveUsername`). Tests: `packages/names/tests/names.test.ts` ("a username", "a reader takes an answer only with 2xx, and only so large", "a lookup that is redirected is refused…"), `packages/core/tests/inbox.test.ts` ("is signed by its own signing key: one signed by another key, or edited, is refused")._
 
 ## 10. Not yet specified
 

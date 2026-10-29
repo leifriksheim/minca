@@ -27,10 +27,8 @@ wherever one does: knock on it.
 
 ```ts
 import { claimUsername } from '@minca/core/inbox';
-import { deriveNameKeyBytes } from '@minca/core';
 
-const nameKey = await deriveNameKeyBytes(contactKey, 'leif@minca.social');
-const until = await claimUsername('leif@minca.social', nameKey, inboxCode);
+const until = await claimUsername('leif@minca.social', contactKey, inboxCode);
 ```
 
 `claimUsername` looks the name up first. A Minca name service says, in every
@@ -66,7 +64,7 @@ The answer is `{ "until": <ms> }`, when the name lapses, or
 
 **The name key** is derived from the contact key, one per username:
 `HKDF-SHA-256(contact key, info = "minca/p256-name-key/v1|" + name@domain)`,
-in lower case, as the inbox keys are. Every device that holds the contact key
+with the username as `formatUsername` writes it, so every spelling a reader takes gives one key. `claimUsername` derives it itself. Every device that holds the contact key
 derives the same one; it is not an inbox key, so replacing the inbox keeps
 the name, and nothing ties it to the account. Only the key that holds a name
 can point it elsewhere, renew it or give it up.
@@ -74,23 +72,26 @@ can point it elsewhere, renew it or give it up.
 **Who may.** A name leads to the account's inbox, so only what may run the
 inbox may claim one: a node whose note grants `/account/write` for the whole
 account, holding the contact key. An app given the contact key could claim
-the account's names too
+the account's names too, and its hold outlasts revoking it, since a name key
+has no generation to move on to
 ([#313](https://github.com/leifriksheim/minca/issues/313)).
 
 ## What the service keeps to
 
-| Rule                       | On minca.social                                                                  |
-| -------------------------- | -------------------------------------------------------------------------------- |
-| How long a claim holds     | A year. Claiming again, with the same code or a new one, renews it               |
-| New names from one address | 3 a day (an IPv4 address, or an IPv6 /48). Changing or renewing a name is free   |
-| Work                       | 20 bits: a second or two on a laptop, a few on a phone                           |
-| Names held                 | 200,000                                                                          |
-| Reserved                   | `admin`, `support`, `security`, `minca` and a few more that pass for the service |
-| Given up                   | Free again after 10 minutes, so no earlier claim can be replayed to take it back |
+| Rule                       | On minca.social                                                                    |
+| -------------------------- | ---------------------------------------------------------------------------------- |
+| How long a claim holds     | A year. Claiming again, with the same code or a new one, renews it                 |
+| New names from one address | 3 a day (an IPv4 address, or an IPv6 /48). Changing or renewing a name is free     |
+| Work                       | 20 bits: a second or two on a laptop, a few on a phone                             |
+| Names held                 | 50,000: each is a file of up to 8 KB, so a 1 GB volume holds them, inodes included |
+| Reserved                   | `admin`, `support`, `security`, `minca` and a few more that pass for the service   |
+| Given up                   | Free again after 10 minutes, so no earlier claim can be replayed to take it back   |
 
 The work is a speed bump for bots, not a gate: a server does it ten times
 faster than a phone. The address budget and the year are what keep squatting
-in check; a name nobody renews comes back.
+in check; a name nobody renews comes back. The budget is kept in memory, so a
+restart forgets it; nothing a client sends can make the service stop, since
+whatever goes wrong with one request answers that request.
 
 Each name is a file of its own on the service's disk, so nothing grows in
 memory and no large file is rewritten. Lookups are open to any page
