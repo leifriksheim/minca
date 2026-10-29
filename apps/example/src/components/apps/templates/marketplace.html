@@ -499,7 +499,7 @@
     const cat = kindOf(body.category);
     const away = distanceText(near, body.place);
     const selling = listing.createdBy === me;
-    const mayEdit = useCan('edit', LISTING);
+    const mayEdit = useCan('edit', listing.key);
     const condition = CONDITIONS.find((c) => c.id === body.condition);
     const [confirmDelete, setConfirmDelete] = useState(false);
     const setStatus = (status) => minca.update(listing.key, { ...body, status });

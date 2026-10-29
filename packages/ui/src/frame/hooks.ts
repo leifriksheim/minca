@@ -146,6 +146,6 @@ export function useMarked(): string | null {
   return marked;
 }
 
-/** Whether the person looking may `create`, `edit` or `delete` in a collection; false until known */
-export const useCan = (action: 'create' | 'edit' | 'delete', collection: string) =>
-  useLoaded(() => minca.can(action, collection), [action, collection]) ?? false;
+/** Whether the person looking may `create` in a collection, or `edit` or `delete` a record by its key; false until known */
+export const useCan = (action: 'create' | 'edit' | 'delete', target: string) =>
+  useLoaded(() => minca.can(action, target), [action, target]) ?? false;

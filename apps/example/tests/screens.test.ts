@@ -294,6 +294,13 @@ describe('screens', () => {
       assert.equal((await call('can', 'create', 'app.chess.game')).value, true);
       assert.equal((await call('can', 'create', 'app.secret')).ok, false, "not another app's collection");
       assert.equal((await call('can', 'define', 'app.chess.game')).ok, false);
+      // Editing and deleting are asked of a record, since who wrote it decides; a collection is no record.
+      const mine = await call('put', 'app.chess.game', { white: 'bob' });
+      const key = isRecord(mine.value) ? String(mine.value.key) : '';
+      assert.equal((await call('can', 'edit', key)).value, true);
+      assert.equal((await call('can', 'delete', key)).value, true);
+      assert.equal((await call('can', 'edit', 'app.chess.game')).value, false);
+      assert.equal((await call('can', 'edit', secret.key)).value, false, "not a record of another app's");
 
       assert.equal(
         (await call('picture', alice.node.did)).value,

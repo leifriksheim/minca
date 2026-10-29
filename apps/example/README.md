@@ -208,7 +208,8 @@ VITE_SIGNALING_URL=wss://your-relay.example npm run dev
 ### Derived UI
 
 A space opens on its **Apps** tab: apps built on the standard schemas (a chat,
-a kanban board, polls, decisions, events, a marketplace and a call log) show
+a kanban board, lists, shared bills, polls, decisions, events, a marketplace
+and a call log) show
 up once someone who may add collections has put them on the space's launcher
 (`launcher.app` records, `src/components/apps/launcher.ts`). Adding one
 defines every collection it uses, and someone who may can arrange or remove

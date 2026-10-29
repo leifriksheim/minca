@@ -1,20 +1,24 @@
 /**
  * `std.comment` on a record, the way the app shows it: a thread, oldest
  * first, and a box to add to it, where "@" mentions someone so they can be
- * told and "/" shares something from the space. A screen whose app names
- * `std.comment` among its collections can use it.
+ * told, "+" (or typing "/") shares something from the space or, when the
+ * app has `std.file`, attaches files, kept about the comment, and 🙂 adds an emoji. A screen whose
+ * app names `std.comment` among its collections can use it.
  */
 import { useState } from 'preact/hooks';
 import { ago } from '../time';
+import { attach, Attachments } from './attachments';
 import type { ScreenRecord } from './minca';
 import { useCan, usePeople, useRecords } from './hooks';
 import { html } from './html';
 import { MentionInput, MentionText, mentionsIn } from './mentions';
+import { AddMenu, EmojiPicker } from './menus';
 import { Avatar, Person } from './people';
 import { recordTitle } from './record';
 import { Shared, Sharing, useShare } from './share';
 
 const COMMENT = 'std.comment';
+const FILE = 'std.file';
 
 interface CommentBody {
   readonly text?: string;
@@ -29,9 +33,15 @@ export function Comments({ about }: { about: Pick<ScreenRecord, 'key' | 'created
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
   const share = useShare();
+  // Files picked to go with the next comment
+  const [files, setFiles] = useState<File[]>([]);
+  const mayAttach = minca.collections.includes(FILE);
 
   const send = () => {
-    const text = draft.trim() || (share.sharing ? recordTitle(share.sharing) : '');
+    const text =
+      draft.trim() ||
+      (share.sharing ? recordTitle(share.sharing) : '') ||
+      files.map((file) => file.name).join(', ');
     if (!text) return;
     const links = [{ rel: 'about', to: about.key }, ...share.links];
     setError(null);
@@ -47,9 +57,12 @@ export function Comments({ about }: { about: Pick<ScreenRecord, 'key' | 'created
         },
         { links },
       )
-      .then(() => {
+      .then(async (comment) => {
         setDraft('');
         share.clear();
+        const sending = files;
+        setFiles([]);
+        if (sending.length) await attach(comment.key, sending);
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
   };
@@ -67,6 +80,7 @@ export function Comments({ about }: { about: Pick<ScreenRecord, 'key' | 'created
             </div>
             <p class="comment-text"><${MentionText} text=${c.body.text ?? ''} /></p>
             <${Shared} from=${c} />
+            ${mayAttach && html`<${Attachments} about=${c.key} />`}
           </div>
         </div>`,
     )}
@@ -80,24 +94,48 @@ export function Comments({ about }: { about: Pick<ScreenRecord, 'key' | 'created
           send();
         }}
       >
-        ${share.sharing && html`<div class="row"><${Sharing} share=${share} /></div>`}
+        ${
+          (share.sharing || files.length > 0) &&
+          html`<div class="row" style="flex-wrap: wrap">
+            ${share.sharing && html`<${Sharing} share=${share} />`}
+            ${files.map(
+              (file, i) =>
+                html`<span class="chip row" key=${i}>
+                  <span class="ellipsis">${file.name}</span>
+                  <button
+                    type="button"
+                    data-variant="ghost"
+                    data-icon
+                    aria-label=${`Don't attach ${file.name}`}
+                    onClick=${() => setFiles(files.filter((_, j) => j !== i))}
+                  >
+                    ✕
+                  </button>
+                </span>`,
+            )}
+          </div>`
+        }
         <div class="row">
+          <div class="composer">
+            <${AddMenu}
+              onShare=${() => void share.pick()}
+              onFiles=${mayAttach ? (picked: File[]) => setFiles([...files, ...picked]) : null}
+            />
+            <${MentionInput}
+              value=${draft}
+              onChange=${(next: string) => setDraft(share.typed(draft, next))}
+              placeholder="Write a comment…"
+              aria-label="Write a comment"
+            />
+            <div class="composer-end">
+              <${EmojiPicker} onPick=${(emoji: string) => setDraft(draft + emoji)} />
+            </div>
+          </div>
           <button
-            type="button"
-            data-icon
-            aria-label="Share something from this space"
-            title="Share something from this space"
-            onClick=${() => void share.pick()}
+            type="submit"
+            data-variant="primary"
+            disabled=${!draft.trim() && !share.sharing && files.length === 0}
           >
-            /
-          </button>
-          <${MentionInput}
-            value=${draft}
-            onChange=${(next: string) => setDraft(share.typed(draft, next))}
-            placeholder="Write a comment… @ to mention, / to share"
-            aria-label="Write a comment"
-          />
-          <button type="submit" data-variant="primary" disabled=${!draft.trim() && !share.sharing}>
             Send
           </button>
         </div>

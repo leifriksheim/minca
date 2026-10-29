@@ -1,0 +1,903 @@
+<!-- Bills: std.expense and std.settlement, split and settled up like Splitwise. Every share is written out exactly, in the expense's currency, so every device adds up the same balances. -->
+<style>
+  #app {
+    max-width: 680px;
+  }
+  .summary {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 18px 20px;
+  }
+  .summary .total {
+    flex: 1;
+    min-width: 200px;
+  }
+  .summary strong {
+    display: block;
+    font-size: 22px;
+    font-weight: 600;
+  }
+  .owed {
+    color: var(--minca-good);
+  }
+  .owe {
+    color: var(--minca-danger);
+  }
+  .month {
+    margin: 14px 0 2px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--minca-faint);
+  }
+  .entry {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 0;
+    padding: 10px 12px;
+    border: none;
+    border-radius: var(--minca-radius-md);
+    background: none;
+    color: var(--minca-body);
+    font-weight: 400;
+    text-align: left;
+  }
+  .entry:hover {
+    background: var(--minca-sunken);
+  }
+  .day {
+    width: 34px;
+    flex-shrink: 0;
+    text-align: center;
+    line-height: 1.1;
+    color: var(--minca-faint);
+  }
+  .day b {
+    display: block;
+    font-size: 17px;
+    font-weight: 500;
+    color: var(--minca-muted);
+  }
+  .day small {
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+  .icon {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    border-radius: var(--minca-radius-md);
+    background: var(--minca-sunken);
+    font-size: 17px;
+  }
+  .what {
+    flex: 1;
+    min-width: 0;
+  }
+  .what > div:first-child {
+    font-size: 15px;
+    color: var(--minca-ink);
+  }
+  .side {
+    flex-shrink: 0;
+    text-align: right;
+    font-size: 12px;
+    line-height: 1.3;
+  }
+  .side b {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .person-line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 4px;
+  }
+  .person-line .person,
+  .split-row .person {
+    justify-content: flex-start;
+  }
+  .person-line > :first-child {
+    flex: 1;
+    min-width: 0;
+  }
+  .amount-big {
+    font-size: 30px;
+    font-weight: 600;
+    color: var(--minca-ink);
+  }
+  .money {
+    display: flex;
+    gap: 8px;
+  }
+  .money select {
+    width: 96px;
+    flex-shrink: 0;
+  }
+  .split-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 40px;
+  }
+  .split-row > :nth-child(2) {
+    flex: 1;
+    min-width: 0;
+  }
+  .split-row input[type='checkbox'] {
+    width: 18px;
+    min-height: 18px;
+    flex-shrink: 0;
+    accent-color: var(--minca-ink);
+  }
+  .split-row input:not([type='checkbox']) {
+    width: 110px;
+    text-align: right;
+  }
+  .split-row .each {
+    font-variant-numeric: tabular-nums;
+  }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+</style>
+<script>
+  const {
+    html,
+    render,
+    useState,
+    useEffect,
+    useMemo,
+    useRef,
+    useRecords,
+    useCan,
+    usePeople,
+    useShown,
+    Avatar,
+    Person,
+  } = ui;
+  const { Comments, Modal } = ui;
+  const EXPENSE = 'std.expense';
+  const SETTLEMENT = 'std.settlement';
+  const me = minca.me.did;
+  const COMMON = ['EUR', 'USD', 'GBP', 'NOK', 'SEK', 'DKK', 'CHF', 'JPY', 'CAD', 'AUD'];
+  const BY_REGION = {
+    NO: 'NOK',
+    SE: 'SEK',
+    DK: 'DKK',
+    GB: 'GBP',
+    US: 'USD',
+    CH: 'CHF',
+    JP: 'JPY',
+    CA: 'CAD',
+    AU: 'AUD',
+  };
+
+  // Money is counted in whole minor units (cents, øre), never in floats.
+  const digitsOf = (currency) => {
+    try {
+      return new Intl.NumberFormat('en', { style: 'currency', currency }).resolvedOptions()
+        .maximumFractionDigits;
+    } catch {
+      return 2;
+    }
+  };
+  /** "12.50" or "12,5" as minor units, or null */
+  const toMinor = (text, currency) => {
+    const match = /^\s*(\d{0,12})(?:[.,](\d*))?\s*$/.exec(String(text ?? ''));
+    if (!match || (!match[1] && !match[2])) return null;
+    const digits = digitsOf(currency);
+    const fraction = (match[2] ?? '').slice(0, digits).padEnd(digits, '0');
+    return Number(match[1] || '0') * 10 ** digits + Number(fraction || '0');
+  };
+  /** Minor units as the decimal string a record keeps */
+  const toDecimal = (minor, currency) => {
+    const digits = digitsOf(currency);
+    const whole = Math.floor(Math.abs(minor) / 10 ** digits);
+    const part = String(Math.abs(minor) % 10 ** digits).padStart(digits, '0');
+    return (minor < 0 ? '-' : '') + whole + (digits ? '.' + part : '');
+  };
+  const show = (minor, currency) => {
+    try {
+      return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(
+        minor / 10 ** digitsOf(currency),
+      );
+    } catch {
+      return `${toDecimal(minor, currency)} ${currency}`;
+    }
+  };
+  /** A total in parts by weight: the cents left over go one each to the largest remainders */
+  const allocate = (total, weights) => {
+    const sum = weights.reduce((a, b) => a + b, 0);
+    if (sum <= 0) return weights.map(() => 0);
+    const exact = weights.map((w) => (total * w) / sum);
+    const parts = exact.map(Math.floor);
+    let left = total - parts.reduce((a, b) => a + b, 0);
+    const order = exact.map((x, i) => [x - parts[i], i]).sort((a, b) => b[0] - a[0] || a[1] - b[1]);
+    for (const [, i] of order) if (left-- > 0) parts[i] += 1;
+    return parts;
+  };
+  const today = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  const dayOf = (r) => (typeof r.body.date === 'string' ? r.body.date : r.createdAt.slice(0, 10));
+  const dateText = (day, options) => new Date(`${day}T12:00:00`).toLocaleDateString(undefined, options);
+
+  // Anyone can write records without this screen: read only what is there.
+  const isMoney = (m) =>
+    m && typeof m.amount === 'string' && typeof m.currency === 'string' && m.currency.length === 3;
+  const isExpense = (r) =>
+    r.body && typeof r.body.title === 'string' && isMoney(r.body.amount) && typeof r.body.paidBy === 'string';
+  const isSettlement = (r) =>
+    r.body && typeof r.body.from === 'string' && typeof r.body.to === 'string' && isMoney(r.body.amount);
+
+  /**
+   * What each person's part of an expense is, in minor units. Shares written
+   * out count as written; people listed with none split what is left equally.
+   * With no split at all, the people it names in owedBy split it.
+   */
+  function partsOf(body) {
+    const currency = body.amount.currency;
+    const total = toMinor(body.amount.amount, currency) ?? 0;
+    const split = Array.isArray(body.split) ? body.split.filter((s) => s && typeof s.did === 'string') : [];
+    const listed = split.length
+      ? split
+      : (Array.isArray(body.owedBy) ? body.owedBy : [])
+          .filter((d) => typeof d === 'string')
+          .map((did) => ({ did }));
+    const fixed = listed.map((s) => (s.share === undefined ? null : toMinor(s.share, currency)));
+    const open = fixed.filter((f) => f === null).length;
+    const rest = Math.max(0, total - fixed.reduce((a, f) => a + (f ?? 0), 0));
+    const even = allocate(rest, Array(open).fill(1));
+    const parts = new Map();
+    for (const [i, s] of listed.entries())
+      parts.set(s.did, (parts.get(s.did) ?? 0) + (fixed[i] ?? even.shift() ?? 0));
+    return { total, currency, parts };
+  }
+
+  /** Each person's balance, per currency: above zero they are owed, below they owe */
+  function balancesOf(expenses, settlements) {
+    const all = new Map();
+    const add = (currency, did, minor) => {
+      if (!all.has(currency)) all.set(currency, new Map());
+      const one = all.get(currency);
+      one.set(did, (one.get(did) ?? 0) + minor);
+    };
+    for (const e of expenses) {
+      const { currency, parts } = partsOf(e.body);
+      // Only what others owe the payer moves anything; the payer's own part is theirs.
+      for (const [did, part] of parts)
+        if (did !== e.body.paidBy) {
+          add(currency, e.body.paidBy, part);
+          add(currency, did, -part);
+        }
+    }
+    for (const s of settlements) {
+      const minor = toMinor(s.body.amount.amount, s.body.amount.currency) ?? 0;
+      add(s.body.amount.currency, s.body.from, minor);
+      add(s.body.amount.currency, s.body.to, -minor);
+    }
+    return all;
+  }
+
+  /** The fewest payments that settle everyone: the largest debt to the largest credit, again and again */
+  function simplify(balances) {
+    const payments = [];
+    for (const [currency, one] of balances) {
+      const owed = [...one].filter(([, b]) => b > 0).map(([did, b]) => ({ did, b }));
+      const owing = [...one].filter(([, b]) => b < 0).map(([did, b]) => ({ did, b: -b }));
+      while (owed.length && owing.length) {
+        owed.sort((x, y) => y.b - x.b || x.did.localeCompare(y.did));
+        owing.sort((x, y) => y.b - x.b || x.did.localeCompare(y.did));
+        const amount = Math.min(owed[0].b, owing[0].b);
+        payments.push({ from: owing[0].did, to: owed[0].did, minor: amount, currency });
+        owed[0].b -= amount;
+        owing[0].b -= amount;
+        if (!owed[0].b) owed.shift();
+        if (!owing[0].b) owing.shift();
+      }
+    }
+    return payments;
+  }
+
+  const nameIn = (people, did) =>
+    did === me ? 'You' : (people.find((p) => p.did === did)?.name ?? 'Someone');
+  function useNames() {
+    const people = usePeople() ?? [];
+    return (did) => nameIn(people, did);
+  }
+
+  function Bills() {
+    const allExpenses = useRecords(EXPENSE);
+    const allSettlements = useRecords(SETTLEMENT);
+    const mayAdd = useCan('create', EXPENSE);
+    const maySettle = useCan('create', SETTLEMENT);
+    const [tab, setTab] = useState('activity');
+    const [openKey, setOpenKey] = useState(null);
+    // { expense? } to add or change one; { from, to, minor, currency } to settle up
+    const [adding, setAdding] = useState(null);
+    const [settling, setSettling] = useState(null);
+    const [currency, setCurrency] = useState(null);
+    const asked = useShown();
+    useEffect(() => {
+      if (asked) setOpenKey(asked.key);
+    }, [asked]);
+    useEffect(() => {
+      minca.recall('currency').then((kept) => {
+        const region = (navigator.language.split('-')[1] ?? '').toUpperCase();
+        setCurrency(typeof kept === 'string' ? kept : (BY_REGION[region] ?? 'EUR'));
+      });
+    }, []);
+    const expenses = useMemo(() => (allExpenses ?? []).filter(isExpense), [allExpenses]);
+    const settlements = useMemo(() => (allSettlements ?? []).filter(isSettlement), [allSettlements]);
+    const balances = useMemo(() => balancesOf(expenses, settlements), [expenses, settlements]);
+    if (!allExpenses || !allSettlements || !currency) return null;
+
+    const payments = simplify(balances);
+    const mine = [...balances].map(([cur, one]) => [cur, one.get(me) ?? 0]).filter(([, b]) => b !== 0);
+    const opened = expenses.find((e) => e.key === openKey) ?? settlements.find((s) => s.key === openKey);
+    const remember = (cur) => {
+      setCurrency(cur);
+      minca.remember('currency', cur);
+    };
+    const used = [...new Set([currency, ...COMMON, ...balances.keys()])];
+    const firstSettle = payments.find((p) => p.from === me) ?? payments.find((p) => p.to === me);
+
+    return html`<div class="stack" style="gap: 16px">
+      <section class="card summary">
+        <div class="total">
+          ${
+            mine.length === 0
+              ? html`<span class="muted">Overall</span><strong>You're all settled up</strong>`
+              : mine.map(
+                  ([cur, b]) =>
+                    html`<div key=${cur}>
+                      <span class="muted">${b > 0 ? 'Overall, you are owed' : 'Overall, you owe'}</span>
+                      <strong class=${b > 0 ? 'owed' : 'owe'}>${show(Math.abs(b), cur)}</strong>
+                    </div>`,
+                )
+          }
+        </div>
+        <div class="row">
+          ${
+            maySettle &&
+            html`<button
+              onClick=${() => setSettling(firstSettle ?? { from: me, to: null, minor: 0, currency })}
+            >
+              Settle up
+            </button>`
+          }
+          ${mayAdd && html`<button data-variant="primary" onClick=${() => setAdding({})}>Add an expense</button>`}
+        </div>
+      </section>
+
+      <div class="tabs" role="tablist">
+        ${[
+          ['activity', 'Expenses'],
+          ['balances', 'Balances'],
+        ].map(
+          ([id, label]) =>
+            html`<button role="tab" key=${id} aria-selected=${tab === id} onClick=${() => setTab(id)}>
+              ${label}
+            </button>`,
+        )}
+      </div>
+
+      ${
+        tab === 'activity'
+          ? html`<${Activity}
+              expenses=${expenses}
+              settlements=${settlements}
+              onOpen=${setOpenKey}
+              mayAdd=${mayAdd}
+            />`
+          : html`<${Balances}
+              balances=${balances}
+              payments=${payments}
+              onSettle=${maySettle ? setSettling : null}
+            />`
+      }
+      ${
+        opened &&
+        (isExpense(opened)
+          ? html`<${ExpenseView}
+              expense=${opened}
+              onClose=${() => setOpenKey(null)}
+              onEdit=${() => {
+                setOpenKey(null);
+                setAdding({ expense: opened });
+              }}
+            />`
+          : html`<${SettlementView} settlement=${opened} onClose=${() => setOpenKey(null)} />`)
+      }
+      ${
+        adding &&
+        html`<${ExpenseForm}
+          expense=${adding.expense}
+          currency=${currency}
+          currencies=${used}
+          onCurrency=${remember}
+          onClose=${() => setAdding(null)}
+        />`
+      }
+      ${
+        settling &&
+        html`<${SettleForm} initial=${settling} currencies=${used} onClose=${() => setSettling(null)} />`
+      }
+    </div>`;
+  }
+
+  /** Expenses and payments, newest first, by month */
+  function Activity({ expenses, settlements, onOpen, mayAdd }) {
+    const names = useNames();
+    const entries = [...expenses, ...settlements].sort(
+      (a, b) => dayOf(b).localeCompare(dayOf(a)) || b.createdAt.localeCompare(a.createdAt),
+    );
+    if (entries.length === 0)
+      return html`<p class="empty">
+        No expenses yet.${mayAdd ? ' Add the first one, and it splits itself.' : ''}
+      </p>`;
+    let month = null;
+    return html`<div class="stack" style="gap: 2px">
+      ${entries.map((r) => {
+        const day = dayOf(r);
+        const heading = day.slice(0, 7) !== month;
+        month = day.slice(0, 7);
+        return html`<div key=${r.key}>
+          ${heading && html`<div class="month">${dateText(day, { month: 'long', year: 'numeric' })}</div>`}
+          <button class="entry" onClick=${() => onOpen(r.key)}>
+            <span class="day">
+              <small>${dateText(day, { month: 'short' })}</small>
+              <b>${Number(day.slice(8, 10))}</b>
+            </span>
+            ${isExpense(r) ? html`<${ExpenseLine} expense=${r} names=${names} />` : html`<${SettlementLine} settlement=${r} names=${names} />`}
+          </button>
+        </div>`;
+      })}
+    </div>`;
+  }
+
+  function ExpenseLine({ expense, names }) {
+    const { total, currency, parts } = partsOf(expense.body);
+    const payer = expense.body.paidBy;
+    const lent = [...parts].filter(([did]) => did !== payer).reduce((a, [, p]) => a + p, 0);
+    const side =
+      payer === me
+        ? lent > 0 && html`<span class="owed">you lent<b>${show(lent, currency)}</b></span>`
+        : parts.has(me)
+          ? html`<span class="owe">you borrowed<b>${show(parts.get(me), currency)}</b></span>`
+          : html`<span class="faint">not involved</span>`;
+    return html`<span class="icon" aria-hidden="true">🧾</span>
+      <span class="what">
+        <div class="ellipsis">${expense.body.title}</div>
+        <div class="faint">${names(payer)} paid ${show(total, currency)}</div>
+      </span>
+      <span class="side">${side}</span>`;
+  }
+
+  function SettlementLine({ settlement, names }) {
+    const { from, to, amount } = settlement.body;
+    const minor = toMinor(amount.amount, amount.currency) ?? 0;
+    return html`<span class="icon" aria-hidden="true">💸</span>
+      <span class="what">
+        <div class="ellipsis">${names(from)} paid ${to === me ? 'you' : names(to)}</div>
+        <div class="faint">
+          ${show(minor, amount.currency)}${settlement.body.note ? ` · ${settlement.body.note}` : ''}
+        </div>
+      </span>
+      <span class="side">
+        ${from === me ? html`<span class="owed">you paid<b>${show(minor, amount.currency)}</b></span>` : to === me ? html`<span class="owe">you received<b>${show(minor, amount.currency)}</b></span>` : null}
+      </span>`;
+  }
+
+  function Balances({ balances, payments, onSettle }) {
+    const names = useNames();
+    const people = [...balances].flatMap(([cur, one]) =>
+      [...one].filter(([, b]) => b !== 0).map(([did, b]) => ({ did, b, cur })),
+    );
+    if (people.length === 0) return html`<p class="empty">Everyone is settled up.</p>`;
+    people.sort((x, y) => (x.did === me ? -1 : y.did === me ? 1 : y.b - x.b));
+    return html`<div class="stack" style="gap: 20px">
+      <section class="card stack" style="gap: 0">
+        ${people.map(
+          (p) =>
+            html`<div class="person-line" key=${p.did + p.cur}>
+              <${Person} did=${p.did} size=${28} />
+              <span class=${`num ${p.b > 0 ? 'owed' : 'owe'}`}>
+                ${p.b > 0 ? 'gets back' : p.did === me ? 'owe' : 'owes'} ${show(Math.abs(p.b), p.cur)}
+              </span>
+            </div>`,
+        )}
+      </section>
+      <section class="stack">
+        <div class="label">Fewest payments to settle everyone</div>
+        <div class="card stack" style="gap: 0">
+          ${payments.map(
+            (p, i) =>
+              html`<div class="person-line" key=${i}>
+                <span class="row" style="gap: 8px">
+                  <${Avatar} did=${p.from} size=${24} round />
+                  <span>
+                    ${names(p.from)} ${p.from === me ? 'pay' : 'pays'} ${p.to === me ? 'you' : names(p.to)}
+                    <b class="num"> ${show(p.minor, p.currency)}</b>
+                  </span>
+                </span>
+                ${onSettle && (p.from === me || p.to === me) && html`<button onClick=${() => onSettle(p)}>Settle up</button>`}
+              </div>`,
+          )}
+        </div>
+      </section>
+    </div>`;
+  }
+
+  function ExpenseView({ expense, onClose, onEdit }) {
+    const names = useNames();
+    const mayEdit = useCan('edit', expense.key);
+    const mayDelete = useCan('delete', expense.key);
+    const { total, currency, parts } = partsOf(expense.body);
+    const payer = expense.body.paidBy;
+    return html`<${Modal} title=${expense.body.title} onClose=${onClose}>
+      <div class="stack" style="gap: 4px">
+        <span class="amount-big">${show(total, currency)}</span>
+        <span class="faint">
+          Added by ${names(expense.createdBy)} · ${dateText(dayOf(expense), { day: 'numeric', month: 'long', year: 'numeric' })}
+          ${expense.version > 1 ? ' · edited' : ''}
+        </span>
+      </div>
+      <div class="stack" style="gap: 0">
+        <div class="person-line">
+          <${Person} did=${payer} size=${28} />
+          <span>paid <b class="num">${show(total, currency)}</b></span>
+        </div>
+        ${[...parts].map(
+          ([did, part]) =>
+            html`<div class="person-line" key=${did} style="padding-left: 20px">
+              <${Person} did=${did} size=${22} />
+              <span class="muted num"
+                >${`${did === payer ? (did === me ? 'your part' : 'their part') : did === me ? 'owe' : 'owes'} ${show(part, currency)}`}</span
+              >
+            </div>`,
+        )}
+      </div>
+      ${expense.body.note && html`<p class="muted" style="white-space: pre-wrap">${expense.body.note}</p>`}
+      ${
+        (mayEdit || mayDelete) &&
+        html`<div class="row">
+          ${mayEdit && html`<button onClick=${onEdit}>Edit</button>`}
+          ${
+            mayDelete &&
+            html`<button
+              data-variant="danger"
+              onClick=${async () => {
+                await minca.remove(expense.key);
+                onClose();
+              }}
+            >
+              Delete
+            </button>`
+          }
+        </div>`
+      }
+      ${minca.collections.includes('std.comment') && html`<${Comments} about=${expense} />`}
+    </${Modal}>`;
+  }
+
+  function SettlementView({ settlement, onClose }) {
+    const names = useNames();
+    const mayDelete = useCan('delete', settlement.key);
+    const { from, to, amount, note } = settlement.body;
+    return html`<${Modal} title="Payment" onClose=${onClose}>
+      <div class="stack" style="gap: 4px">
+        <span class="amount-big">${show(toMinor(amount.amount, amount.currency) ?? 0, amount.currency)}</span>
+        <span>${names(from)} paid ${to === me ? 'you' : names(to)}</span>
+        <span class="faint">${dateText(dayOf(settlement), { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+      </div>
+      ${note && html`<p class="muted">${note}</p>`}
+      ${
+        mayDelete &&
+        html`<div class="row">
+          <button
+            data-variant="danger"
+            onClick=${async () => {
+              await minca.remove(settlement.key);
+              onClose();
+            }}
+          >
+            Delete
+          </button>
+        </div>`
+      }
+    </${Modal}>`;
+  }
+
+  const MODES = [
+    ['equal', 'Equally'],
+    ['exact', 'Exact amounts'],
+    ['percent', 'Percentages'],
+    ['shares', 'Shares'],
+  ];
+
+  /** Adds an expense, or changes one: what, how much, who paid, and how it splits */
+  function ExpenseForm({ expense, currency: preferred, currencies, onCurrency, onClose }) {
+    const people = usePeople() ?? [];
+    const was = expense?.body;
+    const wasParts = was ? partsOf(was).parts : null;
+    const everyone = [
+      ...new Set([me, ...people.map((p) => p.did), ...(was ? [was.paidBy, ...wasParts.keys()] : [])]),
+    ];
+    const [title, setTitle] = useState(was?.title ?? '');
+    const [currency, setCurrency] = useState(was?.amount.currency ?? preferred);
+    const [amount, setAmount] = useState(was?.amount.amount ?? '');
+    const [paidBy, setPaidBy] = useState(was?.paidBy ?? me);
+    const [date, setDate] = useState(was?.date ?? today());
+    const [note, setNote] = useState(was?.note ?? '');
+    const [mode, setMode] = useState(was ? 'exact' : 'equal');
+    // Who is in it, and what each typed for their part (exact, percent or shares)
+    // A new expense is everyone's until someone is ticked off: people may still be arriving.
+    const [picked, setPicked] = useState(() => (wasParts ? new Set(wasParts.keys()) : null));
+    const inIt = picked ?? new Set(everyone);
+    const [typed, setTyped] = useState(() =>
+      wasParts ? Object.fromEntries([...wasParts].map(([d, p]) => [d, toDecimal(p, currency)])) : {},
+    );
+    const [error, setError] = useState(null);
+    const [busy, setBusy] = useState(false);
+    // autofocus only works on what the page loads with; and the dialog takes focus itself once drawn
+    const first = useRef(null);
+    useEffect(() => {
+      const frame = requestAnimationFrame(() => first.current?.focus());
+      return () => cancelAnimationFrame(frame);
+    }, []);
+
+    const total = toMinor(amount, currency);
+    const chosen = everyone.filter((d) => inIt.has(d));
+    const number = (did) => Number(String(typed[did] ?? '').replace(',', '.')) || 0;
+    const percent = chosen.reduce((a, d) => a + number(d), 0);
+    const parts = (() => {
+      if (total === null) return null;
+      if (mode === 'equal')
+        return allocate(
+          total,
+          chosen.map(() => 1),
+        );
+      if (mode === 'exact') return chosen.map((d) => toMinor(typed[d] || '0', currency) ?? 0);
+      const weights = chosen.map(number);
+      // Percentages short of 100 show as typed, not stretched to fill the total
+      const covered = mode === 'percent' ? Math.min(percent, 100) / 100 : 1;
+      return allocate(Math.round(total * covered), weights);
+    })();
+    const sum = parts ? parts.reduce((a, b) => a + b, 0) : 0;
+    const problem = !title.trim()
+      ? 'What was it for?'
+      : !total
+        ? 'How much was it?'
+        : chosen.length === 0
+          ? 'Who is it split between?'
+          : mode === 'exact' && sum !== total
+            ? `The parts add up to ${show(sum, currency)}, ${show(Math.abs(total - sum), currency)} ${sum < total ? 'short' : 'over'}`
+            : mode === 'percent' && Math.abs(percent - 100) > 0.001
+              ? `The percentages add up to ${percent}%, not 100%`
+              : mode === 'shares' && sum !== total
+                ? 'Give someone at least one share'
+                : null;
+
+    const save = async (event) => {
+      event.preventDefault();
+      if (problem) return setError(problem);
+      setBusy(true);
+      setError(null);
+      const split = chosen
+        .map((did, i) => ({ did, share: toDecimal(parts[i], currency) }))
+        .filter((s, i) => parts[i] > 0);
+      const body = {
+        title: title.trim(),
+        amount: { amount: toDecimal(total, currency), currency },
+        paidBy,
+        split,
+        owedBy: split.map((s) => s.did).filter((d) => d !== paidBy),
+        date,
+        ...(note.trim() ? { note: note.trim() } : {}),
+      };
+      try {
+        if (expense) await minca.update(expense.key, body);
+        else await minca.put(EXPENSE, body);
+        onCurrency(currency);
+        onClose();
+      } catch (e) {
+        setError(e.message);
+        setBusy(false);
+      }
+    };
+
+    const toggle = (did) => {
+      const next = new Set(inIt);
+      next.has(did) ? next.delete(did) : next.add(did);
+      setPicked(next);
+    };
+
+    return html`<${Modal} title=${expense ? 'Edit expense' : 'Add an expense'} onClose=${onClose} width=${520}>
+      <form class="stack" style="gap: 14px" onSubmit=${save}>
+        <input
+          value=${title}
+          onInput=${(e) => setTitle(e.currentTarget.value)}
+          placeholder="What was it for? Dinner, rent, tickets…"
+          aria-label="What it was for"
+          ref=${first}
+        />
+        <div class="money">
+          <select value=${currency} onChange=${(e) => setCurrency(e.currentTarget.value)} aria-label="Currency">
+            ${currencies.map((c) => html`<option key=${c} value=${c}>${c}</option>`)}
+          </select>
+          <input
+            value=${amount}
+            inputmode="decimal"
+            onInput=${(e) => setAmount(e.currentTarget.value)}
+            placeholder="0.00"
+            aria-label="Amount"
+            style="font-size: 18px"
+          />
+        </div>
+        <div class="pair">
+          <label class="field">
+            <span class="label">Paid by</span>
+            <select value=${paidBy} onChange=${(e) => setPaidBy(e.currentTarget.value)}>
+              ${everyone.map((d) => html`<option key=${d} value=${d}>${nameIn(people, d)}</option>`)}
+            </select>
+          </label>
+          <label class="field">
+            <span class="label">Date</span>
+            <input type="date" value=${date} onInput=${(e) => setDate(e.currentTarget.value || today())} />
+          </label>
+        </div>
+        <div class="stack" style="gap: 6px">
+          <span class="label">Split</span>
+          <div class="tabs" role="tablist">
+            ${MODES.map(
+              ([id, label]) =>
+                html`<button
+                  type="button"
+                  role="tab"
+                  key=${id}
+                  aria-selected=${mode === id}
+                  onClick=${() => setMode(id)}
+                >
+                  ${label}
+                </button>`,
+            )}
+          </div>
+          <div class="stack" style="gap: 0">
+            ${everyone.map((did) => {
+              const at = chosen.indexOf(did);
+              return html`<label class="split-row" key=${did}>
+                <input type="checkbox" checked=${inIt.has(did)} onChange=${() => toggle(did)} />
+                <${Person} did=${did} size=${24} />
+                ${
+                  mode !== 'equal' &&
+                  inIt.has(did) &&
+                  html`<input
+                    value=${typed[did] ?? ''}
+                    inputmode="decimal"
+                    placeholder=${mode === 'exact' ? '0.00' : mode === 'percent' ? '%' : '1'}
+                    aria-label=${`${nameIn(people, did)}'s part`}
+                    onInput=${(e) => setTyped({ ...typed, [did]: e.currentTarget.value })}
+                  />`
+                }
+                <span class="each faint" style="min-width: 72px; text-align: right">
+                  ${at >= 0 && parts ? show(parts[at], currency) : ''}
+                </span>
+              </label>`;
+            })}
+          </div>
+        </div>
+        <textarea
+          rows="2"
+          value=${note}
+          onInput=${(e) => setNote(e.currentTarget.value)}
+          placeholder="Notes (optional)"
+          aria-label="Notes"
+        ></textarea>
+        ${error && html`<p class="error">${error}</p>`}
+        <div class="row">
+          <span class="faint" style="flex: 1">${!error && problem && total ? problem : ''}</span>
+          <button type="button" onClick=${onClose}>Cancel</button>
+          <button type="submit" data-variant="primary" disabled=${busy}>${busy ? 'Saving…' : 'Save'}</button>
+        </div>
+      </form>
+    </${Modal}>`;
+  }
+
+  /** A payment from one person to another: settling up all or part of what they owe */
+  function SettleForm({ initial, currencies, onClose }) {
+    const people = usePeople() ?? [];
+    const everyone = [
+      ...new Set([me, ...people.map((p) => p.did), initial.from, initial.to].filter(Boolean)),
+    ];
+    const [from, setFrom] = useState(initial.from ?? me);
+    const [to, setTo] = useState(initial.to ?? everyone.find((d) => d !== (initial.from ?? me)) ?? '');
+    const [currency, setCurrency] = useState(initial.currency);
+    const [amount, setAmount] = useState(initial.minor ? toDecimal(initial.minor, initial.currency) : '');
+    const [error, setError] = useState(null);
+    const minor = toMinor(amount, currency);
+    const problem = !to || from === to ? 'Pick two different people' : !minor ? 'How much was paid?' : null;
+    return html`<${Modal} title="Settle up" onClose=${onClose} width=${440}>
+      <form
+        class="stack"
+        style="gap: 14px"
+        onSubmit=${async (event) => {
+          event.preventDefault();
+          if (problem) return setError(problem);
+          try {
+            await minca.put(SETTLEMENT, {
+              from,
+              to,
+              amount: { amount: toDecimal(minor, currency), currency },
+              date: today(),
+            });
+            onClose();
+          } catch (e) {
+            setError(e.message);
+          }
+        }}
+      >
+        <div class="row" style="justify-content: center; gap: 16px; padding: 8px 0">
+          <${Avatar} did=${from} size=${48} round />
+          <span class="muted" style="font-size: 22px">→</span>
+          ${to ? html`<${Avatar} did=${to} size=${48} round />` : html`<span style="width: 48px"></span>`}
+        </div>
+        <div class="pair">
+          <label class="field">
+            <span class="label">Who paid</span>
+            <select value=${from} onChange=${(e) => setFrom(e.currentTarget.value)}>
+              ${everyone.map((d) => html`<option key=${d} value=${d}>${nameIn(people, d)}</option>`)}
+            </select>
+          </label>
+          <label class="field">
+            <span class="label">To</span>
+            <select value=${to} onChange=${(e) => setTo(e.currentTarget.value)}>
+              ${everyone.map((d) => html`<option key=${d} value=${d}>${nameIn(people, d)}</option>`)}
+            </select>
+          </label>
+        </div>
+        <div class="money">
+          <select value=${currency} onChange=${(e) => setCurrency(e.currentTarget.value)} aria-label="Currency">
+            ${currencies.map((c) => html`<option key=${c} value=${c}>${c}</option>`)}
+          </select>
+          <input
+            value=${amount}
+            inputmode="decimal"
+            onInput=${(e) => setAmount(e.currentTarget.value)}
+            placeholder="0.00"
+            aria-label="Amount"
+            style="font-size: 18px"
+          />
+        </div>
+        ${error && html`<p class="error">${error}</p>`}
+        <div class="row" style="justify-content: flex-end">
+          <button type="button" onClick=${onClose}>Cancel</button>
+          <button type="submit" data-variant="primary">Record payment</button>
+        </div>
+      </form>
+    </${Modal}>`;
+  }
+
+  render(html`<${Bills} />`);
+</script>

@@ -16,7 +16,8 @@ ui has:
   render(tree, element?)            draws it; without an element, into one of its own at the end of the page, once the page is ready
   html, h, Fragment, and the hooks useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, useReducer
   useRecords(collection, where?)    its records, oldest first, redrawn whenever the space changes; null until here
-  useCan(action, collection)        whether the person looking may "create", "edit" or "delete" there; false until known
+  useCan(action, target)            whether the person looking may "create" in a collection, or "edit" or "delete" a record
+                                    (by its key); false until known
   usePeople()                       [{ did, name }], kept current
   useName(did)                      their name here, "You" for the person looking
   useFile(key, ref)                 a picture the record \`key\` refers to, as a URL for <img>; null until here
@@ -46,7 +47,14 @@ ui has:
                                     record (a "/" button), onChange=\${(next) => setDraft(share.typed(draft, next))} does the same for "/"
                                     typed into an empty box; put share.links on what you send, then share.clear(). <\${Sharing} share />
                                     is the chip of the one waiting; <\${Shared} from=\${record} /> the card of what a record shares
-  <\${Modal} title onClose width?>…</\${Modal}>   a dialog over the screen
+  <\${AddMenu} onShare onFiles? />   "+" for a message box: share something from the space, and attach files when onFiles is given
+  <\${EmojiPicker} onPick />        a 🙂 button with a grid of emoji; put the one picked in the text, or react with it
+  <\${Reactions} about=\${record} adding? />   emoji reactions on a record (std.reaction), yours toggled; react(record, emoji) adds one
+                                    (needs "std.reaction" in collections)
+  For a message box, put AddMenu and EmojiPicker inside the field, as Comments does: <div class="composer"> holding
+  <\${AddMenu} />, the input, and <div class="composer-end"><\${EmojiPicker} /></div>
+  <\${Modal} title onClose width?>…</\${Modal}>   a dialog over the screen, and the only way to draw one: it floats without dimming
+                                    what is behind, since the screen is one pane of the app. Never draw a backdrop of your own
   <\${Shape} kind colour? size? />  one of Minca's shapes; <\${Cover} seed colour size? class?>…</\${Cover}> a picture for what has none
                                     (colour: cobalt, coral, peach, sage or lilac)
   <\${PlaceField} value onChange coarse? near? placeholder />   find a place by name, or use where the person is

@@ -1,4 +1,4 @@
-<!-- Chat: std.message as one room, with "@" mentions, files (std.file) dropped anywhere on it, pasted or picked, and anything in the space shared with "/". -->
+<!-- Chat: std.message as one room, with "@" mentions, replies, emoji reactions (std.reaction), files (std.file) dropped anywhere on it, pasted or picked, and anything in the space shared with "+" or "/". -->
 <style>
   html,
   body {
@@ -18,7 +18,24 @@
     overflow-y: auto;
     padding: 16px 16px 8px;
   }
+  .day {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 18px 0 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--minca-faint);
+  }
+  .day::before,
+  .day::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--minca-line);
+  }
   .line {
+    position: relative;
     display: flex;
     gap: 10px;
     padding: 2px 8px;
@@ -27,6 +44,7 @@
   }
   .line.starts {
     margin-top: 10px;
+    padding-top: 4px;
   }
   .line.for-me {
     background: var(--minca-accent-soft);
@@ -38,27 +56,90 @@
     background: var(--minca-sunken);
   }
   .line .face {
-    width: 28px;
+    width: 32px;
     flex-shrink: 0;
+  }
+  .line .when {
+    visibility: hidden;
+    display: block;
+    padding-top: 3px;
+    font-size: 10px;
+    color: var(--minca-faint);
+    text-align: center;
+  }
+  .line:hover .when {
+    visibility: visible;
   }
   .line .text {
     white-space: pre-wrap;
     word-break: break-word;
   }
-  .line .delete {
-    visibility: hidden;
+  .line .text.big {
+    font-size: 32px;
+    line-height: 1.2;
+  }
+  .edited {
+    font-size: 11px;
+    color: var(--minca-faint);
+  }
+  .quote {
     align-self: flex-start;
-    min-height: 24px;
-    padding: 0 8px;
+    max-width: 100%;
+    min-height: 0;
+    padding: 0 0 0 8px;
+    border: none;
+    border-left: 2px solid var(--minca-line-strong);
+    border-radius: 0;
+    background: none;
+    color: var(--minca-muted);
     font-size: 12px;
+    font-weight: 400;
   }
-  .line:hover .delete,
-  .line:focus-within .delete {
-    visibility: visible;
+  .tools {
+    position: absolute;
+    top: -14px;
+    right: 8px;
+    z-index: 2;
+    display: none;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--minca-line);
+    border-radius: var(--minca-radius-md);
+    background: var(--minca-card);
   }
-  .composer {
+  .line:hover .tools,
+  .tools:focus-within {
+    display: flex;
+  }
+  .tools button {
+    width: 28px;
+    height: 28px;
+    min-height: 0;
+    padding: 0;
+    border: none;
+    font-size: 14px;
+  }
+  .composer-bar {
     padding: 8px 16px 16px;
-    border-top: 1px solid var(--minca-line);
+  }
+  .composer-bar .row > button[type='submit'] {
+    flex-shrink: 0;
+  }
+  .typing {
+    min-height: 18px;
+    padding: 0 4px 4px;
+    font-size: 12px;
+    color: var(--minca-muted);
+  }
+  .replying {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    padding: 6px 10px;
+    border-radius: var(--minca-radius-md);
+    background: var(--minca-sunken);
+    font-size: 13px;
   }
   .drop {
     position: fixed;
@@ -109,78 +190,222 @@
 </style>
 <script>
   const { html, render, useState, useEffect, useRef, useRecords, useCan, usePeople, useShown, useShare } = ui;
-  const { Avatar, Person, MentionInput, MentionText, mentionsIn, Attachments, attach, ago } = ui;
-  const { Shared, Sharing, recordTitle } = ui;
+  const { Avatar, Person, MentionInput, MentionText, mentionsIn, Attachments, attach, ago, usePresence } = ui;
+  const { Shared, Sharing, recordTitle, AddMenu, EmojiPicker, Reactions, react } = ui;
   const MESSAGE = 'std.message';
   const me = minca.me.did;
+  const has = (collection) => minca.collections.includes(collection);
   /** Messages from one person this close together read as one run, under one name */
   const RUN_MS = 5 * 60 * 1000;
+  /** How long someone shows as typing after their last key */
+  const TYPING_MS = 3000;
+
+  const dayOf = (iso) => new Date(iso).toDateString();
+  const dayLabel = (iso) => {
+    const day = new Date(iso);
+    const today = new Date();
+    const yesterday = new Date(today.getTime() - 86400000);
+    if (day.toDateString() === today.toDateString()) return 'Today';
+    if (day.toDateString() === yesterday.toDateString()) return 'Yesterday';
+    return day.toLocaleDateString(undefined, {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      ...(day.getFullYear() === today.getFullYear() ? {} : { year: 'numeric' }),
+    });
+  };
+  const timeOf = (iso) => new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  const linkOf = (r, rel) => r.links.find((l) => l.rel === rel)?.to;
+  // A message of only an emoji or three shows large, as chat apps do.
+  const onlyEmoji = (text) =>
+    /^(\p{Extended_Pictographic}|\p{Emoji_Component}|‍|️|\s){1,12}$/u.test(text) && !/\d/.test(text);
+  const nameIn = (people, did) =>
+    did === me ? 'You' : (people.find((p) => p.did === did)?.name ?? 'Someone');
 
   function Chat() {
     const messages = useRecords(MESSAGE);
     const maySend = useCan('create', MESSAGE);
+    const people = usePeople();
     const list = useRef(null);
+    // Whether the list was at its end before what just arrived: only then does it follow along.
+    const atEnd = useRef(true);
     const count = messages?.length ?? 0;
+    const [replying, setReplying] = useState(null);
+    const [editing, setEditing] = useState(null);
+    // Who is typing, as each screen says it live; kept nowhere
+    const [typing, setTyping] = useState(false);
+    const others = usePresence({ typing });
+    const typists = [...new Set(others.filter((o) => o.state?.typing && o.did !== me).map((o) => o.did))];
     // A message opened from elsewhere, like the one a file was shared on: scrolled to and marked a moment.
     const shown = useShown();
     const [marked, setMarked] = useState(null);
-    // New messages land at the bottom, so keep it in view as they arrive, unless one was opened.
     useEffect(() => {
-      if (!marked) list.current?.scrollTo({ top: list.current.scrollHeight });
+      const last = messages?.at(-1);
+      if (!marked && (atEnd.current || last?.mine))
+        list.current?.scrollTo({ top: list.current.scrollHeight });
     }, [count]);
     useEffect(() => {
       if (!shown || !messages?.some((m) => m.key === shown.key)) return;
-      setMarked(shown.key);
-      document.getElementById(`m-${shown.key}`)?.scrollIntoView({ block: 'center' });
-      const done = setTimeout(() => setMarked(null), 2500);
-      return () => clearTimeout(done);
+      jumpTo(shown.key);
     }, [shown, count > 0]);
     if (!messages) return null;
+
+    function jumpTo(key) {
+      setMarked(key);
+      document.getElementById(`m-${key}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      setTimeout(() => setMarked((was) => (was === key ? null : was)), 2500);
+    }
+    const byKey = new Map(messages.map((m) => [m.key, m]));
+
     return html`
-      <div class="messages" ref=${list}>
-        ${messages.length === 0 && html`<p class="empty">No messages yet. Say hello.</p>`}
+      <div
+        class="messages"
+        ref=${list}
+        onScroll=${(event) => {
+          const el = event.currentTarget;
+          atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+        }}
+      >
+        ${
+          messages.length === 0 &&
+          html`<div class="empty">
+            <p style="font-size: 32px">👋</p>
+            <p>No messages yet. Say hello.</p>
+          </div>`
+        }
         ${messages.map((m, i) => {
           const before = messages[i - 1];
+          const newDay = !before || dayOf(before.createdAt) !== dayOf(m.createdAt);
           const starts =
-            !before ||
+            newDay ||
             before.createdBy !== m.createdBy ||
+            !!linkOf(m, 'replyTo') ||
             Date.parse(m.createdAt) - Date.parse(before.createdAt) > RUN_MS;
-          return html`<${Line} key=${m.key} message=${m} starts=${starts} marked=${m.key === marked} />`;
+          const to = linkOf(m, 'replyTo');
+          return html`<div key=${m.key}>
+            ${newDay && html`<div class="day">${dayLabel(m.createdAt)}</div>`}
+            <${Line}
+              message=${m}
+              starts=${starts}
+              marked=${m.key === marked}
+              replyTo=${to ? (byKey.get(to) ?? { missing: true }) : null}
+              people=${people}
+              editing=${editing === m.key}
+              onEdit=${(on) => setEditing(on ? m.key : null)}
+              onReply=${maySend ? () => setReplying(m) : null}
+              onJump=${jumpTo}
+            />
+          </div>`;
         })}
       </div>
       ${
         maySend
-          ? html`<${Composer} />`
-          : html`<p class="composer muted">Your role here doesn't let you send messages.</p>`
+          ? html`<${Composer}
+              replying=${replying}
+              onReplied=${() => setReplying(null)}
+              typists=${typists}
+              people=${people}
+              onTyping=${setTyping}
+            />`
+          : html`<p class="composer-bar muted">Your role here doesn't let you send messages.</p>`
       }
     `;
   }
 
-  /** One message: its writer when it starts a run, what it says, what is attached, and Delete for your own */
-  function Line({ message, starts, marked }) {
+  /**
+   * One message: its writer when it starts a run, else its time on hover; what
+   * it answers, says, shares and has attached; its reactions; and, on hover,
+   * react, reply, and edit or delete your own.
+   */
+  function Line({ message, starts, marked, replyTo, people, editing, onEdit, onReply, onJump }) {
     const forMe = message.body.mentions?.includes(me);
+    const text = typeof message.body.text === 'string' ? message.body.text : '';
+    const [draft, setDraft] = useState(text);
+    const box = useRef(null);
+    useEffect(() => {
+      if (editing) box.current?.querySelector('input')?.focus();
+    }, [editing]);
+    const edited = Date.parse(message.updatedAt) - Date.parse(message.createdAt) > 1000;
+    const save = async () => {
+      const next = draft.trim();
+      if (next && next !== text) {
+        const mentions = mentionsIn(next, people);
+        const { mentions: _, ...rest } = message.body;
+        await minca.update(message.key, { ...rest, text: next, ...(mentions.length ? { mentions } : {}) });
+      }
+      onEdit(false);
+    };
     return html`<div
       id=${`m-${message.key}`}
       class=${`line${starts ? ' starts' : ''}${forMe ? ' for-me' : ''}${marked ? ' shown' : ''}`}
     >
-      <div class="face">${starts && html`<${Avatar} did=${message.createdBy} size=${28} round />`}</div>
+      <div class="face">
+        ${starts ? html`<${Avatar} did=${message.createdBy} size=${32} round />` : html`<span class="when">${timeOf(message.createdAt)}</span>`}
+      </div>
       <div class="stack" style="flex: 1; min-width: 0; gap: 4px">
+        ${
+          replyTo &&
+          html`<button class="quote ellipsis" onClick=${() => !replyTo.missing && onJump(replyTo.key)}>
+            ↪
+            ${replyTo.missing ? 'A message that is gone' : html`<b>${nameIn(people, replyTo.createdBy)}</b> ${replyTo.body.text}`}
+          </button>`
+        }
         ${
           starts &&
           html`<div>
             <${Person} did=${message.createdBy} face=${false} />
-            <span class="faint"> · ${ago(message.createdAt)}</span>
+            <span class="faint"> · ${timeOf(message.createdAt)}</span>
           </div>`
         }
-        <p class="text"><${MentionText} text=${message.body.text} /></p>
+        ${
+          editing
+            ? html`<form
+                ref=${box}
+                onKeyDown=${(event) => event.key === 'Escape' && onEdit(false)}
+                onSubmit=${(event) => {
+                  event.preventDefault();
+                  save();
+                }}
+              >
+                <${MentionInput} value=${draft} onChange=${setDraft} aria-label="Edit the message" />
+                <span class="faint">Enter to save, Escape to cancel</span>
+              </form>`
+            : html`<p class=${`text${onlyEmoji(text) ? ' big' : ''}`}>
+                <${MentionText} text=${text} />${edited && html`<span class="edited"> (edited)</span>`}
+              </p>`
+        }
         <${Shared} from=${message} />
         <${Attachments} about=${message.key} />
+        ${has('std.reaction') && html`<${Reactions} about=${message} />`}
       </div>
       ${
-        message.mine &&
-        html`<button class="delete" data-variant="ghost" onClick=${() => minca.remove(message.key)}>
-          Delete
-        </button>`
+        !editing &&
+        html`<div class="tools">
+          ${has('std.reaction') && html`<${EmojiPicker} label="React" onPick=${(emoji) => react(message, emoji).catch(() => {})} />`}
+          ${onReply && html`<button data-variant="ghost" title="Reply" aria-label="Reply" onClick=${onReply}>↩</button>`}
+          ${
+            message.mine &&
+            html`<button
+                data-variant="ghost"
+                title="Edit"
+                aria-label="Edit"
+                onClick=${() => {
+                  setDraft(text);
+                  onEdit(true);
+                }}
+              >
+                ✎
+              </button>
+              <button
+                data-variant="ghost"
+                title="Delete"
+                aria-label="Delete"
+                onClick=${() => minca.remove(message.key)}
+              >
+                🗑
+              </button>`
+          }
+        </div>`
       }
     </div>`;
   }
@@ -204,9 +429,8 @@
     </button>`;
   }
 
-  /** The box: text with "@" mentions, and files dropped anywhere on the screen, pasted or picked */
-  function Composer() {
-    const people = usePeople();
+  /** The box: text with "@" mentions and emoji, a reply, and files dropped anywhere on the screen, pasted or picked */
+  function Composer({ replying, onReplied, typists, people, onTyping }) {
     const [draft, setDraft] = useState('');
     const [files, setFiles] = useState([]);
     // A record the person chose to share, sent with the next message
@@ -214,8 +438,14 @@
     const [dropping, setDropping] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(null);
-    const picker = useRef(null);
+    const quiet = useRef(null);
     const add = (list) => list?.length && setFiles((was) => [...was, ...list]);
+    const type = (next) => {
+      setDraft(next);
+      onTyping(next.length > 0);
+      clearTimeout(quiet.current);
+      quiet.current = setTimeout(() => onTyping(false), TYPING_MS);
+    };
 
     // Files dropped anywhere on the screen, or pasted wherever the focus is, wait in the box.
     useEffect(() => {
@@ -273,15 +503,18 @@
       setError(null);
       try {
         const mentions = mentionsIn(draft, people);
+        const answering = replying && replying.createdBy !== me ? { replyingTo: replying.createdBy } : {};
         const sent = await minca.put(
           MESSAGE,
-          { text, ...(mentions.length ? { mentions } : {}) },
-          { links: share.links },
+          { text, ...(mentions.length ? { mentions } : {}), ...answering },
+          { links: [...share.links, ...(replying ? [{ rel: 'replyTo', to: replying.key }] : [])] },
         );
         await attach(sent.key, files);
         setDraft('');
         setFiles([]);
         share.clear();
+        onReplied();
+        onTyping(false);
       } catch (e) {
         setError(e.message);
       } finally {
@@ -289,14 +522,26 @@
       }
     };
 
+    const ready = draft.trim() || files.length || share.sharing;
     return html`<form
-      class="composer"
+      class="composer-bar"
       onSubmit=${(event) => {
         event.preventDefault();
         send();
       }}
     >
       ${dropping && html`<div class="drop">Drop files to attach</div>`}
+      ${
+        replying &&
+        html`<div class="replying">
+          <span class="ellipsis" style="flex: 1"
+            >↪ Replying to <b>${nameIn(people, replying.createdBy)}</b></span
+          >
+          <button type="button" data-variant="ghost" data-icon aria-label="Don't reply" onClick=${onReplied}>
+            ✕
+          </button>
+        </div>`
+      }
       ${share.sharing && html`<div class="pending"><${Sharing} share=${share} /></div>`}
       ${
         files.length > 0 &&
@@ -312,47 +557,27 @@
         </div>`
       }
       <div class="row">
-        <button
-          type="button"
-          data-icon
-          aria-label="Attach files"
-          title="Attach files"
-          onClick=${() => picker.current?.click()}
-        >
-          +
-        </button>
-        <button
-          type="button"
-          data-icon
-          aria-label="Share something from this space"
-          title="Share something from this space"
-          onClick=${() => share.pick()}
-        >
-          /
-        </button>
-        <input
-          ref=${picker}
-          type="file"
-          multiple
-          hidden
-          onChange=${(event) => {
-            add([...event.currentTarget.files]);
-            event.currentTarget.value = '';
-          }}
-        />
-        <${MentionInput}
-          value=${draft}
-          onChange=${(next) => setDraft(share.typed(draft, next))}
-          placeholder="Message… @ to mention, / to share"
-          aria-label="Message"
-        />
-        <button
-          type="submit"
-          data-variant="primary"
-          disabled=${busy || (!draft.trim() && !files.length && !share.sharing)}
-        >
+        <div class="composer" onKeyDown=${(event) => event.key === 'Escape' && replying && onReplied()}>
+          <${AddMenu} onShare=${() => share.pick()} onFiles=${add} />
+          <${MentionInput}
+            value=${draft}
+            onChange=${(next) => type(share.typed(draft, next))}
+            placeholder=${replying ? `Reply to ${nameIn(people, replying.createdBy)}…` : 'Message…'}
+            aria-label="Message"
+          />
+          <div class="composer-end">
+            <${EmojiPicker} onPick=${(emoji) => type(draft + emoji)} />
+          </div>
+        </div>
+        <button type="submit" data-variant="primary" disabled=${busy || !ready}>
           ${busy ? 'Sending…' : 'Send'}
         </button>
+      </div>
+      <div class="typing" aria-live="polite">
+        ${
+          typists.length > 0 &&
+          `${typists.map((did) => nameIn(people, did)).join(', ')} ${typists.length === 1 ? 'is' : 'are'} typing…`
+        }
       </div>
       ${(error || share.error) && html`<p class="error">${error || share.error}</p>`}
     </form>`;

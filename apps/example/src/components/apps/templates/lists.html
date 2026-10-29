@@ -1,0 +1,540 @@
+<!-- Lists: to-do lists like a notes app keeps them, on std.list and std.list-item. Each line is a record of its own, ordered by position, so two people writing different lines at once never undo each other; only the same line, written at the same moment, keeps the last. -->
+<style>
+  body {
+    padding: 0;
+  }
+  #app {
+    max-width: none;
+  }
+  .lists {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    min-height: 100vh;
+  }
+  .index {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 16px 10px;
+    border-right: 1px solid var(--minca-line);
+  }
+  .index > header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 6px 10px;
+  }
+  .index h2 {
+    font-size: 18px;
+  }
+  .pick {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    min-height: 0;
+    padding: 10px 12px;
+    border: none;
+    border-radius: var(--minca-radius-md);
+    background: none;
+    color: var(--minca-body);
+    font-weight: 400;
+    text-align: left;
+  }
+  .pick:hover {
+    background: var(--minca-sunken);
+  }
+  .pick b {
+    font-weight: 600;
+    color: var(--minca-ink);
+  }
+  .pick[aria-current='true'] {
+    background: var(--minca-accent-soft);
+  }
+  .pick[aria-current='true'] b {
+    color: var(--minca-accent);
+  }
+  .page {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    max-width: 720px;
+    padding: 24px 32px 80px;
+  }
+  .page-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 32px;
+  }
+  .back {
+    display: none;
+  }
+  .title {
+    min-height: 0;
+    padding: 4px 0 12px;
+    border: none;
+    background: none;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--minca-ink);
+  }
+  .line {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 3px 0;
+  }
+  .tick {
+    width: 22px;
+    height: 22px;
+    min-height: 0;
+    margin-top: 5px;
+    flex-shrink: 0;
+    padding: 0;
+    border: 1.5px solid var(--minca-line-strong);
+    border-radius: 50%;
+    background: none;
+    color: var(--minca-inverse);
+    font-size: 12px;
+  }
+  .tick[aria-checked='true'] {
+    border-color: var(--minca-ink);
+    background: var(--minca-ink);
+  }
+  .tick:disabled {
+    opacity: 0.4;
+  }
+  .text {
+    flex: 1;
+    min-height: 0;
+    padding: 4px 0 6px;
+    border: none;
+    border-bottom: 1px solid var(--minca-line);
+    border-radius: 0;
+    background: none;
+    font-size: 16px;
+    line-height: 1.4;
+    resize: none;
+    overflow: hidden;
+  }
+  .text:focus {
+    border-bottom-color: var(--minca-line-strong);
+  }
+  .line[data-done='true'] .text {
+    color: var(--minca-faint);
+    text-decoration: line-through;
+  }
+  .here {
+    margin-top: 6px;
+    flex-shrink: 0;
+  }
+  .done-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 20px;
+  }
+  .done-head button {
+    min-height: 28px;
+    font-size: 12px;
+  }
+  @media (max-width: 640px) {
+    .lists {
+      grid-template-columns: 1fr;
+    }
+    .index {
+      border-right: none;
+    }
+    .lists[data-open='true'] .index,
+    .lists[data-open='false'] .page {
+      display: none;
+    }
+    .page {
+      padding: 12px 16px 80px;
+    }
+    .back {
+      display: inline-flex;
+    }
+  }
+</style>
+<script>
+  const {
+    html,
+    render,
+    useState,
+    useEffect,
+    useRef,
+    useRecords,
+    useCan,
+    useShown,
+    usePresence,
+    Avatar,
+    ago,
+  } = ui;
+  const { positionBetween } = ui;
+  const LIST = 'std.list';
+  const ITEM = 'std.list-item';
+  /** The kinds of std.list this app shows: other apps keep lists too, like the categories of files */
+  const KINDS = ['checklist', 'todo', 'shopping', 'packing'];
+  /** How long typing rests before a line is written: one version per pause, not per key */
+  const PAUSE = 600;
+
+  const inList = (item) => item.links.find((l) => l.rel === 'in')?.to;
+  const byPosition = (a, b) => {
+    const pa = a.body.position;
+    const pb = b.body.position;
+    if (pa !== pb) return pa === undefined ? 1 : pb === undefined ? -1 : pa < pb ? -1 : 1;
+    return a.createdAt.localeCompare(b.createdAt) || a.key.localeCompare(b.key);
+  };
+  // Anyone can write records without this screen: a line with no text is still a line.
+  const textOf = (item) => (typeof item.body?.text === 'string' ? item.body.text : '');
+
+  function Lists() {
+    const lists = useRecords(LIST);
+    const items = useRecords(ITEM);
+    const mayCreate = useCan('create', LIST);
+    const [openKey, setOpenKey] = useState(null);
+    const asked = useShown();
+    useEffect(() => {
+      if (asked) setOpenKey(asked.key);
+    }, [asked]);
+    if (!lists || !items) return null;
+
+    const mine = lists.filter((l) => l.body && KINDS.includes(l.body.kind));
+    const linesOf = (key) => items.filter((i) => i.body && inList(i) === key).sort(byPosition);
+    const touched = (list) =>
+      linesOf(list.key).reduce((last, i) => (i.updatedAt > last ? i.updatedAt : last), list.updatedAt);
+    const sorted = [...mine].sort((a, b) => touched(b).localeCompare(touched(a)));
+    // On a wide screen, the latest list is open; on a narrow one, the index is, until one is picked.
+    const open = sorted.find((l) => l.key === openKey) ?? null;
+    const shown = open ?? sorted[0] ?? null;
+
+    const create = async () => {
+      const made = await minca.put(LIST, { title: 'New list', kind: 'checklist' });
+      setOpenKey(made.key);
+    };
+
+    return html`<div class="lists" data-open=${open !== null}>
+      <nav class="index" aria-label="Lists">
+        <header>
+          <h2>Lists</h2>
+          ${mayCreate && html`<button data-variant="primary" onClick=${create}>New list</button>`}
+        </header>
+        ${sorted.length === 0 && html`<p class="empty">No lists yet.${mayCreate ? ' Make one for groceries, packing, or the week.' : ''}</p>`}
+        ${sorted.map((list) => {
+          const lines = linesOf(list.key);
+          const left = lines.filter((i) => !i.body.checked && textOf(i).trim());
+          return html`<button
+            class="pick"
+            key=${list.key}
+            aria-current=${shown?.key === list.key}
+            onClick=${() => setOpenKey(list.key)}
+          >
+            <b class="ellipsis">${list.body.icon ? `${list.body.icon} ` : ''}${list.body.title}</b>
+            <span class="faint ellipsis">
+              ${`${ago(touched(list))} · ${left.length ? left.map(textOf).slice(0, 3).join(', ') : lines.length ? 'All done' : 'Empty'}`}
+            </span>
+          </button>`;
+        })}
+      </nav>
+      ${
+        shown
+          ? html`<${Page}
+              key=${shown.key}
+              list=${shown}
+              lines=${linesOf(shown.key)}
+              onBack=${() => setOpenKey(null)}
+            />`
+          : html`<div class="page"></div>`
+      }
+    </div>`;
+  }
+
+  /** One list: its title, the lines still to do, then the ones done */
+  function Page({ list, lines, onBack }) {
+    const mayWrite = useCan('create', ITEM);
+    const mayDelete = useCan('delete', list.key);
+    // The line to put the cursor in once it is drawn, and where in it
+    const [focus, setFocus] = useState(
+      list.body.title === 'New list' && lines.length === 0 ? { key: 'title' } : null,
+    );
+    const [editing, setEditing] = useState(null);
+    // Who else has this list open, and which line they are in
+    const others = usePresence({ list: list.key, line: editing });
+    const hereOn = (key) => others.filter((o) => o.state?.list === list.key && o.state.line === key);
+
+    const todo = lines.filter((i) => !i.body.checked);
+    const done = lines.filter((i) => i.body.checked);
+
+    /** A new line after `after` (a record, or null for the top), with the cursor in it */
+    const add = async (after, text = '') => {
+      const at = after ? todo.findIndex((i) => i.key === after.key) : -1;
+      const made = await minca.put(
+        ITEM,
+        {
+          text,
+          checked: false,
+          position: positionBetween(after?.body.position, todo[at + 1]?.body.position),
+        },
+        { links: [{ rel: 'in', to: list.key }] },
+      );
+      setFocus({ key: made.key, at: 0 });
+    };
+    const append = (text) => {
+      const last = todo.at(-1);
+      return minca
+        .put(
+          ITEM,
+          { text, checked: false, position: positionBetween(last?.body.position) },
+          { links: [{ rel: 'in', to: list.key }] },
+        )
+        .then((made) => setFocus({ key: made.key, at: text.length }));
+    };
+    const removeLine = async (item) => {
+      const at = todo.findIndex((i) => i.key === item.key);
+      const before = todo[at - 1];
+      await minca.remove(item.key);
+      setFocus(before ? { key: before.key, at: textOf(before).length } : { key: 'title' });
+    };
+    const removeList = async () => {
+      // Its lines first, so none is left in a list that is gone; one that can't go stays, harmlessly.
+      await Promise.allSettled(lines.map((i) => minca.remove(i.key)));
+      await minca.remove(list.key);
+      onBack();
+    };
+
+    const row = (item, i, all) =>
+      html`<${Line}
+        key=${item.key}
+        item=${item}
+        focus=${focus?.key === item.key ? focus : null}
+        here=${hereOn(item.key)}
+        onFocused=${() => setFocus(null)}
+        onEditing=${(on) => setEditing(on ? item.key : null)}
+        onEnter=${(rest) => add(item, rest)}
+        onEmptyBack=${() => removeLine(item)}
+        onUp=${() => all[i - 1] && setFocus({ key: all[i - 1].key, at: textOf(all[i - 1]).length })}
+        onDown=${() => all[i + 1] && setFocus({ key: all[i + 1].key, at: 0 })}
+      />`;
+
+    return html`<main class="page">
+      <div class="page-top">
+        <button class="back" data-variant="ghost" onClick=${onBack}>‹ Lists</button>
+        <span style="flex: 1"></span>
+        ${others.length > 0 && others.map((o) => html`<${Avatar} key=${o.device} did=${o.did} size=${22} round />`)}
+        <span class="faint">${ago(list.updatedAt)}</span>
+        ${mayDelete && html`<button data-variant="ghost" onClick=${removeList}>Delete list</button>`}
+      </div>
+      <${Title}
+        list=${list}
+        focus=${focus?.key === 'title'}
+        onFocused=${() => setFocus(null)}
+        onEnter=${() => add(null)}
+      />
+      ${todo.map((item, i) => row(item, i, todo))} ${mayWrite && html`<${NewLine} onAdd=${append} />`}
+      ${
+        done.length > 0 &&
+        html`<div class="done-head">
+            <span class="label">${done.length} done</span>
+            ${mayWrite && html`<button data-variant="ghost" onClick=${() => Promise.allSettled(done.map((i) => minca.remove(i.key)))}>Clear</button>`}
+          </div>
+          ${done.map((item, i) => row(item, i, done))}`
+      }
+    </main>`;
+  }
+
+  /** Whether the person looking may do this to a record: null until known */
+  function useMay(action, key) {
+    const [may, setMay] = useState(null);
+    useEffect(() => {
+      let current = true;
+      minca.can(action, key).then((answer) => current && setMay(answer));
+      return () => {
+        current = false;
+      };
+    }, [action, key]);
+    return may;
+  }
+
+  /** Text written a pause after the last key, and when the field is left: one version per pause */
+  function useSaving(save) {
+    const timer = useRef(null);
+    const pending = useRef(null);
+    const flush = () => {
+      clearTimeout(timer.current);
+      if (pending.current !== null) save(pending.current);
+      pending.current = null;
+    };
+    useEffect(() => flush, []);
+    return {
+      change: (value) => {
+        pending.current = value;
+        clearTimeout(timer.current);
+        timer.current = setTimeout(flush, PAUSE);
+      },
+      flush,
+    };
+  }
+
+  /** The list's title, written the same way as a line */
+  function Title({ list, focus, onFocused, onEnter }) {
+    const [draft, setDraft] = useState(null);
+    const input = useRef(null);
+    const saving = useSaving(
+      (title) => title.trim() && minca.update(list.key, { ...list.body, title: title.trim() }),
+    );
+    useEffect(() => {
+      if (!focus || !input.current) return;
+      input.current.focus();
+      input.current.select();
+      onFocused();
+    }, [focus]);
+    return html`<input
+      ref=${input}
+      class="title"
+      value=${draft ?? list.body.title}
+      aria-label="Title"
+      onFocus=${() => setDraft(list.body.title)}
+      onInput=${(e) => {
+        setDraft(e.currentTarget.value);
+        saving.change(e.currentTarget.value);
+      }}
+      onBlur=${() => {
+        saving.flush();
+        setDraft(null);
+      }}
+      onKeyDown=${(e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        saving.flush();
+        onEnter();
+      }}
+    />`;
+  }
+
+  /**
+   * One line: a tick and its text. While someone types in it, what they type
+   * is what shows, whatever arrives from elsewhere; once they leave it, the
+   * record does.
+   */
+  function Line({ item, focus, here, onFocused, onEditing, onEnter, onEmptyBack, onUp, onDown }) {
+    const [draft, setDraft] = useState(null);
+    const area = useRef(null);
+    const saving = useSaving((text) => minca.update(item.key, { ...item.body, text }));
+    // Locked only once the answer is no: a line just made takes the first keys typed into it
+    const mayEdit = useMay('edit', item.key) !== false;
+    const value = draft ?? textOf(item);
+    useEffect(() => {
+      if (!focus || !area.current) return;
+      area.current.focus();
+      const at = focus.at ?? area.current.value.length;
+      area.current.setSelectionRange(at, at);
+      onFocused();
+    }, [focus]);
+    // A textarea that grows with what is in it, so long lines wrap like a note's; again when
+    // its width changes, as when a page drawn hidden on a phone is shown
+    useEffect(() => {
+      const el = area.current;
+      if (!el) return;
+      let width = -1;
+      const fit = () => {
+        if (el.clientWidth === width) return;
+        width = el.clientWidth;
+        el.style.height = 'auto';
+        el.style.height = `${el.scrollHeight}px`;
+      };
+      fit();
+      const watching = new ResizeObserver(fit);
+      watching.observe(el);
+      return () => watching.disconnect();
+    }, [value]);
+    const checked = item.body.checked === true;
+    return html`<div class="line" data-done=${checked}>
+      <button
+        class="tick"
+        role="checkbox"
+        aria-checked=${checked}
+        aria-label=${checked ? 'Not done' : 'Done'}
+        disabled=${!mayEdit}
+        onClick=${() => minca.update(item.key, { ...item.body, text: value, checked: !checked })}
+      >
+        ${checked ? '✓' : ''}
+      </button>
+      <textarea
+        ref=${area}
+        class="text"
+        rows="1"
+        value=${value}
+        readonly=${!mayEdit}
+        aria-label="Item"
+        onFocus=${() => {
+          setDraft(textOf(item));
+          onEditing(true);
+        }}
+        onBlur=${() => {
+          saving.flush();
+          setDraft(null);
+          onEditing(false);
+        }}
+        onInput=${(e) => {
+          setDraft(e.currentTarget.value);
+          saving.change(e.currentTarget.value);
+        }}
+        onKeyDown=${(e) => {
+          const el = e.currentTarget;
+          if (e.key === 'Enter' && !e.shiftKey) {
+            // Enter splits the line where the cursor is, as in a note
+            e.preventDefault();
+            const before = el.value.slice(0, el.selectionStart);
+            const after = el.value.slice(el.selectionEnd).trimStart();
+            setDraft(before);
+            saving.change(before);
+            saving.flush();
+            onEnter(after);
+          } else if (e.key === 'Backspace' && el.value === '') {
+            e.preventDefault();
+            onEmptyBack();
+          } else if (e.key === 'ArrowUp' && el.selectionStart === 0) {
+            e.preventDefault();
+            onUp();
+          } else if (e.key === 'ArrowDown' && el.selectionEnd === el.value.length) {
+            e.preventDefault();
+            onDown();
+          }
+        }}
+      ></textarea>
+      ${here.map((o) => html`<span class="here" key=${o.device}><${Avatar} did=${o.did} size=${18} round /></span>`)}
+    </div>`;
+  }
+
+  /** The empty line at the end: typing in it starts a new one */
+  function NewLine({ onAdd }) {
+    const [text, setText] = useState('');
+    return html`<div class="line">
+      <span class="tick" aria-hidden="true" style="opacity: 0.4"></span>
+      <input
+        class="text"
+        value=${text}
+        placeholder="Add an item"
+        aria-label="Add an item"
+        onInput=${(e) => setText(e.currentTarget.value)}
+        onKeyDown=${(e) => {
+          if (e.key !== 'Enter' || !text.trim()) return;
+          e.preventDefault();
+          onAdd(text.trim());
+          setText('');
+        }}
+        onBlur=${() => {
+          if (!text.trim()) return;
+          onAdd(text.trim());
+          setText('');
+        }}
+      />
+    </div>`;
+  }
+
+  render(html`<${Lists} />`);
+</script>

@@ -1,7 +1,24 @@
-<!-- Kanban: std.task and std.column as a board. Dragging a card rewrites only its in link (to its column) and position. -->
+<!-- Kanban: std.task and std.column as a board, like a small Trello. Dragging a card rewrites only its in link (to its column) and position. A card's checklist is tasks whose parent is the card; they stay off the board. -->
 <style>
   body {
     padding: 16px 16px 4px;
+  }
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .face-filter {
+    min-height: 0;
+    padding: 2px;
+    border: 2px solid transparent;
+    border-radius: 50%;
+    background: none;
+  }
+  .face-filter[aria-pressed='true'] {
+    border-color: var(--minca-accent);
   }
   .board {
     display: flex;
@@ -11,7 +28,7 @@
     padding-bottom: 12px;
   }
   .lane {
-    flex: 0 0 264px;
+    flex: 0 0 272px;
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -22,18 +39,32 @@
   .lane > header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 8px;
+    gap: 6px;
+    min-height: 30px;
     padding: 2px 4px 6px;
     font-size: 13px;
     font-weight: 600;
   }
-  .lane > header button {
+  .lane > header > button:first-child {
+    flex: 1;
     min-height: 0;
     padding: 0;
     border: none;
     background: none;
     font-weight: 600;
+    justify-content: flex-start;
+  }
+  .lane > header input {
+    min-height: 28px;
+    padding: 2px 8px;
+    font-weight: 600;
+  }
+  .lane > header .quiet {
+    min-height: 0;
+    padding: 0 4px;
+    border: none;
+    background: none;
+    color: var(--minca-faint);
   }
   .task {
     width: 100%;
@@ -60,6 +91,31 @@
   .task[draggable='true'] {
     cursor: grab;
   }
+  .meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: var(--minca-muted);
+  }
+  .meta .faces {
+    display: flex;
+    gap: 2px;
+    margin-left: auto;
+  }
+  .late {
+    color: var(--minca-danger);
+  }
+  .pill {
+    align-self: flex-start;
+    padding: 1px 8px;
+    border-radius: var(--minca-radius-pill);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--minca-ink);
+    background: var(--c, var(--minca-sunken));
+  }
   .marker {
     height: 2px;
     margin: 2px 0 4px;
@@ -72,19 +128,87 @@
     padding: 0 8px;
   }
   .new-column {
-    flex: 0 0 264px;
+    flex: 0 0 272px;
   }
   .new-column > button {
     width: 100%;
     height: 40px;
   }
+  .card-title {
+    min-height: 0;
+    padding: 4px 0;
+    border: none;
+    background: none;
+    font-size: 20px;
+    font-weight: 600;
+  }
+  .fields {
+    display: grid;
+    grid-template-columns: 96px 1fr;
+    gap: 10px 12px;
+    align-items: center;
+  }
+  .fields > .label {
+    align-self: start;
+    padding-top: 8px;
+  }
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 32px;
+  }
+  .check input[type='checkbox'] {
+    width: 18px;
+    min-height: 18px;
+    flex-shrink: 0;
+    accent-color: var(--minca-ink);
+  }
+  .check span {
+    flex: 1;
+  }
+  .check[data-done='true'] span {
+    color: var(--minca-faint);
+    text-decoration: line-through;
+  }
+  .bar {
+    height: 4px;
+    border-radius: var(--minca-radius-pill);
+    background: var(--minca-sunken);
+    overflow: hidden;
+  }
+  .bar > span {
+    display: block;
+    height: 100%;
+    background: var(--minca-good);
+  }
+  @media (max-width: 520px) {
+    .fields {
+      grid-template-columns: 1fr;
+    }
+    .fields > .label {
+      padding-top: 0;
+    }
+  }
 </style>
 <script>
-  const { html, render, useState, useEffect, useRef, useRecords, useCan, useMarked, positionBetween } = ui;
+  const { html, render, useState, useEffect, useRef, useRecords, useCan, usePeople, useShown } = ui;
+  const { Avatar, Person, Modal, Comments, Attachments, attach, positionBetween } = ui;
   const TASK = 'std.task';
   const COLUMN = 'std.column';
+  const COMMENT = 'std.comment';
+  const FILE = 'std.file';
+  const me = minca.me.did;
+  const has = (collection) => minca.collections.includes(collection);
   /** The lane for tasks whose column is gone, or that never had one */
   const LOOSE = '';
+  /** std.task's priority, 1 urgent to 4 low (0 or none: no label), each with a colour */
+  const PRIORITIES = [
+    [1, 'Urgent', 'coral'],
+    [2, 'High', 'peach'],
+    [3, 'Medium', 'lilac'],
+    [4, 'Low', 'sage'],
+  ];
 
   /** By position; records without one go last, oldest first */
   const byPosition = (a, b) => {
@@ -93,40 +217,82 @@
     if (pa !== pb) return pa === undefined ? 1 : pb === undefined ? -1 : pa < pb ? -1 : 1;
     return a.createdAt.localeCompare(b.createdAt) || a.key.localeCompare(b.key);
   };
+  const linkOf = (r, rel) => r.links.find((l) => l.rel === rel)?.to;
   // A task is `in` its column; one `in` a project with no column on the board is loose.
-  const laneOf = (t) => t.links.find((l) => l.rel === 'in')?.to ?? LOOSE;
   const columnLinks = (lane) => (lane === LOOSE ? [] : [{ rel: 'in', to: lane }]);
+  // Anyone can write records without this screen: read only what is there.
+  const isTask = (r) => r.body && typeof r.body.title === 'string';
+  const assigneesOf = (t) =>
+    Array.isArray(t.body.assignees) ? t.body.assignees.filter((d) => typeof d === 'string') : [];
+  const today = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  const dayOf = (due) => (typeof due === 'string' ? due.slice(0, 10) : null);
+  const dueText = (day) =>
+    new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  const nameIn = (people, did) =>
+    did === me ? 'You' : (people.find((p) => p.did === did)?.name ?? 'Someone');
+
+  /** Whether the person looking may do this to a record: null until known */
+  function useMay(action, key) {
+    const [may, setMay] = useState(null);
+    useEffect(() => {
+      let current = true;
+      minca.can(action, key).then((answer) => current && setMay(answer));
+      return () => {
+        current = false;
+      };
+    }, [action, key]);
+    return may;
+  }
 
   function Board() {
     const columns = useRecords(COLUMN);
-    const tasks = useRecords(TASK);
+    const all = useRecords(TASK);
+    // A copy of this app may not have comments or files; the same on every draw, so the hooks keep their order
+    const comments = has(COMMENT) ? useRecords(COMMENT) : [];
+    const files = has(FILE) ? useRecords(FILE) : [];
+    const people = usePeople() ?? [];
     const mayAddTask = useCan('create', TASK);
-    const mayMove = useCan('edit', TASK);
     const mayAddColumn = useCan('create', COLUMN);
     const [dragging, setDragging] = useState(null);
     // Where a dragged card would land: a lane, and the card it would go before (null: the end)
     const [drop, setDrop] = useState(null);
     const [addingTo, setAddingTo] = useState(null);
     const [addingColumn, setAddingColumn] = useState(false);
-    // A task opened from elsewhere, like one shared in a chat: scrolled to and lit up a moment.
-    const marked = useMarked();
-    if (!columns || !tasks) return null;
+    const [openKey, setOpenKey] = useState(null);
+    // Only the cards one person is on: their did, or null for everyone's
+    const [only, setOnly] = useState(null);
+    // A task opened from elsewhere, like one shared in a chat: its card.
+    const asked = useShown();
+    useEffect(() => {
+      if (asked) setOpenKey(asked.key);
+    }, [asked]);
+    if (!columns || !all || !comments || !files) return null;
 
-    const cols = [...columns].sort(byPosition);
+    const tasks = all.filter(isTask);
+    const cols = columns.filter((c) => c.body && typeof c.body.name === 'string').sort(byPosition);
     const known = new Set(cols.map((c) => c.key));
-    const sorted = [...tasks].sort(byPosition);
-    const tasksIn = (lane) => sorted.filter((t) => (known.has(laneOf(t)) ? laneOf(t) : LOOSE) === lane);
+    // A checklist item is a task under a card, not a card of its own.
+    const cards = tasks.filter((t) => !linkOf(t, 'parent')).sort(byPosition);
+    const shown = only ? cards.filter((t) => assigneesOf(t).includes(only)) : cards;
+    const childrenOf = (key) => tasks.filter((t) => linkOf(t, 'parent') === key).sort(byPosition);
+    const countAbout = (records, key) => records.filter((r) => linkOf(r, 'about') === key).length;
+    const laneOf = (t) => (known.has(linkOf(t, 'in')) ? linkOf(t, 'in') : LOOSE);
+    const tasksIn = (lane) => shown.filter((t) => laneOf(t) === lane);
     const nextIn = (lane, key) => {
       const list = tasksIn(lane);
       return list[list.findIndex((t) => t.key === key) + 1]?.key ?? null;
     };
     const lanes = [
-      ...(tasksIn(LOOSE).length > 0 ? [{ key: LOOSE, name: 'No column', record: null }] : []),
+      ...(cards.some((t) => laneOf(t) === LOOSE) ? [{ key: LOOSE, name: 'No column', record: null }] : []),
       ...cols.map((c) => ({ key: c.key, name: c.body.name, record: c })),
     ];
+    const assigned = [...new Set(cards.flatMap(assigneesOf))];
 
     const place = (lane, before, moving) => {
-      const list = tasksIn(lane).filter((t) => t.key !== moving);
+      const list = cards.filter((t) => laneOf(t) === lane && t.key !== moving);
       const at =
         before === null
           ? list.length
@@ -143,16 +309,14 @@
       return positionBetween(prev, next);
     };
     const move = (key, to) => {
-      const t = sorted.find((x) => x.key === key);
+      const t = cards.find((x) => x.key === key);
       if (!t) return;
-      const lane = known.has(laneOf(t)) ? laneOf(t) : LOOSE;
+      const lane = laneOf(t);
       if (lane === to.lane && (to.before === key || nextIn(lane, key) === to.before)) return; // dropped where it was
-      minca.update(
+      return minca.update(
         key,
         { ...t.body, position: place(to.lane, to.before, key) },
-        {
-          links: [...t.links.filter((l) => l.rel !== 'in'), ...columnLinks(to.lane)],
-        },
+        { links: [...t.links.filter((l) => l.rel !== 'in'), ...columnLinks(to.lane)] },
       );
     };
     const endDrag = () => {
@@ -168,108 +332,460 @@
       if (drop?.lane !== lane || drop.before !== before) setDrop({ lane, before });
     };
     const landing = (lane, before) => dragging !== null && drop?.lane === lane && drop.before === before;
+    const opened = tasks.find((t) => t.key === openKey);
 
-    return html`<div class="board">
-      ${lanes.map((lane) => {
-        const cards = tasksIn(lane.key);
-        return html`<section
-          class="lane"
-          key=${lane.key}
-          aria-label=${lane.name}
-          onDragOver=${(event) => {
-            if (!dragging) return;
-            event.preventDefault();
-            if (drop?.lane !== lane.key || drop.before !== null) setDrop({ lane: lane.key, before: null });
-          }}
-          onDrop=${(event) => {
-            event.preventDefault();
-            if (dragging && drop) move(dragging, drop);
-            endDrag();
-          }}
-        >
-          <header>
-            ${
-              lane.record
-                ? html`<button
-                    title="Open this column"
-                    onClick=${() => minca.open({ record: lane.record.key })}
-                  >
-                    ${lane.name}
-                  </button>`
-                : html`<span class="muted">${lane.name}</span>`
-            }
-            <span class="faint">${cards.length}</span>
-          </header>
-          ${cards.map(
-            (t) =>
-              html`<div key=${t.key}>
-                ${landing(lane.key, t.key) && html`<div class="marker" aria-hidden="true"></div>`}
-                <button
-                  type="button"
-                  class="task"
-                  data-key=${t.key}
-                  data-marked=${t.key === marked}
-                  draggable=${mayMove}
-                  style=${{ opacity: dragging === t.key ? 0.4 : 1 }}
-                  onDragStart=${(event) => {
-                    event.dataTransfer.effectAllowed = 'move';
-                    event.dataTransfer.setData('text/plain', t.body.title);
-                    setDragging(t.key);
-                  }}
-                  onDragEnd=${endDrag}
-                  onDragOver=${(event) => overCard(event, lane.key, t.key)}
-                  onClick=${() => minca.open({ record: t.key })}
-                >
-                  <span>${t.body.title}</span>
-                  ${t.body.notes && html`<span class="faint">Has notes</span>`}
-                </button>
-              </div>`,
-          )}
-          ${landing(lane.key, null) && html`<div class="marker" aria-hidden="true"></div>`}
-          ${
-            mayAddTask &&
-            (addingTo === lane.key
-              ? html`<${OneLine}
-                  placeholder="Task title"
-                  onDone=${() => setAddingTo(null)}
-                  onSubmit=${(title) => minca.put(TASK, { title, position: place(lane.key, null) }, { links: columnLinks(lane.key) })}
-                />`
-              : html`<button class="add" data-variant="ghost" onClick=${() => setAddingTo(lane.key)}>
-                  + Add task
-                </button>`)
-          }
-        </section>`;
-      })}
+    return html`<div>
       ${
-        mayAddColumn &&
-        html`<div class="new-column">
+        assigned.length > 0 &&
+        html`<div class="toolbar" role="group" aria-label="Show the cards of">
+          <button class="chip" aria-pressed=${only === null} onClick=${() => setOnly(null)}>Everyone</button>
           ${
-            addingColumn
-              ? html`<${OneLine}
-                  placeholder="Column name"
-                  onDone=${() => setAddingColumn(false)}
-                  onSubmit=${(name) =>
-                    minca.put(COLUMN, {
-                      name,
-                      position: positionBetween(
-                        [...cols].reverse().find((c) => c.body.position)?.body.position,
-                      ),
-                    })}
-                />`
-              : html`<button onClick=${() => setAddingColumn(true)}>+ Add column</button>`
+            assigned.includes(me) &&
+            html`<button
+              class="chip"
+              aria-pressed=${only === me}
+              onClick=${() => setOnly(only === me ? null : me)}
+            >
+              Assigned to me
+            </button>`
           }
+          ${assigned
+            .filter((did) => did !== me)
+            .map(
+              (did) =>
+                html`<button
+                  key=${did}
+                  class="face-filter"
+                  aria-pressed=${only === did}
+                  title=${nameIn(people, did)}
+                  aria-label=${`Only ${nameIn(people, did)}'s cards`}
+                  onClick=${() => setOnly(only === did ? null : did)}
+                >
+                  <${Avatar} did=${did} size=${26} round />
+                </button>`,
+            )}
         </div>`
+      }
+      <div class="board">
+        ${lanes.map(
+          (lane) =>
+            html`<section
+              class="lane"
+              key=${lane.key}
+              aria-label=${lane.name}
+              onDragOver=${(event) => {
+                if (!dragging) return;
+                event.preventDefault();
+                if (drop?.lane !== lane.key || drop.before !== null)
+                  setDrop({ lane: lane.key, before: null });
+              }}
+              onDrop=${(event) => {
+                event.preventDefault();
+                if (dragging && drop) move(dragging, drop);
+                endDrag();
+              }}
+            >
+              <${LaneHeader}
+                lane=${lane}
+                count=${tasksIn(lane.key).length}
+                empty=${!cards.some((t) => laneOf(t) === lane.key)}
+              />
+              ${tasksIn(lane.key).map(
+                (t) =>
+                  html`<div key=${t.key}>
+                    ${landing(lane.key, t.key) && html`<div class="marker" aria-hidden="true"></div>`}
+                    <${Card}
+                      task=${t}
+                      checklist=${childrenOf(t.key)}
+                      comments=${countAbout(comments, t.key)}
+                      files=${countAbout(files, t.key)}
+                      faded=${dragging === t.key}
+                      onOpen=${() => setOpenKey(t.key)}
+                      onDragStart=${() => setDragging(t.key)}
+                      onDragEnd=${endDrag}
+                      onDragOver=${(event) => overCard(event, lane.key, t.key)}
+                    />
+                  </div>`,
+              )}
+              ${landing(lane.key, null) && html`<div class="marker" aria-hidden="true"></div>`}
+              ${
+                mayAddTask &&
+                (addingTo === lane.key
+                  ? html`<${OneLine}
+                      placeholder="Card title"
+                      onDone=${() => setAddingTo(null)}
+                      onSubmit=${(title) =>
+                        minca.put(
+                          TASK,
+                          // Added while one person's cards are shown, it is theirs, so it stays in sight
+                          { title, position: place(lane.key, null), ...(only ? { assignees: [only] } : {}) },
+                          { links: columnLinks(lane.key) },
+                        )}
+                    />`
+                  : html`<button class="add" data-variant="ghost" onClick=${() => setAddingTo(lane.key)}>
+                      + Add a card
+                    </button>`)
+              }
+            </section>`,
+        )}
+        ${
+          mayAddColumn &&
+          html`<div class="new-column">
+            ${
+              addingColumn
+                ? html`<${OneLine}
+                    placeholder="Column name"
+                    onDone=${() => setAddingColumn(false)}
+                    onSubmit=${(name) =>
+                      minca.put(COLUMN, {
+                        name,
+                        position: positionBetween(
+                          [...cols].reverse().find((c) => c.body.position)?.body.position,
+                        ),
+                      })}
+                  />`
+                : html`<button onClick=${() => setAddingColumn(true)}>+ Add column</button>`
+            }
+          </div>`
+        }
+      </div>
+      ${
+        opened &&
+        html`<${CardView}
+          key=${opened.key}
+          task=${opened}
+          lanes=${lanes.filter((l) => l.record)}
+          lane=${laneOf(opened)}
+          checklist=${childrenOf(opened.key)}
+          onMove=${(lane) => move(opened.key, { lane, before: null })}
+          onOpen=${setOpenKey}
+          onClose=${() => setOpenKey(null)}
+        />`
       }
     </div>`;
   }
 
-  /** A one-line input that adds on Enter, stays open for the next, and closes on Escape or when left empty */
-  function OneLine({ placeholder, onSubmit, onDone }) {
-    const [text, setText] = useState('');
+  /** A column's name, renamed in place; an empty column can be taken away */
+  function LaneHeader({ lane, count, empty }) {
+    const key = lane.record?.key ?? '';
+    const mayRename = useMay('edit', key) === true;
+    const mayDelete = useMay('delete', key) === true;
+    const [renaming, setRenaming] = useState(false);
+    if (!lane.record)
+      return html`<header>
+        <span class="muted" style="flex: 1">${lane.name}</span><span class="faint">${count}</span>
+      </header>`;
+    return html`<header>
+      ${
+        renaming
+          ? html`<${OneLine}
+              placeholder="Column name"
+              initial=${lane.name}
+              onDone=${() => setRenaming(false)}
+              onSubmit=${async (name) => {
+                setRenaming(false);
+                await minca.update(key, { ...lane.record.body, name });
+              }}
+            />`
+          : html`<button
+              title=${mayRename ? 'Rename this column' : undefined}
+              disabled=${!mayRename}
+              style="opacity: 1"
+              onClick=${() => setRenaming(true)}
+            >
+              ${lane.name}
+            </button>`
+      }
+      <span class="faint">${count}</span>
+      ${
+        mayDelete &&
+        empty &&
+        !renaming &&
+        html`<button
+          class="quiet"
+          title="Delete this empty column"
+          aria-label="Delete this column"
+          onClick=${() => minca.remove(key)}
+        >
+          ✕
+        </button>`
+      }
+    </header>`;
+  }
+
+  /** A card on the board: its label, title, and what is on it at a glance */
+  function Card({ task, checklist, comments, files, faded, onOpen, onDragStart, onDragEnd, onDragOver }) {
+    // Draggable until the answer is no, so a card just added moves at once
+    const mayMove = useMay('edit', task.key) !== false;
+    const { title, notes, priority } = task.body;
+    const label = PRIORITIES.find(([p]) => p === priority);
+    const due = dayOf(task.body.due);
+    const late = due !== null && due < today();
+    const done = checklist.filter((c) => c.body.status === 'done').length;
+    const faces = assigneesOf(task);
+    const more = due || notes || checklist.length > 0 || comments > 0 || files > 0 || faces.length > 0;
+    return html`<button
+      type="button"
+      class="task"
+      data-key=${task.key}
+      draggable=${mayMove}
+      style=${{ opacity: faded ? 0.4 : 1 }}
+      onDragStart=${(event) => {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', title);
+        onDragStart();
+      }}
+      onDragEnd=${onDragEnd}
+      onDragOver=${onDragOver}
+      onClick=${onOpen}
+    >
+      ${label && html`<span class=${`pill c-${label[2]}`}>${label[1]}</span>`}
+      <span>${title}</span>
+      ${
+        more &&
+        html`<span class="meta">
+          ${due && html`<span class=${late ? 'late' : ''} title=${late ? 'Overdue' : 'Due'}>◷ ${dueText(due)}</span>`}
+          ${notes && html`<span title="Has a description">≡</span>`}
+          ${checklist.length > 0 && html`<span title="Checklist">☑ ${done}/${checklist.length}</span>`}
+          ${comments > 0 && html`<span title="Comments">💬 ${comments}</span>`}
+          ${files > 0 && html`<span title="Attachments">📎 ${files}</span>`}
+          ${
+            faces.length > 0 &&
+            html`<span class="faces">
+              ${faces.slice(0, 4).map((did) => html`<${Avatar} key=${did} did=${did} size=${22} round />`)}
+            </span>`
+          }
+        </span>`
+      }
+    </button>`;
+  }
+
+  /** A card opened: everything on it, each part changed where it is shown */
+  function CardView({ task, lanes, lane, checklist, onMove, onOpen, onClose }) {
+    const people = usePeople() ?? [];
+    const mayEdit = useMay('edit', task.key) !== false;
+    const mayDelete = useMay('delete', task.key) === true;
+    const mayAddItem = useCan('create', TASK);
+    const [title, setTitle] = useState(task.body.title);
+    const [notes, setNotes] = useState(task.body.notes ?? '');
+    const [error, setError] = useState(null);
+    const fileInput = useRef(null);
+    // What someone else changed shows, unless this person is changing it too
+    useEffect(() => setTitle(task.body.title), [task.body.title]);
+    useEffect(() => setNotes(task.body.notes ?? ''), [task.body.notes]);
+
+    /** Sets one field, or takes it off when empty */
+    const set = (field, value) => {
+      const body = { ...task.body, [field]: value };
+      if (value === null || value === '' || (Array.isArray(value) && value.length === 0)) delete body[field];
+      return minca.update(task.key, body).catch((e) => setError(e.message));
+    };
+    const assignees = assigneesOf(task);
+    const parent = linkOf(task, 'parent');
+    const due = dayOf(task.body.due);
+    const done = checklist.filter((c) => c.body.status === 'done').length;
+
+    return html`<${Modal} title=${parent ? 'Checklist item' : 'Card'} onClose=${onClose} width=${600}>
+      <input
+        class="card-title"
+        value=${title}
+        readonly=${!mayEdit}
+        aria-label="Title"
+        onInput=${(e) => setTitle(e.currentTarget.value)}
+        onKeyDown=${(e) => e.key === 'Enter' && e.currentTarget.blur()}
+        onBlur=${() => title.trim() && title.trim() !== task.body.title && set('title', title.trim())}
+      />
+      ${parent && html`<button style="align-self: flex-start" onClick=${() => onOpen(parent)}>‹ Back to its card</button>`}
+      <div class="fields">
+        ${
+          !parent &&
+          lanes.length > 0 &&
+          html`<span class="label">Column</span>
+            <select value=${lane} disabled=${!mayEdit} onChange=${(e) => onMove(e.currentTarget.value)}>
+              ${lane === LOOSE && html`<option value="">No column</option>`}
+              ${lanes.map((l) => html`<option key=${l.key} value=${l.key}>${l.name}</option>`)}
+            </select>`
+        }
+        <span class="label">Members</span>
+        <div class="row" style="flex-wrap: wrap; gap: 6px">
+          ${people.map(
+            (p) =>
+              html`<button
+                key=${p.did}
+                class="chip"
+                aria-pressed=${assignees.includes(p.did)}
+                disabled=${!mayEdit}
+                onClick=${() =>
+                  set(
+                    'assignees',
+                    assignees.includes(p.did) ? assignees.filter((d) => d !== p.did) : [...assignees, p.did],
+                  )}
+              >
+                <${Avatar} did=${p.did} size=${18} round /> ${nameIn(people, p.did)}
+              </button>`,
+          )}
+        </div>
+        <span class="label">Due</span>
+        <div class="row">
+          <input
+            type="date"
+            value=${due ?? ''}
+            disabled=${!mayEdit}
+            style="max-width: 180px"
+            onChange=${(e) => set('due', e.currentTarget.value)}
+          />
+          ${due && due < today() && html`<span class="late" style="font-size: 13px">Overdue</span>`}
+        </div>
+        <span class="label">Priority</span>
+        <div class="row" style="flex-wrap: wrap; gap: 6px">
+          <button class="chip" aria-pressed=${!task.body.priority} disabled=${!mayEdit} onClick=${() => set('priority', null)}>
+            None
+          </button>
+          ${PRIORITIES.map(
+            ([p, name]) =>
+              html`<button
+                key=${p}
+                class="chip"
+                aria-pressed=${task.body.priority === p}
+                disabled=${!mayEdit}
+                onClick=${() => set('priority', p)}
+              >
+                ${name}
+              </button>`,
+          )}
+        </div>
+      </div>
+      <div class="stack" style="gap: 6px">
+        <span class="label">Description</span>
+        <textarea
+          rows="4"
+          value=${notes}
+          readonly=${!mayEdit}
+          placeholder="Add more detail…"
+          onInput=${(e) => setNotes(e.currentTarget.value)}
+          onBlur=${() => notes !== (task.body.notes ?? '') && set('notes', notes)}
+        ></textarea>
+      </div>
+      ${
+        !parent &&
+        html`<div class="stack" style="gap: 6px">
+          <div class="row">
+            <span class="label" style="flex: 1">Checklist</span>
+            ${checklist.length > 0 && html`<span class="faint">${done}/${checklist.length}</span>`}
+          </div>
+          ${
+            checklist.length > 0 &&
+            html`<div class="bar">
+              <span style=${{ width: `${(done / checklist.length) * 100}%` }}></span>
+            </div>`
+          }
+          ${checklist.map((item) => html`<${CheckItem} key=${item.key} item=${item} onOpen=${() => onOpen(item.key)} />`)}
+          ${
+            mayAddItem &&
+            html`<${OneLine}
+              placeholder="Add an item"
+              still
+              onDone=${() => {}}
+              onSubmit=${(itemTitle) =>
+                minca.put(
+                  TASK,
+                  {
+                    title: itemTitle,
+                    status: 'todo',
+                    position: positionBetween(checklist.at(-1)?.body.position),
+                  },
+                  { links: [{ rel: 'parent', to: task.key }] },
+                )}
+            />`
+          }
+        </div>`
+      }
+      ${
+        has(FILE) &&
+        html`<div class="stack" style="gap: 6px">
+          <div class="row">
+            <span class="label" style="flex: 1">Attachments</span>
+            <button onClick=${() => fileInput.current?.click()}>Attach a file</button>
+            <input
+              ref=${fileInput}
+              type="file"
+              multiple
+              hidden
+              onChange=${(e) => {
+                attach(task.key, e.currentTarget.files).catch((err) => setError(err.message));
+                e.currentTarget.value = '';
+              }}
+            />
+          </div>
+          <${Attachments} about=${task.key} />
+        </div>`
+      }
+      ${error && html`<p class="error">${error}</p>`}
+      ${has(COMMENT) && html`<${Comments} about=${task} />`}
+      <div class="row">
+        <span class="faint" style="flex: 1">Added by <${Person} did=${task.createdBy} face=${false} /></span>
+        ${
+          mayDelete &&
+          html`<button
+            data-variant="danger"
+            onClick=${async () => {
+              // Its checklist first, so nothing is left under a card that is gone
+              await Promise.allSettled(checklist.map((item) => minca.remove(item.key)));
+              await minca.remove(task.key);
+              onClose();
+            }}
+          >
+            Delete ${parent ? 'item' : 'card'}
+          </button>`
+        }
+      </div>
+    </${Modal}>`;
+  }
+
+  /** One item of a card's checklist: ticked here, or opened as a task of its own */
+  function CheckItem({ item, onOpen }) {
+    const mayEdit = useMay('edit', item.key) !== false;
+    const mayDelete = useMay('delete', item.key) === true;
+    const isDone = item.body.status === 'done';
+    return html`<div class="check" data-done=${isDone}>
+      <input
+        type="checkbox"
+        checked=${isDone}
+        disabled=${!mayEdit}
+        aria-label=${isDone ? 'Not done' : 'Done'}
+        onChange=${() => minca.update(item.key, { ...item.body, status: isDone ? 'todo' : 'done' })}
+      />
+      <span>${item.body.title}</span>
+      ${assigneesOf(item).map((did) => html`<${Avatar} key=${did} did=${did} size=${18} round />`)}
+      <button data-variant="ghost" data-icon aria-label="Open this item" onClick=${onOpen}>›</button>
+      ${
+        mayDelete &&
+        html`<button
+          data-variant="ghost"
+          data-icon
+          aria-label="Delete this item"
+          onClick=${() => minca.remove(item.key)}
+        >
+          ✕
+        </button>`
+      }
+    </div>`;
+  }
+
+  /**
+   * A one-line input that adds on Enter and stays open for the next. It takes
+   * the cursor and closes on Escape or when left, unless it is `still`: always
+   * there, like a checklist's last line.
+   */
+  function OneLine({ placeholder, onSubmit, onDone, initial = '', still = false }) {
+    const [text, setText] = useState(initial);
     // autofocus only works on what the page loads with, not on what is added later
     const input = useRef(null);
-    useEffect(() => input.current?.focus(), []);
+    useEffect(() => {
+      if (!still) input.current?.select();
+    }, []);
     return html`<form
+      style="flex: 1"
       onSubmit=${(event) => {
         event.preventDefault();
         if (text.trim()) onSubmit(text.trim());
@@ -281,7 +797,7 @@
         value=${text}
         onInput=${(event) => setText(event.currentTarget.value)}
         onKeyDown=${(event) => event.key === 'Escape' && onDone()}
-        onBlur=${() => !text.trim() && onDone()}
+        onBlur=${() => (!text.trim() || initial) && onDone()}
         placeholder=${placeholder}
         aria-label=${placeholder}
       />

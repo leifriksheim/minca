@@ -10,6 +10,7 @@ import {
   comment,
   decision,
   event,
+  expense,
   file,
   list,
   listItem,
@@ -21,17 +22,21 @@ import {
   poll,
   positionBetween,
   proposal,
+  reaction,
   rsvp,
+  settlement,
   task,
   vote,
 } from '@minca/core/schemas';
 import type { Template } from '../launcher';
 import calls from './calls.html?raw';
+import bills from './bills.html?raw';
 import chat from './chat.html?raw';
 import decisions from './decisions.html?raw';
 import events from './events.html?raw';
 import files from './files.html?raw';
 import kanban from './kanban.html?raw';
+import lists from './lists.html?raw';
 import marketplace from './marketplace.html?raw';
 import polls from './polls.html?raw';
 
@@ -41,16 +46,17 @@ export const TEMPLATES: ReadonlyArray<Template> = [
       template: 'chat',
       title: 'Chat',
       description:
-        'Talk with everyone in the space. "@" someone to tell them, and drop files in to share them.',
-      collections: [message.name, file.name],
+        'Talk with everyone in the space: reply, react, "@" someone to tell them, and drop files in to share them.',
+      collections: [message.name, file.name, reaction.name],
       shows: [message.name],
       notify: [
         notifyOn('Mentions me', message.name, { mentions: { $contains: '$me' } }),
+        notifyOn('Replies to me', message.name, { replyingTo: '$me' }),
         notifyOn('New message', message.name),
       ],
       screen: chat,
     },
-    needs: [message, file],
+    needs: [message, file, reaction],
   },
   {
     app: {
@@ -68,8 +74,9 @@ export const TEMPLATES: ReadonlyArray<Template> = [
     app: {
       template: 'kanban',
       title: 'Kanban',
-      description: 'Tasks on a board: drag them between columns, and into order.',
-      collections: [task.name, column.name],
+      description:
+        'Cards on a board, like Trello: drag them between columns, put people on them, give them a due date and a checklist.',
+      collections: [task.name, column.name, comment.name, file.name],
       shows: [task.name],
       notify: [
         notifyOn('New task', task.name),
@@ -77,8 +84,7 @@ export const TEMPLATES: ReadonlyArray<Template> = [
       ],
       screen: kanban,
     },
-    needs: [task, column],
-    uses: [file],
+    needs: [task, column, comment, file],
     setup: async (node, spaceId) => {
       if ((await node.records.list(spaceId, { collection: column.name })).length > 0) return;
       let position: string | null = null;
@@ -87,6 +93,34 @@ export const TEMPLATES: ReadonlyArray<Template> = [
         await node.records.put(spaceId, column.name, { name, position });
       }
     },
+  },
+  {
+    app: {
+      template: 'lists',
+      title: 'Lists',
+      description: 'To-dos, groceries, packing: lists anyone can write in at once, a line each.',
+      collections: [list.name, listItem.name],
+      shows: [list.name],
+      notify: [notifyOn('New list', list.name)],
+      screen: lists,
+    },
+    needs: [list, listItem],
+  },
+  {
+    app: {
+      template: 'bills',
+      title: 'Bills',
+      description:
+        'Split what you spend together, see who owes whom, and settle up in as few payments as can be.',
+      collections: [expense.name, settlement.name, comment.name],
+      shows: [expense.name],
+      notify: [
+        notifyOn('Expenses I owe a part of', expense.name, { owedBy: { $contains: '$me' } }),
+        notifyOn('Paid back to me', settlement.name, { to: '$me' }),
+      ],
+      screen: bills,
+    },
+    needs: [expense, settlement, comment],
   },
   {
     app: {
