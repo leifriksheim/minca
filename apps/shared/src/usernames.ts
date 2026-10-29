@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react';
 import { createP256Provider } from '@minca/core';
 import { formatUsername, parseUsername, resolveUsername, type ResolvedUsername } from '@minca/core/inbox';
-import { useNode } from '@minca/react';
 
-/** Where this app's people claim their usernames: `leif@minca.social` */
+/** Where this build's people claim their usernames: `leif@minca.social` */
 export const NAMES_DOMAIN = import.meta.env.VITE_NAMES_DOMAIN || 'minca.social';
 
 const provider = createP256Provider();
 
-/** A username from what someone typed: `anna` is anna at this app's domain, `@anna@x.org` is as written */
+/** A username from what someone typed: `anna` is anna at this build's domain, `@anna@x.org` is as written */
 function usernameFrom(text: string): string | null {
   const typed = text.trim().replace(/^@/, '').toLowerCase();
   if (!typed) return null;
@@ -51,15 +50,45 @@ export function useUsernameLookup(text: string, delayMs = 300): Lookup {
   return lookup;
 }
 
-/** Keeps these spaces syncing while the screen shows, so what contacts leave there arrives */
-export function useHeldSpaces(ids: ReadonlyArray<string>): void {
-  const node = useNode();
-  const key = [...ids].sort().join(',');
+/**
+ * Names to offer someone called `name`, best first: their first name, the
+ * whole of it, then the first name with a number.
+ */
+export function usernameIdeas(name: string): string[] {
+  const words = name
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+  const first = words[0]?.slice(0, 30);
+  if (!first) return [];
+  // The same number for the same name, so the ideas don't change between renders.
+  const number = 10 + ([...name].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 90);
+  return [...new Set([first, words.join('.').slice(0, 64), `${first}${number}`])];
+}
+
+/** The first of `ideas` nobody has yet, once looked up; null while looking, or when all are taken */
+export function useFreeUsername(ideas: ReadonlyArray<string>): string | null {
+  const [free, setFree] = useState<string | null>(null);
+  const key = ideas.join(',');
   useEffect(() => {
-    if (!key) return;
-    const held = key.split(',').map((id) => node.spaces.hold(id).catch(() => null));
+    let current = true;
+    void (async () => {
+      for (const idea of key.split(',')) {
+        const username = usernameFrom(idea);
+        if (!username) continue;
+        const taken = await resolveUsername(username, provider).then(
+          () => true,
+          () => false,
+        );
+        if (!current) return;
+        if (!taken) return setFree(idea);
+      }
+    })();
     return () => {
-      for (const hold of held) void hold.then((release) => release?.());
+      current = false;
     };
-  }, [node, key]);
+  }, [key]);
+  return free;
 }

@@ -1,4 +1,5 @@
 /** Contacts (`node.contacts`) and the inbox (`node.inbox`), for the screens that show them. */
+import { useEffect } from 'react';
 import { ROLE_ASSIGN, type ContactView, type P2PNode } from '@minca/core';
 import { useAsync, useLive, useNode, useWatched } from '@minca/react';
 
@@ -96,4 +97,17 @@ export async function takeBack(
     }
   }
   await node.contacts.remove(did);
+}
+
+/** Keeps these spaces syncing while the screen shows, so what contacts leave there arrives */
+export function useHeldSpaces(ids: ReadonlyArray<string>): void {
+  const node = useNode();
+  const key = [...ids].sort().join(',');
+  useEffect(() => {
+    if (!key) return;
+    const held = key.split(',').map((id) => node.spaces.hold(id).catch(() => null));
+    return () => {
+      for (const hold of held) void hold.then((release) => release?.());
+    };
+  }, [node, key]);
 }

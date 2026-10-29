@@ -7,7 +7,7 @@ import { Shape } from '@minca/app-shared/shapes';
 import { markFor } from '@minca/ui/shapes';
 import { palette, styles } from '../styles';
 import { invitableRoles, useContacts } from '../contacts';
-import { useUsernameLookup } from '../usernames';
+import { useUsernameLookup } from '@minca/app-shared/usernames';
 import { AddButton } from './Buttons';
 import { AddDialog, Handle, PersonRow } from './PeopleParts';
 

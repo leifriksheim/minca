@@ -23,7 +23,9 @@
     "./Payment": "./src/Payment.tsx",
     "./CommunitySetup": "./src/CommunitySetup.tsx",
     "./Feature": "./src/Feature.tsx",
-    "./may": "./src/may.ts"
+    "./may": "./src/may.ts",
+    "./usernames": "./src/usernames.ts",
+    "./UsernamePicker": "./src/UsernamePicker.tsx"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

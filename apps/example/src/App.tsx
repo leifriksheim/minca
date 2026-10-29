@@ -1,6 +1,5 @@
 import { Link, Outlet, useNavigate } from '@tanstack/react-router';
-import { useContacts } from './contacts';
-import { useHeldSpaces } from './usernames';
+import { useContacts, useHeldSpaces } from './contacts';
 import { SpaceInvites } from './components/PeopleParts';
 import type { NewSpace } from '@minca/core';
 import { inviteFromLink, useAccount, useConnection, useNode, useSpaces } from '@minca/react';
@@ -13,6 +12,7 @@ import { useRunAutomations } from './automations';
 import { ConnectScreen } from './components/ConnectScreen';
 import { useAccountInAddress } from './account-address';
 import { ContactsView } from './components/ContactsView';
+import { UsernameStep, useUsernameStep } from './components/UsernameStep';
 import { RelayDown } from './components/RelayNotice';
 import { DocsNote } from './components/DocsNote';
 import { SpaceList } from './components/SpaceList';
@@ -29,12 +29,18 @@ export function App() {
   const { state } = useConnection();
   useAccountInAddress();
   // Calls sit above the workspace, so moving between spaces never touches one.
-  return state.status === 'ready' ? (
+  return state.status === 'ready' ? <Connected /> : <ConnectScreen />;
+}
+
+/** In: a username first, the once, then the workspace */
+function Connected() {
+  const username = useUsernameStep();
+  if (username.looking) return null;
+  if (username.ask) return <UsernameStep onDone={username.done} />;
+  return (
     <CallsProvider>
       <Workspace />
     </CallsProvider>
-  ) : (
-    <ConnectScreen />
   );
 }
 

@@ -9,7 +9,7 @@ import { shapeFor } from '@minca/ui/shapes';
 import { ago } from '@minca/ui/time';
 import { palette, styles } from '../styles';
 import { NOT_CARRIED } from '../contacts';
-import { shortUsername } from '../usernames';
+import { shortUsername } from '@minca/app-shared/usernames';
 import { AddButton, LinkButton } from './Buttons';
 import { Icon } from './Icon';
 import { usePopover } from './usePopover';

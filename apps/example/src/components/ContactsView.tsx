@@ -21,6 +21,7 @@ import {
   takeBack,
   useContacts,
   useStanding,
+  useHeldSpaces,
 } from '../contacts';
 import { nameOf, peopleFrom } from '../derive/people';
 import { ago } from '@minca/ui/time';
@@ -35,7 +36,7 @@ import { Icon } from './Icon';
 import { UsernameCard } from './UsernameCard';
 import { AddDialog, Handle, Notice, PersonRow, RowMenu, SpaceInvites } from './PeopleParts';
 import { InviteToSpace } from './InvitePeople';
-import { shortUsername, useHeldSpaces, useUsernameLookup } from '../usernames';
+import { shortUsername, useUsernameLookup } from '@minca/app-shared/usernames';
 
 const { ink, surface, accent } = palette;
 

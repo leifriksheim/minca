@@ -45,9 +45,6 @@ export function injectBaseStyles(): void {
 
     /* In a space: the rail, the space's sidebar, and whatever is open, each
        the height of the window and scrolling on its own, the way chat apps are. */
-    /* A pill holding an input and words beside it: the ring goes round the pill, not the input. */
-    .pill-field input, .pill-field input:focus { border: none !important; box-shadow: none !important; }
-    .pill-field:focus-within { border-color: ${accent.base} !important; box-shadow: 0 0 0 3px ${accent.soft}; }
 
     .shell { padding-left: ${RAIL_WIDTH}px; }
     .space-shell { display: grid; grid-template-columns: ${SIDEBAR_WIDTH}px minmax(0, 1fr); height: 100vh; height: 100dvh; }
