@@ -20,6 +20,7 @@
  * the remover never saw it — is passed over when reading, and the version
  * before it counts again, where the store still has one.
  */
+import { cached, getOrAdd } from '../utils/map.js';
 import { contactKeyPair, isContactPublicKey } from '../identity/contact-key.js';
 import type { CryptoProvider, Link, NetworkMessage, PeerInfo, StorageAdapter, Version } from '../types.js';
 import type { Signer } from '../schema/signer.js';
@@ -401,27 +402,6 @@ const isFolderAdapter = (adapter: StorageAdapter): adapter is FolderAdapter =>
 const isLinks = (links: unknown): links is ReadonlyArray<Link> => checkLinks(links) === null;
 const isLine = (line: unknown): line is Line => checkLine(line) === null;
 const areKeepers = (keepers: unknown): keepers is Keeper[] => checkKeepers(keepers) === null;
-
-/**
- * The cached answer for `key`, or `make`'s, which is cached while `keep` says
- * it can't change. A failure is never kept.
- */
-function memo<T>(
-  cache: Map<string, Promise<T>>,
-  key: string,
-  make: () => Promise<T>,
-  keep: (value: T) => boolean = () => true,
-): Promise<T> {
-  const known = cache.get(key);
-  if (known) return known;
-  const made = make();
-  cache.set(key, made);
-  void made.then(
-    (value) => keep(value) || cache.delete(key),
-    () => cache.delete(key),
-  );
-  return made;
-}
 
 /** A cutoff from a record's body — key DID → collection → the place covered up to — or null when it isn't one */
 function readCutoff(value: unknown): Cutoff | null {
@@ -1010,7 +990,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   /** The definition held in one version of `sys.collection` */
   function definitionIn(id: string): Promise<Definition> {
     // Something missing may turn up; only settled answers are kept.
-    return memo(
+    return cached(
       definitions,
       id,
       async (): Promise<Definition> => {
@@ -1122,7 +1102,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     if (problem) return { ok: false, reason: problem };
     const cacheKey = within ? `${copyKey(version)}|${idsKey(within)}` : copyKey(version);
     // Only a verdict that stands is kept: one waiting changes when what it waits on arrives (02 §9.5).
-    return memo(
+    return cached(
       standings,
       cacheKey,
       () => judgeStanding(version, within),
@@ -1343,7 +1323,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const cacheKey = `${copyKey(version)}|${within ? idsKey(within) : ''}`;
     // Only what can't change is kept: not a verdict waiting on what it cites, nor one this node couldn't judge.
     const settled = (found: ChecksVerdict) => !('pending' in found) && found !== UNJUDGED;
-    return memo(checkVerdicts, cacheKey, () => judgeChecks(version, within), settled);
+    return cached(checkVerdicts, cacheKey, () => judgeChecks(version, within), settled);
   }
 
   async function judgeChecks(version: Version, within?: ReadonlyArray<string>): Promise<ChecksVerdict> {
@@ -1451,11 +1431,10 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   const lineIndexes = new Map<string, Promise<Map<string, Version[]>>>();
   const twinKey = (version: Version) => `${version.key}\n${version.prev ?? ''}`;
   function lineIndex(collection: string): Promise<Map<string, Version[]>> {
-    return memo(lineIndexes, collection, async () => {
+    return cached(lineIndexes, collection, async () => {
       const byPlace = new Map<string, Version[]>();
       for (const version of await storage.keptVersions(collection)) {
-        const twins = byPlace.get(twinKey(version)) ?? [];
-        byPlace.set(twinKey(version), [...twins, version]);
+        getOrAdd(byPlace, twinKey(version), () => []).push(version);
       }
       return byPlace;
     });

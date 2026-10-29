@@ -8,6 +8,7 @@
  * sits in mailboxes: the account's host's first, which keeps it while every
  * device is away, then the relays where the space's members meet.
  */
+import { cached } from '../utils/map.js';
 import {
   bareInvite,
   parseSpaceInvite,
@@ -35,7 +36,7 @@ import { isKeptLink, LINK_COLLECTION, type KeptLink } from '../space/account-reg
 import { base64UrlDecode, bytesToHex, hexToBytes } from '../utils/encoding.js';
 import { unref } from '../utils/guards.js';
 import { serial } from '../utils/serial.js';
-import { cached, inBackground, sleep, type NodeContext } from './node-context.js';
+import { inBackground, sleep, type NodeContext } from './node-context.js';
 
 /** The long invite a text names, and when its inviter stops sharing it */
 interface Resolved {

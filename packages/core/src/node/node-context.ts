@@ -89,16 +89,6 @@ export function within(work: Promise<unknown>, waitMs: number): Promise<boolean>
   });
 }
 
-/** The promise kept under `key`, made once; forgotten if it fails, so the next ask tries again */
-export function cached<T>(cache: Map<string, Promise<T>>, key: string, make: () => Promise<T>): Promise<T> {
-  const known = cache.get(key);
-  if (known) return known;
-  const made = make();
-  cache.set(key, made);
-  made.catch(() => cache.delete(key));
-  return made;
-}
-
 /** The value `make` gives, or null if it throws */
 export function attempt<T>(make: () => T): T | null {
   try {

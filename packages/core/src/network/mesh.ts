@@ -20,6 +20,7 @@
  *
  * A connection that ends up in no room is closed.
  */
+import { getOrAdd } from '../utils/map.js';
 import type { PeerInfo, NetworkMessage } from '../types.js';
 import { utf8Encode, utf8Decode } from '../utils/encoding.js';
 import { createEmitter, type Emitter } from '../utils/events.js';
@@ -414,7 +415,7 @@ export function createMesh(config: MeshConfig): Mesh {
       greet(name, peer);
       return;
     }
-    addTo(expected, peer, name);
+    getOrAdd(expected, peer, () => new Set()).add(name);
     if (!offer || attempted.has(peer)) return;
     attempted.add(peer);
     void offerTo(peer, offer);
@@ -460,7 +461,7 @@ export function createMesh(config: MeshConfig): Mesh {
     if (!(await verifyBy(provider, origin, sig, introductionLabel(name, signal)))) return;
     if (forUs) {
       if (!isNewSignal(name, origin, at)) return;
-      addTo(actedOn, `${name} ${origin}`, at);
+      getOrAdd(actedOn, `${name} ${origin}`, () => new Set()).add(at);
       void onSignal(origin, kind, { type: kind, sdp }, throughMesh(origin, name));
       return;
     }
@@ -662,12 +663,6 @@ function relayedSignal(
 ): RelayedSignal {
   const { origin, target, kind, at, sdp } = fields;
   return { origin, target, kind, data: { type: kind, sdp }, at, sig, hops };
-}
-
-function addTo<K, V>(map: Map<K, Set<V>>, key: K, value: V): void {
-  const held = map.get(key);
-  if (held) held.add(value);
-  else map.set(key, new Set([value]));
 }
 
 /** Sets `key` as the newest entry, letting the oldest go past `limit` */

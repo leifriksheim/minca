@@ -8,6 +8,7 @@
  * in it for each of the account's spaces (`space/pass.ts`) — so a space
  * joined in any app is carried, with nothing to do in the home.
  */
+import { cached } from '../utils/map.js';
 import { encodeSpaceInvite, type SpaceRecord } from '../space/space-manager.js';
 import { MAX_KEEPERS } from '../space/roles.js';
 import { SPACE_KEEPERS } from '../space/grants.js';
@@ -33,7 +34,7 @@ import { base32Encode } from '../utils/hash.js';
 import { queue, serial } from '../utils/serial.js';
 import type { SpaceRuntime } from './space-runtime.js';
 import type { NodeAutomations, NodeCarriers, NodeRecord, OwnAutomationView } from './types.js';
-import { cached, inBackground, sameJson, within, type NodeContext } from './node-context.js';
+import { inBackground, sameJson, within, type NodeContext } from './node-context.js';
 
 /** A carrier record of the account's, with its carry space */
 export interface CarrierEntry {

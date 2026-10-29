@@ -3,6 +3,7 @@
  * The account's profile: its name and picture, kept in its registry, and
  * told to each space it uses as that space opens.
  */
+import { cached } from '../utils/map.js';
 import {
   isAvatarRef,
   PROFILE_COLLECTION,
@@ -12,7 +13,7 @@ import {
 } from '../space/account-registry.js';
 import type { SpaceRuntime } from './space-runtime.js';
 import type { AccountProfileView, NodeAccount } from './types.js';
-import { cached, inBackground, type NodeContext } from './node-context.js';
+import { inBackground, type NodeContext } from './node-context.js';
 
 export function createNodeAccount(ctx: NodeContext) {
   const { config, accountSpaceId, contactKeys } = ctx;

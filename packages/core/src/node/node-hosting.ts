@@ -8,6 +8,7 @@
  * subscription, and any of them hands the host the carry space once it is
  * paid — the one that paid, or the next one to notice.
  */
+import { cached } from '../utils/map.js';
 import { MAX_INVITE_NODES } from '../space/invite-link.js';
 import { KEY_CHANGE, MEMBER_REMOVE } from '../space/grants.js';
 import { makePass, type SpacePass } from '../space/pass.js';
@@ -42,15 +43,7 @@ import type {
   SpaceHostingView,
 } from './types.js';
 import type { CarrierEntry } from './node-carriers.js';
-import {
-  attempt,
-  cached,
-  checkAddress,
-  errorText,
-  sameJson,
-  sleep,
-  type NodeContext,
-} from './node-context.js';
+import { attempt, checkAddress, errorText, sameJson, sleep, type NodeContext } from './node-context.js';
 
 interface HostingNeeds {
   readonly spaces: NodeSpaces;

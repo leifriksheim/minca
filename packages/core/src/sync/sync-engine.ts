@@ -16,6 +16,7 @@
  * hold. Whatever a node takes in from a peer, it tells that peer (`stored`), so
  * a node holding part of a space can let go of its own writes.
  */
+import { getOrAdd } from '../utils/map.js';
 import type { Version } from '../types.js';
 import type { StorageProvider } from '../storage/storage-provider.js';
 import { cidDigest, cidOfDigest } from '../utils/hash.js';
@@ -713,14 +714,6 @@ const newPeerState = (): PeerState => ({
 const refusal = (peerId: string, id: string) => `${peerId}\n${id}`;
 
 const abandoned = (peerId: string, why: string) => new Error(`Sync with ${peerId} abandoned: ${why}`);
-
-function getOrAdd<K, V>(map: Map<K, V>, key: K, make: () => V): V {
-  const found = map.get(key);
-  if (found !== undefined) return found;
-  const made = make();
-  map.set(key, made);
-  return made;
-}
 
 /** Drops the oldest entry once a map or set is over `max` */
 function dropOldest<K>(items: Map<K, unknown> | Set<K>, max: number): void {

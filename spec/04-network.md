@@ -234,7 +234,7 @@ socket that watches one. A relay MAY hand one username to every socket of one
 network, so that coturn's per-user quota caps a network rather than each
 request; the reference relay does. A relay without TURN never answers `ice`.
 
-_Source: `packages/relay/relay.mjs` (`upgrade`, `clientIp`, `handleMessage`, `handleMail`, `watch`, `offerTurn`, `turnFromEnv`, `networkOf`, `withinBudget`, heartbeat), `packages/relay/signaling-server.mjs`, `packages/cli/src/serve.ts` (`serve`), `packages/core/src/network/relay-minca.ts`. Tests: `packages/core/tests/rendezvous.test.ts` ("the relay keeps nothing dropped with ttl 0"), `packages/core/tests/relay-turn.test.ts`, `packages/core/tests/inbox.test.ts`, `packages/cli/tests/cli.test.ts` ("answers /health…", "is a relay too…")._
+_Source: `packages/relay/relay.mjs` (`upgrade`, `clientIp`, `handleMessage`, `fetchMail`, `dropMail`, `watch`, `offerTurn`, `turnFromEnv`, `networkOf`, `withinBudget`, heartbeat), `packages/relay/signaling-server.mjs`, `packages/cli/src/serve.ts` (`serve`), `packages/core/src/network/relay-minca.ts`. Tests: `packages/core/tests/rendezvous.test.ts` ("the relay keeps nothing dropped with ttl 0"), `packages/core/tests/relay-turn.test.ts`, `packages/core/tests/inbox.test.ts`, `packages/cli/tests/cli.test.ts` ("answers /health…", "is a relay too…")._
 
 ### 1.5 A Nostr relay
 
@@ -1011,7 +1011,7 @@ sig = base64url( ECDSA-P256-SHA256( the key `origin` names,
 > anyway; so the description goes as it is. Signed by its origin, nobody can
 > pass one on in another's name.
 
-_Source: `packages/core/src/network/introductions.ts` (`introductionLabel`), `packages/core/src/network/mesh.ts` (`handlePeerList`, `floodSignal`, `throughMesh`, `onRelayedSignal`, `isNewSignal`). Tests: `packages/core/tests/introductions.test.ts`, `packages/core/tests/network-manager.test.ts` ("a relay connects the first pair, and a peer introduces the rest", "a signal passed on in someone else’s name is ignored, and a genuine one is acted on once", "a signal is taken only from a peer admitted in its room")._
+_Source: `packages/core/src/network/introductions.ts` (`introductionLabel`), `packages/core/src/network/mesh.ts` (`onPeerList`, `floodSignal`, `throughMesh`, `onRelayedSignal`, `isNewSignal`). Tests: `packages/core/tests/introductions.test.ts`, `packages/core/tests/network-manager.test.ts` ("a relay connects the first pair, and a peer introduces the rest", "a signal passed on in someone else’s name is ignored, and a genuine one is acted on once", "a signal is taken only from a peer admitted in its room")._
 
 ---
 
