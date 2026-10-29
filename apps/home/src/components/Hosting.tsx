@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useSession } from '@minca/react';
+import { useAsync, useSession } from '@minca/react';
 import { describeHost, type HostDescription, type OverSpace } from '@minca/core';
 import type { HostingView, P2PNode } from '@minca/core/node';
 import { DEFAULT_HOST } from '@minca/app-shared/relay';
@@ -234,13 +234,8 @@ function HostRow({
  * which its members start in the space. Nothing leaves anyone's devices.
  */
 function OverSpaces({ node, host, over }: { node: P2PNode; host: string; over: ReadonlyArray<OverSpace> }) {
-  const [names, setNames] = useState<ReadonlyMap<string, string>>(new Map());
-  useEffect(() => {
-    void node.spaces.list().then(
-      (spaces) => setNames(new Map(spaces.map((space) => [space.id, space.name]))),
-      () => {},
-    );
-  }, [node]);
+  const spaces = useAsync(() => node.spaces.list(), [node]);
+  const names = new Map(spaces.status === 'done' ? spaces.value.map((space) => [space.id, space.name]) : []);
   return (
     <ul style={styles.todoList}>
       {over.map((one) => (
@@ -395,22 +390,17 @@ function StopDialog({ node, host, onClose }: { node: P2PNode; host: HostingView;
 
 /** Above everything else, when a balance runs out soon or has: from the host's signed `paidUntil` */
 export function HostingDue() {
-  const session = useSession();
-  const [due, setDue] = useState<ReadonlyArray<HostingView>>([]);
-  useEffect(() => {
-    void session.node.hosting.list().then(
-      (hosts) =>
-        setDue(
-          hosts.filter((host) => {
-            const status = host.status;
-            // On a free plan nothing runs out: a balance ending only means less room.
-            if (!status || status.paidUntil === 0 || status.plan === 'free') return false;
-            return status.state === 'grace' || status.paidUntil - Date.now() / 1000 < DUE_DAYS * DAY;
-          }),
-        ),
-      () => {},
-    );
-  }, [session]);
+  const { node } = useSession();
+  const asked = useAsync(async () => {
+    const now = Date.now() / 1000;
+    return (await node.hosting.list()).filter((host) => {
+      const status = host.status;
+      // On a free plan nothing runs out: a balance ending only means less room.
+      if (!status || status.paidUntil === 0 || status.plan === 'free') return false;
+      return status.state === 'grace' || status.paidUntil - now < DUE_DAYS * DAY;
+    });
+  }, [node]);
+  const due = asked.status === 'done' ? asked.value : [];
   return due.map((host) => {
     const state = standing(host);
     return (

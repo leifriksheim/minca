@@ -7,6 +7,13 @@ export function getOrAdd<K, V>(map: Map<K, V>, key: K, make: () => V): V {
   return made;
 }
 
+/** Sets a value in a map that lets its oldest entry go past `max` */
+export function setCapped<K, V>(map: Map<K, V>, key: K, value: V, max: number): void {
+  map.set(key, value);
+  const oldest = map.keys().next();
+  if (map.size > max && !oldest.done) map.delete(oldest.value);
+}
+
 /**
  * A promise kept by key, so each is made once. One that fails, or whose value
  * `keep` turns down, is forgotten and made again next time.

@@ -112,6 +112,36 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
       await reloadCarriers();
     });
 
+  const disconnectButton = (id: string, onClick: () => void) => (
+    <button
+      onClick={onClick}
+      disabled={disconnecting !== null}
+      data-variant="quiet"
+      style={styles.smallButton}
+    >
+      {disconnecting === id ? 'Disconnecting…' : 'Disconnect'}
+    </button>
+  );
+  /** Removes a way in, unless it is the only one: then the other must be set up first */
+  const removeButton = (shortcut: 'passkey' | 'passphrase', other: string) => (
+    <button
+      onClick={() =>
+        guarded(
+          `remove the ${shortcut === 'passkey' ? 'passkey' : 'password'}`,
+          () => void auth.removeShortcut(shortcut),
+        )
+      }
+      disabled={state.busy || onlyWayIn}
+      title={
+        onlyWayIn ? `${other} first — otherwise you would need your recovery code to get back in.` : undefined
+      }
+      data-variant="quiet"
+      style={{ ...styles.smallButton, color: palette.accent.danger }}
+    >
+      Remove
+    </button>
+  );
+
   const choose = async (choice: StaySignedIn) => {
     setStay(choice);
     await auth.staySignedIn.setChoice(choice);
@@ -141,19 +171,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
           >
             {hasPasskey ? (
               <Row label="A passkey signs you in on this device.">
-                <button
-                  onClick={() => guarded('remove the passkey', () => void auth.removeShortcut('passkey'))}
-                  disabled={state.busy || onlyWayIn}
-                  title={
-                    onlyWayIn
-                      ? 'Set a password first — otherwise you would need your recovery code to get back in.'
-                      : undefined
-                  }
-                  data-variant="quiet"
-                  style={{ ...styles.smallButton, color: palette.accent.danger }}
-                >
-                  Remove
-                </button>
+                {removeButton('passkey', 'Set a password')}
               </Row>
             ) : (
               <Row label="No passkey on this device.">
@@ -199,23 +217,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
                   >
                     {hasPassword ? 'Change' : 'Set a password'}
                   </button>
-                  {hasPassword && (
-                    <button
-                      onClick={() =>
-                        guarded('remove the password', () => void auth.removeShortcut('passphrase'))
-                      }
-                      disabled={state.busy || onlyWayIn}
-                      title={
-                        onlyWayIn
-                          ? 'Set up a passkey first — otherwise you would need your recovery code to get back in.'
-                          : undefined
-                      }
-                      data-variant="quiet"
-                      style={{ ...styles.smallButton, color: palette.accent.danger }}
-                    >
-                      Remove
-                    </button>
-                  )}
+                  {hasPassword && removeButton('passphrase', 'Set up a passkey')}
                 </span>
               </Row>
             )}
@@ -287,14 +289,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
                     : describeConnection(app)
                 }
               >
-                <button
-                  onClick={() => disconnect(app)}
-                  disabled={disconnecting !== null}
-                  data-variant="quiet"
-                  style={styles.smallButton}
-                >
-                  {disconnecting === connectionKey(app) ? 'Disconnecting…' : 'Disconnect'}
-                </button>
+                {disconnectButton(connectionKey(app), () => disconnect(app))}
               </Row>
             ))}
             {elsewhere.map((carrier) => (
@@ -303,14 +298,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
                 shape={carrier.space}
                 label={`${carrier.name} · keeps your spaces online · connected on another device · ${presence(carrier.space)}`}
               >
-                <button
-                  onClick={() => removeCarrier(carrier.space)}
-                  disabled={disconnecting !== null}
-                  data-variant="quiet"
-                  style={styles.smallButton}
-                >
-                  {disconnecting === carrier.space ? 'Disconnecting…' : 'Disconnect'}
-                </button>
+                {disconnectButton(carrier.space, () => removeCarrier(carrier.space))}
               </Row>
             ))}
             {disconnectError && <p style={styles.error}>{disconnectError}</p>}
@@ -462,22 +450,15 @@ function Overview({
 
 /** How much this site keeps in the browser, and whether the browser may clear it to make room */
 function useBrowserStorage(): { used: number | null; persisted: boolean | null } {
-  const [found, setFound] = useState<{ used: number | null; persisted: boolean | null }>({
-    used: null,
-    persisted: null,
-  });
-  useEffect(() => {
+  const found = useAsync(async () => {
     const storage = globalThis.navigator?.storage;
-    if (!storage) return;
-    void Promise.all([
-      storage.estimate?.().then(
-        (estimate) => estimate.usage ?? null,
-        () => null,
-      ) ?? null,
-      storage.persisted?.().catch(() => null) ?? null,
-    ]).then(([used, persisted]) => setFound({ used, persisted }));
+    const [estimate, persisted] = await Promise.all([
+      storage?.estimate?.().catch(() => null),
+      storage?.persisted?.().catch(() => null),
+    ]);
+    return { used: estimate?.usage ?? null, persisted: persisted ?? null };
   }, []);
-  return found;
+  return found.status === 'done' ? found.value : { used: null, persisted: null };
 }
 
 const megabytes = (bytes: number) => `${Math.max(1, Math.round(bytes / 1_000_000))} MB`;
@@ -629,7 +610,6 @@ function SignOut() {
   );
 }
 
-/** Who this is, with the name editable in place */
 /** A tab's title and what it is for */
 function PageHead({ title, line }: { title: string; line: string }) {
   return (

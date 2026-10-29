@@ -6,6 +6,7 @@ import { useNode } from '@minca/react';
 import { useLauncherRecords } from './entries';
 import { checkLauncherApp, prepareLauncher } from './launcher';
 import { styles, palette, hstack, stack } from '../../styles';
+import { LinkButton, PrimaryButton } from '../Buttons';
 
 const TITLE = 'Add your own app';
 
@@ -113,20 +114,13 @@ function AskForApp({
               Nothing changes in {space.name} until {adds}.
             </p>
           )}
-          <button
+          <PrimaryButton
             type="button"
             onClick={onReview}
-            data-variant="primary"
-            style={{
-              ...styles.button,
-              alignSelf: 'flex-start',
-              width: 'auto',
-              padding: '0 18px',
-              marginTop: 6,
-            }}
+            style={{ alignSelf: 'flex-start', width: 'auto', padding: '0 18px', marginTop: 6 }}
           >
             Review it
-          </button>
+          </PrimaryButton>
         </div>
       ) : (
         <p style={{ ...stepText, color: palette.ink.muted, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -136,14 +130,13 @@ function AskForApp({
       )}
 
       {onBuildByHand && (
-        <button
+        <LinkButton
           type="button"
           onClick={onBuildByHand}
-          data-variant="ghost"
-          style={{ ...styles.linkButton, fontSize: 13, padding: 0, alignSelf: 'flex-start' }}
+          style={{ fontSize: 13, padding: 0, alignSelf: 'flex-start' }}
         >
           Or build one by hand
-        </button>
+        </LinkButton>
       )}
     </>
   );

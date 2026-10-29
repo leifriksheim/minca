@@ -5,6 +5,7 @@ import type { Sort } from '../derive/filters';
 import type { People } from '../derive/people';
 import { ClauseList } from './automations/parts';
 import { styles, palette, hstack, stack } from '../styles';
+import { QuietButton } from './Buttons';
 
 export const PAGE_SIZES = [10, 25, 50, 100] as const;
 
@@ -55,13 +56,9 @@ export function QueryBuilder({
           />
         </div>
         {clauses.length > 0 && (
-          <button
-            onClick={() => onClauses([])}
-            data-variant="quiet"
-            style={{ ...styles.smallButton, height: 30, color: palette.ink.muted }}
-          >
+          <QuietButton onClick={() => onClauses([])} style={{ height: 30, color: palette.ink.muted }}>
             Clear filters
-          </button>
+          </QuietButton>
         )}
         <label style={labelStyle}>
           Sort by

@@ -1,7 +1,7 @@
-import { useCallback, useRef, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { SpaceSummary } from '@minca/core';
 import { useAccount, useCollections } from '@minca/react';
-import { useDismiss } from '@minca/app-shared/useDismiss';
+import { usePopover } from './usePopover';
 import { markRead, useAlerts, useTabDot } from '../alerts';
 import { useAppNotifications, useOwnAutomations } from '../notifications';
 import { ago } from '@minca/ui/time';
@@ -32,16 +32,10 @@ export function Bell({
   const { did } = useAccount();
   const { items, unread } = useAlerts(did);
   const setup = useAppNotifications();
-  const [open, setOpen] = useState(false);
+  const { open, setOpen, root } = usePopover();
   const [tab, setTab] = useState<Tab>('activity');
   const [building, setBuilding] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
   useTabDot(unread > 0);
-  useDismiss(
-    open,
-    root,
-    useCallback(() => setOpen(false), []),
-  );
 
   // Nothing is on yet: what there is to see is how to turn them on.
   const off = setup.on === 0;
@@ -78,12 +72,11 @@ export function Bell({
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '10px 10px 6px 14px' }}>
             <p style={{ flex: 1, fontWeight: 600, fontSize: 14, color: palette.ink.strong }}>Notifications</p>
             <div role="tablist" aria-label="Notifications" style={hstack(2)}>
-              <TabButton on={tab === 'activity'} onClick={() => setTab('activity')}>
-                Activity
-              </TabButton>
-              <TabButton on={tab === 'settings'} onClick={() => setTab('settings')}>
-                Settings
-              </TabButton>
+              {(['activity', 'settings'] as const).map((one) => (
+                <TabButton key={one} on={tab === one} onClick={() => setTab(one)}>
+                  {one === 'activity' ? 'Activity' : 'Settings'}
+                </TabButton>
+              ))}
             </div>
           </div>
 

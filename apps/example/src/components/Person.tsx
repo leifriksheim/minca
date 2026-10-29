@@ -7,8 +7,9 @@ import { NOT_CARRIED, takeBack, useContacts, useStanding } from '../contacts';
 import { PersonAvatar } from './std/PersonAvatar';
 import { Modal } from '@minca/app-shared/Modal';
 import { useAction, useCopy } from '@minca/app-shared/action';
-import { Loader } from '@minca/app-shared/Loader';
+import { Loading } from './Loading';
 import { ask } from '@minca/app-shared/Ask';
+import { AddButton, LinkButton, QuietButton } from './Buttons';
 
 /** What a name in a space needs to open its card: the space, who is in it, and where a space for two opens */
 interface PersonScope {
@@ -42,13 +43,11 @@ export function usePeopleHere(): { readonly people: People; readonly me: string 
 export function Person({
   did,
   label,
-  suffix,
   style,
 }: {
   did: string | null | undefined;
   /** Shown instead of their name, like the "@Name" of a mention */
   label?: string;
-  suffix?: string;
   style?: React.CSSProperties;
 }) {
   const scope = useContext(Scope);
@@ -56,13 +55,7 @@ export function Person({
   const people = scope?.people ?? new Map();
   // A bot says so in its profile; shown with its name wherever it appears.
   const name = label ?? (isBot(did, people) ? `${nameOf(did, people)} · bot` : nameOf(did, people));
-  if (!scope || !did)
-    return (
-      <span style={style}>
-        {name}
-        {suffix}
-      </span>
-    );
+  if (!scope || !did) return <span style={style}>{name}</span>;
   return (
     <>
       <button
@@ -87,7 +80,6 @@ export function Person({
         }}
       >
         {name}
-        {suffix}
       </button>
       {open && <PersonCard did={did} scope={scope} onClose={() => setOpen(false)} />}
     </>
@@ -126,14 +118,9 @@ function PersonCard({ did, scope, onClose }: { did: string; scope: PersonScope; 
           </p>
           <p style={{ ...styles.todoMeta, fontFamily: 'ui-monospace, monospace', wordBreak: 'break-all' }}>
             {did}{' '}
-            <button
-              type="button"
-              onClick={() => copy(did)}
-              data-variant="ghost"
-              style={{ ...styles.linkButton, padding: '0 4px', fontSize: 12 }}
-            >
+            <LinkButton type="button" onClick={() => copy(did)} style={{ padding: '0 4px', fontSize: 12 }}>
               {copied ? 'Copied' : 'Copy'}
-            </button>
+            </LinkButton>
           </p>
         </div>
       </div>
@@ -144,14 +131,10 @@ function PersonCard({ did, scope, onClose }: { did: string; scope: PersonScope; 
             accept, the two of you share a private space.
           </p>
           {!asked.carried && <p style={styles.hint}>{NOT_CARRIED}</p>}
-          <button onClick={onClose} data-variant="primary" style={styles.addButton}>
-            Done
-          </button>
+          <AddButton onClick={onClose}>Done</AddButton>
         </>
       ) : contacts === undefined ? (
-        <p style={styles.hint}>
-          <Loader label="Loading your contacts" showLabel />
-        </p>
+        <Loading label="Loading your contacts" style={styles.hint} />
       ) : contact?.blocked ? (
         <p style={styles.hint}>You blocked {name}. Unblock them from Contacts to hear from them again.</p>
       ) : contact ? (
@@ -193,12 +176,7 @@ function Standing({
   const { space, me, openSpace } = scope;
   const called = contact.name !== name && contact.name !== contact.did ? ` as ${contact.name}` : '';
 
-  if (standing === undefined)
-    return (
-      <p style={styles.hint}>
-        <Loader label="Loading" showLabel />
-      </p>
-    );
+  if (standing === undefined) return <Loading label="Loading" style={styles.hint} />;
   if (standing === 'gone') {
     return (
       <>
@@ -207,14 +185,12 @@ function Standing({
           anything. Remove them to ask again.
         </p>
         {error && <p style={styles.bad}>{error}</p>}
-        <button
+        <AddButton
           disabled={busy}
           onClick={() => void act(() => takeBack(node, [space.id], me, contact.did))}
-          data-variant="primary"
-          style={styles.addButton}
         >
           {busy ? 'Removing…' : 'Remove, and ask again'}
-        </button>
+        </AddButton>
       </>
     );
   }
@@ -226,7 +202,7 @@ function Standing({
           Contacts screen.
         </p>
         {error && <p style={styles.bad}>{error}</p>}
-        <button
+        <QuietButton
           disabled={busy}
           onClick={() =>
             void ask('Your space for two is left and the request here is deleted.', {
@@ -236,11 +212,9 @@ function Standing({
               if (sure) await act(() => takeBack(node, [space.id], me, contact.did));
             })
           }
-          data-variant="quiet"
-          style={styles.smallButton}
         >
           {busy ? 'Taking back…' : 'Take back'}
-        </button>
+        </QuietButton>
       </>
     );
   }
@@ -248,16 +222,14 @@ function Standing({
     <>
       <p style={styles.hint}>In your contacts{called}.</p>
       {contact.space && openSpace && (
-        <button
+        <AddButton
           onClick={() => {
             onClose();
             openSpace(contact.space!);
           }}
-          data-variant="primary"
-          style={styles.addButton}
         >
           Open your space for two
-        </button>
+        </AddButton>
       )}
     </>
   );
@@ -310,14 +282,9 @@ function AskContact({
         style={styles.textarea}
       />
       {error && <p style={styles.bad}>{error}</p>}
-      <button
-        type="submit"
-        disabled={asking}
-        data-variant="primary"
-        style={{ ...styles.addButton, marginTop: 12 }}
-      >
+      <AddButton type="submit" disabled={asking} style={{ marginTop: 12 }}>
         {asking ? 'Asking…' : 'Add as a contact'}
-      </button>
+      </AddButton>
     </form>
   );
 }

@@ -34,32 +34,16 @@ import { base64UrlDecode, base64UrlEncode } from '../utils/encoding.js';
 import { isRecord } from '../utils/guards.js';
 import { hashedKey } from '../utils/hash.js';
 import type { SpaceRuntime } from './space-runtime.js';
-import type {
-  HostingView,
-  NodeCarriers,
-  NodeHosting,
-  NodeRecord,
-  NodeSpaces,
-  SpaceHostingView,
-} from './types.js';
-import type { CarrierEntry } from './node-carriers.js';
+import type { HostingView, NodeHosting, NodeRecord, SpaceHostingView } from './types.js';
 import { attempt, checkAddress, errorText, sameJson, sleep, type NodeContext } from './node-context.js';
-
-interface HostingNeeds {
-  readonly spaces: NodeSpaces;
-  /** A host is a carrier: it is added as one once paid, and removed as one when stopped */
-  readonly carriers: NodeCarriers;
-  readonly liveCarriers: () => Promise<ReadonlyArray<CarrierEntry>>;
-}
 
 /** Last time each host was handed the spaces, or refused them — so asking again waits a while */
 const HAND_AGAIN_MS = 60_000;
 /** How long a space waits before asking its hosts again when nothing it names changed */
 const SPACE_HOSTS_EVERY_MS = 10 * 60_000;
 
-export function createNodeHosting(ctx: NodeContext, needs: HostingNeeds) {
+export function createNodeHosting(ctx: NodeContext) {
   const { config, provider, registry, runtimes } = ctx;
-  const { spaces, carriers } = needs;
 
   // ─── The account's hosts ───────────────────────────────────────────
 
@@ -152,7 +136,7 @@ export function createNodeHosting(ctx: NodeContext, needs: HostingNeeds) {
     const due = force || Date.now() - (handedAt.get(hosting.url) ?? 0) > HAND_AGAIN_MS;
     if (!accountPaid(told.status, description) || !due || ctx.narrowNote) return told;
     handedAt.set(hosting.url, Date.now());
-    const attaching = carriers
+    const attaching = ctx.carrying.carriers
       .add({ did: hosting.host, name: new URL(hosting.url).host })
       .then(({ invite }) => client.attach(config.signer.did, invite));
     handing.set(hosting.url, attaching);
@@ -201,7 +185,7 @@ export function createNodeHosting(ctx: NodeContext, needs: HostingNeeds) {
     try {
       const { client, description } = await reachNamedHost(named);
       let { status } = await client.status(spaceId);
-      const record = hand && spacePaid(status, description) ? await ctx.findRecord(spaceId) : null;
+      const record = hand && paid(status, !!description.free) ? await ctx.findRecord(spaceId) : null;
       if (record && (record.space.visibility === 'public' || record.key)) {
         const pass = await makePass(record);
         if (!status.carrying || (pass.read && status.readKey !== currentReadKey(pass)))
@@ -414,26 +398,27 @@ export function createNodeHosting(ctx: NodeContext, needs: HostingNeeds) {
         const address = body.url;
         if (attempt(() => new URL(address).origin) === url) await rt.remove(record.key);
       }
-      const access = await spaces.access(spaceId);
+      const access = await ctx.spaces.access(spaceId);
       const members = new Map(access.members.map((member) => [member.did, member.roles]));
       const bots: string[] = [];
       for (const bot of view.bots.map((one) => one.bot)) {
         const roles = members.get(bot);
-        if (roles && (await spaces.may(spaceId, MEMBER_REMOVE, { self: false, roles }))) bots.push(bot);
+        if (roles && (await ctx.spaces.may(spaceId, MEMBER_REMOVE, { self: false, roles }))) bots.push(bot);
       }
-      if (bots.length === 0 && !(await spaces.may(spaceId, KEY_CHANGE))) return { bots: [], newKey: false };
-      for (const bot of bots) await spaces.removeMember(spaceId, bot);
+      if (bots.length === 0 && !(await ctx.spaces.may(spaceId, KEY_CHANGE)))
+        return { bots: [], newKey: false };
+      for (const bot of bots) await ctx.spaces.removeMember(spaceId, bot);
       // A host that can't say whether it holds a pass is taken to hold one.
       const handed = view.status ? view.status.carrying : true;
       const newKey = access.key !== null && (bots.length > 0 || handed);
       // Removing a member changes the key by itself; with none removed it is changed here.
-      if (newKey && bots.length === 0) await spaces.changeKey(spaceId);
+      if (newKey && bots.length === 0) await ctx.spaces.changeKey(spaceId);
       return { bots, newKey };
     },
 
     async startBot(spaceId, url, bot) {
       const client = await spaceHostClient(spaceId, url);
-      const invite = await spaces.invite(spaceId, bot.role ? { role: bot.role } : {});
+      const invite = await ctx.spaces.invite(spaceId, bot.role ? { role: bot.role } : {});
       const { bot: did, status } = await client.startBot(spaceId, bot.name, invite);
       return { bot: did, status };
     },
@@ -443,8 +428,8 @@ export function createNodeHosting(ctx: NodeContext, needs: HostingNeeds) {
       const known = await requireHosting(url);
       const { client } = await hostClient(known);
       await client.detach().catch(() => {});
-      const carrier = (await needs.liveCarriers()).find(({ body }) => body.did === known.host);
-      if (carrier) await carriers.remove(carrier.carry.space.id);
+      const carrier = (await ctx.carrying.liveCarriers()).find(({ body }) => body.did === known.host);
+      if (carrier) await ctx.carrying.carriers.remove(carrier.carry.space.id);
       await registryRt.removeSystem(await hostingKey(known.url));
     },
   });
@@ -500,22 +485,13 @@ function namedHostOf(record: NodeRecord<unknown>): NamedHost | null {
   };
 }
 
-interface PaidState {
-  readonly state: string;
-}
+/** Paid, or on a free plan that hasn't lapsed */
+const paid = (status: { readonly state: string }, free: boolean) =>
+  status.state === 'active' || status.state === 'grace' || (free && status.state !== 'lapsed');
 
-/** Paid, or on the host's free plan: a host with limits keeps an account's spaces with nothing paid */
-function accountPaid(status: PaidState, description: HostDescription): boolean {
-  const free = description.free || description.limits !== undefined;
-  return status.state === 'active' || status.state === 'grace' || (free && status.state !== 'lapsed');
-}
-
-/** Paid, or at a free host that hasn't let it lapse */
-function spacePaid(status: PaidState, description: HostDescription): boolean {
-  return (
-    status.state === 'active' || status.state === 'grace' || (description.free && status.state !== 'lapsed')
-  );
-}
+/** A host with limits keeps an account's spaces with nothing paid */
+const accountPaid = (status: { readonly state: string }, description: HostDescription) =>
+  paid(status, !!description.free || description.limits !== undefined);
 
 const fundOf = (description: HostDescription) => (description.free ? null : (description.fund ?? null));
 

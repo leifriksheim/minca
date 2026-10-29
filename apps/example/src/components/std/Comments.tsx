@@ -9,6 +9,7 @@ import { styles, palette, hstack, stack } from '../../styles';
 import { Person } from '../Person';
 import { peopleFrom, respondingTo } from '../../derive/people';
 import { MentionField, MentionList, MentionText, useMentions } from './Mentions';
+import { AddButton } from '../Buttons';
 
 /**
  * `std.comment` on a record: a thread, oldest first, and a box to add to it.
@@ -107,14 +108,9 @@ export function Comments({
             aria-label="Write a comment"
             style={styles.input}
           />
-          <button
-            type="submit"
-            disabled={!draft.trim()}
-            data-variant="primary"
-            style={{ ...styles.addButton }}
-          >
+          <AddButton type="submit" disabled={!draft.trim()}>
             Send
-          </button>
+          </AddButton>
         </form>
       )}
     </section>

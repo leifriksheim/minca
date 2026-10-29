@@ -19,7 +19,7 @@ import { RecordPanel } from './RecordPanel';
 import { SHAPE_CYCLE } from '@minca/ui/tokens';
 import { styles, palette, ui, stack } from '../styles';
 import { Person } from './Person';
-import { Loader } from '@minca/app-shared/Loader';
+import { Loading } from './Loading';
 
 /** A dot on the map: a record, or — when people are shown — a person */
 interface Dot {
@@ -601,32 +601,25 @@ export function GraphView({
     return set;
   }, [selected, graph, dotById]);
 
-  /** With everything shown, a click isolates one collection; after that, clicks add and remove them */
-  const toggle = (name: string) => {
+  /** Another pick of collections: a fresh map, at the first budget */
+  const choose = (next: (old: ReadonlySet<string> | null) => ReadonlySet<string> | null) => {
     setBudget(BUDGET);
     setWalked([]);
     fitted.current = false;
-    setChosen((old) => {
+    setChosen(next);
+  };
+  /** With everything shown, a click isolates one collection; after that, clicks add and remove them */
+  const toggle = (name: string) =>
+    choose((old) => {
       if (!old) return new Set([name]);
       const next = new Set(old);
       if (next.has(name)) next.delete(name);
       else next.add(name);
       return next.size ? next : null;
     });
-  };
-  const showEverything = () => {
-    setBudget(BUDGET);
-    setWalked([]);
-    fitted.current = false;
-    setChosen(null);
-  };
 
   if (records === undefined)
-    return (
-      <p style={{ fontSize: 13, color: palette.ink.faint }}>
-        <Loader label="Loading" showLabel />
-      </p>
-    );
+    return <Loading label="Loading" style={{ fontSize: 13, color: palette.ink.faint }} />;
 
   const header = (
     <header>
@@ -699,7 +692,7 @@ export function GraphView({
           );
         })}
         {chosen !== null && (
-          <button onClick={showEverything} style={{ ...ui.chip, color: palette.ink.muted }}>
+          <button onClick={() => choose(() => null)} style={{ ...ui.chip, color: palette.ink.muted }}>
             Show everything
           </button>
         )}

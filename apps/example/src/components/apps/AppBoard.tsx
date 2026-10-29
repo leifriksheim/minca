@@ -18,7 +18,8 @@ import {
 import { nameOf, peopleFrom, writerOf, type People } from '../../derive/people';
 import { ago } from '@minca/ui/time';
 import { styles, palette, ui, stack } from '../../styles';
-import { Loader } from '@minca/app-shared/Loader';
+import { Loading } from '../Loading';
+import { LinkButton, QuietButton } from '../Buttons';
 
 /**
  * An added app drawn from its definitions alone: unlinked records are the list, what links to them
@@ -58,12 +59,7 @@ export function AppBoard({
     );
   const main = held.filter((c) => !pointsIntoApp(c));
 
-  if (!records)
-    return (
-      <p style={styles.emptyState}>
-        <Loader label="Opening" showLabel />
-      </p>
-    );
+  if (!records) return <Loading label="Opening" style={styles.emptyState} />;
   const byName = new Map(held.map((c, i) => [c.name, records[i] ?? []]));
 
   return (
@@ -211,13 +207,12 @@ function Children({
         {mine && (
           <span style={styles.faint}>
             You picked — pick again to change{' '}
-            <button
+            <LinkButton
               onClick={() => void run(() => node.records.delete(space.id, mine.key))}
-              data-variant="ghost"
-              style={{ ...styles.linkButton, padding: 0, fontSize: 12 }}
+              style={{ padding: 0, fontSize: 12 }}
             >
               or take it back
-            </button>
+            </LinkButton>
           </span>
         )}
         {error && <p style={styles.error}>{error}</p>}
@@ -235,14 +230,13 @@ function Children({
         </span>
         {onePerMe && nothingToFill ? (
           mine ? (
-            <button
+            <QuietButton
               onClick={() => void run(() => node.records.delete(space.id, mine.key))}
               disabled={busy}
-              data-variant="quiet"
-              style={{ ...styles.smallButton, height: 28 }}
+              style={{ height: 28 }}
             >
               Remove your {label}
-            </button>
+            </QuietButton>
           ) : (
             <button
               onClick={() => void run(() => node.records.put(space.id, child.name, {}, { links }))}
@@ -291,17 +285,12 @@ function AddForm({
   const [open, setOpen] = useState(false);
   if (!open) {
     return (
-      <button
+      <QuietButton
         onClick={() => setOpen(true)}
-        data-variant="quiet"
-        style={{
-          ...styles.smallButton,
-          height: compact ? 28 : 32,
-          alignSelf: compact ? 'auto' : 'flex-start',
-        }}
+        style={{ height: compact ? 28 : 32, alignSelf: compact ? 'auto' : 'flex-start' }}
       >
         {label}
-      </button>
+      </QuietButton>
     );
   }
   return (

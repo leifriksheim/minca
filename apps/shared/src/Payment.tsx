@@ -121,15 +121,12 @@ export function ChipIn({
   start,
   paid,
   onDone,
-  cta,
   rate,
 }: {
   fund: FundOffer;
   start: (payment: FundPayment) => Promise<PayAnswer>;
   paid: () => Promise<boolean>;
   onDone?: () => void;
-  /** The button's words before the amount: "Add" */
-  cta?: string;
   /**
    * What the balance spends now, from the host's status: its daily rate in
    * millionths of a dollar, what is in it (below zero: owed), and the bots it
@@ -255,7 +252,7 @@ export function ChipIn({
       >
         {paying.busy
           ? 'One moment…'
-          : `${cta ?? 'Add'} ${valid ? `$${amount}` : ''}${monthly && method === 'checkout' ? ' a month' : ''}`}
+          : `Add ${valid ? `$${amount}` : ''}${monthly && method === 'checkout' ? ' a month' : ''}`}
       </button>
       <p style={{ ...styles.faint, textAlign: 'center' }}>
         {valid && owed > 0

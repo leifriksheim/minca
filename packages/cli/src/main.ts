@@ -205,7 +205,6 @@ function commandFor(command: string, args: string[]): Command | undefined {
   if (['help', '--help', '-h'].includes(command)) return showUsage;
   if (['version', '--version'].includes(command)) return showVersion;
   if (command === 'host' && args[0] === 'stats') return hostStats;
-  if (command === 'mcp') return args.includes('--account') ? accountMcp : agentMcp;
   if (command === 'automation' && args[0] === 'add') return addAutomation;
   if (command === 'collections' && args[0] === 'define' && args.includes('--standard'))
     return defineCollection;
@@ -223,6 +222,7 @@ const COMMANDS = new Map<string, Command>([
   ['bots', bots],
   ['disconnect', disconnect],
   ['agent', agent],
+  ['mcp', agentMcp],
 ]);
 
 async function pickFromMenu(): Promise<string[] | null> {
@@ -532,15 +532,6 @@ async function disconnect(_args: string[], globals: Globals): Promise<number> {
   stderr(
     "This computer's agent is forgotten here. To stop its notes working everywhere, disconnect each of its sessions in your account home.",
   );
-  return 0;
-}
-
-/** `mcp --account`: the unlocked account itself, offline; a running daemon syncs what it writes */
-async function accountMcp(_args: string[], globals: Globals): Promise<number> {
-  const node = await nodeFor(await openAccount(globals));
-  stderr(`minca mcp: serving ${NODE_ACTIONS.length} tools for ${node.did}`);
-  await runMcpStdio(() => node, MCP_INFO);
-  await node.close();
   return 0;
 }
 

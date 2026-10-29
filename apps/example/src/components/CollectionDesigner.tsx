@@ -18,7 +18,8 @@ import {
 } from '../derive/field-types';
 import { SchemaForm } from './SchemaForm';
 import { styles, palette, ui, hstack, stack } from '../styles';
-import { ask } from '@minca/app-shared/Ask';
+import { PrimaryButton, QuietButton } from './Buttons';
+import { confirmThen } from '../confirm';
 
 type LinkDeclaration = NonNullable<DefineCollection['links']>[string];
 
@@ -99,15 +100,18 @@ const TEMPLATES: ReadonlyArray<{
 let nextId = 0;
 const id = () => ++nextId;
 
+/** A template's fields, as drafts to change */
+const fromTemplate = (template: (typeof TEMPLATES)[number]): FieldDraft[] =>
+  template.fields.map((f) => ({
+    id: id(),
+    label: f.label,
+    type: f.type,
+    options: f.options ?? [],
+    required: !!f.required,
+  }));
+
 function draftsFrom(collection: NodeCollection | null): FieldDraft[] {
-  if (!collection)
-    return TEMPLATES[0]!.fields.map((f) => ({
-      id: id(),
-      label: f.label,
-      type: f.type,
-      options: [],
-      required: !!f.required,
-    }));
+  if (!collection) return fromTemplate(TEMPLATES[0]!);
   const schema = collection.schema ?? {};
   const properties = isObject(schema.properties) ? schema.properties : {};
   const required = new Set(Array.isArray(schema.required) ? schema.required : []);
@@ -226,15 +230,7 @@ export function CollectionEditor({
   };
   const applyTemplate = (picked: (typeof TEMPLATES)[number]) => {
     setTemplate(picked.title);
-    setFields(
-      picked.fields.map((f) => ({
-        id: id(),
-        label: f.label,
-        type: f.type,
-        options: f.options ?? [],
-        required: !!f.required,
-      })),
-    );
+    setFields(fromTemplate(picked));
     if (!title.trim() && picked.thing) setTitle(picked.thing);
   };
 
@@ -302,18 +298,16 @@ export function CollectionEditor({
   const cannotDelete = collection?.records
     ? `Delete its ${collection.records === 1 ? 'one record' : `${collection.records} records`} first. A definition can only be deleted once nothing uses it.`
     : null;
-  const remove = async (gone: NodeCollection) => {
-    const sure = await ask(`It's removed for everyone in the space.`, {
-      title: `Delete the definition of ${label}?`,
-      yes: 'Delete',
-      danger: true,
-    });
-    if (!sure) return;
-    await run(async () => {
-      await node.collections.delete(space.id, gone.name);
-      onDone(null);
-    });
-  };
+  const remove = (gone: NodeCollection) =>
+    confirmThen(
+      `It's removed for everyone in the space.`,
+      { title: `Delete the definition of ${label}?`, yes: 'Delete' },
+      () =>
+        run(async () => {
+          await node.collections.delete(space.id, gone.name);
+          onDone(null);
+        }),
+    );
 
   const designer = (
     <div className="designer" style={{ display: 'grid', gap: 28, alignItems: 'start' }}>
@@ -627,27 +621,16 @@ export function CollectionEditor({
         )}
         {error && <p style={styles.error}>{error}</p>}
         <div style={{ ...hstack(8), alignItems: 'center', flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            onClick={() => void save()}
-            disabled={busy}
-            data-variant="primary"
-            style={{ ...styles.button, width: 'auto' }}
-          >
+          <PrimaryButton type="button" onClick={() => void save()} disabled={busy} style={{ width: 'auto' }}>
             {busy ? 'Saving…' : making ? `Create ${title.trim() || 'collection'}` : 'Save changes'}
-          </button>
-          <button
-            type="button"
-            onClick={() => onDone(null)}
-            data-variant="quiet"
-            style={{ ...styles.smallButton, height: 40 }}
-          >
+          </PrimaryButton>
+          <QuietButton type="button" onClick={() => onDone(null)} style={{ height: 40 }}>
             Cancel
-          </button>
+          </QuietButton>
           {collection && (
             <button
               type="button"
-              onClick={() => void remove(collection)}
+              onClick={() => remove(collection)}
               disabled={busy || !!cannotDelete}
               title={cannotDelete ?? undefined}
               data-variant="danger"

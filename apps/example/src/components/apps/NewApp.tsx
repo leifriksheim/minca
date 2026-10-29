@@ -7,6 +7,7 @@ import { AppIcon } from './AppIcon';
 import { addTemplate } from './launcher';
 import { Icon } from '../Icon';
 import { styles, palette, stack } from '../../styles';
+import { QuietButton } from '../Buttons';
 
 /**
  * Adding an app to a space: first one of your own, asked of an agent
@@ -86,15 +87,14 @@ export function NewApp({
                 <p style={cardText}>{app.description}</p>
               </div>
               {mayDefine && (
-                <button
+                <QuietButton
                   onClick={() => add(app)}
                   disabled={busy}
                   aria-label={`Add ${app.title}`}
-                  data-variant="quiet"
-                  style={{ ...styles.smallButton, flexShrink: 0 }}
+                  style={{ flexShrink: 0 }}
                 >
                   {busy && adding?.id === app.id ? 'Adding…' : 'Add'}
-                </button>
+                </QuietButton>
               )}
             </div>
             <details style={{ marginTop: 6 }}>

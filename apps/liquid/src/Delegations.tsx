@@ -37,12 +37,14 @@ function makesLoop(a: Assembly, topic: string, to: string): boolean {
   return next.kind === 'wait' && next.how === 'loop';
 }
 
+/** Everything first, then each topic: what trust is given for */
+const topicRows = (a: Assembly): ReadonlyArray<{ key: string; topic: TopicView | null }> => [
+  { key: EVERYTHING, topic: null },
+  ...a.topics.map((t) => ({ key: t.key, topic: t })),
+];
+
 export function Delegations({ a, writable }: { a: Assembly; writable: boolean }) {
   const [picking, setPicking] = useState<{ topic: string; label: string } | null>(null);
-  const rows: ReadonlyArray<{ key: string; topic: TopicView | null }> = [
-    { key: EVERYTHING, topic: null },
-    ...a.topics.map((t) => ({ key: t.key, topic: t })),
-  ];
 
   return (
     <div style={stack(28)}>
@@ -58,7 +60,7 @@ export function Delegations({ a, writable }: { a: Assembly; writable: boolean })
       </section>
 
       <section className="lq-card">
-        {rows.map(({ key, topic }) => (
+        {topicRows(a).map(({ key, topic }) => (
           <TrustRow
             key={key}
             a={a}
@@ -203,11 +205,7 @@ function ChainNote({ a, next }: { a: Assembly; next: Next }) {
 /** Whose votes come to you, topic by topic */
 function TrustedBy({ a }: { a: Assembly }) {
   const rows = useMemo(() => {
-    const topics: ReadonlyArray<{ key: string; topic: TopicView | null }> = [
-      { key: EVERYTHING, topic: null },
-      ...a.topics.map((t) => ({ key: t.key, topic: t })),
-    ];
-    return topics
+    return topicRows(a)
       .map(({ key, topic }) => {
         const outcomes = a.members.map((m) => [m.did, chainFor(a, m.did, topic ? key : null)] as const);
         const through = outcomes.filter(

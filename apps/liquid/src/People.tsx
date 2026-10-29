@@ -235,26 +235,17 @@ function PartyCard({
         {writable &&
           (steward ? (
             <span className="lq-chip">You’re a steward</span>
-          ) : inIt ? (
+          ) : inIt || myAsk ? (
+            // Leaving, or taking back the ask: either way, the ask goes.
             <button
               className="lq-btn"
               data-variant="quiet"
               data-size="sm"
               disabled={action.busy}
+              title={inIt ? undefined : 'A steward lets members in'}
               onClick={() => myAsk && void action.run(() => node.records.delete(a.spaceId, myAsk))}
             >
-              Leave
-            </button>
-          ) : myAsk ? (
-            <button
-              className="lq-btn"
-              data-variant="quiet"
-              data-size="sm"
-              disabled={action.busy}
-              title="A steward lets members in"
-              onClick={() => void action.run(() => node.records.delete(a.spaceId, myAsk))}
-            >
-              Asked · Cancel
+              {inIt ? 'Leave' : 'Asked · Cancel'}
             </button>
           ) : (
             <button

@@ -142,6 +142,44 @@ const button: CSSProperties = {
   width: '100%',
 };
 
+const smallButton: CSSProperties = {
+  height: 32,
+  padding: '0 14px',
+  borderRadius: radius.pill,
+  border: `1px solid ${surface.rule}`,
+  backgroundColor: surface.card,
+  color: ink.strong,
+  fontSize: 13,
+  fontWeight: 500,
+  whiteSpace: 'nowrap',
+};
+
+const segment: CSSProperties = {
+  flex: 1,
+  padding: '6px 14px',
+  borderRadius: radius.pill,
+  border: '1px solid transparent',
+  background: 'none',
+  color: ink.muted,
+  fontSize: 13,
+  fontWeight: 500,
+};
+
+const chip: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  height: 26,
+  padding: '0 10px',
+  borderRadius: radius.pill,
+  border: `1px solid ${surface.line}`,
+  backgroundColor: surface.sunken,
+  color: ink.body,
+  fontSize: 12,
+  fontWeight: 500,
+  whiteSpace: 'nowrap',
+};
+
 /** A column of children `gap` pixels apart */
 export const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap });
 
@@ -217,13 +255,6 @@ export const styles = {
   errorHint: { color: ink.muted, fontSize: 13, marginTop: 8, lineHeight: 1.6 },
 
   app: { maxWidth: 720, width: '100%' },
-  header: {
-    marginBottom: 24,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    gap: 10,
-  },
   headerRow: {
     marginBottom: 24,
     display: 'flex',
@@ -238,7 +269,6 @@ export const styles = {
     letterSpacing: '-0.04em',
     color: ink.strong,
   },
-  identityBar: { display: 'flex', gap: 6, flexWrap: 'wrap' },
   badge: {
     fontSize: 12,
     color: ink.muted,
@@ -248,42 +278,15 @@ export const styles = {
     borderRadius: radius.pill,
   },
 
-  addForm: { display: 'flex', gap: 8, marginBottom: 16 },
-  todoInput: {
-    flex: 1,
-    height: 40,
-    padding: '0 16px',
-    borderRadius: radius.pill,
-    border: `1px solid ${surface.lineStrong}`,
-    backgroundColor: surface.card,
-    color: ink.strong,
-    fontSize: 14,
-    outline: 'none',
-  },
   addButton: { ...button, width: 'auto', whiteSpace: 'nowrap', alignSelf: 'flex-start' },
   /** Secondary actions: the card's white, the navy rule, a little shorter */
-  smallButton: {
-    height: 32,
-    padding: '0 14px',
-    borderRadius: radius.pill,
-    border: `1px solid ${surface.rule}`,
-    backgroundColor: surface.card,
-    color: ink.strong,
-    fontSize: 13,
-    fontWeight: 500,
-    whiteSpace: 'nowrap',
-  },
+  smallButton,
   /** A small button in the one accent, for the one thing to do next */
   darkSmall: {
-    height: 32,
-    padding: '0 14px',
-    borderRadius: radius.pill,
+    ...smallButton,
     border: `1px solid ${accent.base}`,
     backgroundColor: accent.base,
     color: ink.inverse,
-    fontSize: 13,
-    fontWeight: 500,
-    whiteSpace: 'nowrap',
   },
 
   todoList: { listStyle: 'none', ...stack(8) },
@@ -295,20 +298,10 @@ export const styles = {
     border: `1px dashed ${surface.lineStrong}`,
     borderRadius: radius.md,
   },
-  todoItem: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: 12,
-    padding: '11px 12px',
-    borderRadius: radius.md,
-    border: '1px solid transparent',
-  },
   checkbox: { marginTop: 4, width: 15, height: 15, accentColor: accent.base, cursor: 'pointer' },
   todoContent: { flex: 1, minWidth: 0 },
   todoText: { fontSize: 14, fontWeight: 500, color: ink.strong, lineHeight: 1.5, wordBreak: 'break-word' },
   todoMeta: { fontSize: 12, color: ink.faint, marginTop: 3, lineHeight: 1.5 },
-  footer: { marginTop: 28, textAlign: 'center' },
-  footerHint: { fontSize: 12, color: ink.faint, lineHeight: 1.6 },
 
   panel: {
     marginTop: 16,
@@ -349,17 +342,6 @@ export const styles = {
     letterSpacing: '-0.04em',
   },
 
-  chain: {
-    backgroundColor: surface.sunken,
-    borderRadius: radius.md,
-    padding: 14,
-    fontSize: 12,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 6,
-  },
-  chainRow: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' },
-  chainArrow: { color: ink.faint },
   token: {
     display: 'block',
     marginTop: 8,
@@ -385,34 +367,6 @@ export const styles = {
     borderRadius: radius.pill,
   },
 
-  recoveryCode: {
-    display: 'block',
-    marginTop: 14,
-    padding: '14px 16px',
-    backgroundColor: surface.sunken,
-    border: `1px solid ${surface.line}`,
-    borderRadius: radius.md,
-    fontSize: 14,
-    letterSpacing: '0.06em',
-    color: ink.strong,
-    textAlign: 'center',
-    wordBreak: 'break-all',
-  },
-
-  spaceButton: {
-    width: '100%',
-    textAlign: 'left',
-    padding: '16px',
-    borderRadius: radius.lg,
-    border: `1px solid ${surface.rule}`,
-    backgroundColor: surface.card,
-    color: ink.strong,
-    fontSize: 14,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 3,
-  },
-
   /** A band set back from the page: no edge, the colour says it */
   inviteBanner: {
     padding: '16px 18px',
@@ -421,7 +375,6 @@ export const styles = {
     marginBottom: 16,
   },
 
-  saveForm: { ...stack(8), marginTop: 16 },
   checkboxRow: {
     display: 'flex',
     alignItems: 'center',
@@ -431,20 +384,8 @@ export const styles = {
     cursor: 'pointer',
   },
 
-  diagnostics: { marginTop: 12 },
-  factList: { ...stack(6), marginTop: 8 },
   factLabel: { color: ink.muted, fontSize: 12 },
   factValue: { color: ink.strong, fontSize: 12, fontWeight: 500 },
-  infoList: {
-    listStyle: 'none',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
-    padding: '4px 16px 18px',
-    fontSize: 13,
-    color: ink.muted,
-    lineHeight: 1.6,
-  },
 
   /** A small circled "i", sitting inline with the text it explains. */
   infoButton: {
@@ -526,25 +467,12 @@ export const styles = {
     backgroundColor: surface.sunken,
     borderRadius: radius.pill,
   },
-  segment: {
-    flex: 1,
-    padding: '6px 14px',
-    borderRadius: radius.pill,
-    border: '1px solid transparent',
-    background: 'none',
-    color: ink.muted,
-    fontSize: 13,
-    fontWeight: 500,
-  },
+  segment,
   segmentActive: {
-    flex: 1,
-    padding: '6px 14px',
-    borderRadius: radius.pill,
+    ...segment,
     border: `1px solid ${surface.rule}`,
-    backgroundColor: surface.card,
+    background: surface.card,
     color: ink.strong,
-    fontSize: 13,
-    fontWeight: 500,
   },
   fieldLabel: { fontSize: 12, fontWeight: 600, color: ink.muted, marginBottom: 6 },
 
@@ -581,59 +509,12 @@ export const styles = {
     borderRadius: radius.lg,
     backgroundColor: surface.card,
   },
-  /** The big frame on a page (a canvas, a table, a preview): the rule, the frame corner */
-  frame: {
-    border: `1px solid ${surface.rule}`,
-    borderRadius: radius.xl,
-    backgroundColor: surface.card,
-    overflow: 'hidden',
-  },
   /** A tag or a filter: a small sunken pill with a hairline, as the site's chips are */
-  chip: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 6,
-    height: 26,
-    padding: '0 10px',
-    borderRadius: radius.pill,
-    border: `1px solid ${surface.line}`,
-    backgroundColor: surface.sunken,
-    color: ink.body,
-    fontSize: 12,
-    fontWeight: 500,
-    whiteSpace: 'nowrap',
-  },
+  chip,
   /** A chip that is chosen: the rule, as a chosen segment has */
-  chipOn: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 6,
-    height: 26,
-    padding: '0 10px',
-    borderRadius: radius.pill,
-    border: `1px solid ${surface.rule}`,
-    backgroundColor: surface.card,
-    color: ink.strong,
-    fontSize: 12,
-    fontWeight: 500,
-    whiteSpace: 'nowrap',
-  },
+  chipOn: { ...chip, border: `1px solid ${surface.rule}`, backgroundColor: surface.card, color: ink.strong },
   /** Anything that floats over the page (a menu, a popover, a panel): the rule, a soft shadow */
   float: {
-    border: `1px solid ${surface.rule}`,
-    borderRadius: radius.lg,
-    backgroundColor: surface.card,
-    boxShadow: shadow.float,
-  },
-
-  /** A panel that floats over the page rather than sitting in it. */
-  menu: {
-    position: 'absolute',
-    right: 0,
-    top: 44,
-    zIndex: 20,
-    minWidth: 300,
-    marginTop: 0,
     border: `1px solid ${surface.rule}`,
     borderRadius: radius.lg,
     backgroundColor: surface.card,

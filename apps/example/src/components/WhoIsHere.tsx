@@ -1,11 +1,11 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import type { CarrierSummary, SpaceStatus } from '@minca/core';
-import { useAccount, useNetwork, useNode } from '@minca/react';
+import { type ReactNode } from 'react';
+import type { SpaceStatus } from '@minca/core';
+import { useAccount, useNetwork } from '@minca/react';
 import { healthOf, type Health } from '../derive/network';
-import { Dot, HEALTH_COLOR } from './NetworkView';
+import { Dot, HEALTH_COLOR, useCarriers } from './NetworkView';
 import { nameOf, type People } from '../derive/people';
 import { Avatar } from '@minca/app-shared/Avatar';
-import { styles, palette } from '../styles';
+import { styles, palette, ui } from '../styles';
 
 const count = (n: number, one: string, many: string) => (n === 1 ? one : `${n} ${many}`);
 
@@ -20,18 +20,9 @@ export function WhoIsHere({
   /** Opens the details: the Network tab */
   onOpen?: () => void;
 }) {
-  const node = useNode();
   const network = useNetwork();
   const { did: me } = useAccount();
-  const [carriers, setCarriers] = useState<ReadonlyArray<CarrierSummary>>([]);
-  const carrierKeys = status.carriers.join(',');
-  useEffect(() => {
-    if (!carrierKeys) return;
-    void node.carriers
-      .list()
-      .then(setCarriers)
-      .catch(() => {});
-  }, [node, carrierKeys]);
+  const carriers = useCarriers(status);
 
   const health = healthOf(status, network);
   if (health !== 'syncing') {
@@ -119,12 +110,10 @@ export function WhoIsHere({
       ) : (
         <Dot color={HEALTH_COLOR.syncing} />
       )}
-      <span style={ellipsis}>online · {short}</span>
+      <span style={{ ...ui.ellipsis, minWidth: 0 }}>online · {short}</span>
     </Badge>
   );
 }
-
-const ellipsis = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 } as const;
 
 /** The badge, which opens the Network tab when there is one to open */
 function Badge({ onOpen, title, children }: { onOpen?: () => void; title: string; children: ReactNode }) {

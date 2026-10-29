@@ -51,6 +51,7 @@ import {
 import { usePeopleHere } from '../Person';
 import { styles, palette, hstack, stack } from '../../styles';
 import { ClauseList, Pill, PlacePill, Sentence, Step, ValueInput, card, chip, previewBox } from './parts';
+import { PrimaryButton, QuietButton } from '../Buttons';
 
 /** In the schedule picker, a time of one's own */
 const OTHER = 'other';
@@ -607,17 +608,16 @@ export function AutomationBuilder({
         {error && <p style={{ ...styles.error, fontSize: 13 }}>{error}</p>}
 
         <div style={{ ...hstack(8), justifyContent: 'flex-end' }}>
-          <button onClick={onClose} data-variant="quiet" style={{ ...styles.smallButton, height: 40 }}>
+          <QuietButton onClick={onClose} style={{ height: 40 }}>
             Cancel
-          </button>
-          <button
+          </QuietButton>
+          <PrimaryButton
             onClick={() => void save()}
             disabled={(!chosen && !timed) || busy}
-            data-variant="primary"
-            style={{ ...styles.button, width: 'auto' }}
+            style={{ width: 'auto' }}
           >
             {busy ? 'Saving…' : editing ? 'Save automation' : 'Turn on automation'}
-          </button>
+          </PrimaryButton>
         </div>
       </Modal>
       {addingBot && (

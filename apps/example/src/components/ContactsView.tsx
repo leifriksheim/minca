@@ -27,8 +27,9 @@ import { Avatar } from '@minca/app-shared/Avatar';
 import { Modal } from '@minca/app-shared/Modal';
 import { styles, palette, stack } from '../styles';
 import { message, useAction, useCopy } from '@minca/app-shared/action';
-import { Loader } from '@minca/app-shared/Loader';
-import { ask } from '@minca/app-shared/Ask';
+import { Loading } from './Loading';
+import { AddButton, LinkButton, QuietButton } from './Buttons';
+import { confirmThen } from '../confirm';
 
 /** How often to look in the inbox's mailboxes: knocks wait on relays, which tell nobody */
 const KNOCK_POLL_MS = 30_000;
@@ -137,21 +138,18 @@ export function ContactsView({
                     <p style={{ ...styles.todoMeta, color: palette.ink.body }}>“{request.note}”</p>
                   )}
                 </div>
-                <button
+                <AddButton
                   onClick={() => void act(() => node.contacts.accept(request.space, request.key))}
-                  data-variant="primary"
-                  style={{ ...styles.addButton, height: 32 }}
+                  style={{ height: 32 }}
                 >
                   Accept
-                </button>
-                <button
+                </AddButton>
+                <LinkButton
                   onClick={() => void act(() => node.contacts.block(request.from))}
-                  data-variant="ghost"
-                  style={styles.linkButton}
                   title="Hide their knocks, in every space"
                 >
                   Block
-                </button>
+                </LinkButton>
               </li>
             ))}
             {knocks.map((knock) => (
@@ -172,29 +170,21 @@ export function ContactsView({
                     <p style={{ ...styles.todoMeta, color: palette.ink.body }}>“{knock.note}”</p>
                   )}
                 </div>
-                <button
-                  onClick={() => void act(() => node.inbox.accept(knock.id))}
-                  data-variant="primary"
-                  style={{ ...styles.addButton, height: 32 }}
-                >
+                <AddButton onClick={() => void act(() => node.inbox.accept(knock.id))} style={{ height: 32 }}>
                   Accept
-                </button>
-                <button
+                </AddButton>
+                <LinkButton
                   onClick={() => void act(() => node.inbox.dismiss(knock.id))}
-                  data-variant="ghost"
-                  style={styles.linkButton}
                   title="Let this knock go; they can knock again"
                 >
                   Dismiss
-                </button>
-                <button
+                </LinkButton>
+                <LinkButton
                   onClick={() => void act(() => node.contacts.block(knock.from))}
-                  data-variant="ghost"
-                  style={styles.linkButton}
                   title="Hide their knocks and requests from now on"
                 >
                   Block
-                </button>
+                </LinkButton>
               </li>
             ))}
           </ul>
@@ -204,9 +194,7 @@ export function ContactsView({
       <section style={stack(4)} aria-label="Contacts">
         <h2 style={styles.sectionTitle}>Contacts{listed.length > 0 ? ` (${listed.length})` : ''}</h2>
         {contacts === undefined ? (
-          <p style={styles.todoMeta}>
-            <Loader label="Loading" showLabel />
-          </p>
+          <Loading label="Loading" style={styles.todoMeta} />
         ) : listed.length === 0 ? (
           <div style={styles.emptyState}>
             No contacts yet. Add someone from a space you share — their name under People — or give them your
@@ -249,14 +237,12 @@ export function ContactsView({
                 <span style={{ flex: 1, fontSize: 14 }}>
                   {contact.name === contact.did ? nameOf(contact.did, nobody) : contact.name}
                 </span>
-                <button
+                <LinkButton
                   onClick={() => void act(() => node.contacts.remove(contact.did))}
-                  data-variant="ghost"
-                  style={styles.linkButton}
                   title="They can ask or knock again"
                 >
                   Unblock
-                </button>
+                </LinkButton>
               </li>
             ))}
           </ul>
@@ -342,50 +328,36 @@ function ContactRow({
         )}
       </div>
       {contact.space && standing !== 'gone' && (
-        <button onClick={() => onOpen(contact.space!)} data-variant="quiet" style={styles.smallButton}>
-          Open
-        </button>
+        <QuietButton onClick={() => onOpen(contact.space!)}>Open</QuietButton>
       )}
-      <button
-        onClick={() => setRenaming(contact.name)}
-        data-variant="ghost"
-        style={styles.linkButton}
-        title="Only you see what you call them"
-      >
+      <LinkButton onClick={() => setRenaming(contact.name)} title="Only you see what you call them">
         Rename
-      </button>
-      <button
+      </LinkButton>
+      <LinkButton
         onClick={() =>
-          void ask(
+          confirmThen(
             standing === 'waiting'
               ? 'Your request is taken back and you leave the space for two.'
               : 'You leave the space for two; they keep their copy.',
-            { title: `Remove ${contact.name}?`, yes: 'Remove', danger: true },
-          ).then(async (sure) => {
-            if (sure)
-              await act(() => takeBack(node, standing === 'waiting' ? shared : [], account.did, contact.did));
-          })
+            { title: `Remove ${contact.name}?`, yes: 'Remove' },
+            () => act(() => takeBack(node, standing === 'waiting' ? shared : [], account.did, contact.did)),
+          )
         }
-        data-variant="ghost"
-        style={styles.linkButton}
       >
         Remove
-      </button>
-      <button
+      </LinkButton>
+      <LinkButton
         onClick={() =>
-          void ask('You leave the space for two, and their requests and knocks are hidden from now on.', {
-            title: `Block ${contact.name}?`,
-            yes: 'Block',
-            danger: true,
-          }).then(async (sure) => {
-            if (sure) await act(() => node.contacts.block(contact.did));
-          })
+          confirmThen(
+            'You leave the space for two, and their requests and knocks are hidden from now on.',
+            { title: `Block ${contact.name}?`, yes: 'Block' },
+            () => act(() => node.contacts.block(contact.did)),
+          )
         }
-        data-variant="ghost"
-        style={{ ...styles.linkButton, color: palette.accent.danger }}
+        style={{ color: palette.accent.danger }}
       >
         Block
-      </button>
+      </LinkButton>
     </li>
   );
 }
@@ -424,52 +396,35 @@ function Inbox({
               </p>
               <p style={styles.todoMeta}>Since {ago(inbox.updatedAt)}</p>
             </div>
-            <button
-              onClick={() => copy(inboxLink(inbox.code))}
-              data-variant="quiet"
-              style={styles.smallButton}
-            >
+            <QuietButton onClick={() => copy(inboxLink(inbox.code))}>
               {copied ? 'Copied' : 'Copy link'}
-            </button>
-            <button
+            </QuietButton>
+            <LinkButton
               onClick={() => void act(() => node.inbox.clear())}
-              data-variant="ghost"
-              style={styles.linkButton}
               title="Clear every knock waiting, for an inbox someone is flooding"
             >
               Clear knocks
-            </button>
-            <button
+            </LinkButton>
+            <LinkButton
               onClick={() =>
-                void ask('The link you shared stops working everywhere. You get a new one.', {
-                  title: 'Replace your inbox?',
-                  yes: 'Replace it',
-                  danger: true,
-                }).then(async (sure) => {
-                  if (sure) await act(() => node.inbox.rotate());
-                })
+                confirmThen(
+                  'The link you shared stops working everywhere. You get a new one.',
+                  { title: 'Replace your inbox?', yes: 'Replace it' },
+                  () => act(() => node.inbox.rotate()),
+                )
               }
-              data-variant="ghost"
-              style={{ ...styles.linkButton, color: palette.accent.danger }}
+              style={{ color: palette.accent.danger }}
             >
               Replace
-            </button>
+            </LinkButton>
           </li>
         </ul>
       )}
       <div style={styles.linkRow}>
         {!inbox && (
-          <button
-            onClick={() => void act(() => node.inbox.open())}
-            data-variant="quiet"
-            style={styles.smallButton}
-          >
-            Open your inbox
-          </button>
+          <QuietButton onClick={() => void act(() => node.inbox.open())}>Open your inbox</QuietButton>
         )}
-        <button onClick={() => setKnocking(true)} data-variant="ghost" style={styles.linkButton}>
-          Knock on someone's inbox
-        </button>
+        <LinkButton onClick={() => setKnocking(true)}>Knock on someone's inbox</LinkButton>
       </div>
       {knocking && (
         <KnockDialog
@@ -539,14 +494,13 @@ function KnockDialog({
           account and the name you go by. The name an inbox shows is the owner's to choose, so be sure the
           link came from them.
         </p>
-        <button
+        <AddButton
           type="submit"
           disabled={!text || inbox.status !== 'done' || !inbox.value}
-          data-variant="primary"
-          style={{ ...styles.addButton, marginTop: 12 }}
+          style={{ marginTop: 12 }}
         >
           Knock
-        </button>
+        </AddButton>
       </form>
     </Modal>
   );

@@ -25,16 +25,11 @@ const CLI = (import.meta.env.VITE_MINCA_CONNECT ?? 'npx @minca/cli connect').rep
 export function AddBotDialog({
   spaceId,
   writable,
-  cli = CLI,
-  running = [],
   onAutomations,
   onClose,
 }: {
   spaceId: string;
   writable: boolean;
-  cli?: string;
-  /** Names of the bots already there: the dialog then opens on what to tell them */
-  running?: ReadonlyArray<string>;
   onAutomations?: (() => void) | undefined;
   onClose: () => void;
 }) {
@@ -52,7 +47,7 @@ export function AddBotDialog({
   const [name, setName] = useState('');
   const { run, busy, error: problem, setError: setProblem } = useAction();
   const [started, setStarted] = useState<{ bot: string; name: string } | null>(null);
-  const [chosenView, setView] = useState<'add' | 'done' | 'yourself'>(running.length ? 'done' : 'add');
+  const [chosenView, setView] = useState<'add' | 'done' | 'yourself'>('add');
   const chosen = role ?? roles[0]?.name ?? null;
   const called = name.trim() || 'Club Bot';
   // Until the community is kept online, adding to its fund comes first.
@@ -165,10 +160,8 @@ export function AddBotDialog({
         {view === 'done' && (
           <>
             <p style={{ fontSize: 14, color: palette.ink.body, lineHeight: 1.5 }}>
-              {started
-                ? `${started.name} is in the community.`
-                : `${running.join(', ')} ${running.length === 1 ? 'is' : 'are'} on.`}{' '}
-              Tell it what to do in Automations: answer when mentioned, sum up the week every Friday.
+              {started?.name ?? called} is in the community. Tell it what to do in Automations: answer when
+              mentioned, sum up the week every Friday.
             </p>
             {!profiles && (
               <div
@@ -218,7 +211,7 @@ export function AddBotDialog({
 
         {view === 'yourself' && (
           <>
-            <RunItYourself spaceId={spaceId} cli={cli} name={called} role={chosen} />
+            <RunItYourself spaceId={spaceId} name={called} role={chosen} />
             <button
               onClick={() => setView('add')}
               style={{ ...styles.linkButton, alignSelf: 'center', fontSize: 12 }}
@@ -233,17 +226,7 @@ export function AddBotDialog({
 }
 
 /** For those who run the bot themselves: an invite for its role, and the command that joins with it */
-function RunItYourself({
-  spaceId,
-  cli,
-  name,
-  role,
-}: {
-  spaceId: string;
-  cli: string;
-  name: string;
-  role: string | null;
-}) {
+function RunItYourself({ spaceId, name, role }: { spaceId: string; name: string; role: string | null }) {
   const node = useNode();
   const [invite, setInvite] = useState<string | null>(null);
   const { run, error: problem } = useAction();
@@ -270,7 +253,7 @@ function RunItYourself({
       </p>
       {invite ? (
         <>
-          <Copyable text={`${cli} agent --bot --name ${quoted(name)} --invite ${quoted(invite)}`} secret />
+          <Copyable text={`${CLI} agent --bot --name ${quoted(name)} --invite ${quoted(invite)}`} secret />
           <p style={{ ...styles.faint, lineHeight: 1.5 }}>
             Paste it into a terminal. It asks for a password for the bot and an AI key, then joins. Keep it to
             yourself: whoever has it can join as the bot.
@@ -333,12 +316,10 @@ function Copyable({ text, secret = false }: { text: string; secret?: boolean }) 
 export function SpaceBots({
   spaceId,
   writable,
-  cli = CLI,
   onAutomations,
 }: {
   spaceId: string;
   writable: boolean;
-  cli?: string;
   onAutomations?: () => void;
 }) {
   const { bots: listed, look, lookBots } = useSpaceBots(spaceId, writable);
@@ -406,7 +387,6 @@ export function SpaceBots({
         <AddBotDialog
           spaceId={spaceId}
           writable={writable}
-          cli={cli}
           {...(onAutomations
             ? {
                 onAutomations: () => {

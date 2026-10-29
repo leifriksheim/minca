@@ -36,8 +36,9 @@ import { styles, palette, ui, hstack, stack } from '../styles';
 import { useAction } from '@minca/app-shared/action';
 import { Person } from './Person';
 import { useDraft } from './useDraft';
-import { Loader } from '@minca/app-shared/Loader';
-import { ask } from '@minca/app-shared/Ask';
+import { Loading } from './Loading';
+import { QuietButton } from './Buttons';
+import { confirmThen } from '../confirm';
 
 /** Standard collections with a place of their own on every record, so not offered as "+ Add …" */
 const ANNOTATIONS = new Set<string>([reaction.name, comment.name, tag.name, file.name]);
@@ -190,9 +191,7 @@ export function RecordPanel({
         </header>
 
         {!data ? (
-          <p style={{ ...styles.emptyState, margin: 20 }}>
-            <Loader label="Opening" showLabel />
-          </p>
+          <Loading label="Opening" style={{ ...styles.emptyState, margin: 20 }} />
         ) : !record ? (
           <p style={{ ...styles.emptyState, margin: 20 }}>This record is gone — deleted, or not here yet.</p>
         ) : (
@@ -465,18 +464,16 @@ export function RecordPanel({
                 addable.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                     {addable.map((a) => (
-                      <button
+                      <QuietButton
                         key={`${a.collection.name}-${a.rel}`}
                         onClick={() => setAdding(a)}
                         title={a.collection.links[a.rel]?.description}
-                        data-variant="quiet"
-                        style={styles.smallButton}
                       >
                         + Add {collectionLabel(a.collection).toLowerCase()}
                         {/* One kind added two ways, like a task under a column or a project, says which */}
                         {addable.filter((b) => b.collection.name === a.collection.name).length > 1 &&
                           ` · ${humanize(a.rel).toLowerCase()}`}
-                      </button>
+                      </QuietButton>
                     ))}
                   </div>
                 )
@@ -522,21 +519,18 @@ export function RecordPanel({
                 {record.seq > 0 && ` · version ${record.seq + 1}`}
               </span>
               {may?.delete && (
-                <button
-                  onClick={() => {
-                    void ask('It is deleted for everyone in the space.', {
-                      title: 'Delete this?',
-                      yes: 'Delete',
-                      danger: true,
-                    }).then(async (sure) => {
-                      if (sure) await node.records.delete(space.id, record.key).then(onClose);
-                    });
-                  }}
-                  data-variant="quiet"
-                  style={{ ...styles.smallButton, color: palette.accent.danger }}
+                <QuietButton
+                  onClick={() =>
+                    confirmThen(
+                      'It is deleted for everyone in the space.',
+                      { title: 'Delete this?', yes: 'Delete' },
+                      () => node.records.delete(space.id, record.key).then(onClose),
+                    )
+                  }
+                  style={{ color: palette.accent.danger }}
                 >
                   Delete
-                </button>
+                </QuietButton>
               )}
             </footer>
           </div>
@@ -654,9 +648,7 @@ function FieldEditor({
         >
           Save
         </button>
-        <button onClick={() => setEditing(false)} data-variant="quiet" style={styles.smallButton}>
-          Cancel
-        </button>
+        <QuietButton onClick={() => setEditing(false)}>Cancel</QuietButton>
       </div>
     </div>
   ) : (

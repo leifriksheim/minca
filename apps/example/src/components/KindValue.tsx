@@ -10,7 +10,8 @@ import { fileRefOf, moneyText, safeHref, whenText } from '../derive/kinds';
 import { isObject } from '../derive/schema-ui';
 import { saveFile, useFileUrl } from '../files';
 import { Person, useSpaceHere } from './Person';
-import { palette, styles } from '../styles';
+import { palette } from '../styles';
+import { LinkButton } from './Buttons';
 
 /** A value as its kind says to show it, or null to show it plainly */
 export function byKind(kind: string, value: unknown, compact: boolean): ReactNode | null {
@@ -110,9 +111,9 @@ export function FileValue({
       <span>{name}</span>
       <span style={{ color: palette.ink.muted, fontSize: 12 }}>{sizeOf(value.size)}</span>
       {!compact && space && (
-        <button type="button" data-variant="ghost" style={styles.linkButton} onClick={() => void save()}>
+        <LinkButton type="button" onClick={() => void save()}>
           Save
-        </button>
+        </LinkButton>
       )}
     </span>
   );

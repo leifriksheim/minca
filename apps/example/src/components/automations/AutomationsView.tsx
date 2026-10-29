@@ -18,7 +18,8 @@ import { Empty, SectionHead, iconDot, list, section } from './parts';
 import { SpaceBots } from '@minca/app-shared/CommunitySetup';
 import { useAction } from '@minca/app-shared/action';
 import { useActivityOff } from '../../activity';
-import { ask } from '@minca/app-shared/Ask';
+import { LinkButton, QuietButton } from '../Buttons';
+import { confirmThen } from '../../confirm';
 
 type Open = {
   readonly kind: 'automation';
@@ -107,14 +108,9 @@ export function AutomationsView({
             Nobody sees when a bot or agent is working on something here, so its answers arrive unannounced.
           </span>
           {shows.turnOn ? (
-            <button
-              type="button"
-              data-variant="ghost"
-              style={styles.linkButton}
-              onClick={() => shows.turnOn && act(shows.turnOn)}
-            >
+            <LinkButton type="button" onClick={() => shows.turnOn && act(shows.turnOn)}>
               Show it
-            </button>
+            </LinkButton>
           ) : (
             <span>Someone who may add collections can show it.</span>
           )}
@@ -176,7 +172,7 @@ export function AutomationsView({
                     </div>
                     <div style={{ ...hstack(6), flexShrink: 0 }}>
                       {mine && (
-                        <button
+                        <QuietButton
                           onClick={() =>
                             act(() =>
                               node.records.update(space.id, record.key, {
@@ -186,43 +182,33 @@ export function AutomationsView({
                               }),
                             )
                           }
-                          data-variant="quiet"
-                          style={styles.smallButton}
                         >
                           {off ? 'Turn on' : 'Pause'}
-                        </button>
+                        </QuietButton>
                       )}
                       {mine ? (
-                        <button
-                          onClick={() => setOpen({ kind: 'automation', editing: record })}
-                          data-variant="quiet"
-                          style={styles.smallButton}
-                        >
+                        <QuietButton onClick={() => setOpen({ kind: 'automation', editing: record })}>
                           Change
-                        </button>
+                        </QuietButton>
                       ) : (
                         space.writable && (
-                          <button
+                          <QuietButton
                             onClick={() => setOpen({ kind: 'automation', copying: record })}
-                            data-variant="quiet"
                             title="Save it as an automation of your own, which you can change"
-                            style={styles.smallButton}
                           >
                             Make a copy
-                          </button>
+                          </QuietButton>
                         )
                       )}
                       {rules.deletable.has(record.key) && (
                         <button
-                          onClick={() => {
-                            void ask('It stops running, for everyone in the space.', {
-                              title: `Delete the automation “${automation.name}”?`,
-                              yes: 'Delete',
-                              danger: true,
-                            }).then((sure) => {
-                              if (sure) act(() => node.records.delete(space.id, record.key));
-                            });
-                          }}
+                          onClick={() =>
+                            confirmThen(
+                              'It stops running, for everyone in the space.',
+                              { title: `Delete the automation “${automation.name}”?`, yes: 'Delete' },
+                              () => act(() => node.records.delete(space.id, record.key)),
+                            )
+                          }
                           data-variant="danger"
                           aria-label={`Delete ${automation.name}`}
                           style={{ ...styles.smallButton, color: palette.accent.danger }}

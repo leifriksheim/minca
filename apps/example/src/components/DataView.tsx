@@ -7,6 +7,7 @@ import { CollectionsOverview, namespaceLabel } from './CollectionsOverview';
 import { Library } from './Library';
 import { CollectionEditor } from './CollectionDesigner';
 import { styles, palette, stack } from '../styles';
+import { AddButton } from './Buttons';
 
 /** Where the Data view is: which collection, and which record is open beside it */
 export interface Place {
@@ -188,13 +189,12 @@ export function DataView({
               Define a collection — or ask an agent: this page offers the space's operations as WebMCP tools.
             </span>
             {space.writable && (
-              <button
+              <AddButton
                 onClick={() => onPlace({ collection: NEW, key: null })}
-                data-variant="primary"
-                style={{ ...styles.addButton, alignSelf: 'center' }}
+                style={{ alignSelf: 'center' }}
               >
                 New collection
-              </button>
+              </AddButton>
             )}
           </div>
         )}

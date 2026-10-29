@@ -8,8 +8,9 @@ import { Proposals } from './MadeApps';
 import { moveApp, removeApp } from './launcher';
 import { Icon } from '../Icon';
 import { unreadOf, type Unread } from '../../seen';
-import { styles, palette, variants, hstack, stack } from '../../styles';
-import { ask } from '@minca/app-shared/Ask';
+import { styles, palette, variants, hstack, stack, ui } from '../../styles';
+import { PrimaryButton, QuietButton } from '../Buttons';
+import { confirmThen } from '../../confirm';
 
 /**
  * A space's apps like a phone's home screen: those added, then proposals.
@@ -41,15 +42,14 @@ export function AppsView({
     const at = apps.placed.findIndex((record) => record.key === app.record.key);
     void arrange.run(() => moveApp(node, space.id, apps.placed, app.record.key, at + by));
   };
-  const remove = async (app: AppEntry) => {
-    const sure = await ask(
+  const remove = (app: AppEntry) =>
+    confirmThen(
       app.record.body?.template
         ? 'Everything it holds stays in the space, and adding it again brings it back.'
         : 'Everything it holds stays in the space; to have the app again, someone proposes it again.',
-      { title: `Take ${app.title} off ${space.name}?`, yes: 'Take it off', danger: true },
+      { title: `Take ${app.title} off ${space.name}?`, yes: 'Take it off' },
+      () => arrange.run(() => removeApp(node, space.id, app.record, apps.records)),
     );
-    if (sure) await arrange.run(() => removeApp(node, space.id, app.record, apps.records));
-  };
 
   return (
     <div style={stack(36)}>
@@ -73,14 +73,9 @@ export function AppsView({
               </button>
             )}
             {space.writable && !arranging && (
-              <button
-                onClick={onCreate}
-                data-variant="primary"
-                className="hide-on-phone"
-                style={{ ...styles.button, ...inlineButton }}
-              >
+              <PrimaryButton onClick={onCreate} className="hide-on-phone" style={{ ...inlineButton }}>
                 <Icon name="plus" size={14} /> New app
-              </button>
+              </PrimaryButton>
             )}
           </div>
         </div>
@@ -96,7 +91,7 @@ export function AppsView({
                 first={at === 0}
                 last={at === apps.ready.length - 1}
                 onMove={(by) => move(app, by)}
-                onRemove={() => void remove(app)}
+                onRemove={() => remove(app)}
               />
             ))}
           </ol>
@@ -205,7 +200,7 @@ function ArrangeRow({
   return (
     <li style={{ ...arrangeRow, borderTop: first ? 'none' : `1px solid ${palette.surface.line}` }}>
       <AppIcon id={app.id} size={32} />
-      <strong style={{ ...cardTitle, ...ellipsis, flex: 1, minWidth: 0 }}>{app.title}</strong>
+      <strong style={{ ...cardTitle, ...ui.ellipsis, flex: 1, minWidth: 0 }}>{app.title}</strong>
       <span style={{ ...hstack(6), flexShrink: 0 }}>
         <button
           onClick={() => onMove(-1)}
@@ -229,14 +224,9 @@ function ArrangeRow({
             <Icon name="chevron" size={14} />
           </span>
         </button>
-        <button
-          onClick={onRemove}
-          disabled={busy}
-          data-variant="quiet"
-          style={{ ...styles.smallButton, height: 40, color: palette.accent.danger }}
-        >
+        <QuietButton onClick={onRemove} disabled={busy} style={{ height: 40, color: palette.accent.danger }}>
           Remove
-        </button>
+        </QuietButton>
       </span>
     </li>
   );
@@ -288,7 +278,6 @@ const arrangeRow = {
 } as const;
 // As tall as a finger needs (`pointer: coarse` raises buttons to 40), and as wide, so they stay round.
 const roundButton = { ...styles.smallButton, width: 40, height: 40, padding: 0, flexShrink: 0 } as const;
-const ellipsis = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as const;
 const cardTitle = { fontSize: 15, fontWeight: 600, color: palette.ink.strong };
 const cardText = { fontSize: 13, lineHeight: 1.45, color: palette.ink.muted };
 const inlineButton = {

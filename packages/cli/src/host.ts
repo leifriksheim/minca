@@ -58,6 +58,7 @@ import {
   type Subscription,
 } from '@minca/core';
 import { isRecord, messageOf } from './json.js';
+import { queue } from './queue.js';
 import { createInboundPeers, serve, type Served } from './serve.js';
 import type { WalletPayments } from './wallet.js';
 import { isEmail, type Reminders } from './reminders.js';
@@ -1173,16 +1174,6 @@ function pays(transfer: { amount: string; at: number }, invoice: Invoice | undef
     transfer.at >= invoice.at - CLOCK_SKEW_SECONDS &&
     transfer.at <= invoice.at + INVOICE_SECONDS
   );
-}
-
-/** Runs one piece of work at a time, in the order asked */
-function queue() {
-  let tail: Promise<unknown> = Promise.resolve();
-  return <T>(work: () => Promise<T>): Promise<T> => {
-    const next = tail.then(work, work);
-    tail = next.catch(() => {});
-    return next;
-  };
 }
 
 /** Runs `work` every `ms` without keeping the process alive */

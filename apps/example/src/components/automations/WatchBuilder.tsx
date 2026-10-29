@@ -21,6 +21,7 @@ import { usePeopleHere } from '../Person';
 import { styles, palette, hstack, stack } from '../../styles';
 import { places, type Within } from '../../automations';
 import { ClauseList, Pill, PlacePill, Sentence, Step, card, previewBox } from './parts';
+import { PrimaryButton, QuietButton } from '../Buttons';
 
 type Who = 'others' | 'anyone';
 type Where = 'space' | 'all';
@@ -132,9 +133,7 @@ export function WatchBuilder({
           “{shown}” is on. This app lets you know while it's open, in a tab or installed. You can pause or
           remove it any time in your account.
         </p>
-        <button onClick={onClose} data-variant="primary" style={styles.button}>
-          Done
-        </button>
+        <PrimaryButton onClick={onClose}>Done</PrimaryButton>
       </Modal>
     );
 
@@ -270,17 +269,12 @@ export function WatchBuilder({
       {error && <p style={{ ...styles.errorHint, marginTop: 0, color: palette.accent.danger }}>{error}</p>}
 
       <div style={{ ...hstack(8), justifyContent: 'flex-end' }}>
-        <button onClick={onClose} data-variant="quiet" style={{ ...styles.smallButton, height: 40 }}>
+        <QuietButton onClick={onClose} style={{ height: 40 }}>
           Cancel
-        </button>
-        <button
-          onClick={submit}
-          disabled={!chosen || asking}
-          data-variant="primary"
-          style={{ ...styles.button, width: 'auto' }}
-        >
+        </QuietButton>
+        <PrimaryButton onClick={submit} disabled={!chosen || asking} style={{ width: 'auto' }}>
           {asking ? 'Confirm in your account…' : 'Notify me'}
-        </button>
+        </PrimaryButton>
       </div>
     </Modal>
   );

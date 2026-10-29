@@ -211,7 +211,8 @@ export async function setActivity(
   label?: string,
 ): Promise<NodeRecord | null> {
   if (!(await definedNames(node, space)).has(activity.name)) return null;
-  const kept = label ?? (await labelNow(node, space, on));
+  const mine = await node.records.linked<Activity>(space, on, { rel: 'about', collection: activity.name });
+  const kept = label ?? mine.find((record) => record.root === node.did && !record.deleted)?.body?.label;
   const body: Activity = {
     state,
     ...(kept ? { label: kept.slice(0, 120) } : {}),
@@ -219,12 +220,6 @@ export async function setActivity(
   };
   // One per account per record: a put for one it already has is that record's next version.
   return node.records.put(space, activity.name, body, { links: [{ rel: 'about', to: on }] });
-}
-
-/** The label this account's activity on a record has now */
-async function labelNow(node: P2PNode, space: string, on: string): Promise<string | undefined> {
-  const records = await node.records.linked<Activity>(space, on, { rel: 'about', collection: activity.name });
-  return records.find((record) => record.root === node.did && !record.deleted)?.body?.label;
 }
 
 /** In an action, the record the automation holds for */
@@ -287,36 +282,27 @@ export function checkAutomation(value: unknown): string | null {
   if (typeof value.name !== 'string' || !value.name.trim()) return 'An automation needs a name';
   if (value.when === undefined && value.every === undefined)
     return 'An automation needs a when: { query, holds? }, an every, or both';
-  const part =
-    whenProblem(value.when) ??
-    everyProblem(value.every) ??
-    actionProblem(value.then, value.when !== undefined);
-  if (part) return part;
+  if (isObject(value.when)) {
+    const query = checkQuery(value.when.query);
+    if (query) return `when.query: ${query}`;
+    const holds =
+      value.when.holds === undefined ? null : checkFilter(value.when.holds, 'when.holds', { include: true });
+    if (holds) return holds;
+  }
+  const every = typeof value.every === 'string' ? checkCron(value.every) : null;
+  if (every) return `every: ${every}`;
+  const then = value.then;
+  const action = isObject(then) && typeof then.kind === 'string' ? ACTIONS[then.kind] : undefined;
+  if (!isObject(then) || !action) return `then.kind must be one of ${Object.keys(ACTIONS).join(', ')}`;
+  const actionShape = schemaProblem(action, then, 'then');
+  if (actionShape) return actionShape;
+  if (then.kind === 'set' && value.when === undefined)
+    return 'An automation that changes a record needs a when';
   if (typeof value.since !== 'string' || !Number.isFinite(Date.parse(value.since)))
     return 'since must be a date';
   if (value.open !== undefined && !isWebAddress(value.open)) return 'open must be an https:// address';
   if (isObject(value.app) && !isOrigin(value.app.origin)) return 'app.origin must be a web origin';
   return null;
-}
-
-function whenProblem(when: unknown): string | null {
-  if (!isObject(when)) return null;
-  const query = checkQuery(when.query);
-  if (query) return `when.query: ${query}`;
-  return when.holds === undefined ? null : checkFilter(when.holds, 'when.holds', { include: true });
-}
-
-function everyProblem(every: unknown): string | null {
-  const problem = typeof every === 'string' ? checkCron(every) : null;
-  return problem && `every: ${problem}`;
-}
-
-function actionProblem(then: unknown, hasWhen: boolean): string | null {
-  const shape = isObject(then) && typeof then.kind === 'string' ? ACTIONS[then.kind] : undefined;
-  if (!isObject(then) || !shape) return `then.kind must be one of ${Object.keys(ACTIONS).join(', ')}`;
-  const problem = schemaProblem(shape, then, 'then');
-  if (problem) return problem;
-  return then.kind === 'set' && !hasWhen ? 'An automation that changes a record needs a when' : null;
 }
 
 /** An https:// address, or http:// on this machine */
@@ -533,15 +519,6 @@ export interface RunAutomationsOptions {
   readonly onRun?: (trigger: AutomationTrigger, run: AutomationRun) => void;
 }
 
-/** What an action needs to write its run */
-interface Acting {
-  readonly node: P2PNode;
-  readonly space: string;
-  readonly match: AutomationMatch | undefined;
-  readonly at: string;
-  readonly fill: (template: string) => string;
-}
-
 /** Does what an automation says, as whoever runs it; says what happened */
 export async function act(
   node: P2PNode,
@@ -551,7 +528,7 @@ export async function act(
   const { automation: active, match } = trigger;
   const at = new Date().toISOString();
   const fill = (template: string) => fillAutomationText(template, match, options.title);
-  const acting: Acting = { node, space: active.space, match, at, fill };
+  const space = active.space;
   const then = active.body.then;
   try {
     switch (then.kind) {
@@ -563,50 +540,33 @@ export async function act(
       case 'ask':
         if (!options.ask) return { did: 'Nothing here can ask an agent', ok: false, at };
         return { ...(await options.ask(trigger)), at };
-      case 'add':
-        return await addRecord(then, acting);
-      case 'set':
-        return await setField(then, acting);
+      case 'add': {
+        const collections = await node.collections.list(space);
+        const target = collections.find((c) => c.name === then.collection && c.version !== null);
+        const thing = (target?.title ?? then.collection.split('.').pop() ?? then.collection).toLowerCase();
+        const fresh = target ? quickAddBody(target.schema, fill(then.text)) : null;
+        if (!target || !fresh)
+          return { did: `This space can't add a ${thing} from a line of text`, ok: false, at };
+        // Without a record, as when the time set it off, a link to it has nothing to point at.
+        const links = (then.links ?? []).flatMap((l) =>
+          l.to !== IT ? [l] : match ? [{ rel: l.rel, to: match.record.key }] : [],
+        );
+        const made = await node.records.put(space, target.name, fresh, { links });
+        return { did: `Added a ${thing}: ${fill(then.text)}`, ok: true, at, made: made.key };
+      }
+      case 'set': {
+        const current = match ? await node.records.get(space, match.record.key) : null;
+        const was = isObject(current?.body) ? current.body : null;
+        if (!current || !was) return { did: 'It is not there any more', ok: false, at };
+        if (!(await node.records.can(space, 'edit', current.key)))
+          return { did: 'Only whoever made it can change it', ok: false, at };
+        await node.records.update(space, current.key, { ...was, [then.field]: then.value });
+        return { did: `${fill('“{title}”')}: set ${then.field} to ${String(then.value)}`, ok: true, at };
+      }
     }
   } catch (error) {
     return { did: error instanceof Error ? error.message : String(error), ok: false, at };
   }
-}
-
-type Action<K extends AutomationAction['kind']> = Extract<AutomationAction, { kind: K }>;
-
-async function addRecord(
-  then: Action<'add'>,
-  { node, space, match, at, fill }: Acting,
-): Promise<AutomationRun> {
-  const collections = await node.collections.list(space);
-  const target = collections.find((c) => c.name === then.collection && c.version !== null);
-  const thing = (target?.title ?? then.collection.split('.').pop() ?? then.collection).toLowerCase();
-  const fresh = target ? quickAddBody(target.schema, fill(then.text)) : null;
-  if (!target || !fresh) return { did: `This space can't add a ${thing} from a line of text`, ok: false, at };
-  const made = await node.records.put(space, target.name, fresh, { links: linksFor(then.links, match) });
-  return { did: `Added a ${thing}: ${fill(then.text)}`, ok: true, at, made: made.key };
-}
-
-/** A new record's links, `$it` made the matched record's key; without a match, as when the time set it off, those go */
-function linksFor(links: ReadonlyArray<AutomationLink> = [], match?: AutomationMatch): AutomationLink[] {
-  return links.flatMap((link) => {
-    if (link.to !== IT) return [link];
-    return match ? [{ rel: link.rel, to: match.record.key }] : [];
-  });
-}
-
-async function setField(
-  then: Action<'set'>,
-  { node, space, match, at, fill }: Acting,
-): Promise<AutomationRun> {
-  const current = match ? await node.records.get(space, match.record.key) : null;
-  const was = isObject(current?.body) ? current.body : null;
-  if (!current || !was) return { did: 'It is not there any more', ok: false, at };
-  if (!(await node.records.can(space, 'edit', current.key)))
-    return { did: 'Only whoever made it can change it', ok: false, at };
-  await node.records.update(space, current.key, { ...was, [then.field]: then.value });
-  return { did: `${fill('“{title}”')}: set ${then.field} to ${String(then.value)}`, ok: true, at };
 }
 
 /** Whether someone holds one of these roles; `member` is any place at all, and a founder holds every role's power */

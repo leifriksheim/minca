@@ -540,6 +540,8 @@ export const ui = {
     background: surface.sunken,
   },
   td: { padding: '10px 14px', borderBottom: line, color: ink.body },
+  /** Around a table, which scrolls sideways inside it when too wide */
+  tableBox: { border: `1px solid ${surface.rule}`, borderRadius: radius.lg, overflowX: 'auto' },
   card: styles.tile,
   ellipsis: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
 } satisfies Record<string, CSSProperties>;

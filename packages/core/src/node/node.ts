@@ -60,15 +60,10 @@ import type {
   SpaceSummary,
 } from './types.js';
 import { inBackground, type NodeContext, type OwnSpaceKind } from './node-context.js';
-import { createNodeInvites } from './node-invites.js';
 import { createNodeCarriers } from './node-carriers.js';
 import { createNodeHosting } from './node-hosting.js';
-import { createNodeAccount } from './node-account.js';
 import { createNodeContacts } from './node-contacts.js';
-import { createNodeInbox } from './node-inbox.js';
-import { createNodeDirect } from './node-direct.js';
-import { createNodeRecords } from './node-records.js';
-import { startAgent } from './node-agent.js';
+import { createNodeDirect, createNodeRecords, startAgent } from './node-records.js';
 
 /** Everything a session key may do: every command, about the whole account */
 export const SESSION_COMMAND = ALL_COMMAND;
@@ -198,14 +193,12 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   if (contactsRecord && !(await registry.get(contactsRecord.space.id))) {
     await joinRegistry(await encodeSpaceInvite(contactsRecord, looseSigner(), provider));
   }
-  /** Which of the account's own spaces this is, or null for one it uses */
   async function kindOf(spaceId: string): Promise<OwnSpaceKind | null> {
     if (spaceId === accountSpaceId) return 'registry';
     if (spaceId === contactsSpaceId) return 'contacts';
     return (await carrying.isCarrySpace(spaceId)) ? 'carry' : null;
   }
 
-  /** The contact key, for a node allowed to open contact requests */
   const contactKeys = config.contactKey ? await contactKeyPair(config.contactKey) : null;
 
   async function findRecord(spaceId: string): Promise<SpaceRecord | null> {
@@ -248,17 +241,15 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       emit({ type: 'account' });
       void reconcile();
       // A rename on another device reaches the spaces open here too.
-      void profile.publishProfileToOpenSpaces();
+      void people.publishProfileToOpenSpaces();
     }
   };
 
-  /** The account registry, or why `what` can't be done without it */
   function requireAccount(what: string): Promise<SpaceRuntime> {
     if (!accountSpaceId) return Promise.reject(new Error(`${what} needs the account key`));
     return runtime(accountSpaceId);
   }
 
-  /** What this account wrote in a collection that `check` takes: only it writes its own lists */
   async function ownRecords<T>(
     rt: SpaceRuntime,
     options: ListOptions,
@@ -269,7 +260,6 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     );
   }
 
-  /** The same, in the account registry; none without one */
   async function accountRecords<T>(
     options: ListOptions,
     check?: (record: NodeRecord<T>) => boolean,
@@ -287,7 +277,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     open.catch(() => runtimes.delete(spaceId));
     runtimes.set(spaceId, open);
     // Its profile, a revoke from an earlier visit, carriers added since, and the hosts to reach.
-    for (const step of [profile.publishProfile, checkRevoked, carrying.nameKeepers]) whenOpen(spaceId, step);
+    for (const step of [people.publishProfile, checkRevoked, carrying.nameKeepers]) whenOpen(spaceId, step);
     inBackground(open.then(() => hosts.reachHosts(spaceId)));
     return open;
   }
@@ -321,7 +311,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       onRole: (role) => {
         // Holding a role now, perhaps just joined: the space may hear who this is.
         if (role !== null) {
-          whenOpen(spaceId, profile.publishProfile);
+          whenOpen(spaceId, people.publishProfile);
           inBackground(hosts.keepSpaceHosts(spaceId));
         }
         if (record.role !== role) void registry.setRole(spaceId, role).then(() => emit({ type: 'spaces' }));
@@ -358,7 +348,6 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
    * record that makes the difference may be the one that arrived meanwhile.
    */
   const joining = new Map<string, () => Promise<void>>();
-  /** Takes in an invite; the space it is for may now have one waiting */
   async function joinRegistry(invite: string): Promise<SpaceRecord> {
     const record = await registry.join(invite);
     noInviteWaiting.delete(record.space.id);
@@ -431,7 +420,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     if (known && (!options.refresh || known.deleted)) return;
     // A view-only invite: what lets the account write is its role in the
     // space, which every device reads there. Invite secrets are never kept.
-    const invite = await invites.inviteTo(spaceId);
+    const invite = await carrying.inviteTo(spaceId);
     if (known && inviteKeyOf(known.body?.invite) === inviteKeyOf(invite)) return;
     await open.upsertSystem<Membership>(MEMBERSHIP_COLLECTION, membershipKey(spaceId), {
       space: spaceId,
@@ -527,6 +516,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     narrowNote,
     mailbox: config.mailbox ?? createMailboxClient(),
     emit,
+    subscribe: events.subscribe,
     isClosed: () => closed,
     looseSigner,
     runtime,
@@ -537,20 +527,21 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     requireAccount,
     ownRecords,
     accountRecords,
+    memberships,
+    get spaces() {
+      return spaces;
+    },
+    get carrying() {
+      return carrying;
+    },
+    get hosts() {
+      return hosts;
+    },
   });
 
-  // Invites and carriers each need the other once running: a kept link is handed to carriers, and
-  // a refill drops the links again first. Hosting needs the spaces it hands over, made below.
-  const invites = createNodeInvites(ctx, {
-    nodesOf: (spaceId) => hosts.nodesOf(spaceId),
-    passAll: () => carrying.passAll(),
-  });
-  const carrying = createNodeCarriers(ctx, {
-    memberships,
-    keptLinks: invites.keptLinks,
-    keepLinks: invites.keepLinks,
-  });
-  const profile = createNodeAccount(ctx);
+  const carrying = createNodeCarriers(ctx);
+  const hosts = createNodeHosting(ctx);
+  const people = createNodeContacts(ctx);
 
   const spaces = Object.freeze<NodeSpaces>({
     async list() {
@@ -585,7 +576,9 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       // A short link's secret comes first: a role invite's own secret is derived from it.
       const link = options.short ? generateLinkSecret() : null;
       const share = (opened: InviteLinkOptions = {}) =>
-        link ? invites.shortInvite(spaceId, link, opened, options.until) : invites.inviteTo(spaceId, opened);
+        link
+          ? carrying.shortInvite(spaceId, link, opened, options.until)
+          : carrying.inviteTo(spaceId, opened);
       if (options.write === false) return share();
       const open = await runtime(spaceId);
       const { roles, founder, mine } = await open.access();
@@ -609,7 +602,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     },
 
     async preview(invite) {
-      const { long, until } = await invites.resolveInvite(invite);
+      const { long, until } = await carrying.resolveInvite(invite);
       // Who it says invited is shown before joining, so it is checked as joining checks it.
       const parsed = parseSpaceInvite(long);
       const unsigned = await checkInvitation(parsed.signed, provider, parsed.invite);
@@ -618,7 +611,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     },
 
     async join(invite, options = {}) {
-      const record = await joinRegistry((await invites.resolveInvite(invite)).long);
+      const record = await joinRegistry((await carrying.resolveInvite(invite)).long);
       if (options.memberKey) await registry.setMemberKey(record.space.id, options.memberKey);
       // A runtime opened before the key arrived would still be unable to read.
       await closeRuntime(record.space.id);
@@ -718,10 +711,10 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     },
 
     async closeInvite(spaceId, keyOrLink) {
-      const key = await invites.inviteKeyOf(keyOrLink);
+      const key = await carrying.inviteKeyOf(keyOrLink);
       await (await runtime(spaceId)).closeInvite(key);
       // Its link, if the account keeps one, is no longer served.
-      await invites.forgetLinks((link) => link.space === spaceId && link.invite === key);
+      await carrying.forgetLinks((link) => link.space === spaceId && link.invite === key);
     },
 
     revoke: perSpace((rt, key: string, options?: RevokeOptions) => rt.revoke(key, options)),
@@ -742,16 +735,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     },
   });
 
-  const hosts = createNodeHosting(ctx, {
-    spaces,
-    carriers: carrying.carriers,
-    liveCarriers: carrying.liveCarriers,
-  });
-  const contacts = createNodeContacts(ctx, { spaces, ownName: profile.ownName });
-  const inbox = createNodeInbox(ctx, { spaces, contacts, ownName: profile.ownName });
-  const direct = createNodeDirect(ctx);
-  const recordsNeeds = { runtime, subscribe: events.subscribe };
-  const records = createNodeRecords(recordsNeeds);
+  const records = createNodeRecords(ctx);
 
   const collections = Object.freeze<NodeCollections>({
     list: perSpace((rt) => rt.collections()),
@@ -783,19 +767,15 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     spaces,
     records,
     collections,
-    account: profile.account,
+    account: people.account,
     carriers: carrying.carriers,
     hosting: hosts.hosting,
     automations: carrying.automations,
-    contacts: contacts.contacts,
-    direct,
-    inbox,
+    contacts: people.contacts,
+    direct: createNodeDirect(ctx),
+    inbox: people.inbox,
     asAgent: (agent: { readonly keys: CryptoKeyPair; readonly note: Delegation }) =>
-      startAgent(node, agent, {
-        provider,
-        contactsSpaceId,
-        recordsAs: (as) => createNodeRecords(recordsNeeds, as),
-      }),
+      startAgent(node, agent, ctx),
 
     delegation: () => current,
 
@@ -839,7 +819,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       closed = true;
       stopWatchingNetwork?.();
       if (renewTimer) clearTimeout(renewTimer);
-      invites.stop();
+      carrying.stop();
       const open = [...runtimes.keys()];
       await Promise.all(open.map((spaceId) => closeRuntime(spaceId)));
       // Let go of the registry too: an open database connection blocks the

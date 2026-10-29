@@ -76,4 +76,4 @@ Like any record, a warrant is withdrawn when its writer is removed by a
 change whose cutoff doesn't cover it, or revokes the key that signed it ([#166](https://github.com/leifriksheim/minca/issues/166)). More kinds are planned after v1, in
 [#148](https://github.com/leifriksheim/minca/issues/148).
 
-_Source: `packages/core/src/records/warrant.ts` (`readWarrant`, `knownKind`), `packages/core/src/node/space-warrants.ts` (`ownView`, `warrantShape`, `warrantVerdict`, `evidenceHolds`, `violationIn`, `warrantIfDue`, `flagged`), `packages/core/src/space/space-access.ts` (`WARRANT_COLLECTION`). Tests: `packages/core/tests/warrants.test.ts`._
+_Source: `packages/core/src/records/warrant.ts` (`readWarrant`, `knownKind`), `packages/core/src/node/space-runtime.ts` (`ownView`, `warrantShape`, `warrantVerdict`, `evidenceHolds`, `violationIn`, `warrantIfDue`, `flagged`), `packages/core/src/space/space-access.ts` (`WARRANT_COLLECTION`). Tests: `packages/core/tests/warrants.test.ts`._

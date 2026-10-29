@@ -8,6 +8,8 @@ import { fitImage } from '@minca/ui/image';
 import { sizeOf } from '@minca/ui/size';
 import { saveFile, useFileUrl } from '../../files';
 import { palette, styles, stack } from '../../styles';
+import { QuietButton } from '../Buttons';
+import { useAction } from '@minca/app-shared/action';
 
 /** The file an attachment names, when its body holds one */
 const fileOf = (record: NodeRecord): FileRef | null => fileRefOf(bodyOf(record).blob);
@@ -41,44 +43,30 @@ export function Attachments({
   space,
   target,
   attachments,
-  compact = false,
 }: {
   space: SpaceSummary;
   target: string;
   attachments: ReadonlyArray<NodeRecord>;
-  /** Only the files, no title or button: under a chat message, say */
-  compact?: boolean;
 }) {
   const node = useNode();
   const input = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { run, busy, error } = useAction();
   const sorted = [...attachments].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
   const attach = async (files: FileList | null) => {
     if (!files?.length) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await attachFiles(node, space.id, target, files);
-    } catch (problem) {
-      setError(problem instanceof Error ? problem.message : String(problem));
-    } finally {
-      setBusy(false);
-      if (input.current) input.current.value = '';
-    }
+    await run(() => attachFiles(node, space.id, target, files));
+    if (input.current) input.current.value = '';
   };
 
   return (
     <section aria-label="Attachments" style={stack(10)}>
-      {!compact && (
-        <h3 style={styles.sectionTitle}>
-          Attachments{' '}
-          {attachments.length > 0 && (
-            <span style={{ color: palette.ink.faint, fontWeight: 400 }}>{attachments.length}</span>
-          )}
-        </h3>
-      )}
+      <h3 style={styles.sectionTitle}>
+        Attachments{' '}
+        {attachments.length > 0 && (
+          <span style={{ color: palette.ink.faint, fontWeight: 400 }}>{attachments.length}</span>
+        )}
+      </h3>
       {sorted.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {sorted.map((record) => (
@@ -86,7 +74,7 @@ export function Attachments({
           ))}
         </div>
       )}
-      {!compact && space.writable && (
+      {space.writable && (
         <div>
           <input
             ref={input}
@@ -95,14 +83,9 @@ export function Attachments({
             hidden
             onChange={(event) => void attach(event.target.files)}
           />
-          <button
-            onClick={() => input.current?.click()}
-            disabled={busy}
-            data-variant="quiet"
-            style={styles.smallButton}
-          >
+          <QuietButton onClick={() => input.current?.click()} disabled={busy}>
             {busy ? 'Attaching…' : 'Attach files'}
-          </button>
+          </QuietButton>
         </div>
       )}
       {error && <p style={{ margin: 0, fontSize: 13, color: palette.ink.muted }}>{error}</p>}

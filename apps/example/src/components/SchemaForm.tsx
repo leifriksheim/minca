@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import type { JsonSchema } from '@minca/core';
 import {
   choicesOf,
@@ -11,12 +11,13 @@ import {
   type Field,
   type LinkedByRel,
 } from '../derive/schema-ui';
-import { FileInput, FileListInput, MoneyInput, WhenInput } from './KindInputs';
+import { FileInput, FileListInput, labelStyle, MoneyInput, WhenInput } from './KindInputs';
 import { fieldTypeOf } from '../derive/field-types';
 import { nameOf } from '../derive/people';
 import { usePeopleHere } from './Person';
 import { styles, palette, hstack } from '../styles';
 import { useAction } from '@minca/app-shared/action';
+import { AddButton, LinkButton } from './Buttons';
 
 /**
  * A form for a record, drawn from its collection's schema. Without a schema,
@@ -84,20 +85,18 @@ export function SchemaForm({
       )}
       {error && <p style={styles.error}>{error}</p>}
       <div style={styles.linkRow}>
-        <button type="submit" disabled={busy} data-variant="primary" style={styles.addButton}>
+        <AddButton type="submit" disabled={busy}>
           {submitLabel}
-        </button>
+        </AddButton>
         {onCancel && (
-          <button type="button" onClick={onCancel} data-variant="ghost" style={styles.linkButton}>
+          <LinkButton type="button" onClick={onCancel}>
             Cancel
-          </button>
+          </LinkButton>
         )}
       </div>
     </form>
   );
 }
-
-const labelStyle = { display: 'flex', flexDirection: 'column' as const, gap: 4, fontSize: 13 };
 
 export function FieldInput({
   field,
@@ -121,6 +120,14 @@ export function FieldInput({
       )}
     </span>
   );
+  /** One control under the field's label */
+  const labelled = (control: ReactNode) => (
+    <label style={labelStyle}>
+      {label}
+      {control}
+    </label>
+  );
+  const text = typeof value === 'string' ? value : '';
 
   // What the field says it holds, as the standard library's fragments label it.
   const kind = valueKindOf(field.schema);
@@ -132,51 +139,38 @@ export function FieldInput({
   if (items === 'file' || items === 'image')
     return <FileListInput label={label} picture={items === 'image'} value={value} onChange={onChange} />;
   if (kind === 'day')
-    return (
-      <label style={labelStyle}>
-        {label}
-        <input
-          type="date"
-          value={typeof value === 'string' ? value : ''}
-          onChange={(e) => onChange(e.target.value || undefined)}
-          style={styles.input}
-        />
-      </label>
+    return labelled(
+      <input
+        type="date"
+        value={text}
+        onChange={(e) => onChange(e.target.value || undefined)}
+        style={styles.input}
+      />,
     );
   if (kind === 'url')
-    return (
-      <label style={labelStyle}>
-        {label}
-        <input
-          type="url"
-          value={typeof value === 'string' ? value : ''}
-          onChange={(e) => onChange(e.target.value || undefined)}
-          placeholder="https://"
-          style={styles.input}
-        />
-      </label>
+    return labelled(
+      <input
+        type="url"
+        value={text}
+        onChange={(e) => onChange(e.target.value || undefined)}
+        placeholder="https://"
+        style={styles.input}
+      />,
     );
   if ((type === 'person' || type === 'people') && here && here.people.size > 0) {
     const everyone = [...here.people.keys()];
     const name = (did: string) =>
       did === here.me ? `${nameOf(did, here.people)} (you)` : nameOf(did, here.people);
     if (type === 'person')
-      return (
-        <label style={labelStyle}>
-          {label}
-          <select
-            value={typeof value === 'string' ? value : ''}
-            onChange={(e) => onChange(e.target.value || undefined)}
-            style={styles.input}
-          >
-            <option value="">—</option>
-            {everyone.map((did) => (
-              <option key={did} value={did}>
-                {name(did)}
-              </option>
-            ))}
-          </select>
-        </label>
+      return labelled(
+        <select value={text} onChange={(e) => onChange(e.target.value || undefined)} style={styles.input}>
+          <option value="">—</option>
+          {everyone.map((did) => (
+            <option key={did} value={did}>
+              {name(did)}
+            </option>
+          ))}
+        </select>,
       );
     const picked: ReadonlyArray<unknown> = Array.isArray(value) ? value : [];
     return (
@@ -228,51 +222,37 @@ export function FieldInput({
           />
         );
       const selected = choices.findIndex((c) => c.value === value);
-      return (
-        <label style={labelStyle}>
-          {label}
-          <select
-            value={selected < 0 ? '' : String(selected)}
-            onChange={(e) =>
-              onChange(e.target.value === '' ? undefined : choices[Number(e.target.value)]?.value)
-            }
-            style={styles.input}
-          >
-            <option value="">—</option>
-            {choices.map((choice, i) => (
-              <option key={i} value={String(i)}>
-                {choice.label}
-              </option>
-            ))}
-          </select>
-        </label>
+      return labelled(
+        <select
+          value={selected < 0 ? '' : String(selected)}
+          onChange={(e) =>
+            onChange(e.target.value === '' ? undefined : choices[Number(e.target.value)]?.value)
+          }
+          style={styles.input}
+        >
+          <option value="">—</option>
+          {choices.map((choice, i) => (
+            <option key={i} value={String(i)}>
+              {choice.label}
+            </option>
+          ))}
+        </select>,
       );
     }
     case 'number':
     case 'integer':
-      return (
-        <label style={labelStyle}>
-          {label}
-          <input
-            type="number"
-            step={field.kind === 'integer' ? 1 : 'any'}
-            value={typeof value === 'number' ? value : ''}
-            onChange={(e) => onChange(e.target.value === '' ? undefined : Number(e.target.value))}
-            style={styles.input}
-          />
-        </label>
+      return labelled(
+        <input
+          type="number"
+          step={field.kind === 'integer' ? 1 : 'any'}
+          value={typeof value === 'number' ? value : ''}
+          onChange={(e) => onChange(e.target.value === '' ? undefined : Number(e.target.value))}
+          style={styles.input}
+        />,
       );
     case 'longText':
-      return (
-        <label style={labelStyle}>
-          {label}
-          <textarea
-            value={typeof value === 'string' ? value : ''}
-            onChange={(e) => onChange(e.target.value)}
-            rows={4}
-            style={styles.textarea}
-          />
-        </label>
+      return labelled(
+        <textarea value={text} onChange={(e) => onChange(e.target.value)} rows={4} style={styles.textarea} />,
       );
     case 'list':
       return (
@@ -307,16 +287,8 @@ export function FieldInput({
     case 'json':
       return <JsonInput label={label} value={value} onChange={onChange} />;
     default:
-      return (
-        <label style={labelStyle}>
-          {label}
-          <input
-            type="text"
-            value={typeof value === 'string' ? value : ''}
-            onChange={(e) => onChange(e.target.value)}
-            style={styles.input}
-          />
-        </label>
+      return labelled(
+        <input type="text" value={text} onChange={(e) => onChange(e.target.value)} style={styles.input} />,
       );
   }
 }
@@ -329,7 +301,7 @@ function ListInput({
   onChange,
 }: {
   field: Field;
-  label: React.ReactNode;
+  label: ReactNode;
   value: unknown[];
   onChange: (value: unknown) => void;
 }) {
@@ -347,25 +319,22 @@ function ListInput({
             onChange={(e) => onChange(value.map((old, i) => (i === index ? parse(e.target.value) : old)))}
             style={{ ...styles.input, flex: 1 }}
           />
-          <button
+          <LinkButton
             type="button"
             onClick={() => onChange(value.filter((_, i) => i !== index))}
-            data-variant="ghost"
-            style={styles.linkButton}
             aria-label={`Remove ${field.label} ${index + 1}`}
           >
             ✕
-          </button>
+          </LinkButton>
         </div>
       ))}
-      <button
+      <LinkButton
         type="button"
         onClick={() => onChange([...value, numeric ? 0 : ''])}
-        data-variant="ghost"
-        style={{ ...styles.linkButton, alignSelf: 'flex-start' }}
+        style={{ alignSelf: 'flex-start' }}
       >
         + Add {field.label.toLowerCase()}
-      </button>
+      </LinkButton>
     </div>
   );
 }
@@ -375,7 +344,7 @@ function JsonInput({
   value,
   onChange,
 }: {
-  label: React.ReactNode;
+  label: ReactNode;
   value: unknown;
   onChange: (value: unknown) => void;
 }) {

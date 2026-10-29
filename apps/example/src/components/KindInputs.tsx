@@ -12,8 +12,9 @@ import { isObject } from '../derive/schema-ui';
 import { useSpaceHere } from './Person';
 import { FileValue } from './KindValue';
 import { styles, hstack } from '../styles';
+import { LinkButton } from './Buttons';
 
-const labelStyle = { display: 'flex', flexDirection: 'column' as const, gap: 4, fontSize: 13 };
+export const labelStyle = { display: 'flex', flexDirection: 'column' as const, gap: 4, fontSize: 13 };
 const row = { ...hstack(8), alignItems: 'center', flexWrap: 'wrap' as const };
 
 /** What a timed value starts at when "all day" is turned off */
@@ -197,14 +198,9 @@ export function FileInput({
           {busy ? 'Adding…' : ref ? 'Replace' : picture ? 'Add a picture' : 'Add a file'}
         </button>
         {ref && (
-          <button
-            type="button"
-            data-variant="ghost"
-            style={styles.linkButton}
-            onClick={() => onChange(undefined)}
-          >
+          <LinkButton type="button" onClick={() => onChange(undefined)}>
             Remove
-          </button>
+          </LinkButton>
         )}
       </div>
       {current && ref && (

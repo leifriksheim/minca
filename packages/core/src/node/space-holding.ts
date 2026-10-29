@@ -14,9 +14,8 @@ import type { AccessHistory } from '../space/roles.js';
 import type { Holds, SyncEngine } from '../sync/sync-engine.js';
 import { cidOfDigest } from '../utils/hash.js';
 import { utf8Decode, utf8Encode } from '../utils/encoding.js';
-import { isObject, isRecord, unref } from '../utils/guards.js';
+import { isObject, isRecord, isStringList, unref } from '../utils/guards.js';
 import type { CacheConfig, NodeEvent } from './types.js';
-import { isStringList } from './space-common.js';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type DragEvent, type ReactNode } from 'react';
+import { createContext, useContext, useState, type DragEvent, type ReactNode } from 'react';
 import {
   Link,
   Outlet,
@@ -32,7 +32,9 @@ import { NEW } from './DataView';
 import { SpaceRail } from './SpaceRail';
 import { SpaceMark } from './SpaceList';
 import { AccountMenu } from './AccountMenu';
-import { styles, palette, stack } from '../styles';
+import { styles, palette, stack, ui } from '../styles';
+import { useAction } from '@minca/app-shared/action';
+import { useRemembered } from '../kept';
 import { Icon, type IconName } from './Icon';
 import { WhoIsHere } from './WhoIsHere';
 import { RelayDown } from './RelayNotice';
@@ -41,7 +43,8 @@ import { CallButton } from './calls/Calls';
 import { peopleFrom } from '../derive/people';
 import { useBots } from '../bots';
 import { PersonScopeProvider } from './Person';
-import { markSeen, seenAt, totalOf, unreadOf, useSeen, useUnread, type Unread } from '../seen';
+import { seenAt, totalOf, unreadOf, useLookingAt, useSeen, useUnread, type Unread } from '../seen';
+import { QuietButton } from './Buttons';
 
 /** Under the hood: the views for the curious, folded at the foot of the sidebar */
 export const HOOD = [
@@ -73,16 +76,6 @@ export const HOOD = [
 const SIDEBAR_APPS = 10;
 /** Where the seen store keeps when All apps, and the proposals on it, were last looked at; no app has this id */
 const PROPOSALS = ':proposals';
-
-/** Whether Under the hood was left open in the sidebar, in this browser */
-const HOOD_OPEN_KEY = 'minca:hood-open';
-const hoodWasOpen = (): boolean => {
-  try {
-    return globalThis.localStorage.getItem(HOOD_OPEN_KEY) === '1';
-  } catch {
-    return false;
-  }
-};
 
 /** What belongs to the space rather than to one app, in sidebar order */
 export const SECTIONS = [
@@ -189,19 +182,17 @@ function SpaceView({ space }: { space: SpaceSummary }) {
 
   // The app being dragged to a new place in the sidebar, by its launcher record, and why a move failed
   const [dragging, setDragging] = useState<string | null>(null);
-  const [moveError, setMoveError] = useState<string | null>(null);
+  const moving = useAction();
   const [creating, setCreating] = useState(false);
   // A record more than one app can open, while the person picks which
   const [choosing, setChoosing] = useState<NodeRecord | null>(null);
   const [everyApp, setEveryApp] = useState(false);
-  const [hoodOpen, setHoodOpen] = useState(() => hoodWasOpen() || hood !== undefined);
+  // Whether Under the hood was left open in the sidebar, in this browser
+  const [hoodKept, keepHood] = useRemembered('minca:hood-open');
+  const [hoodOpen, setHoodOpen] = useState(() => hoodKept === '1' || hood !== undefined);
   const openHood = (open: boolean) => {
     setHoodOpen(open);
-    try {
-      globalThis.localStorage.setItem(HOOD_OPEN_KEY, open ? '1' : '0');
-    } catch {
-      // Only remembering it is lost.
-    }
+    keepHood(open ? '1' : '0');
   };
   // Wherever a view under the hood is opened from, the sidebar unfolds to show where one is.
   // Adjusted while rendering rather than in an effect, so the folded sidebar is never painted.
@@ -266,18 +257,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
     void navigate({ to: '.', search: (was) => ({ ...was, at: undefined }), replace: true });
   const closeRecord = () => void navigate({ to: '.', search: (was) => ({ ...was, record: undefined }) });
 
-  // An open app is looked at, as long as the page is: what arrives while it is counts as seen.
-  const lookingAt = open?.id;
-  const newInOpen = lookingAt ? unreadOf(unread, lookingAt).count : 0;
-  useEffect(() => {
-    if (!lookingAt) return;
-    const look = () => {
-      if (globalThis.document.visibilityState === 'visible') markSeen(account.did, space.id, lookingAt);
-    };
-    look();
-    globalThis.document.addEventListener('visibilitychange', look);
-    return () => globalThis.document.removeEventListener('visibilitychange', look);
-  }, [account.did, space.id, lookingAt, newInOpen]);
+  useLookingAt(space.id, open?.id, open ? unreadOf(unread, open.id).count : 0);
 
   // Proposed apps others, or an agent, wrote since All apps was last looked at.
   const proposalsSeen = Date.parse(seenAt(seen, space.id, PROPOSALS));
@@ -289,15 +269,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
     ).length,
     forMe: 0,
   };
-  useEffect(() => {
-    if (!onApps) return;
-    const look = () => {
-      if (globalThis.document.visibilityState === 'visible') markSeen(account.did, space.id, PROPOSALS);
-    };
-    look();
-    globalThis.document.addEventListener('visibilitychange', look);
-    return () => globalThis.document.removeEventListener('visibilitychange', look);
-  }, [account.did, space.id, onApps, newProposals.count]);
+  useLookingAt(space.id, onApps ? PROPOSALS : undefined, newProposals.count);
 
   // The sidebar's apps: the first few, and the open one wherever it sits; the rest behind "more", with what is new in them.
   const folds = apps.ready.length > SIDEBAR_APPS;
@@ -306,13 +278,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
       ? apps.ready.filter((app, at) => at < SIDEBAR_APPS || app.id === open?.id)
       : apps.ready;
   const folded = apps.ready.filter((app) => !listed.includes(app));
-  const newInFolded = folded.reduce<Unread>(
-    (sum, app) => {
-      const one = unreadOf(unread, app.id);
-      return { count: sum.count + one.count, forMe: sum.forMe + one.forMe };
-    },
-    { count: 0, forMe: 0 },
-  );
+  const newInFolded = totalOf(folded.map((app) => unreadOf(unread, app.id)));
 
   const fill = open ? fills(open) : false;
   // Dropped on another app: it goes where that one is, for everyone in the space.
@@ -321,10 +287,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
     setDragging(null);
     if (!key || key === target.record.key) return;
     const to = apps.placed.findIndex((placed) => placed.key === target.record.key);
-    setMoveError(null);
-    moveApp(node, space.id, apps.placed, key, to).catch((error: unknown) =>
-      setMoveError(error instanceof Error ? error.message : String(error)),
-    );
+    void moving.run(() => moveApp(node, space.id, apps.placed, key, to));
   };
   const title =
     open?.title ??
@@ -362,7 +325,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
               <div style={{ minWidth: 0 }}>
                 <strong
                   style={{
-                    ...ellipsis,
+                    ...ui.ellipsis,
                     display: 'block',
                     fontFamily: palette.display,
                     fontSize: 16,
@@ -412,9 +375,9 @@ function SpaceView({ space }: { space: SpaceSummary }) {
                     : {})}
                 />
               ))}
-              {moveError && (
+              {moving.error && (
                 <p role="alert" style={{ ...styles.error, padding: '2px 8px', fontSize: 12 }}>
-                  {moveError}
+                  {moving.error}
                 </p>
               )}
               {folds && (
@@ -469,7 +432,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
                 <span style={{ width: 20, display: 'inline-flex', justifyContent: 'center', flexShrink: 0 }}>
                   <Icon name="layers" size={14} />
                 </span>
-                <span style={{ ...ellipsis, flex: 1, minWidth: 0 }}>Under the hood</span>
+                <span style={{ ...ui.ellipsis, flex: 1, minWidth: 0 }}>Under the hood</span>
                 <span
                   style={{
                     display: 'inline-flex',
@@ -504,15 +467,14 @@ function SpaceView({ space }: { space: SpaceSummary }) {
         <main className="space-main">
           <header className="space-bar">
             {onApp ? (
-              <button
+              <QuietButton
                 onClick={() => go('/spaces/$spaceId')}
                 aria-label="All apps"
-                data-variant="quiet"
                 className="phone-only"
-                style={{ ...styles.smallButton, width: 36, padding: 0 }}
+                style={{ width: 36, padding: 0 }}
               >
                 <Icon name="back" size={16} />
-              </button>
+              </QuietButton>
             ) : (
               <span className="phone-only" style={{ display: 'contents' }}>
                 <SpaceMark space={space} size={30} />
@@ -520,7 +482,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
             )}
             {open && <AppIcon id={open.id} size={28} />}
             <div style={{ flex: 1, minWidth: 0, ...stack(1) }}>
-              <h1 style={{ ...styles.appTitle, ...ellipsis, fontSize: 18 }}>{title}</h1>
+              <h1 style={{ ...styles.appTitle, ...ui.ellipsis, fontSize: 18 }}>{title}</h1>
               {/* Under the space's name on a phone, as the sidebar has it beside a wide screen. */}
               {onApps && (
                 <span className="phone-only">
@@ -617,12 +579,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
             <span style={{ position: 'relative', display: 'inline-flex' }}>
               <Icon name="apps" size={20} />
               <span className="tab-count">
-                <Count
-                  unread={{
-                    count: totalOf(unread).count + newProposals.count,
-                    forMe: totalOf(unread).forMe,
-                  }}
-                />
+                <Count unread={totalOf([...unread.values(), newProposals])} />
               </span>
             </span>
             Apps
@@ -754,7 +711,7 @@ export function MoreRow({
       <span style={{ width: 24, display: 'inline-flex', justifyContent: 'center', flexShrink: 0 }}>
         <Icon name={icon} size={18} />
       </span>
-      <span style={{ ...ellipsis, flex: 1, minWidth: 0 }}>{label}</span>
+      <span style={{ ...ui.ellipsis, flex: 1, minWidth: 0 }}>{label}</span>
       <span style={{ display: 'inline-flex', color: palette.ink.faint }}>
         <Icon name="chevron" size={14} />
       </span>
@@ -833,10 +790,8 @@ function SideItem({
       <span style={{ width: 20, display: 'inline-flex', justifyContent: 'center', flexShrink: 0 }}>
         {icon}
       </span>
-      <span style={{ ...ellipsis, flex: 1, minWidth: 0 }}>{label}</span>
+      <span style={{ ...ui.ellipsis, flex: 1, minWidth: 0 }}>{label}</span>
       {unread && <Count unread={unread} />}
     </button>
   );
 }
-
-const ellipsis = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as const;

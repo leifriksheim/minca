@@ -37,31 +37,15 @@ import { useAction } from '@minca/app-shared/action';
 import { Lane, Card } from './Lane';
 import { Person } from './Person';
 import { useDraft } from './useDraft';
+import { useRemembered } from '../kept';
 import { QueryBuilder, PAGE_SIZES } from './QueryBuilder';
 import { NEWEST_FIRST, type Sort } from '../derive/filters';
 import { clauseFields, whereOf, type Clause } from '../derive/conditions';
+import { AddButton, QuietButton } from './Buttons';
 
 const LAYOUTS = ['list', 'table', 'board'] as const;
 type Layout = (typeof LAYOUTS)[number];
 const isLayout = (value: unknown): value is Layout => LAYOUTS.some((layout) => layout === value);
-
-/** Each collection remembers how you last looked at it — on this device only */
-const layoutKey = (space: string, name: string) => `minca.layout:${space}:${name}`;
-const groupKey = (space: string, name: string) => `minca.board:${space}:${name}`;
-function remembered(key: string): string | null {
-  try {
-    return globalThis.localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-function remember(key: string, value: string): void {
-  try {
-    globalThis.localStorage.setItem(key, value);
-  } catch {
-    /* fine */
-  }
-}
 
 interface Row {
   readonly record: QueryRecord;
@@ -95,12 +79,11 @@ export function CollectionView({
   const computed = computedFieldsOf(collection, collections);
   const title = titleField(schema);
   const groups = groupFields(schema);
-  const [groupName, setGroupName] = useState(() => remembered(groupKey(space.id, name)));
+  // Each collection remembers how you last looked at it, on this device.
+  const [groupName, setGroupName] = useRemembered(`minca.board:${space.id}:${name}`);
   const group = groups.find((f) => f.name === groupName) ?? groups[0] ?? null;
-  const [layout, setLayout] = useState<Layout>(() => {
-    const saved = remembered(layoutKey(space.id, name));
-    return isLayout(saved) ? saved : 'list';
-  });
+  const [saved, setLayout] = useRemembered(`minca.layout:${space.id}:${name}`);
+  const layout: Layout = isLayout(saved) ? saved : 'list';
   const [search, setSearchText] = useState('');
   const [clauses, setClauseList] = useState<ReadonlyArray<Clause>>([]);
   const [sort, setSortOrder] = useState<Sort>(NEWEST_FIRST);
@@ -126,11 +109,6 @@ export function CollectionView({
   const redefine = useMayRedefine(space, collection);
   // Records that can be about anything — comments, reactions, tags — are added on the record they're about.
   const onOthers = Object.values(collection?.links ?? {}).some((l) => l.to === '*');
-
-  const choose = (next: Layout) => {
-    setLayout(next);
-    remember(layoutKey(space.id, name), next);
-  };
 
   // Choices that live in a linked record (a vote's poll) need that record to show their label.
   const needsLinked = [...columnsOf(schema), ...metaFields(schema)].some((f) => choicesFrom(f.schema));
@@ -187,6 +165,7 @@ export function CollectionView({
 
   const label = collection ? collectionLabel(collection) : name;
   const visible = (rows ?? []).filter((r) => r.record.body !== null);
+  const shown: Shown = { rows: visible, schema, computed, people, space, onOpen };
 
   if (defining && collection) {
     return <CollectionEditor space={space} collection={collection} onDone={() => setDefining(false)} />;
@@ -233,10 +212,7 @@ export function CollectionView({
               Columns by
               <select
                 value={group.name}
-                onChange={(e) => {
-                  setGroupName(e.target.value);
-                  remember(groupKey(space.id, name), e.target.value);
-                }}
+                onChange={(e) => setGroupName(e.target.value)}
                 style={{ ...styles.input, height: 32, fontSize: 13, width: 'auto' }}
               >
                 {groups.map((f) => (
@@ -248,19 +224,18 @@ export function CollectionView({
             </label>
           )}
           {collection?.schema && (
-            <button
+            <QuietButton
               onClick={() => setDefining(true)}
               disabled={!redefine.may}
               title={redefine.may ? 'Change its fields and the kinds of links it has' : redefine.reason}
-              data-variant="quiet"
-              style={{ ...styles.smallButton, height: 32 }}
+              style={{ height: 32 }}
             >
               Edit definition
-            </button>
+            </QuietButton>
           )}
           <div role="tablist" aria-label="Layout" className="segmented">
             {LAYOUTS.map((l) => (
-              <button key={l} role="tab" aria-selected={layout === l} onClick={() => choose(l)}>
+              <button key={l} role="tab" aria-selected={layout === l} onClick={() => setLayout(l)}>
                 {l[0]!.toUpperCase() + l.slice(1)}
               </button>
             ))}
@@ -312,36 +287,15 @@ export function CollectionView({
         <p style={styles.emptyState}>{filtered ? 'Nothing matches.' : `No ${label.toLowerCase()} yet.`}</p>
       )}
 
-      {visible.length > 0 && layout === 'list' && (
-        <ListLayout
-          rows={visible}
-          schema={schema}
-          computed={computed}
-          people={people}
-          space={space}
-          onOpen={onOpen}
-        />
-      )}
-      {visible.length > 0 && layout === 'table' && (
-        <TableLayout rows={visible} schema={schema} computed={computed} onOpen={onOpen} />
-      )}
+      {visible.length > 0 && layout === 'list' && <ListLayout {...shown} />}
+      {visible.length > 0 && layout === 'table' && <TableLayout {...shown} />}
       {layout === 'board' && !group && (
         <p style={styles.emptyState}>
           A board makes a column for each option of a choice field — like a status of To do, Doing and Done.{' '}
           {label} has no field like that yet{redefine.may ? ' — add one with Edit definition' : ''}.
         </p>
       )}
-      {visible.length > 0 && layout === 'board' && group && (
-        <BoardLayout
-          rows={visible}
-          schema={schema}
-          computed={computed}
-          field={group}
-          people={people}
-          space={space}
-          onOpen={onOpen}
-        />
-      )}
+      {visible.length > 0 && layout === 'board' && group && <BoardLayout {...shown} field={group} />}
 
       {page && (cursors.length > 1 || page.next) && (
         <nav
@@ -353,22 +307,15 @@ export function CollectionView({
             {!filtered && collection ? ` of ${collection.records}` : ''}
           </span>
           <div style={hstack(8)}>
-            <button
-              onClick={() => setCursors(cursors.slice(0, -1))}
-              disabled={cursors.length <= 1}
-              data-variant="quiet"
-              style={styles.smallButton}
-            >
+            <QuietButton onClick={() => setCursors(cursors.slice(0, -1))} disabled={cursors.length <= 1}>
               ← Previous
-            </button>
-            <button
+            </QuietButton>
+            <QuietButton
               onClick={() => page.next && setCursors([...cursors, page.next])}
               disabled={!page.next}
-              data-variant="quiet"
-              style={styles.smallButton}
             >
               Next →
-            </button>
+            </QuietButton>
           </div>
         </nav>
       )}
@@ -394,11 +341,7 @@ function QuickAdd({
   const noun = label.toLowerCase();
 
   if (!title) {
-    return (
-      <button onClick={() => onMore({})} data-variant="primary" style={{ ...styles.addButton }}>
-        + New {noun}
-      </button>
-    );
+    return <AddButton onClick={() => onMore({})}>+ New {noun}</AddButton>;
   }
   return (
     <form
@@ -425,14 +368,13 @@ function QuickAdd({
           aria-label={`Add ${noun}`}
           style={{ ...styles.input, flex: 1 }}
         />
-        <button
+        <QuietButton
           type="button"
           onClick={() => onMore(text.trim() ? { [title]: text.trim() } : {})}
-          data-variant="quiet"
-          style={{ ...styles.smallButton, height: 40 }}
+          style={{ height: 40 }}
         >
           More fields
-        </button>
+        </QuietButton>
       </div>
       {error && <p style={styles.error}>{error}</p>}
     </form>
@@ -441,21 +383,17 @@ function QuickAdd({
 
 // ─── Layouts ───────────────────────────────────────────────────────
 
-function ListLayout({
-  rows,
-  schema,
-  computed,
-  people,
-  space,
-  onOpen,
-}: {
-  rows: Row[];
-  schema: NodeCollection['schema'];
-  computed: ReadonlyArray<Field>;
-  people: People;
-  space: SpaceSummary;
-  onOpen: (r: NodeRecord) => void;
-}) {
+/** What every layout shows: the rows of a page, and how to read and open them */
+interface Shown {
+  readonly rows: Row[];
+  readonly schema: NodeCollection['schema'];
+  readonly computed: ReadonlyArray<Field>;
+  readonly people: People;
+  readonly space: SpaceSummary;
+  readonly onOpen: (r: NodeRecord) => void;
+}
+
+function ListLayout({ rows, schema, computed, people, space, onOpen }: Shown) {
   const node = useNode();
   // Without a yes/no field to tick, a computed one shows as a box that ticks itself.
   const check = checkField(schema) ?? computed.find((f) => f.kind === 'boolean') ?? null;
@@ -549,26 +487,10 @@ function Check({
   );
 }
 
-function TableLayout({
-  rows,
-  schema,
-  computed,
-  onOpen,
-}: {
-  rows: Row[];
-  schema: NodeCollection['schema'];
-  computed: ReadonlyArray<Field>;
-  onOpen: (r: NodeRecord) => void;
-}) {
+function TableLayout({ rows, schema, computed, onOpen }: Shown) {
   const columns = [...columnsOf(schema), ...shortOf(computed)];
   return (
-    <div
-      style={{
-        border: `1px solid ${palette.surface.rule}`,
-        borderRadius: palette.radius.lg,
-        overflowX: 'auto',
-      }}
-    >
+    <div style={ui.tableBox}>
       <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 14 }}>
         <thead>
           <tr>
@@ -618,23 +540,7 @@ function TableLayout({
 }
 
 /** Columns by a fixed-choice field; drag a card to another column to change it */
-function BoardLayout({
-  rows,
-  schema,
-  computed,
-  field,
-  people,
-  space,
-  onOpen,
-}: {
-  rows: Row[];
-  schema: NodeCollection['schema'];
-  computed: ReadonlyArray<Field>;
-  field: Field;
-  people: People;
-  space: SpaceSummary;
-  onOpen: (r: NodeRecord) => void;
-}) {
+function BoardLayout({ rows, schema, computed, field, people, space, onOpen }: Shown & { field: Field }) {
   const node = useNode();
   const [over, setOver] = useState<string | null>(null);
   const choices = choicesOf(field) ?? [];

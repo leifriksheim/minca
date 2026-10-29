@@ -516,6 +516,17 @@ export function createScreenBridge(params: {
     if (!record || !allowed.has(record.collection)) throw new Error(`No record ${key} this screen can use`);
     return record;
   };
+  /** The file one of the screen's records refers to, named by the record's key and the file or its hash */
+  const ownFile = async (verb: string, args: unknown[]) => {
+    const { key, ref } = spread(args, ['key', 'ref']);
+    const hash = typeof ref === 'string' ? ref : fieldOf(ref, 'hash');
+    if (typeof hash !== 'string')
+      throw new Error(`minca.${verb} takes a record key and the file it refers to`);
+    const record = await ownRecord(key);
+    const file = fileIn(record.body, hash);
+    if (!file) throw new Error(`Record ${String(key)} refers to no such file`);
+    return { record, file };
+  };
 
   /** Records the person chose for this screen (`minca.pick`): the only ones outside its collections it may link to */
   const picked = new Set<string>();
@@ -697,23 +708,13 @@ export function createScreenBridge(params: {
     },
     // Only a picture a record of this app's points to, read from the record rather than taken on the screen's word.
     file: async (...args) => {
-      const { key, ref } = spread(args, ['key', 'ref']);
-      const hash = typeof ref === 'string' ? ref : fieldOf(ref, 'hash');
-      if (typeof hash !== 'string')
-        throw new Error('minca.file takes a record key and the file it refers to');
-      const file = fileIn((await ownRecord(key)).body, hash);
-      if (!file) throw new Error(`Record ${String(key)} refers to no such file`);
+      const { file } = await ownFile('file', args);
       if (!file.mime.startsWith('image/')) return null;
       return picture(await node.records.readFile(spaceId, file), file.mime);
     },
     // The whole file, from the record rather than on the screen's word; a Blob crosses the port without JSON.
     blob: async (...args) => {
-      const { key, ref } = spread(args, ['key', 'ref']);
-      const hash = typeof ref === 'string' ? ref : fieldOf(ref, 'hash');
-      if (typeof hash !== 'string')
-        throw new Error('minca.blob takes a record key and the file it refers to');
-      const file = fileIn((await ownRecord(key)).body, hash);
-      if (!file) throw new Error(`Record ${String(key)} refers to no such file`);
+      const { file } = await ownFile('blob', args);
       return new Blob([(await node.records.readFile(spaceId, file)).slice()], { type: file.mime });
     },
     // A file's bytes, kept in the space as the person looking; a record of the app's then refers to it.
@@ -730,13 +731,7 @@ export function createScreenBridge(params: {
       return node.records.addFile(spaceId, bytes, { mime, ...(name ? { name } : {}) });
     },
     download: async (...args) => {
-      const { key, ref } = spread(args, ['key', 'ref']);
-      const hash = typeof ref === 'string' ? ref : fieldOf(ref, 'hash');
-      if (typeof hash !== 'string')
-        throw new Error('minca.download takes a record key and the file it refers to');
-      const record = await ownRecord(key);
-      const file = fileIn(record.body, hash);
-      if (!file) throw new Error(`Record ${String(key)} refers to no such file`);
+      const { record, file } = await ownFile('download', args);
       const named = fieldOf(record.body, 'name');
       const name = file.name ?? (typeof named === 'string' ? named : 'file');
       hosted().save(name.replace(/[/\\]/g, '_'), await node.records.readFile(spaceId, file), file.mime);

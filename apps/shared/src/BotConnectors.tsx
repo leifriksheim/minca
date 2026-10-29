@@ -115,26 +115,16 @@ export function BotConnectors({
                 `Not connected to ${name}`
               )}
             </span>
-            {instructs &&
-              (connected ? (
-                <button
-                  onClick={() => disconnect(id)}
-                  disabled={busy}
-                  data-variant="quiet"
-                  style={styles.smallButton}
-                >
-                  Disconnect
-                </button>
-              ) : (
-                <button
-                  onClick={() => connectTo(id)}
-                  disabled={busy}
-                  data-variant="quiet"
-                  style={styles.smallButton}
-                >
-                  Connect {name}
-                </button>
-              ))}
+            {instructs && (
+              <button
+                onClick={() => (connected ? disconnect(id) : connectTo(id))}
+                disabled={busy}
+                data-variant="quiet"
+                style={styles.smallButton}
+              >
+                {connected ? 'Disconnect' : `Connect ${name}`}
+              </button>
+            )}
           </div>
         );
       })}

@@ -107,7 +107,7 @@ _Source:_ `packages/core/src/node/actions.ts` (`direct_list`, `direct_send`),
 (`openTrigger`, `ruleContext`). Tests: `packages/core/tests/direct.test.ts`
 ("the direct message actions"), `packages/cli/tests/agent-automations.test.ts`.
 
-_Source: `packages/core/src/privacy/direct.ts` (`sealDirect`, `openDirect`, `directBound`), `packages/core/src/schemas/library/publishing.ts` (`direct`), `packages/core/src/node/node-direct.ts` (`createNodeDirect`, `directView`), `packages/core/src/node/space-runtime.ts` (`memberKeys`, `ownMemberKey`), `apps/example/src/components/apps/Chat.tsx`. Tests: `packages/core/tests/direct.test.ts`, `packages/core/tests/records-only.test.ts` ("neither sends nor reads direct messages")._
+_Source: `packages/core/src/privacy/direct.ts` (`sealDirect`, `openDirect`, `directBound`), `packages/core/src/schemas/library/publishing.ts` (`direct`), `packages/core/src/node/node-records.ts` (`createNodeDirect`, `directView`), `packages/core/src/node/space-runtime.ts` (`memberKeys`, `ownMemberKey`), `apps/example/src/components/apps/Chat.tsx`. Tests: `packages/core/tests/direct.test.ts`, `packages/core/tests/records-only.test.ts` ("neither sends nor reads direct messages")._
 
 ## Planned: direct messages in public spaces
 

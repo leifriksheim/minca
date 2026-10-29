@@ -19,6 +19,7 @@ import { message as messageOf } from '@minca/app-shared/action';
 import { Loader } from '@minca/app-shared/Loader';
 import { styles, palette, ui, hstack, stack } from '../styles';
 import { DocsNote } from './DocsNote';
+import { QuietButton } from './Buttons';
 
 // Try the query language on this space's own data, with examples built from its real collections.
 
@@ -339,18 +340,10 @@ export function QueryPlayground({
           {parsed?.ok && (result?.cursor || parsed.query.cursor) && (
             <div style={{ ...hstack(8), flexWrap: 'wrap' }}>
               {parsed.query.cursor && (
-                <button onClick={() => setCursor(null)} data-variant="quiet" style={styles.smallButton}>
-                  Back to the first page
-                </button>
+                <QuietButton onClick={() => setCursor(null)}>Back to the first page</QuietButton>
               )}
               {result?.cursor && (
-                <button
-                  onClick={() => setCursor(result.cursor)}
-                  data-variant="quiet"
-                  style={styles.smallButton}
-                >
-                  Next page →
-                </button>
+                <QuietButton onClick={() => setCursor(result.cursor)}>Next page →</QuietButton>
               )}
             </div>
           )}
@@ -522,13 +515,7 @@ function ResultTable({
 }) {
   const anyIncluded = records.some((r) => r.included && Object.keys(r.included).length > 0);
   return (
-    <div
-      style={{
-        border: `1px solid ${palette.surface.rule}`,
-        borderRadius: palette.radius.lg,
-        overflowX: 'auto',
-      }}
-    >
+    <div style={ui.tableBox}>
       <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
         <thead>
           <tr>

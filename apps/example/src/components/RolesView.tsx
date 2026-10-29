@@ -1,7 +1,7 @@
-import { useState, type CSSProperties } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
 import { useAction } from '@minca/app-shared/action';
 import { MEMBER_REMOVE, ROLE_ASSIGN, ROLE_DEFINE, ROLE_UNASSIGN } from '@minca/core';
-import type { SpaceGrant as Grant, NodeCollection, SpaceSummary } from '@minca/core';
+import type { SpaceGrant as Grant, SpaceSummary } from '@minca/core';
 import { useAccess, useAccount, useLive, useNode, useProfiles } from '@minca/react';
 import {
   abilitiesOf,
@@ -17,8 +17,9 @@ import { RingButton } from './calls/Calls';
 import { createInviteLink } from '../spaces';
 import { styles, palette, variants, hstack, stack } from '../styles';
 import { Person } from './Person';
-import { Loader } from '@minca/app-shared/Loader';
-import { ask } from '@minca/app-shared/Ask';
+import { Loading } from './Loading';
+import { AddButton, LinkButton, QuietButton } from './Buttons';
+import { confirmThen } from '../confirm';
 
 /** Your own name, renamed in place on the account, so every space you are in gets it */
 function MyName({ name }: { name: string }) {
@@ -31,14 +32,13 @@ function MyName({ name }: { name: string }) {
   };
   if (draft === null) {
     return (
-      <button
+      <LinkButton
         onClick={() => setDraft(name)}
-        data-variant="ghost"
         title="Rename — everyone in your spaces sees this name"
-        style={{ ...styles.linkButton, fontSize: 14, color: palette.ink.strong }}
+        style={{ fontSize: 14, color: palette.ink.strong }}
       >
         {name}
-      </button>
+      </LinkButton>
     );
   }
   return (
@@ -132,23 +132,13 @@ function usePowers(spaceId: string, me: string): Powers {
 }
 
 /** Who may do what in a space: its people and the roles assigned them, and what each role grants */
-export function RolesView({
-  space,
-  collections: _collections,
-}: {
-  space: SpaceSummary;
-  collections: ReadonlyArray<NodeCollection>;
-}) {
+export function RolesView({ space }: { space: SpaceSummary }) {
   const access = useAccess(space.id);
   const account = useAccount();
   const people = peopleFrom(useProfiles(space.id));
   const powers = usePowers(space.id, account.did);
   if (!access)
-    return (
-      <p style={{ fontSize: 13, color: palette.ink.faint }}>
-        <Loader label="Loading who's who" showLabel />
-      </p>
-    );
+    return <Loading label="Loading who's who" style={{ fontSize: 13, color: palette.ink.faint }} />;
   return (
     <div style={stack(36)}>
       <Members space={space} access={access} me={account.did} people={people} powers={powers} />
@@ -204,26 +194,15 @@ function Roles({ space, access, powers }: { space: SpaceSummary; access: SpaceAc
 
   return (
     <section style={section} aria-label="Roles">
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 12,
-          flexWrap: 'wrap',
-        }}
-      >
-        <h2 style={{ ...styles.appTitle, fontSize: 20 }}>Roles</h2>
-        <button
+      <Heading title="Roles">
+        <QuietButton
           onClick={() => setEditing({ kind: 'new' })}
           disabled={!powers.defineNew || editing?.kind === 'new'}
           title={powers.defineNew ? undefined : 'Defining roles takes a grant of /role/define'}
-          data-variant="quiet"
-          style={styles.smallButton}
         >
           New role
-        </button>
-      </div>
+        </QuietButton>
+      </Heading>
       <p style={{ ...styles.quiet, lineHeight: 1.5 }}>
         A role is what it grants. Whoever defines a role can give it only what they may do themselves.
       </p>
@@ -267,15 +246,13 @@ function Roles({ space, access, powers }: { space: SpaceSummary; access: SpaceAc
                     </span>
                   )}
                 </div>
-                <button
+                <QuietButton
                   onClick={() => setEditing(open ? null : { kind: 'edit', name: role.name })}
                   disabled={!may}
                   title={may ? undefined : 'Defining this role takes a grant of /role/define for it'}
-                  data-variant="quiet"
-                  style={styles.smallButton}
                 >
                   {open ? 'Close' : 'Edit'}
-                </button>
+                </QuietButton>
               </div>
               {open && (
                 <RoleEditor space={space} existing={role} roles={roles} onDone={() => setEditing(null)} />
@@ -410,14 +387,9 @@ function RoleEditor({
       {problem && <p style={styles.quiet}>{problem}</p>}
       {error && <p style={styles.error}>{plainError(error)}</p>}
       <div style={hstack(8)}>
-        <button
-          onClick={() => void save()}
-          disabled={!!problem || saving}
-          data-variant="primary"
-          style={{ ...styles.addButton, height: 34 }}
-        >
+        <AddButton onClick={() => void save()} disabled={!!problem || saving} style={{ height: 34 }}>
           {saving ? 'Saving…' : existing ? 'Save role' : 'Create role'}
-        </button>
+        </AddButton>
         <button
           onClick={onDone}
           data-variant="quiet"
@@ -448,23 +420,14 @@ function Members({
   const node = useNode();
   const { run, error } = useAction();
   const [inviteOpen, setInviteOpen] = useState(false);
-  const roleNamed = (name: string) => access.roles.find((r) => r.name === name) ?? null;
+  const roleTitle = (name: string) => titleOf(access.roles.find((r) => r.name === name) ?? { name });
   const members = new Set(access.members.map((m) => m.did));
   // People who said who they are here but hold no role: they follow along.
   const followers = [...people.keys()].filter((did) => !members.has(did));
 
   // Asks first, then does it, if the person said yes.
   const confirmed = (title: string, question: string, yes: string, then: () => Promise<unknown>) =>
-    void ask(question, { title, yes, danger: true }).then((sure) => sure && run(then));
-  const closeInvite = async (key: string) => {
-    const sure = await ask('Nobody new can join with it. People who already joined keep their role.', {
-      title: 'Close this invite link?',
-      yes: 'Close it',
-      danger: true,
-    });
-    if (!sure) return;
-    await run(() => node.spaces.closeInvite(space.id, key));
-  };
+    confirmThen(question, { title, yes }, () => run(then));
 
   const row = (member: { did: string; founder: boolean; roles: ReadonlyArray<string> }) => {
     const { did } = member;
@@ -484,34 +447,31 @@ function Members({
           </span>
           <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 2 }}>
             {member.founder && <span style={chip}>Founder</span>}
-            {member.roles.map((role) => {
-              const r = roleNamed(role);
-              return (
-                <span key={role} style={chip}>
-                  {r ? titleOf(r) : role}
-                  {takes.has(role) && (
-                    <button
-                      onClick={() =>
-                        confirmed(
-                          self
-                            ? `Give up your ${r ? titleOf(r) : role} role?`
-                            : `Take ${r ? titleOf(r) : role} from ${name}?`,
-                          self
-                            ? 'You can only have it back if someone gives it to you.'
-                            : 'What they already wrote stays.',
-                          self ? 'Give it up' : 'Take it',
-                          () => node.spaces.unassign(space.id, did, role),
-                        )
-                      }
-                      aria-label={`Take ${role} from ${name}`}
-                      style={{ ...styles.linkButton, padding: '0 0 0 6px', fontSize: 12 }}
-                    >
-                      ×
-                    </button>
-                  )}
-                </span>
-              );
-            })}
+            {member.roles.map((role) => (
+              <span key={role} style={chip}>
+                {roleTitle(role)}
+                {takes.has(role) && (
+                  <button
+                    onClick={() =>
+                      confirmed(
+                        self
+                          ? `Give up your ${roleTitle(role)} role?`
+                          : `Take ${roleTitle(role)} from ${name}?`,
+                        self
+                          ? 'You can only have it back if someone gives it to you.'
+                          : 'What they already wrote stays.',
+                        self ? 'Give it up' : 'Take it',
+                        () => node.spaces.unassign(space.id, did, role),
+                      )
+                    }
+                    aria-label={`Take ${role} from ${name}`}
+                    style={{ ...styles.linkButton, padding: '0 0 0 6px', fontSize: 12 }}
+                  >
+                    ×
+                  </button>
+                )}
+              </span>
+            ))}
           </span>
         </div>
         {!self && members.has(did) && <RingButton space={space} did={did} name={name} />}
@@ -525,18 +485,15 @@ function Members({
             style={{ ...styles.input, width: 'auto', height: 32, fontSize: 13 }}
           >
             <option value="">Give a role…</option>
-            {gives.map((role) => {
-              const r = roleNamed(role);
-              return (
-                <option key={role} value={role}>
-                  {r ? titleOf(r) : role}
-                </option>
-              );
-            })}
+            {gives.map((role) => (
+              <option key={role} value={role}>
+                {roleTitle(role)}
+              </option>
+            ))}
           </select>
         )}
         {self && member.founder && member.roles.length > 0 && (
-          <button
+          <QuietButton
             onClick={() =>
               confirmed(
                 'Step down as a founder?',
@@ -545,11 +502,9 @@ function Members({
                 () => node.spaces.stepDown(space.id),
               )
             }
-            data-variant="quiet"
-            style={styles.smallButton}
           >
             Step down
-          </button>
+          </QuietButton>
         )}
         {members.has(did) && removes && (
           <button
@@ -576,16 +531,7 @@ function Members({
   const invites = access.invites.filter((i) => i.open);
   return (
     <section style={section} aria-label="Members">
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 12,
-          flexWrap: 'wrap',
-        }}
-      >
-        <h2 style={{ ...styles.appTitle, fontSize: 20 }}>People ({access.members.length})</h2>
+      <Heading title={`People (${access.members.length})`}>
         <button
           onClick={() => setInviteOpen(!inviteOpen)}
           data-variant={inviteOpen ? 'quiet' : 'primary'}
@@ -593,7 +539,7 @@ function Members({
         >
           {inviteOpen ? 'Close' : 'Invite people'}
         </button>
-      </div>
+      </Heading>
       {inviteOpen && <Invite space={space} access={access} offered={powers.invite} />}
       {error && <p style={styles.error}>{plainError(error)}</p>}
       <ul style={{ ...list, gap: 0 }}>{access.members.map(row)}</ul>
@@ -637,25 +583,29 @@ function Members({
           <p style={styles.fieldLabel}>Open invite links</p>
           <ul style={{ ...list, gap: 0 }}>
             {invites.map((invite) => {
-              const role = roleNamed(invite.role);
               const why = powers.invite.includes(invite.role)
                 ? null
                 : 'Closing it takes a grant of /role/assign for its role';
               return (
                 <li key={invite.key} style={{ ...styles.row, padding: '8px 4px' }}>
                   <span style={{ flex: 1, fontSize: 13, color: palette.ink.body }}>
-                    Joins as <strong>{role ? titleOf(role) : invite.role}</strong>
+                    Joins as <strong>{roleTitle(invite.role)}</strong>
                     <span style={{ color: palette.ink.faint }}> · …{invite.key.slice(-6)}</span>
                   </span>
-                  <button
-                    onClick={() => void closeInvite(invite.key)}
+                  <QuietButton
+                    onClick={() =>
+                      confirmed(
+                        'Close this invite link?',
+                        'Nobody new can join with it. People who already joined keep their role.',
+                        'Close it',
+                        () => node.spaces.closeInvite(space.id, invite.key),
+                      )
+                    }
                     disabled={!!why}
                     title={why ?? undefined}
-                    data-variant="quiet"
-                    style={styles.smallButton}
                   >
                     Close link
-                  </button>
+                  </QuietButton>
                 </li>
               );
             })}
@@ -746,13 +696,9 @@ function Invite({
         </p>
       )}
       {error && <p style={styles.error}>{plainError(error)}</p>}
-      <button
-        onClick={() => void make()}
-        data-variant="primary"
-        style={{ ...styles.addButton, height: 34, alignSelf: 'flex-start' }}
-      >
+      <AddButton onClick={() => void make()} style={{ height: 34, alignSelf: 'flex-start' }}>
         {link ? 'Make another link' : 'Create link'}
-      </button>
+      </AddButton>
       {link && (
         <div>
           <p style={{ fontSize: 12, color: palette.ink.muted }}>
@@ -763,6 +709,24 @@ function Invite({
           <code style={styles.token}>{link}</code>
         </div>
       )}
+    </div>
+  );
+}
+
+/** A section's title, and what can be done to it on the right */
+function Heading({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+        flexWrap: 'wrap',
+      }}
+    >
+      <h2 style={{ ...styles.appTitle, fontSize: 20 }}>{title}</h2>
+      {children}
     </div>
   );
 }

@@ -18,7 +18,7 @@ import { styles, palette, variants, hstack, stack } from '../styles';
 import { Person } from './Person';
 import { DocsNote } from './DocsNote';
 import { useAction } from '@minca/app-shared/action';
-import { ask } from '@minca/app-shared/Ask';
+import { confirmThen } from '../confirm';
 
 /** The time now, a second at a time, for countdowns and "for 4 min" */
 export function useNow(): number {
@@ -28,6 +28,21 @@ export function useNow(): number {
     return () => clearInterval(timer);
   }, []);
   return now;
+}
+
+/** The carriers this account has, read again when the ones syncing the space change */
+export function useCarriers(status: SpaceStatus): ReadonlyArray<CarrierSummary> {
+  const node = useNode();
+  const [carriers, setCarriers] = useState<ReadonlyArray<CarrierSummary>>([]);
+  const carrierKeys = status.carriers.join(',');
+  useEffect(() => {
+    if (!carrierKeys) return;
+    void node.carriers
+      .list()
+      .then(setCarriers)
+      .catch(() => {});
+  }, [node, carrierKeys]);
+  return carriers;
 }
 
 /** The colour of each health, and of each relay state, as a dot */
@@ -179,17 +194,8 @@ const KIND_LABEL: Record<PeerKind, string> = {
 };
 
 function Peers({ status }: { status: SpaceStatus }) {
-  const node = useNode();
   const { did: me } = useAccount();
-  const [carriers, setCarriers] = useState<ReadonlyArray<CarrierSummary>>([]);
-  const carrierKeys = status.carriers.join(',');
-  useEffect(() => {
-    if (!carrierKeys) return;
-    void node.carriers
-      .list()
-      .then(setCarriers)
-      .catch(() => {});
-  }, [node, carrierKeys]);
+  const carriers = useCarriers(status);
 
   const groups = groupPeers(status, me);
   return (
@@ -351,14 +357,12 @@ function SpaceRelays({
     if (await save([...named, candidate])) setDraft('');
   };
 
-  const remove = async (url: string) => {
-    const sure = await ask(
+  const remove = (url: string) =>
+    confirmThen(
       'Members still on only that relay lose touch until their apps pick up the change from someone else.',
-      { title: `Stop meeting on ${relayName(url)}?`, yes: 'Stop', danger: true },
+      { title: `Stop meeting on ${relayName(url)}?`, yes: 'Stop' },
+      () => save(named.filter((u) => u !== url)),
     );
-    if (!sure) return;
-    await save(named.filter((u) => u !== url));
-  };
 
   return (
     <Section
@@ -387,7 +391,7 @@ function SpaceRelays({
                 {manages && (
                   <button
                     type="button"
-                    onClick={() => void remove(url)}
+                    onClick={() => remove(url)}
                     disabled={busy || named.length === 1}
                     title={named.length === 1 ? 'Add another relay before removing the last one' : undefined}
                     style={{

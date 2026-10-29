@@ -1,17 +1,25 @@
 /**
  * @module node-context
- * What every part of a node shares: the account and its spaces, the way to
- * open a space, and the small helpers each part would otherwise repeat.
- * `createNode` (`packages/core/src/node/node.ts`) makes one and hands it to
- * each part.
+ * What every part of a node shares: the account and its spaces, the other
+ * parts (reached lazily, so each may call another), and small helpers.
  */
 import type { CryptoProvider } from '../types.js';
 import type { ContactKeyPair } from '../identity/contact-key.js';
 import type { LooseSigner } from '../records/loose.js';
 import type { SpaceManager, SpaceRecord } from '../space/space-manager.js';
+import type { Membership } from '../space/account-registry.js';
 import type { MailboxClient } from '../network/relays.js';
 import type { SpaceRuntime } from './space-runtime.js';
-import type { DefineCollection, ListOptions, NodeConfig, NodeEvent, NodeRecord } from './types.js';
+import type {
+  DefineCollection,
+  ListOptions,
+  NodeConfig,
+  NodeEvent,
+  NodeRecord,
+  NodeSpaces,
+} from './types.js';
+import type { createNodeCarriers } from './node-carriers.js';
+import type { createNodeHosting } from './node-hosting.js';
 import { isRecord, unref } from '../utils/guards.js';
 
 /** Which of the account's own spaces a space is */
@@ -35,8 +43,9 @@ export interface NodeContext {
   readonly narrowNote: boolean;
   readonly mailbox: MailboxClient;
   readonly emit: (event: NodeEvent) => void;
+  readonly subscribe: (listener: (event: NodeEvent) => void) => () => void;
   readonly isClosed: () => boolean;
-  /** What signs this node's loose versions — invitations, knocks */
+  /** What signs this node's loose versions: invitations, knocks */
   readonly looseSigner: () => LooseSigner;
   /** A space's runtime, opened on first use */
   readonly runtime: (spaceId: string) => Promise<SpaceRuntime>;
@@ -60,6 +69,11 @@ export interface NodeContext {
     options: ListOptions,
     check?: (record: NodeRecord<T>) => boolean,
   ) => Promise<NodeRecord<T>[]>;
+  /** The account's memberships, live and left */
+  readonly memberships: () => Promise<ReadonlyArray<NodeRecord<Membership>>>;
+  readonly spaces: NodeSpaces;
+  readonly carrying: ReturnType<typeof createNodeCarriers>;
+  readonly hosts: ReturnType<typeof createNodeHosting>;
 }
 
 /** What an error says: its message when it has one */

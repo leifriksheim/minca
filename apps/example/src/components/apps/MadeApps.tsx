@@ -14,7 +14,8 @@ import { ScreenFrame } from './ScreenFrame';
 import { ago } from '@minca/ui/time';
 import { styles, palette, hstack, stack } from '../../styles';
 import { Person } from '../Person';
-import { ask } from '@minca/app-shared/Ask';
+import { LinkButton, QuietButton } from '../Buttons';
+import { confirmThen } from '../../confirm';
 
 /**
  * The blueprint a proposed app points at, if any, and what applying it would
@@ -133,14 +134,13 @@ function Proposal({
     run(async () => {
       onAdded(await addMade(node, space.id, record, placed));
     });
-  const remove = async () => {
+  const remove = () => {
     const title = body?.title ?? 'this app';
-    const sure = await ask(mine ? 'Your proposal is taken back.' : 'It is removed for everyone.', {
-      title: mine ? `Withdraw ${title}?` : `Decline ${title}?`,
-      yes: mine ? 'Withdraw' : 'Decline',
-      danger: true,
-    });
-    if (sure) await run(() => removeApp(node, space.id, record, [record]));
+    confirmThen(
+      mine ? 'Your proposal is taken back.' : 'It is removed for everyone.',
+      { title: mine ? `Withdraw ${title}?` : `Decline ${title}?`, yes: mine ? 'Withdraw' : 'Decline' },
+      () => run(() => removeApp(node, space.id, record, [record])),
+    );
   };
 
   const changes = review?.collections.filter((one) => one.status === 'change') ?? [];
@@ -175,24 +175,14 @@ function Proposal({
         </div>
         <div style={{ ...hstack(6), flexShrink: 0 }}>
           {mine && (
-            <button
-              onClick={() => void remove()}
-              disabled={busy}
-              data-variant="quiet"
-              style={{ ...styles.smallButton, height: 28 }}
-            >
+            <QuietButton onClick={remove} disabled={busy} style={{ height: 28 }}>
               Withdraw
-            </button>
+            </QuietButton>
           )}
           {mayDefine && !mine && (
-            <button
-              onClick={() => void remove()}
-              disabled={busy}
-              data-variant="quiet"
-              style={{ ...styles.smallButton, height: 28 }}
-            >
+            <QuietButton onClick={remove} disabled={busy} style={{ height: 28 }}>
               Decline
-            </button>
+            </QuietButton>
           )}
           {mayDefine && body && !problem && (
             <button
@@ -246,15 +236,14 @@ function Proposal({
               opened anywhere in {space.name} can open here.
             </p>
           ) : null}
-          <button
+          <LinkButton
             onClick={() => setOpen((was) => !was)}
-            data-variant="ghost"
-            style={{ ...styles.linkButton, alignSelf: 'flex-start', padding: 0, fontSize: 13 }}
+            style={{ alignSelf: 'flex-start', padding: 0, fontSize: 13 }}
           >
             {open
               ? 'Hide what it allows'
               : `What it allows (${reviewed.length} ${reviewed.length === 1 ? 'collection' : 'collections'})`}
-          </button>
+          </LinkButton>
           {open && (
             <ul
               style={{
@@ -346,13 +335,12 @@ function ScreenNote({ screen, network }: { screen: string; network: ReadonlyArra
         The rules below can't vouch for what the screen shows, so add it only if you trust whoever proposed
         it.
       </p>
-      <button
+      <LinkButton
         onClick={() => setOpen((was) => !was)}
-        data-variant="ghost"
-        style={{ ...styles.linkButton, alignSelf: 'flex-start', padding: 0, fontSize: 13 }}
+        style={{ alignSelf: 'flex-start', padding: 0, fontSize: 13 }}
       >
         {open ? 'Hide the code' : 'Show the code'}
-      </button>
+      </LinkButton>
       {open && (
         <pre
           style={{
@@ -435,13 +423,9 @@ export function MadeAppScreen({
           }}
         >
           {screen && (
-            <button
-              onClick={() => setPlain((was) => !was)}
-              data-variant="ghost"
-              style={{ ...styles.linkButton, fontSize: 13, padding: 0 }}
-            >
+            <LinkButton onClick={() => setPlain((was) => !was)} style={{ fontSize: 13, padding: 0 }}>
               {plain ? 'Show its screen' : 'Show the records'}
-            </button>
+            </LinkButton>
           )}
           <CopyTo space={space} record={record} others={others} />
         </div>

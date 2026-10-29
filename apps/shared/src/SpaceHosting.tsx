@@ -208,7 +208,11 @@ export function SpaceHosting({ spaceId, writable }: { spaceId: string; writable:
           onStart={() => setDialog('keep')}
         />
       )}
-      {dialog === 'keep' && <KeepOnlineDialog spaceId={spaceId} writable={writable} onClose={close} />}
+      {dialog === 'keep' && (
+        <Modal title="Keep it online" onClose={close} width={460}>
+          <KeepOnline spaceId={spaceId} writable={writable} onClose={close} />
+        </Modal>
+      )}
       {dialog === 'stop' && host && (
         <Modal title={`Stop using ${host.name}?`} onClose={close} width={460}>
           <StopHost spaceId={spaceId} host={host} onKeep={close} onStopped={close} />
@@ -363,23 +367,6 @@ function StopHost({
       )}
       <StopFooter name={host.name} busy={busy} error={error} onKeep={onKeep} onStop={stop} />
     </div>
-  );
-}
-
-/** The dialog for keeping a space online: choosing a host, then its fund */
-export function KeepOnlineDialog({
-  spaceId,
-  writable,
-  onClose,
-}: {
-  spaceId: string;
-  writable: boolean;
-  onClose: () => void;
-}) {
-  return (
-    <Modal title="Keep it online" onClose={onClose} width={460}>
-      <KeepOnline spaceId={spaceId} writable={writable} onClose={onClose} />
-    </Modal>
   );
 }
 
@@ -591,7 +578,7 @@ export function KeepOnline({
  * about to start, a usual reply, and the model they think with. Lines the
  * host adds that this doesn't place are shown as they come.
  */
-export function FundPaysFor({
+function FundPaysFor({
   fund,
   bots,
   bytes,

@@ -151,18 +151,23 @@ export function Proposals({ a, writable }: { a: Assembly; writable: boolean }) {
 }
 
 /** Supporting a proposal, or taking it back */
-function useSupport(a: Assembly, p: ProposalView) {
+function Support({ a, p, writable }: { a: Assembly; p: ProposalView; writable: boolean }) {
   const node = useNode();
   const action = useAction();
-  return {
-    toggle: () =>
-      void action.run(() =>
-        p.mySupportKey
-          ? node.records.delete(a.spaceId, p.mySupportKey)
-          : node.records.put(a.spaceId, support, {}, { links: [{ rel: 'about', to: p.key }] }),
-      ),
-    busy: action.busy,
-  };
+  const toggle = () =>
+    void action.run(() =>
+      p.mySupportKey
+        ? node.records.delete(a.spaceId, p.mySupportKey)
+        : node.records.put(a.spaceId, support, {}, { links: [{ rel: 'about', to: p.key }] }),
+    );
+  return (
+    <Upvote
+      count={p.supporters.size}
+      pressed={p.mySupportKey !== null}
+      disabled={!writable || action.busy || p.result !== 'open'}
+      onToggle={toggle}
+    />
+  );
 }
 
 function ProposalCard({
@@ -178,7 +183,6 @@ function ProposalCard({
   index: number;
   onOpen: () => void;
 }) {
-  const supportIt = useSupport(a, p);
   const totals = a.countOf(p);
   const topic = a.topicOf(p.topic);
 
@@ -192,12 +196,7 @@ function ProposalCard({
       tabIndex={0}
       aria-label={p.title}
     >
-      <Upvote
-        count={p.supporters.size}
-        pressed={p.mySupportKey !== null}
-        disabled={!writable || supportIt.busy || p.result !== 'open'}
-        onToggle={supportIt.toggle}
-      />
+      <Support a={a} p={p} writable={writable} />
       <div style={{ ...stack(10), minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12.5 }}>
           {topic && <TopicChip topic={topic} />}
@@ -312,7 +311,6 @@ function ProposalPage({
   onBack: () => void;
 }) {
   const node = useNode();
-  const supportIt = useSupport(a, p);
   const action = useAction();
   const [confirming, setConfirming] = useState<Choice | null>(null);
   const topic = a.topicOf(p.topic);
@@ -336,12 +334,7 @@ function ProposalPage({
       <div className="lq-two">
         <div style={{ ...stack(20), minWidth: 0 }}>
           <div style={hstack(14)}>
-            <Upvote
-              count={p.supporters.size}
-              pressed={p.mySupportKey !== null}
-              disabled={!writable || supportIt.busy || p.result !== 'open'}
-              onToggle={supportIt.toggle}
-            />
+            <Support a={a} p={p} writable={writable} />
             <div style={{ ...stack(8), minWidth: 0 }}>
               <div
                 style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12.5 }}
@@ -770,19 +763,11 @@ function Compose({
 
   const byName = (x: string, y: string) =>
     x === a.me ? -1 : y === a.me ? 1 : a.name(x).localeCompare(a.name(y));
-  const people = a.members
-    .map((m) => m.did)
-    .filter((did) => !a.bots.has(did))
-    .sort(byName);
-  const bots = a.members
-    .map((m) => m.did)
-    .filter((did) => a.bots.has(did))
-    .sort(byName);
+  const everyone = a.members.map((m) => m.did);
+  const people = everyone.filter((did) => !a.bots.has(did)).sort(byName);
+  const bots = everyone.filter((did) => a.bots.has(did)).sort(byName);
   const picks = (did: string) => (a.bots.has(did) ? added.has(did) : !left.has(did));
-  const voters = a.members
-    .map((m) => m.did)
-    .filter(picks)
-    .sort();
+  const voters = everyone.filter(picks).sort();
   const n = voters.length;
   const toPass =
     rule === 'custom'

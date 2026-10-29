@@ -32,7 +32,7 @@ keys stay, so a code already handed out keeps working once it is read again.
 `gen + 1`: the old code leads to a topic nobody reads, and nothing ties the
 new keys to the old.
 
-_Source: `packages/core/src/schemas/contacts.ts` (`inbox`), `packages/core/src/node/node-inbox.ts` (`inboxRecord`, `writeInbox`, `inbox.rotate`). Tests: `packages/core/tests/inbox.test.ts` ("node.inbox")._
+_Source: `packages/core/src/schemas/contacts.ts` (`inbox`), `packages/core/src/node/node-contacts.ts` (`inboxRecord`, `writeInbox`, `inbox.rotate`). Tests: `packages/core/tests/inbox.test.ts` ("node.inbox")._
 
 ## The exchange
 
@@ -113,7 +113,7 @@ and the contact key. The inbox is the person's: a node whose note lacks
 knock, accept or dismiss. A home never gives an agent the contact key in the
 first place ([spec 06 §2.8](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
 
-_Source: `packages/core/src/node/node-contacts.ts` (`makePair`), `packages/core/src/node/node-inbox.ts` (`settleSent`, `readKnocks`, `inbox`), `packages/core/src/node/types.ts` (`NodeInbox`), `packages/core/src/schemas/contacts.ts` (`inbox`, `knock`), `packages/core/src/inbox/inbox.ts`, `packages/core/src/session/auth.ts` (`grant`). Tests: `packages/core/tests/inbox.test.ts` ("node.inbox"), `packages/core/tests/carrier.test.ts` ("a space made just now, carried before its invite goes out…"), `packages/core/tests/records-only.test.ts`._
+_Source: `packages/core/src/node/node-contacts.ts` (`makePair`, `settleSent`, `readKnocks`, `inbox`), `packages/core/src/node/types.ts` (`NodeInbox`), `packages/core/src/schemas/contacts.ts` (`inbox`, `knock`), `packages/core/src/inbox/inbox.ts`, `packages/core/src/session/auth.ts` (`grant`). Tests: `packages/core/tests/inbox.test.ts` ("node.inbox"), `packages/core/tests/carrier.test.ts` ("a space made just now, carried before its invite goes out…"), `packages/core/tests/records-only.test.ts`._
 
 ## `node.inbox`
 

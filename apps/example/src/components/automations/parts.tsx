@@ -14,6 +14,7 @@ import { recordLabel } from '../../derive/schema-ui';
 import { noun, type Within } from '../../automations';
 import { styles, palette, stack } from '../../styles';
 import { Icon } from '../Icon';
+import { AddButton } from '../Buttons';
 
 /** One choice inside a sentence, drawn as a word you can change */
 export function Pill<T extends string>({
@@ -415,21 +416,13 @@ export function SectionHead({
         <h3 style={{ ...styles.sectionTitle, fontSize: 16 }}>{title}</h3>
         <p style={{ ...styles.quiet, marginTop: 2 }}>{about}</p>
       </div>
-      <button
+      <AddButton
         onClick={onAction}
         disabled={disabled}
-        data-variant="primary"
-        style={{
-          ...styles.addButton,
-          height: 34,
-          fontSize: 13,
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-        }}
+        style={{ height: 34, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}
       >
         <Icon name="plus" size={13} /> {action}
-      </button>
+      </AddButton>
     </div>
   );
 }

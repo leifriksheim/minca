@@ -5,6 +5,7 @@ import { collectionLabel, humanize } from '../derive/schema-ui';
 import { styles, palette, stack } from '../styles';
 import { useAction } from '@minca/app-shared/action';
 import { RecordFinder } from './RecordFinder';
+import { LinkButton, QuietButton } from './Buttons';
 
 /**
  * Links this record to another, in one of the ways its collection allows —
@@ -68,21 +69,19 @@ export function LinkPicker({
       {!initialRel && kinds.length > 1 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {kinds.map(([r, d]) => (
-            <button
+            <QuietButton
               key={r}
               type="button"
               onClick={() => setRel(r)}
               title={d.description}
               aria-pressed={rel === r}
-              data-variant="quiet"
               style={{
-                ...styles.smallButton,
                 height: 28,
                 ...(rel === r ? { borderColor: palette.ink.strong, color: palette.ink.strong } : {}),
               }}
             >
               {humanize(r).toLowerCase()}
-            </button>
+            </QuietButton>
           ))}
         </div>
       )}
@@ -108,14 +107,9 @@ export function LinkPicker({
         </>
       )}
       {error && <p style={styles.error}>{error}</p>}
-      <button
-        type="button"
-        onClick={onDone}
-        data-variant="ghost"
-        style={{ ...styles.linkButton, alignSelf: 'flex-start' }}
-      >
+      <LinkButton type="button" onClick={onDone} style={{ alignSelf: 'flex-start' }}>
         Cancel
-      </button>
+      </LinkButton>
     </section>
   );
 }

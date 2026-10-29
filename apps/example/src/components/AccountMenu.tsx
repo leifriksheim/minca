@@ -1,8 +1,8 @@
-import { useCallback, useRef, useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { useAccount, useAccountPicture, useConnection, useNode, useObjectUrl } from '@minca/react';
 import { accountHomeLink } from '@minca/core/session';
 import { Avatar } from '@minca/app-shared/Avatar';
-import { useDismiss } from '@minca/app-shared/useDismiss';
+import { usePopover } from './usePopover';
 import { message, useCopy } from '@minca/app-shared/action';
 import { useNavigate } from '@tanstack/react-router';
 import { ConnectAgent } from './ConnectAgent';
@@ -22,11 +22,8 @@ export function AccountMenu({ place = 'header' }: { place?: Place }) {
   const navigate = useNavigate();
   const { copied, copy } = useCopy();
   const { picture, choose, picker, problem } = usePicture(account.name);
-  const [open, setOpen] = useState(false);
+  const { open, setOpen, close, root } = usePopover();
   const [connecting, setConnecting] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
-  const close = useCallback(() => setOpen(false), []);
-  useDismiss(open, root, close);
 
   const home = new URL(state.home).host;
   const others = state.accounts.filter((other) => other.did !== account.did);
