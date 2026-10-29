@@ -91,7 +91,7 @@ const me = await manager.fromSeed(seed);
 const node = await createNode({
   signer: createLocalRootSigner(me, manager.getProvider()),
   stores: indexedDBStores('groceries'),
-  network: { relays: ['wss://minca.fly.dev'] },
+  network: { relays: ['wss://relay.minca.social'] },
 });
 
 // 3. A private space, encrypted end to end, with a team's roles.
@@ -118,7 +118,7 @@ import { MincaProvider, useConnection } from '@minca/react';
 const connection = createMincaConnection({
   home: 'https://home.minca.social/connect', // a suggestion: the person may use their own
   request: { name: 'Todo', access: 'write', scope: 'spaces' },
-  network: { relays: ['wss://minca.fly.dev'] },
+  network: { relays: ['wss://relay.minca.social'] },
 });
 
 function App() {

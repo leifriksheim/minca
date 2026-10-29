@@ -44,7 +44,7 @@ const me = await manager.fromRecoveryCode(password);
 const node = await createNode({
   signer: createLocalRootSigner(me, manager.getProvider()),
   stores: indexedDBStores('my-app'), // or a folder: folderStores(dir)
-  network: { relays: ['wss://minca.fly.dev'] },
+  network: { relays: ['wss://relay.minca.social'] },
 });
 `;
 

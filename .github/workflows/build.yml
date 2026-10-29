@@ -72,7 +72,7 @@ jobs:
     env:
       # What the app and its carrier connect to (apps/example/.env.production). Vite
       # reads that file itself; electrobun.config.ts reads only the environment.
-      VITE_SIGNALING_URL: wss://minca.fly.dev
+      VITE_SIGNALING_URL: wss://relay.minca.social
       VITE_MINCA_HOME: https://home.minca.social/connect
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0

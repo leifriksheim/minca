@@ -77,7 +77,7 @@ const until = await claimUsername('leif@minca.social', contactKey, inboxCode);
 answer, where claims go and how much work one needs:
 
 ```json
-{ "names": {}, "claim": "https://minca-names.fly.dev/.well-known/minca.json", "work": 20 }
+{ "names": {}, "claim": "https://usernames.minca.social/.well-known/minca.json", "work": 20 }
 ```
 
 Then it posts the claim there:

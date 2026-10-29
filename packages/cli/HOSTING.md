@@ -131,7 +131,7 @@ Anyone can see what a host carries and takes in, so whoever is thinking of
 running one sees real numbers, and whoever uses one sees it is open:
 
 ```
-minca host stats https://minca-host.fly.dev
+minca host stats https://host.minca.social
 Minca host, counted 2026-10-21 14:00 UTC
   Communities    about 15
   Accounts       about 40

@@ -1,4 +1,4 @@
-# A relay on Fly — deployed as minca (https://minca.fly.dev).
+# A relay on Fly — deployed as minca (https://relay.minca.social).
 # To run your own, change `app` to a name of your own before deploying.
 #
 #   cd packages/relay

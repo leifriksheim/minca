@@ -660,7 +660,7 @@ offer or answer waits for ICE gathering to finish, or 2 s, and carries what it
 found.
 
 **Kinds of relay** (spec 04 §1.2). `network.relays` may mix kinds:
-`['wss://minca.fly.dev', 'nostr+wss://relay.damus.io']`. A relay of a kind
+`['wss://relay.minca.social', 'nostr+wss://relay.damus.io']`. A relay of a kind
 this library doesn't speak is left out of `network.status()`. On a Nostr
 relay, each event is signed with a key made for it and forgotten.
 

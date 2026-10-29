@@ -43,10 +43,10 @@ release puts that zip on GitHub as `minca-chrome.zip`
 Settings are read at build time, from `extension/.env.local` (not committed;
 copy `.env.example` to start). A variable set in the shell wins over the file.
 
-| Variable       | Default                                   | What                                                                               |
-| -------------- | ----------------------------------------- | ---------------------------------------------------------------------------------- |
-| `MINCA_HOME`   | `http://localhost:5174`                   | The account home offered first. People can type their own.                         |
-| `MINCA_RELAYS` | `ws://localhost:8787,wss://minca.fly.dev` | Relays, comma separated. The home's relays arrive with the grant and are used too. |
+| Variable       | Default                                        | What                                                                               |
+| -------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `MINCA_HOME`   | `http://localhost:5174`                        | The account home offered first. People can type their own.                         |
+| `MINCA_RELAYS` | `ws://localhost:8787,wss://relay.minca.social` | Relays, comma separated. The home's relays arrive with the grant and are used too. |
 
 For local development run the home (`npm run dev -w apps/home`). The relay on
 this machine (`npm run signal` at the root) is optional: the deployed one is in
