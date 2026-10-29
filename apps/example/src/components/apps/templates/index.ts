@@ -22,6 +22,7 @@ import {
   poll,
   positionBetween,
   proposal,
+  reaction,
   rsvp,
   settlement,
   task,
@@ -45,16 +46,17 @@ export const TEMPLATES: ReadonlyArray<Template> = [
       template: 'chat',
       title: 'Chat',
       description:
-        'Talk with everyone in the space. "@" someone to tell them, and drop files in to share them.',
-      collections: [message.name, file.name],
+        'Talk with everyone in the space: reply, react, "@" someone to tell them, and drop files in to share them.',
+      collections: [message.name, file.name, reaction.name],
       shows: [message.name],
       notify: [
         notifyOn('Mentions me', message.name, { mentions: { $contains: '$me' } }),
+        notifyOn('Replies to me', message.name, { replyingTo: '$me' }),
         notifyOn('New message', message.name),
       ],
       screen: chat,
     },
-    needs: [message, file],
+    needs: [message, file, reaction],
   },
   {
     app: {

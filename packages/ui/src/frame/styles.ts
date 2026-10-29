@@ -89,5 +89,24 @@ dialog::backdrop { background: none; }
 .shared { align-self: flex-start; max-width: 100%; }
 .lightbox { display: block; max-width: 100%; max-height: 75vh; margin: 0 auto; object-fit: contain; border-radius: var(--minca-radius-md); }
 .comment-text { white-space: pre-wrap; word-break: break-word; }
+/* A box with "+" inside it at the left and 🙂 at the right, as chat apps have */
+.composer { position: relative; flex: 1; min-width: 0; }
+.composer input { padding-left: 40px; padding-right: 40px; }
+.composer > .menu-anchor, .composer-end { position: absolute; z-index: 6; top: 50%; transform: translateY(-50%); }
+.composer > .menu-anchor { left: 4px; }
+.composer-end { right: 4px; display: flex; }
+.menu-anchor { position: relative; }
+.menu-button { width: 28px; height: 28px; min-height: 0; font-size: 18px; }
+.menu { right: auto; min-width: 200px; bottom: calc(100% + 8px); padding: 4px 0; }
+.emoji-grid { position: absolute; z-index: 7; bottom: calc(100% + 8px); left: 0; display: grid; grid-template-columns: repeat(8, 32px); gap: 2px; padding: 6px; background: var(--minca-card); border: 1px solid var(--minca-line); border-radius: var(--minca-radius-md); box-shadow: var(--minca-shadow-small); }
+.emoji-grid.right { left: auto; right: 0; }
+.emoji-grid.below { bottom: auto; top: calc(100% + 8px); }
+.emoji-grid button { width: 32px; height: 32px; min-height: 0; padding: 0; border: none; border-radius: var(--minca-radius-sm); background: none; font-size: 18px; }
+.emoji-grid button:hover { background: var(--minca-sunken); }
+.reactions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.reaction { min-height: 26px; padding: 0 8px; gap: 4px; border-color: var(--minca-line); font-size: 13px; font-weight: 400; }
+.reaction span { color: var(--minca-muted); font-size: 12px; }
+.reaction[aria-pressed="true"] { border-color: var(--minca-accent); background: var(--minca-accent-soft); }
+.reaction[aria-pressed="true"] span { color: var(--minca-accent); }
 .mention { padding: 0 2px; border-radius: var(--minca-radius-sm); background: var(--minca-accent-soft); color: var(--minca-accent); }
 `;

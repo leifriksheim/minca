@@ -47,6 +47,12 @@ ui has:
                                     record (a "/" button), onChange=\${(next) => setDraft(share.typed(draft, next))} does the same for "/"
                                     typed into an empty box; put share.links on what you send, then share.clear(). <\${Sharing} share />
                                     is the chip of the one waiting; <\${Shared} from=\${record} /> the card of what a record shares
+  <\${AddMenu} onShare onFiles? />   "+" for a message box: share something from the space, and attach files when onFiles is given
+  <\${EmojiPicker} onPick />        a 🙂 button with a grid of emoji; put the one picked in the text, or react with it
+  <\${Reactions} about=\${record} adding? />   emoji reactions on a record (std.reaction), yours toggled; react(record, emoji) adds one
+                                    (needs "std.reaction" in collections)
+  For a message box, put AddMenu and EmojiPicker inside the field, as Comments does: <div class="composer"> holding
+  <\${AddMenu} />, the input, and <div class="composer-end"><\${EmojiPicker} /></div>
   <\${Modal} title onClose width?>…</\${Modal}>   a dialog over the screen, and the only way to draw one: it floats without dimming
                                     what is behind, since the screen is one pane of the app. Never draw a backdrop of your own
   <\${Shape} kind colour? size? />  one of Minca's shapes; <\${Cover} seed colour size? class?>…</\${Cover}> a picture for what has none

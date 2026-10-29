@@ -40,6 +40,8 @@ export interface FoundPlace {
 
 export interface Minca {
   readonly me: { readonly did: string; readonly name: string };
+  /** The collections this screen may use: its app's */
+  readonly collections: ReadonlyArray<string>;
   list<T = Record<string, unknown>>(
     collection: string,
     options?: { where?: unknown },
@@ -53,6 +55,7 @@ export interface Minca {
     body: unknown,
     options?: { links?: ReadonlyArray<{ rel: string; to: string }> },
   ): Promise<ScreenRecord>;
+  remove(key: string): Promise<null>;
   people(): Promise<Someone[]>;
   can(action: string, target: string): Promise<boolean>;
   picture(did: string): Promise<string | null>;
