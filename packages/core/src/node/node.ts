@@ -528,6 +528,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     ownRecords,
     accountRecords,
     memberships,
+    // Parts made below: read them only after createNode returns, never while a part is being built.
     get spaces() {
       return spaces;
     },
