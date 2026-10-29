@@ -15,7 +15,8 @@
 import { ownedKey } from './key.js';
 import { canonicalize } from '../schema/version.js';
 import { bytesToHex, utf8Encode } from '../utils/encoding.js';
-import { bufferSource, isRecord, readField } from '../utils/guards.js';
+import { isRecord, readField } from '../utils/guards.js';
+import { hkdfHmacKey, hmacPrefix } from '../utils/hmac.js';
 import type { Link } from '../types.js';
 
 export interface CollectionRules {
@@ -35,33 +36,34 @@ export interface CollectionRules {
   readonly final?: true;
 }
 
+const RULES = ['onePer', 'fixed', 'final'];
+/** Rules that moved elsewhere, and where to */
+const GONE: Readonly<Record<string, string>> = {
+  create: "who may write is the space's grants (spec 02 §7)",
+  edit: "who may write is the space's grants (spec 02 §7)",
+  delete: "who may write is the space's grants (spec 02 §7)",
+  check: "a contract is the definition's contract.check (spec 09 §1)",
+};
+
 /** Why a set of rules is malformed, or null when it is not */
 export function checkRules(rules: unknown, at = 'rules'): string | null {
   if (rules === undefined) return null;
   if (!isRecord(rules)) return `${at} must be an object`;
-  const r = rules;
-  for (const key of Object.keys(r)) {
-    if (['create', 'edit', 'delete'].includes(key))
-      return `${at}.${key} is gone: who may write is the space's grants (spec 02 §7)`;
-    if (key === 'check')
-      return `${at}.check is gone: a contract is the definition's contract.check (spec 09 §1)`;
-    if (!['onePer', 'fixed', 'final'].includes(key))
-      return `${at}.${key} is not a rule (use onePer, fixed, final)`;
+  for (const key of Object.keys(rules)) {
+    const gone = Object.hasOwn(GONE, key) ? GONE[key] : undefined;
+    if (gone) return `${at}.${key} is gone: ${gone}`;
+    if (!RULES.includes(key)) return `${at}.${key} is not a rule (use onePer, fixed, final)`;
   }
-  if (r.final !== undefined && r.final !== true) return `${at}.final must be true`;
+  if (rules.final !== undefined && rules.final !== true) return `${at}.final must be true`;
   for (const list of ['onePer', 'fixed']) {
-    const value = r[list];
-    if (value === undefined) continue;
-    if (
-      !Array.isArray(value) ||
-      value.length === 0 ||
-      !value.every((v) => typeof v === 'string' && v.length > 0)
-    ) {
-      return `${at}.${list} must be a non-empty list of names`;
-    }
+    const value = rules[list];
+    if (value !== undefined && !isNameList(value)) return `${at}.${list} must be a non-empty list of names`;
   }
   return null;
 }
+
+const isNameList = (value: unknown) =>
+  Array.isArray(value) && value.length > 0 && value.every((v) => typeof v === 'string' && v.length > 0);
 
 /**
  * What a space's `onePer` keys are keyed with (spec 02 §7.3): from its first
@@ -73,17 +75,8 @@ export async function onePerSecret(
   material: { readonly spaceKey: Uint8Array } | { readonly spaceId: string },
 ): Promise<CryptoKey> {
   const secret =
-    'spaceKey' in material
-      ? bufferSource(material.spaceKey)
-      : utf8Encode(`minca/public-one-per/v1|${material.spaceId}`);
-  const base = await globalThis.crypto.subtle.importKey('raw', secret, 'HKDF', false, ['deriveKey']);
-  return globalThis.crypto.subtle.deriveKey(
-    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: utf8Encode('minca/one-per/v1') },
-    base,
-    { name: 'HMAC', hash: 'SHA-256', length: 256 },
-    false,
-    ['sign'],
-  );
+    'spaceKey' in material ? material.spaceKey : utf8Encode(`minca/public-one-per/v1|${material.spaceId}`);
+  return hkdfHmacKey(secret, 'minca/one-per/v1');
 }
 
 /**
@@ -98,26 +91,25 @@ export async function onePerKey(
   onePer: ReadonlyArray<string>,
   record: { root: string; links: ReadonlyArray<Link>; body: unknown },
 ): Promise<string | null> {
-  const parts: string[] = [collection];
-  for (const part of onePer) {
-    if (part === '@author') {
-      parts.push(`@author=${record.root}`);
-    } else if (part.startsWith('link:')) {
-      const rel = part.slice(5);
-      const link = record.links.find((l) => l.rel === rel);
-      if (!link) return null;
-      parts.push(`${part}=${link.to}`);
-    } else {
-      const value = readField(record.body, part);
-      if (value === undefined) return null;
-      parts.push(`${part}=${canonicalize(value)}`);
-    }
-  }
-  const mac = new Uint8Array(
-    await globalThis.crypto.subtle.sign('HMAC', secret, utf8Encode(parts.join('\n'))),
-  );
-  const name = `one:${bytesToHex(mac.subarray(0, 20))}`;
+  const parts = onePer.map((part) => onePerPart(part, record));
+  if (parts.includes(null)) return null;
+  const mac = await hmacPrefix(secret, [collection, ...parts].join('\n'), 20);
+  const name = `one:${bytesToHex(mac)}`;
   return onePer.includes('@author') ? ownedKey(record.root, name) : name;
+}
+
+/** One part of a `onePer` key's input: `<part>=<value>`, or null when the record has no value for it */
+function onePerPart(
+  part: string,
+  record: { root: string; links: ReadonlyArray<Link>; body: unknown },
+): string | null {
+  if (part === '@author') return `@author=${record.root}`;
+  if (part.startsWith('link:')) {
+    const link = record.links.find((l) => l.rel === part.slice(5));
+    return link ? `${part}=${link.to}` : null;
+  }
+  const value = readField(record.body, part);
+  return value === undefined ? null : `${part}=${canonicalize(value)}`;
 }
 
 /** The first fixed field whose value differs from the record's first version, or null */
@@ -126,12 +118,11 @@ export function changedFixedField(
   first: unknown,
   next: unknown,
 ): string | null {
-  for (const field of fixed ?? []) {
-    const a = readField(first, field);
-    const b = readField(next, field);
-    // Canonical, so a reordered object is the same value; `undefined` is absent on both sides alike.
-    if ((a === undefined) !== (b === undefined) || (a !== undefined && canonicalize(a) !== canonicalize(b)))
-      return field;
-  }
-  return null;
+  return fixed?.find((field) => !sameValue(readField(first, field), readField(next, field))) ?? null;
+}
+
+/** Canonical, so a reordered object is the same value; absent is absent on both sides alike */
+function sameValue(a: unknown, b: unknown): boolean {
+  if (a === undefined || b === undefined) return a === b;
+  return canonicalize(a) === canonicalize(b);
 }

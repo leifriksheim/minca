@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { InvitePreview } from '@minca/core';
 import { useNode } from './context.js';
+import { useAsync } from './use-async.js';
 
 /**
  * Invite links carry the invite in the URL fragment (`#invite=…`), which
@@ -43,37 +44,13 @@ export function useInviteLink(): {
   const node = useNode();
   const [invite, setInvite] = useState(() => IN_LINK.exec(globalThis.location?.hash ?? '')?.[1] ?? null);
   // A short link is fetched from its mailboxes, so what it is for arrives a moment later.
-  // What arrives is kept with the invite it is for: a newer invite shows nothing until its own does.
-  const [found, setFound] = useState<{
-    readonly invite: string;
-    readonly preview: InvitePreview | null;
-    readonly problem: string | null;
-  } | null>(null);
-  useEffect(() => {
-    if (!invite) return;
-    let current = true;
-    node.spaces.preview(invite).then(
-      (preview) => current && setFound({ invite, preview, problem: null }),
-      (error: unknown) =>
-        current &&
-        setFound({
-          invite,
-          preview: null,
-          problem: error instanceof Error ? error.message : 'This invite could not be read',
-        }),
-    );
-    return () => {
-      current = false;
-    };
-  }, [node, invite]);
-  const read =
-    found && found.invite === invite
-      ? { preview: found.preview, problem: found.problem }
-      : { preview: null, problem: null };
+  const read = useAsync(async () => (invite ? node.spaces.preview(invite) : null), [node, invite]);
+  const preview = read.status === 'done' ? read.value : null;
+  const problem = read.status === 'failed' ? read.error.message || 'This invite could not be read' : null;
   const dismiss = useCallback(() => {
     setInvite(null);
     const { pathname, search } = globalThis.location;
     globalThis.history.replaceState(null, '', pathname + search);
   }, []);
-  return { invite, ...read, dismiss };
+  return { invite, preview, problem, dismiss };
 }

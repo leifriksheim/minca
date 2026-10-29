@@ -173,11 +173,6 @@ export interface CarryCoreConfig {
   readonly held?: (carrySpace: string) => ReadonlySet<string> | undefined;
 }
 
-/**
- * What a carrier and a host share: carry spaces — one per account it carries
- * for — and every space their passes name, each held once however many
- * accounts ask for it.
- */
 /** The short links an account keeps in its carry space, by topic: at most 64, the newest */
 async function linksIn(
   carryRuntime: SpaceRuntime,
@@ -196,6 +191,30 @@ async function linksIn(
   return links;
 }
 
+/**
+ * Two accounts naming one space: a pass for a later key beats one for the
+ * space's first, since an account whose pass is behind just hasn't caught up.
+ */
+function preferLater(wanted: Map<string, SpaceRecord>, record: SpaceRecord): void {
+  const later = (read: SpaceRecord['read']) => !!read && read.did !== record.space.readKey;
+  const known = wanted.get(record.space.id);
+  if (!known || (!later(known.read) && later(record.read))) wanted.set(record.space.id, record);
+}
+
+function wakesIn(records: ReadonlyArray<{ key: string; body: unknown }>): Map<string, Wake> {
+  const found = new Map<string, Wake>();
+  for (const record of records) {
+    const wake = readWake(record.body);
+    if (wake) found.set(record.key, wake);
+  }
+  return found;
+}
+
+/**
+ * What a carrier and a host share: carry spaces, one per account it carries
+ * for, and every space their passes name, each held once however many
+ * accounts ask for it.
+ */
 export async function createCarryCore(config: CarryCoreConfig) {
   const provider = config.provider ?? createP256Provider();
   const signer = createSigner(provider);
@@ -346,62 +365,75 @@ export async function createCarryCore(config: CarryCoreConfig) {
   async function refreshOnce(): Promise<void> {
     if (closed) return;
     const wanted = new Map<string, SpaceRecord>();
-    for (const [carrySpace, entry] of carries) {
-      const carryRuntime = carried.get(carrySpace)?.runtime;
-      if (!carryRuntime) continue;
-      const records = (await carryRuntime.list<unknown>({ collection: PASS_COLLECTION })).filter(
+    for (const [carrySpace, entry] of carries) await readCarry(carrySpace, entry, wanted);
+    for (const record of direct.values()) preferLater(wanted, record);
+    const opened = await carryWanted(wanted);
+    const released = await releaseUnwanted(wanted);
+    if (opened || released) emit({ type: 'spaces' });
+  }
+
+  /** Reads one carry space again: its wakes, its links, and the spaces its passes name, into `wanted` */
+  async function readCarry(
+    carrySpace: string,
+    entry: Carry,
+    wanted: Map<string, SpaceRecord>,
+  ): Promise<void> {
+    const carryRuntime = carried.get(carrySpace)?.runtime;
+    if (!carryRuntime) return;
+    const own = async (collection: string) =>
+      (await carryRuntime.list<unknown>({ collection })).filter(
         (record) => record.verified && record.root === entry.account,
       );
-      if (records.some((record) => record.key === CARRY_CLOSED_KEY)) {
-        entry.wants = new Set();
-        entry.named = new Set();
-        config.onClosed(carrySpace);
-        continue;
-      }
-      const found = new Map<string, Wake>();
-      for (const record of await carryRuntime.list<unknown>({ collection: WAKE_COLLECTION })) {
-        if (!record.verified || record.root !== entry.account) continue;
-        const wake = readWake(record.body);
-        if (wake) found.set(record.key, wake);
-      }
-      entry.wakes = found;
-      entry.links = await linksIn(carryRuntime, entry.account);
-      const wants = new Set<string>();
-      const named = new Set<string>();
-      const passes: OpenedPass[] = [];
-      for (const record of records) {
-        if (!record.key.startsWith('pass:')) continue;
-        const pass = await openPass(record.body, provider);
-        if (!pass || carries.has(pass.space.id)) continue;
-        named.add(pass.space.id);
-        if (!config.skip?.(pass.space.id)) passes.push(pass);
-      }
-      // What it carries already comes first, so a cap keeps those and turns away only new ones.
-      passes.sort((a, b) => Number(entry.wants.has(b.space.id)) - Number(entry.wants.has(a.space.id)));
-      const held = config.held?.(carrySpace);
-      for (const pass of passes) {
-        if (held?.has(pass.space.id)) continue;
+    const records = await own(PASS_COLLECTION);
+    if (records.some((record) => record.key === CARRY_CLOSED_KEY)) {
+      entry.wants = new Set();
+      entry.named = new Set();
+      config.onClosed(carrySpace);
+      return;
+    }
+    entry.wakes = wakesIn(await own(WAKE_COLLECTION));
+    entry.links = await linksIn(carryRuntime, entry.account);
+
+    const passes = await passesIn(records);
+    entry.named = new Set(passes.map((pass) => pass.space.id));
+    const wants = new Set<string>();
+    for (const pass of passesToCarry(carrySpace, entry, passes)) {
+      // Counted as it goes, so one handed over with thousands of passes takes no more than it may.
+      if (config.most !== undefined && wants.size >= config.most) continue;
+      wants.add(pass.space.id);
+      preferLater(wanted, carriedRecord(pass));
+    }
+    entry.wants = wants;
+  }
+
+  /** The passes among a carry space's records, but those for carry spaces */
+  async function passesIn(records: ReadonlyArray<{ key: string; body: unknown }>): Promise<OpenedPass[]> {
+    const passes: OpenedPass[] = [];
+    for (const record of records) {
+      if (!record.key.startsWith('pass:')) continue;
+      const pass = await openPass(record.body, provider);
+      if (pass && !carries.has(pass.space.id)) passes.push(pass);
+    }
+    return passes;
+  }
+
+  /** The passes a carry space may have carried: what it carries already first, so a cap turns away only new ones */
+  function passesToCarry(carrySpace: string, entry: Carry, passes: ReadonlyArray<OpenedPass>): OpenedPass[] {
+    const held = config.held?.(carrySpace);
+    const carriesNow = (pass: OpenedPass) => entry.wants.has(pass.space.id);
+    return passes
+      .filter((pass) => !config.skip?.(pass.space.id))
+      .sort((a, b) => Number(carriesNow(b)) - Number(carriesNow(a)))
+      .filter((pass) => {
+        if (held?.has(pass.space.id)) return false;
         // Over its limit: no new space, though one held already for someone else costs nothing more.
-        const more = !entry.wants.has(pass.space.id) && !carried.has(pass.space.id);
-        if (more && config.full?.(carrySpace)) continue;
-        // Counted as it goes, so one handed over with thousands of passes takes no more than it may.
-        if (config.most !== undefined && wants.size >= config.most) continue;
-        wants.add(pass.space.id);
-        // Two accounts naming one space: a pass for a later key beats one for the space's first,
-        // since an account whose pass is behind just hasn't caught up yet.
-        const known = wanted.get(pass.space.id);
-        const later = (read: SpaceRecord['read']) => !!read && read.did !== pass.space.readKey;
-        if (!known || (!later(known.read) && later(pass.read)))
-          wanted.set(pass.space.id, carriedRecord(pass));
-      }
-      entry.wants = wants;
-      entry.named = named;
-    }
-    for (const [spaceId, record] of direct) {
-      const known = wanted.get(spaceId);
-      const later = (read: SpaceRecord['read']) => !!read && read.did !== record.space.readKey;
-      if (!known || (!later(known.read) && later(record.read))) wanted.set(spaceId, record);
-    }
+        const more = !carriesNow(pass) && !carried.has(pass.space.id);
+        return !(more && config.full?.(carrySpace));
+      });
+  }
+
+  /** Opens what is wanted and not carried, or carried with an older read key */
+  async function carryWanted(wanted: ReadonlyMap<string, SpaceRecord>): Promise<boolean> {
     let changed = false;
     for (const [spaceId, record] of wanted) {
       const held = carried.get(spaceId);
@@ -411,13 +443,16 @@ export async function createCarryCore(config: CarryCoreConfig) {
       await carry(record);
       changed = true;
     }
-    for (const spaceId of [...carried.keys()]) {
-      if (carries.has(spaceId) || wanted.has(spaceId)) continue;
+    return changed;
+  }
+
+  async function releaseUnwanted(wanted: ReadonlyMap<string, SpaceRecord>): Promise<boolean> {
+    const unwanted = [...carried.keys()].filter((spaceId) => !carries.has(spaceId) && !wanted.has(spaceId));
+    for (const spaceId of unwanted) {
       await drop(spaceId);
       await config.onRelease?.(spaceId).catch(() => {});
-      changed = true;
     }
-    if (changed) emit({ type: 'spaces' });
+    return unwanted.length > 0;
   }
 
   const carriedView: ReadonlyMap<string, Carried> = carried;

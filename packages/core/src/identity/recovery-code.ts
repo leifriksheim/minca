@@ -12,24 +12,16 @@ const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 /** Crockford's substitutions for characters people confuse when transcribing. */
 const SUBSTITUTIONS: Record<string, string> = { O: '0', I: '1', L: '1', U: 'V' };
 
-/** 128 bits: 16 bytes, 26 base32 characters, shown in groups of four. */
-const SEED_BYTES = 16;
-
-/** How many bytes a seed is. Anything else cannot be written as a code. */
-export const RECOVERY_SEED_BYTES = SEED_BYTES;
+/** How many bytes a seed is: 128 bits, 26 base32 characters. Anything else cannot be written as a code. */
+export const RECOVERY_SEED_BYTES = 16;
+const SEED_BYTES = RECOVERY_SEED_BYTES;
 
 /** Generates a fresh seed. */
 export function generateSeed(): Uint8Array {
   return globalThis.crypto.getRandomValues(new Uint8Array(SEED_BYTES));
 }
 
-/**
- * Writes a seed out as a code a person can copy.
- *
- * The inverse of {@link recoveryCodeToSeed} — which matters once the seed is
- * kept wrapped rather than written down, because showing the user their code
- * then means encoding a seed that already exists rather than minting one.
- */
+/** Writes a seed out as a code a person can copy; the inverse of {@link recoveryCodeToSeed} */
 export function seedToRecoveryCode(seed: Uint8Array): string {
   if (seed.length !== SEED_BYTES) {
     throw new Error(`A recovery code carries exactly ${SEED_BYTES} bytes, not ${seed.length}.`);

@@ -68,7 +68,7 @@ import { foundersOf } from '../space/constitution.js';
 import { base64UrlDecode, base64UrlEncode, bytesToHex, hexToBytes } from '../utils/encoding.js';
 import { isRecord, unref } from '../utils/guards.js';
 import { createListeners } from '../utils/events.js';
-import { serial } from '../utils/serial.js';
+import { serial, queue } from '../utils/serial.js';
 import { buildNamespaces, callMethod, givenFor, type Namespace, type OwnMethods } from './api.js';
 import {
   contactKeyPair,
@@ -229,11 +229,6 @@ function collectionsOf(query: Query): string[] {
   return [...found];
 }
 
-/** What a rejection says: its message when it has one */
-function reasonText(reason: unknown): string {
-  return String((isRecord(reason) ? reason.message : undefined) ?? reason);
-}
-
 /** Starts a node; call `close()` when done */
 export async function createNode(config: NodeConfig): Promise<P2PNode> {
   const provider = config.provider ?? createP256Provider();
@@ -261,21 +256,19 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   let closed = false;
   let renewTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const scheduleRenewal = (inSeconds: number) => {
-    renewTimer = setTimeout(() => {
-      delegate()
-        .then((token) => {
-          current = token;
-          scheduleRenewal(ttl * 0.75);
-        })
-        .catch(() => {
-          // The signer said no or was unreachable. Keep the delegation we have
-          // and ask again soon; writes fail validation once it expires.
-          if (!closed) scheduleRenewal(Math.min(60, ttl / 4));
-        });
-    }, inSeconds * 1000);
+  function scheduleRenewal(inSeconds: number): void {
+    renewTimer = setTimeout(() => void renew(), inSeconds * 1000);
     unref(renewTimer);
-  };
+  }
+  async function renew(): Promise<void> {
+    try {
+      current = await delegate();
+      scheduleRenewal(ttl * 0.75);
+    } catch {
+      // Keep the delegation we have and ask again soon; writes fail once it expires.
+      if (!closed) scheduleRenewal(Math.min(60, ttl / 4));
+    }
+  }
   scheduleRenewal(ttl * 0.75);
 
   const session: ActiveSession = {
@@ -283,9 +276,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     key: sessionKeys.privateKey,
     proof: () => current,
   };
-  // A key made here dies with the node, and its places in each log with it. A
-  // claimed key keeps them in its slot; one handed in (an agent's, an app's) in the
-  // node's stores (`node/writers.ts`).
+  // Where a key keeps its places in each log: a claimed key in its slot, one handed in
+  // (an agent's, an app's) in the node's stores, and one made here nowhere.
   const handedIn = await config.stores('writers');
   const writers = createWriters((did) =>
     did !== sessionDid ? handedIn : (claimed?.heads ?? (config.sessionKey ? handedIn : null)),
@@ -377,14 +369,12 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       ...(await hostingRecords()),
       ...((await kindOf(spaceId)) ? [] : await namedHosts(spaceId).catch(() => [])),
     ];
-    const inTime = (peer: Promise<string | null>) =>
-      Promise.race([peer, new Promise<null>((resolve) => unref(setTimeout(() => resolve(null), 3000)))]);
-    // Not the nodes an invite gave this node: nothing vouches for them, so they are used here and never passed on.
-    const peers = await Promise.all(hosts.map((host) => inTime(peerOf(host).catch(() => null))));
-    const pinned = [
-      ...new Set(peers.filter((peer): peer is string => peer !== null && peer.includes('#did:key:'))),
-    ];
-    return pinned.slice(0, MAX_INVITE_NODES);
+    const inTime = (host: (typeof hosts)[number]) =>
+      Promise.race([peerOf(host).catch(() => null), sleep(3000).then(() => null)]);
+    // Not the nodes an invite gave this node: nothing vouches for them, so they are never passed on.
+    const peers = await Promise.all(hosts.map(inTime));
+    const pinned = peers.filter((peer): peer is string => peer !== null && peer.includes('#did:key:'));
+    return [...new Set(pinned)].slice(0, MAX_INVITE_NODES);
   }
 
   async function findRecord(spaceId: string): Promise<SpaceRecord | null> {
@@ -417,11 +407,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         if (spaceId !== accountSpaceId) emit({ type: 'status', space: spaceId });
     }
     if (event.type !== 'records') return;
-    void runtimes
-      .get(event.space)
-      ?.then((rt) => checkRevoked(event.space, rt))
-      .catch(() => {});
-    void keepSpaceHosts(event.space).catch(() => {});
+    whenOpen(event.space, checkRevoked);
+    inBackground(keepSpaceHosts(event.space));
     // A space joined with an invite whose record had not arrived: perhaps it has now.
     void finishJoining(event.space);
     if (event.space === accountSpaceId) {
@@ -478,43 +465,38 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     const own = await ownProfile();
     if (!own) return;
     const base = { name: own.name, ...(contactKeys ? { contactKey: contactKeys.publicKey } : {}) };
-    const held = (await open.profiles()).find((profile) => profile.did === config.signer.did)?.avatar;
-    const current = isAvatarRef(held) && held.source === own.avatar?.hash ? held : undefined;
-    // The name and contact key go out now, with the picture the space already has; a new picture
-    // follows once it is copied, which may wait on its bytes reaching this device.
-    const shown = own.avatar ? (current ?? (isAvatarRef(held) ? held : undefined)) : undefined;
+    const held = await heldAvatar(open);
+    const copied = held?.source === own.avatar?.hash ? held : undefined;
+    // The name goes out now with the picture the space has; a new picture follows once copied,
+    // which may wait on its bytes reaching this device.
+    const shown = own.avatar ? (copied ?? held) : undefined;
     await open.publishProfile({ ...base, ...(shown ? { avatar: shown } : {}) });
-    if (own.avatar && !current)
-      void avatarIn(spaceId, open, own.avatar)
-        .then((avatar) => open.publishProfile({ ...base, avatar }))
-        .catch(() => {
-          // Its bytes are on a device that is away: copied next time the profile is published.
-        });
+    if (own.avatar && !copied)
+      inBackground(
+        avatarIn(spaceId, open, own.avatar).then((avatar) => open.publishProfile({ ...base, avatar })),
+      );
   }
 
+  /** The account's picture as this space shows it */
+  async function heldAvatar(open: SpaceRuntime): Promise<AvatarRef | undefined> {
+    const avatar = (await open.profiles()).find((profile) => profile.did === config.signer.did)?.avatar;
+    return isAvatarRef(avatar) ? avatar : undefined;
+  }
+
+  const avatarCopies = new Map<string, Promise<AvatarRef>>();
   /**
-   * The account's picture as a file of this space: a space's members can't
-   * read the registry, so each space holds its own copy, made once and named
-   * by the registry file it copies.
+   * The account's picture as a file of this space: members can't read the
+   * registry, so each space holds its own copy, made once per picture.
    */
   function avatarIn(spaceId: string, open: SpaceRuntime, avatar: AvatarRef): Promise<AvatarRef> {
-    // One copy per space and picture, however many publishes ask at once (a space opening, a change).
-    const at = `${spaceId}:${avatar.hash}`;
-    let copying = avatarCopies.get(at);
-    if (!copying) {
-      copying = (async () => {
-        const held = (await open.profiles()).find((profile) => profile.did === config.signer.did)?.avatar;
-        if (isAvatarRef(held) && held.source === avatar.hash) return held;
-        const registryRt = await runtime(accountSpaceId!);
-        const copy = await open.addFile(await registryRt.readFile(avatar));
-        return { ...copy, mime: avatar.mime, source: avatar.hash };
-      })();
-      copying.catch(() => avatarCopies.delete(at));
-      avatarCopies.set(at, copying);
-    }
-    return copying;
+    return cached(avatarCopies, `${spaceId}:${avatar.hash}`, async () => {
+      const held = await heldAvatar(open);
+      if (held?.source === avatar.hash) return held;
+      const registryRt = await runtime(accountSpaceId!);
+      const copy = await open.addFile(await registryRt.readFile(avatar));
+      return { ...copy, mime: avatar.mime, source: avatar.hash };
+    });
   }
-  const avatarCopies = new Map<string, Promise<AvatarRef>>();
 
   async function publishProfileToOpenSpaces(): Promise<void> {
     for (const [spaceId, open] of runtimes) {
@@ -524,71 +506,70 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
   function runtime(spaceId: string): Promise<SpaceRuntime> {
     if (closed) return Promise.reject(new Error('Node is closed'));
-    let open = runtimes.get(spaceId);
-    if (!open) {
-      open = requireRecord(spaceId).then(async (record) => {
-        const kind = await kindOf(spaceId);
-        return openSpaceRuntime({
-          record,
-          writers,
-          stores: config.stores,
-          provider,
-          signer,
-          schemas,
-          session,
-          rootDid: config.signer.did,
-          ...(config.network ? { network: config.network } : {}),
-          ...(mesh ? { mesh } : {}),
-          accountOnly: kind !== null,
-          // The account's own spaces are always held whole: every device needs all of them.
-          ...(config.cache && !kind ? { cache: config.cache } : {}),
-          watchIntervalMs: config.watchIntervalMs ?? 2000,
-          ...(config.fetchFiles ? { fetchFiles: config.fetchFiles } : {}),
-          emit: fromRuntime,
-          onRole: (role) => {
-            // Holding a role now — perhaps just joined — means the space may hear who this is.
-            if (role !== null)
-              void runtimes
-                .get(spaceId)
-                ?.then((rt) => publishProfile(spaceId, rt))
-                .catch(() => {});
-            if (role !== null) void keepSpaceHosts(spaceId).catch(() => {});
-            if (record.role === role) return;
-            void registry.setRole(spaceId, role).then(() => emit({ type: 'spaces' }));
-          },
-          onJoined: () => {
-            if (!record.invite) return;
-            void registry.clearInvite(spaceId).then(() => emit({ type: 'spaces' }));
-          },
-          memberKey:
-            kind === 'registry'
-              ? null
-              : config.accountKey
-                ? await deriveMemberKeyBytes(config.accountKey, spaceId)
-                : (record.memberKey ?? null),
-          // Kept only for a space in the list: the registry is not in it.
-          onRelays: (relays) => registry.setRelays(spaceId, relays),
-          onKeys: async (keys, current) => {
-            if (kind === 'registry') return;
-            await registry.addKeys(spaceId, keys, current);
-            // The account's other devices follow the new key, and its carriers: passes and wakes, not a whole reconcile.
-            if (!kind) await remember(spaceId, { refresh: true });
-            void passAll().catch(() => {});
-          },
-        });
-      });
-      // A failed open must not be cached, or the space stays broken until restart.
-      open.catch(() => runtimes.delete(spaceId));
-      void open.then((rt) => publishProfile(spaceId, rt)).catch(() => {});
-      // A revoke that arrived on an earlier visit.
-      void open.then((rt) => checkRevoked(spaceId, rt)).catch(() => {});
-      // Carriers added since this space was last open.
-      void open.then((rt) => nameKeepers(spaceId, rt)).catch(() => {});
-      runtimes.set(spaceId, open);
-      // The hosts the account or the space uses, reached over their sockets.
-      void open.then(() => reachHosts(spaceId)).catch(() => {});
-    }
+    const known = runtimes.get(spaceId);
+    if (known) return known;
+    const open = requireRecord(spaceId).then((record) => openRuntime(spaceId, record));
+    // A failed open is not kept, or the space would stay broken until restart.
+    open.catch(() => runtimes.delete(spaceId));
+    runtimes.set(spaceId, open);
+    // Its profile, a revoke from an earlier visit, carriers added since, and the hosts to reach.
+    for (const step of [publishProfile, checkRevoked, nameKeepers]) whenOpen(spaceId, step);
+    inBackground(open.then(() => reachHosts(spaceId)));
     return open;
+  }
+
+  /** Runs `step` on a space's runtime in the background, if it is open */
+  function whenOpen(spaceId: string, step: (spaceId: string, rt: SpaceRuntime) => Promise<void>): void {
+    const open = runtimes.get(spaceId);
+    if (open) inBackground(open.then((rt) => step(spaceId, rt)));
+  }
+
+  async function openRuntime(spaceId: string, record: SpaceRecord): Promise<SpaceRuntime> {
+    const kind = await kindOf(spaceId);
+    const memberKey = kind === 'registry' ? null : await memberKeyOf(spaceId, record);
+    return openSpaceRuntime({
+      record,
+      writers,
+      stores: config.stores,
+      provider,
+      signer,
+      schemas,
+      session,
+      rootDid: config.signer.did,
+      ...(config.network ? { network: config.network } : {}),
+      ...(mesh ? { mesh } : {}),
+      accountOnly: kind !== null,
+      // The account's own spaces are always held whole: every device needs all of them.
+      ...(config.cache && !kind ? { cache: config.cache } : {}),
+      watchIntervalMs: config.watchIntervalMs ?? 2000,
+      ...(config.fetchFiles ? { fetchFiles: config.fetchFiles } : {}),
+      emit: fromRuntime,
+      onRole: (role) => {
+        // Holding a role now, perhaps just joined: the space may hear who this is.
+        if (role !== null) {
+          whenOpen(spaceId, publishProfile);
+          inBackground(keepSpaceHosts(spaceId));
+        }
+        if (record.role !== role) void registry.setRole(spaceId, role).then(() => emit({ type: 'spaces' }));
+      },
+      onJoined: () => {
+        if (record.invite) void registry.clearInvite(spaceId).then(() => emit({ type: 'spaces' }));
+      },
+      memberKey,
+      onRelays: (relays) => registry.setRelays(spaceId, relays),
+      onKeys: async (keys, currentKey) => {
+        if (kind === 'registry') return;
+        await registry.addKeys(spaceId, keys, currentKey);
+        // The account's other devices and its carriers follow the new key.
+        if (!kind) await remember(spaceId, { refresh: true });
+        inBackground(passAll());
+      },
+    });
+  }
+
+  async function memberKeyOf(spaceId: string, record: SpaceRecord): Promise<Uint8Array | null> {
+    if (!config.accountKey) return record.memberKey ?? null;
+    return deriveMemberKeyBytes(config.accountKey, spaceId);
   }
 
   /** A method that opens the space its first argument names, and asks its runtime */
@@ -728,91 +709,90 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   async function carrySpaceOf(carrier: Carrier): Promise<SpaceRecord | null> {
     if (carrier.invite && carrier.space)
       return (await registry.get(carrier.space)) ?? joinRegistry(carrier.invite).catch(() => null);
-    if (!config.accountKey) return null;
-    const at = `${carrier.did}|${carrier.gen ?? 0}`;
-    const known = derivedCarry.get(at);
-    if (known) return known;
-    const derived = deriveCarrySpace(
-      config.accountKey,
-      config.signer.did,
-      carrier.did,
-      carrier.gen ?? 0,
-      provider,
+    const { accountKey } = config;
+    if (!accountKey) return null;
+    const gen = carrier.gen ?? 0;
+    return cached(derivedCarry, `${carrier.did}|${gen}`, () =>
+      deriveCarrySpace(accountKey, config.signer.did, carrier.did, gen, provider),
     );
-    derivedCarry.set(at, derived);
-    return derived;
   }
 
   /** The account's carriers, live and removed, each with its carry space */
   async function carrierRecords(): Promise<ReadonlyArray<CarrierEntry>> {
     if (!accountSpaceId) return [];
+    const registryRt = await runtime(accountSpaceId);
+    const listed = await ownRecords<Carrier>(registryRt, { collection: CARRIER_COLLECTION }, hasCarrierBody);
     const found: CarrierEntry[] = [];
-    for (const record of await ownRecords<Carrier>(
-      await runtime(accountSpaceId),
-      { collection: CARRIER_COLLECTION },
-      // A generation is a count: anything else names no carry space.
-      (one) =>
-        typeof one.body?.did === 'string' &&
-        (one.body.gen === undefined || (Number.isSafeInteger(one.body.gen) && one.body.gen >= 0)),
-    )) {
-      const carry = await carrySpaceOf(record.body!);
+    for (const { key, body } of listed) {
+      const carry = await carrySpaceOf(body!);
       // Its key names its carry space: that is how every device knows the space is one.
-      if (carry && record.key === (await carrierKey(carry.space.id)))
-        found.push({ key: record.key, body: record.body!, carry });
+      if (carry && key === (await carrierKey(carry.space.id))) found.push({ key, body: body!, carry });
     }
     return found;
   }
 
-  /**
-   * Puts a pass in a carrier's space for each of the account's spaces, and
-   * takes away the rest; and a wake for each of its own automations, each value replaced by
-   * the space's tag: the carrier matches, never learns.
-   */
+  /** Makes a carrier's space hold exactly the account's passes, kept links and wakes as they are now */
   async function syncPasses(carrier: CarrierEntry): Promise<void> {
     if (!account || narrowNote) return;
-    const passes = new Map<string, SpacePass>();
-    const spaces: WakeSpace[] = [];
     const owned = await ownAutomations();
-    // The registry and the contacts too, so a restore can come through the carrier.
-    passes.set(await passKey(account.space.id), await makePass(account));
-    if (contactsRecord) passes.set(await passKey(contactsRecord.space.id), await makePass(contactsRecord));
-    for (const membership of await memberships()) {
-      if (membership.deleted || !membership.body || (await kindOf(membership.body.space))) continue;
-      const record = await registry.get(membership.body.space);
-      if (!record) continue;
-      // Opened even with no wakes to make: opening is also how this device learns the space's key changed.
-      const declared = new Map(
-        (await (await runtime(record.space.id)).collections()).map((c) => [c.name, c]),
-      );
-      spaces.push({
-        id: record.space.id,
-        key: record.key,
-        visibility: record.space.visibility,
-        topics: (collection) => declared.get(collection)?.topics ?? [],
-        computed: (collection) => declared.get(collection)?.computed,
-      });
-      try {
-        passes.set(await passKey(record.space.id), await makePass(record));
-      } catch {
-        // Held without its key — nothing to pass on until it arrives.
-      }
-    }
+    const { passes, spaces } = await passesFor(account);
     // Removed meanwhile, on this device or another: its passes stay deleted.
     if (!(await liveCarriers()).some((live) => live.key === carrier.key)) return;
     const carry = await runtime(carrier.carry.space.id);
     await writeExactly(carry, PASS_COLLECTION, passes, (key) => key.startsWith('pass:'));
     // The links the account keeps, for the carrier to serve while every device is away.
-    const links = new Map<string, unknown>();
-    for (const link of await keptLinks()) links.set(link.key, link.body);
+    const links = new Map((await keptLinks()).map((link) => [link.key, link.body]));
     await writeExactly(carry, LINK_COLLECTION, links, (key) => key.startsWith('link:'));
+    await writeExactly(carry, WAKE_COLLECTION, await wakesOf(owned, spaces), () => true);
+  }
+
+  /**
+   * A pass for each of the account's spaces, its registry and contacts too so a
+   * restore can come through a carrier; and what a wake needs of each space.
+   */
+  async function passesFor(account: SpaceRecord) {
+    const passes = new Map<string, SpacePass>();
+    const spaces: WakeSpace[] = [];
+    for (const own of contactsRecord ? [account, contactsRecord] : [account])
+      passes.set(await passKey(own.space.id), await makePass(own));
+    for (const membership of await memberships()) {
+      if (membership.deleted || !membership.body || (await kindOf(membership.body.space))) continue;
+      const record = await registry.get(membership.body.space);
+      if (!record) continue;
+      spaces.push(await wakeSpaceOf(record));
+      // Held without its key: nothing to pass on until it arrives.
+      const pass = await makePass(record).catch(() => null);
+      if (pass) passes.set(await passKey(record.space.id), pass);
+    }
+    return { passes, spaces };
+  }
+
+  /** What a wake needs of a space. Opening it is also how this device learns its key changed. */
+  async function wakeSpaceOf(record: SpaceRecord): Promise<WakeSpace> {
+    const rt = await runtime(record.space.id);
+    const declared = new Map((await rt.collections()).map((c) => [c.name, c]));
+    return {
+      id: record.space.id,
+      key: record.key,
+      visibility: record.space.visibility,
+      topics: (collection) => declared.get(collection)?.topics ?? [],
+      computed: (collection) => declared.get(collection)?.computed,
+    };
+  }
+
+  /** A wake for each automation, every value replaced by the space's tag: the carrier matches, never learns */
+  async function wakesOf(
+    owned: ReadonlyArray<OwnAutomationView>,
+    spaces: ReadonlyArray<WakeSpace>,
+  ): Promise<Map<string, unknown>> {
     const wakes = new Map<string, unknown>();
     for (const own of owned) {
       const wake = await wakeFor(own, spaces, config.signer.did);
       wakes.set(`wake:${own.id}`, wake);
-      // A 👍 can make a todo done: what a computed field the automation names reads wakes too.
+      // A computed field the automation names reads wakes too: a 👍 can make a todo done.
       for (const also of linkedWakes(own, wake, spaces)) wakes.set(`wake:${own.id}:${also.collection}`, also);
     }
-    await writeExactly(carry, WAKE_COLLECTION, wakes, () => true);
+    return wakes;
   }
 
   /** Makes what this account wrote in a collection, among the keys `mine` takes, say exactly `wanted` */
@@ -822,16 +802,13 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     wanted: ReadonlyMap<string, unknown>,
     mine: (key: string) => boolean,
   ): Promise<void> {
-    const held = new Map(
-      (await ownRecords(rt, { collection, includeDeleted: true }, (record) => mine(record.key))).map(
-        (record) => [record.key, record],
-      ),
-    );
+    const records = await ownRecords(rt, { collection, includeDeleted: true }, (record) => mine(record.key));
+    const held = new Map(records.map((record) => [record.key, record]));
     for (const [key, body] of wanted) {
-      const current = held.get(key);
-      if (!current || current.deleted || JSON.stringify(current.body) !== JSON.stringify(body))
-        await rt.upsertSystem(collection, key, body);
+      const existing = held.get(key);
       held.delete(key);
+      if (!existing || existing.deleted || !sameJson(existing.body, body))
+        await rt.upsertSystem(collection, key, body);
     }
     for (const [key, record] of held) if (!record.deleted) await rt.removeSystem(key);
   }
@@ -915,40 +892,19 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
     // Not awaited: it opens every space the account holds, which from a data
     // folder takes long, and nothing here needs it done. Signing in waits on this.
-    void passAll().catch(() => {});
+    inBackground(passAll());
     // Carriers came or went: the open spaces this account manages say so.
-    for (const [spaceId, open] of runtimes) void open.then((rt) => nameKeepers(spaceId, rt)).catch(() => {});
+    for (const spaceId of runtimes.keys()) whenOpen(spaceId, nameKeepers);
     // Not awaited: a host that is slow to answer must not hold up the rest.
-    void keepHosted().catch(() => {});
+    inBackground(keepHosted());
     // Hosts came or went: every open space holds a socket to those the account uses now.
-    for (const spaceId of runtimes.keys()) void reachHosts(spaceId).catch(() => {});
+    for (const spaceId of runtimes.keys()) inBackground(reachHosts(spaceId));
 
     if (changed) emit({ type: 'spaces' });
   }
 
-  /** Whether `work` settled within `waitMs` */
-  const within = (work: Promise<unknown>, waitMs: number): Promise<boolean> =>
-    new Promise((resolve) => {
-      const timer = setTimeout(() => resolve(false), waitMs);
-      void work.then(
-        () => {
-          clearTimeout(timer);
-          resolve(true);
-        },
-        () => {
-          clearTimeout(timer);
-          resolve(false);
-        },
-      );
-    });
-
   /** Writing in carry spaces, one thing at a time: a removal never lands in the middle of a refill */
-  let carryTurn: Promise<unknown> = Promise.resolve();
-  const inCarryTurn = <T>(work: () => Promise<T>): Promise<T> => {
-    const run = carryTurn.catch(() => {}).then(work);
-    carryTurn = run;
-    return run;
-  };
+  const inCarryTurn = queue();
 
   const mailbox = config.mailbox ?? createMailboxClient();
 
@@ -979,33 +935,38 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     const long = await inviteTo(spaceId, options);
     // The invitation as signed: its secret is the link's to give.
     const invite = parseSpaceInvite(long);
-    let sealed: { readonly blob: string; readonly pin: Uint8Array };
-    try {
-      sealed = await sealInvite(secret, { invite: invite.signed, ...(until !== undefined ? { until } : {}) });
-    } catch {
-      return long;
-    }
-    const topic = await linkTopic(sealed.pin);
+    const sealed = await sealInvite(secret, {
+      invite: invite.signed,
+      ...(until !== undefined ? { until } : {}),
+    }).catch(() => null);
+    if (!sealed) return long;
+    const nodes = invite.nodes ?? [];
     const ttl = until !== undefined ? Math.max(60, Math.ceil((until - Date.now()) / 1000)) : undefined;
-    const hosts = new Set((invite.nodes ?? []).map(relayOfNode));
-    const places = await linkPlaces(spaceId, invite.nodes ?? []);
-    const kept = (
-      await Promise.all(
-        places.map((place) =>
-          mailbox.drop(place, topic, sealed.blob, ttl).then(
-            () => place,
-            () => null,
-          ),
-        ),
-      )
-    ).filter((place): place is string => place !== null);
+    const places = await linkPlaces(spaceId, nodes);
+    const kept = await dropAt(places, await linkTopic(sealed.pin), sealed.blob, ttl);
     if (kept.length === 0) return long;
     await keepLink(spaceId, sealed, options, until);
     // A host first, which keeps it; then a relay, so one going away leaves the other.
-    const host = kept.find((place) => hosts.has(place));
-    const relay = kept.find((place) => !hosts.has(place));
-    const named = [host, relay].filter((place): place is string => place !== undefined);
-    return encodeInviteLink({ secret, pin: sealed.pin, places: named.slice(0, MAX_LINK_PLACES) });
+    const hosts = new Set(nodes.map(relayOfNode));
+    const named = [kept.find((place) => hosts.has(place)), kept.find((place) => !hosts.has(place))];
+    const linked = named.filter((place) => place !== undefined);
+    return encodeInviteLink({ secret, pin: sealed.pin, places: linked.slice(0, MAX_LINK_PLACES) });
+  }
+
+  /** Leaves a blob at each place; the places that took it */
+  async function dropAt(
+    places: ReadonlyArray<string>,
+    topic: string,
+    blob: string,
+    ttl: number | undefined,
+  ): Promise<string[]> {
+    const drop = (place: string) =>
+      mailbox.drop(place, topic, blob, ttl).then(
+        () => place,
+        () => null,
+      );
+    const taken = await Promise.all(places.map(drop));
+    return taken.filter((place) => place !== null);
   }
 
   /** The links the account keeps, as its registry holds them */
@@ -1042,7 +1003,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     await (
       await runtime(accountSpaceId)
     ).upsertSystem(LINK_COLLECTION, `link:${bytesToHex(sealed.pin)}`, body);
-    void passAll().catch(() => {});
+    inBackground(passAll());
   }
 
   /** Stops keeping the links `which` picks */
@@ -1055,7 +1016,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         await registryRt.removeSystem(key);
         forgot = true;
       }
-    if (forgot) void passAll().catch(() => {});
+    if (forgot) inBackground(passAll());
   }
 
   /**
@@ -1070,15 +1031,10 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     for (const { key, body } of await keptLinks()) {
       if (closed) return;
       const record = await registry.get(body.space);
-      // Ended only on what this device knows: one behind on a key change, or not holding the space yet,
-      // would otherwise end a link another device of the account just made.
+      // Ended only on what this device knows: one not holding the space yet would end a link
+      // another device of the account just made.
       if (!record) continue;
-      const moved =
-        body.keyId !== undefined &&
-        record.key !== null &&
-        record.key.id !== body.keyId &&
-        (record.keys ?? []).some((held) => held.id === body.keyId);
-      if (moved || (body.until !== undefined && body.until <= Date.now())) {
+      if (linkEnded(body, record)) {
         if (body.invite) await closeIfOpen(body.space, body.invite).catch(() => {});
         await forgetLinks((link) => link.blob === body.blob);
         continue;
@@ -1086,7 +1042,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       const topic = await linkTopic(hexToBytes(key.slice('link:'.length)));
       const ttl = body.until !== undefined ? Math.ceil((body.until - Date.now()) / 1000) : undefined;
       for (const place of await linkPlaces(body.space, []))
-        void mailbox.drop(place, topic, body.blob, ttl).catch(() => {});
+        inBackground(mailbox.drop(place, topic, body.blob, ttl));
     }
   });
 
@@ -1108,16 +1064,10 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   function resolveInvite(text: string): Promise<{ readonly long: string; readonly until?: number }> {
     const bare = bareInvite(text);
     if (!isShortInvite(bare)) return Promise.resolve({ long: bare });
-    let found = resolved.get(bare);
-    if (!found) {
-      found = fetchInvite(bare);
-      // A preview and the join after it ask once; a few links are remembered, not every one ever read.
-      const oldest = resolved.keys().next();
-      if (resolved.size >= 16 && !oldest.done) resolved.delete(oldest.value);
-      resolved.set(bare, found);
-      found.catch(() => resolved.delete(bare));
-    }
-    return found;
+    // A few links are remembered, not every one ever read.
+    const oldest = resolved.keys().next().value;
+    if (!resolved.has(bare) && resolved.size >= 16 && oldest !== undefined) resolved.delete(oldest);
+    return cached(resolved, bare, () => fetchInvite(bare));
   }
 
   /**
@@ -1131,23 +1081,11 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     const places = [...new Set([...link.places, ...usableRelays(config.network)])];
     if (places.length === 0)
       throw new Error('That invite names no place to find it, and this app knows none');
-    const blobs = new Set<string>();
     // A slow place can't hold the join up for long: what has come back by then is all there is.
-    await Promise.race([
-      new Promise<void>((resolve) => unref(setTimeout(resolve, 20_000))),
-      Promise.all(
-        places.map((place) =>
-          mailbox.fetch(place, topic).then(
-            (items) => items.forEach((item) => blobs.add(item.blob)),
-            () => {},
-          ),
-        ),
-      ),
-    ]);
+    const blobs = await fetchBlobs(places, topic, 20_000);
     // Only blobs whose hash is the pin; any other, whoever left it, is never opened.
     const named: string[] = [];
-    for (const blob of blobs)
-      if ((await pinOf(blob)).every((byte, i) => byte === link.pin[i])) named.push(blob);
+    for (const blob of blobs) if (await hasPin(blob, link.pin)) named.push(blob);
     // Only the inviter could make two blobs share a pin, and then neither is trusted.
     if (named.length > 1) throw new Error('That invite link names more than one invite, so it is not used');
     const opened = named[0] ? await openInvite(link, named[0]) : null;
@@ -1158,6 +1096,20 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     const signed = readInvitation(writeInvitation(invite)).version;
     const long = writeInvitation(signed, typeof signed.body.role === 'string' ? inviteSecret : undefined);
     return { long, ...(until !== undefined ? { until } : {}) };
+  }
+
+  /** What the places hold under a topic, as much as came back within `waitMs` */
+  async function fetchBlobs(
+    places: ReadonlyArray<string>,
+    topic: string,
+    waitMs: number,
+  ): Promise<Set<string>> {
+    const blobs = new Set<string>();
+    const fetchAt = async (place: string) => {
+      for (const item of await mailbox.fetch(place, topic)) blobs.add(item.blob);
+    };
+    await Promise.race([sleep(waitMs), Promise.all(places.map((place) => fetchAt(place).catch(() => {})))]);
+    return blobs;
   }
 
   /** Every carrier the account uses gets its passes and wakes as they are now, one run at a time */
@@ -1314,7 +1266,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       const open = await runtime(spaceId);
       // Named a keeper, and given its pass now rather than whenever the next round comes.
       await nameKeepers(spaceId, open).catch(() => {});
-      void passAll().catch(() => {});
+      inBackground(passAll());
       while (!closed && Date.now() < deadline) {
         // Level with a carrier: it holds the genesis, and any invite opened since.
         for (const peer of (await spaces.status(spaceId)).carriers)
@@ -1397,7 +1349,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     // A system collection: nothing defines it, so no other key of the account can make it final.
     await registryRt.upsertSystem<Automation>(OWN_AUTOMATIONS, id, body);
     // Every carrier gets the wakes as they are now, in the background (`carriers.settled`).
-    void passAll().catch(() => {});
+    inBackground(passAll());
     return { ...body, id };
   }
 
@@ -1427,7 +1379,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       const registryRt = await requireAccount('Making an automation');
       if (!(await ownAutomations()).some((view) => view.id === id)) return;
       await registryRt.removeSystem(id);
-      void passAll().catch(() => {});
+      inBackground(passAll());
     },
 
     async versions(ids) {
@@ -1450,7 +1402,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       );
       if (mine.length === 0) return 0;
       const taken = await (await runtime(accountSpaceId)).take(mine);
-      if (taken > 0) void passAll().catch(() => {});
+      if (taken > 0) inBackground(passAll());
       return taken;
     },
   });
@@ -1469,7 +1421,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       const all = await carrierRecords();
       // The same carrier again keeps its carry space: what it holds stays good, and nothing is closed under it.
       let entry = all.find(({ body }) => body.did === carrier.did && !body.removed);
-      if (entry) void passAll().catch(() => {});
+      if (entry) inBackground(passAll());
       else {
         // Added again after a removal, a new carry space: the last one tells it to forget. One past the
         // highest seen, not a count: a device that hasn't synced every earlier one must not land on a closed space.
@@ -1586,16 +1538,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     if (narrowNote || !accountSpaceId) return;
     const { name } = description;
     const peer = hostPeerAddress(hosting.url, description) ?? undefined;
-    const same =
-      kept &&
-      kept.state === status.state &&
-      kept.paidUntil === status.paidUntil &&
-      kept.renews === status.renews &&
-      kept.plan === status.plan &&
-      JSON.stringify(kept.over ?? []) === JSON.stringify(status.over ?? []) &&
-      hosting.name === name &&
-      hosting.peer === peer;
-    if (same) return;
+    if (kept && sameStatus(kept, status) && hosting.name === name && hosting.peer === peer) return;
     const { peer: _before, ...rest } = hosting;
     const record: Hosting = { ...rest, name, receipt, ...(peer ? { peer } : {}) };
     await (
@@ -1610,53 +1553,51 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     const base = { url: hosting.url, host: hosting.host, subscription, since: hosting.since };
     try {
       const description = await describeKnown(hosting);
-      let { status, receipt } = await client.status();
-      const due = force || Date.now() - (handedAt.get(hosting.url) ?? 0) > HAND_AGAIN_MS;
-      // A host with limits keeps an account's spaces with nothing paid: its free plan.
-      const paid =
-        status.state === 'active' ||
-        status.state === 'grace' ||
-        ((description.free || description.limits !== undefined) && status.state !== 'lapsed');
-      const inFlight = handing.get(hosting.url);
-      if (!status.carrying && inFlight) {
-        // Another look is handing the spaces over right now: wait for it,
-        // rather than answer "not carrying" while they're on their way.
-        const handed = await inFlight.catch(() => null);
-        if (handed) ({ status, receipt } = handed);
-      } else if (!status.carrying && paid && due && !narrowNote) {
-        handedAt.set(hosting.url, Date.now());
-        const attaching = carriers
-          .add({ did: hosting.host, name: new URL(hosting.url).host })
-          .then(({ invite }) => client.attach(config.signer.did, invite));
-        handing.set(hosting.url, attaching);
-        try {
-          ({ status, receipt } = await attaching);
-        } catch (error) {
-          // Not paid after all (it lapsed in between): the status says so.
-          if (!(error instanceof HostError && error.status === 402)) throw error;
-        } finally {
-          handing.delete(hosting.url);
-        }
-      }
+      const { status, receipt } = await handOverIfDue(hosting, client, description, force);
       await keepReceipt(hosting, kept, status, receipt, description);
-      return {
-        ...base,
-        name: description.name,
-        status,
-        live: true,
-        fund: description.free ? null : (description.fund ?? null),
-        reminds: description.remind === true,
-      };
+      const live = { status, live: true, fund: fundOf(description), reminds: description.remind === true };
+      return { ...base, name: description.name, ...live };
     } catch (error) {
+      const name = hosting.name ?? new URL(hosting.url).host;
       return {
         ...base,
-        name: hosting.name ?? new URL(hosting.url).host,
+        name,
         status: kept,
         live: false,
         fund: null,
         reminds: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorText(error),
       };
+    }
+  }
+
+  /** How a host stands, after handing it the spaces if it is paid for but not carrying them */
+  async function handOverIfDue(
+    hosting: Hosting,
+    client: HostClient,
+    description: HostDescription,
+    force: boolean,
+  ): Promise<{ status: HostStatus; receipt: SignedStatus }> {
+    const told = await client.status();
+    if (told.status.carrying) return told;
+    // Another look is handing the spaces over now: wait for it, rather than answer "not carrying".
+    const inFlight = handing.get(hosting.url);
+    if (inFlight) return (await inFlight.catch(() => null)) ?? told;
+    const due = force || Date.now() - (handedAt.get(hosting.url) ?? 0) > HAND_AGAIN_MS;
+    if (!accountPaid(told.status, description) || !due || narrowNote) return told;
+    handedAt.set(hosting.url, Date.now());
+    const attaching = carriers
+      .add({ did: hosting.host, name: new URL(hosting.url).host })
+      .then(({ invite }) => client.attach(config.signer.did, invite));
+    handing.set(hosting.url, attaching);
+    try {
+      return await attaching;
+    } catch (error) {
+      // Not paid after all (it lapsed in between): the status says so.
+      if (error instanceof HostError && error.status === 402) return told;
+      throw error;
+    } finally {
+      handing.delete(hosting.url);
     }
   }
 
@@ -1672,15 +1613,6 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     return found;
   }
 
-  /** An address a device may reach: https://, or http:// on this machine */
-  function checkAddress(address: string, what: string): URL {
-    const url = new URL(address);
-    const local = ['localhost', '127.0.0.1'].includes(url.hostname);
-    if (url.protocol !== 'https:' && !(url.protocol === 'http:' && local))
-      throw new Error(`${what} is reached over https://`);
-    return url;
-  }
-
   // ─── A space paying for itself ─────────────────────────────────────
   //
   // A space names the hosts it pays in `std.host` records, which only those
@@ -1692,94 +1624,62 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   const spaceHostsAsked = new Map<string, { at: number; named: string }>();
   const SPACE_HOSTS_EVERY_MS = 10 * 60_000;
 
-  async function namedHosts(
-    spaceId: string,
-  ): Promise<ReadonlyArray<{ url: string; did?: string; name?: string }>> {
+  async function namedHosts(spaceId: string): Promise<ReadonlyArray<NamedHost>> {
     const rt = await runtime(spaceId);
     // Only where the space keeps hosts: listing a collection makes a space held in part hold it.
     if (!(await rt.collections()).some((c) => c.name === 'std.host' && c.version !== null)) return [];
     const records = await rt.list<unknown>({ collection: 'std.host' });
-    return records.flatMap((record) => {
-      const body = record.body;
-      if (!record.verified || record.deleted || !isRecord(body) || typeof body.url !== 'string') return [];
-      let url: string;
-      try {
-        url = checkAddress(body.url, 'A host').origin;
-      } catch {
-        return [];
-      }
-      return [
-        {
-          url,
-          ...(typeof body.did === 'string' ? { did: body.did } : {}),
-          ...(typeof body.name === 'string' ? { name: body.name } : {}),
-        },
-      ];
-    });
+    return records.map(namedHostOf).filter((host) => host !== null);
   }
 
   /** The read key a space is carried with now, as a DID: what a host should hold */
   const currentReadKey = (pass: SpacePass): string | undefined => pass.readKey ?? pass.space.readKey;
 
-  async function askSpaceHost(
-    spaceId: string,
-    named: { url: string; did?: string; name?: string },
-    hand: boolean,
-  ): Promise<SpaceHostingView> {
+  async function askSpaceHost(spaceId: string, named: NamedHost, hand: boolean): Promise<SpaceHostingView> {
     try {
-      const description = await describeHost(named.url);
-      // A host whose key changed since the space chose it is not the host it chose.
-      if (named.did && named.did !== description.did) throw new Error('The host’s key changed');
-      const client = createSpaceHostClient(named.url, description.did, provider);
+      const { client, description } = await reachNamedHost(named);
       let { status } = await client.status(spaceId);
-      // Paid, or a free host that hasn't let it lapse, as for an account's subscription.
-      const paid =
-        status.state === 'active' ||
-        status.state === 'grace' ||
-        (description.free && status.state !== 'lapsed');
-      const record = hand && paid ? await findRecord(spaceId) : null;
+      const record = hand && spacePaid(status, description) ? await findRecord(spaceId) : null;
       if (record && (record.space.visibility === 'public' || record.key)) {
         const pass = await makePass(record);
         if (!status.carrying || (pass.read && status.readKey !== currentReadKey(pass)))
           ({ status } = await client.hand(spaceId, pass));
       }
+      const runsBots = description.bots === true;
       return {
         url: named.url,
         name: named.name ?? description.name,
         host: description.did,
         status,
         free: description.free === true,
-        fund: description.free ? null : (description.fund ?? null),
+        fund: fundOf(description),
         reminds: description.remind === true,
-        runsBots: description.bots === true,
+        runsBots,
         bots: status.bots ?? [],
-        connectors: description.bots === true ? connectorOffers(description.connectors) : [],
+        connectors: runsBots ? connectorOffers(description.connectors) : [],
       };
     } catch (error) {
-      return {
-        url: named.url,
-        name: named.name ?? new URL(named.url).hostname,
-        host: null,
-        status: null,
-        free: false,
-        fund: null,
-        reminds: false,
-        runsBots: false,
-        bots: [],
-        connectors: [],
-        error: error instanceof Error ? error.message : String(error),
-      };
+      const name = named.name ?? new URL(named.url).hostname;
+      return { url: named.url, name, ...UNREACHED_HOST, error: errorText(error) };
     }
   }
 
   /** A client for a host a space names, checked to be the host it chose */
-  async function spaceHostClient(spaceId: string, url: string) {
+  async function reachNamedHost(named: NamedHost) {
+    const description = await describeHost(named.url);
+    // A host whose key changed since the space chose it is not the host it chose.
+    if (named.did && named.did !== description.did) throw new Error('The host’s key changed');
+    return { description, client: createSpaceHostClient(named.url, description.did, provider) };
+  }
+
+  async function requireNamedHost(spaceId: string, url: string): Promise<NamedHost> {
     const named = (await namedHosts(spaceId)).find((known) => known.url === url);
     if (!named) throw new Error('This space doesn’t use the host at that address');
-    const description = await describeHost(named.url);
-    if (named.did && named.did !== description.did) throw new Error('The host’s key changed');
-    return createSpaceHostClient(named.url, description.did, provider);
+    return named;
   }
+
+  const spaceHostClient = async (spaceId: string, url: string) =>
+    (await reachNamedHost(await requireNamedHost(spaceId, url))).client;
 
   /** Hands the hosts a space names its pass, when they were paid and don't carry it with its key yet */
   async function keepSpaceHosts(spaceId: string): Promise<void> {
@@ -1804,24 +1704,14 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   // the node was built with (`network.hosts`), so a new device with only the
   // recovery code finds its registry there, and every space from it.
 
-  /** Each host's socket address, as its description said: asked once, and again after a failure */
-  /** A node address pinned to a key (spec 04 §5.2); one without a key to pin stays as it is */
-  const pinnedTo = (address: string | null, did: string | undefined): string | null =>
-    address && did?.startsWith('did:key:') ? `${address.split('#')[0]}#${did}` : address;
   const describedPeers = new Map<string, Promise<string | null>>();
+  /** A host's socket address, as its description said: asked once, and again after a failure */
   function describedPeer(url: string): Promise<string | null> {
-    let found = describedPeers.get(url);
-    if (!found) {
-      found = describeHost(url).then(
-        (description) => pinnedTo(hostPeerAddress(url, description), description.did),
-        () => {
-          describedPeers.delete(url);
-          return null;
-        },
-      );
-      describedPeers.set(url, found);
-    }
-    return found;
+    const describe = async () => {
+      const description = await describeHost(url);
+      return pinnedTo(hostPeerAddress(url, description), description.did);
+    };
+    return cached(describedPeers, url, describe).catch(() => null);
   }
   /**
    * A host's socket address: the one written down with it, or its
@@ -1857,28 +1747,25 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     // Asked only while it is still open: asking would open it again.
     if (!(await kindOf(spaceId)) && runtimes.get(spaceId) === open)
       hosts.push(...(spaceHosts ?? (await namedHosts(spaceId))));
-    // The nodes the invite that brought it here named: the inviter's hosts, reached before the space's own
-    // records are. Once the space names its keepers, only those of them it names: an invite is unauthenticated.
-    const named = (await registry.get(spaceId))?.nodes ?? [];
-    const keepers = new Set(
-      named.length > 0
-        ? ((await (await open).access().catch(() => null))?.keepers ?? []).map((keeper) => keeper.did)
-        : [],
-    );
-    const invited = named.filter(
-      (node) => keepers.size === 0 || keepers.has(decodeURIComponent(node.split('#')[1] ?? '')),
-    );
-    const peers = [
-      ...new Set(
-        [...(await Promise.all(hosts.map(peerOf))), ...invited].filter(
-          (peer): peer is string => peer !== null,
-        ),
-      ),
-    ].sort();
+    const invited = await invitedNodes(spaceId, open);
+    const found = [...(await Promise.all(hosts.map(peerOf))), ...invited].filter((peer) => peer !== null);
+    const peers = [...new Set(found)].sort();
     const said = peers.join(' ');
     if (reaching.get(spaceId) === said || runtimes.get(spaceId) !== open) return;
     reaching.set(spaceId, said);
     (await open).useNodes(peers);
+  }
+
+  /**
+   * The nodes the invite that brought this node here named: the inviter's hosts, reached before the
+   * space's records are. Once the space names keepers, only those: an invite is unauthenticated.
+   */
+  async function invitedNodes(spaceId: string, open: Promise<SpaceRuntime>): Promise<string[]> {
+    const named = (await registry.get(spaceId))?.nodes ?? [];
+    if (named.length === 0) return [];
+    const access = await (await open).access().catch(() => null);
+    const keepers = new Set((access?.keepers ?? []).map((keeper) => keeper.did));
+    return named.filter((node) => keepers.size === 0 || keepers.has(nodeDid(node)));
   }
 
   const hosting = Object.freeze<NodeHosting>({
@@ -1941,8 +1828,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     },
 
     async stopForSpace(spaceId, url) {
-      const named = (await namedHosts(spaceId)).find((known) => known.url === url);
-      if (!named) throw new Error('This space doesn’t use the host at that address');
+      const named = await requireNamedHost(spaceId, url);
       // Which bots are the host's is its own word, signed: asked before it is let go.
       const view = await askSpaceHost(spaceId, named, false);
       // Un-named first, so no device hands it the key that follows.
@@ -1950,13 +1836,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       for (const record of await rt.list<unknown>({ collection: 'std.host' })) {
         const body = record.body;
         if (record.deleted || !isRecord(body) || typeof body.url !== 'string') continue;
-        let origin: string;
-        try {
-          origin = new URL(body.url).origin;
-        } catch {
-          continue;
-        }
-        if (origin === url) await rt.remove(record.key);
+        const address = body.url;
+        if (attempt(() => new URL(address).origin) === url) await rt.remove(record.key);
       }
       const access = await spaces.access(spaceId);
       const members = new Map(access.members.map((member) => [member.did, member.roles]));
@@ -2431,27 +2312,40 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     if (!record) return [];
     const { gen, places } = record.body!;
     const keys = await inboxKeys(gen);
-    // Every mailbox, in full: an inbox holds 64 knocks at most, and a knock
-    // cleared from another device should go from here too. What was opened
-    // once is not opened again, nor what failed to.
-    const held = new Map<string, string>();
-    const fetched = await Promise.allSettled(places.map((place) => mailbox.fetch(place, keys.topic)));
-    for (const result of fetched) {
-      if (result.status !== 'fulfilled') continue;
-      // A relay's id is only its word: file the knock under the hash of what it is.
-      for (const item of result.value) held.set(await knockId(item.blob), item.blob);
-    }
+    // Every mailbox in full: an inbox holds 64 knocks at most, and one cleared on another device goes here too.
+    const held = await knocksAt(places, keys.topic);
     const found: { id: string; opened: OpenedKnock }[] = [];
     for (const [id, blob] of held) {
-      let opened = knockCache.get(id)?.opened ?? null;
-      if (!opened && (failed.get(id) ?? 0) <= now) {
-        opened = await openKnock([keys.key], blob, provider);
-        if (opened) knockCache.set(id, { opened, until: opened.at + KNOCK_TTL_SECONDS * 1000 });
-        else failed.set(id, now + 15 * 60_000);
-      }
+      const opened = knockCache.get(id)?.opened ?? (await openOnce(id, blob, keys.key, now));
       if (opened) found.push({ id, opened });
     }
     return found;
+  }
+
+  /** What the mailboxes hold under a topic, by knock id */
+  async function knocksAt(places: ReadonlyArray<string>, topic: string): Promise<Map<string, string>> {
+    const held = new Map<string, string>();
+    const fetched = await Promise.allSettled(places.map((place) => mailbox.fetch(place, topic)));
+    for (const result of fetched) {
+      if (result.status !== 'fulfilled') continue;
+      // A relay's id is only its word: a knock is filed under the hash of what it is.
+      for (const item of result.value) held.set(await knockId(item.blob), item.blob);
+    }
+    return held;
+  }
+
+  /** Opens a knock; one that failed waits a while before it is tried again */
+  async function openOnce(
+    id: string,
+    blob: string,
+    key: Uint8Array,
+    now: number,
+  ): Promise<OpenedKnock | null> {
+    if ((failed.get(id) ?? 0) > now) return null;
+    const opened = await openKnock([key], blob, provider);
+    if (opened) knockCache.set(id, { opened, until: opened.at + KNOCK_TTL_SECONDS * 1000 });
+    else failed.set(id, now + 15 * 60_000);
+    return opened;
   }
 
   /** A direct message as this account reads it — null when it is neither by nor for this account */
@@ -2579,7 +2473,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       if (!left.some((result) => result.status === 'fulfilled')) {
         await spaces.leave(made.space).catch(() => {});
         const reasons = left
-          .map((result) => (result.status === 'rejected' ? reasonText(result.reason) : ''))
+          .map((result) => (result.status === 'rejected' ? errorText(result.reason) : ''))
           .filter(Boolean);
         throw new Error(`None of their inbox's mailboxes took the knock. ${reasons.join('; ')}`);
       }
@@ -2879,6 +2773,14 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     }) satisfies P2PNode;
   }
 
+  async function anyoneOnline(): Promise<boolean> {
+    for (const open of runtimes.values()) {
+      const rt = await open.catch(() => null);
+      if (rt && (await rt.status()).peers.length > 0) return true;
+    }
+    return false;
+  }
+
   const node: P2PNode = Object.freeze({
     did: config.signer.did,
     sessionDid,
@@ -2925,18 +2827,10 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     },
 
     async revokeSelf(options: RevokeOptions = {}) {
-      // Forgotten first: a tab closed while the revokes wait must not leave a
-      // revoked key behind, to be claimed and refused on every write after.
+      // Forgotten first: a tab closed while the revokes wait must not leave a revoked key to be claimed.
       await claimed?.forget().catch(() => {});
-      // With anyone online, every revoke waits for a peer to take it in, closed
-      // spaces too, which open for it. With nobody, waiting would only keep a
-      // person signing out looking at a spinner: they go out with the next sync.
-      let anyone = false;
-      for (const open of runtimes.values()) {
-        const rt = await open.catch(() => null);
-        if (rt && (await rt.status()).peers.length > 0) anyone = true;
-      }
-      await node.revokeKey(sessionDid, anyone ? options : {});
+      // With nobody online, waiting would only show a spinner: the revokes go out with the next sync.
+      await node.revokeKey(sessionDid, (await anyoneOnline()) ? options : {});
     },
 
     async close() {
@@ -2967,3 +2861,150 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   }
   return node;
 }
+
+/** What an error says: its message when it has one */
+function errorText(error: unknown): string {
+  return String((isRecord(error) ? error.message : undefined) ?? error);
+}
+
+/** Lets work run on its own: a failure is dropped, and the next change tries again */
+function inBackground(work: Promise<unknown>): void {
+  void work.catch(() => {});
+}
+
+/** Resolves after `ms`, without keeping the process alive */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => unref(setTimeout(resolve, ms)));
+}
+
+/** Whether `work` settled within `waitMs` */
+function within(work: Promise<unknown>, waitMs: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), waitMs);
+    const settle = (done: boolean) => () => {
+      clearTimeout(timer);
+      resolve(done);
+    };
+    void work.then(settle(true), settle(false));
+  });
+}
+
+/** The promise kept under `key`, made once; forgotten if it fails, so the next ask tries again */
+function cached<T>(cache: Map<string, Promise<T>>, key: string, make: () => Promise<T>): Promise<T> {
+  const known = cache.get(key);
+  if (known) return known;
+  const made = make();
+  cache.set(key, made);
+  made.catch(() => cache.delete(key));
+  return made;
+}
+
+/** The value `make` gives, or null if it throws */
+function attempt<T>(make: () => T): T | null {
+  try {
+    return make();
+  } catch {
+    return null;
+  }
+}
+
+/** Whether a sealed invite hashes to a link's pin */
+async function hasPin(blob: string, pin: Uint8Array): Promise<boolean> {
+  return (await pinOf(blob)).every((byte, i) => byte === pin[i]);
+}
+
+const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+/** An address a device may reach: https://, or http:// on this machine */
+function checkAddress(address: string, what: string): URL {
+  const url = new URL(address);
+  const local = ['localhost', '127.0.0.1'].includes(url.hostname);
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && local))
+    throw new Error(`${what} is reached over https://`);
+  return url;
+}
+
+/** A node address pinned to a key (spec 04 §5.2); one without a key to pin stays as it is */
+function pinnedTo(address: string | null, did: string | undefined): string | null {
+  return address && did?.startsWith('did:key:') ? `${address.split('#')[0]}#${did}` : address;
+}
+
+/** The DID a node address is pinned to, or '' */
+const nodeDid = (node: string) => decodeURIComponent(node.split('#')[1] ?? '');
+
+interface NamedHost {
+  readonly url: string;
+  readonly did?: string;
+  readonly name?: string;
+}
+
+/** A `std.host` record's host, when its address is one a device may reach */
+function namedHostOf(record: NodeRecord<unknown>): NamedHost | null {
+  const body = record.body;
+  if (!record.verified || record.deleted || !isRecord(body) || typeof body.url !== 'string') return null;
+  const address = body.url;
+  const url = attempt(() => checkAddress(address, 'A host').origin);
+  if (!url) return null;
+  return {
+    url,
+    ...(typeof body.did === 'string' ? { did: body.did } : {}),
+    ...(typeof body.name === 'string' ? { name: body.name } : {}),
+  };
+}
+
+/** A carrier record whose generation is a count: anything else names no carry space */
+function hasCarrierBody(record: NodeRecord<Carrier>): boolean {
+  const gen = record.body?.gen;
+  return (
+    typeof record.body?.did === 'string' && (gen === undefined || (Number.isSafeInteger(gen) && gen >= 0))
+  );
+}
+
+/** A kept link has ended once its time is up, or the space's key has moved on from the one it carries */
+function linkEnded(link: KeptLink, record: SpaceRecord): boolean {
+  if (link.until !== undefined && link.until <= Date.now()) return true;
+  const { keyId } = link;
+  if (keyId === undefined || record.key === null || record.key.id === keyId) return false;
+  return (record.keys ?? []).some((held) => held.id === keyId);
+}
+
+interface PaidState {
+  readonly state: string;
+}
+
+/** Paid, or on the host's free plan: a host with limits keeps an account's spaces with nothing paid */
+function accountPaid(status: PaidState, description: HostDescription): boolean {
+  const free = description.free || description.limits !== undefined;
+  return status.state === 'active' || status.state === 'grace' || (free && status.state !== 'lapsed');
+}
+
+/** Paid, or at a free host that hasn't let it lapse */
+function spacePaid(status: PaidState, description: HostDescription): boolean {
+  return (
+    status.state === 'active' || status.state === 'grace' || (description.free && status.state !== 'lapsed')
+  );
+}
+
+const fundOf = (description: HostDescription) => (description.free ? null : (description.fund ?? null));
+
+function sameStatus(a: HostStatus, b: HostStatus): boolean {
+  return (
+    a.state === b.state &&
+    a.paidUntil === b.paidUntil &&
+    a.renews === b.renews &&
+    a.plan === b.plan &&
+    sameJson(a.over ?? [], b.over ?? [])
+  );
+}
+
+/** What a space host's view says when the host can't be reached */
+const UNREACHED_HOST = {
+  host: null,
+  status: null,
+  free: false,
+  fund: null,
+  reminds: false,
+  runsBots: false,
+  bots: [],
+  connectors: [],
+} as const;

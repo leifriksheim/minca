@@ -1,28 +1,19 @@
 /**
  * @module identity/contact-key
- * The contact key: what lets someone seal a message only you can open, while
- * you are offline.
+ * The contact key: a P-256 ECDH key pair, derived from the seed under its own
+ * label, that lets someone seal a message only you can open while you are
+ * offline. Not the root key (apps never hold the seed, and one key should not
+ * both sign and decrypt), and not a session key (those change every hour).
  *
- * It is a P-256 key pair for key agreement (ECDH), derived from the account's
- * seed like the root key but under its own label — the same on every device,
- * and back with the recovery code. It is not the root key: apps never hold the
- * seed, and one key should not both sign and decrypt. It is not a session key
- * either: those change every hour, and a request read next week would be
- * locked to a key that is gone.
- *
- * The public half goes on the account's profile in every space it writes in
- * (`sys.profile`). The private half stays with the account home, and goes to
- * apps the person lets handle contacts.
- *
- * Sealing to it is HPKE (`identity/hpke.ts`): a fresh key pair for each
- * message, with a label and the place it belongs bound in.
+ * Its public half goes on the account's profile (`sys.profile`); sealing to it
+ * is HPKE (`identity/hpke.ts`). Member and inbox keys are derived the same way.
  */
 import { p256 } from '@noble/curves/nist.js';
 import { base64UrlDecode, base64UrlEncode, utf8Encode } from '../utils/encoding.js';
 import { bufferSource } from '../utils/guards.js';
 import { hkdf } from './hkdf.js';
 
-/** Domain separation for the contact key. Changing it changes every account's contact key. */
+/** Domain separation. Changing a label changes every key derived under it. */
 const CONTACT_KEY_INFO = 'minca/p256-contact-key/v1';
 const MEMBER_KEY_INFO = 'minca/p256-member-key/v1';
 const INBOX_KEY_INFO = 'minca/p256-inbox-key/v1';
@@ -66,69 +57,48 @@ function importScalar(
   );
 }
 
-/**
- * The contact key's private scalar, from the account seed — 32 bytes. This is
- * what an account home hands an app it lets handle contacts.
- */
-export async function deriveContactKeyBytes(seed: Uint8Array): Promise<Uint8Array> {
+/** The contact key's 32-byte private scalar, from the seed: what an account home hands an app that handles contacts */
+export function deriveContactKeyBytes(seed: Uint8Array): Promise<Uint8Array> {
   return deriveScalar(seed, CONTACT_KEY_INFO);
 }
 
 /**
- * An account's **member key** for one space: the same kind of key pair, derived
- * from the account key and the space id. When a private space's key
- * changes, the new key is sealed to each member's member key (`sys.box`).
- *
- * One per space, not one per account, so an account home can hand an app the
- * member keys for exactly the spaces it grants — and a new space key reaches
- * that app without it holding anything that opens other spaces' keys.
+ * The account's member key for one space, which new space keys are sealed to
+ * (`sys.box`). One per space, so an app granted one space holds nothing that opens another.
  * @param accountKey The account key (`deriveAccountKey(seed)`)
  */
-export async function deriveMemberKeyBytes(accountKey: Uint8Array, spaceId: string): Promise<Uint8Array> {
+export function deriveMemberKeyBytes(accountKey: Uint8Array, spaceId: string): Promise<Uint8Array> {
   return deriveScalar(accountKey, `${MEMBER_KEY_INFO}|${spaceId}`);
 }
 
 /**
- * An **inbox key**: the key knocks on the account's inbox are sealed to
- * (`inbox/inbox.ts`, spec 07 §1). Derived from the contact key and the
- * inbox's generation, so every device and app holding the contact key opens
- * the same inbox, and a new inbox is a new `gen`.
- *
- * Not the contact key itself: that one's public half is on your profile in
- * every space you write in, and an inbox is handed to people who may not know
- * who you are yet. An inbox key says nothing about the account behind it.
+ * An inbox key, which knocks are sealed to (spec 07 §1). Not the contact key,
+ * whose public half is on every profile: an inbox key says nothing about whose it is.
  * @param contactKey The contact key's private scalar (`deriveContactKeyBytes`)
  */
-export async function deriveInboxKeyBytes(contactKey: Uint8Array, gen: number): Promise<Uint8Array> {
+export function deriveInboxKeyBytes(contactKey: Uint8Array, gen: number): Promise<Uint8Array> {
   return deriveScalar(contactKey, `${INBOX_KEY_INFO}|${gen}`);
 }
 
-/**
- * An inbox's **signing key**: what signs the inbox, and proves to a relay
- * clearing its mailbox that it is the owner, without saying whose it is.
- * Separate from the inbox key, which only opens knocks: one key should not
- * both sign and decrypt.
- */
-export async function deriveInboxSignKeyBytes(contactKey: Uint8Array, gen: number): Promise<Uint8Array> {
+/** An inbox's signing key: signs the inbox and proves ownership to a relay. Separate, so no key both signs and decrypts. */
+export function deriveInboxSignKeyBytes(contactKey: Uint8Array, gen: number): Promise<Uint8Array> {
   return deriveScalar(contactKey, `${INBOX_SIGN_KEY_INFO}|${gen}`);
 }
 
-/** A private scalar as a key to sign with (ECDSA), for what an inbox's signing key signs as a version */
+/** A private scalar as an ECDSA signing key */
 export function signingKeyOf(secret: Uint8Array): Promise<CryptoKey> {
   return importScalar(secret, 'ECDSA', ['sign']);
 }
 
-/**
- * Signs with a P-256 private scalar: ECDSA over SHA-256, 64 bytes r ‖ s,
- * base64url — for an inbox's signing key.
- */
+/** Signs with a P-256 private scalar: ECDSA over SHA-256, 64 bytes r ‖ s, base64url */
 export async function signWithScalar(secret: Uint8Array, data: Uint8Array): Promise<string> {
-  const key = await importScalar(secret, 'ECDSA', ['sign']);
-  return base64UrlEncode(
-    new Uint8Array(
-      await globalThis.crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, bufferSource(data)),
-    ),
+  const key = await signingKeyOf(secret);
+  const signature = await globalThis.crypto.subtle.sign(
+    { name: 'ECDSA', hash: 'SHA-256' },
+    key,
+    bufferSource(data),
   );
+  return base64UrlEncode(new Uint8Array(signature));
 }
 
 /** The public half, from the private scalar */

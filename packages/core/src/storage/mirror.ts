@@ -27,6 +27,7 @@
  * only what its store still keeps, then delete the old ones. New first,
  * delete after: a reader in between sees duplicates, which are harmless.
  */
+import { queue } from '../utils/serial.js';
 import type { Version, StorageAdapter } from '../types.js';
 import type { BlobStore } from './blob-store.js';
 import type { StorageProvider } from './storage-provider.js';
@@ -289,14 +290,4 @@ async function readOrCreate(state: StorageAdapter, key: string, create: () => st
   const value = create();
   await state.put(key, utf8Encode(value));
   return value;
-}
-
-/** Runs async work one at a time, in the order it was asked for */
-function queue() {
-  let last: Promise<unknown> = Promise.resolve();
-  return <T>(work: () => Promise<T>): Promise<T> => {
-    const next = last.then(work, work);
-    last = next.catch(() => {});
-    return next;
-  };
 }

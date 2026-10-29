@@ -15,13 +15,7 @@ import { RECOVERY_SEED_BYTES } from './recovery-code.js';
 
 const SALT_BYTES = 16;
 
-/**
- * PBKDF2 rounds for a passphrase wrap.
- *
- * Tuned to roughly a quarter-second in a browser, on the reasoning that this
- * runs once per unlock and the thing it guards is an identity rather than a
- * session.
- */
+/** PBKDF2 rounds for a passphrase wrap: about a quarter-second in a browser, once per unlock */
 export const PASSPHRASE_ITERATIONS = 600_000;
 /** More rounds than this are refused: a vault file edited to a huge count would hang the page */
 const MAX_ITERATIONS = 10_000_000;
@@ -42,23 +36,10 @@ interface WrapBase {
   readonly sealed: string;
 }
 
-/**
- * A seed wrapped under a key held on one device.
- *
- * The key is not derived from the passkey — a passkey only yields key material
- * through the PRF extension, which several widely used providers do not
- * implement. It is a random key in this origin's storage, and the passkey in
- * front of it is a user-verification gate rather than the source of the
- * secret. See {@link module:device-key} for what that does and does not
- * protect against.
- */
+/** A seed wrapped under a random key in one origin's storage, gated by a passkey ({@link module:device-key}) */
 export interface DeviceWrap extends WrapBase {
   readonly kind: 'device';
-  /**
-   * The origin this belongs to. The key it names lives in that origin's
-   * storage, so a wrap from another app is not merely likely to fail — it is
-   * unreachable from here.
-   */
+  /** The origin whose storage holds its key; no other origin can open it */
   readonly rpId: string;
   /** Which local key opens it. Missing from this device means unopenable here. */
   readonly deviceKeyId: string;
@@ -88,99 +69,12 @@ export interface AccountVault {
   readonly wraps: ReadonlyArray<SeedWrap>;
 }
 
-/**
- * Whether parsed JSON is a vault. Loose on purpose: the version and a list of
- * wraps; each wrap is checked when something tries to open it.
- */
+/** Whether parsed JSON is a vault. Loose on purpose: each wrap is checked when opened. */
 export function isAccountVault(value: unknown): value is AccountVault {
   return isRecord(value) && value.version === 1 && Array.isArray(value.wraps);
 }
 
-/** Random bytes as base64url, for salts and nonces. */
-function randomBytes(length: number): Uint8Array<ArrayBuffer> {
-  return globalThis.crypto.getRandomValues(new Uint8Array(length));
-}
-
-/** A short opaque id for a wrap. */
-function wrapId(): string {
-  return base64UrlEncode(randomBytes(8));
-}
-
-/** The DID a seed derives */
-async function didOfSeed(seed: Uint8Array): Promise<string> {
-  return (await createIdentityManager().fromSeed(seed)).did;
-}
-
-/** What a wrap's envelope is bound to: whose seed, which wrap, and how it opens */
-function wrapBound(
-  did: string,
-  wrap: {
-    readonly id: string;
-    readonly kind: SeedWrap['kind'];
-    readonly salt?: string;
-    readonly iterations?: number;
-  },
-): Bound {
-  return wrap.kind === 'passphrase'
-    ? { did, id: wrap.id, kind: wrap.kind, salt: wrap.salt ?? '', iterations: wrap.iterations ?? 0 }
-    : { did, id: wrap.id, kind: wrap.kind };
-}
-
-const unlockFailed = () =>
-  protocolError(
-    'VAULT_UNLOCK_FAILED',
-    'That did not unlock the folder.',
-    'Check the passphrase, or use your recovery code instead.',
-  );
-
-/**
- * Opens a wrap, and checks what is inside is the seed of `did`: a wrap copied
- * in from another account's vault, or edited, is refused.
- */
-async function open(wrap: SeedWrap, key: CryptoKey, did: string): Promise<Uint8Array> {
-  let seed: Uint8Array | null = null;
-  try {
-    seed = await openEnvelope(key, WRAP_LABEL, wrapBound(did, wrap), base64UrlDecode(wrap.sealed));
-  } catch {
-    seed = null;
-  }
-  // AES-GCM authenticates, so a failure is the wrong key, account or wrap rather than corruption.
-  if (!seed || seed.length !== RECOVERY_SEED_BYTES || (await didOfSeed(seed)) !== did) throw unlockFailed();
-  return seed;
-}
-
-/**
- * Stretches a passphrase into the key that wraps a seed.
- * @param iterations PBKDF2 rounds, read from the wrap so old ones stay openable
- */
-async function passphraseWrappingKey(
-  passphrase: string,
-  salt: Uint8Array,
-  iterations: number,
-): Promise<CryptoKey> {
-  const material = await globalThis.crypto.subtle.importKey(
-    'raw',
-    bufferSource(utf8Encode(passphrase.normalize('NFKC'))),
-    { name: 'PBKDF2' },
-    false,
-    ['deriveKey'],
-  );
-  return globalThis.crypto.subtle.deriveKey(
-    { name: 'PBKDF2', hash: 'SHA-256', salt: bufferSource(salt), iterations },
-    material,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt', 'decrypt'],
-  );
-}
-
-/**
- * Wraps a seed under this device's key.
- *
- * The key is random and lives in this origin's storage; the passkey recorded
- * alongside is the gate in front of it, not the source of it. See
- * {@link module:device-key}.
- */
+/** Wraps a seed under this device's key; the passkey recorded beside it is a gate, not the key's source */
 export async function wrapSeedWithDeviceKey(
   seed: Uint8Array,
   deviceKey: { id: string; key: CryptoKey },
@@ -234,9 +128,8 @@ export async function wrapSeedWithPassphrase(
 }
 
 /**
- * Opens a passphrase wrap. Its `salt` and `iterations` are bound into the
- * envelope, so a wrap edited to fewer rounds does not open; fewer than
- * {@link PASSPHRASE_ITERATIONS} are refused before any are run.
+ * Opens a passphrase wrap. Its salt and rounds are bound into the envelope, so
+ * an edited wrap does not open; too few or too many rounds are refused before any run.
  * @param did The vault's DID: the seed inside must derive it
  */
 export async function unwrapSeedWithPassphrase(
@@ -252,66 +145,36 @@ export async function unwrapSeedWithPassphrase(
 }
 
 /**
- * The **local key**: what seals this account's data on this device (the
- * registry at rest, the CLI's writer keys). Never handed to anyone, and not
- * extractable, so a page can use it without being able to leak it.
- *
- * Derived from the seed under its own label, beside the account key, so an
- * app given the account key derives nothing that opens local storage.
+ * The local key: seals this account's data on this device, never leaves it,
+ * and isn't extractable. Its own label, so the account key derives nothing that opens it.
  */
-export async function deriveLocalKey(seed: Uint8Array): Promise<CryptoKey> {
+export function deriveLocalKey(seed: Uint8Array): Promise<CryptoKey> {
   return hkdfAesKey(seed, LOCAL_KEY_INFO);
 }
 
-/**
- * The **account key**, 32 bytes: the root of the member keys and of the
- * account's own spaces (the registry, the contacts). What an app given the
- * whole account receives, and a node that follows the registry is given.
- */
-export async function deriveAccountKey(seed: Uint8Array): Promise<Uint8Array> {
+/** The account key, 32 bytes: the root of member keys and the account's own spaces */
+export function deriveAccountKey(seed: Uint8Array): Promise<Uint8Array> {
   return hkdf(seed, ACCOUNT_KEY_INFO, 32);
 }
 
-/**
- * The device wraps this origin could actually attempt.
- *
- * The key a wrap names lives in the storage of the origin that made it, so one
- * from another app is not merely likely to fail — it is unreachable from here.
- */
+/** The device wraps this origin can attempt: only its own storage holds their keys */
 export function deviceWrapsFor(vault: AccountVault, rpId: string): ReadonlyArray<DeviceWrap> {
   return vault.wraps.filter((wrap): wrap is DeviceWrap => wrap.kind === 'device' && wrap.rpId === rpId);
 }
 
-/**
- * What the CLI labels the passphrase it unlocks with unattended. Kept apart
- * from the account's password, so changing one does not remove the other.
- */
+/** The label of the passphrase the CLI unlocks with unattended, apart from the account's own */
 export const CLI_PASSPHRASE_LABEL = 'CLI passphrase';
 
-/**
- * Adds a wrap, replacing any earlier one for the same passkey.
- *
- * Re-registering on an origin should leave one usable wrap rather than a pile of
- * stale ones, and a wrap whose credential is gone is only clutter.
- */
+/** Adds a wrap, replacing an earlier device wrap for the same origin */
 export function withWrap(vault: AccountVault, wrap: SeedWrap): AccountVault {
-  // One device wrap per origin: re-adding the shortcut should replace it, not
-  // leave an older one pointing at a key nobody will use again.
   const superseded = (existing: SeedWrap): boolean =>
     existing.kind === 'device' && wrap.kind === 'device' && existing.rpId === wrap.rpId;
-
   return { ...vault, wraps: [...vault.wraps.filter((existing) => !superseded(existing)), wrap] };
 }
 
 /**
- * Assembles a fresh locked account.
- *
- * Pure — it neither generates the seed nor touches the disk, so a caller stays
- * in charge of both the entropy and when it lands.
- *
- * @param params.wraps Shortcuts for getting in. May be empty: the account code
- *   is the seed written out, so it opens the account with nothing stored —
- *   which is exactly what a brand new account has.
+ * Assembles a fresh locked account; generates nothing and writes nothing.
+ * @param params.wraps May be empty: the recovery code is the seed, and opens it with nothing stored
  */
 export function createVault(params: {
   did: string;
@@ -325,4 +188,67 @@ export function createVault(params: {
     createdAt: new Date().toISOString(),
     wraps: params.wraps,
   };
+}
+
+const randomBytes = (length: number) => globalThis.crypto.getRandomValues(new Uint8Array(length));
+const wrapId = () => base64UrlEncode(randomBytes(8));
+const didOfSeed = async (seed: Uint8Array) => (await createIdentityManager().fromSeed(seed)).did;
+
+/** What a wrap's envelope is bound to: whose seed, which wrap, and how it opens */
+function wrapBound(
+  did: string,
+  wrap: {
+    readonly id: string;
+    readonly kind: SeedWrap['kind'];
+    readonly salt?: string;
+    readonly iterations?: number;
+  },
+): Bound {
+  return wrap.kind === 'passphrase'
+    ? { did, id: wrap.id, kind: wrap.kind, salt: wrap.salt ?? '', iterations: wrap.iterations ?? 0 }
+    : { did, id: wrap.id, kind: wrap.kind };
+}
+
+const unlockFailed = () =>
+  protocolError(
+    'VAULT_UNLOCK_FAILED',
+    'That did not unlock the folder.',
+    'Check the passphrase, or use your recovery code instead.',
+  );
+
+/** Opens a wrap, refusing one whose seed doesn't derive `did`: copied from another vault, or edited */
+async function open(wrap: SeedWrap, key: CryptoKey, did: string): Promise<Uint8Array> {
+  const seed = await openSealed(wrap, key, did);
+  if (!seed || seed.length !== RECOVERY_SEED_BYTES || (await didOfSeed(seed)) !== did) throw unlockFailed();
+  return seed;
+}
+
+async function openSealed(wrap: SeedWrap, key: CryptoKey, did: string): Promise<Uint8Array | null> {
+  try {
+    return await openEnvelope(key, WRAP_LABEL, wrapBound(did, wrap), base64UrlDecode(wrap.sealed));
+  } catch {
+    return null;
+  }
+}
+
+/** Stretches a passphrase into the key that wraps a seed; `iterations` come from the wrap */
+async function passphraseWrappingKey(
+  passphrase: string,
+  salt: Uint8Array,
+  iterations: number,
+): Promise<CryptoKey> {
+  const material = await globalThis.crypto.subtle.importKey(
+    'raw',
+    bufferSource(utf8Encode(passphrase.normalize('NFKC'))),
+    { name: 'PBKDF2' },
+    false,
+    ['deriveKey'],
+  );
+  return globalThis.crypto.subtle.deriveKey(
+    { name: 'PBKDF2', hash: 'SHA-256', salt: bufferSource(salt), iterations },
+    material,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt'],
+  );
 }

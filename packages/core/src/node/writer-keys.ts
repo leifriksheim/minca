@@ -6,9 +6,9 @@
  * §4.10). A node that makes a new key each time it starts begins new lines
  * each time; one that keeps its key keeps its lines for as long as the device
  * does. But a kept key must never sign in two places at once, or its lines
- * fork and everything it signed there from the fork on stops counting. So a key is kept in a **slot**, and a node
- * claims a slot under a lock: another tab, worker or process that finds the
- * slot taken claims the next one. A key's places in its log are kept in the
+ * fork and what it signed from the fork on stops counting. So a key is kept
+ * in a **slot**, claimed under a lock: a tab, worker or process that finds
+ * the slot taken claims the next one. A key's places in its log are kept in the
  * slot with it — never in the account's stores, which may be a folder shared,
  * copied or restored elsewhere.
  */
@@ -70,16 +70,15 @@ const isKeyPair = (value: unknown): value is CryptoKeyPair =>
 
 /**
  * Lasting keys in this origin's IndexedDB, one database per slot, locked with
- * the Web Locks API across tabs and workers. The private key is
- * non-extractable: a script that gets into the page can sign with it while it
- * runs, but can never take it away.
+ * Web Locks across tabs and workers. The private key is non-extractable: a
+ * script in the page can sign with it while it runs, never take it away.
  *
  * Gives null, so the node makes a key for one run, where there is no
- * IndexedDB or no Web Locks: a key that two nodes might hold at once is worse
+ * IndexedDB or no Web Locks: a key two nodes might hold at once is worse
  * than no lasting key.
  *
- * @param name Scopes the slots, e.g. the account's store prefix. Signing out
- *   deletes every database under that prefix, and the keys with them.
+ * @param name Scopes the slots, e.g. the account's store prefix, so signing
+ *   out deletes the keys with the rest.
  */
 export function browserWriterKeys(
   name: string,
@@ -94,51 +93,7 @@ export function browserWriterKeys(
         const unlock = await tryLock(locks, dbName);
         if (!unlock) continue;
         try {
-          let db = await openDb(dbName, STORE);
-          // The browser can close the connection under a running node. Opened
-          // again only while the slot still holds the key: one emptied (site
-          // data cleared) has lost the key's places, and signing on would reuse them.
-          const run = async <T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBRequest<T>) => {
-            try {
-              return await idbRun(db, STORE, mode, fn);
-            } catch (error) {
-              if (!(error instanceof DOMException) || error.name !== 'InvalidStateError') throw error;
-              db = await openDb(dbName, STORE);
-              if (!isKeyPair(await idbRun(db, STORE, 'readonly', (store) => store.get(KEYS))))
-                throw new Error('This site’s data was cleared while the page was open. Reload the page.');
-              return idbRun(db, STORE, mode, fn);
-            }
-          };
-          let keys = await run('readonly', (store) => store.get(KEYS));
-          if (!isKeyPair(keys)) {
-            const made = await provider.generateKeyPair();
-            keys = { publicKey: made.publicKey, privateKey: made.privateKey };
-            // A new key starts new lines: whatever a forgotten one left goes.
-            await run('readwrite', (store) => store.clear());
-            await run('readwrite', (store) => store.put(keys, KEYS));
-          }
-          if (!isKeyPair(keys)) throw new Error('The writer key could not be kept');
-          const heads: HeadStore = {
-            async get(key) {
-              const value = await run('readonly', (store) => store.get(`head:${key}`));
-              return value instanceof Uint8Array ? value : null;
-            },
-            async put(key, value) {
-              await run('readwrite', (store) => store.put(value, `head:${key}`));
-            },
-          };
-          return Object.freeze({
-            keys,
-            heads,
-            async release() {
-              db.close();
-              unlock();
-            },
-            async forget() {
-              // The key only: its places stay while it may still sign, until the next claim.
-              await run('readwrite', (store) => store.delete(KEYS));
-            },
-          });
+          return await openSlot(dbName, unlock, provider);
         } catch {
           // This slot's storage won't open; another may, or the node goes without.
           unlock();
@@ -147,4 +102,64 @@ export function browserWriterKeys(
       return null;
     },
   });
+}
+
+/** The key in a slot this node holds the lock to, made if there is none */
+async function openSlot(
+  dbName: string,
+  unlock: () => void,
+  provider: CryptoProvider,
+): Promise<ClaimedWriter> {
+  const run = await slotStore(dbName);
+  let keys: unknown = await run('readonly', (store) => store.get(KEYS));
+  if (!isKeyPair(keys)) {
+    const made = await provider.generateKeyPair();
+    keys = { publicKey: made.publicKey, privateKey: made.privateKey };
+    // A new key starts new lines: whatever a forgotten one left goes.
+    await run('readwrite', (store) => store.clear());
+    await run('readwrite', (store) => store.put(keys, KEYS));
+  }
+  if (!isKeyPair(keys)) throw new Error('The writer key could not be kept');
+  const heads: HeadStore = {
+    async get(key) {
+      const value = await run('readonly', (store) => store.get(`head:${key}`));
+      return value instanceof Uint8Array ? value : null;
+    },
+    async put(key, value) {
+      await run('readwrite', (store) => store.put(value, `head:${key}`));
+    },
+  };
+  return Object.freeze({
+    keys,
+    heads,
+    async release() {
+      run.close();
+      unlock();
+    },
+    async forget() {
+      // The key only: its places stay while it may still sign, until the next claim.
+      await run('readwrite', (store) => store.delete(KEYS));
+    },
+  });
+}
+
+/**
+ * Runs requests on a slot's database. The browser can close the connection
+ * under a running node; it is opened again only while the slot still holds
+ * the key, since one emptied (site data cleared) has lost the key's places.
+ */
+async function slotStore(dbName: string) {
+  let db = await openDb(dbName, STORE);
+  const run = async <T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBRequest<T>) => {
+    try {
+      return await idbRun(db, STORE, mode, fn);
+    } catch (error) {
+      if (!(error instanceof DOMException) || error.name !== 'InvalidStateError') throw error;
+      db = await openDb(dbName, STORE);
+      if (!isKeyPair(await idbRun(db, STORE, 'readonly', (store) => store.get(KEYS))))
+        throw new Error('This site’s data was cleared while the page was open. Reload the page.');
+      return idbRun(db, STORE, mode, fn);
+    }
+  };
+  return Object.assign(run, { close: () => db.close() });
 }

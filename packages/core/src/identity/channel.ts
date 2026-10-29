@@ -23,6 +23,7 @@ import { openEnvelope, sealEnvelope } from './envelope.js';
 const POINT_BYTES = 65;
 /** Sealed messages longer than this are not tried */
 const MAX_SEALED = 1_000_000;
+const ECDH = { name: 'ECDH', namedCurve: 'P-256' } as const;
 
 /** The labels one kind of exchange uses, so no exchange of one kind opens as the other */
 export interface ChannelKind {
@@ -51,10 +52,7 @@ export const CODE_CHANNEL: ChannelKind = Object.freeze({
 /** Which side: the one that made the secret and shows it, or the one that joins with it */
 export type ChannelSide = 'offer' | 'join';
 
-/**
- * The room both sides meet in: a hash of the secret, so only someone who has
- * the secret can find it, and a relay sees a new name every time.
- */
+/** The room both sides meet in: a hash of the secret, so only its holders find it */
 export async function channelRoom(kind: ChannelKind, secret: Uint8Array): Promise<string> {
   return cidFromBytes(concatBytes(utf8Encode(kind.room), secret));
 }
@@ -64,9 +62,7 @@ export async function channelKeyPair(): Promise<{
   readonly privateKey: CryptoKey;
   readonly point: Uint8Array;
 }> {
-  const pair = await globalThis.crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, false, [
-    'deriveBits',
-  ]);
+  const pair = await globalThis.crypto.subtle.generateKey(ECDH, false, ['deriveBits']);
   const point = new Uint8Array(await globalThis.crypto.subtle.exportKey('raw', pair.publicKey));
   return { privateKey: pair.privateKey, point };
 }
@@ -88,11 +84,8 @@ const notAKey = () => protocolError('PAIRING_TICKET_UNREADABLE', 'That device se
 
 /**
  * The channel, from this side's private key, both public points and the secret.
- *
- * The secret goes into the key, so someone who never had it gets a different
- * channel; the shared point goes in too, so a recording opens nothing to
- * someone who learns the secret later; both points go into the labels, so a
- * message sealed for one exchange opens in no other.
+ * The secret and the shared point both go into the keys, so neither alone
+ * opens a recording; both points go into the labels, binding it to this exchange.
  */
 export async function deriveChannel(params: {
   readonly kind: ChannelKind;
@@ -105,35 +98,28 @@ export async function deriveChannel(params: {
   /** Which of the two this side is */
   readonly side: ChannelSide;
 }): Promise<Channel> {
-  for (const point of [params.offer, params.join]) {
-    if (point.length !== POINT_BYTES || point[0] !== 0x04) throw notAKey();
-  }
-  let shared: Uint8Array;
-  try {
-    const peer = await globalThis.crypto.subtle.importKey(
-      'raw',
-      bufferSource(params.side === 'offer' ? params.join : params.offer),
-      { name: 'ECDH', namedCurve: 'P-256' },
-      false,
-      [],
-    );
-    shared = new Uint8Array(
-      await globalThis.crypto.subtle.deriveBits({ name: 'ECDH', public: peer }, params.privateKey, 256),
-    );
-  } catch {
-    throw notAKey();
-  }
-  const { kind } = params;
+  const { kind, side, offer, join } = params;
+  if (!isPoint(offer) || !isPoint(join)) throw notAKey();
+  const shared = await sharedPoint(params.privateKey, side === 'offer' ? join : offer);
   const ikm = concatBytes(params.secret, shared);
-  const transcript = `|${base64UrlEncode(params.offer)}|${base64UrlEncode(params.join)}`;
-  const other: ChannelSide = params.side === 'offer' ? 'join' : 'offer';
-  const sendKey = await hkdfAesKey(ikm, utf8Encode(`${kind.key}|${params.side}${transcript}`));
+  const transcript = `|${base64UrlEncode(offer)}|${base64UrlEncode(join)}`;
+  const other: ChannelSide = side === 'offer' ? 'join' : 'offer';
+  const sendKey = await hkdfAesKey(ikm, utf8Encode(`${kind.key}|${side}${transcript}`));
   const receiveKey = await hkdfAesKey(ikm, utf8Encode(`${kind.key}|${other}${transcript}`));
 
   let sent = 0;
   let received = 0;
   // One open at a time, so two messages arriving together are each tried at the count they should have.
   let opening: Promise<unknown> = Promise.resolve();
+
+  async function openNext(type: string, sealed: unknown): Promise<Uint8Array | null> {
+    const bytes = decodeSealed(sealed);
+    if (!bytes) return null;
+    const plain = await openEnvelope(receiveKey, kind.message, { type, seq: received }, bytes);
+    if (plain) received += 1;
+    return plain;
+  }
+
   return Object.freeze({
     async seal(type: string, plaintext: Uint8Array): Promise<string> {
       const seq = sent;
@@ -141,21 +127,33 @@ export async function deriveChannel(params: {
       return base64UrlEncode(await sealEnvelope(sendKey, kind.message, { type, seq }, plaintext));
     },
     open(type: string, sealed: unknown): Promise<Uint8Array | null> {
-      const result = opening.then(async () => {
-        if (typeof sealed !== 'string' || sealed.length > MAX_SEALED) return null;
-        let bytes: Uint8Array;
-        try {
-          bytes = base64UrlDecode(sealed);
-        } catch {
-          return null;
-        }
-        const plain = await openEnvelope(receiveKey, kind.message, { type, seq: received }, bytes);
-        if (plain) received += 1;
-        return plain;
-      });
+      const result = opening.then(() => openNext(type, sealed));
       opening = result;
       return result;
     },
     derive: (label: string, length: number) => hkdf(ikm, utf8Encode(label + transcript), length),
   });
+}
+
+const isPoint = (point: Uint8Array) => point.length === POINT_BYTES && point[0] === 0x04;
+
+/** The ECDH shared x coordinate with the other side's point */
+async function sharedPoint(privateKey: CryptoKey, theirs: Uint8Array): Promise<Uint8Array> {
+  try {
+    const peer = await globalThis.crypto.subtle.importKey('raw', bufferSource(theirs), ECDH, false, []);
+    return new Uint8Array(
+      await globalThis.crypto.subtle.deriveBits({ name: 'ECDH', public: peer }, privateKey, 256),
+    );
+  } catch {
+    throw notAKey();
+  }
+}
+
+function decodeSealed(sealed: unknown): Uint8Array | null {
+  if (typeof sealed !== 'string' || sealed.length > MAX_SEALED) return null;
+  try {
+    return base64UrlDecode(sealed);
+  } catch {
+    return null;
+  }
 }

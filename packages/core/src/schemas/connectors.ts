@@ -14,7 +14,9 @@
  */
 import type { BodyOf } from '../query/types.js';
 import type { P2PNode } from '../node/types.js';
-import { base64UrlEncode } from '../utils/encoding.js';
+import { base64UrlEncode, utf8Encode } from '../utils/encoding.js';
+import { sha256 } from '../utils/hash.js';
+import { isObject } from '../utils/guards.js';
 import { define, person, text, when, words } from './fragments.js';
 import { INSTRUCT } from './automations.js';
 
@@ -148,13 +150,13 @@ export async function askToConnect(
   options: { readonly disconnect?: boolean } = {},
 ): Promise<ConnectAsk> {
   const secret = base64UrlEncode(globalThis.crypto.getRandomValues(new Uint8Array(32)));
-  const hash = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(secret));
+  const verifier = base64UrlEncode(await sha256(utf8Encode(secret)));
   // A little under the most a host takes, for clocks that differ.
   const expires = new Date(Date.now() + (CONNECT_REQUEST_SECONDS - 60) * 1000).toISOString();
   const record = await node.records.put(space, connect, {
     bot,
     kind,
-    verifier: base64UrlEncode(new Uint8Array(hash)),
+    verifier,
     expires,
     ...(options.disconnect ? { disconnect: true } : {}),
   });
@@ -164,25 +166,23 @@ export async function askToConnect(
 /** The host's page that connects a bot, for a request `askToConnect` wrote */
 export function connectPage(hostUrl: string, ask: ConnectAsk): string {
   const query = new URLSearchParams({ space: ask.space, request: ask.request, secret: ask.secret });
-  return `${hostUrl.replace(/\/+$/, '')}/host/bots/${encodeURIComponent(ask.bot)}/connect/${encodeURIComponent(ask.kind)}?${query}`;
+  return `${botAddress(hostUrl, ask, 'connect')}?${query}`;
 }
 
 /** Asks a bot's host to disconnect it, for a request `askToConnect` wrote with `disconnect` */
 export async function askToDisconnect(hostUrl: string, ask: ConnectAsk): Promise<void> {
-  const res = await fetch(
-    `${hostUrl.replace(/\/+$/, '')}/host/bots/${encodeURIComponent(ask.bot)}/disconnect/${encodeURIComponent(ask.kind)}`,
-    {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ space: ask.space, request: ask.request, secret: ask.secret }),
-    },
-  );
-  if (!res.ok) {
-    const answer: unknown = await res.json().catch(() => null);
-    throw new Error(
-      typeof answer === 'object' && answer !== null && 'error' in answer && typeof answer.error === 'string'
-        ? answer.error
-        : `The host answered ${res.status}`,
-    );
-  }
+  const res = await fetch(botAddress(hostUrl, ask, 'disconnect'), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ space: ask.space, request: ask.request, secret: ask.secret }),
+  });
+  if (res.ok) return;
+  const answer: unknown = await res.json().catch(() => null);
+  const error = isObject(answer) && typeof answer.error === 'string' ? answer.error : null;
+  throw new Error(error ?? `The host answered ${res.status}`);
+}
+
+function botAddress(hostUrl: string, ask: ConnectAsk, action: 'connect' | 'disconnect'): string {
+  const host = hostUrl.replace(/\/+$/, '');
+  return `${host}/host/bots/${encodeURIComponent(ask.bot)}/${action}/${encodeURIComponent(ask.kind)}`;
 }

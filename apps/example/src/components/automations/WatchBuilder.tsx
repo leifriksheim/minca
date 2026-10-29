@@ -1,6 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
-import { matches, type Filter, type NodeCollection, type NodeRecord, type SpaceSummary } from '@minca/core';
-import { useAccount, useNode } from '@minca/react';
+import { useMemo, useState } from 'react';
+import {
+  matches,
+  type Filter,
+  type NodeCollection,
+  type NodeRecord,
+  type P2PNode,
+  type SpaceSummary,
+} from '@minca/core';
+import { useAccount, useAsync, useNode } from '@minca/react';
 import { ME } from '@minca/core/schemas';
 import { Modal } from '@minca/app-shared/Modal';
 import { Loader } from '@minca/app-shared/Loader';
@@ -92,30 +99,14 @@ export function WatchBuilder({
 
   // What it would have caught lately, in this space.
   const looking = JSON.stringify([collection, clauses, within, who]);
-  const [found, setFound] = useState<{ for: string; matched: NodeRecord[]; looked: number } | null>(null);
-  const preview = found?.for === looking ? found : null;
-  useEffect(() => {
-    if (!collection) return;
-    let live = true;
+  const lookup = useAsync(async () => {
+    if (!collection) return null;
     const condition = allOf([whereOf(clauses, did), ...within.map(linkedTo)].filter((c) => c !== undefined));
-    // A query, so a condition on a computed field reads what this device works out.
-    void node.records
-      .query(space.id, { collection, sort: { '@createdAt': 'desc' }, limit: LOOK_BACK })
-      .then(async ({ records }) => {
-        const matched: NodeRecord[] = [];
-        for (const record of records) {
-          if (!record.verified || record.body === null) continue;
-          if (who === 'others' && record.createdBy === did) continue;
-          if (condition !== undefined && !matches(record, condition)) continue;
-          matched.push(record);
-        }
-        if (live) setFound({ for: looking, matched, looked: records.length });
-      })
-      .catch(() => live && setFound({ for: looking, matched: [], looked: 0 }));
-    return () => {
-      live = false;
-    };
-  }, [node, space.id, collection, clauses, within, who, did, looking]);
+    const caught = await recentlyCaught(node, space.id, collection, condition, who === 'others' ? did : null);
+    return { for: looking, ...caught };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `looking` names what it reads
+  }, [node, space.id, did, looking]);
+  const preview = lookup.status === 'done' && lookup.value?.for === looking ? lookup.value : null;
 
   const submit = () => {
     if (!chosen) return;
@@ -293,4 +284,27 @@ export function WatchBuilder({
       </div>
     </Modal>
   );
+}
+
+/** The newest records of a collection a watch would have told you about, leaving out your own when `notBy` names you */
+async function recentlyCaught(
+  node: P2PNode,
+  spaceId: string,
+  collection: string,
+  condition: Filter | undefined,
+  notBy: string | null,
+): Promise<{ matched: NodeRecord[]; looked: number }> {
+  // A query, so a condition on a computed field reads what this device works out.
+  const found = await node.records
+    .query(spaceId, { collection, sort: { '@createdAt': 'desc' }, limit: LOOK_BACK })
+    .catch(() => null);
+  if (!found) return { matched: [], looked: 0 };
+  const matched = found.records.filter(
+    (record) =>
+      record.verified &&
+      record.body !== null &&
+      record.createdBy !== notBy &&
+      (condition === undefined || matches(record, condition)),
+  );
+  return { matched, looked: found.records.length };
 }

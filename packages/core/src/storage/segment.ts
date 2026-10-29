@@ -8,15 +8,11 @@
  */
 import type { Version } from '../types.js';
 import { sha256 } from '../utils/hash.js';
-import { utf8Decode, utf8Encode } from '../utils/encoding.js';
+import { bytesToHex, utf8Decode, utf8Encode } from '../utils/encoding.js';
 import { isObject, isStoredVersion } from '../utils/guards.js';
 
 export const SEGMENT_SUFFIX = '.seg';
-/**
- * The segment format. 6 since who may do what is grants held by roles
- * (spec 03 §2): an older segment's access records are ones no peer reads
- * now, so a reader holds nothing for it instead.
- */
+/** The segment format; a reader skips segments of any other */
 const SEGMENT_VERSION = 8;
 
 /** Packs versions into a segment's bytes */
@@ -36,8 +32,7 @@ export function unpackSegment(bytes: Uint8Array): Version[] {
 }
 
 /** The first 8 bytes of a segment's SHA-256, as hex: what its name ends with */
-const hashOf = async (bytes: Uint8Array) =>
-  Array.from((await sha256(bytes)).subarray(0, 8), (b) => b.toString(16).padStart(2, '0')).join('');
+const hashOf = async (bytes: Uint8Array) => bytesToHex((await sha256(bytes)).subarray(0, 8));
 
 /** A segment's file name: `000042-<first 16 hex of its hash>.seg` */
 export async function segmentName(counter: number, bytes: Uint8Array): Promise<string> {

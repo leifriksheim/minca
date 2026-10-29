@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import type { CarrierSummary } from '@minca/core/node';
+import type { CarrierSummary, P2PNode } from '@minca/core/node';
 import {
   STAY_SIGNED_IN_CHOICES,
   passwordStrength,
@@ -11,7 +11,7 @@ import {
   type Connection,
   type StaySignedIn,
 } from '@minca/core/session';
-import { useAuth, useSession } from '@minca/react';
+import { useAsync, useAuth, useSession } from '@minca/react';
 import { Shape } from '@minca/app-shared/shapes';
 import { shapeFor, type ShapeKind } from '@minca/ui/shapes';
 import type { ShapeColour } from '@minca/ui/tokens';
@@ -89,48 +89,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
     });
   };
 
-  // Carriers are in the account registry, so every device lists them — not
-  // only the home that connected one, which is all `connections()` knows.
-  const [carriers, setCarriers] = useState<ReadonlyArray<CarrierSummary> | null>(null);
-  // A host is a carrier too, but it has its own section.
-  const [hostKeys, setHostKeys] = useState<ReadonlySet<string>>(new Set());
-  useEffect(() => {
-    void session.node.hosting.list().then(
-      (hosts) => setHostKeys(new Set(hosts.map((host) => host.host))),
-      () => {},
-    );
-  }, [session]);
-  // Which carriers are online now: each is a peer in its own carry space. One
-  // that never is may be keeping another account online instead.
-  const [online, setOnline] = useState<ReadonlySet<string>>(new Set());
-  useEffect(() => {
-    let current: ReadonlyArray<CarrierSummary> = [];
-    const look = async () => {
-      const seen = new Set<string>();
-      for (const carrier of current) {
-        const status = await session.node.spaces.status(carrier.space).catch(() => null);
-        // By key: a carrier set up on two devices at once has two carry spaces, and is online in one.
-        if (status?.peers.includes(carrier.did))
-          for (const same of current) if (same.did === carrier.did) seen.add(same.space);
-      }
-      setOnline(seen);
-    };
-    const load = () =>
-      void session.node.carriers.list().then(
-        (found) => {
-          current = found;
-          setCarriers(onePerKey(found));
-          void look();
-        },
-        () => {},
-      );
-    load();
-    return session.node.subscribe((event) => {
-      if (event.type === 'records' || event.type === 'account') load();
-      else if (event.type === 'status' && current.some((carrier) => carrier.space === event.space))
-        void look();
-    });
-  }, [session]);
+  const { carriers, hostKeys, online, reload: reloadCarriers } = useCarriers();
   const presence = (space: string | undefined) =>
     space && online.has(space) ? 'online now' : 'not online right now';
   const anyAway = (carriers ?? []).some((carrier) => !online.has(carrier.space));
@@ -150,7 +109,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
   const removeCarrier = (space: string) =>
     leave(space, 'it', async () => {
       await session.node.carriers.remove(space);
-      setCarriers(onePerKey(await session.node.carriers.list()));
+      await reloadCarriers();
     });
 
   const choose = async (choice: StaySignedIn) => {
@@ -949,6 +908,55 @@ function Strength({ password }: { password: string }) {
       </p>
     </div>
   );
+}
+
+/**
+ * The account's carriers, one per key, and which are online now. Carriers are
+ * in the account registry, so every device lists them, not only the home that
+ * connected one. A host is a carrier too, but it has its own section: `hostKeys`.
+ */
+function useCarriers() {
+  const { node } = useSession();
+  const [found, setFound] = useState<ReadonlyArray<CarrierSummary> | null>(null);
+  const [online, setOnline] = useState<ReadonlySet<string>>(new Set());
+  const hosts = useAsync(() => node.hosting.list(), [node]);
+  const hostKeys = new Set(hosts.status === 'done' ? hosts.value.map((host) => host.host) : []);
+
+  const reload = async () => setFound(await node.carriers.list());
+
+  useEffect(() => {
+    const load = () => void node.carriers.list().then(setFound, () => {});
+    load();
+    return node.subscribe((event) => {
+      if (event.type === 'records' || event.type === 'account') load();
+    });
+  }, [node]);
+
+  // Each carrier is a peer in its own carry space when it is online.
+  useEffect(() => {
+    if (!found) return;
+    const look = () => void onlineSpaces(node, found).then(setOnline);
+    look();
+    return node.subscribe((event) => {
+      if (event.type === 'status' && found.some((carrier) => carrier.space === event.space)) look();
+    });
+  }, [node, found]);
+
+  return { carriers: found && onePerKey(found), hostKeys, online, reload };
+}
+
+/** The carry spaces whose carrier is online, by key: one set up on two devices is online in one of its two */
+async function onlineSpaces(
+  node: P2PNode,
+  carriers: ReadonlyArray<CarrierSummary>,
+): Promise<ReadonlySet<string>> {
+  const seen = new Set<string>();
+  for (const carrier of carriers) {
+    const status = await node.spaces.status(carrier.space).catch(() => null);
+    if (status?.peers.includes(carrier.did))
+      for (const same of carriers) if (same.did === carrier.did) seen.add(same.space);
+  }
+  return seen;
 }
 
 /** Each carrier once, by key: one set up on two devices at once has two carry spaces (spec 06 §4.2) */

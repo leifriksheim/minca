@@ -25,36 +25,42 @@ export function useLive<T>(
 
   useEffect(() => {
     let stopped = false;
-    let running = false;
-    let again = false;
-    const run = async () => {
-      if (running) {
-        again = true;
-        return;
+    const reload = coalesced(async () => {
+      try {
+        const next = await load(node);
+        if (!stopped) setValue(next);
+      } catch (error) {
+        console.warn('useLive:', error);
       }
-      running = true;
-      do {
-        again = false;
-        try {
-          const next = await load(node);
-          if (!stopped) setValue(next);
-        } catch (error) {
-          console.warn('useLive:', error);
-        }
-      } while (again && !stopped);
-      running = false;
-    };
-    void run();
+    });
+    reload();
     const unsubscribe = node.subscribe((event) => {
-      if ('space' in event && event.space === spaceId) void run();
+      if ('space' in event && event.space === spaceId) reload();
     });
     return () => {
       stopped = true;
       unsubscribe();
     };
-    // The caller names what `load` depends on, as with useEffect.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the caller names what load reads
   }, [node, spaceId, ...deps]);
 
   return value;
+}
+
+/** Runs `work` now, or once more after the run in progress: calls in between fold into one. */
+function coalesced(work: () => Promise<void>): () => void {
+  let running = false;
+  let again = false;
+  const run = async () => {
+    running = true;
+    do {
+      again = false;
+      await work();
+    } while (again);
+    running = false;
+  };
+  return () => {
+    if (running) again = true;
+    else void run();
+  };
 }

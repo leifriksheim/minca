@@ -6,7 +6,7 @@ import {
   type NodeRecord,
   type SpaceSummary,
 } from '@minca/core';
-import { useAccount, useNode } from '@minca/react';
+import { useAccount, useAsync, useNode } from '@minca/react';
 import { useMay, useMayDefine } from '@minca/app-shared/may';
 import { Modal } from '@minca/app-shared/Modal';
 import { AddBotDialog, useSpaceBots } from '@minca/app-shared/CommunitySetup';
@@ -28,7 +28,6 @@ import {
   automationRun as runCollection,
   type Automation,
   type AutomationAction,
-  type AutomationMatch,
 } from '@minca/core/schemas';
 import {
   ACTIONS,
@@ -172,23 +171,13 @@ export function AutomationBuilder({
   const onlyTheirs = !!chosen && !changesOthers;
 
   // What it holds for right now: shown, never acted on — an automation acts on what changes after it's made.
-  const [found, setFound] = useState<{ for: typeof when; matches: ReadonlyArray<AutomationMatch> } | null>(
-    null,
-  );
-  const preview = found?.for === when ? found.matches : null;
-  useEffect(() => {
-    if (!when.collection) return;
-    let live = true;
-    const timer = setTimeout(() => {
-      void matching(node, space.id, compile(when), did, 100)
-        .then((matches) => live && setFound({ for: when, matches }))
-        .catch(() => live && setFound({ for: when, matches: [] }));
-    }, 250);
-    return () => {
-      live = false;
-      clearTimeout(timer);
-    };
-  }, [node, space.id, when, did]);
+  const settled = useSettled(when, 250);
+  const lookup = useAsync(async () => {
+    if (!settled.collection) return null;
+    const matches = await matching(node, space.id, compile(settled), did, 100).catch(() => []);
+    return { for: settled, matches };
+  }, [node, space.id, settled, did]);
+  const preview = lookup.status === 'done' && lookup.value?.for === when ? lookup.value.matches : null;
 
   const save = async () => {
     if (!chosen && !timed) return;
@@ -796,3 +785,13 @@ const tile = {
 } as const;
 
 const token = { ...styles.smallButton, height: 24, padding: '0 8px', fontSize: 12 } as const;
+
+/** The value once it has stopped changing for `ms` */
+function useSettled<T>(value: T, ms: number): T {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(value), ms);
+    return () => clearTimeout(timer);
+  }, [value, ms]);
+  return settled;
+}

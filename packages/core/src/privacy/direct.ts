@@ -61,22 +61,18 @@ export async function sealDirect(
     throw new Error(`A direct message can be for ${MAX_DIRECT_TO} people at most`);
   const bound = directBound(spaceId, from, recipients);
   const key = await generateSpaceKey();
-  const raw = base64UrlEncode(key.raw);
+  const sealedKey = { key: base64UrlEncode(key.raw) };
+
   const boxes = [];
   for (const reader of [...recipients, from]) {
     const publicKey = memberKeys.get(reader);
     if (!publicKey)
       throw new Error(`${reader} can't be written to here yet: they have no member key in this space`);
-    boxes.push({
-      to: reader,
-      sealed: await sealValueTo(publicKey, BOX_LABEL, { ...bound, reader }, { key: raw }),
-    });
+    const sealed = await sealValueTo(publicKey, BOX_LABEL, { ...bound, reader }, sealedKey);
+    boxes.push({ to: reader, sealed });
   }
-  return {
-    to: recipients,
-    data: await sealValue(key.seal, TEXT_LABEL, bound, { text: content.text }),
-    boxes,
-  };
+  const data = await sealValue(key.seal, TEXT_LABEL, bound, { text: content.text });
+  return { to: recipients, data, boxes };
 }
 
 /**
@@ -93,30 +89,36 @@ export async function openDirect(
   reader: string,
   memberKey: { readonly privateKey: CryptoKey; readonly publicKey: string },
 ): Promise<DirectContent | null> {
-  if (
-    !isRecord(body) ||
-    typeof body.data !== 'string' ||
-    !Array.isArray(body.to) ||
-    !Array.isArray(body.boxes)
-  )
-    return null;
-  const to = body.to.filter((did): did is string => typeof did === 'string');
-  if (to.length !== body.to.length) return null;
-  if (reader !== from && !to.includes(reader)) return null;
-  const box: unknown = body.boxes.find(
-    (candidate: unknown) => isRecord(candidate) && candidate.to === reader,
-  );
+  const direct = readDirectBody(body);
+  if (!direct || (reader !== from && !direct.to.includes(reader))) return null;
+  const box = direct.boxes.find((candidate) => isRecord(candidate) && candidate.to === reader);
   if (!isRecord(box) || typeof box.sealed !== 'string') return null;
-  const bound = directBound(spaceId, from, to);
+
+  const bound = directBound(spaceId, from, direct.to);
   const opened = await openValueFrom(memberKey, BOX_LABEL, { ...bound, reader }, box.sealed);
   if (!isRecord(opened) || typeof opened.key !== 'string') return null;
-  let key;
+  const key = await keyFrom(opened.key);
+  if (!key) return null;
+
+  const content = await openValue(key.seal, TEXT_LABEL, bound, direct.data);
+  if (!isRecord(content) || typeof content.text !== 'string') return null;
+  return { text: content.text };
+}
+
+/** A body's fields, unchecked boxes and all, or null when it isn't shaped like a direct message */
+function readDirectBody(body: unknown) {
+  if (!isRecord(body) || typeof body.data !== 'string') return null;
+  if (!Array.isArray(body.to) || !Array.isArray(body.boxes)) return null;
+  const to = body.to.filter((did): did is string => typeof did === 'string');
+  if (to.length !== body.to.length) return null;
+  const boxes: ReadonlyArray<unknown> = body.boxes;
+  return { to, data: body.data, boxes };
+}
+
+async function keyFrom(raw: string) {
   try {
-    key = await spaceKeyFromRaw(base64UrlDecode(opened.key));
+    return await spaceKeyFromRaw(base64UrlDecode(raw));
   } catch {
     return null;
   }
-  const content = await openValue(key.seal, TEXT_LABEL, bound, body.data);
-  if (!isRecord(content) || typeof content.text !== 'string') return null;
-  return { text: content.text };
 }

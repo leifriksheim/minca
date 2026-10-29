@@ -3,13 +3,10 @@
  * Moving an account's data from one set of stores to another — out of a
  * browser's own database into a data folder, say.
  *
- * There is no separate "merge". Every record is signed and named by its own
- * content, and a delete is a record too, so combining two copies of the same
- * account is the union of what each holds: nothing can conflict, nothing is
- * duplicated, and whatever either copy deleted stays deleted. Copying into a
- * store that already has some of it is therefore safe, and copying twice does
- * nothing the second time. Where both hold a version of the same record, the
- * ordering rule picks the same one sync would.
+ * There is no separate "merge". Every version is signed and named by its
+ * content, and a delete is a version too, so two copies of an account combine
+ * as the union of what each holds: nothing conflicts or duplicates, and
+ * copying twice does nothing the second time.
  */
 import type { StoreFactory } from './stores.js';
 import { createSpaceManager } from '../space/space-manager.js';
@@ -43,11 +40,73 @@ export interface CopyResult {
  * Copies every space an account holds, with its key and its records, into
  * another set of stores. Whatever the destination already has is kept.
  */
-/**
- * A data folder's segments for one space, over these stores (`folderStores`):
- * what this device holds of a space in a folder is only its own copy, and
- * the folder is what other devices read.
- */
+export async function copyAccountData(params: CopyAccountParams): Promise<CopyResult> {
+  const fromRegistryStore = await params.from('registry', { seal: true });
+  const toRegistryStore = await params.to('registry', { seal: true });
+  const provider = createP256Provider();
+  const fromRegistry = createSpaceManager(fromRegistryStore, provider);
+  const toRegistry = createSpaceManager(toRegistryStore, provider);
+
+  // A list leaves out an entry that won't open; a copy must not, or the person
+  // could forget the browser copy of a space that never reached the pod.
+  const listed = await fromRegistry.list();
+  if (listed.length !== (await fromRegistryStore.list('space:')).length)
+    throw new Error('A space on this device can no longer be read, so nothing was copied.');
+
+  // An invite carries what a registry needs: the space and its key. Signed by
+  // a key made for it, which vouches for nothing.
+  const made = await provider.generateKeyPair();
+  const copier = { did: await didOf(made.publicKey, provider), key: made.privateKey };
+  // The contacts space is copied, but the person doesn't count it as theirs.
+  const contacts = params.accountKey
+    ? (await deriveContactsSpace(params.accountKey, params.did)).space.id
+    : null;
+  let spacesAdded = 0;
+  for (const { space } of listed) {
+    if (await toRegistry.get(space.id)) continue;
+    await toRegistry.join(await fromRegistry.createInvite(space.id, copier));
+    if (space.id !== contacts) spacesAdded++;
+  }
+
+  const spaceIds = listed.map(({ space }) => space.id);
+  if (params.accountKey) spaceIds.push((await deriveAccountRegistry(params.accountKey, params.did)).space.id);
+  let recordsAdded = 0;
+  for (const [index, spaceId] of spaceIds.entries()) {
+    recordsAdded += await copySpace(params, spaceId);
+    params.onProgress?.(index + 1, spaceIds.length);
+  }
+
+  await Promise.all([fromRegistryStore.close(), toRegistryStore.close()]);
+  return { spacesAdded, recordsAdded, spaces: spaceIds.length };
+}
+
+/** Copies one space's versions; how many the target did not hold before */
+async function copySpace(params: CopyAccountParams, spaceId: string): Promise<number> {
+  const source = createStorageProvider(await params.from(`spaces/${spaceId}`));
+  const target = createStorageProvider(await params.to(`spaces/${spaceId}`));
+  const from = await folderOf(params.from, spaceId, source);
+  const into = await folderOf(params.to, spaceId, target);
+  try {
+    await from?.pull();
+    let added = 0;
+    // Every version goes through the ordering rule, as if synced from the source.
+    for (const id of new Set(await source.versionIds())) {
+      const held = await target.getVersion(id);
+      const version = await source.getVersion(id);
+      if (!version) continue;
+      await target.addVersion(version);
+      // Counted only if it stayed: one the target's own supersedes is dropped again.
+      if (!held && (await target.getVersion(id))) added++;
+    }
+    await into?.flush();
+    return added;
+  } finally {
+    await Promise.all([from?.close(), into?.close()]);
+    await Promise.all([source.close(), target.close()]);
+  }
+}
+
+/** A data folder's segments for one space, when the stores have a folder: what other devices read */
 async function folderOf(stores: StoreFactory, spaceId: string, storage: StorageProvider) {
   if (!stores.folder) return null;
   return createMirror({
@@ -61,66 +120,4 @@ async function folderOf(stores: StoreFactory, spaceId: string, storage: StorageP
       return 'stored';
     },
   });
-}
-
-export async function copyAccountData(params: CopyAccountParams): Promise<CopyResult> {
-  const fromRegistryStore = await params.from('registry', { seal: true });
-  const toRegistryStore = await params.to('registry', { seal: true });
-  const provider = createP256Provider();
-  const fromRegistry = createSpaceManager(fromRegistryStore, provider);
-  const toRegistry = createSpaceManager(toRegistryStore, provider);
-  const made = await provider.generateKeyPair();
-  const copier = { did: await didOf(made.publicKey, provider), key: made.privateKey };
-
-  // The contacts space is copied like any other, but it is not one the person counts as theirs.
-  const contacts = params.accountKey
-    ? (await deriveContactsSpace(params.accountKey, params.did)).space.id
-    : null;
-  let spacesAdded = 0;
-  const spaceIds: string[] = [];
-  const listed = await fromRegistry.list();
-  // A list leaves out an entry that won't open; a copy must not, or the person
-  // could forget the browser copy of a space that never reached the pod.
-  if (listed.length !== (await fromRegistryStore.list('space:')).length)
-    throw new Error('A space on this device can no longer be read, so nothing was copied.');
-  for (const { space } of listed) {
-    spaceIds.push(space.id);
-    if (await toRegistry.get(space.id)) continue;
-    // An invite carries exactly what a registry needs: the space, and its key. Signed by a key
-    // made for it, which vouches for nothing: no relays or nodes ride along.
-    await toRegistry.join(await fromRegistry.createInvite(space.id, copier));
-    if (space.id !== contacts) spacesAdded++;
-  }
-  if (params.accountKey) spaceIds.push((await deriveAccountRegistry(params.accountKey, params.did)).space.id);
-
-  let recordsAdded = 0;
-  for (const [index, spaceId] of spaceIds.entries()) {
-    const source = createStorageProvider(await params.from(`spaces/${spaceId}`));
-    const target = createStorageProvider(await params.to(`spaces/${spaceId}`));
-    const from = await folderOf(params.from, spaceId, source);
-    const into = await folderOf(params.to, spaceId, target);
-    try {
-      await from?.pull();
-      // Every version the source keeps — current, first, retained — goes
-      // through the ordering rule on arrival, so the target ends up with what
-      // it would have reached by syncing with the source.
-      const ids = new Set(await source.versionIds());
-      for (const id of ids) {
-        const held = await target.getVersion(id);
-        const version = await source.getVersion(id);
-        if (!version) continue;
-        await target.addVersion(version);
-        // Counted only if it stayed: a version the target's own one supersedes is dropped again.
-        if (!held && (await target.getVersion(id))) recordsAdded++;
-      }
-      await into?.flush();
-    } finally {
-      await Promise.all([from?.close(), into?.close()]);
-      await Promise.all([source.close(), target.close()]);
-    }
-    params.onProgress?.(index + 1, spaceIds.length);
-  }
-
-  await Promise.all([fromRegistryStore.close(), toRegistryStore.close()]);
-  return { spacesAdded, recordsAdded, spaces: spaceIds.length };
 }

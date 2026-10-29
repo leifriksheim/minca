@@ -3,6 +3,8 @@ import type {
   ContactRequest,
   ContactView,
   InboxView,
+  NodeEvent,
+  P2PNode,
   KnockView,
   SentKnockView,
   SpaceSummary,
@@ -19,6 +21,7 @@ import {
   useContacts,
   useStanding,
 } from '../contacts';
+import { useWatched } from '../use-watched';
 import { nameOf, peopleFrom } from '../derive/people';
 import { ago } from '@minca/ui/time';
 import { Avatar } from '@minca/app-shared/Avatar';
@@ -30,6 +33,15 @@ import { ask } from '@minca/app-shared/Ask';
 
 /** How often to look in the inbox's mailboxes: knocks wait on relays, which tell nobody */
 const KNOCK_POLL_MS = 30_000;
+
+async function readMailbox(node: P2PNode) {
+  const [inbox, knocks, sent] = await Promise.all([
+    node.inbox.get().catch(() => null),
+    node.inbox.knocks().catch((): KnockView[] => []),
+    node.inbox.sent().catch((): SentKnockView[] => []),
+  ]);
+  return { inbox, knocks, sent };
+}
 
 /** Checks inbox codes as they are typed */
 const provider = createP256Provider();
@@ -47,10 +59,6 @@ export function ContactsView({
 }) {
   const node = useNode();
   const contacts = useContacts();
-  const [requests, setRequests] = useState<ReadonlyArray<ContactRequest>>([]);
-  const [knocks, setKnocks] = useState<ReadonlyArray<KnockView>>([]);
-  const [sent, setSent] = useState<ReadonlyArray<SentKnockView>>([]);
-  const [inbox, setInbox] = useState<InboxView | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const { run, error } = useAction();
   const [tick, setTick] = useState(0);
@@ -68,53 +76,27 @@ export function ContactsView({
   // Requests are records in the spaces you share, so a change in any of them may bring one.
   const shared = spaces.filter((space) => !space.joining);
   const sharedIds = shared.map((space) => space.id).join(',');
-  useEffect(() => {
-    let stopped = false;
-    void Promise.all(
-      shared.map((space) => node.contacts.requests(space.id).catch((): ContactRequest[] => [])),
-    ).then((found) => !stopped && setRequests(found.flat()));
-    return () => {
-      stopped = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [node, sharedIds, tick]);
-
-  useEffect(() => {
-    const ids = new Set(sharedIds.split(','));
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const unsubscribe = node.subscribe((event) => {
-      if ((event.type === 'records' && ids.has(event.space)) || event.type === 'spaces') {
-        clearTimeout(timer);
-        timer = setTimeout(reload, 400);
-      }
-    });
-    return () => {
-      clearTimeout(timer);
-      unsubscribe();
-    };
-  }, [node, sharedIds, reload]);
-
+  const watch = {
+    when: (event: NodeEvent) =>
+      (event.type === 'records' && sharedIds.split(',').includes(event.space)) || event.type === 'spaces',
+    settle: 400,
+  };
+  const requests =
+    useWatched(
+      async (node) => {
+        const found = await Promise.all(
+          shared.map((space) => node.contacts.requests(space.id).catch((): ContactRequest[] => [])),
+        );
+        return found.flat();
+      },
+      [sharedIds, tick],
+      watch,
+    ) ?? [];
   // The inbox, and the knocks in it. Reading knocks also turns knocks of yours someone joined into contacts.
-  useEffect(() => {
-    let stopped = false;
-    const load = async () => {
-      const [open, waiting, left] = await Promise.all([
-        node.inbox.get().catch(() => null),
-        node.inbox.knocks().catch(() => []),
-        node.inbox.sent().catch(() => []),
-      ]);
-      if (stopped) return;
-      setInbox(open);
-      setKnocks(waiting);
-      setSent(left);
-    };
-    void load();
-    const timer = setInterval(() => void load(), KNOCK_POLL_MS);
-    return () => {
-      stopped = true;
-      clearInterval(timer);
-    };
-  }, [node, tick]);
+  const mailbox = useWatched(readMailbox, [sharedIds, tick], { ...watch, every: KNOCK_POLL_MS });
+  const inbox = mailbox?.inbox ?? null;
+  const knocks = mailbox?.knocks ?? [];
+  const sent = mailbox?.sent ?? [];
 
   // Where a request of yours may be waiting, to take back with it.
   const writable = shared.filter((space) => space.writable).map((space) => space.id);

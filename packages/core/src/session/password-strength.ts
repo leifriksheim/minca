@@ -72,6 +72,12 @@ const LEET: Readonly<Record<string, string>> = {
   '!': 'i',
 };
 
+const HINTS: Readonly<Record<PasswordStrength, string>> = {
+  weak: 'Weak: anyone who gets a copy of your account could guess it. Longer is better.',
+  fair: 'Fair. A few more characters, or another word, make it much harder to guess.',
+  strong: 'Strong.',
+};
+
 /**
  * A guess at how hard `password` is to guess, and a line saying so. It reads
  * the password as the vault does, NFKC-normalised (01 §11.3), so a fullwidth
@@ -79,26 +85,32 @@ const LEET: Readonly<Record<string, string>> = {
  */
 export function passwordStrength(password: string): PasswordCheck {
   const bits = Math.round(estimateBits(password.normalize('NFKC')));
-  if (!password) return { strength: 'weak', bits, hint: '' };
-  if (bits < FAIR_BITS) {
-    return {
-      strength: 'weak',
-      bits,
-      hint: 'Weak: anyone who gets a copy of your account could guess it. Longer is better.',
-    };
-  }
-  if (bits < STRONG_BITS) {
-    return {
-      strength: 'fair',
-      bits,
-      hint: 'Fair. A few more characters, or another word, make it much harder to guess.',
-    };
-  }
-  return { strength: 'strong', bits, hint: 'Strong.' };
+  const strength = bits < FAIR_BITS ? 'weak' : bits < STRONG_BITS ? 'fair' : 'strong';
+  return { strength, bits, hint: password ? HINTS[strength] : '' };
 }
 
+/** Each kind of character a password uses widens what a guesser must try */
+const POOLS: ReadonlyArray<readonly [(c: string) => boolean, number]> = [
+  [(c) => c >= 'a' && c <= 'z', 26],
+  [(c) => c >= 'A' && c <= 'Z', 26],
+  [(c) => c >= '0' && c <= '9', 10],
+  [(c) => c < '\u0080' && !/[a-zA-Z0-9]/.test(c), 33],
+  [(c) => c >= '\u0080', 100],
+];
+
 function estimateBits(password: string): number {
-  // The same chunk over and over (abcabc, password1password1) is the chunk and a count.
+  const chars = [...password];
+  const repeated = repeatedBits(password);
+  if (repeated !== null) return repeated;
+
+  const pool = POOLS.filter(([uses]) => chars.some(uses)).reduce((sum, [, size]) => sum + size, 0);
+  if (pool === 0) return 0;
+  const cap = COMMON.has(commonCore(password)) ? FAIR_BITS - 1 : Infinity;
+  return Math.min(sequenceBits(chars, Math.log2(pool)), cap);
+}
+
+/** The same chunk over and over (abcabc) is the chunk and a count; null when it isn't one */
+function repeatedBits(password: string): number | null {
   const lower = password.toLowerCase();
   const chars = [...password];
   for (let size = 1; size <= chars.length / 2; size++) {
@@ -109,21 +121,17 @@ function estimateBits(password: string): number {
     // Saying a weak password twice keeps it weak.
     return Math.min(once + Math.log2(chars.length / size), once < FAIR_BITS ? FAIR_BITS - 1 : Infinity);
   }
+  return null;
+}
 
-  // A common word, perhaps in leetspeak, with digits or symbols around it is guessed early.
-  const core = [...lower.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, '')].map((c) => LEET[c] ?? c).join('');
-  const cap = COMMON.has(core) ? FAIR_BITS - 1 : Infinity;
+/** The word under digits, symbols and leetspeak (p@ssw0rd1! is password) */
+function commonCore(password: string): string {
+  const letters = password.toLowerCase().replace(/^[^\p{L}]+|[^\p{L}]+$/gu, '');
+  return [...letters].map((c) => LEET[c] ?? c).join('');
+}
 
-  let pool = 0;
-  if (chars.some((c) => c >= 'a' && c <= 'z')) pool += 26;
-  if (chars.some((c) => c >= 'A' && c <= 'Z')) pool += 26;
-  if (chars.some((c) => c >= '0' && c <= '9')) pool += 10;
-  if (chars.some((c) => c < '\u0080' && !/[a-zA-Z0-9]/.test(c))) pool += 33;
-  if (chars.some((c) => c >= '\u0080')) pool += 100;
-  if (pool === 0) return 0;
-
-  // A character that repeats the last one, or carries on a run (abc, 321), adds next to nothing.
-  const each = Math.log2(pool);
+/** A character that repeats the last one, or carries on a run (abc, 321), adds next to nothing */
+function sequenceBits(chars: ReadonlyArray<string>, each: number): number {
   let bits = 0;
   let before: number | null = null;
   let step: number | null = null;
@@ -134,5 +142,5 @@ function estimateBits(password: string): number {
     step = run ? diff : null;
     before = here;
   }
-  return Math.min(bits, cap);
+  return bits;
 }

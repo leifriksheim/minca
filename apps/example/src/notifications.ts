@@ -1,5 +1,5 @@
 /** Notifications: each app's `notify` offered through the account home, then matched and shown by this app while it is open. */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAccount, useConnection, useNode } from '@minca/react';
 import {
   MAX_PROPOSALS,
@@ -7,6 +7,7 @@ import {
   watchNotifications,
   type AutomationProposal,
   type OwnAutomationView,
+  type P2PNode,
 } from '@minca/core';
 import { accountHomeLink } from '@minca/core/session';
 import { notifyOn, type AppAutomation } from '@minca/core/schemas';
@@ -15,6 +16,7 @@ import { isForMe, madeNotify } from './components/apps/entries';
 import { launcherApp, sortLauncher, type LauncherApp } from './components/apps/launcher';
 import { message } from '@minca/app-shared/action';
 import { addAlert } from './alerts';
+import { useWatched } from './use-watched';
 
 /** Offered whatever apps a space has */
 const CONTACTS: AutomationProposal = notifyOn('Someone asks to be your contact', 'std.contact-request');
@@ -30,25 +32,15 @@ const keptFor = (own: OwnAutomationView) => lookingFor({ when: { query: ownQuery
 
 /** This app's automations, as the account keeps them */
 export function useOwnAutomations(): ReadonlyArray<OwnAutomationView> {
-  const node = useNode();
-  const [mine, setMine] = useState<ReadonlyArray<OwnAutomationView>>([]);
-  useEffect(() => {
-    let live = true;
-    const load = () =>
-      void node.automations
-        .list()
-        .then((all) => live && setMine(all.filter((own) => own.app?.origin === globalThis.location.origin)))
-        .catch(() => {});
-    load();
-    const stop = node.subscribe((event) => {
-      if (event.type === 'records' || event.type === 'account') load();
-    });
-    return () => {
-      live = false;
-      stop();
-    };
-  }, [node]);
-  return mine;
+  const mine = useWatched(
+    async (node) => {
+      const all = await node.automations.list();
+      return all.filter((own) => own.app?.origin === globalThis.location.origin);
+    },
+    [],
+    { when: (event) => event.type === 'records' || event.type === 'account' },
+  );
+  return mine ?? [];
 }
 
 /** One proposal, as the same thing asked for again would be */
@@ -131,38 +123,24 @@ export function useAsk() {
 
 /** Everything this app can notify about, in every space, worked out before the click that opens the home's popup */
 function useEverything(): ReadonlyArray<AutomationProposal> {
-  const node = useNode();
-  const [offers, setOffers] = useState<ReadonlyArray<AutomationProposal>>(() => gather([]));
-  useEffect(() => {
-    let live = true;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const load = async () => {
-      const made: LauncherApp[] = [];
-      for (const space of await node.spaces.list()) {
-        const [records, collections, access] = await Promise.all([
-          node.records.list<LauncherApp>(space.id, { collection: launcherApp.name }),
-          node.collections.list(space.id),
-          node.spaces.access(space.id),
-        ]).catch(() => [[], [], null] as const);
-        for (const record of sortLauncher(records, collections, access).placed)
-          if (record.body) made.push(record.body);
-      }
-      if (live) setOffers(gather(made));
-    };
-    void load();
-    // Apps come and go with records; one look a little after a burst of them is enough.
-    const stop = node.subscribe((event) => {
-      if (event.type !== 'records') return;
-      clearTimeout(timer);
-      timer = setTimeout(() => void load(), 1500);
-    });
-    return () => {
-      live = false;
-      clearTimeout(timer);
-      stop();
-    };
-  }, [node]);
-  return offers;
+  // Apps come and go with records; one look a little after a burst of them is enough.
+  const made = useWatched(madeApps, [], { when: (event) => event.type === 'records', settle: 1500 });
+  return useMemo(() => gather(made ?? []), [made]);
+}
+
+/** The apps made in every space, as each space's launcher places them */
+async function madeApps(node: P2PNode): Promise<ReadonlyArray<LauncherApp>> {
+  const made: LauncherApp[] = [];
+  for (const space of await node.spaces.list()) {
+    const [records, collections, access] = await Promise.all([
+      node.records.list<LauncherApp>(space.id, { collection: launcherApp.name }),
+      node.collections.list(space.id),
+      node.spaces.access(space.id),
+    ]).catch(() => [[], [], null] as const);
+    for (const record of sortLauncher(records, collections, access).placed)
+      if (record.body) made.push(record.body);
+  }
+  return made;
 }
 
 /** Contact requests, the ready-made apps and those in the spaces, once each, as many as one request may carry */
@@ -176,7 +154,7 @@ function gather(made: ReadonlyArray<LauncherApp>): ReadonlyArray<AutomationPropo
 export function useAppNotifications() {
   const mine = useOwnAutomations();
   const everything = useEverything();
-  const { permission, error, asking, kept, ask, allow, manage } = useAsk();
+  const { kept, ask, ...prompt } = useAsk();
   // What is on everywhere already is not asked for again.
   const turnOn = useCallback(
     () =>
@@ -189,21 +167,13 @@ export function useAppNotifications() {
       ),
     [ask, everything, kept, mine],
   );
-  return {
-    on: mine.filter((own) => !own.paused).length,
-    permission,
-    error,
-    asking,
-    turnOn,
-    allow,
-    manage,
-  };
+  return { ...prompt, on: mine.filter((own) => !own.paused).length, turnOn };
 }
 
 /** One app's notifications in one space (all, or only what names you): whether each is on, and turning one on */
 export function useNotifyFor(spaceId: string, offers: ReadonlyArray<AppAutomation>) {
   const mine = useOwnAutomations();
-  const { permission, error, asking, kept, ask, allow, manage } = useAsk();
+  const { kept, ask, ...prompt } = useAsk();
   const covers = (offer: AppAutomation) =>
     kept.has(proposalKey({ ...offer, spaces: [spaceId] })) ||
     mine.some((own) => {
@@ -216,20 +186,8 @@ export function useNotifyFor(spaceId: string, offers: ReadonlyArray<AppAutomatio
   const forMe = offers.filter(isForMe);
   const turnOn = (which: ReadonlyArray<AppAutomation>) =>
     void ask(which.filter((offer) => !covers(offer)).map((offer) => ({ ...offer, spaces: [spaceId] })));
-  return {
-    everything,
-    forMe,
-    on: {
-      everything: everything.length > 0 && everything.every(covers),
-      forMe: forMe.length > 0 && forMe.every(covers),
-    },
-    permission,
-    error,
-    asking,
-    turnOn,
-    allow,
-    manage,
-  };
+  const allOn = (offers: ReadonlyArray<AppAutomation>) => offers.length > 0 && offers.every(covers);
+  return { ...prompt, everything, forMe, on: { everything: allOn(everything), forMe: allOn(forMe) }, turnOn };
 }
 
 /** How long to wait for every automation a record matches, before showing one notification for it */

@@ -1,7 +1,7 @@
 /** Contacts (`node.contacts`) and the inbox (`node.inbox`), for the screens that show them. */
-import { useEffect, useState } from 'react';
 import type { ContactView, P2PNode } from '@minca/core';
-import { useLive, useNode } from '@minca/react';
+import { useAsync, useLive, useNode } from '@minca/react';
+import { useWatched } from './use-watched';
 
 /** What a new space for two means when no carrier holds it yet (`spaces.carried`) */
 export const NOT_CARRIED =
@@ -29,30 +29,11 @@ export function clearInboxFromUrl(): void {
  */
 export function useContacts(): ReadonlyArray<ContactView> | undefined {
   const node = useNode();
-  const [contacts, setContacts] = useState<ReadonlyArray<ContactView>>();
-
-  useEffect(() => {
-    let stopped = false;
-    let space: string | null = null;
-    const load = () =>
-      void node.contacts
-        .list()
-        .then((list) => !stopped && setContacts(list))
-        .catch(() => !stopped && setContacts([]));
-    void node.contacts.space().then((id) => {
-      space = id;
-      load();
-    });
-    const unsubscribe = node.subscribe((event) => {
-      if (event.type === 'records' && event.space === space) load();
-    });
-    return () => {
-      stopped = true;
-      unsubscribe();
-    };
-  }, [node]);
-
-  return contacts;
+  const space = useAsync(() => node.contacts.space(), [node]);
+  const spaceId = space.status === 'done' ? space.value : undefined;
+  return useWatched((node) => node.contacts.list().catch(() => []), [spaceId], {
+    when: (event) => event.type === 'records' && event.space === spaceId,
+  });
 }
 
 /** Where a contact stands with your space for two (`gone`: you left it); undefined while loading */

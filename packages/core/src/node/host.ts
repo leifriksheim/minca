@@ -3,28 +3,23 @@
  * A carrier that never sleeps, for many accounts: what a hosting service runs.
  *
  * It is the extension's carrier (`node/carrier.ts`) with more than one carry
- * space. Each **subscription** — someone paying for hosting — is a key the
- * account made, a date it is paid until, and once a device hands it over,
- * the account's carry space. The spaces every carry space's passes name are
- * held once, whoever asks for them, so a space shared by two paying members
- * is one space here, online for all its members.
+ * space. Each **subscription** (someone paying for hosting) is a key the
+ * account made, a date it is paid until, and once a device hands it over, the
+ * account's carry space. The spaces the carry spaces' passes name are held
+ * once, whoever asks, so a space shared by two paying members is one space here.
  *
- * Blind, like any carrier: it holds no seed, no space key and no note, signs
- * nothing, and takes in only what passes the same gates as at any member's
- * node. What it learns: which spaces exist, their size, when they change, and
- * — through the carry spaces — which account asked for which.
+ * Blind, like any carrier: no seed, no space key, no note; it signs nothing and
+ * takes in only what passes the same gates as any member's node. It learns
+ * which spaces exist, their size, when they change, and which account asked
+ * for which.
  *
- * A space can also pay for itself: a subscription named `space:<id>` carries
- * that one space, from its pass alone, handed over by any member's device.
- * Anyone may pay into it; what it carries is still only ciphertext.
+ * A space can pay for itself: a subscription named `space:<id>` carries that
+ * one space from its pass, handed over by any member's device.
  *
- * Subscriptions live in the host's own store, next to the carried spaces. The
- * payment side (`packages/cli/src/host/…`) only ever moves a subscription's date.
- *
- * With `limits`, an account's subscription needs no payment: it is on the
- * free plan, and paying buys room. A space several accounts write in is free
- * up to a line — how many accounts wrote there lately, and its size — and past
- * it, after a grace period, only its own subscription carries it (spec 08 §1.1).
+ * With `limits`, an account's subscription needs no payment: it is on the free
+ * plan, and paying buys room. A space several accounts write in is free up to
+ * a line, and past it, after a grace period, only its own subscription carries
+ * it (spec 08 §1.1).
  */
 import type { CryptoProvider, StorageAdapter, Version } from '../types.js';
 import type { HostLimits, OverSpace, SpaceUsage } from '../session/hosting.js';
@@ -50,10 +45,7 @@ export const spaceSubscription = (spaceId: string) => `${SPACE_SUBSCRIPTION_PREF
 
 /** Someone paying for hosting, as the host knows them */
 export interface Subscription {
-  /**
-   * The subscription key's DID, what every call about it is signed with; or
-   * for a space paying for itself, `space:<space id>`
-   */
+  /** The subscription key's DID, which signs every call about it; or `space:<space id>` */
   readonly id: string;
   /** Unix seconds. Past it, the grace period; past that, it is dropped. */
   readonly paidUntil: number;
@@ -61,27 +53,28 @@ export interface Subscription {
   readonly since: number;
   /** The account and its carry space, once a device has handed them over */
   readonly carry?: { readonly account: string; readonly space: string; readonly invite: string };
-  /** For a space's own subscription: the pass a member's device handed over, once one has */
+  /** For a space's own subscription: the pass a member's device handed over */
   readonly pass?: unknown;
-  /** The payment provider's reference for whoever pays — nothing else about them is kept */
+  /** The payment provider's reference for whoever pays; nothing else about them is kept */
   readonly customer?: string;
   /** A wallet payment asked for and not yet seen (`packages/cli/src/wallet.ts`) */
   readonly invoice?: Invoice;
-  /** When one of its devices last made a signed call, unix seconds, to the day: a free one idle long enough is dropped */
+  /** When one of its devices last made a signed call, unix seconds, to the day */
   readonly seen?: number;
 }
 
 /**
- * An account over its room at a host with limits, kept by the account rather
- * than a subscription key, so a new key starts nothing anew: since when, since
- * when it fits again (the notice goes after a whole window of it), and whether
- * its carry space alone was over, so it is carried for no more.
+ * An account over its room at a host with limits, kept by account so a new
+ * subscription key starts nothing anew.
  */
 interface Room {
+  /** Since when it was over */
   readonly full: number;
+  /** Since when it fits again; the notice goes after a whole window of it */
   readonly fits?: number;
+  /** Its carry space alone was over, so it is carried no more */
   readonly refused?: true;
-  /** The spaces held back for want of its room, each since when: past `keepDays` the host's copy goes */
+  /** The spaces held back for want of room, each since when: past `keepDays` the host's copy goes */
   readonly held?: Readonly<Record<string, number>>;
 }
 
@@ -90,67 +83,56 @@ export interface Invoice {
   readonly plan: string;
   /** In the token's smallest unit, as a decimal string */
   readonly amount: string;
-  /** When it was asked for, unix seconds — a transfer made before it pays nothing */
+  /** When it was asked for, unix seconds: a transfer made before it pays nothing */
   readonly at: number;
 }
 
 export type SubscriptionState = 'active' | 'grace' | 'lapsed';
 
-/** Which limits a space is over */
 type Reason = OverSpace['reasons'][number];
 
-/**
- * Where a space stands against the free line. `since` is when it went over;
- * `from` is when its grace began; `calm` that it was under the line when last
- * looked at; `under` is since when it has been well under; `stopped` is when
- * members' subscriptions stopped carrying it.
- */
+/** Where a space stands against the free line */
 interface Line {
+  /** When it went over */
   readonly since: number;
+  /** When its grace began */
   readonly from: number;
   readonly reasons: ReadonlyArray<Reason>;
+  /** It was under the line when last looked at */
   readonly calm?: true;
   /** When it was last found over the line */
   readonly lastOver?: number;
+  /** Since when it has been well under */
   readonly under?: number;
+  /** When members' subscriptions stopped carrying it */
   readonly stopped?: number;
 }
+
+type Changes = { over: string[]; stopped: string[]; under: string[] };
+
 export interface HostConfig {
-  /** The host's own key — who it is to peers */
+  /** The host's own key: who it is to peers */
   readonly key: CryptoKeyPair;
   readonly stores: StoreFactory;
   readonly network?: NodeNetworkConfig;
   readonly provider?: CryptoProvider;
   /** Days a lapsed subscription is kept, carried, before it is dropped. Default 30. */
   readonly graceDays?: number;
-  /** Every subscription counts as paid — for someone hosting only themselves, and for trying it out */
+  /** Every subscription counts as paid: for someone hosting only themselves, and for trying it out */
   readonly free?: boolean;
-  /**
-   * The accounts this host carries for, and no others — someone hosting only
-   * themselves and their family. Absent: any account whose subscription is paid.
-   */
+  /** The accounts this host carries for, and no others. Absent: any account whose subscription is paid. */
   readonly allow?: ReadonlyArray<string>;
   /** Unix seconds now; for tests */
   readonly now?: () => number;
   /**
-   * The host's bucket (`storage/blob/s3.ts`): every carried space is kept
-   * there too, in the mirror layout, and so is the list of subscriptions. The
-   * host's disk is then only a cache — lose it, and everything comes back.
-   * A space nobody pays for any more is deleted from it.
+   * The host's bucket (`storage/blob/s3.ts`): every carried space and the
+   * subscriptions are kept there too, so the host's disk is only a cache.
    */
   readonly mirror?: BlobStore;
   readonly watchIntervalMs?: number;
-  /**
-   * Whether the subscription an account's carry space belongs to may take no
-   * more spaces: what it carries stays, and a space its account adds later
-   * waits until this says no. The host's storage limit, its own policy.
-   */
+  /** Whether a carry space's subscription may take no more spaces: the host's storage limit */
   readonly full?: (carrySpace: string) => boolean;
-  /**
-   * Free hosting within limits: an account's subscription needs no payment,
-   * and a community past the free line pays for itself (spec 08 §1.1).
-   * Ignored with `free`.
-   */
+  /** Free hosting within limits (spec 08 §1.1). Ignored with `free`. */
   readonly limits?: HostLimits;
   /** How many bytes a carried space takes: what the free line's `bytes` reads */
   readonly measure?: (spaceId: string) => Promise<number>;
@@ -162,8 +144,6 @@ export interface HostConfig {
 
 /** A host, as `createHostNode` starts it */
 export type HostNode = Awaited<ReturnType<typeof createHostNode>>;
-
-const SUBSCRIPTION_PREFIX = 'subscription:';
 
 /** The space a subscription is a space's own for, or null for an account's */
 const spaceIdOf = (id: string): string | null =>
@@ -177,21 +157,14 @@ export class NotAllowedError extends Error {
     super('This host only carries spaces for the accounts its owner named');
   }
 }
-/** Where the subscriptions are kept in the bucket */
-const BUCKET_PREFIX = 'host/subscriptions/';
-/** Where each space's standing against the free line is kept, there and in the bucket */
-const LINE_PREFIX = 'line:';
-const LINE_BUCKET_PREFIX = 'host/lines/';
+
 const DAY = 24 * 3600;
 /** How far under every limit a space must stay, for its window, to be free again */
 const UNDER = 0.8;
 /** How long after the host first sees a space what arrives may be its history, rather than people writing now */
 const CATCH_UP_SECONDS = 600;
-/** Where the host keeps which spaces it once stopped carrying for members, there and in the bucket */
-const STRUCK_PREFIX = 'struck:';
-/** Days of notice a space gets when it goes over again after its grace was spent, before it is stopped */
+/** Days of notice a space gets when it goes over again after its grace was spent */
 const NOTICE_DAYS = 7;
-const STRUCK_BUCKET_PREFIX = 'host/struck/';
 
 /** Starts a host */
 export async function createHostNode(config: HostConfig) {
@@ -200,35 +173,36 @@ export async function createHostNode(config: HostConfig) {
   const graceSeconds = (config.graceDays ?? 30) * DAY;
   const allowed = (account: string) => !config.allow || config.allow.includes(account);
   const store: StorageAdapter = await config.stores('host');
-
   const events = createListeners<CarrierEvent>('host');
+  const limits = config.free ? null : (config.limits ?? null);
+  const lineGrace = (limits?.graceDays ?? 0) * DAY;
+  const keepSeconds = (limits?.keepDays ?? 0) * DAY;
+
+  // Each kind of record is kept in the host's store and in the bucket, which a new disk starts from.
+  const kept = {
+    subscriptions: shelf(store, config.mirror, 'subscription:', {
+      ...bucketNames('host/subscriptions/', { encoded: true, suffix: '.json' }),
+      nameOf: (_key, bytes) => subscriptionIdIn(bytes),
+    }),
+    lines: shelf(store, config.mirror, 'line:', bucketNames('host/lines/', { suffix: '.json' })),
+    rooms: shelf(store, config.mirror, 'room:', bucketNames('host/rooms/', { encoded: true })),
+    struck: shelf(store, config.mirror, 'struck:', bucketNames('host/struck/')),
+  };
 
   const read = async (id: string): Promise<Subscription | null> => {
-    const bytes = await store.get(`${SUBSCRIPTION_PREFIX}${id}`);
-    // Only `write` below puts anything here; a check would turn a damaged record into a missing one.
+    const text = await kept.subscriptions.get(id);
+    // Only `write` puts anything here; a check would turn a damaged record into a missing one.
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- this host's own writes
-    return bytes ? (JSON.parse(utf8Decode(bytes)) as Subscription) : null;
+    return text ? (JSON.parse(text) as Subscription) : null;
   };
-  const bucketKey = (id: string) => `${BUCKET_PREFIX}${encodeURIComponent(id)}.json`;
   const write = async (subscription: Subscription): Promise<Subscription> => {
-    const bytes = utf8Encode(JSON.stringify(subscription));
-    await store.put(`${SUBSCRIPTION_PREFIX}${subscription.id}`, bytes);
-    // The bucket's copy is what a host with a new disk starts from.
-    await config.mirror?.put(bucketKey(subscription.id), bytes);
+    await kept.subscriptions.put(subscription.id, JSON.stringify(subscription));
     return subscription;
   };
-  const forget = async (id: string) => {
-    await store.delete(`${SUBSCRIPTION_PREFIX}${id}`);
-    await config.mirror?.delete(bucketKey(id));
-  };
   const list = async (): Promise<Subscription[]> => {
-    const keys = await store.list(SUBSCRIPTION_PREFIX);
-    return (await Promise.all(keys.map((key) => read(key.slice(SUBSCRIPTION_PREFIX.length))))).filter(
-      (s): s is Subscription => s !== null,
-    );
+    const all = await Promise.all((await kept.subscriptions.names()).map(read));
+    return all.filter((subscription) => subscription !== null);
   };
-
-  const limits = config.free ? null : (config.limits ?? null);
 
   const state = (subscription: Subscription): SubscriptionState => {
     if (config.free || subscription.paidUntil >= now()) return 'active';
@@ -238,8 +212,10 @@ export async function createHostNode(config: HostConfig) {
   };
 
   /** Which room an account's subscription has, at a host with limits; null otherwise */
-  const plan = (subscription: Subscription): 'free' | 'paid' | null =>
-    limits && !spaceIdOf(subscription.id) ? (subscription.paidUntil >= now() ? 'paid' : 'free') : null;
+  const plan = (subscription: Subscription): 'free' | 'paid' | null => {
+    if (!limits || spaceIdOf(subscription.id)) return null;
+    return subscription.paidUntil >= now() ? 'paid' : 'free';
+  };
 
   // ─── The free line ─────────────────────────────────────────────────
 
@@ -250,158 +226,102 @@ export async function createHostNode(config: HostConfig) {
         now,
       })
     : null;
+
   const lines = new Map<string, Line>();
-  const lineBucketKey = (spaceId: string) => `${LINE_BUCKET_PREFIX}${spaceId}.json`;
-  const writeLine = async (spaceId: string, line: Line | null) => {
-    if (line) lines.set(spaceId, line);
-    else lines.delete(spaceId);
-    if (line) {
-      const bytes = utf8Encode(JSON.stringify(line));
-      await store.put(`${LINE_PREFIX}${spaceId}`, bytes);
-      // A restart, or a new disk, keeps the grace clock where it was.
-      await config.mirror?.put(lineBucketKey(spaceId), bytes);
-    } else {
-      await store.delete(`${LINE_PREFIX}${spaceId}`);
-      await config.mirror?.delete(lineBucketKey(spaceId));
-    }
-  };
-  if (limits) {
-    if (config.mirror && (await store.list(LINE_PREFIX)).length === 0)
-      for (const key of await config.mirror.list(LINE_BUCKET_PREFIX)) {
-        const bytes = await config.mirror.get(key);
-        const spaceId = key.slice(LINE_BUCKET_PREFIX.length, -'.json'.length);
-        if (bytes && spaceId) await store.put(`${LINE_PREFIX}${spaceId}`, bytes);
-      }
-    for (const key of await store.list(LINE_PREFIX)) {
-      const bytes = await store.get(key);
-      const line: unknown = bytes ? JSON.parse(utf8Decode(bytes)) : null;
-      if (
-        isRecord(line) &&
-        typeof line.since === 'number' &&
-        typeof line.from === 'number' &&
-        Array.isArray(line.reasons)
-      )
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- this host's own writes, shape checked
-        lines.set(key.slice(LINE_PREFIX.length), line as unknown as Line);
-    }
-  }
-  const lineGrace = (limits?.graceDays ?? 0) * DAY;
-  /** Each account over its room, there and in the bucket */
-  const ROOM_PREFIX = 'room:';
-  const ROOM_BUCKET_PREFIX = 'host/rooms/';
+  /** Each account over its room */
   const rooms = new Map<string, Room>();
+  /** Spaces members' subscriptions once stopped carrying, and when: one back over the line gets no new grace */
+  const struck = new Map<string, number>();
   if (limits) {
-    if (config.mirror && (await store.list(ROOM_PREFIX)).length === 0)
-      for (const key of await config.mirror.list(ROOM_BUCKET_PREFIX)) {
-        const bytes = await config.mirror.get(key);
-        // Named in the bucket by the account DID, encoded: the store by the DID itself.
-        if (bytes)
-          await store.put(`${ROOM_PREFIX}${decodeURIComponent(key.slice(ROOM_BUCKET_PREFIX.length))}`, bytes);
-      }
-    for (const key of await store.list(ROOM_PREFIX)) {
-      const bytes = await store.get(key);
-      const room: unknown = bytes ? JSON.parse(utf8Decode(bytes)) : null;
-      if (isRecord(room) && typeof room.full === 'number') {
-        const held: Record<string, number> = {};
-        if (isRecord(room.held))
-          for (const [spaceId, since] of Object.entries(room.held))
-            if (typeof since === 'number') held[spaceId] = since;
-        rooms.set(key.slice(ROOM_PREFIX.length), {
-          full: room.full,
-          ...(typeof room.fits === 'number' ? { fits: room.fits } : {}),
-          ...(room.refused === true ? { refused: true } : {}),
-          ...(Object.keys(held).length ? { held } : {}),
-        });
-      }
+    for (const [spaceId, text] of await kept.lines.load()) {
+      const line = parseLine(JSON.parse(text));
+      if (line) lines.set(spaceId, line);
+    }
+    for (const [account, text] of await kept.rooms.load()) {
+      const room = parseRoom(JSON.parse(text));
+      if (room) rooms.set(account, room);
+    }
+    for (const [spaceId, text] of await kept.struck.load()) {
+      const at = Number(text);
+      if (Number.isFinite(at)) struck.set(spaceId, at);
     }
   }
-  const writeRoom = async (account: string, room: Room | null) => {
-    if (JSON.stringify(room) === JSON.stringify(rooms.get(account) ?? null)) return;
-    const key = encodeURIComponent(account);
+
+  async function writeLine(spaceId: string, line: Line | null): Promise<void> {
+    if (line) {
+      lines.set(spaceId, line);
+      await kept.lines.put(spaceId, JSON.stringify(line));
+    } else {
+      lines.delete(spaceId);
+      await kept.lines.delete(spaceId);
+    }
+  }
+
+  async function writeRoom(account: string, room: Room | null): Promise<void> {
+    if (sameJson(room, rooms.get(account) ?? null)) return;
     if (room) {
       rooms.set(account, room);
-      const bytes = utf8Encode(JSON.stringify(room));
-      await store.put(`${ROOM_PREFIX}${account}`, bytes);
-      await config.mirror?.put(`${ROOM_BUCKET_PREFIX}${key}`, bytes);
+      await kept.rooms.put(account, JSON.stringify(room));
     } else {
       rooms.delete(account);
-      await store.delete(`${ROOM_PREFIX}${account}`);
-      await config.mirror?.delete(`${ROOM_BUCKET_PREFIX}${key}`);
+      await kept.rooms.delete(account);
     }
-  };
-  /** The account a subscription carries for */
+  }
+
+  async function strike(spaceId: string, at: number): Promise<void> {
+    struck.set(spaceId, at);
+    await kept.struck.put(spaceId, String(at));
+  }
+
+  async function unstrike(spaceId: string): Promise<void> {
+    if (!struck.delete(spaceId)) return;
+    await kept.struck.delete(spaceId);
+  }
+
   const accountOf = (subscription: Subscription) => subscription.carry?.account;
+  const roomOf = (subscription: Subscription) => rooms.get(accountOf(subscription) ?? '');
+
   /** Whether a subscription's account is past its notice of being over its room */
   const outOfRoom = (subscription: Subscription) => {
-    const room = rooms.get(accountOf(subscription) ?? '');
+    const room = roomOf(subscription);
     return room !== undefined && room.full + lineGrace <= now();
   };
-  /** Each carry space's spaces held back for want of its room, and all of them together */
+
+  /** Each carry space's spaces held back for want of its room */
   const holds = new Map<string, ReadonlySet<string>>();
   /** Those whose copy the host still keeps: held back less than `keepDays` for some account */
   const roomHeld = new Set<string>();
   /** Held back longer, their copy already deleted: not deleted again until the host restarts */
   const dropped = new Set<string>();
-
   /** Spaces members' subscriptions no longer carry, being over the line with nobody paying */
-  const skipped = new Set(
-    [...lines].flatMap(([spaceId, line]) => (line.stopped !== undefined ? [spaceId] : [])),
-  );
-
-  /**
-   * Spaces members' subscriptions once stopped carrying, and when: one that
-   * comes back over the line after the host forgot it gets no new grace.
-   */
-  const struck = new Map<string, number>();
-  const strike = async (spaceId: string, at: number) => {
-    struck.set(spaceId, at);
-    const bytes = utf8Encode(String(at));
-    await store.put(`${STRUCK_PREFIX}${spaceId}`, bytes);
-    await config.mirror?.put(`${STRUCK_BUCKET_PREFIX}${spaceId}`, bytes);
-  };
-  const unstrike = async (spaceId: string) => {
-    if (!struck.delete(spaceId)) return;
-    await store.delete(`${STRUCK_PREFIX}${spaceId}`);
-    await config.mirror?.delete(`${STRUCK_BUCKET_PREFIX}${spaceId}`);
-  };
-  if (limits) {
-    if (config.mirror && (await store.list(STRUCK_PREFIX)).length === 0)
-      for (const key of await config.mirror.list(STRUCK_BUCKET_PREFIX)) {
-        const bytes = await config.mirror.get(key);
-        if (bytes) await store.put(`${STRUCK_PREFIX}${key.slice(STRUCK_BUCKET_PREFIX.length)}`, bytes);
-      }
-    for (const key of await store.list(STRUCK_PREFIX)) {
-      const bytes = await store.get(key);
-      const at = bytes ? Number(utf8Decode(bytes)) : NaN;
-      if (Number.isFinite(at)) struck.set(key.slice(STRUCK_PREFIX.length), at);
-    }
-  }
+  const skipped = new Set([...lines].filter(([, line]) => line.stopped !== undefined).map(([id]) => id));
 
   /**
    * A version reached a carried space: its account wrote there, unless it is
-   * the host's own. Counted by when it arrived, whatever its writer says of
-   * when it was written, except while the host first catches up on a space:
-   * then what says it is older than the window is its history.
+   * the host's own. Counted by when it arrived, except while the host first
+   * catches up on a space: then what is older than the window is history.
    */
   const counted = (spaceId: string, version: Version) => {
     if (!meter || !limits) return;
     const account = version.proof?.payload.iss ?? version.author;
     const written = Date.parse(version.createdAt) / 1000;
     const old = Number.isFinite(written) && written < now() - limits.space.windowDays * DAY;
-    void (async () => {
-      const first = await meter.firstSeen(spaceId);
-      if (old && now() - first < CATCH_UP_SECONDS) return;
+    const count = async () => {
+      const catchingUp = now() - (await meter.firstSeen(spaceId)) < CATCH_UP_SECONDS;
+      if (old && catchingUp) return;
       if (!(await config.ignore?.(account))) await meter.wrote(spaceId, account);
-    })().catch(() => {});
+    };
+    void count().catch(() => {});
   };
+
   /** Whether anyone but the account holds a role in its carry space: then it is a shared space */
   const sharedCarry = async (carrySpace: string, account: string): Promise<boolean> => {
     const entry = core.carried.get(carrySpace);
     if (!entry) return false;
-    return (await entry.runtime.access()).members.some(
-      (member) => member.did !== account && (member.founder || member.roles.length > 0),
-    );
+    const { members } = await entry.runtime.access();
+    return members.some((member) => member.did !== account && (member.founder || member.roles.length > 0));
   };
+
   /** Stops a carry space being any subscription's */
   const letCarryGo = async (carrySpace: string) => {
     for (const subscription of await list()) {
@@ -419,18 +339,9 @@ export async function createHostNode(config: HostConfig) {
     return (await entry.runtime.access()).members.map((member) => member.did);
   };
 
-  // A fresh disk: the subscriptions come back from the bucket, and the spaces with them.
-  if (config.mirror && (await store.list(SUBSCRIPTION_PREFIX)).length === 0) {
-    for (const key of await config.mirror.list(BUCKET_PREFIX)) {
-      const bytes = await config.mirror.get(key);
-      if (!bytes) continue;
-      const subscription: unknown = JSON.parse(utf8Decode(bytes));
-      if (isRecord(subscription) && typeof subscription.id === 'string')
-        await store.put(`${SUBSCRIPTION_PREFIX}${subscription.id}`, bytes);
-    }
-  }
+  await kept.subscriptions.restore();
 
-  /** The subscription an account's carry space belongs to, when it wrote `carry:closed` */
+  /** The account's carry space being let go, after it wrote `carry:closed` */
   let closing: Promise<void> = Promise.resolve();
   /** Whether the carry core below is made, so its events may look at it */
   let opened = false;
@@ -455,79 +366,70 @@ export async function createHostNode(config: HostConfig) {
         }
       : {}),
     ...(config.spacesPerCarry !== undefined ? { most: config.spacesPerCarry } : {}),
-    ...(config.mirror
-      ? {
-          mirror: config.mirror,
-          // One stopped for being over the line is kept a while, so a fund brings it back as it was.
-          onRelease: async (spaceId: string) => {
-            if (!skipped.has(spaceId) && !roomHeld.has(spaceId))
-              await deleteMirrored(config.mirror!, spaceId);
-          },
-        }
-      : {}),
+    ...(config.mirror ? { mirror: config.mirror, onRelease: releaseMirrored(config.mirror) } : {}),
+    // The account stopped using this host: forget its carry space; the subscription stays paid.
     onClosed: (carrySpace) => {
-      // The account stopped using this host: forget its carry space; the subscription stays paid.
-      closing = closing.then(async () => {
-        for (const subscription of await list()) {
-          if (subscription.carry?.space !== carrySpace) continue;
-          const { carry: _gone, ...rest } = subscription;
-          await write(rest);
-        }
-        await core.removeCarry(carrySpace);
-      });
+      closing = closing.then(() => letCarryGo(carrySpace));
     },
   });
-
   opened = true;
 
-  // Carry again what was carried before a restart — the store is only a cache of the spaces, but the list is ours.
-  for (const subscription of await list()) {
-    if (subscription.pass !== undefined && state(subscription) !== 'lapsed') {
-      await core.addPass(subscription.pass).catch((error: unknown) => {
-        console.error(`Could not carry for subscription ${subscription.id}:`, error);
-      });
-      continue;
-    }
-    // An account taken off the list since is not carried again.
-    if (!subscription.carry || state(subscription) === 'lapsed' || !allowed(subscription.carry.account))
-      continue;
-    await core.addCarry(subscription.carry.account, subscription.carry.invite).catch((error: unknown) => {
-      console.error(`Could not carry for subscription ${subscription.id}:`, error);
-    });
+  /** One stopped for being over the line is kept a while, so a fund brings it back as it was */
+  function releaseMirrored(mirror: BlobStore) {
+    return async (spaceId: string) => {
+      if (!skipped.has(spaceId) && !roomHeld.has(spaceId)) await deleteMirrored(mirror, spaceId);
+    };
   }
 
-  /** Whether another subscription still carries this carry space */
-  const carriedByOther = async (carrySpace: string, except: string) =>
-    (await list()).some((other) => other.id !== except && other.carry?.space === carrySpace);
+  await carryAgain();
 
-  /** Whether a space's own subscription pays for it now, within the room its fund buys: the free line does not apply then */
+  /** Carries again what was carried before a restart: the store caches the spaces, but the list is ours */
+  async function carryAgain(): Promise<void> {
+    for (const subscription of await list()) {
+      if (state(subscription) === 'lapsed') continue;
+      const fail = (error: unknown) =>
+        console.error(`Could not carry for subscription ${subscription.id}:`, error);
+      if (subscription.pass !== undefined) await core.addPass(subscription.pass).catch(fail);
+      // An account taken off the list since is not carried again.
+      else if (subscription.carry && allowed(subscription.carry.account))
+        await core.addCarry(subscription.carry.account, subscription.carry.invite).catch(fail);
+    }
+  }
+
+  /** Stops carrying a carry space, unless another subscription still carries it */
+  const releaseCarry = async (carrySpace: string, except: string) => {
+    const others = await list();
+    if (others.some((other) => other.id !== except && other.carry?.space === carrySpace)) return;
+    await core.removeCarry(carrySpace);
+  };
+
+  /** Whether a space's own subscription pays for it now: the free line does not apply then */
   const paysItself = async (spaceId: string) => {
-    const own = await read(`${SPACE_SUBSCRIPTION_PREFIX}${spaceId}`);
+    const own = await read(spaceSubscription(spaceId));
     return !!own && state(own) === 'active';
   };
 
-  /** The spaces the free line is about: those accounts' passes name, and those carried for themselves; never a carry space */
+  /** The spaces the free line is about: those accounts' passes name, and the carry spaces too */
   const metered = (): ReadonlySet<string> => {
-    const found = new Set<string>();
-    for (const entry of core.carries.values()) for (const spaceId of entry.named) found.add(spaceId);
-    // Carry spaces too: an account's own has one writer, and a shared space handed over as one is held to the line.
-    for (const spaceId of core.carried.keys()) found.add(spaceId);
-    return found;
+    const named = [...core.carries.values()].flatMap((entry) => [...entry.named]);
+    // An account's own carry space has one writer; a shared space handed over as one is held to the line.
+    return new Set([...named, ...core.carried.keys()]);
   };
+
+  const measure = async (spaceId: string) => (await config.measure?.(spaceId).catch(() => 0)) ?? 0;
 
   /** Where one space stands now: its counts, its size, and the line it is held to */
   async function standing(spaceId: string, before: Line | undefined, own: boolean): Promise<Line | null> {
     if (!limits || !meter) return null;
     const t = now();
-    const window = limits.space.windowDays * DAY;
-    const keep = (limits.keepDays ?? 0) * DAY;
-    // Members stopped carrying it, so nothing it does reaches here: it stays as it was, and is forgotten after a while.
-    if (before?.stopped !== undefined && !own) return before.stopped + keep <= t ? null : before;
-    // Not carried now, so who is a member can't be read: judged again once it is, as it was till then.
+    // Members stopped carrying it, so nothing it does reaches here: it stays, and is forgotten after a while.
+    if (before?.stopped !== undefined && !own) return before.stopped + keepSeconds <= t ? null : before;
+    // Not carried now, so its members can't be read: it stays as it was until it is.
     const members = await membersOf(spaceId);
     if (!members) return before ?? null;
+
     const counts = await meter.usage(spaceId, members);
-    const bytes = (await config.measure?.(spaceId).catch(() => 0)) ?? 0;
+    const bytes = await measure(spaceId);
     const shared = counts.writers >= 2;
     // One writer is never a community, whatever the limit says.
     const most = Math.max(limits.space.writers, 1);
@@ -535,106 +437,92 @@ export async function createHostNode(config: HostConfig) {
     if (counts.writers > most) reasons.push('writers');
     if (shared && bytes > limits.space.bytes) reasons.push('bytes');
     const wellUnder = counts.writers <= most * UNDER && (!shared || bytes <= limits.space.bytes * UNDER);
+
     let line: Line | null = before ?? null;
-    // Its grace was spent once, by a stop or by running out while it was under: over again,
-    // it gets only a short notice, never a whole grace again.
-    const notice = t - lineGrace + NOTICE_DAYS * DAY;
-    const spent = before ? before.calm === true && before.from + lineGrace <= t : struck.has(spaceId);
     if (reasons.length > 0) {
+      // A grace spent once, by a stop or by running out while under, buys only a short notice next time.
+      const notice = t - lineGrace + NOTICE_DAYS * DAY;
+      const spent = before ? before.calm === true && before.from + lineGrace <= t : struck.has(spaceId);
       const from = spent ? Math.max(before?.from ?? notice, notice) : (before?.from ?? t);
       line = { since: before?.since ?? t, from, reasons, lastOver: t };
     } else if (line && wellUnder) {
       const under = line.under ?? t;
       // Free again only after a whole window well under, so a busy week does not flip it.
-      if (t - under >= window) return null;
+      if (t - under >= limits.space.windowDays * DAY) return null;
       line = { ...line, calm: true, under };
     } else if (line) {
       const { under: _gone, ...rest } = line;
       line = { ...rest, calm: true };
     }
     if (!line) return null;
-    // While it pays for itself the line does not apply. Its grace is given once: paying for
-    // a while does not buy it again, so once the fund stops, what is left of it is all it has.
+
+    // While it pays for itself the line does not apply, but its grace is not given again.
     if (own) {
       const { stopped: _paid, ...rest } = line;
       return rest;
     }
-    // Stopped once its grace runs out if it is over then, or was at any look in the last days
-    // before: one that went back under in time keeps its notice and is carried, but going
-    // under for an hour as the date passes buys nothing.
+    // Stopped once its grace runs out if it is over then, or was in the last days before:
+    // going under for an hour as the date passes buys nothing.
     const until = line.from + lineGrace;
     const lately = (line.lastOver ?? 0) >= until - NOTICE_DAYS * DAY;
-    return (reasons.length > 0 || lately) && until <= t && line.stopped === undefined
-      ? { ...line, stopped: t }
-      : line;
+    const stops = (reasons.length > 0 || lately) && until <= t && line.stopped === undefined;
+    return stops ? { ...line, stopped: t } : line;
   }
 
   /**
-   * Each space against the free line, and members' subscriptions let go of
-   * those past it. Run now and then. Says which spaces went over, stopped
-   * being carried for members, or came back under.
+   * Holds each space to the free line, and lets members' subscriptions go of
+   * those past it. Run now and then. Says which spaces went over, stopped, or
+   * came back under.
    */
-  async function evaluate(): Promise<{ over: string[]; stopped: string[]; under: string[] }> {
-    const changed: { over: string[]; stopped: string[]; under: string[] } = {
-      over: [],
-      stopped: [],
-      under: [],
-    };
+  async function evaluate(): Promise<Changes> {
+    const changed: Changes = { over: [], stopped: [], under: [] };
     if (!limits || !meter) return changed;
     await meter.prune();
     const spaces = metered();
     for (const spaceId of new Set([...spaces, ...lines.keys()]))
       await evaluateOne(spaceId, spaces, changed).catch((error: unknown) => {
-        // One space that can't be judged now is judged next time; the others go on.
+        // Judged again next time; the others go on.
         console.error(`Could not hold space ${spaceId} to the free line:`, error);
       });
     await core.refresh();
     return changed;
   }
 
-  async function evaluateOne(
-    spaceId: string,
-    spaces: ReadonlySet<string>,
-    changed: { over: string[]; stopped: string[]; under: string[] },
-  ): Promise<void> {
-    if (!meter) return;
-    {
-      const before = lines.get(spaceId);
-      const own = await paysItself(spaceId);
-      // A space nobody names for a while keeps its line: the line goes only by a whole window
-      // under, or after a stop, by `keepDays`; never because it was let go for an hour.
-      const after = spaces.has(spaceId) || before ? await standing(spaceId, before, own) : null;
-      // A stop long forgotten, and a window more under: its grace is its own again.
-      const struckAt = struck.get(spaceId);
-      if (!before && !after && struckAt !== undefined && limits) {
-        const forgotten = ((limits.keepDays ?? 0) + limits.space.windowDays) * DAY;
-        if (struckAt + forgotten <= now()) await unstrike(spaceId);
-      }
-      if (JSON.stringify(after) !== JSON.stringify(before ?? null)) await writeLine(spaceId, after);
-      if (after && !before) changed.over.push(spaceId);
-      if (after?.stopped !== undefined && before?.stopped === undefined) {
-        changed.stopped.push(spaceId);
-        await strike(spaceId, after.stopped);
-        // A shared space handed over as someone's carry space: it stops being theirs to carry.
-        // Skipped first, so letting it go keeps the bucket's copy.
-        skipped.add(spaceId);
-        if (core.carries.has(spaceId)) await letCarryGo(spaceId);
-      }
-      // A carry space someone else came to hold a role in is let go: it is a shared space.
-      const account = core.carries.get(spaceId)?.account;
-      if (account && (await sharedCarry(spaceId, account))) await letCarryGo(spaceId);
-      if (before && !after) changed.under.push(spaceId);
-      // Free again after a whole window well under: its grace is its own again.
-      if (before && !after && before.stopped === undefined) await unstrike(spaceId);
-      const skip = after?.stopped !== undefined && !own;
-      if (skip) skipped.add(spaceId);
-      else skipped.delete(spaceId);
-      // Forgotten after it was kept a while: what the host held of it goes too, unless something carries it.
-      if (before?.stopped !== undefined && !after) {
-        await meter.forget(spaceId);
-        if (config.mirror && !core.carried.has(spaceId))
-          await deleteMirrored(config.mirror, spaceId).catch(() => {});
-      }
+  async function evaluateOne(spaceId: string, spaces: ReadonlySet<string>, changed: Changes): Promise<void> {
+    if (!meter || !limits) return;
+    const before = lines.get(spaceId);
+    const own = await paysItself(spaceId);
+    // A space nobody names for a while keeps its line, never dropped because it was let go for an hour.
+    const after = spaces.has(spaceId) || before ? await standing(spaceId, before, own) : null;
+
+    // A stop long forgotten, and a window more under: its grace is its own again.
+    const struckAt = struck.get(spaceId);
+    const forgotten = ((limits.keepDays ?? 0) + limits.space.windowDays) * DAY;
+    if (!before && !after && struckAt !== undefined && struckAt + forgotten <= now()) await unstrike(spaceId);
+
+    if (!sameJson(after, before ?? null)) await writeLine(spaceId, after);
+    if (after && !before) changed.over.push(spaceId);
+    if (after?.stopped !== undefined && before?.stopped === undefined) {
+      changed.stopped.push(spaceId);
+      await strike(spaceId, after.stopped);
+      // Skipped first, so letting a carry space go keeps the bucket's copy.
+      skipped.add(spaceId);
+      if (core.carries.has(spaceId)) await letCarryGo(spaceId);
+    }
+    // A carry space someone else came to hold a role in is a shared space.
+    const account = core.carries.get(spaceId)?.account;
+    if (account && (await sharedCarry(spaceId, account))) await letCarryGo(spaceId);
+    if (before && !after) changed.under.push(spaceId);
+    if (before && !after && before.stopped === undefined) await unstrike(spaceId);
+
+    if (after?.stopped !== undefined && !own) skipped.add(spaceId);
+    else skipped.delete(spaceId);
+
+    // Forgotten after it was kept a while: the host's copy goes too, unless something carries it.
+    if (before?.stopped !== undefined && !after) {
+      await meter.forget(spaceId);
+      if (config.mirror && !core.carried.has(spaceId))
+        await deleteMirrored(config.mirror, spaceId).catch(() => {});
     }
   }
 
@@ -642,8 +530,9 @@ export async function createHostNode(config: HostConfig) {
   const overOf = (spaceIds: Iterable<string>): ReadonlyArray<OverSpace> =>
     [...spaceIds].flatMap((spaceId) => {
       const line = lines.get(spaceId);
-      // One back under and carried is not over: it keeps its line, quietly, until free again.
-      return line && (!line.calm || line.stopped !== undefined)
+      // One back under and carried keeps its line quietly, until free again.
+      const over = line && (!line.calm || line.stopped !== undefined);
+      return over
         ? [{ space: spaceId, since: line.since, until: line.from + lineGrace, reasons: line.reasons }]
         : [];
     });
@@ -654,6 +543,39 @@ export async function createHostNode(config: HostConfig) {
       throw new Error('A subscription is named by its key, or by the space it is for');
     return (await read(id)) ?? write({ id, paidUntil: 0, since: now() });
   };
+
+  /** Which spaces are held back now, in a form to compare */
+  const holdsSignature = () =>
+    [...holds]
+      .map(([space, held]) => `${space}:${[...held].sort().join(',')}`)
+      .sort()
+      .join(' ');
+
+  /** The spaces some account holds back for less than `keepDays`, whose copy the host keeps */
+  function recountRoomHeld(t: number): void {
+    roomHeld.clear();
+    for (const room of rooms.values())
+      for (const [spaceId, since] of Object.entries(room.held ?? {}))
+        if (since + keepSeconds > t) roomHeld.add(spaceId);
+  }
+
+  /** Held back longer than `keepDays` for every account that holds it: the host's copy goes, as for a stop */
+  async function dropLongHeld(): Promise<void> {
+    for (const held of holds.values())
+      for (const spaceId of held) {
+        if (
+          roomHeld.has(spaceId) ||
+          dropped.has(spaceId) ||
+          skipped.has(spaceId) ||
+          core.carried.has(spaceId)
+        )
+          continue;
+        dropped.add(spaceId);
+        if (config.mirror) await deleteMirrored(config.mirror, spaceId).catch(() => {});
+      }
+    // Carried again: should it be held that long again, its copy goes again.
+    for (const spaceId of dropped) if (core.carried.has(spaceId)) dropped.delete(spaceId);
+  }
 
   return Object.freeze({
     did: core.did,
@@ -670,9 +592,8 @@ export async function createHostNode(config: HostConfig) {
     limits,
 
     /**
-     * Whether a subscription's spaces take more than its room, as its host
-     * measured. The notice runs from when they first did, and goes only after
-     * a whole window of fitting, so a dip under for an hour starts nothing anew.
+     * Whether a subscription's spaces take more than its room. The notice runs
+     * from when they first did, and goes only after a whole window of fitting.
      */
     async setFull(id: string, over: boolean): Promise<void> {
       const subscription = await read(id);
@@ -680,27 +601,25 @@ export async function createHostNode(config: HostConfig) {
       if (!account || !limits) return;
       const room = rooms.get(account);
       const t = now();
-      if (over)
+      if (over) {
         await writeRoom(account, {
           full: room?.full ?? t,
           ...(room?.refused ? { refused: true } : {}),
           ...(room?.held ? { held: room.held } : {}),
         });
-      else if (room) {
-        const fits = room.fits ?? t;
-        // Fitting a whole window: the notice goes, though a refusal stays until the host's owner says.
-        if (t - fits >= limits.space.windowDays * DAY && !room.refused) await writeRoom(account, null);
-        else await writeRoom(account, { ...room, fits });
+        return;
       }
+      if (!room) return;
+      const fits = room.fits ?? t;
+      // A refusal stays until the host's owner says.
+      const fitWholeWindow = t - fits >= limits.space.windowDays * DAY && !room.refused;
+      await writeRoom(account, fitWholeWindow ? null : { ...room, fits });
     },
 
     /** Whether a subscription is past its notice of being over its room */
     outOfRoom,
 
-    /**
-     * Holds back these solo spaces of a subscription's for want of room, and
-     * no others of its: the host keeps them, unserved, until they fit.
-     */
+    /** Holds back these solo spaces of a subscription's for want of room, and no others: kept, unserved, until they fit */
     async holdForRoom(id: string, spaceIds: ReadonlyArray<string>): Promise<void> {
       const subscription = await read(id);
       const carrySpace = subscription?.carry?.space;
@@ -713,50 +632,22 @@ export async function createHostNode(config: HostConfig) {
         const held = Object.fromEntries(spaceIds.map((spaceId) => [spaceId, before[spaceId] ?? t]));
         await writeRoom(account, Object.keys(held).length ? { ...rest, held } : rest);
       }
-      const before = [...holds]
-        .map(([space, held]) => `${space}:${[...held].sort().join(',')}`)
-        .sort()
-        .join(' ');
+      const before = holdsSignature();
       if (spaceIds.length) holds.set(carrySpace, new Set(spaceIds));
       else holds.delete(carrySpace);
-      roomHeld.clear();
-      const keep = (limits?.keepDays ?? 0) * DAY;
-      for (const one of rooms.values())
-        for (const [spaceId, since] of Object.entries(one.held ?? {}))
-          if (since + keep > t) roomHeld.add(spaceId);
-      // Held back longer than that for every account that holds it: the host's copy goes, as for a stop.
-      for (const held of holds.values())
-        for (const spaceId of held) {
-          if (
-            roomHeld.has(spaceId) ||
-            dropped.has(spaceId) ||
-            skipped.has(spaceId) ||
-            core.carried.has(spaceId)
-          )
-            continue;
-          dropped.add(spaceId);
-          if (config.mirror) await deleteMirrored(config.mirror, spaceId).catch(() => {});
-        }
-      // Carried again, by room made or someone else: should it be held that long again, its copy goes again.
-      for (const spaceId of dropped) if (core.carried.has(spaceId)) dropped.delete(spaceId);
-      const after = [...holds]
-        .map(([space, held]) => `${space}:${[...held].sort().join(',')}`)
-        .sort()
-        .join(' ');
-      if (after !== before) await core.refresh();
+      recountRoomHeld(t);
+      await dropLongHeld();
+      if (holdsSignature() !== before) await core.refresh();
     },
 
-    /**
-     * Stops carrying a subscription's carry space, which is over its room by
-     * itself past its notice, and turns it away until the host's owner says.
-     */
+    /** Stops carrying a carry space over its room by itself past its notice, until the host's owner says */
     async refuse(id: string): Promise<void> {
       const subscription = await read(id);
       if (!subscription?.carry) return;
       const { carry, ...rest } = subscription;
       await writeRoom(carry.account, { ...(rooms.get(carry.account) ?? { full: now() }), refused: true });
       await write(rest);
-      if (!(await carriedByOther(carry.space, id))) await core.removeCarry(carry.space);
+      await releaseCarry(carry.space, id);
     },
 
     async seen(id: string): Promise<void> {
@@ -788,36 +679,34 @@ export async function createHostNode(config: HostConfig) {
     /** How a space is used, as a status says it; null at a host without limits */
     async usage(spaceId: string): Promise<SpaceUsage | null> {
       if (!meter) return null;
-      const counts = await meter.usage(spaceId, await membersOf(spaceId));
-      const bytes = core.carried.has(spaceId) ? ((await config.measure?.(spaceId).catch(() => 0)) ?? 0) : 0;
-      return { writers: counts.writers, readers: counts.readers, bytes, windowDays: counts.windowDays };
+      const { writers, readers, windowDays } = await meter.usage(spaceId, await membersOf(spaceId));
+      const bytes = core.carried.has(spaceId) ? await measure(spaceId) : 0;
+      return { writers, readers, bytes, windowDays };
     },
 
     /** When a subscription's notice of being over its room runs out, or null when it is not over */
     fullUntil: (subscription: Subscription): { since: number; until: number } | null => {
-      const room = rooms.get(accountOf(subscription) ?? '');
+      const room = roomOf(subscription);
       return room ? { since: room.full, until: room.full + lineGrace } : null;
     },
 
-    /** Whether members' subscriptions hold a space back, being past the free line: no member's room counts it */
+    /** Whether members' subscriptions hold a space back, being past the free line */
     heldBack: (spaceId: string): boolean => skipped.has(spaceId),
 
     /** Whether a space pays for itself now, so no account's room counts it */
     paysItself,
 
-    /** Moves a subscription's paid-until date — the one thing payments do */
+    /** Moves a subscription's paid-until date: the one thing payments do */
     async extend(id: string, until: number, customer?: string): Promise<Subscription> {
       const subscription = await subscribe(id);
-      const extended = {
+      const extended = await write({
         ...subscription,
         paidUntil: Math.max(subscription.paidUntil, until),
         ...(customer ? { customer } : {}),
-      };
-      await write(extended);
+      });
       // Paid again in time: carry again what the grace period had kept.
-      if (extended.carry && !core.carries.has(extended.carry.space)) {
+      if (extended.carry && !core.carries.has(extended.carry.space))
         await core.addCarry(extended.carry.account, extended.carry.invite);
-      }
       if (extended.pass !== undefined) await core.addPass(extended.pass).catch(() => {});
       return extended;
     },
@@ -826,9 +715,7 @@ export async function createHostNode(config: HostConfig) {
     async setPaidUntil(id: string, until: number): Promise<Subscription> {
       const subscription = await subscribe(id);
       if (subscription.paidUntil === until) return subscription;
-      const set = { ...subscription, paidUntil: until };
-      await write(set);
-      // Money came back in time: carry again what the grace period had kept.
+      const set = await write({ ...subscription, paidUntil: until });
       if (set.pass !== undefined && state(set) !== 'lapsed') await core.addPass(set.pass).catch(() => {});
       return set;
     },
@@ -850,36 +737,18 @@ export async function createHostNode(config: HostConfig) {
         throw new Error('That subscription is not paid for');
       if (!account.startsWith('did:key:')) throw new Error('An account is named by its DID');
       if (!allowed(account)) throw new NotAllowedError();
-      // Kept by the account, so a new subscription key brings nothing back; paying does, as a balance has no room.
-      const room = rooms.get(account);
-      if (room?.refused && plan(subscription) !== 'paid')
-        throw new Error('This host stopped carrying for this account: its carry space was over its room');
-      if (room?.refused) {
-        const { refused: _lifted, ...rest } = room;
-        await writeRoom(account, rest);
-      }
-      // A shared space stopped for being over the line comes back only through its own fund.
+      await liftRefusal(account, plan(subscription));
       const asked = parseSpaceInvite(invite).space.id;
-      if (lines.get(asked)?.stopped !== undefined && !(await paysItself(asked)))
-        throw new Error('That space is over this host’s free line: only its own fund carries it');
-      // One carried, or named, for others already is theirs to carry: taking it as a carry space
-      // would take it from them, and letting it go again would drop the host's copy.
-      if (limits && !core.carries.has(asked)) {
-        const others =
-          core.carried.has(asked) || [...core.carries.values()].some((entry) => entry.named.has(asked));
-        if (others) throw new Error('That is a space others are members of, not a carry space');
-      }
+      await checkCarrySpace(asked);
       const space = await core.addCarry(account, invite);
-      // A carry space is the account's alone: anyone else holding a role there makes it a shared
-      // space, which members' own passes carry, each told of the line.
+      // Anyone else holding a role there makes it a shared space, which members' own passes carry.
       if (limits && (await sharedCarry(space, account))) {
-        if (!(await carriedByOther(space, id))) await core.removeCarry(space);
+        await releaseCarry(space, id);
         throw new Error('That is a space others are members of, not a carry space');
       }
       const before = subscription.carry;
       const attached = await write({ ...subscription, carry: { account, space, invite } });
-      if (before && before.space !== space && !(await carriedByOther(before.space, id)))
-        await core.removeCarry(before.space);
+      if (before && before.space !== space) await releaseCarry(before.space, id);
       return attached;
     },
 
@@ -889,7 +758,7 @@ export async function createHostNode(config: HostConfig) {
       if (!subscription?.carry) return;
       const { carry, ...rest } = subscription;
       await write(rest);
-      if (!(await carriedByOther(carry.space, id))) await core.removeCarry(carry.space);
+      await releaseCarry(carry.space, id);
     },
 
     /**
@@ -916,24 +785,16 @@ export async function createHostNode(config: HostConfig) {
 
     /** Drops what lapsed past its grace period, and free subscriptions idle too long. Run now and then. */
     async sweep(): Promise<ReadonlyArray<string>> {
-      const dropped: string[] = [];
-      const idle = limits?.idleDays !== undefined ? limits.idleDays * DAY : null;
-      for (let subscription of await list()) {
-        // One from before idle subscriptions were dropped counts from now, not from when it was made.
-        if (idle !== null && plan(subscription) === 'free' && subscription.seen === undefined)
-          subscription = await write({ ...subscription, seen: now() });
-        const idled =
-          idle !== null && plan(subscription) === 'free' && (subscription.seen ?? now()) + idle < now();
-        if (state(subscription) !== 'lapsed' && !idled) continue;
-        await forget(subscription.id);
+      const gone: string[] = [];
+      for (const subscription of await list()) {
+        if (!(await expired(subscription))) continue;
+        await kept.subscriptions.delete(subscription.id);
         const spaceId = spaceIdOf(subscription.id);
         if (spaceId) await core.removePass(spaceId);
-        if (subscription.carry && !(await carriedByOther(subscription.carry.space, subscription.id))) {
-          await core.removeCarry(subscription.carry.space);
-        }
-        dropped.push(subscription.id);
+        if (subscription.carry) await releaseCarry(subscription.carry.space, subscription.id);
+        gone.push(subscription.id);
       }
-      return dropped;
+      return gone;
     },
 
     spaces: core.spaces,
@@ -978,4 +839,135 @@ export async function createHostNode(config: HostConfig) {
       events.clear();
     },
   });
+
+  /** A refused account comes back only by paying, since a balance has no room; a new key brings nothing back */
+  async function liftRefusal(account: string, room: 'free' | 'paid' | null): Promise<void> {
+    const refused = rooms.get(account);
+    if (!refused?.refused) return;
+    if (room !== 'paid')
+      throw new Error('This host stopped carrying for this account: its carry space was over its room');
+    const { refused: _lifted, ...rest } = refused;
+    await writeRoom(account, rest);
+  }
+
+  /** Refuses as a carry space one that is others' to carry */
+  async function checkCarrySpace(spaceId: string): Promise<void> {
+    // Stopped for being over the line, it comes back only through its own fund.
+    if (lines.get(spaceId)?.stopped !== undefined && !(await paysItself(spaceId)))
+      throw new Error('That space is over this host’s free line: only its own fund carries it');
+    if (!limits || core.carries.has(spaceId)) return;
+    // Taking it would take it from them, and letting it go again would drop the host's copy.
+    const others =
+      core.carried.has(spaceId) || [...core.carries.values()].some((entry) => entry.named.has(spaceId));
+    if (others) throw new Error('That is a space others are members of, not a carry space');
+  }
+
+  /** Lapsed past its grace, or a free subscription idle too long */
+  async function expired(subscription: Subscription): Promise<boolean> {
+    const idle = limits?.idleDays !== undefined ? limits.idleDays * DAY : null;
+    if (idle === null || plan(subscription) !== 'free') return state(subscription) === 'lapsed';
+    let seen = subscription.seen;
+    // One from before idle subscriptions were dropped counts from now, not from when it was made.
+    if (seen === undefined) {
+      seen = now();
+      await write({ ...subscription, seen });
+    }
+    return state(subscription) === 'lapsed' || seen + idle < now();
+  }
 }
+
+/** How a kind of record is named in the bucket */
+interface BucketNames {
+  readonly prefix: string;
+  readonly key: (name: string) => string;
+  /** The name a bucket file restores under, or null to skip it */
+  readonly nameOf: (key: string, bytes: Uint8Array) => string | null;
+}
+
+function bucketNames(prefix: string, { encoded = false, suffix = '' } = {}): BucketNames {
+  return {
+    prefix,
+    key: (name) => `${prefix}${encoded ? encodeURIComponent(name) : name}${suffix}`,
+    nameOf: (key) => {
+      const name = key.slice(prefix.length, key.length - suffix.length);
+      return (encoded ? decodeURIComponent(name) : name) || null;
+    },
+  };
+}
+
+/** Records kept as text in the host's store under `prefix`, and in the bucket too */
+function shelf(store: StorageAdapter, mirror: BlobStore | undefined, prefix: string, bucket: BucketNames) {
+  const at = (name: string) => `${prefix}${name}`;
+  const names = async () => (await store.list(prefix)).map((key) => key.slice(prefix.length));
+
+  async function get(name: string): Promise<string | null> {
+    const bytes = await store.get(at(name));
+    return bytes ? utf8Decode(bytes) : null;
+  }
+
+  /** A fresh disk starts from the bucket's copy */
+  async function restore(): Promise<void> {
+    if (!mirror || (await names()).length > 0) return;
+    for (const key of await mirror.list(bucket.prefix)) {
+      const bytes = await mirror.get(key);
+      const name = bytes && bucket.nameOf(key, bytes);
+      if (bytes && name) await store.put(at(name), bytes);
+    }
+  }
+
+  return {
+    get,
+    names,
+    restore,
+    async put(name: string, text: string): Promise<void> {
+      const bytes = utf8Encode(text);
+      await store.put(at(name), bytes);
+      await mirror?.put(bucket.key(name), bytes);
+    },
+    async delete(name: string): Promise<void> {
+      await store.delete(at(name));
+      await mirror?.delete(bucket.key(name));
+    },
+    /** Every record, after restoring from the bucket */
+    async load(): Promise<Array<[string, string]>> {
+      await restore();
+      const entries: Array<[string, string]> = [];
+      for (const name of await names()) {
+        const text = await get(name);
+        if (text !== null) entries.push([name, text]);
+      }
+      return entries;
+    },
+  };
+}
+
+function subscriptionIdIn(bytes: Uint8Array): string | null {
+  const subscription: unknown = JSON.parse(utf8Decode(bytes));
+  return isRecord(subscription) && typeof subscription.id === 'string' ? subscription.id : null;
+}
+
+function parseLine(value: unknown): Line | null {
+  const fits =
+    isRecord(value) &&
+    typeof value.since === 'number' &&
+    typeof value.from === 'number' &&
+    Array.isArray(value.reasons);
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- this host's own writes, shape checked
+  return fits ? (value as unknown as Line) : null;
+}
+
+function parseRoom(value: unknown): Room | null {
+  if (!isRecord(value) || typeof value.full !== 'number') return null;
+  const given = isRecord(value.held) ? Object.entries(value.held) : [];
+  const held = Object.fromEntries(
+    given.filter((entry): entry is [string, number] => typeof entry[1] === 'number'),
+  );
+  return {
+    full: value.full,
+    ...(typeof value.fits === 'number' ? { fits: value.fits } : {}),
+    ...(value.refused === true ? { refused: true } : {}),
+    ...(Object.keys(held).length ? { held } : {}),
+  };
+}
+
+const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);

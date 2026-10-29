@@ -3,41 +3,33 @@
  * show, a picture made small before it is added, and a file saved to disk.
  * The bytes come from `records.readFile` (spec 05 §16.6).
  */
-import { useEffect, useState } from 'react';
-import { useNode } from '@minca/react';
-import type { FileRef } from '@minca/core';
+import { useAsync, useNode } from '@minca/react';
+import type { FileRef, P2PNode } from '@minca/core';
 
 /** Object URLs by file id: one per file for the life of the page, however many places show it */
 const urls = new Map<string, Promise<string>>();
 
+function objectUrl(node: P2PNode, spaceId: string, ref: FileRef): Promise<string> {
+  const cached = urls.get(ref.hash);
+  if (cached) return cached;
+  const made = node.records
+    .readFile(spaceId, ref)
+    .then((bytes) => URL.createObjectURL(new Blob([bytes.slice()], { type: ref.mime })));
+  // A file that couldn't be had now may be had later: not remembered.
+  made.catch(() => urls.delete(ref.hash));
+  urls.set(ref.hash, made);
+  return made;
+}
+
 /** A URL for a file a body refers to, once its bytes are here; null until then, or if none can be had */
 export function useFileUrl(spaceId: string, ref: FileRef | null | undefined): string | null {
   const node = useNode();
-  const [url, setUrl] = useState<string | null>(null);
-  const hash = ref?.hash ?? null;
-  useEffect(() => {
-    if (!ref || !hash) return setUrl(null);
-    let live = true;
-    let made = urls.get(hash);
-    if (!made) {
-      made = node.records
-        .readFile(spaceId, ref)
-        .then((bytes) => URL.createObjectURL(new Blob([bytes.slice()], { type: ref.mime })));
-      // A file that couldn't be had now may be had later: not remembered.
-      made.catch(() => urls.delete(hash));
-      urls.set(hash, made);
-    }
-    made.then(
-      (made) => live && setUrl(made),
-      () => live && setUrl(null),
-    );
-    return () => {
-      live = false;
-    };
-    // The file is named by its id: a new object for the same file is the same file.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by the file's id
-  }, [node, spaceId, hash]);
-  return url;
+  // Keyed by the file's id: a new object for the same file is the same file.
+  const url = useAsync(
+    async () => (ref?.hash ? objectUrl(node, spaceId, ref) : null),
+    [node, spaceId, ref?.hash],
+  );
+  return url.status === 'done' ? url.value : null;
 }
 
 /** An image made at most `side` pixels on its longer side, as WebP: what a picture is added as */

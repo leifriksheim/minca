@@ -36,6 +36,7 @@
  * something that knows nothing of order still counts: it goes at the end.
  */
 import type { DefineCollection, P2PNode } from '../node/types.js';
+import { definedNames } from './defined.js';
 export * from './library/annotations.js';
 export * from './library/social.js';
 export * from './library/publishing.js';
@@ -80,21 +81,23 @@ export function positionBetween(before?: string | null, after?: string | null): 
   let b = after && after > a ? after : null;
   let out = '';
   for (let i = 0; ; i++) {
-    const low = i < a.length ? DIGITS.indexOf(a[i]!) : 0;
-    const high = b !== null ? (i < b.length ? DIGITS.indexOf(b[i]!) : 0) : DIGITS.length;
-    if (low === high) {
-      out += DIGITS[low];
-      continue;
-    }
-    // At an open end, step by one rather than halving, so a list that only
-    // ever grows at the end (or the start) keeps short positions.
-    const open = i < a.length ? (b === null ? 'after' : null) : b !== null ? 'before' : null;
-    const mid = open === 'after' ? low + 1 : open === 'before' ? high - 1 : Math.floor((low + high) / 2);
+    const low = digitAt(a, i);
+    const high = b === null ? DIGITS.length : digitAt(b, i);
+    const mid = middleDigit(low, high, i < a.length, b !== null);
     if (mid > low && mid < high) return out + DIGITS[mid];
-    // Adjacent digits: keep the lower one, and anything above the rest of `a` will do.
     out += DIGITS[low];
-    b = null;
+    // Adjacent digits: keep the lower one, and anything above the rest of `a` will do.
+    if (low !== high) b = null;
   }
+}
+
+const digitAt = (text: string, i: number) => (i < text.length ? DIGITS.indexOf(text[i]!) : 0);
+
+/** At an open end, step by one rather than halving, so a list that only grows at one end keeps short positions */
+function middleDigit(low: number, high: number, insideBefore: boolean, bounded: boolean): number {
+  if (insideBefore && !bounded) return low + 1;
+  if (!insideBefore && bounded) return high - 1;
+  return Math.floor((low + high) / 2);
 }
 
 /**
@@ -110,9 +113,7 @@ export async function useSchemas(
 ): Promise<void> {
   const summary = await node.spaces.get(spaceId);
   if (!summary?.writable) return;
-  const known = new Set(
-    (await node.collections.list(spaceId)).filter((c) => c.version !== null).map((c) => c.name),
-  );
+  const known = await definedNames(node, spaceId);
   for (const schema of schemas) {
     if (!known.has(schema.name)) await node.collections.define(spaceId, schema);
   }

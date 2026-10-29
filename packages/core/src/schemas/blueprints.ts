@@ -27,6 +27,7 @@ import {
   toJsonSchema,
 } from '../schema/collection-def.js';
 import { standardDefinition } from './standard.js';
+import { definedIn } from './defined.js';
 import { isObject } from '../utils/guards.js';
 import { canonicalize } from '../schema/version.js';
 import { describeCollection } from '../records/describe.js';
@@ -404,23 +405,19 @@ export async function proposeCollections(
  * by their role and by their key's note.
  */
 export async function applyBlueprint(node: P2PNode, spaceId: string, key: string): Promise<BlueprintReview> {
-  const record = await node.records.get<Blueprint>(spaceId, key);
-  if (!record?.body || record.collection !== blueprint.name)
-    throw new Error(`No blueprint ${key} in this space`);
+  const body = await blueprintAt(node, spaceId, key);
   const known = await node.collections.list(spaceId);
-  const review = reviewBlueprint(record.body, known);
+  const review = reviewBlueprint(body, known);
   if (review.problem) throw new Error(review.problem);
   const blueprints = await node.records.list<Blueprint>(spaceId, { collection: blueprint.name });
   if (supersededBlueprints(blueprints, known).has(key))
     throw new Error('A newer version of this blueprint has been applied; applying this one would undo it');
   // Knowing std.blueprint itself means its own rules hold from now on: only its proposer edits it.
-  if (!known.some((c) => c.name === blueprint.name && c.version !== null))
-    await node.collections.define(spaceId, blueprint);
+  if (!definedIn(known).has(blueprint.name)) await node.collections.define(spaceId, blueprint);
   for (const one of review.collections) {
-    if (one.status === 'same') continue;
-    await node.collections.define(spaceId, one.definition);
+    if (one.status !== 'same') await node.collections.define(spaceId, one.definition);
   }
-  return reviewBlueprint(record.body, await node.collections.list(spaceId));
+  return reviewBlueprint(body, await node.collections.list(spaceId));
 }
 
 /** Copies a blueprint into another space, as a proposal there: people in that space decide for themselves. */
@@ -430,14 +427,18 @@ export async function copyBlueprint(
   key: string,
   toSpace: string,
 ): Promise<NodeRecord<Blueprint>> {
-  const record = await node.records.get<Blueprint>(fromSpace, key);
-  if (!record?.body || record.collection !== blueprint.name)
-    throw new Error(`No blueprint ${key} in this space`);
-  const { title, description, collections } = record.body;
+  const { title, description, collections } = await blueprintAt(node, fromSpace, key);
   return proposeCollections(node, toSpace, {
     title,
     ...(description !== undefined ? { description } : {}),
     collections,
     from: `${fromSpace}/${key}`,
   });
+}
+
+async function blueprintAt(node: P2PNode, spaceId: string, key: string): Promise<Blueprint> {
+  const record = await node.records.get<Blueprint>(spaceId, key);
+  if (!record?.body || record.collection !== blueprint.name)
+    throw new Error(`No blueprint ${key} in this space`);
+  return record.body;
 }

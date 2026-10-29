@@ -1,11 +1,10 @@
 /**
- * What a space is, fixed at creation — and the keys around it that anyone can
- * check without holding a secret.
+ * The keys around a space that anyone can check without holding a secret.
  *
  * What a space is, fixed at creation, is its constitution
  * (`space/constitution.ts`), whose hash is the space id. Everything after
- * that — definitions, assignments, invites — is records in the space's
- * access history (`space/roles.ts`); their keys are made here.
+ * that is records in the space's access history (`space/roles.ts`); their
+ * keys are made here.
  *
  * A private space's **read key pair** is derived from its AES key, so everyone
  * who can read already has it. A node checks a connecting reader against its
@@ -53,13 +52,11 @@ export async function expandSecret(secret: Uint8Array, info: string): Promise<Ui
 
 /**
  * A key pair from a secret, for one purpose. The secret is expanded under its
- * own label first, so no two uses of one secret — nor an account seed that
- * happened to equal it — ever give the same key.
+ * own label first, so no two uses of one secret, nor an account seed equal to
+ * it, give the same key.
  */
 async function derivePair(secret: Uint8Array, info: string, provider: CryptoProvider): Promise<SpaceKeyPair> {
-  const pair = await provider.deriveKeyPairFromSeed(await expandSecret(secret, info));
-  const did = await didOf(pair.publicKey, provider);
-  return Object.freeze({ did, privateKey: pair.privateKey });
+  return readKeyFromSeed(await expandSecret(secret, info), provider);
 }
 
 /** The key pair an invite link's secret stands for */
@@ -89,9 +86,6 @@ export async function readKeyFromSeed(seed: Uint8Array, provider: CryptoProvider
 }
 
 // ─── Record keys in the access history ────────────────────────────────
-//
-// Record keys are lower case; DIDs and CIDs are not. So a key names a hash of
-// the thing, and the record's body names the thing itself.
 
 /** The key of the record assigning a role to an account, or taking it away */
 export const assignKey = (did: string, role: string) => hashedKey('assign', `${did}|${role}`);

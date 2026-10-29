@@ -14,24 +14,18 @@
  *     versions/<cid>.json
  * ```
  *
- * **Versions are the truth; the entries are an index over them.** That
- * inversion is what lets two origins share one folder with no locking. Every
- * version file is immutable and named by its own content hash, so
- * concurrent writers can only ever add files that agree — the one genuinely
- * mutable thing, which version is current, is derived state that either side
- * can put right. {@link reconcileFolder} is what puts it right.
+ * **Versions are the truth; the entries are an index over them.** Version
+ * files are immutable and named by their content hash, so two origins can
+ * share a folder without locking; which version is current is derived, and
+ * {@link reconcileFolder} puts it right.
  */
 
 import type { StorageAdapter, BatchOp, Version } from '../types.js';
 import { utf8Encode, utf8Decode } from '../utils/encoding.js';
 import { isStoredVersion } from '../utils/guards.js';
 
-// ─── The slice of the File System Access API this module relies on ─────
-//
-// Declared structurally rather than taken from `lib.dom`, for two reasons: the
-// async iterator methods live in the separate `DOM.AsyncIterable` lib that this
-// project does not pull in, and writing the contract out makes it obvious what a
-// test double has to provide.
+// The slice of the File System Access API used here. Declared rather than
+// taken from `lib.dom`, whose async iterators live in a lib not pulled in.
 
 export interface WritableFileLike {
   write(data: Uint8Array | string): Promise<void>;
@@ -65,12 +59,8 @@ export interface FolderAdapter extends StorageAdapter {
   /** Where inside the folder this adapter keeps its files */
   readonly namespace: string;
   /**
-   * Re-reads the directory, picking up writes made by another origin or device.
-   *
-   * There is no filesystem change notification on the web, so freshness is
-   * something the caller asks for — on an interval, on focus, or after a sync
-   * round. Pair it with {@link reconcileFolder} to fold what turns up into the
-   * local tree.
+   * Re-reads the directory, picking up writes made by another origin or
+   * device; the web has no change notification. Pair it with {@link reconcileFolder}.
    */
   reload(): Promise<FolderReload>;
   /** Every version id currently on disk, whatever the entries believe */
@@ -78,22 +68,19 @@ export interface FolderAdapter extends StorageAdapter {
 }
 
 const VERSION_SUFFIX = '.json';
+const versionFile = (id: string) => encodeKey(id) + VERSION_SUFFIX;
 
 /**
- * Percent-encodes a storage key into a filename.
- *
- * Only lowercase is left unescaped, which looks excessive until you remember
- * that macOS and Windows filesystems are case-insensitive by default: without
- * this, the keys `space:Abc` and `space:abc` would quietly become one file and
- * one of the two values would be lost.
+ * Percent-encodes a storage key into a filename. Upper case is escaped too:
+ * on a case-insensitive filesystem `space:Abc` and `space:abc` would be one file.
  */
 export function encodeKey(key: string): string {
-  let out = '';
-  for (const byte of utf8Encode(key)) {
-    const char = String.fromCharCode(byte);
-    out += /[a-z0-9._-]/.test(char) ? char : `%${byte.toString(16).padStart(2, '0').toUpperCase()}`;
-  }
-  return out;
+  return Array.from(utf8Encode(key), encodeByte).join('');
+}
+
+function encodeByte(byte: number): string {
+  const char = String.fromCharCode(byte);
+  return /[a-z0-9._-]/.test(char) ? char : `%${byte.toString(16).padStart(2, '0').toUpperCase()}`;
 }
 
 /** Reverses {@link encodeKey}. */
@@ -161,30 +148,21 @@ export async function removeFile(dir: DirectoryHandleLike, name: string): Promis
 }
 
 /**
- * Opens a storage adapter backed by a directory on the user's disk.
+ * Opens a storage adapter backed by a directory on the user's disk. Versions
+ * are held in memory too, or a query would read one file per record.
  *
- * Versions are held in memory as well as on disk — a query would otherwise
- * mean one file read per record, and the example app re-lists on every render.
- * The cost is that the working set has to fit in memory.
- *
- * @param path Where to keep these files inside it, `/` separating
- *   subdirectories. The full path from the folder root, so that several
- *   accounts can each have a subtree of their own.
+ * @param path Where to keep these files from the folder root, `/` separating
+ *   subdirectories, so several accounts can each have a subtree.
  */
 export async function createFolderAdapter(root: DirectoryHandleLike, path: string): Promise<FolderAdapter> {
   const segments = path.split('/').filter(Boolean).map(encodeKey);
-  if (segments.length === 0) {
-    throw new Error('A folder adapter needs a path to live in.');
-  }
+  if (segments.length === 0) throw new Error('A folder adapter needs a path to live in.');
   const base = await resolvePath(root, segments);
   const kvDir = await base.getDirectoryHandle('kv', { create: true });
   const versionsDir = await base.getDirectoryHandle('versions', { create: true });
 
   const versions = new Map<string, Version>();
-
-  // Content-addressed nodes never change, so caching them is free. The root
-  // pointer does change, which is why `reload` throws the whole cache away
-  // rather than trying to be clever about which entries are still good.
+  /** Entries read or written, null for a miss; `reload` drops it, since another writer may have changed any */
   const kvCache = new Map<string, Uint8Array | null>();
 
   async function readVersionFile(name: string): Promise<Version | null> {
@@ -194,10 +172,19 @@ export async function createFolderAdapter(root: DirectoryHandleLike, path: strin
       const parsed: unknown = JSON.parse(utf8Decode(bytes));
       return isStoredVersion(parsed) ? parsed : null;
     } catch {
-      // A half-written file from a writer that died mid-flush. It will either be
-      // rewritten or stay unreadable; either way it is not ours to repair.
+      // Half written by a writer that died mid-flush: not ours to repair.
       return null;
     }
+  }
+
+  async function put(key: string, value: Uint8Array): Promise<void> {
+    await writeFolderFile(kvDir, encodeKey(key), value);
+    kvCache.set(key, value);
+  }
+
+  async function remove(key: string): Promise<void> {
+    await removeFile(kvDir, encodeKey(key));
+    kvCache.set(key, null);
   }
 
   async function reload(): Promise<FolderReload> {
@@ -242,15 +229,8 @@ export async function createFolderAdapter(root: DirectoryHandleLike, path: strin
       return bytes;
     },
 
-    async put(key: string, value: Uint8Array): Promise<void> {
-      await writeFolderFile(kvDir, encodeKey(key), value);
-      kvCache.set(key, value);
-    },
-
-    async delete(key: string): Promise<void> {
-      await removeFile(kvDir, encodeKey(key));
-      kvCache.set(key, null);
-    },
+    put,
+    delete: remove,
 
     async list(prefix = ''): Promise<string[]> {
       const keys: string[] = [];
@@ -258,19 +238,14 @@ export async function createFolderAdapter(root: DirectoryHandleLike, path: strin
         const key = decodeKey(name);
         if (!key.startsWith(prefix)) continue;
         keys.push(key);
-        // Another writer created it after this process looked and found
-        // nothing. The file is on disk now, so the remembered miss is stale.
+        // Another writer created it since this process missed it.
         if (kvCache.get(key) === null) kvCache.delete(key);
       }
       return keys;
     },
 
     async putVersion(version: Version): Promise<void> {
-      await writeFolderFile(
-        versionsDir,
-        encodeKey(version.id) + VERSION_SUFFIX,
-        utf8Encode(JSON.stringify(version)),
-      );
+      await writeFolderFile(versionsDir, versionFile(version.id), utf8Encode(JSON.stringify(version)));
       versions.set(version.id, version);
     },
 
@@ -279,25 +254,20 @@ export async function createFolderAdapter(root: DirectoryHandleLike, path: strin
       if (known) return known;
 
       // Not in memory: another origin may have written it since the last reload.
-      const version = await readVersionFile(encodeKey(id) + VERSION_SUFFIX);
+      const version = await readVersionFile(versionFile(id));
       if (version) versions.set(id, version);
       return version;
     },
 
     async deleteVersion(id: string): Promise<void> {
-      await removeFile(versionsDir, encodeKey(id) + VERSION_SUFFIX);
+      await removeFile(versionsDir, versionFile(id));
       versions.delete(id);
     },
 
     async batch(ops: ReadonlyArray<BatchOp>): Promise<void> {
       for (const op of ops) {
-        if (op.type === 'put') {
-          await writeFolderFile(kvDir, encodeKey(op.key), op.value);
-          kvCache.set(op.key, op.value);
-        } else {
-          await removeFile(kvDir, encodeKey(op.key));
-          kvCache.set(op.key, null);
-        }
+        if (op.type === 'put') await put(op.key, op.value);
+        else await remove(op.key);
       }
     },
 

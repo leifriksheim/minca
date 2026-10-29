@@ -1,10 +1,7 @@
 /**
  * A blob store in any S3-compatible bucket: Cloudflare R2, Backblaze B2,
- * MinIO, Wasabi, AWS itself.
- *
- * Requests are signed with `aws4fetch` rather than the AWS SDK or hand-written
- * SigV4 (see CLAUDE.md, Dependencies): tiny, no dependencies, `fetch` and
- * `crypto.subtle` only, so it runs in browsers, Node and Bun alike.
+ * MinIO, Wasabi, AWS itself. Requests are signed with `aws4fetch` (see
+ * CLAUDE.md, Dependencies).
  */
 import { AwsClient } from 'aws4fetch';
 import type { BlobStore } from '../blob-store.js';
@@ -45,11 +42,9 @@ export function createS3BlobStore(config: S3Config): BlobStore {
     for (let attempt = 1; ; attempt += 1) {
       const signed = await client.sign(url, init);
       const response = await call(signed);
-      if (response.status !== 429 && response.status < 500) return response;
-      if (attempt >= ATTEMPTS) return response;
-      const after = Number(response.headers.get('retry-after'));
-      const wait = Number.isFinite(after) && after > 0 ? after * 1000 : backoff(attempt, 5000, 200);
-      await new Promise((resolve) => setTimeout(resolve, wait));
+      const busy = response.status === 429 || response.status >= 500;
+      if (!busy || attempt >= ATTEMPTS) return response;
+      await sleep(retryDelay(response, attempt));
     }
   }
 
@@ -85,18 +80,30 @@ export function createS3BlobStore(config: S3Config): BlobStore {
         if (token) query.set('continuation-token', token);
         const response = await send(`${base}?${query}`);
         if (!response.ok) await fail('list', response);
-        const xml = await response.text();
-        for (const match of xml.matchAll(/<Key>([^<]*)<\/Key>/g))
-          keys.push(unescapeXml(match[1]!).slice(prefix.length));
-        token = /<IsTruncated>true<\/IsTruncated>/.test(xml)
-          ? (/<NextContinuationToken>([^<]*)<\/NextContinuationToken>/.exec(xml)?.[1] ?? null)
-          : null;
-        if (token) token = unescapeXml(token);
+        const page = parseListing(await response.text());
+        keys.push(...page.keys.map((key) => key.slice(prefix.length)));
+        token = page.next;
       } while (token);
       return keys;
     },
   });
 }
+
+/** The keys in one page of a ListObjectsV2 answer, and the token for the next if it was cut short */
+function parseListing(xml: string): { keys: string[]; next: string | null } {
+  const keys = [...xml.matchAll(/<Key>([^<]*)<\/Key>/g)].map((match) => unescapeXml(match[1]!));
+  const truncated = /<IsTruncated>true<\/IsTruncated>/.test(xml);
+  const token = /<NextContinuationToken>([^<]*)<\/NextContinuationToken>/.exec(xml)?.[1];
+  return { keys, next: truncated && token ? unescapeXml(token) : null };
+}
+
+/** Retry-After when the service gives one, else backing off */
+function retryDelay(response: Response, attempt: number): number {
+  const after = Number(response.headers.get('retry-after'));
+  return Number.isFinite(after) && after > 0 ? after * 1000 : backoff(attempt, 5000, 200);
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function unescapeXml(text: string): string {
   return text.replace(

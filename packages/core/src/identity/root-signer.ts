@@ -31,12 +31,7 @@ export interface RootSigner {
   delegate(params: NoteRequest): Promise<Delegation>;
 }
 
-/**
- * A signer for a key this page is holding.
- *
- * The ordinary case: the seed was unlocked here, so the key is in memory and
- * signing is a local operation.
- */
+/** A signer for a key this page holds: the seed was unlocked here */
 export function createLocalRootSigner(
   identity: { did: string; privateKey: CryptoKey },
   provider: CryptoProvider,
@@ -44,18 +39,17 @@ export function createLocalRootSigner(
   return Object.freeze({
     did: identity.did,
 
-    async delegate(params: NoteRequest): Promise<Delegation> {
-      return issueDelegation(
-        {
-          issuer: { did: identity.did, privateKey: identity.privateKey },
-          audience: params.audience,
-          command: params.command,
-          ...(params.subject !== undefined ? { subject: params.subject } : {}),
-          ...(params.policy ? { policy: params.policy } : {}),
-          expiration: params.expiration,
-        },
-        provider,
-      );
+    delegate({ audience, command, subject, policy, expiration }: NoteRequest): Promise<Delegation> {
+      const issuer = { did: identity.did, privateKey: identity.privateKey };
+      const note = {
+        issuer,
+        audience,
+        command,
+        ...(subject !== undefined ? { subject } : {}),
+        ...(policy ? { policy } : {}),
+        expiration,
+      };
+      return issueDelegation(note, provider);
     },
   });
 }

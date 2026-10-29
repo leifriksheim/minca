@@ -2,32 +2,21 @@
  * The account's own automations: "let me know when…", across its spaces,
  * noticed by nodes that can't read.
  *
- * An automation kept in the account registry instead of a space — the body
- * of a `std.automation` (`schemas/automations.ts`), in `sys.automation` — is
- * the account's alone: nobody else sees it, and it looks at the spaces it
- * names, or all of them. For now
- * it only notifies: new records a query finds in those spaces, perhaps only
- * other people's. Not protocol: a peer that has never heard of it syncs and
- * judges it like any other record (docs/automations.md).
+ * Kept in the account registry (`sys.automation`) rather than a space, the
+ * body of a `std.automation` is the account's alone, and looks at the spaces
+ * it names, or all of them. For now it only notifies. Not protocol
+ * (docs/automations.md).
  *
- * The account's carriers — its extension, its hosts — are the ones online to
- * notice, and they can't read. So every device holding the account key copies
- * each one into each carry space as a **wake** (`sys.wake`): the collection,
- * the spaces, and the tags of the topic values its `where` asks for, never the
- * values. A carrier learns "tag X, in Club", never what X stands for, and can
- * match arriving records on their outside — what it needs to wake an app that
- * is closed. That much is protocol (spec 03 §15).
+ * The account's carriers are the ones online to notice, and they can't read.
+ * So every device holding the account key copies each automation into each
+ * carry space as a **wake** (`sys.wake`): the collection, the spaces, and the
+ * tags of the topic values its `where` asks for, never the values. That much
+ * is protocol (spec 03 §15).
  *
- * Only an app proposes them (`AutomationProposal`), when the person asks it
- * to — "Notify me" — as a node already connected (`proposeToHome`); never
- * while connecting, and never a carrier or the home on its own. The person
- * says yes to each on the home's approval screen, and the home writes them
- * into the registry naming the app — the app never writes there itself. In
- * the home they can pause or remove them, not add any.
- *
- * The app that asked shows the notifications: an app given the whole account
- * reads the registry and matches what it sees arrive (`matchesRecord`,
- * `node/watch-notifications.ts`), with the body in hand.
+ * Only an app proposes them (`AutomationProposal`), when the person asks; the
+ * home writes them into the registry once the person says yes. The app that
+ * asked shows the notifications (`matchesRecord`,
+ * `node/watch-notifications.ts`).
  */
 import type { Version, Link } from '../types.js';
 import type { SpaceKey } from '../privacy/space-encryption.js';
@@ -76,9 +65,9 @@ export function checkOwnAutomation(value: unknown): string | null {
 /** Why a query can't be an account's own automation's, or null: one collection, and a filter over each record alone */
 function checkOwnQuery(query: unknown): string | null {
   if (!isObject(query)) return 'when.query must be an object';
-  for (const key of Object.keys(query))
-    if (key !== 'collection' && key !== 'where')
-      return `when.query.${key}: an automation of the account’s own reads only collection and where`;
+  const stray = Object.keys(query).find((key) => key !== 'collection' && key !== 'where');
+  if (stray !== undefined)
+    return `when.query.${stray}: an automation of the account’s own reads only collection and where`;
   if (typeof query.collection !== 'string' || !COLLECTION_NAME.test(query.collection))
     return 'when.query.collection must be a collection name';
   if (query.collection.startsWith('sys.'))
@@ -175,25 +164,28 @@ export function checkAppAutomation(value: unknown): string | null {
 export function checkProposal(proposal: unknown, origin?: string): string | null {
   const shape = schemaProblem(PROPOSAL, proposal, 'proposal');
   if (shape || !isObject(proposal)) return shape ?? 'A proposed automation must be an object';
-  const p = proposal;
-  const when = isObject(p.when) ? p.when : {};
-  const name = typeof p.name === 'string' ? p.name.trim() : p.name;
+  const { open } = proposal;
+  const when = isObject(proposal.when) ? proposal.when : {};
+  const name = trimmed(proposal.name);
   // What it would become, with the defaults the home fills in: checked as the account's own.
   const candidate = {
     name,
     when: { query: when.query, others: when.others ?? true },
-    then: p.then ?? { kind: 'notify', text: name },
-    spaces: p.spaces ?? 'all',
-    ...(p.open !== undefined ? { open: p.open } : {}),
+    then: proposal.then ?? { kind: 'notify', text: name },
+    spaces: proposal.spaces ?? 'all',
+    ...(open !== undefined ? { open } : {}),
     since: new Date(0).toISOString(),
   };
   const problem = checkOwnAutomation(candidate);
   if (problem) return problem;
-  if (origin === undefined) return null;
+  if (origin === undefined || open === undefined) return null;
   // eslint-disable-next-line @typescript-eslint/no-base-to-string -- checkOwnAutomation has passed it as a web address, the way URL reads it
-  if (p.open !== undefined && new URL(String(p.open)).origin !== origin)
-    return 'open must be an address on the app’s own site';
-  return null;
+  return new URL(String(open)).origin === origin ? null : 'open must be an address on the app’s own site';
+}
+
+/** A name with its ends trimmed, when it is text */
+function trimmed<T>(name: T): T | string {
+  return typeof name === 'string' ? name.trim() : name;
 }
 
 /**
@@ -214,7 +206,7 @@ export function fromProposal(
   proposal: AutomationProposal,
   context: { readonly app: AutomationApp; readonly spaces: AutomationSpaces; readonly since?: string },
 ): Automation {
-  const name = typeof proposal.name === 'string' ? proposal.name.trim() : proposal.name;
+  const name = trimmed(proposal.name);
   const own: Automation = {
     name,
     when: { query: proposal.when?.query, others: proposal.when?.others ?? true },
@@ -283,8 +275,6 @@ function requiredValues(
   topics: ReadonlyArray<string>,
 ): { field: string; values: Array<string | number | boolean> } | null {
   if (!where) return null;
-  const scalar = (v: unknown): v is string | number | boolean =>
-    typeof v === 'string' || typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v));
   for (const [field, condition] of Object.entries(where)) {
     if (field === '$and' && Array.isArray(condition)) {
       for (const part of condition) {
@@ -294,14 +284,23 @@ function requiredValues(
       continue;
     }
     if (field.startsWith('$') || !topics.includes(field)) continue;
-    if (scalar(condition)) return { field, values: [condition] };
+    if (isScalar(condition)) return { field, values: [condition] };
     if (!isObject(condition)) continue;
-    if (scalar(condition.$eq)) return { field, values: [condition.$eq] };
-    if (scalar(condition.$contains)) return { field, values: [condition.$contains] };
-    if (Array.isArray(condition.$in) && condition.$in.length > 0 && condition.$in.every(scalar))
+    if (isScalar(condition.$eq)) return { field, values: [condition.$eq] };
+    if (isScalar(condition.$contains)) return { field, values: [condition.$contains] };
+    if (Array.isArray(condition.$in) && condition.$in.length > 0 && condition.$in.every(isScalar))
       return { field, values: condition.$in };
   }
   return null;
+}
+
+const isScalar = (v: unknown): v is string | number | boolean =>
+  typeof v === 'string' || typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v));
+
+/** The spaces an automation looks at, of those given */
+function lookedAt(own: Automation, spaces: ReadonlyArray<WakeSpace>): ReadonlyArray<WakeSpace> {
+  const only = own.spaces ?? 'all';
+  return only === 'all' ? spaces : spaces.filter((s) => only.includes(s.id));
 }
 
 /**
@@ -318,34 +317,38 @@ export async function wakeFor(
 ): Promise<Wake> {
   const { collection, where } = ownQuery(own);
   const resolved = where === undefined ? undefined : asRunner(where, account);
-  const only = own.spaces ?? 'all';
-  const looked = only === 'all' ? spaces : spaces.filter((s) => only.includes(s.id));
   const tags: Record<string, string[]> = {};
-  for (const space of looked) {
-    // Without its key a device can read neither the space's records nor its topics: never wake there.
-    if (space.visibility === 'private' && !space.key) {
-      tags[space.id] = [];
-      continue;
-    }
-    const required = requiredValues(resolved, space.topics(collection));
-    if (!required || new Set(required.values).size > MAX_WAKE_TAGS) continue;
-    const key = await topicKey(
-      space.visibility === 'private' ? { spaceKey: space.key!.raw } : { spaceId: space.id },
-    );
-    tags[space.id] = await Promise.all(
-      [...new Set(required.values)].map((value) => topicTag(key, collection, required.field, value)),
-    );
+  for (const space of lookedAt(own, spaces)) {
+    const spaceTags = await wakeTags(space, collection, resolved);
+    if (spaceTags) tags[space.id] = spaceTags;
   }
   return {
     v: 1,
     collection,
-    spaces: only,
+    spaces: own.spaces ?? 'all',
     ...(Object.keys(tags).length > 0 ? { tags } : {}),
     others: own.when?.others ?? false,
     ...(own.open ? { open: own.open } : {}),
     paused: own.paused ?? false,
     since: own.since,
   };
+}
+
+/** The tags a space's records must carry one of to wake, or undefined when any record wakes */
+async function wakeTags(
+  space: WakeSpace,
+  collection: string,
+  where: Filter | undefined,
+): Promise<string[] | undefined> {
+  // Without its key a device can read neither the space's records nor its topics: never wake there.
+  if (space.visibility === 'private' && !space.key) return [];
+  const required = requiredValues(where, space.topics(collection));
+  if (!required) return undefined;
+  const values = new Set(required.values);
+  if (values.size > MAX_WAKE_TAGS) return undefined;
+  const spaceKey = space.visibility === 'private' ? space.key : null;
+  const key = await topicKey(spaceKey ? { spaceKey: spaceKey.raw } : { spaceId: space.id });
+  return Promise.all([...values].map((value) => topicTag(key, collection, required.field, value)));
 }
 
 const WAKE: JsonSchema = {
@@ -401,10 +404,9 @@ export function linkedWakes(
   spaces: ReadonlyArray<WakeSpace>,
 ): ReadonlyArray<Wake> {
   const { collection, where } = ownQuery(own);
-  const only = own.spaces ?? 'all';
   // Each collection read, and the spaces whose definition reads it: a definer in one space can't widen the others.
   const read = new Map<string, string[]>();
-  for (const space of only === 'all' ? spaces : spaces.filter((s) => only.includes(s.id))) {
+  for (const space of lookedAt(own, spaces)) {
     const named = namedComputed(space.computed?.(collection) ?? {}, where);
     for (const { collection: from } of linkedReads(named)) {
       if (from.startsWith('sys.') || from === collection) continue;
@@ -431,7 +433,6 @@ export function linkedWakes(
 
 /** Who a version was written for: the account that issued its note, else its own key */
 function rootOf(version: Version): string {
-  if (!version.proof) return version.author;
   return parseDelegation(version.proof)?.payload.iss ?? version.author;
 }
 
