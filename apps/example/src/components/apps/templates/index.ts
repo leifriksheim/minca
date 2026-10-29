@@ -72,8 +72,9 @@ export const TEMPLATES: ReadonlyArray<Template> = [
     app: {
       template: 'kanban',
       title: 'Kanban',
-      description: 'Tasks on a board: drag them between columns, and into order.',
-      collections: [task.name, column.name],
+      description:
+        'Cards on a board, like Trello: drag them between columns, put people on them, give them a due date and a checklist.',
+      collections: [task.name, column.name, comment.name, file.name],
       shows: [task.name],
       notify: [
         notifyOn('New task', task.name),
@@ -81,8 +82,7 @@ export const TEMPLATES: ReadonlyArray<Template> = [
       ],
       screen: kanban,
     },
-    needs: [task, column],
-    uses: [file],
+    needs: [task, column, comment, file],
     setup: async (node, spaceId) => {
       if ((await node.records.list(spaceId, { collection: column.name })).length > 0) return;
       let position: string | null = null;

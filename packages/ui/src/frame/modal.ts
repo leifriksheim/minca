@@ -19,13 +19,16 @@ export function Modal({
   children?: ComponentChildren;
 }) {
   const box = useRef<HTMLDivElement>(null);
+  // The latest onClose, since screens pass a new one each time they draw
+  const close = useRef(onClose);
+  close.current = onClose;
   useEffect(() => {
-    const away = (event: KeyboardEvent) => event.key === 'Escape' && onClose();
+    const away = (event: KeyboardEvent) => event.key === 'Escape' && close.current();
     addEventListener('keydown', away);
-    // What was in focus before goes back to the page beneath; the dialog takes it.
+    // Once, when it opens: taken again on every redraw, it would pull the cursor out of what is being typed.
     box.current?.focus();
     return () => removeEventListener('keydown', away);
-  }, [onClose]);
+  }, []);
   return html`<div
     class="modal-scrim"
     onClick=${(event: Event) => event.target === event.currentTarget && onClose()}
