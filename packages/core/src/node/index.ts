@@ -79,4 +79,5 @@ export type {
   InboxView,
   KnockView,
   SentKnockView,
+  SpaceInviteView,
 } from './types.js';

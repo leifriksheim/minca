@@ -126,6 +126,8 @@ export const API = Object.freeze({
     requests: 'read knocks',
     accept: 'accept knocks',
     others: "look inside a contact's space",
+    invite: 'invite a contact into a space',
+    invites: 'read invites from contacts',
   },
   // Direct messages are sealed to the person's member key, which an agent isn't given.
   direct: { reachable: 'own', send: 'send direct messages', list: 'read direct messages' },
@@ -135,6 +137,8 @@ export const API = Object.freeze({
     open: 'open your inbox',
     rotate: 'replace your inbox',
     clear: 'clear your inbox',
+    claim: 'claim a username',
+    release: 'give up a username',
     knock: "knock on anyone's inbox",
     knocks: 'read knocks',
     sent: 'look at knocks',

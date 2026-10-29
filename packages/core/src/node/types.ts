@@ -747,7 +747,23 @@ export interface ContactView {
   readonly note?: string;
   /** Their knocks are hidden, in every space and in your inbox */
   readonly blocked: boolean;
+  /** Their username, when you found them by it */
+  readonly username?: string;
   readonly updatedAt: string;
+}
+
+/** An invite to a space a contact left for you in your space for two */
+export interface SpaceInviteView {
+  /** Who left it */
+  readonly from: string;
+  /** The space it invites you to, and what it is called */
+  readonly space: string;
+  readonly name: string;
+  /** What `spaces.join` takes */
+  readonly invite: string;
+  /** The space for two it was left in */
+  readonly pairSpace: string;
+  readonly createdAt: string;
 }
 
 /** A knock left for this account in a space both belong to, opened */
@@ -799,6 +815,14 @@ export interface NodeContacts {
   accept(spaceId: string, requestKey: string): Promise<ContactView>;
   /** Accounts in your space for two besides the two of you */
   others(did: string): Promise<ReadonlyArray<string>>;
+  /**
+   * Invites whoever you share a space for two with into another space: an
+   * invite for `role` (as `spaces.invite` makes one), left for them there. Works for a
+   * knock nobody joined yet too, so they find it when they do.
+   */
+  invite(pairSpace: string, spaceId: string, options?: { readonly role?: string }): Promise<void>;
+  /** Invites contacts left for you, to spaces you don't hold yet, newest first */
+  invites(): Promise<ReadonlyArray<SpaceInviteView>>;
 }
 
 /** A direct message, opened (`node.direct`) */
@@ -840,6 +864,9 @@ export interface InboxView {
   readonly places: ReadonlyArray<string>;
   /** The inbox code to hand out, in a link (`#inbox=…`) or a QR code */
   readonly code: string;
+  /** The username that leads to it, and when it lapses unless claimed again (ms) */
+  readonly username?: string;
+  readonly usernameUntil?: number;
   readonly updatedAt: string;
 }
 
@@ -864,6 +891,8 @@ export interface SentKnockView {
   readonly space: string;
   /** The name their inbox code gave */
   readonly name: string;
+  /** The username you knocked on, when it was one */
+  readonly username?: string;
   readonly at: string;
 }
 
@@ -877,7 +906,19 @@ export interface NodeInbox {
   rotate(): Promise<InboxView>;
   /** Clears every knock waiting in your inbox, and keeps it open */
   clear(): Promise<void>;
-  /** Knocks on someone's inbox (a code or link) with a space for two; `carried` as for `contacts.ask` */
+  /**
+   * Claims a username (`leif@minca.social`) for your inbox on its domain's
+   * name service, opening the inbox first if need be. The name follows the
+   * inbox: replacing it, or changing its name or mailboxes, points the name at
+   * the new code, and it is renewed before it lapses.
+   */
+  claim(username: string): Promise<InboxView>;
+  /** Gives your username up: it leads nowhere, and anyone may claim it */
+  release(): Promise<InboxView>;
+  /**
+   * Knocks on someone's inbox, by its code, a link, or a username, with a
+   * space for two; `carried` as for `contacts.ask`
+   */
   knock(
     code: string,
     options?: { readonly note?: string },

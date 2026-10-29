@@ -19,11 +19,14 @@ import {
   contactRequest as contactRequestSchema,
   inbox as inboxSchema,
   knock as knockSchema,
+  spaceInvite as spaceInviteSchema,
   type Contact,
   type ContactRequestRecord,
   type Inbox,
   type Knock,
+  type SpaceInviteRecord,
 } from '../schemas/contacts.js';
+import { claimUsername, formatUsername, parseUsername, resolveUsername } from '../inbox/names.js';
 import {
   clip,
   encodeInbox,
@@ -52,6 +55,7 @@ import type {
   NodeContacts,
   NodeInbox,
   NodeRecord,
+  SpaceInviteView,
 } from './types.js';
 import { ensureDefined, errorText, inBackground, type NodeContext } from './node-context.js';
 
@@ -236,6 +240,7 @@ export function createNodeContacts(ctx: NodeContext) {
       space: typeof body.space === 'string' ? body.space : null,
       ...(typeof body.note === 'string' ? { note: body.note } : {}),
       blocked: body.blocked === true,
+      ...(typeof body.username === 'string' ? { username: body.username } : {}),
       updatedAt: record.updatedAt,
     });
   }
@@ -444,6 +449,47 @@ export function createNodeContacts(ctx: NodeContext) {
       ]);
       return [...seen].filter((account) => account !== config.signer.did && account !== did).sort();
     },
+
+    async invite(pairSpace, spaceId, options = {}) {
+      requireEverywhere('Inviting someone');
+      const space = (await ctx.spaces.list()).find((summary) => summary.id === spaceId);
+      if (!space) throw new Error("You don't hold that space");
+      const invite = await ctx.spaces.invite(spaceId, options.role ? { role: options.role } : {});
+      const pair = await ctx.runtime(pairSpace);
+      await ensureDefined(pair, spaceInviteSchema);
+      // One per space: inviting again replaces the invite left before.
+      await pair.put<SpaceInviteRecord>(spaceInviteSchema.name, { space: spaceId, name: space.name, invite });
+    },
+
+    async invites() {
+      const held = new Set((await ctx.spaces.list()).map((summary) => summary.id));
+      const blocked = await blockedDids();
+      const pairs = new Set(
+        (await contactRecords()).flatMap(({ body }) => (body!.space ? [body!.space] : [])),
+      );
+      const found: SpaceInviteView[] = [];
+      for (const pairSpace of pairs) {
+        if (!held.has(pairSpace)) continue;
+        const pair = await ctx.runtime(pairSpace);
+        for (const record of await pair.list<SpaceInviteRecord>({ collection: spaceInviteSchema.name })) {
+          const body = record.body;
+          const from = record.root;
+          if (!record.verified || !from || from === config.signer.did || blocked.has(from)) continue;
+          if (!body || typeof body.invite !== 'string' || held.has(body.space)) continue;
+          found.push(
+            Object.freeze({
+              from,
+              space: body.space,
+              name: body.name,
+              invite: body.invite,
+              pairSpace,
+              createdAt: record.createdAt,
+            }),
+          );
+        }
+      }
+      return found.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    },
   });
 
   // ─── The inbox ─────────────────────────────────────────────────────
@@ -514,6 +560,8 @@ export function createNodeContacts(ctx: NodeContext) {
         },
         provider,
       ),
+      ...(body.username ? { username: body.username } : {}),
+      ...(body.usernameUntil ? { usernameUntil: body.usernameUntil } : {}),
       updatedAt: record.updatedAt,
     });
   }
@@ -521,7 +569,12 @@ export function createNodeContacts(ctx: NodeContext) {
   /** Writes the inbox's settings, checked the way a knocker will read its code */
   async function writeInbox(body: Inbox, current: NodeRecord<Inbox> | null): Promise<InboxView> {
     const keys = await inboxKeys(body.gen);
-    await encodeInbox(keys.sign, { ...body, key: keys.publicKey, sign: keys.signPublic }, provider);
+    const { gen, places, name } = body;
+    await encodeInbox(
+      keys.sign,
+      { gen, places, ...(name ? { name } : {}), key: keys.publicKey, sign: keys.signPublic },
+      provider,
+    );
     const open = await contactsRuntime();
     await ensureDefined(open, inboxSchema);
     return inboxView(
@@ -550,6 +603,36 @@ export function createNodeContacts(ctx: NodeContext) {
     failed.clear();
   }
 
+  // ─── The username ──────────────────────────────────────────────────
+  //
+  // A name at a domain that leads to the inbox's code (spec 07 §9), claimed on
+  // the domain's name service (`packages/core/docs/usernames.md`). It is kept
+  // in `std.inbox`, so every device points it at the code when the code
+  // changes, and renews it before its year is up.
+
+  /** Renew a name this long before it lapses */
+  const RENEW_BEFORE_MS = 30 * DAY_MS;
+  /** When this node last looked whether the name needs renewing */
+  let renewChecked = 0;
+
+  /** Points the inbox's username at its code now, and keeps when it lapses */
+  async function pointName(view: InboxView): Promise<InboxView> {
+    if (!view.username) return view;
+    const until = await claimUsername(view.username, requireContactKey('Your username'), view.code);
+    const current = await inboxRecord();
+    return current ? writeInbox({ ...current.body!, usernameUntil: until }, current) : view;
+  }
+
+  /** Claims the name again when its year is nearly up; at most once an hour */
+  async function renewName(): Promise<void> {
+    if (Date.now() - renewChecked < 3600_000) return;
+    renewChecked = Date.now();
+    const current = await inboxRecord();
+    const { username, usernameUntil = 0 } = current?.body ?? {};
+    if (current && username && usernameUntil - Date.now() < RENEW_BEFORE_MS)
+      await pointName(await inboxView(current));
+  }
+
   const sentRecords = () =>
     ownContactRecords<Knock>(
       knockSchema.name,
@@ -562,7 +645,7 @@ export function createNodeContacts(ctx: NodeContext) {
    */
   async function settleSent(): Promise<void> {
     for (const record of await sentRecords()) {
-      const { space, name, invite } = record.body!;
+      const { space, name, invite, username } = record.body!;
       if (!(await registry.get(space))) {
         await (await contactsRuntime()).remove(record.key);
         continue;
@@ -574,7 +657,7 @@ export function createNodeContacts(ctx: NodeContext) {
         // Whoever else the invite reached, nobody more joins with it.
         await ctx.spaces.closeInvite(space, invite).catch(() => {});
         const given = (await open.profiles()).find((profile) => profile.did === joiner)?.name;
-        await writeContact({ did: joiner, name: given ?? name, space });
+        await writeContact({ did: joiner, name: given ?? name, space, ...(username ? { username } : {}) });
         await (await contactsRuntime()).remove(record.key);
       } else if (Date.now() - Date.parse(record.createdAt) > KNOCK_TTL_SECONDS * 1000 + DAY_MS) {
         await ctx.spaces.leave(space).catch(() => {});
@@ -645,7 +728,21 @@ export function createNodeContacts(ctx: NodeContext) {
       if (places.length === 0)
         throw new Error('An inbox needs a mailbox to hold its knocks, and this node has none.');
       const name = clip((options.name ?? current?.body?.name ?? (await ownName()) ?? '').trim(), 64);
-      return writeInbox({ gen: current?.body?.gen ?? 0, places, ...(name ? { name } : {}) }, current);
+      const { username, usernameUntil } = current?.body ?? {};
+      const written = await writeInbox(
+        {
+          gen: current?.body?.gen ?? 0,
+          places,
+          ...(name ? { name } : {}),
+          ...(username ? { username, ...(usernameUntil ? { usernameUntil } : {}) } : {}),
+        },
+        current,
+      );
+      // A code that says something new: the name leads to it.
+      const said = (body: Inbox | undefined) => JSON.stringify([body?.places, body?.name ?? null]);
+      return current && said(current.body) !== said({ gen: 0, places, ...(name ? { name } : {}) })
+        ? pointName(written)
+        : written;
     },
 
     async rotate() {
@@ -655,7 +752,35 @@ export function createNodeContacts(ctx: NodeContext) {
       // What waits in the old one goes with it.
       await purgeInbox(current.body!, null).catch(() => 0);
       forgetKnocks();
-      return writeInbox({ ...current.body!, gen: current.body!.gen + 1 }, current);
+      return pointName(await writeInbox({ ...current.body!, gen: current.body!.gen + 1 }, current));
+    },
+
+    async claim(username) {
+      requireEverywhere('Claiming a username');
+      const key = requireContactKey('Claiming a username');
+      const parsed = parseUsername(username);
+      if (!parsed) throw new Error('That is not a username, like leif@minca.social');
+      const shown = formatUsername(parsed);
+      const view = (await inbox.get()) ?? (await inbox.open());
+      const until = await claimUsername(shown, key, view.code);
+      const current = await inboxRecord();
+      if (!current) throw new Error('Your inbox is not open');
+      const previous = current.body!.username;
+      const written = await writeInbox({ ...current.body!, username: shown, usernameUntil: until }, current);
+      // One name at a time: the one before leads nowhere now.
+      if (previous && previous !== shown) await claimUsername(previous, key, null).catch(() => 0);
+      return written;
+    },
+
+    async release() {
+      requireEverywhere('Giving up a username');
+      const key = requireContactKey('Giving up a username');
+      const current = await inboxRecord();
+      const username = current?.body?.username;
+      if (!current || !username) throw new Error('You have no username');
+      await claimUsername(username, key, null);
+      const { gen, places, name } = current.body;
+      return writeInbox({ gen, places, ...(name ? { name } : {}) }, current);
     },
 
     async clear() {
@@ -667,9 +792,11 @@ export function createNodeContacts(ctx: NodeContext) {
       forgetKnocks();
     },
 
-    async knock(code, options = {}) {
+    async knock(target, options = {}) {
       requireContactKey('Knocking');
       requireEverywhere('Knocking');
+      const username = parseUsername(target);
+      const code = username ? (await resolveUsername(target, provider)).code : target;
       const theirs = await readInboxCode(code, provider);
       if ((await inbox.get())?.key === theirs.key) throw new Error('That is your own inbox');
       if (!contactsSpaceId) await contactsRuntime();
@@ -689,13 +816,19 @@ export function createNodeContacts(ctx: NodeContext) {
       }
       const open = await contactsRuntime();
       await ensureDefined(open, knockSchema);
-      await open.put<Knock>(knockSchema.name, { space: made.space, name, invite: made.invite });
+      await open.put<Knock>(knockSchema.name, {
+        space: made.space,
+        name,
+        invite: made.invite,
+        ...(username ? { username: formatUsername(username) } : {}),
+      });
       return { space: made.space, carried: made.carried };
     },
 
     async knocks() {
       requireContactKey('Reading knocks');
       await settleSent().catch(() => {});
+      await renewName().catch(() => {});
       const blocked = await blockedDids();
       const found: KnockView[] = [];
       for (const { id, opened } of await readKnocks()) {
@@ -719,7 +852,12 @@ export function createNodeContacts(ctx: NodeContext) {
     async sent() {
       await settleSent().catch(() => {});
       return (await sentRecords()).map((record) =>
-        Object.freeze({ space: record.body!.space, name: record.body!.name, at: record.createdAt }),
+        Object.freeze({
+          space: record.body!.space,
+          name: record.body!.name,
+          ...(record.body!.username ? { username: record.body!.username } : {}),
+          at: record.createdAt,
+        }),
       );
     },
 
