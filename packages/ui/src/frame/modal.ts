@@ -3,8 +3,9 @@ import { useEffect, useRef } from 'preact/hooks';
 import { html } from './html';
 
 /**
- * A dialog over the screen, like the app's: a title, a close button, and
- * whatever is in it. Escape or a click on the dimmed page closes it.
+ * A dialog over the screen: a title, a close button, and whatever is in it.
+ * It doesn't dim the screen behind, which is only one pane of the app around
+ * it. Escape or a click beside it closes it.
  */
 export function Modal({
   title,

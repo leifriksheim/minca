@@ -10,6 +10,7 @@ import {
   comment,
   decision,
   event,
+  expense,
   file,
   list,
   listItem,
@@ -22,16 +23,19 @@ import {
   positionBetween,
   proposal,
   rsvp,
+  settlement,
   task,
   vote,
 } from '@minca/core/schemas';
 import type { Template } from '../launcher';
 import calls from './calls.html?raw';
+import bills from './bills.html?raw';
 import chat from './chat.html?raw';
 import decisions from './decisions.html?raw';
 import events from './events.html?raw';
 import files from './files.html?raw';
 import kanban from './kanban.html?raw';
+import lists from './lists.html?raw';
 import marketplace from './marketplace.html?raw';
 import polls from './polls.html?raw';
 
@@ -87,6 +91,34 @@ export const TEMPLATES: ReadonlyArray<Template> = [
         await node.records.put(spaceId, column.name, { name, position });
       }
     },
+  },
+  {
+    app: {
+      template: 'lists',
+      title: 'Lists',
+      description: 'To-dos, groceries, packing: lists anyone can write in at once, a line each.',
+      collections: [list.name, listItem.name],
+      shows: [list.name],
+      notify: [notifyOn('New list', list.name)],
+      screen: lists,
+    },
+    needs: [list, listItem],
+  },
+  {
+    app: {
+      template: 'bills',
+      title: 'Bills',
+      description:
+        'Split what you spend together, see who owes whom, and settle up in as few payments as can be.',
+      collections: [expense.name, settlement.name, comment.name],
+      shows: [expense.name],
+      notify: [
+        notifyOn('Expenses I owe a part of', expense.name, { owedBy: { $contains: '$me' } }),
+        notifyOn('Paid back to me', settlement.name, { to: '$me' }),
+      ],
+      screen: bills,
+    },
+    needs: [expense, settlement, comment],
   },
   {
     app: {

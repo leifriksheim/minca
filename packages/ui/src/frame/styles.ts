@@ -62,8 +62,9 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--m
 .c-sage { --c: var(--minca-sage); } .c-lilac { --c: var(--minca-lilac); }
 .chip { min-height: 32px; max-width: 280px; padding: 0 12px; font-weight: 400; }
 .chip[aria-pressed="true"] { background: var(--minca-ink); border-color: var(--minca-ink); color: var(--minca-inverse); }
-.modal-scrim { position: fixed; inset: 0; z-index: 100; display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; background: var(--minca-scrim); }
-.modal { width: 100%; display: flex; flex-direction: column; gap: 16px; padding: 20px; background: var(--minca-card); border-radius: var(--minca-radius-lg); box-shadow: var(--minca-shadow); }
+.modal-scrim { position: fixed; inset: 0; z-index: 100; display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; }
+.modal { width: 100%; display: flex; flex-direction: column; gap: 16px; padding: 20px; background: var(--minca-card); border: 1px solid var(--minca-line-strong); border-radius: var(--minca-radius-lg); box-shadow: var(--minca-shadow); }
+dialog::backdrop { background: none; }
 .modal:focus { outline: none; }
 .cover { position: relative; overflow: hidden; background: var(--minca-sunken); }
 .place-field { position: relative; }

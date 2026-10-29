@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { message, useAction } from '@minca/app-shared/action';
+import { useAction } from '@minca/app-shared/action';
 import { describeCollection, type NodeCollection, type NodeRecord, type SpaceSummary } from '@minca/core';
-import { useLive, useNode, useSpaces } from '@minca/react';
+import { useLive, useNode } from '@minca/react';
 import {
   blueprint as blueprintSchema,
   reviewBlueprint,
@@ -9,7 +9,7 @@ import {
   type BlueprintReview,
 } from '@minca/core/schemas';
 import { AppBoard } from './AppBoard';
-import { addMade, checkLauncherApp, copyApp, removeApp, updated, type LauncherApp } from './launcher';
+import { addMade, checkLauncherApp, removeApp, updated, type LauncherApp } from './launcher';
 import { ScreenFrame } from './ScreenFrame';
 import { ago } from '@minca/ui/time';
 import { styles, palette, hstack, stack } from '../../styles';
@@ -403,34 +403,13 @@ export function MadeAppScreen({
   const body = record.body!;
   const names = body.collections ?? [];
   const screen = body.screen;
-  const [plain, setPlain] = useState(false);
-  const others = useSpaces().spaces.filter((other) => other.id !== space.id && other.writable);
 
   return (
     <section
       aria-label={body.title}
       style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1, minHeight: 0 }}
     >
-      {(screen || others.length > 0) && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            flexWrap: 'wrap',
-            padding: '8px 16px',
-            borderBottom: `1px solid ${palette.surface.line}`,
-          }}
-        >
-          {screen && (
-            <LinkButton onClick={() => setPlain((was) => !was)} style={{ fontSize: 13, padding: 0 }}>
-              {plain ? 'Show its screen' : 'Show the records'}
-            </LinkButton>
-          )}
-          <CopyTo space={space} record={record} others={others} />
-        </div>
-      )}
-      {screen && !plain ? (
+      {screen ? (
         <ScreenFrame
           spaceId={space.id}
           appKey={record.key}
@@ -450,47 +429,6 @@ export function MadeAppScreen({
         </div>
       )}
     </section>
-  );
-}
-
-/** Proposes the same app in another of your spaces — people there decide for themselves */
-function CopyTo({
-  space,
-  record,
-  others,
-}: {
-  space: SpaceSummary;
-  record: NodeRecord<LauncherApp>;
-  others: ReadonlyArray<SpaceSummary>;
-}) {
-  const node = useNode();
-  const [said, setSaid] = useState<string | null>(null);
-  if (others.length === 0) return null;
-  return (
-    <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-      {said && <span style={{ color: palette.ink.muted }}>{said}</span>}
-      <select
-        value=""
-        aria-label="Copy to another space"
-        onChange={(event) => {
-          const target = others.find((other) => other.id === event.target.value);
-          if (!target) return;
-          setSaid(null);
-          copyApp(node, space.id, record, target.id).then(
-            () => setSaid(`Proposed in ${target.name}`),
-            (e: unknown) => setSaid(message(e)),
-          );
-        }}
-        style={{ ...styles.smallButton, height: 30 }}
-      >
-        <option value="">Copy to…</option>
-        {others.map((other) => (
-          <option key={other.id} value={other.id}>
-            {other.name}
-          </option>
-        ))}
-      </select>
-    </span>
   );
 }
 

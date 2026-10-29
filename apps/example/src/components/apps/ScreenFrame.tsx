@@ -227,9 +227,7 @@ export function ScreenFrame({
         }}
       >
         <p style={styles.error}>This screen tried to open another page, so it was stopped.</p>
-        <p style={styles.errorHint}>
-          It can't reach your data from there. Reload it to try again, or show the records as lists instead.
-        </p>
+        <p style={styles.errorHint}>It can't reach your data from there. Reload it to try again.</p>
         <QuietButton onClick={() => setGeneration((n) => n + 1)} style={{ alignSelf: 'flex-start' }}>
           Reload the screen
         </QuietButton>

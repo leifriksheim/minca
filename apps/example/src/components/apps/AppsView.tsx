@@ -1,11 +1,11 @@
-import { useState } from 'react';
-import { useAction } from '@minca/app-shared/action';
-import type { NodeCollection, SpaceSummary } from '@minca/core';
-import { useNode } from '@minca/react';
+import { useState, type ReactNode } from 'react';
+import { message, useAction } from '@minca/app-shared/action';
+import type { NodeCollection, NodeRecord, SpaceSummary } from '@minca/core';
+import { useNode, useSpaces } from '@minca/react';
 import type { AppEntry, useSpaceApps } from './entries';
 import { AppIcon, Count } from './AppIcon';
 import { Proposals } from './MadeApps';
-import { moveApp, removeApp } from './launcher';
+import { copyApp, moveApp, removeApp, type LauncherApp } from './launcher';
 import { Icon } from '../Icon';
 import { unreadOf, type Unread } from '../../seen';
 import { styles, palette, variants, hstack, stack, ui } from '../../styles';
@@ -15,7 +15,8 @@ import { confirmThen } from '../../confirm';
 /**
  * A space's apps like a phone's home screen: those added, then proposals.
  * Ready-made ones to add are under New app (`NewApp`). Someone who may add collections can arrange them: move
- * them, or take them off. Taking one off keeps everything it holds.
+ * them, or take them off. Taking one off keeps everything it holds. Arranging is also where an app is copied
+ * to another of your spaces.
  */
 export function AppsView({
   space,
@@ -37,6 +38,7 @@ export function AppsView({
   const node = useNode();
   const [arranging, setArranging] = useState(false);
   const arrange = useAction();
+  const others = useSpaces().spaces.filter((other) => other.id !== space.id && other.writable);
 
   const move = (app: AppEntry, by: number) => {
     const at = apps.placed.findIndex((record) => record.key === app.record.key);
@@ -92,6 +94,7 @@ export function AppsView({
                 last={at === apps.ready.length - 1}
                 onMove={(by) => move(app, by)}
                 onRemove={() => remove(app)}
+                copy={<CopyTo space={space} record={app.record} others={others} />}
               />
             ))}
           </ol>
@@ -189,6 +192,7 @@ function ArrangeRow({
   last,
   onMove,
   onRemove,
+  copy,
 }: {
   app: AppEntry;
   busy: boolean;
@@ -196,6 +200,7 @@ function ArrangeRow({
   last: boolean;
   onMove: (by: number) => void;
   onRemove: () => void;
+  copy: ReactNode;
 }) {
   return (
     <li style={{ ...arrangeRow, borderTop: first ? 'none' : `1px solid ${palette.surface.line}` }}>
@@ -224,11 +229,53 @@ function ArrangeRow({
             <Icon name="chevron" size={14} />
           </span>
         </button>
+        {copy}
         <QuietButton onClick={onRemove} disabled={busy} style={{ height: 40, color: palette.accent.danger }}>
           Remove
         </QuietButton>
       </span>
     </li>
+  );
+}
+
+/** Proposes the same app in another of your spaces — people there decide for themselves */
+function CopyTo({
+  space,
+  record,
+  others,
+}: {
+  space: SpaceSummary;
+  record: NodeRecord<LauncherApp>;
+  others: ReadonlyArray<SpaceSummary>;
+}) {
+  const node = useNode();
+  const [said, setSaid] = useState<string | null>(null);
+  if (others.length === 0) return null;
+  return (
+    <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+      {said && <span style={{ color: palette.ink.muted }}>{said}</span>}
+      <select
+        value=""
+        aria-label="Copy to another space"
+        onChange={(event) => {
+          const target = others.find((other) => other.id === event.target.value);
+          if (!target) return;
+          setSaid(null);
+          copyApp(node, space.id, record, target.id).then(
+            () => setSaid(`Proposed in ${target.name}`),
+            (e: unknown) => setSaid(message(e)),
+          );
+        }}
+        style={{ ...styles.smallButton, height: 40 }}
+      >
+        <option value="">Copy to…</option>
+        {others.map((other) => (
+          <option key={other.id} value={other.id}>
+            {other.name}
+          </option>
+        ))}
+      </select>
+    </span>
   );
 }
 

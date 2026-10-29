@@ -126,7 +126,8 @@ Inside it, window.minca is:
   await minca.update(key, body, { links? })             → the next version
   await minca.remove(key)
   await minca.people()              [{ did, name }] — everyone in the space who said their name
-  await minca.can(action, collection)   whether the person looking may "create", "edit" or "delete" there
+  await minca.can("create", collection)   whether the person looking may add records there
+  await minca.can("edit" | "delete", key)  whether they may change or delete that record: who wrote it decides
   await minca.picture(did)          the picture someone in the space chose, as a data: URL, or null
   await minca.open({ record: key }) or minca.open({ person: did })   shows it in the app around the screen: a record opens in the
                                     app that shows its collection (a message in the chat), else beside this screen
@@ -671,11 +672,14 @@ export function createScreenBridge(params: {
     },
     people: async () =>
       (await node.spaces.profiles(spaceId)).map((profile) => ({ did: profile.did, name: profile.name })),
+    // Creating is asked of a collection; editing and deleting of one record, since who wrote it decides.
     can: async (...args) => {
-      const { action, collection } = spread(args, ['action', 'collection']);
-      if (action !== 'create' && action !== 'edit' && action !== 'delete')
-        throw new Error('minca.can takes "create", "edit" or "delete", then a collection');
-      return node.records.can(spaceId, action, collectionOf(collection));
+      const { action, target } = spread(args, ['action', 'target']);
+      if (action === 'create') return node.records.can(spaceId, action, collectionOf(target));
+      if (action !== 'edit' && action !== 'delete')
+        throw new Error('minca.can takes "create" and a collection, or "edit" or "delete" and a record key');
+      const record = await ownRecord(target).catch(() => null);
+      return record !== null && node.records.can(spaceId, action, record.key);
     },
     // Only someone in this space, so a screen learns nothing the person looking couldn't see here.
     picture: async (...args) => {

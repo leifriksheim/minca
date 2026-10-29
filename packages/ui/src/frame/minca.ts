@@ -54,7 +54,7 @@ export interface Minca {
     options?: { links?: ReadonlyArray<{ rel: string; to: string }> },
   ): Promise<ScreenRecord>;
   people(): Promise<Someone[]>;
-  can(action: string, collection: string): Promise<boolean>;
+  can(action: string, target: string): Promise<boolean>;
   picture(did: string): Promise<string | null>;
   open(target: { person: string } | { record: string; link?: string }): Promise<null>;
   file(key: string, ref: string): Promise<string | null>;
