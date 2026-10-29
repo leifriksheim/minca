@@ -344,19 +344,6 @@ way as connecting, and keeps that connection for next time. They all share
 one copy of your spaces in `~/.minca/agent/spaces`, so a new session starts
 from what the others synced.
 
-`minca mcp --account` serves the unlocked account instead, as you:
-
-```json
-{
-  "mcpServers": {
-    "minca": { "command": "minca", "args": ["mcp", "--account"], "env": { "MINCA_PASSPHRASE": "…" } }
-  }
-}
-```
-
-It works offline against the folder; with `minca run` on the same folder,
-whatever the agent writes is synced within seconds.
-
 ### The agent on its own
 
 `minca agent` runs the connected agent without a chat client: its own node,
