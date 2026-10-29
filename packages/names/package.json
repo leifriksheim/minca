@@ -1,0 +1,25 @@
+{
+  "name": "@minca/names",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A name service for Minca: usernames at a domain that lead to inbox codes.",
+  "exports": {
+    ".": {
+      "types": "./names.d.mts",
+      "default": "./names.mjs"
+    }
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --conditions=@minca/source --import tsx --test --test-timeout=60000 --test-force-exit tests/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@minca/core": "*",
+    "@types/node": "^26.6.5"
+  }
+}

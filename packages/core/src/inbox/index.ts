@@ -20,5 +20,15 @@ export {
   KNOCK_TTL_SECONDS,
 } from './inbox.js';
 export type { InboxBody, KnockBody, OpenedKnock } from './inbox.js';
+export {
+  parseUsername,
+  formatUsername,
+  usernameUrl,
+  resolveUsername,
+  claimUsername,
+  claimMessage,
+  bindMessage,
+} from './names.js';
+export type { Username, ResolvedUsername } from './names.js';
 export { createMailboxClient } from '../network/relays.js';
 export type { MailboxClient, MailboxOptions, MailItem } from '../network/relays.js';
