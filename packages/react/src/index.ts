@@ -38,6 +38,8 @@ export {
 export type { MincaProviderProps } from './context.js';
 export { MincaAuth } from './minca-auth.js';
 export type { MincaAuthProps } from './minca-auth.js';
+export { useAsync } from './use-async.js';
+export type { AsyncState } from './use-async.js';
 export { useLive } from './use-live.js';
 export { useQuery } from './use-query.js';
 export type { QueryState } from './use-query.js';

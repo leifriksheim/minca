@@ -39,7 +39,7 @@ import {
   unpackSegment,
 } from './segment.js';
 import { isStub } from '../schema/version.js';
-import { utf8Decode, utf8Encode } from '../utils/encoding.js';
+import { bytesToHex, utf8Decode, utf8Encode } from '../utils/encoding.js';
 import { unref } from '../utils/guards.js';
 
 /** What became of a version handed over from the store */
@@ -81,22 +81,24 @@ export interface Mirror {
   close(): Promise<void>;
 }
 
-const WRITER_KEY = 'mirror:writer';
-const COUNTER_KEY = 'mirror:counter';
-const readKey = (name: string) => `mirror:read:${name}`;
-const knownKey = (id: string) => `mirror:known:${id}`;
+/** What this writer keeps in its own state */
+const keys = {
+  writer: 'mirror:writer',
+  counter: 'mirror:counter',
+  read: (segment: string) => `mirror:read:${segment}`,
+  known: (id = '') => `mirror:known:${id}`,
+};
 const MARK = utf8Encode('1');
 
-/** A new store writer id: 128 random bits as hex, never a DID, so a listing does not say whose device wrote it */
-const newWriterId = () =>
-  Array.from(globalThis.crypto.getRandomValues(new Uint8Array(16)), (b) =>
-    b.toString(16).padStart(2, '0'),
-  ).join('');
+/** A new store writer id: random hex, never a DID, so a listing does not say whose device wrote it */
+const newWriterId = () => bytesToHex(globalThis.crypto.getRandomValues(new Uint8Array(16)));
+
+const isSegment = (key: string) => key.endsWith(SEGMENT_SUFFIX);
 
 /** Deletes everything a space keeps in a store — every writer's segments, and its files */
 export async function deleteMirrored(store: BlobStore, space: string): Promise<void> {
-  for (const key of [...(await store.list(`${space}/`)), ...(await store.list(`files/${space}/`))])
-    await store.delete(key);
+  const keys = [...(await store.list(`${space}/`)), ...(await store.list(`files/${space}/`))];
+  for (const key of keys) await store.delete(key);
 }
 
 export async function createMirror(config: MirrorConfig): Promise<Mirror> {
@@ -104,153 +106,152 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
   const flushBytes = config.flushBytes ?? 256 * 1024;
   const flushMs = config.flushMs ?? 5000;
   const compactAt = config.compactAt ?? 32;
+
+  const writer = await readOrCreate(state, keys.writer, newWriterId);
+  const mine = `${space}/${writer}/`;
+  let counter = Number((await readText(state, keys.counter)) ?? 0);
   /** How many segments the last compaction left, so the next waits for twice that */
   let left = 0;
-
-  let writerBytes = await state.get(WRITER_KEY);
-  if (!writerBytes) {
-    writerBytes = utf8Encode(newWriterId());
-    await state.put(WRITER_KEY, writerBytes);
-  }
-  const writer = utf8Decode(writerBytes);
-  const mine = `${space}/${writer}/`;
-
-  const counterBytes = await state.get(COUNTER_KEY);
-  let counter = counterBytes ? Number(utf8Decode(counterBytes)) : 0;
-
-  // Read once: a flush asks about every version the store keeps, and a folder flushes every second.
-  const known = new Set((await state.list(knownKey(''))).map((key) => key.slice(knownKey('').length)));
-  // It knows the store held versions, yet nothing of the space is there: it was taken out of the
-  // store (`deleteMirrored`). What it knew is gone, so everything goes out again. While anything is
-  // there it knew rightly, and a store it can't reach now leaves what it knows as it was.
-  const gone = known.size > 0 && (await store.list(`${space}/`).catch(() => null))?.length === 0;
-  if (gone) {
-    for (const id of known) await state.delete(knownKey(id));
-    known.clear();
-  }
-  const markKnown = async (id: string) => {
-    if (known.has(id)) return;
-    await state.put(knownKey(id), MARK);
-    known.add(id);
-  };
+  /** The versions the store is known to hold; read once, since every flush asks about all of them */
+  const known = await loadKnown();
 
   let timer: ReturnType<typeof setTimeout> | null = null;
   let closed = false;
   /** One upload or compaction at a time: two at once would pack the same versions twice */
-  let busy: Promise<unknown> = Promise.resolve();
-  const serial = <T>(work: () => Promise<T>): Promise<T> => {
-    const next = busy.then(work, work);
-    busy = next.catch(() => {});
-    return next;
-  };
+  const serial = queue();
 
-  async function writeSegment(versions: ReadonlyArray<Version>): Promise<string> {
+  async function loadKnown(): Promise<Set<string>> {
+    const prefix = keys.known();
+    const ids = new Set((await state.list(prefix)).map((key) => key.slice(prefix.length)));
+    // Known versions, yet the space is gone from the store (`deleteMirrored`): everything goes out
+    // again. A store out of reach right now leaves what it knows as it was.
+    const gone = ids.size > 0 && (await store.list(`${space}/`).catch(() => null))?.length === 0;
+    if (!gone) return ids;
+    for (const id of ids) await state.delete(keys.known(id));
+    return new Set();
+  }
+
+  async function markKnown(id: string): Promise<void> {
+    if (known.has(id)) return;
+    await state.put(keys.known(id), MARK);
+    known.add(id);
+  }
+
+  const mySegments = async () => (await store.list(mine)).filter(isSegment);
+
+  async function writeSegment(versions: ReadonlyArray<Version>): Promise<void> {
     const bytes = packSegment(versions);
     counter += 1;
     const name = `${mine}${await segmentName(counter, bytes)}`;
     await store.put(name, bytes);
-    await state.put(COUNTER_KEY, utf8Encode(String(counter)));
-    await state.put(readKey(name), MARK);
-    return name;
+    await state.put(keys.counter, utf8Encode(String(counter)));
+    await state.put(keys.read(name), MARK);
   }
 
-  /** Writes versions in segments of about `flushBytes`, telling `written` each one */
+  /** Writes versions in segments of about `flushBytes`; how many segments that took */
   async function writeSegments(
     versions: Iterable<Version>,
     written: (batch: ReadonlyArray<Version>) => Promise<void> = async () => {},
-  ): Promise<void> {
+  ): Promise<number> {
+    let count = 0;
     for (const batch of segmentBatches(versions, flushBytes)) {
       await writeSegment(batch);
       await written(batch);
+      count += 1;
     }
+    return count;
   }
 
   async function flushNow(): Promise<void> {
-    // Every version this store keeps: whole if current or retained, as a stub otherwise.
-    const waiting: Version[] = [];
-    for (const id of await storage.versionIds()) {
-      if (known.has(id)) continue;
-      const version = await storage.getVersion(id);
-      if (version) waiting.push(version);
-    }
+    const unknown = (await storage.versionIds()).filter((id) => !known.has(id));
+    const waiting = (await Promise.all(unknown.map((id) => storage.getVersion(id)))).filter(
+      (version) => version !== null,
+    );
     await writeSegments(waiting, async (batch) => {
       for (const version of batch) await markKnown(version.id);
     });
-    // Past what the last compaction left times two: a space bigger than `compactAt` segments
-    // would otherwise be rewritten whole on every flush, and read again by every other reader.
-    if (
-      (await store.list(mine)).filter((key) => key.endsWith(SEGMENT_SUFFIX)).length >=
-      Math.max(compactAt, 2 * left)
-    )
-      await compactNow();
+    // Twice what the last compaction left, or a big space would be rewritten whole on every flush.
+    if ((await mySegments()).length >= Math.max(compactAt, 2 * left)) await compactNow();
   }
 
   async function compactNow(): Promise<void> {
-    const old = (await store.list(mine)).filter((key) => key.endsWith(SEGMENT_SUFFIX));
+    const old = await mySegments();
     if (old.length < 2) return;
+    // What this store holds now: a version superseded since is a stub, and one it never held
+    // was put there by someone else and goes.
     const keep = new Map<string, Version>();
     for (const key of old) {
-      const bytes = await store.get(key).catch(() => null);
-      // The store's copy: a version superseded since it was written is a stub
-      // now, and its body is not carried forward. One the store does not hold
-      // (asked of it afresh, so another process's write to it is found) was put
-      // there by someone else, and goes.
-      for (const version of bytes ? unpackSegment(bytes) : []) {
-        const held = keep.has(version.id) ? null : await storage.getVersion(version.id);
+      for (const version of (await fetchSegment(key)) ?? []) {
+        if (keep.has(version.id)) continue;
+        const held = await storage.getVersion(version.id);
         if (held) keep.set(version.id, held);
       }
     }
     // New first, then delete: a reader in between sees each version twice, which is harmless.
-    let written = 0;
-    await writeSegments(keep.values(), async () => {
-      written += 1;
-    });
+    left = await writeSegments(keep.values());
     for (const key of old) await store.delete(key);
-    left = written;
+  }
+
+  /** The segments other writers left that this one has not read in full */
+  async function unreadSegments(): Promise<string[]> {
+    const unread: string[] = [];
+    for (const key of await store.list(`${space}/`)) {
+      if (!isSegment(key) || key.startsWith(mine)) continue;
+      if (!(await state.get(keys.read(key)))) unread.push(key);
+    }
+    return unread.sort();
+  }
+
+  /** A segment's versions; null if it can't be had, or isn't all there yet, so it is tried next time */
+  async function fetchSegment(key: string): Promise<Version[] | null> {
+    const bytes = await store.get(key).catch(() => null);
+    if (!bytes || !(await isWholeSegment(key, bytes))) return null;
+    return unpackSegment(bytes);
+  }
+
+  /**
+   * Hands versions to the gates, passing over those that wait on another until
+   * nothing more goes in. How many were stored, and how many still wait.
+   */
+  async function take(versions: Version[]): Promise<{ added: number; waiting: number }> {
+    let added = 0;
+    let pending = versions;
+    while (pending.length > 0) {
+      const later: Version[] = [];
+      for (const version of pending) {
+        const taken = await config.accept(version);
+        if (taken === 'later') later.push(version);
+        if (taken === 'stored') {
+          added += 1;
+          await markKnownUnlessHeldWhole(version);
+        }
+      }
+      if (later.length === pending.length) break;
+      pending = later;
+    }
+    return { added, waiting: pending.length };
+  }
+
+  /** A stub of a version this store holds whole doesn't count: the whole one still goes out */
+  async function markKnownUnlessHeldWhole(version: Version): Promise<void> {
+    const held = isStub(version) ? await storage.getVersion(version.id) : null;
+    if (!held || isStub(held)) await markKnown(version.id);
   }
 
   async function pullNow(): Promise<{ added: number }> {
-    const fresh: string[] = [];
-    for (const key of await store.list(`${space}/`)) {
-      // Our own segments hold what we uploaded; a listing that lags is trusted less than our own writes.
-      if (!key.endsWith(SEGMENT_SUFFIX) || key.startsWith(mine) || (await state.get(readKey(key)))) continue;
-      fresh.push(key);
-    }
     let added = 0;
-    for (const key of fresh.sort()) {
-      // One segment that can't be fetched must not keep every one after it out: it is tried again next time.
-      const bytes = await store.get(key).catch(() => null);
-      // Deleted between listing and fetching — compacted by its writer. Its versions are in a newer segment.
-      // Or not all there yet (still being written, half synced): read again next time.
-      if (!bytes || !(await isWholeSegment(key, bytes))) continue;
-      let pending = unpackSegment(bytes);
-      // Versions can depend on each other — a record on its first version, on the access changes it saw.
-      // Pass over the rest until nothing more goes in.
-      for (let progress = true; pending.length > 0 && progress;) {
-        progress = false;
-        const later: Version[] = [];
-        for (const version of pending) {
-          const taken = await config.accept(version);
-          if (taken === 'later') {
-            later.push(version);
-            continue;
-          }
-          // A refused copy is not known to be there: the valid one with the same id may still need pushing.
-          if (taken === 'stored') {
-            added += 1;
-            // Nor is a stub of one held whole: the whole one still goes out.
-            const held = isStub(version) ? await storage.getVersion(version.id) : null;
-            if (!held || isStub(held)) await markKnown(version.id);
-          }
-          progress = true;
-        }
-        pending = later;
-      }
-      // Some still waiting on something no segment here has: read again next time.
-      if (pending.length === 0) await state.put(readKey(key), MARK);
+    for (const key of await unreadSegments()) {
+      const versions = await fetchSegment(key);
+      if (!versions) continue;
+      const taken = await take(versions);
+      added += taken.added;
+      if (taken.waiting === 0) await state.put(keys.read(key), MARK);
     }
     return { added };
   }
+
+  // A store out of reach: the next change tries again, and nothing is lost meanwhile.
+  const flushQuietly = () => serial(flushNow).catch(() => {});
 
   return Object.freeze({
     store,
@@ -263,9 +264,7 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
       if (closed || timer) return;
       timer = setTimeout(() => {
         timer = null;
-        void serial(flushNow).catch(() => {
-          // The store is out of reach; the next change tries again, and nothing is lost meanwhile.
-        });
+        void flushQuietly();
       }, flushMs);
       unref(timer);
     },
@@ -274,7 +273,30 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
       closed = true;
       if (timer) clearTimeout(timer);
       timer = null;
-      await serial(flushNow).catch(() => {});
+      await flushQuietly();
     },
   });
+}
+
+async function readText(state: StorageAdapter, key: string): Promise<string | null> {
+  const bytes = await state.get(key);
+  return bytes ? utf8Decode(bytes) : null;
+}
+
+async function readOrCreate(state: StorageAdapter, key: string, create: () => string): Promise<string> {
+  const existing = await readText(state, key);
+  if (existing !== null) return existing;
+  const value = create();
+  await state.put(key, utf8Encode(value));
+  return value;
+}
+
+/** Runs async work one at a time, in the order it was asked for */
+function queue() {
+  let last: Promise<unknown> = Promise.resolve();
+  return <T>(work: () => Promise<T>): Promise<T> => {
+    const next = last.then(work, work);
+    last = next.catch(() => {});
+    return next;
+  };
 }

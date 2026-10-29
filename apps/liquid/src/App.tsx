@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { SpaceSummary } from '@minca/core';
-import { useConnection, useNode, useSpaces } from '@minca/react';
+import { useAsync, useConnection, useNode, useSpaces } from '@minca/react';
 import { Loader } from '@minca/app-shared/Loader';
 import { styles, palette } from '@minca/app-shared/styles';
 import { Wordmark } from '@minca/app-shared/Wordmark';
 import { AssemblySpace } from './Assembly';
-import { isAssembly, prepareAssembly } from './setup';
+import { becomeAssembly } from './setup';
 
 /**
  * Liquid on its own: connect an account, pick one of the spaces given to it,
@@ -89,28 +89,10 @@ function Spaces() {
 /** A space as an assembly, once it is one: made one here when this account may */
 function Assembly({ space, onBack }: { space: SpaceSummary; onBack: (() => void) | null }) {
   const node = useNode();
-  const [ready, setReady] = useState<boolean | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
-  useEffect(() => {
-    let live = true;
-    void (async () => {
-      if (!(await isAssembly(node, space.id))) await prepareAssembly(node, space.id);
-      return isAssembly(node, space.id);
-    })().then(
-      (is) => live && setReady(is),
-      (error: unknown) => {
-        if (!live) return;
-        setReady(false);
-        setProblem(error instanceof Error ? error.message : String(error));
-      },
-    );
-    return () => {
-      live = false;
-    };
-  }, [node, space.id]);
+  const assembly = useAsync(() => becomeAssembly(node, space.id), [node, space.id]);
 
-  if (ready === null) return <Loader />;
-  if (!ready)
+  if (assembly.status === 'loading') return <Loader />;
+  if (assembly.status === 'failed' || !assembly.value)
     return (
       <div className="page">
         <div style={styles.card}>
@@ -119,7 +101,9 @@ function Assembly({ space, onBack }: { space: SpaceSummary; onBack: (() => void)
             Someone whose role lets them add collections there opens it in Liquid first, and then it is one
             for everyone.
           </p>
-          {problem && <p style={{ fontSize: 13, color: palette.ink.faint }}>{problem}</p>}
+          {assembly.status === 'failed' && (
+            <p style={{ fontSize: 13, color: palette.ink.faint }}>{assembly.error.message}</p>
+          )}
           {onBack && (
             <button onClick={onBack} data-variant="quiet" style={styles.smallButton}>
               Another space
