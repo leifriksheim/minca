@@ -29,6 +29,7 @@ import { accountCredentialName, offerToSave, recoveryKit } from '../session/cred
 import { passwordStrength } from '../session/password-strength.js';
 import type { PairingStage } from '../session/pairing.js';
 import type { AccountSummary } from '../identity/account-store.js';
+import { adHocName, formatUsername, nameFromUsername, parseUsername, usernameFree } from '../inbox/names.js';
 import { adoptStyles, h, svg, type Child } from './dom.js';
 import { AUTH_CSS } from './auth-styles.js';
 
@@ -36,6 +37,13 @@ import { AUTH_CSS } from './auth-styles.js';
 export interface MincaSessionEventDetail {
   readonly session: MincaSession | null;
 }
+
+/** How to give out Minca usernames at a domain of your own */
+const OWN_DOMAIN_HELP =
+  'https://github.com/leifriksheim/minca/blob/main/packages/core/docs/usernames.md#running-one-for-your-domain';
+
+/** Where a username on the create screen stands */
+type NameState = 'empty' | 'checking' | 'free' | 'taken' | 'invalid' | 'unknown';
 
 // Where there is no DOM the module still loads; the element is only ever made where there is one.
 const Base = globalThis.HTMLElement ?? class {};
@@ -152,6 +160,27 @@ function subtitle(...text: Child[]): HTMLElement {
   return h('p', { class: 'wa-subtitle' }, ...text);
 }
 
+/** How the username asked for at sign-up is going, above the setup screens that follow; at `domain`, by its name alone */
+function claimLine({ username: claim }: AuthState, domain: string | null): HTMLElement | null {
+  if (!claim) return null;
+  const states = { claiming: 'checking', claimed: 'free', failed: 'taken' } as const;
+  const shown =
+    domain && claim.username.endsWith(`@${domain}`)
+      ? claim.username.slice(0, -domain.length - 1)
+      : claim.username;
+  // The service's own words, without who refused what: the line says that already.
+  const why = (claim.error ?? 'the name service said no').replace(/^.* refused \S+: /, '');
+  return h(
+    'p',
+    { class: 'wa-small', 'data-name': states[claim.status], 'aria-live': 'polite', style: 'margin:0 0 12px' },
+    claim.status === 'claiming'
+      ? `Getting ${shown} for you…`
+      : claim.status === 'claimed'
+        ? `${shown} is your username.`
+        : `${shown} couldn't be yours: ${why}. Pick another in any app, under Contacts.`,
+  );
+}
+
 /** A form that stays on the page when submitted */
 function form(onSubmit: () => void, props: Record<string, unknown>, ...children: Child[]): HTMLElement {
   return h(
@@ -244,6 +273,12 @@ export class MincaAuthElement extends Base {
   #mismatch = false;
   #lastSelected: string | null = null;
   #lastStage: string | null = null;
+  /** The username on the create screen, and whether it is free */
+  #username: { checked: string; state: NameState } = {
+    checked: '',
+    state: 'empty',
+  };
+  #usernameTimer: ReturnType<typeof setTimeout> | undefined;
 
   /** The flow this element draws. Set it to share one with the rest of the page; otherwise one is made from the attributes. */
   get auth(): MincaAuth {
@@ -342,6 +377,8 @@ export class MincaAuthElement extends Base {
 
   #reset(): void {
     this.#drafts.clear();
+    clearTimeout(this.#usernameTimer);
+    this.#username = { checked: '', state: 'empty' };
     this.#filledAs = '';
     this.#copied = false;
     this.#stored = false;
@@ -758,31 +795,117 @@ export class MincaAuthElement extends Base {
 
   #create(state: AuthState): HTMLElement {
     const auth = this.auth;
-    const name = this.#input('name', {
+    const domain = auth.usernames;
+    if (!domain) {
+      const name = this.#input('name', {
+        type: 'text',
+        placeholder: 'Your name',
+        autocomplete: 'off',
+        autofocus: true,
+        disabled: state.busy,
+        'aria-label': 'Your name',
+      });
+      return card(
+        'Create your account',
+        subtitle('What should apps call you? You can change it later.'),
+        form(
+          () => {
+            if (name.value.trim()) void auth.createAccount(name.value.trim());
+          },
+          {},
+          name,
+          submit(state.busy, 'Continue', 'Creating…'),
+        ),
+        errorBox(state.error),
+        links(link('I already have an account', () => auth.showExisting(), state.busy)),
+        this.#podLine(state),
+      );
+    }
+
+    const busy = state.busy;
+    const username = this.#input('username', {
       type: 'text',
-      placeholder: 'Your name',
+      placeholder: 'yourname',
       autocomplete: 'off',
+      autocapitalize: 'none',
+      spellcheck: 'false',
+      maxlength: '320',
       autofocus: true,
-      disabled: state.busy,
+      disabled: busy,
+      'aria-label': 'Username',
     });
+    // The whole username: as typed when it names a domain of its own, else at this home's.
+    const typedName = () => username.value.trim().toLowerCase();
+    const fullName = (typed: string) => (typed.includes('@') ? typed : `${typed}@${domain}`);
+    const status = h('p', { class: 'wa-small wa-under', 'aria-live': 'polite' });
+    // In the field: a tick once it is free, a cross once it is taken.
+    const mark = h('span', { class: 'wa-mark', 'aria-hidden': 'true' });
+    const show = () => {
+      const { state: now } = this.#username;
+      const typed = typedName();
+      const own = typed.includes('@') ? (parseUsername(typed)?.domain ?? null) : null;
+      mark.dataset.name = status.dataset.name = now;
+      mark.textContent = now === 'free' ? '✓' : now === 'taken' ? '✕' : '';
+      if (now === 'unknown' && own)
+        return status.replaceChildren(
+          `${own} doesn't give out Minca usernames yet. `,
+          h('a', { href: OWN_DOMAIN_HELP, target: '_blank', rel: 'noopener' }, 'Set it up'),
+        );
+      status.textContent =
+        now === 'taken'
+          ? 'Someone has that one. Try another.'
+          : now === 'invalid'
+            ? typed.endsWith('@')
+              ? 'Your domain, like you@yourname.com.'
+              : 'Letters, numbers, dots, dashes and underscores.'
+            : now === 'unknown'
+              ? "Couldn't check it just now. It's tried when you continue."
+              : own && now === 'free'
+                ? `Free at ${own}.`
+                : 'How people find you and add you. You can change it later.';
+    };
+    // Looks the name up a moment after typing stops.
+    const check = () => {
+      clearTimeout(this.#usernameTimer);
+      const typed = typedName();
+      const parsed = typed ? parseUsername(fullName(typed)) : null;
+      this.#username = { checked: typed, state: !typed ? 'empty' : parsed ? 'checking' : 'invalid' };
+      show();
+      if (!parsed) return;
+      this.#usernameTimer = setTimeout(() => {
+        void usernameFree(formatUsername(parsed)).then((free) => {
+          if (this.#username.checked !== typed) return;
+          this.#username.state = free === null ? 'unknown' : free ? 'free' : 'taken';
+          show();
+        });
+      }, 300);
+    };
+    username.addEventListener('input', check);
+    show();
+
+    // No username, so nobody finds the account by one: a name to show until it is given its own.
+    const skip = () => void auth.createAccount(adHocName());
+
     return card(
-      'Create your account',
-      subtitle('What should apps call you? You can change it later.'),
+      'Pick a username',
+      subtitle('Free, and yours. No email or phone number needed.'),
       form(
         () => {
-          if (name.value.trim()) void auth.createAccount(name.value.trim());
+          const typed = typedName();
+          const { state: now } = this.#username;
+          if (!typed || now === 'taken' || now === 'invalid' || now === 'checking') return;
+          void auth.createAccount(nameFromUsername(typed.split('@')[0]!), { username: fullName(typed) });
         },
         {},
-        name,
-        submit(state.busy, 'Continue', 'Creating…'),
-      ),
-      h(
-        'p',
-        { class: 'wa-small' },
-        'Next: a recovery code to keep safe, then a passkey or password for signing in.',
+        h('div', { class: 'wa-username' }, username, mark),
+        status,
+        submit(busy, 'Continue', 'Creating…'),
       ),
       errorBox(state.error),
-      links(link('I already have an account', () => auth.showExisting(), state.busy)),
+      links(
+        link('Continue without a username', skip, busy),
+        link('I already have an account', () => auth.showExisting(), busy),
+      ),
       this.#podLine(state),
     );
   }
@@ -801,6 +924,7 @@ export class MincaAuthElement extends Base {
     const account = state.session?.account;
     return card(
       'Your recovery code',
+      claimLine(state, this.auth.usernames),
       h(
         'p',
         { class: 'wa-hint' },
@@ -935,6 +1059,7 @@ export class MincaAuthElement extends Base {
 
     return card(
       'How do you want to sign in?',
+      claimLine(state, this.auth.usernames),
       subtitle(
         'This is what you will use every day.',
         info(

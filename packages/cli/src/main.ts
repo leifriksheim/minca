@@ -388,7 +388,7 @@ async function hostStats(args: string[]): Promise<number> {
   });
   const [address] = positionals;
   if (!address)
-    throw new Error('minca host stats needs the host’s address: minca host stats https://minca-host.fly.dev');
+    throw new Error('minca host stats needs the host’s address: minca host stats https://host.minca.social');
   const base = (address.includes('://') ? address : `https://${address}`).replace(/\/+$/, '');
   const response = await fetch(`${base}/host/stats`, { signal: AbortSignal.timeout(10_000) });
   if (response.status === 404) throw new Error(`${base} keeps its stats to itself`);

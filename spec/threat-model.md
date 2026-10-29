@@ -94,8 +94,12 @@ reference implementation, or any implementation, honestly.
     address claims 3 new names a day and a service holds 50,000, so many
     addresses can fill one for a year; the address budget is kept in memory
     and starts again when the service restarts
-    (`packages/core/docs/usernames.md`). Claims through minca.social's proxy
-    come from Netlify's addresses, each with a budget of its own. None of
+    (`packages/core/docs/usernames.md`). Only lookups go through
+    minca.social's proxy; claims go to the claim address the service names,
+    which counts the address Fly reports. An account home made with
+    `usernames` asks each new account for a username there and claims it, unless the
+    person continues without one; the name in its inbox code is the
+    username's, not a real one, until the person gives one. None of
     this is protocol: a domain gives out its names as it likes (07 §9). A
     stranger can't point a name at someone else's inbox: a claim is signed by
     the inbox's own key over the name (`packages/names/tests/names.test.ts`,
@@ -702,6 +706,10 @@ _Source: 03 §2, §4, §5, §8.3, §9; 02 §4.1, §6.3, §7.3; 01 §9; `packages
     This is a gap in what readers count, not in what peers store.
   - It can rejoin through any open role invite it saw: removal closes none
     ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_.
+    That includes an invite a contact left it in a space for two
+    (`std.space-invite`, `packages/core/docs/contacts.md`), until its maker's
+    node sees it used and closes it; one with no role, to view, is never
+    closed ([#172](https://github.com/leifriksheim/minca/issues/172)).
   - A key change is only a SHOULD, and only a member granted `/key/change`
     can make one. In a space where nobody holds it, it reads everything new
     ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_.
@@ -1153,7 +1161,9 @@ does whoever controls that domain's DNS or certificates, or hosts it.
   - It learns which address looks up which name, and when. Lookups are open
     to anyone, so anyone can tie together names that lead to the same inbox
     code, and tie that code, wherever it was handed out privately, to the
-    public name.
+    public name. The account home's create screen looks each username up a
+    moment after typing stops, so the service sees what was typed, half-typed
+    prefixes included, before any account exists.
 
 _Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6, §9; 01 §15.2; 06 §3. Tests: `packages/core/tests/rendezvous.test.ts`, `packages/names/tests/names.test.ts`, `packages/core/tests/relay-nostr.test.ts`, `packages/core/tests/relay-socket.test.ts`, `packages/core/tests/pairing.test.ts` ("a message sent back to the side that sealed it does not open there", "someone who learns the secret later cannot open a recording of the exchange"), `packages/core/tests/connect-code.test.ts` ("a relay that relabels or repeats messages changes nothing", "a recording of the room, and the code learned later, open nothing", "a code works for one program: a second with the same code is not answered", "the program asks only the home it opened, and keeps that home, whatever the answer names", "the program keeps its note only once the person gives the code the home shows; a point that breaks its commitment is ignored")._
 
@@ -1196,6 +1206,16 @@ _Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6, §9; 01 §15.2; 06 §3. Tests: 
     What it stops is being there for them: members meet only when two are
     online, wakes for the space stop, and after `keepDays` its copy goes.
 - **Does not hold yet.**
+  - An account home made with `network.hosts` keeps every new account online
+    with the first of them, with nothing to choose, when that host keeps
+    accounts with nothing paid (`packages/core/docs/sign-in.md`). It is handed
+    the account's DID, passes for the registry, the contacts and every space
+    joined later, its wakes and links, and is named a keeper, all as a host
+    the person chose would be; and it sees what a host sees of each (below).
+    Stopping it on the account page tells it to forget, but a host that
+    doesn't keeps the read seeds it was given, proving itself and fetching
+    ciphertext until each space's key changes (06 §4.2); stopping changes no
+    key _(traced)_.
   - Live messages, such as typing, presence and call signalling, reach it in
     plaintext ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_.
   - A host asked for a bot receives a lasting role invite carrying the space

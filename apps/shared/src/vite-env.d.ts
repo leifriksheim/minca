@@ -10,6 +10,8 @@ interface ImportMetaEnv {
   readonly VITE_MINCA_HOST?: string;
   /** What "Connect an agent" and "Add a bot" tell people to run, e.g. `npm run minca -- connect` in this repo */
   readonly VITE_MINCA_CONNECT?: string;
+  /** Where usernames are claimed (`usernames.ts`), e.g. minca.social: names are `<name>@<this>` */
+  readonly VITE_NAMES_DOMAIN?: string;
   /** A Photon server for finding places (`places.ts`); photon.komoot.io when unset */
   readonly VITE_MINCA_PLACES?: string;
 }

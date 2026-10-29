@@ -37,10 +37,10 @@ Serve `dist` from anywhere that falls back to `index.html` for unknown paths
 
 Settings, as build-time environment variables:
 
-| Variable             | Default               |                                                                                             |
-| -------------------- | --------------------- | ------------------------------------------------------------------------------------------- |
-| `VITE_SIGNALING_URL` | `wss://minca.fly.dev` | Relays, comma separated. Must include one your apps use, or they cannot sync with the home. |
-| `VITE_MINCA_NODES`   | —                     | Always-on nodes (`minca run`) to keep a socket to                                           |
+| Variable             | Default                    |                                                                                             |
+| -------------------- | -------------------------- | ------------------------------------------------------------------------------------------- |
+| `VITE_SIGNALING_URL` | `wss://relay.minca.social` | Relays, comma separated. Must include one your apps use, or they cannot sync with the home. |
+| `VITE_MINCA_NODES`   | —                          | Always-on nodes (`minca run`) to keep a socket to                                           |
 
 Then use it from any Minca app: choose **Use your own home** when connecting
 and type its address. The app remembers it, and joins the relays your home

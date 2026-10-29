@@ -674,6 +674,7 @@ export function nodeOptionsFromGrant(grant: Grant, relays: ReadonlyArray<string>
       ? { contactKey: base64UrlDecode(grant.contactKey) }
       : {}),
     ...(grant.contactsSpace ? { contactsSpace: grant.contactsSpace } : {}),
+    ...(grant.name ? { accountName: grant.name } : {}),
   };
 }
 

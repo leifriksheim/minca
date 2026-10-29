@@ -1,5 +1,6 @@
 /** Contacts (`node.contacts`) and the inbox (`node.inbox`), for the screens that show them. */
-import type { ContactView, P2PNode } from '@minca/core';
+import { useEffect } from 'react';
+import { ROLE_ASSIGN, type ContactView, type P2PNode } from '@minca/core';
 import { useAsync, useLive, useNode, useWatched } from '@minca/react';
 
 /** What a new space for two means when no carrier holds it yet (`spaces.carried`) */
@@ -11,12 +12,30 @@ export function inboxLink(code: string): string {
   return `${globalThis.location.origin}/contacts#inbox=${code}`;
 }
 
+/** The username in this page's URL, if someone opened a link to add them (`#user=`) */
+export function readUserFromUrl(): string | null {
+  const found = /[#&]user=([^&]+)/.exec(globalThis.location.hash)?.[1];
+  return found ? decodeURIComponent(found) : null;
+}
+
+/**
+ * The roles this account may invite someone into a space as, `member` first;
+ * empty when it may only share the space to view.
+ */
+export async function invitableRoles(node: P2PNode, spaceId: string): Promise<ReadonlyArray<string>> {
+  const access = await node.spaces.access(spaceId);
+  const roles: string[] = [];
+  for (const { name } of access.roles)
+    if (await node.spaces.may(spaceId, ROLE_ASSIGN, { role: name, self: false, roles: [] })) roles.push(name);
+  return roles.sort((a, b) => Number(b === 'member') - Number(a === 'member'));
+}
+
 /** The inbox code in this page's URL, if someone opened an inbox link */
 export function readInboxFromUrl(): string | null {
   return /[#&]inbox=([A-Za-z0-9_-]+)/.exec(globalThis.location.hash)?.[1] ?? null;
 }
 
-/** Drops the inbox code from the address bar once it has been dealt with */
+/** Drops the inbox code or username from the address bar once it has been dealt with */
 export function clearInboxFromUrl(): void {
   globalThis.history.replaceState(null, '', globalThis.location.pathname + globalThis.location.search);
 }
@@ -78,4 +97,17 @@ export async function takeBack(
     }
   }
   await node.contacts.remove(did);
+}
+
+/** Keeps these spaces syncing while the screen shows, so what contacts leave there arrives */
+export function useHeldSpaces(ids: ReadonlyArray<string>): void {
+  const node = useNode();
+  const key = [...ids].sort().join(',');
+  useEffect(() => {
+    if (!key) return;
+    const held = key.split(',').map((id) => node.spaces.hold(id).catch(() => null));
+    return () => {
+      for (const hold of held) void hold.then((release) => release?.());
+    };
+  }, [node, key]);
 }

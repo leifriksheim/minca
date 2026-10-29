@@ -15,6 +15,7 @@ import { nameOf, peopleFrom, type People } from '../derive/people';
 import { PersonAvatar } from './std/PersonAvatar';
 import { RingButton } from './calls/Calls';
 import { createInviteLink } from '../spaces';
+import { AddPeople } from './InvitePeople';
 import { styles, palette, variants, hstack, stack } from '../styles';
 import { Person } from './Person';
 import { Loading } from './Loading';
@@ -420,6 +421,7 @@ function Members({
   const node = useNode();
   const { run, error } = useAction();
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
   const roleTitle = (name: string) => titleOf(access.roles.find((r) => r.name === name) ?? { name });
   const members = new Set(access.members.map((m) => m.did));
   // People who said who they are here but hold no role: they follow along.
@@ -532,14 +534,16 @@ function Members({
   return (
     <section style={section} aria-label="Members">
       <Heading title={`People (${access.members.length})`}>
-        <button
-          onClick={() => setInviteOpen(!inviteOpen)}
-          data-variant={inviteOpen ? 'quiet' : 'primary'}
-          style={inviteOpen ? styles.smallButton : styles.darkSmall}
-        >
-          {inviteOpen ? 'Close' : 'Invite people'}
-        </button>
+        <span style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => setAdding(true)} data-variant="primary" style={styles.darkSmall}>
+            Add people
+          </button>
+          <button onClick={() => setInviteOpen(!inviteOpen)} data-variant="quiet" style={styles.smallButton}>
+            {inviteOpen ? 'Close' : 'Invite link'}
+          </button>
+        </span>
       </Heading>
+      {adding && <AddPeople space={space} members={members} onClose={() => setAdding(false)} />}
       {inviteOpen && <Invite space={space} access={access} offered={powers.invite} />}
       {error && <p style={styles.error}>{plainError(error)}</p>}
       <ul style={{ ...list, gap: 0 }}>{access.members.map(row)}</ul>

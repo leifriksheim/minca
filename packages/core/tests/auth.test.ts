@@ -4,6 +4,7 @@
  */
 import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
 
 import {
   createMincaAuth,
@@ -290,6 +291,77 @@ describe('createMincaAuth', () => {
       Reflect.deleteProperty(globalThis, 'showDirectoryPicker');
     }
   });
+
+  test('with a host, a new account is kept online with nothing to choose: it goes in while the host is handed the spaces', async () => {
+    // Nothing answers at this address: the handover fails in the background, and nothing waits on it but `settled`.
+    Object.defineProperty(globalThis, 'showDirectoryPicker', { value: () => {}, configurable: true });
+    try {
+      const auth = started({ network: { hosts: ['http://127.0.0.1:9'] } });
+      await auth.start();
+      auth.startCreating();
+      await createAccount(auth, 'Ada');
+      // No pod offered either: kept online, a folder is for later, on the account page.
+      assert.equal(auth.getState().stage, 'ready');
+      assert.equal(auth.getState().setup, null);
+      await auth.settled();
+    } finally {
+      Reflect.deleteProperty(globalThis, 'showDirectoryPicker');
+    }
+  });
+
+  /** A host that only describes itself, at a local address; `limits` makes it keep accounts with nothing paid */
+  async function describedHost(limits: boolean): Promise<{ url: string; close: () => void }> {
+    const server = createServer((_request, response) => {
+      response.setHeader('content-type', 'application/json');
+      response.end(
+        JSON.stringify({
+          minca: 'host/1',
+          did: 'did:key:zDnaeaALTBzySrYHGFnMoDgD9BAQYYcPkB9nXFyPwqLJUFZRL',
+          name: 'Test host',
+          free: false,
+          price: '$0.10 a GB a month',
+          fund: { perGb: '0.10', min: '5', methods: ['request'], recurring: false },
+          ...(limits
+            ? {
+                limits: {
+                  accountBytes: 250_000_000,
+                  space: { writers: 10, bytes: 500_000_000, windowDays: 30, readers: 50 },
+                  graceDays: 30,
+                  keepDays: 30,
+                  idleDays: 180,
+                },
+              }
+            : {}),
+        }),
+      );
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    const port = typeof address === 'object' && address ? address.port : 0;
+    return { url: `http://127.0.0.1:${port}`, close: () => server.close() };
+  }
+
+  for (const [limits, what] of [
+    [
+      true,
+      'a host that keeps accounts with nothing paid is used, though setting a way in started a new session',
+    ],
+    [false, 'a host that only keeps paid accounts is never signed up for by itself'],
+  ] as const)
+    test(what, async () => {
+      const host = await describedHost(limits);
+      try {
+        const auth = started({ network: { hosts: [host.url] } });
+        await auth.start();
+        auth.startCreating();
+        await createAccount(auth, 'Ada');
+        await auth.settled();
+        const used = (await auth.getState().session!.node.hosting.list()).map((view) => view.url);
+        assert.deepEqual(used, limits ? [host.url] : []);
+      } finally {
+        host.close();
+      }
+    });
 
   test('reading the recovery code or offering the account to a phone takes proof it is you', async () => {
     const auth = started();

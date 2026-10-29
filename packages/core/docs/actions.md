@@ -140,7 +140,7 @@ it would write nothing.
 
 A session's node: signer `grantSigner(grant)`, session key = the slot's key,
 the grant's keys when present and relays = the grant's ∪ `$MINCA_RELAYS`
-(default `wss://minca.fly.dev`) (`nodeOptionsFromGrant`), WebRTC via
+(default `wss://relay.minca.social`) (`nodeOptionsFromGrant`), WebRTC via
 `node-datachannel`; it joins any granted spaces it lacks (`joinGranted`);
 wraps the node with `asAgent`; holds every space; and serves MCP over stdio:
 `offeredActions({ agent: true })`, without the `PERSON_ONLY` actions or

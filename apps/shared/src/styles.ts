@@ -91,6 +91,10 @@ export const baseCss = `
     .space-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 40px; align-items: start; }
     @media (max-width: 760px) { .space-layout { grid-template-columns: minmax(0, 1fr); gap: 24px; } }
 
+    /* A pill holding an input and words beside it: the ring goes round the pill, not the input. */
+    .pill-field input, .pill-field input:focus { border: none !important; box-shadow: none !important; }
+    .pill-field:focus-within { border-color: ${accent.base} !important; box-shadow: 0 0 0 3px ${accent.soft}; }
+
     /* A list row is a target, not a card: its small actions show with the
        hover, where there is a pointer that hovers. On touch they stay visible,
        and keyboard users reach them by focus. */

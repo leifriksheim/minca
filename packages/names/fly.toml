@@ -16,7 +16,7 @@ primary_region = "ams"
 
 [env]
   NAMES_DOMAIN = "minca.social"
-  NAMES_CLAIM_URL = "https://minca-names.fly.dev/.well-known/minca.json"
+  NAMES_CLAIM_URL = "https://usernames.minca.social/.well-known/minca.json"
   NAMES_DIR = "/data/names"
 
 [mounts]

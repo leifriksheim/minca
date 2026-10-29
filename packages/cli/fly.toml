@@ -25,7 +25,7 @@ kill_timeout = 30
 
 [env]
   MINCA_HOST_NAME = "Minca host"
-  MINCA_HOST_URL = "https://minca-host.fly.dev"
+  MINCA_HOST_URL = "https://host.minca.social"
   # Free for every account within limits, and paid by the GB past them
   # (MINCA_FUND_PER_GB, default 0.10); a community past the free line pays
   # for itself through its fund

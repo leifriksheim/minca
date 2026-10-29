@@ -8,6 +8,7 @@
  *   yours in packages/cli/.env.host.local. Wallet payments on Base Sepolia by default.
  * - stripe: when .env.host.local has a Stripe test key, the Stripe CLI
  *   forwards Stripe's webhooks to the host, and the host gets its secret.
+ * - names (8789): usernames at localhost:8789 (packages/names), kept in packages/names/.data.
  * - home (5174), app (5173), site (5185) and Liquid (5186); their .env.development point at the rest.
  *
  * Ctrl-C stops them all.
@@ -128,6 +129,14 @@ const children = [
     root,
     hostEnv,
   ),
+  // Usernames at localhost:8789 (packages/names), so trying them out claims nothing at minca.social.
+  start('names', process.execPath, ['packages/names/server.mjs', '8789'], root, {
+    NAMES_DOMAIN: 'localhost:8789',
+    NAMES_CLAIM_URL: 'http://localhost:8789/.well-known/minca.json',
+    NAMES_DIR: `${root}packages/names/.data`,
+    // Everyone trying it here is one address.
+    NAMES_NEW_PER_DAY: '1000',
+  }),
   ...extra.map((begin) => begin()),
   start('home', 'npm', ['run', 'dev'], `${root}apps/home`),
   start('app', 'npm', ['run', 'dev'], `${root}apps/example`),

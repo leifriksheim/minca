@@ -660,7 +660,7 @@ offer or answer waits for ICE gathering to finish, or 2 s, and carries what it
 found.
 
 **Kinds of relay** (spec 04 §1.2). `network.relays` may mix kinds:
-`['wss://minca.fly.dev', 'nostr+wss://relay.damus.io']`. A relay of a kind
+`['wss://relay.minca.social', 'nostr+wss://relay.damus.io']`. A relay of a kind
 this library doesn't speak is left out of `network.status()`. On a Nostr
 relay, each event is signed with a key made for it and forgotten.
 
@@ -909,7 +909,13 @@ genesis and any invite opened before the call. It says whether it was: false
 at once when no carrier is connected. `contacts.ask` and `inbox.knock` wait on it before the knock goes
 out, and pass what it said on as `carried`, for the app to tell the person.
 
-_Source: `packages/core/src/node/node.ts` (`spaces.carried`), `packages/core/src/node/node-contacts.ts` (`makePair`). Tests: `packages/core/tests/carrier.test.ts` ("a space made just now, carried before its invite goes out…", "carried is false at once with no carrier…")._
+`node.spaces.reached(spaceId, peer, waitMs)` is the same wait for one peer
+named by its key, such as an app's key from the request it connected with:
+true once that peer holds all this node does of the space, false when
+`waitMs` (at most a minute) passed first or the peer never came. For a node about to close,
+like a connect page waiting for the app to have what it wrote.
+
+_Source: `packages/core/src/node/node.ts` (`spaces.carried`, `spaces.reached`), `packages/core/src/node/node-contacts.ts` (`makePair`). Tests: `packages/core/tests/carrier.test.ts` ("a space made just now, carried before its invite goes out…", "carried is false at once with no carrier…"), `packages/core/tests/usernames.test.ts` ("spaces.reached is true once a peer holds the space…")._
 
 **The account's own automations.** `node.automations` (needs the account
 key) lists, adds, updates (`name`, `paused`) and removes the account's own
@@ -1025,13 +1031,15 @@ _Source: `packages/core/src/node/node-hosting.ts` (`keepSpaceHosts`, `askSpaceHo
 
 | Call                       | Does                                                                                                                                                                                                                                                                             |
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `get()`                    | Your inbox, or null until opened: `{ gen, name?, key, sign, places, code, updatedAt }`. `code` is signed afresh each time; what it says stays the same                                                                                                                           |
+| `get()`                    | Your inbox, or null until opened: `{ gen, name?, key, sign, places, code, username?, usernameUntil?, updatedAt }`. `code` is signed afresh each time; what it says stays the same                                                                                                |
 | `open({ places?, name? })` | Opens your inbox, or changes where its knocks wait and the name it gives. Places default to the current ones, else this node's relays (up to 3); name to the current one, else the account's                                                                                     |
 | `rotate()`                 | Clears the inbox and replaces it with `gen + 1`: the old code leads nowhere                                                                                                                                                                                                      |
 | `clear()`                  | Purges every knock waiting, from every mailbox it names                                                                                                                                                                                                                          |
-| `knock(code, { note? })`   | [the exchange](inbox.md#the-exchange), returns `{ space, carried }`                                                                                                                                                                                                              |
+| `claim(username)`          | Claims a username for your inbox on its domain's name service ([usernames.md](usernames.md)), opening the inbox if need be; one at a time. It follows the inbox: `rotate` and `open` point it at the new code, and `knocks` renews it a month before it lapses                   |
+| `release()`                | Gives the username up: it leads nowhere                                                                                                                                                                                                                                          |
+| `knock(code, { note? })`   | by a code, a link or a username: [the exchange](inbox.md#the-exchange), returns `{ space, carried }`                                                                                                                                                                             |
 | `knocks()`                 | Fetches the inbox's topic from every mailbox it names, opens and checks ([spec 07 §6](https://github.com/leifriksheim/minca/blob/main/spec/07-inbox.md); opened results are cached by id), settles sent knocks; returns `{ id, from, name, note?, pairSpace, at }`, newest first |
-| `sent()`                   | Your knocks nobody has joined yet: `{ space, name, at }`                                                                                                                                                                                                                         |
+| `sent()`                   | Your knocks nobody has joined yet: `{ space, name, username?, at }`                                                                                                                                                                                                              |
 | `accept(id)`               | [the exchange](inbox.md#the-exchange), returns the new `ContactView`                                                                                                                                                                                                             |
 | `dismiss(id)`              | Purges one knock                                                                                                                                                                                                                                                                 |
 

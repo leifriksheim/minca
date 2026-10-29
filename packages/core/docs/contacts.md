@@ -88,13 +88,46 @@ theirs to leave, and opens as nothing.
   `blocked: true`.
 - `others(did)` lists accounts other than the two seen in the space for two
   (members, profiles, connected peers).
+- `invite(did, spaceId, { role? })` invites a contact into a space you hold:
+  it makes an invite for `role` and leaves it as a `std.space-invite` in your
+  space for two with them. The contact must have joined the space for two: a
+  knock nobody answered yet is refused, so a space is never opened to whoever
+  a username happens to lead to before you have seen who they are. A blocked
+  contact is refused.
+- `invites()` lists the invites a contact left for you in your space for two
+  with them, to spaces you don't hold yet, newest first:
+  `{ from, space, name, invite, pairSpace, key, createdAt }`. Only the
+  contact's own records count, and each invite is checked as joining checks
+  it: signed by the contact, for the space whose constitution it carries,
+  which is where `space` and `name` come from. Invites from someone blocked are
+  not shown. It also closes, and deletes, invites of yours the contact has
+  joined with.
+- `join(pairSpace, key)` joins the space an invite from that contact is for.
+
+## `std.space-invite`
+
+An invite to a space, left in a space for two: `{ space, invite }`,
+`onePer: ['space']`, so inviting again to the same space replaces it.
+
+It is open until its maker's node sees the contact in the space and closes
+it, the next time it reads `invites()`. A contact removed before then can
+rejoin with it, as with any open role invite
+([#170](https://github.com/leifriksheim/minca/issues/170)), and whoever else
+holds a place in the space for two reads it
+([#313](https://github.com/leifriksheim/minca/issues/313)). An invite with no
+role, to view, carries the space key and can't be closed
+([#172](https://github.com/leifriksheim/minca/issues/172)).
+
+A contact's `username` is what their domain answered when you found them by
+it. Nothing checks it again: once a name lapses and someone else claims it, a
+lookup leads to them, and the contact keeps the old one.
 
 `ask` and `accept` need a session note that grants `/account/write` for the
 whole account, as a knock does. An app granted `contacts` sees the list and
 requests, but may not ask or accept
 ([spec 06 §2.5](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
 
-_Source: `packages/core/src/schemas/contacts.ts` (`contact`), `packages/core/src/identity/contact-key.ts` (`deriveContactKeyBytes`), `packages/core/src/inbox/inbox.ts` (`sealKnock`, `openKnock`), `packages/core/src/node/node-contacts.ts` (`openMail`, `makePair`, `contacts`), `packages/core/src/schemas/contacts.ts` (`contactRequest`), `packages/core/src/node/types.ts` (`NodeContacts`), `packages/core/src/space/account-registry.ts` (`deriveContactsSpace`). Tests: `packages/core/tests/contacts.test.ts`, `packages/core/tests/attacks.test.ts` ("a knock re-posted by someone else…")._
+_Source: `packages/core/src/schemas/contacts.ts` (`contact`), `packages/core/src/identity/contact-key.ts` (`deriveContactKeyBytes`), `packages/core/src/inbox/inbox.ts` (`sealKnock`, `openKnock`), `packages/core/src/node/node-contacts.ts` (`openMail`, `makePair`, `contacts`), `packages/core/src/schemas/contacts.ts` (`contactRequest`), `packages/core/src/node/types.ts` (`NodeContacts`), `packages/core/src/space/account-registry.ts` (`deriveContactsSpace`). Tests: `packages/core/tests/contacts.test.ts`, `packages/core/tests/attacks.test.ts` ("a knock re-posted by someone else…"), `packages/core/tests/usernames.test.ts` ("node.contacts.invite")._
 
 ## Planned: requests that can be taken back
 

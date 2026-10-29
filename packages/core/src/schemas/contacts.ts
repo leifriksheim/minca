@@ -26,6 +26,11 @@ export const contact = define({
       space: { type: 'string', maxLength: 256, description: 'The id of your space for two' },
       note: { type: 'string', maxLength: 2000 },
       blocked: { type: 'boolean', description: 'Their knocks are hidden, in every space and in your inbox' },
+      username: {
+        type: 'string',
+        maxLength: 320,
+        description: 'Their username, when you found them by it: name@domain',
+      },
     },
     required: ['did', 'name'],
   },
@@ -74,6 +79,8 @@ export const inbox = define({
         maxLength: 64,
         description: 'The name its code gives, shown to whoever knocks',
       },
+      username: { type: 'string', maxLength: 320, description: 'The username that leads to it: name@domain' },
+      usernameUntil: { type: 'number', description: 'When the username lapses unless claimed again, ms' },
     },
     required: ['gen', 'places'],
   },
@@ -95,9 +102,36 @@ export const knock = define({
       space: { type: 'string', maxLength: 256, description: 'The space for two it invites them to' },
       name: { type: 'string', maxLength: 64, description: 'The name their inbox code gave' },
       invite: { type: 'string', maxLength: 12000, description: 'The invite sent, to close once they join' },
+      username: {
+        type: 'string',
+        maxLength: 320,
+        description: 'The username you knocked on, when it was one',
+      },
     },
     required: ['space', 'name', 'invite'],
   },
   rules: { onePer: ['space'] },
 });
 export type Knock = BodyOf<typeof knock>;
+
+/**
+ * An invite to a space, left for a contact in your space for two with them:
+ * only the two of you read it there, so it needs no sealing. What space it is,
+ * and its name, are read from the signed invite; `space` only keys the record.
+ * Joining deletes it, and the inviter closes the invite once they are in.
+ */
+export const spaceInvite = define({
+  name: 'std.space-invite',
+  title: 'Space invite',
+  description: 'An invite to a space, left for a contact in your space for two.',
+  schema: {
+    type: 'object',
+    properties: {
+      space: { type: 'string', maxLength: 256, description: 'The space it invites them to' },
+      invite: { type: 'string', maxLength: 12000, description: 'The invite, as spaces.join takes it' },
+    },
+    required: ['space', 'invite'],
+  },
+  rules: { onePer: ['space'] },
+});
+export type SpaceInviteRecord = BodyOf<typeof spaceInvite>;

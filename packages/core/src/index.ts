@@ -436,6 +436,7 @@ export type {
   InboxView,
   KnockView,
   SentKnockView,
+  SpaceInviteView,
   CarrierConfig,
   CarrierNode,
   CarriedSpace,

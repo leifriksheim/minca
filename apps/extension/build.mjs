@@ -66,7 +66,7 @@ const options = {
   conditions: ['@minca/source'],
   define: {
     __MINCA_HOME__: JSON.stringify(setting('MINCA_HOME', 'http://localhost:5174')),
-    __MINCA_RELAYS__: JSON.stringify(setting('MINCA_RELAYS', 'ws://localhost:8787,wss://minca.fly.dev')),
+    __MINCA_RELAYS__: JSON.stringify(setting('MINCA_RELAYS', 'ws://localhost:8787,wss://relay.minca.social')),
   },
   logLevel: 'info',
 };

@@ -23,6 +23,48 @@ It asks `https://minca.social/.well-known/minca.json?name=leif`, refuses a
 redirect, and checks the code it gets as any other. The code then works
 wherever one does: knock on it.
 
+## On the node
+
+`node.inbox.claim('leif@minca.social')` does all of the below for the
+account's inbox, and keeps the name in `std.inbox` so every device knows it:
+replacing the inbox, or changing its name or mailboxes, points the name at
+the new code, and reading knocks renews it a month before its year is up.
+`node.inbox.release()` gives it up. `node.inbox.knock('anna@minca.social')`
+knocks by username, and the contact it becomes keeps the username
+(`ContactView.username`). See [node.md](node.md#the-inbox).
+
+**At sign-up.** `createMincaAuth({ usernames: 'minca.social' })` makes the
+create screen of `<minca-auth>` one field: the username, with a tick once the
+service says it is free and a cross once it is taken. A bare name is at that
+domain, and is how it is shown and handed out (`leif`); a whole username,
+`leif@example.org`, is checked and claimed at its own domain, and one that
+gives out no Minca usernames says so, with a link to running a service. The account's name
+starts as the username's (`nameFromUsername`: `leif.r` is Leif R) and is
+changed on the account page. "Continue without a username" makes the account with none, so nobody
+finds it by one, and a made-up name to show until it is given one
+(`adHocName`: Swift Otter). `createAccount(name,
+{ username })` claims it in the background while the recovery code and
+password screens are up, and those screens say how it went: `state.username`
+is `claiming`, `claimed`, or `failed` with an `error`, when it was taken
+meanwhile or the service was down. The account is made either way.
+
+The claim is made on the home's node, which may be the only one holding the
+inbox: a connect page that closes once it answers keeps the window open
+until the app's node holds the contacts space too (`spaces.reached`, keyed
+by the app's key from its request), or else the app would read no knocks
+until the two next met. The account home waits for what setup began in
+the background (`auth.settled()`: the claim, and the host's handover) to
+finish, however long, so neither is cut off halfway; then up to 30 s for the app,
+and only for an account that claimed a name there. If the claim failed, the
+app's contacts screen asks for a name again.
+
+_Source: `packages/core/src/session/auth.ts` (`createAccount`, `claimInBackground`), `packages/core/src/elements/minca-auth.ts` (`#create`), `packages/core/src/inbox/names.ts` (`adHocName`, `nameFromUsername`, `usernameFree`), `apps/home/src/components/ConnectPage.tsx` (`handOver`). Tests: `packages/core/tests/usernames.test.ts` ("a username at sign-up")._
+
+Renewing claims the code of the inbox this device knows. A device that
+hasn't yet synced a replacement made on another one points the name back at
+the old inbox until the inbox next changes; renewal starts only within a
+month of the name lapsing, so this is rare.
+
 ## Claiming a name
 
 ```ts
@@ -35,7 +77,7 @@ const until = await claimUsername('leif@minca.social', contactKey, inboxCode);
 answer, where claims go and how much work one needs:
 
 ```json
-{ "names": {}, "claim": "https://minca-names.fly.dev/.well-known/minca.json", "work": 20 }
+{ "names": {}, "claim": "https://usernames.minca.social/.well-known/minca.json", "work": 20 }
 ```
 
 Then it posts the claim there:
