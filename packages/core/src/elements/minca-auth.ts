@@ -29,13 +29,7 @@ import { accountCredentialName, offerToSave, recoveryKit } from '../session/cred
 import { passwordStrength } from '../session/password-strength.js';
 import type { PairingStage } from '../session/pairing.js';
 import type { AccountSummary } from '../identity/account-store.js';
-import {
-  adHocUsername,
-  formatUsername,
-  nameFromUsername,
-  parseUsername,
-  usernameFree,
-} from '../inbox/names.js';
+import { adHocName, formatUsername, nameFromUsername, parseUsername, usernameFree } from '../inbox/names.js';
 import { adoptStyles, h, svg, type Child } from './dom.js';
 import { AUTH_CSS } from './auth-styles.js';
 
@@ -45,7 +39,7 @@ export interface MincaSessionEventDetail {
 }
 
 /** Where a username on the create screen stands */
-type NameState = 'empty' | 'checking' | 'free' | 'taken' | 'invalid' | 'unknown' | 'picking';
+type NameState = 'empty' | 'checking' | 'free' | 'taken' | 'invalid' | 'unknown';
 
 // Where there is no DOM the module still loads; the element is only ever made where there is one.
 const Base = globalThis.HTMLElement ?? class {};
@@ -269,7 +263,7 @@ export class MincaAuthElement extends Base {
   #mismatch = false;
   #lastSelected: string | null = null;
   #lastStage: string | null = null;
-  /** The username on the create screen, and whether it is free; `picking` while one is made up */
+  /** The username on the create screen, and whether it is free */
   #username: { checked: string; state: NameState } = {
     checked: '',
     state: 'empty',
@@ -818,7 +812,7 @@ export class MincaAuthElement extends Base {
       );
     }
 
-    const busy = state.busy || this.#username.state === 'picking';
+    const busy = state.busy;
     const username = this.#input('username', {
       type: 'text',
       placeholder: 'yourname',
@@ -867,15 +861,8 @@ export class MincaAuthElement extends Base {
 
     const create = (name: string, picked: string) =>
       void auth.createAccount(name, { username: `${picked}@${domain}` });
-    // Skipping makes one up, a free one where the service can say: changed later, like any.
-    const skip = async () => {
-      this.#username = { checked: '', state: 'picking' };
-      this.#redraw();
-      let made = adHocUsername();
-      for (let tries = 0; tries < 3 && (await usernameFree(`${made.username}@${domain}`)) === false; tries++)
-        made = adHocUsername();
-      create(made.name, made.username);
-    };
+    // No username, so nobody finds the account by one: a name to show until it is given its own.
+    const skip = () => void auth.createAccount(adHocName());
 
     return card(
       'Pick a username',
@@ -894,11 +881,7 @@ export class MincaAuthElement extends Base {
       ),
       errorBox(state.error),
       links(
-        link(
-          this.#username.state === 'picking' ? 'Making one up…' : 'Skip, make one up for me',
-          () => void skip(),
-          busy,
-        ),
+        link('Continue without a username', skip, busy),
         link('I already have an account', () => auth.showExisting(), busy),
       ),
       this.#podLine(state),

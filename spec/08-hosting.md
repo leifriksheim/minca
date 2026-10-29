@@ -243,9 +243,11 @@ A device MAY be built with hosts to look for its account registry at before it
 knows which the account uses: that is how a new device with only the recovery
 code finds its registry, and every space from it. The host learns the
 registry's id and the device's session key, and serves it only if it carries
-it. The reference reaches those hosts for the registry alone.
+it. The reference reaches those hosts for the registry; its account home also
+keeps each new account online with the first of them, when it keeps accounts
+with nothing paid (`packages/core/docs/sign-in.md`).
 
-_Source: `packages/core/src/session/hosting.ts` (`hostPeerAddress`), `packages/core/src/node/host.ts`, `packages/core/src/node/node-hosting.ts` (`hosting`, `reachHosts`), `packages/core/src/node/space-peers.ts` (`useNodes`), `packages/cli/src/host.ts` (`startFund`, `watch`), `packages/cli/src/fund.ts`, `packages/cli/src/wallet.ts` (`request`, `scan`), `packages/cli/src/reminders.ts`. Tests: `packages/cli/tests/host.test.ts` ("the host API": all; "pay answers": all; "reaching a host at the address it names": all; "a host’s room": all; "wallet payments": all), `packages/cli/tests/reminders.test.ts`._
+_Source: `packages/core/src/session/hosting.ts` (`hostPeerAddress`), `packages/core/src/session/auth.ts` (`keepOnline`), `packages/core/src/node/host.ts`, `packages/core/src/node/node-hosting.ts` (`hosting`, `reachHosts`), `packages/core/src/node/space-peers.ts` (`useNodes`), `packages/cli/src/host.ts` (`startFund`, `watch`), `packages/cli/src/fund.ts`, `packages/cli/src/wallet.ts` (`request`, `scan`), `packages/cli/src/reminders.ts`. Tests: `packages/cli/tests/host.test.ts` ("the host API": all; "pay answers": all; "reaching a host at the address it names": all; "a host’s room": all; "wallet payments": all), `packages/cli/tests/reminders.test.ts`._
 
 ### 1.1 Limits: free hosting, paid room, and the free line
 

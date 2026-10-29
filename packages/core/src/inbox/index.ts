@@ -30,7 +30,7 @@ export {
   bindMessage,
   usernameIdeas,
   usernameFree,
-  adHocUsername,
+  adHocName,
   nameFromUsername,
 } from './names.js';
 export type { Username, ResolvedUsername } from './names.js';

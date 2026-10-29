@@ -44,6 +44,7 @@ import { isFolderStorageAvailable } from '../storage/directory-access.js';
 import { base64UrlEncode } from '../utils/encoding.js';
 import { startPageNode, type WorkerLike } from '../node/worker.js';
 import { copyAccountData } from '../node/copy.js';
+import { describeHost } from './hosting.js';
 import type { StoreFactory } from '../node/stores.js';
 import type { NodeNetworkConfig, P2PNode } from '../node/types.js';
 import { isProtocolError, protocolError, type ProtocolErrorCode } from '../utils/errors.js';
@@ -1034,7 +1035,8 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
   function claimInBackground(session: MincaSession, username: string): void {
     update({ username: { username, status: 'claiming' } });
     const settle = (claim: UsernameClaim) => {
-      if (state.session === session) update({ username: claim });
+      // The same account: setting a way in meanwhile starts a new session for it.
+      if (state.session?.did === session.did) update({ username: claim });
     };
     background.push(
       session.node.inbox.claim(username).then(
@@ -1071,6 +1073,29 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
   }
 
   /**
+   * Keeps a new account online with `url`: only a host that keeps accounts
+   * with nothing paid, so nobody is signed up to pay for what they never
+   * chose. A host that doesn't answer is tried once more a moment later;
+   * after that the account stays in this browser, kept online from the
+   * account page whenever the person likes.
+   */
+  async function keepOnline(session: MincaSession, url: string): Promise<void> {
+    // The same account, not the same session: setting a way in starts a new one.
+    for (let tries = 0; tries < 2 && state.session?.did === session.did; tries++) {
+      try {
+        const description = await describeHost(url);
+        if (!description.free && !description.limits) return;
+        const now = state.session;
+        if (now?.did !== session.did) return;
+        await now.node.hosting.use(url);
+        return;
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
+    }
+  }
+
+  /**
    * After a way in is set up: a new account is kept online with the host, if
    * there is one, with nothing to choose (stopped on the account page); with
    * none, it is offered a pod where it could use one. Then in.
@@ -1080,7 +1105,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     const session = state.session;
     if (state.setup === 'new' && host && session) {
       // Handed over in the background: the account goes in at once.
-      background.push(session.node.hosting.use(host).catch(() => null));
+      background.push(keepOnline(session, host));
       update({ stage: 'ready', setup: null });
       return;
     }

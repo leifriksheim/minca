@@ -14,7 +14,7 @@ import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { createFolderAccountStore } from '../src/identity/account-store.js';
 import { createMincaAuth, type MincaAuth } from '../src/session/auth.js';
 import {
-  adHocUsername,
+  adHocName,
   nameFromUsername,
   parseUsername,
   resolveUsername,
@@ -403,12 +403,8 @@ describe('usernameIdeas and usernameFree', () => {
     assert.deepEqual(usernameIdeas('  '), []);
   });
 
-  test('skipping makes up a valid username and a name to go with it; a typed one names the account until it is renamed', () => {
-    for (let i = 0; i < 50; i++) {
-      const { username, name } = adHocUsername();
-      assert.ok(parseUsername(`${username}@minca.social`), `${username} is a name`);
-      assert.match(name, /^[A-Z][a-z]+ [A-Z][a-z]+$/);
-    }
+  test('without a username, an account is shown by a made-up name; with one, by the username until it is renamed', () => {
+    for (let i = 0; i < 50; i++) assert.match(adHocName(), /^[A-Z][a-z]+ [A-Z][a-z]+$/);
     assert.equal(nameFromUsername('leif.r'), 'Leif R');
     assert.equal(nameFromUsername('anna'), 'Anna');
   });

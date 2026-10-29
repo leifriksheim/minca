@@ -99,9 +99,16 @@ while it runs, or a carrier given the folder. A page that closes once signed
 in, such as an account home's connect page, passes `offerPod: false`, and
 offers the pod where the person comes back instead.
 
-With `usernames: '<domain>'`, the create screen asks for a username too,
-filled in from the name, and `createAccount` claims it in the background
-([usernames.md](usernames.md#on-the-node)).
+With `usernames: '<domain>'`, the create screen asks for a username alone,
+the account's name taken from it, and `createAccount` claims it in the
+background ([usernames.md](usernames.md#on-the-node)).
+
+With `network.hosts`, a new account is kept online with the first of them as
+it is made, with nothing to choose: `hosting.use` in the background, only
+when the host keeps accounts with nothing paid (`free`, or `limits`), tried
+once more if it doesn't answer. Failing that, the account stays in this
+browser, and is kept online from the account page later. `settled()`
+resolves once this and any username claim are done.
 
 _Source: `packages/core/src/session/auth.ts` (`start`, `reopenPod`), `packages/core/src/session/places.ts` (`podToReopen`). Tests: `packages/core/tests/auth.test.ts`, `packages/core/tests/take-up.test.ts` ("a pod the browser wants a click to open again")._
 

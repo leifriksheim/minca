@@ -320,15 +320,10 @@ const ANIMALS = [
   'wren',
 ];
 
-/** A made-up username and the name that goes with it, for someone who skips choosing: `swift.otter42`, Swift Otter */
-export function adHocUsername(): { readonly username: string; readonly name: string } {
-  const [a = 0, b = 0, c = 0] = globalThis.crypto.getRandomValues(new Uint8Array(3));
-  const adjective = ADJECTIVES[a % ADJECTIVES.length]!;
-  const animal = ANIMALS[b % ANIMALS.length]!;
-  return {
-    username: `${adjective}.${animal}${10 + (c % 90)}`,
-    name: nameFromUsername(`${adjective}.${animal}`),
-  };
+/** A name to show for an account made without a username, until it is given its own: Swift Otter */
+export function adHocName(): string {
+  const [a = 0, b = 0] = globalThis.crypto.getRandomValues(new Uint32Array(2));
+  return nameFromUsername(`${ADJECTIVES[a % ADJECTIVES.length]!}.${ANIMALS[b % ANIMALS.length]!}`);
 }
 
 /** The name an account takes from its username until it is given one: `leif.r` is Leif R */

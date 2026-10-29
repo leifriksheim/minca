@@ -46,10 +46,14 @@ export function ConnectPage() {
   const [, setProved] = useState(0);
 
   // An account made in this window is the one chosen: nobody picks what they just made.
+  // Until what it began in the background has reached the app and the host, this window stays.
+  const [made, setMade] = useState(false);
   useEffect(
     () =>
       auth.subscribe(({ setup, session }) => {
-        if (setup === 'new' && session) setChosen(session.account.id);
+        if (setup !== 'new' || !session) return;
+        setChosen(session.account.id);
+        setMade(true);
       }),
     [auth],
   );
@@ -155,7 +159,7 @@ export function ConnectPage() {
       {request.access === 'carry' ? (
         <ApproveCarrier incoming={incoming} request={request} />
       ) : (
-        <Approve incoming={incoming} request={request} />
+        <Approve incoming={incoming} request={request} made={made} />
       )}
     </ChooseAgain.Provider>
   );
@@ -280,7 +284,16 @@ function Asking({ incoming, step = 'Sign in' }: { incoming: IncomingRequest; ste
   );
 }
 
-function Approve({ incoming, request }: { incoming: IncomingRequest; request: ConnectRequest }) {
+function Approve({
+  incoming,
+  request,
+  made,
+}: {
+  incoming: IncomingRequest;
+  request: ConnectRequest;
+  /** The account was made in this window, which holds what it wrote for the app and the host */
+  made: boolean;
+}) {
   const { origin } = incoming;
   const { auth } = useAuth();
   const session = useSession();
@@ -321,7 +334,9 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
       const answer = await auth.grant({ origin, request, spaceIds: [...chosen] });
       // Only an app that reads the contacts reads the inbox: the whole account, or the contacts alone.
       const contacts = answer.scope === 'account' || answer.contactsSpace !== undefined;
-      const handed = contacts ? handOver(auth, session.node, request.audience) : Promise.resolve();
+      const handed = made
+        ? handOver(auth, session.node, contacts ? request.audience : null)
+        : Promise.resolve();
       incoming.approve(answer, handed);
       if (incoming.check) return setSent(true);
       setHanding(true);
@@ -465,18 +480,38 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
 const HAND_OVER_MS = 30_000;
 
 /**
- * Until what this window began at sign-up is done and has reached the app:
- * the username's claim and the host's handover, then the inbox the name
- * leads to, which only this node holds yet. Nothing waits for an account
- * that claimed no name here.
+ * Until what this window began for a new account is done and has reached
+ * where it goes: the username's claim and the host's handover, then the
+ * inbox (when the app reads the contacts) to the app or the host, and the
+ * passes to the host, which only this node holds yet.
  */
-async function handOver(auth: MincaAuth, node: P2PNode, app: string): Promise<unknown> {
+async function handOver(auth: MincaAuth, node: P2PNode, app: string | null): Promise<unknown> {
   // However long it takes: closed halfway, a name could lead to an inbox no record says it does.
   // The claim's work and requests, and the handover's, end by themselves.
   await auth.settled();
-  if (!auth.getState().username) return;
-  const contacts = await node.contacts.space();
-  return contacts && node.spaces.reached(contacts, app, HAND_OVER_MS);
+  // A new account has one carrier, if any: the host it was kept online with.
+  const carriers = await node.carriers.list();
+  const contacts = app && auth.getState().username ? await node.contacts.space() : null;
+  const held = (space: string, peers: ReadonlyArray<string>) =>
+    firstTrue(peers.map((peer) => node.spaces.reached(space, peer, HAND_OVER_MS)));
+  return Promise.all([
+    // The app has the inbox, or a host does, which the app syncs it from.
+    contacts && app && held(contacts, [app, ...carriers.map((carrier) => carrier.did)]),
+    ...carriers.map((carrier) => node.carriers.reached(carrier.space, HAND_OVER_MS)),
+  ]);
+}
+
+/** True as soon as one of these is; false once all are false */
+function firstTrue(waits: ReadonlyArray<Promise<boolean>>): Promise<boolean> {
+  return new Promise((resolve) => {
+    let left = waits.length;
+    if (left === 0) resolve(false);
+    for (const wait of waits)
+      void wait.then(
+        (done) => (done ? resolve(true) : --left === 0 && resolve(false)),
+        () => --left === 0 && resolve(false),
+      );
+  });
 }
 
 /**
