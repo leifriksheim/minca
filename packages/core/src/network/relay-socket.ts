@@ -342,6 +342,9 @@ export function createRelaySocket(options: RelaySocketOptions): RelaySocket {
   });
 }
 
+/** How long a short conversation waits for the relay to answer */
+const TALK_MS = 8000;
+
 /**
  * A short conversation with a relay on a socket of its own: `start` says the
  * first thing, `hear` answers what comes back (it may `send` again) and
@@ -350,7 +353,7 @@ export function createRelaySocket(options: RelaySocketOptions): RelaySocket {
  */
 export function converse<T>(
   dial: string,
-  options: { readonly timeoutMs: number; readonly WebSocket?: typeof WebSocket },
+  options: { readonly timeoutMs?: number; readonly WebSocket?: typeof WebSocket },
   start: (send: (message: unknown) => void) => void,
   hear: (answer: unknown, send: (message: unknown) => void) => Promise<T | undefined> | T | undefined,
 ): Promise<T> {
@@ -379,7 +382,7 @@ export function converse<T>(
     const fail = (error: Error) => {
       if (settle()) reject(error);
     };
-    const timer = setTimeout(() => fail(new Error(`${dial} did not answer`)), options.timeoutMs);
+    const timer = setTimeout(() => fail(new Error(`${dial} did not answer`)), options.timeoutMs ?? TALK_MS);
     const say = (message: unknown) => ws.send(JSON.stringify(message));
     ws.onopen = () => start(say);
     ws.onerror = () => fail(new Error(`Could not reach ${dial}`));

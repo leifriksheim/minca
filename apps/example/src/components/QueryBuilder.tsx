@@ -4,7 +4,7 @@ import type { Clause, ClauseField } from '../derive/conditions';
 import type { Sort } from '../derive/filters';
 import type { People } from '../derive/people';
 import { ClauseList } from './automations/parts';
-import { styles, palette, ui } from '../styles';
+import { styles, palette, hstack, stack } from '../styles';
 
 export const PAGE_SIZES = [10, 25, 50, 100] as const;
 
@@ -41,8 +41,8 @@ export function QueryBuilder({
   ];
 
   return (
-    <div style={{ ...ui.stack, gap: 8 }}>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+    <div style={stack(8)}>
+      <div style={{ ...hstack(8), alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 260 }}>
           <ClauseList
             fields={fields}
@@ -99,7 +99,7 @@ export function QueryBuilder({
       </div>
 
       <details>
-        <summary style={{ fontSize: 12, color: palette.ink.faint, cursor: 'pointer' }}>As a query</summary>
+        <summary style={{ ...styles.faint, cursor: 'pointer' }}>As a query</summary>
         <pre
           style={{
             margin: '6px 0 0',

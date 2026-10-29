@@ -17,7 +17,7 @@ import { nameOf, peopleFrom } from '../derive/people';
 import { ago } from '@minca/ui/time';
 import { message as messageOf } from '@minca/app-shared/action';
 import { Loader } from '@minca/app-shared/Loader';
-import { styles, palette, ui } from '../styles';
+import { styles, palette, ui, hstack, stack } from '../styles';
 import { DocsNote } from './DocsNote';
 
 // Try the query language on this space's own data, with examples built from its real collections.
@@ -226,7 +226,7 @@ export function QueryPlayground({
 
   if (examples.length === 0 && text === null) {
     return (
-      <section aria-label="Try a query" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <section aria-label="Try a query" style={stack(16)}>
         <Header />
         <p style={styles.emptyState}>Nothing here to look through yet. Add something to this space first.</p>
       </section>
@@ -234,10 +234,7 @@ export function QueryPlayground({
   }
 
   return (
-    <section
-      aria-label="Try a query"
-      style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}
-    >
+    <section aria-label="Try a query" style={{ ...stack(16), minWidth: 0 }}>
       <Header />
 
       <div role="group" aria-label="Examples" style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -265,7 +262,7 @@ export function QueryPlayground({
           alignItems: 'start',
         }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
+        <div style={{ ...stack(8), minWidth: 0 }}>
           <label htmlFor="query-editor" style={styles.fieldLabel}>
             Your query
           </label>
@@ -282,16 +279,7 @@ export function QueryPlayground({
           </DocsNote>
         </div>
 
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 8,
-            minWidth: 0,
-            opacity: stale ? 0.5 : 1,
-            transition: 'opacity .15s ease',
-          }}
-        >
+        <div style={{ ...stack(8), minWidth: 0, opacity: stale ? 0.5 : 1, transition: 'opacity .15s ease' }}>
           <div
             style={{
               display: 'flex',
@@ -349,7 +337,7 @@ export function QueryPlayground({
           {result && raw && <Highlighted code={pretty(result)} style={{ maxHeight: 520 }} />}
 
           {parsed?.ok && (result?.cursor || parsed.query.cursor) && (
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ ...hstack(8), flexWrap: 'wrap' }}>
               {parsed.query.cursor && (
                 <button onClick={() => setCursor(null)} data-variant="quiet" style={styles.smallButton}>
                   Back to the first page
@@ -376,7 +364,7 @@ function Header() {
   return (
     <header>
       <h2 style={{ ...styles.appTitle, fontSize: 22 }}>Try a query</h2>
-      <p style={{ fontSize: 13, color: palette.ink.muted, marginTop: 4, lineHeight: 1.6 }}>
+      <p style={{ ...styles.quiet, marginTop: 4, lineHeight: 1.6 }}>
         Ask this space for exactly the records you want, written as plain JSON. It runs as you type, on the
         data on this device, and nothing you do here changes anything.
       </p>
@@ -597,7 +585,7 @@ function Included({ record, label }: { record: QueryRecord; label: (r: QueryReco
   const entries = Object.entries(record.included ?? {});
   if (entries.length === 0) return <span style={{ color: palette.ink.faint }}>—</span>;
   return (
-    <span style={{ ...ui.stack, gap: 2 }}>
+    <span style={stack(2)}>
       {entries.map(([name, found]) => {
         if (typeof found === 'number') {
           return (

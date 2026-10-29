@@ -17,7 +17,7 @@ import {
 } from '../../derive/schema-ui';
 import { nameOf, peopleFrom, writerOf, type People } from '../../derive/people';
 import { ago } from '@minca/ui/time';
-import { styles, palette, ui } from '../../styles';
+import { styles, palette, ui, stack } from '../../styles';
 import { Loader } from '@minca/app-shared/Loader';
 
 /**
@@ -67,13 +67,9 @@ export function AppBoard({
   const byName = new Map(held.map((c, i) => [c.name, records[i] ?? []]));
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+    <div style={stack(28)}>
       {main.map((parent) => (
-        <section
-          key={parent.name}
-          aria-label={collectionLabel(parent)}
-          style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
-        >
+        <section key={parent.name} aria-label={collectionLabel(parent)} style={stack(10)}>
           <AddForm space={space} collection={parent} label={`Add ${noun(parent)}`} />
           {(byName.get(parent.name) ?? []).length === 0 && (
             <div style={{ ...styles.emptyState, padding: '24px 16px' }}>No {noun(parent)} yet.</div>
@@ -86,7 +82,7 @@ export function AppBoard({
                 <button onClick={() => onOpen(record)} data-variant="ghost" style={cardTitle}>
                   {recordLabel(record, parent.schema)}
                 </button>
-                <span style={{ fontSize: 12, color: palette.ink.faint, whiteSpace: 'nowrap' }}>
+                <span style={{ ...styles.faint, whiteSpace: 'nowrap' }}>
                   {writerOf(record, people)} · {ago(record.createdAt)}
                 </span>
               </header>
@@ -182,7 +178,7 @@ function Children({
           : node.records.put(space.id, child.name, { [picker.name]: value }, { links }),
       );
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={stack(6)}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {choices.map((choice) => {
             const count = records.filter((r) => bodyOf(r)[picker.name] === choice.value).length;
@@ -213,7 +209,7 @@ function Children({
           })}
         </div>
         {mine && (
-          <span style={{ fontSize: 12, color: palette.ink.faint }}>
+          <span style={styles.faint}>
             You picked — pick again to change{' '}
             <button
               onClick={() => void run(() => node.records.delete(space.id, mine.key))}
@@ -232,15 +228,7 @@ function Children({
   const nothingToFill = fields.every((f) => !f.required);
   const label = noun(child);
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 6,
-        paddingTop: 8,
-        borderTop: `1px solid ${palette.surface.line}`,
-      }}
-    >
+    <div style={{ ...stack(6), paddingTop: 8, borderTop: `1px solid ${palette.surface.line}` }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
         <span style={{ fontSize: 12, color: palette.ink.muted }}>
           {records.length} {records.length === 1 ? label : `${label}s`}

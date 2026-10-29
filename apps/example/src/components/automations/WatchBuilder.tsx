@@ -18,7 +18,7 @@ import { nameOf } from '../../derive/people';
 import { ago } from '@minca/ui/time';
 import { useAsk } from '../../notifications';
 import { usePeopleHere } from '../Person';
-import { styles, palette } from '../../styles';
+import { styles, palette, hstack, stack } from '../../styles';
 import { places, type Within } from '../../automations';
 import { ClauseList, Pill, PlacePill, Sentence, Step, card, previewBox } from './parts';
 
@@ -234,14 +234,14 @@ export function WatchBuilder({
               <span style={{ color: palette.ink.muted }}>
                 Lately, this would have told you about {preview.matched.length} of the last {preview.looked}:
               </span>
-              <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <ul style={{ listStyle: 'none', ...stack(4) }}>
                 {preview.matched.slice(0, 4).map((record) => (
-                  <li key={record.key} style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
+                  <li key={record.key} style={{ ...hstack(8), alignItems: 'baseline' }}>
                     <span style={{ color: palette.ink.faint }}>●</span>
                     <span style={{ flex: 1, minWidth: 0, color: palette.ink.strong }}>
                       {recordLabel(record, chosen.schema)}
                     </span>
-                    <span style={{ fontSize: 12, color: palette.ink.faint }}>{ago(record.createdAt)}</span>
+                    <span style={styles.faint}>{ago(record.createdAt)}</span>
                   </li>
                 ))}
               </ul>
@@ -251,7 +251,7 @@ export function WatchBuilder({
       )}
 
       {chosen && (
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <label style={stack(6)}>
           <span style={styles.fieldLabel}>The notification says</span>
           <input
             value={shown}
@@ -269,7 +269,7 @@ export function WatchBuilder({
       )}
       {error && <p style={{ ...styles.errorHint, marginTop: 0, color: palette.accent.danger }}>{error}</p>}
 
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+      <div style={{ ...hstack(8), justifyContent: 'flex-end' }}>
         <button onClick={onClose} data-variant="quiet" style={{ ...styles.smallButton, height: 40 }}>
           Cancel
         </button>

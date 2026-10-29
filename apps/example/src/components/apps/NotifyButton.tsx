@@ -3,7 +3,7 @@ import type { NodeCollection, SpaceSummary } from '@minca/core';
 import { useDismiss } from '@minca/app-shared/useDismiss';
 import { useNotifyFor } from '../../notifications';
 import { Icon } from '../Icon';
-import { styles, palette } from '../../styles';
+import { styles, palette, stack } from '../../styles';
 import type { AppEntry } from './entries';
 import { WatchBuilder } from '../automations/WatchBuilder';
 
@@ -141,7 +141,7 @@ export function NotifyButton({
               <span aria-hidden style={{ width: 16, flexShrink: 0, color: palette.ink.muted }}>
                 +
               </span>
-              <span style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+              <span style={{ ...stack(1), minWidth: 0 }}>
                 <span style={{ color: palette.ink.strong, fontWeight: 500 }}>Something more specific…</span>
                 <span style={{ fontSize: 12, color: palette.ink.muted }}>Pick what, and only when</span>
               </span>
@@ -201,7 +201,7 @@ function Choice({
       >
         ✓
       </span>
-      <span style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+      <span style={{ ...stack(1), minWidth: 0 }}>
         <span style={{ color: palette.ink.strong, fontWeight: 500 }}>{title}</span>
         <span style={{ fontSize: 12, color: palette.ink.muted }}>{hint}</span>
       </span>

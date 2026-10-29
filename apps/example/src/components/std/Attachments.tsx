@@ -7,7 +7,7 @@ import { fileRefOf } from '../../derive/kinds';
 import { fitImage } from '@minca/ui/image';
 import { sizeOf } from '@minca/ui/size';
 import { saveFile, useFileUrl } from '../../files';
-import { palette, styles } from '../../styles';
+import { palette, styles, stack } from '../../styles';
 
 /** The file an attachment names, when its body holds one */
 const fileOf = (record: NodeRecord): FileRef | null => fileRefOf(bodyOf(record).blob);
@@ -70,7 +70,7 @@ export function Attachments({
   };
 
   return (
-    <section aria-label="Attachments" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <section aria-label="Attachments" style={stack(10)}>
       {!compact && (
         <h3 style={styles.sectionTitle}>
           Attachments{' '}
@@ -140,7 +140,7 @@ function AttachmentView({ space, record }: { space: SpaceSummary; record: NodeRe
         {url ? (
           <img src={url} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
-          <span style={{ fontSize: 12, color: palette.ink.faint }}>Loading…</span>
+          <span style={styles.faint}>Loading…</span>
         )}
       </button>
     );
@@ -152,7 +152,7 @@ function AttachmentView({ space, record }: { space: SpaceSummary; record: NodeRe
       style={{ ...tile, padding: '8px 12px', gap: 2, alignItems: 'flex-start', flexDirection: 'column' }}
     >
       <span style={{ fontSize: 13, fontWeight: 500, color: palette.ink.strong }}>{name}</span>
-      <span style={{ fontSize: 12, color: palette.ink.faint }}>
+      <span style={styles.faint}>
         {saving ? 'Fetching…' : file ? sizeOf(Number(body.size ?? file.size)) : 'No bytes here'}
       </span>
     </button>

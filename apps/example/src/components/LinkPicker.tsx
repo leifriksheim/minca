@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { NodeCollection, NodeRecord, SpaceSummary } from '@minca/core';
 import { useNode } from '@minca/react';
 import { collectionLabel, humanize } from '../derive/schema-ui';
-import { styles, palette } from '../styles';
+import { styles, palette, stack } from '../styles';
 import { useAction } from '@minca/app-shared/action';
 import { RecordFinder } from './RecordFinder';
 
@@ -58,9 +58,7 @@ export function LinkPicker({
     <section
       aria-label="Link to another record"
       style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 10,
+        ...stack(10),
         padding: 14,
         border: `1px solid ${palette.surface.line}`,
         borderRadius: palette.radius.md,
@@ -90,7 +88,7 @@ export function LinkPicker({
       )}
       {declared && (
         <>
-          <p style={{ fontSize: 13, color: palette.ink.muted, lineHeight: 1.5 }}>
+          <p style={{ ...styles.quiet, lineHeight: 1.5 }}>
             <strong style={{ color: palette.ink.strong }}>{humanize(rel!).toLowerCase()}</strong>
             {declared.description && ` — ${declared.description}`}. Can point at {allowed}
             {one && current.length > 0 ? '; picking one replaces the one it has.' : '.'}

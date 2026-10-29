@@ -7,7 +7,7 @@ import { useAccount, useProfiles } from '@minca/react';
 import { nameOf, peopleFrom } from '../../derive/people';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { Icon, type ICONS } from '../Icon';
-import { styles, palette } from '../../styles';
+import { styles, palette, hstack } from '../../styles';
 import { ask } from '@minca/app-shared/Ask';
 
 /** Calls, drawn once above every space, so moving between spaces never touches one. */
@@ -152,7 +152,7 @@ function CallPanel({
       )}
 
       {outgoing}
-      {call.problem && <p style={{ fontSize: 13, color: palette.accent.danger }}>{call.problem}</p>}
+      {call.problem && <p style={styles.dangerText}>{call.problem}</p>}
 
       {pip.window ? (
         <>
@@ -165,7 +165,7 @@ function CallPanel({
         tiles
       )}
 
-      <footer style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+      <footer style={{ ...hstack(8), justifyContent: 'center', flexWrap: 'wrap' }}>
         <RoundButton
           icon={call.muted ? 'micOff' : 'mic'}
           label={call.muted ? 'Unmute' : 'Mute'}
@@ -224,7 +224,7 @@ function Tiles({
       ))}
       <Tile name="You" did={me} stream={call.local} camera={call.camera} muted={call.muted} self />
       {others.length === 0 && !call.outgoing && (
-        <p style={{ fontSize: 13, color: palette.ink.muted, alignSelf: 'center' }}>Nobody else here yet.</p>
+        <p style={{ ...styles.quiet, alignSelf: 'center' }}>Nobody else here yet.</p>
       )}
     </div>
   );
@@ -365,7 +365,7 @@ function Ringing({
         </p>
         <p style={{ fontSize: 14, color: palette.ink.muted }}>is calling you · {spaceName}</p>
       </div>
-      <div style={{ display: 'flex', gap: 24, justifyContent: 'center' }}>
+      <div style={{ ...hstack(24), justifyContent: 'center' }}>
         <Choice
           icon="hangUp"
           label="Decline"
@@ -443,7 +443,7 @@ function Rejoin({ call, spaceName }: { call: CallAround; spaceName: string }) {
       <p style={{ color: palette.ink.strong }}>
         You were in a call in <strong>{spaceName}</strong>. It's still going on.
       </p>
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div style={hstack(8)}>
         <button
           onClick={() => calls?.forgetRejoin()}
           data-variant="quiet"

@@ -9,7 +9,7 @@ import { KeepOnline, onlineHost, useSpaceHosts } from './SpaceHosting';
 import { BotConnectors, BotInstructions } from './BotConnectors';
 import { message, useAction, useCopy } from './action';
 import { perReply } from './Payment';
-import { styles, palette } from './styles';
+import { styles, palette, hstack, stack } from './styles';
 
 /** Where running a bot on a server is explained */
 const SERVER_GUIDE =
@@ -78,14 +78,14 @@ export function AddBotDialog({
 
   return (
     <Modal title="Add an AI helper" onClose={onClose} width={460}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-        <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+      <div style={stack(18)}>
+        <div style={{ ...hstack(14), alignItems: 'center' }}>
           <FeatureIcon kind="bot" size={44} />
           <div>
             <p style={{ fontSize: 16, fontWeight: 600, color: palette.ink.strong }}>
               {started ? started.name : called}
             </p>
-            <p style={{ fontSize: 13, color: palette.ink.muted }}>
+            <p style={styles.quiet}>
               {view === 'fund'
                 ? 'Runs from the community fund'
                 : host
@@ -107,12 +107,12 @@ export function AddBotDialog({
 
         {view === 'add' && host && (
           <>
-            <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <ul style={{ listStyle: 'none', ...stack(10) }}>
               <Benefit glyph="chat">Answers when someone mentions it</Benefit>
               <Benefit glyph="clock">Posts summaries and reminders on a schedule</Benefit>
               <Benefit glyph="shield">Holds a role like any member, and can do only what it allows</Benefit>
             </ul>
-            <div style={{ display: 'flex', gap: 10 }}>
+            <div style={hstack(10)}>
               <label style={{ ...field, flex: 1 }}>
                 Name
                 <input
@@ -142,8 +142,8 @@ export function AddBotDialog({
             <button onClick={() => void add()} disabled={busy} data-variant="primary" style={styles.button}>
               {busy ? 'Adding…' : `Add ${called}`}
             </button>
-            {problem && <p style={{ fontSize: 13, color: palette.accent.danger }}>{problem}</p>}
-            <p style={{ display: 'flex', gap: 8, fontSize: 12, color: palette.ink.faint, lineHeight: 1.5 }}>
+            {problem && <p style={styles.dangerText}>{problem}</p>}
+            <p style={{ ...hstack(8), fontSize: 12, color: palette.ink.faint, lineHeight: 1.5 }}>
               <Glyph name="lock" size={12} style={{ marginTop: 2 }} />
               {host.fund
                 ? `Its AI use comes from the community fund${model ? `: ${model.name}` : ''}${host.fund.botTypical ? `, ${perReply(host.fund.botTypical)}` : ''}, up to $${cap ?? '1'} a day. `
@@ -254,8 +254,8 @@ function RunItYourself({
       setInvite(await node.spaces.invite(spaceId, role ? { role, short: true } : { short: true })),
     );
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <p style={{ fontSize: 13, color: palette.ink.muted, lineHeight: 1.5 }}>
+    <div style={stack(10)}>
+      <p style={{ ...styles.quiet, lineHeight: 1.5 }}>
         Run {name} on your own computer or server, with your own AI key. It works while it runs; to keep it
         on,{' '}
         <a
@@ -271,7 +271,7 @@ function RunItYourself({
       {invite ? (
         <>
           <Copyable text={`${cli} agent --bot --name ${quoted(name)} --invite ${quoted(invite)}`} secret />
-          <p style={{ fontSize: 12, color: palette.ink.faint, lineHeight: 1.5 }}>
+          <p style={{ ...styles.faint, lineHeight: 1.5 }}>
             Paste it into a terminal. It asks for a password for the bot and an AI key, then joins. Keep it to
             yourself: whoever has it can join as the bot.
           </p>
@@ -285,7 +285,7 @@ function RunItYourself({
           Make the command
         </button>
       )}
-      {problem && <p style={{ fontSize: 13, color: palette.accent.danger }}>{problem}</p>}
+      {problem && <p style={styles.dangerText}>{problem}</p>}
     </div>
   );
 }
@@ -296,8 +296,7 @@ function Copyable({ text, secret = false }: { text: string; secret?: boolean }) 
   return (
     <div
       style={{
-        display: 'flex',
-        gap: 8,
+        ...hstack(8),
         alignItems: 'center',
         padding: '6px 6px 6px 10px',
         borderRadius: palette.radius.lg,
@@ -347,7 +346,7 @@ export function SpaceBots({
   const mayManage = useMay(spaceId, SPACE_KEEPERS) && writable;
   if (!listed.length && !mayManage) return null;
   return (
-    <section aria-label="AI helpers" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <section aria-label="AI helpers" style={stack(10)}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
         <h3 style={styles.sectionTitle}>AI helpers</h3>
         {mayManage && (
@@ -368,7 +367,7 @@ export function SpaceBots({
           }}
         >
           <FeatureIcon kind="bot" size={36} />
-          <p style={{ fontSize: 13, color: palette.ink.muted, lineHeight: 1.45 }}>
+          <p style={{ ...styles.quiet, lineHeight: 1.45 }}>
             A bot answers when mentioned, sums up long threads and posts reminders. It holds a role like any
             member.
           </p>
@@ -483,10 +482,4 @@ async function botsIn(
   );
 }
 
-const field: CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 6,
-  fontSize: 12.5,
-  color: palette.ink.muted,
-};
+const field: CSSProperties = { ...stack(6), fontSize: 12.5, color: palette.ink.muted };

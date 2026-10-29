@@ -7,7 +7,7 @@ import { EVERYTHING, delegation } from './schema';
 import { follow, type DelegationEdge, type Next } from './tally';
 import { PartyChip, PartyMark, PathView, Problem, TopicChip, Who, decidesText } from './ui';
 import { useAction } from '@minca/app-shared/action';
-import { styles } from '@minca/app-shared/styles';
+import { styles, hstack, stack } from '@minca/app-shared/styles';
 import { palette } from './styles';
 
 /** Where someone's vote would go on a topic if nobody voted: the chain of trust alone */
@@ -45,8 +45,8 @@ export function Delegations({ a, writable }: { a: Assembly; writable: boolean })
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
-      <section className="lq-rise" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div style={stack(28)}>
+      <section className="lq-rise" style={stack(6)}>
         <h2 className="lq-display" style={{ fontSize: 26 }}>
           Who votes when you don’t
         </h2>
@@ -118,7 +118,7 @@ function TrustRow({
           </span>
         )}
       </div>
-      <div style={{ flex: 1, minWidth: 200, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ flex: 1, minWidth: 200, ...stack(6) }}>
         {mine ? (
           <Target a={a} d={mine} />
         ) : fallback ? (
@@ -137,7 +137,7 @@ function TrustRow({
         <Problem>{action.error}</Problem>
       </div>
       {writable && (
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div style={hstack(6)}>
           <button className="lq-btn" data-variant="quiet" data-size="sm" onClick={onPick}>
             {mine ? 'Change' : 'Trust someone'}
           </button>
@@ -182,7 +182,7 @@ function ChainNote({ a, next }: { a: Assembly; next: Next }) {
   if (next.how === 'loop')
     return (
       <div className="lq-note" data-tone="warn" style={{ fontSize: 12.5 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={stack(6)}>
           <PathView path={next.path} a={a} from={a.me} />
           <span>
             This comes back round to you. Unless someone on it votes themselves, nobody does: nothing is ever
@@ -193,7 +193,7 @@ function ChainNote({ a, next }: { a: Assembly; next: Next }) {
     );
   if (next.path.length < 2) return null;
   return (
-    <div className="lq-muted" style={{ fontSize: 12.5, display: 'flex', flexDirection: 'column', gap: 4 }}>
+    <div className="lq-muted" style={{ fontSize: 12.5, ...stack(4) }}>
       <span>When they follow someone too, it goes on:</span>
       <PathView path={next.path} a={a} from={a.me} />
     </div>
@@ -233,7 +233,7 @@ function TrustedBy({ a }: { a: Assembly }) {
   }, [a]);
 
   return (
-    <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <section style={stack(10)}>
       <p className="lq-section-title">Who trusts you</p>
       {rows.length === 0 ? (
         <p className="lq-faint" style={{ fontSize: 13.5 }}>
@@ -324,16 +324,7 @@ function Picker({
         placeholder={kind === 'person' ? 'Search people' : 'Search parties'}
         aria-label="Search"
       />
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 2,
-          maxHeight: 340,
-          overflowY: 'auto',
-          margin: '0 -6px',
-        }}
-      >
+      <div style={{ ...stack(2), maxHeight: 340, overflowY: 'auto', margin: '0 -6px' }}>
         {kind === 'person' &&
           people.map((m) => {
             const n = trustCount(m.did);
@@ -348,7 +339,7 @@ function Picker({
                 onClick={() => pick(m.did)}
               >
                 <Avatar did={m.did} size={32} />
-                <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ flex: 1, minWidth: 0, ...stack(2) }}>
                   <span style={{ fontWeight: 500 }}>{a.name(m.did)}</span>
                   <span className="lq-faint" style={{ fontSize: 12 }}>
                     {[
@@ -373,7 +364,7 @@ function Picker({
               onClick={() => pick(p.key)}
             >
               <PartyMark party={p} size={32} />
-              <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ flex: 1, minWidth: 0, ...stack(2) }}>
                 <span style={{ fontWeight: 500 }}>{p.name}</span>
                 <span
                   className="lq-faint"

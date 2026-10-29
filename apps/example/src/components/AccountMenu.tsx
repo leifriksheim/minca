@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useAccount, useAsync, useConnection, useNode } from '@minca/react';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
+import { useAccount, useAccountPicture, useConnection, useNode, useObjectUrl } from '@minca/react';
 import { accountHomeLink } from '@minca/core/session';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { useDismiss } from '@minca/app-shared/useDismiss';
@@ -8,7 +8,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { ConnectAgent } from './ConnectAgent';
 import { shortAccount } from '../account-address';
 import { shrinkImage } from '../files';
-import { palette, styles, ui } from '../styles';
+import { palette, styles, ui, hstack } from '../styles';
 
 type Place = 'header' | 'sidebar';
 
@@ -54,7 +54,7 @@ export function AccountMenu({ place = 'header' }: { place?: Place }) {
 
       {open && (
         <div role="menu" style={{ ...menu, ...(place === 'sidebar' ? above : below) }}>
-          <div style={{ padding: '14px 14px 12px', display: 'flex', gap: 10, alignItems: 'center' }}>
+          <div style={{ padding: '14px 14px 12px', ...hstack(10), alignItems: 'center' }}>
             <Avatar did={account.did} size={36} round src={picture} />
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ ...ui.ellipsis, fontWeight: 600, fontSize: 14, color: palette.ink.strong }}>
@@ -238,9 +238,6 @@ const item = {
   textAlign: 'left' as const,
 };
 
-const objectUrl = (file: { bytes: Uint8Array; mime: string }) =>
-  URL.createObjectURL(new Blob([file.bytes.slice()], { type: file.mime }));
-
 /**
  * The account's picture: shown where the account is, and chosen from a file,
  * made small before it is kept. Kept in the account registry, so every device
@@ -248,13 +245,10 @@ const objectUrl = (file: { bytes: Uint8Array; mime: string }) =>
  */
 function usePicture(name: string) {
   const node = useNode();
-  // An app without the account key reads no registry: the shape stands in.
-  const kept = useAsync(() => node.account.picture(), [node]);
-  const keptUrl = useMemo(
-    () => (kept.status === 'done' && kept.value ? objectUrl(kept.value) : null),
-    [kept],
-  );
-  const [chosen, setChosen] = useState<string | null>(null);
+  const kept = useAccountPicture();
+  // What was just chosen shows at once, before the account says it changed.
+  const [chosen, setChosen] = useState<{ bytes: Uint8Array; mime: string } | null>(null);
+  const chosenUrl = useObjectUrl(chosen);
   const [problem, setProblem] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
 
@@ -263,7 +257,7 @@ function usePicture(name: string) {
     try {
       const image = await shrinkImage(file, 256);
       await node.account.setAvatar(image, { name });
-      setChosen(objectUrl(image));
+      setChosen(image);
     } catch (error) {
       const noKey = /account key|registry/i.test(message(error));
       setProblem(
@@ -286,5 +280,5 @@ function usePicture(name: string) {
     />
   );
 
-  return { picture: chosen ?? keptUrl, problem, choose: () => input.current?.click(), picker };
+  return { picture: chosenUrl ?? kept, problem, choose: () => input.current?.click(), picker };
 }

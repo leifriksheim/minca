@@ -12,7 +12,7 @@ import { AppBoard } from './AppBoard';
 import { addMade, checkLauncherApp, copyApp, removeApp, updated, type LauncherApp } from './launcher';
 import { ScreenFrame } from './ScreenFrame';
 import { ago } from '@minca/ui/time';
-import { styles, palette } from '../../styles';
+import { styles, palette, hstack, stack } from '../../styles';
 import { Person } from '../Person';
 import { ask } from '@minca/app-shared/Ask';
 
@@ -58,16 +58,16 @@ export function Proposals({
 }) {
   if (proposals.length === 0) return null;
   return (
-    <section aria-label="Proposed apps" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <section aria-label="Proposed apps" style={stack(10)}>
       <div>
         <h2 style={styles.sectionTitle}>Proposed</h2>
-        <p style={{ fontSize: 13, color: palette.ink.muted, marginTop: 2 }}>
+        <p style={{ ...styles.quiet, marginTop: 2 }}>
           Apps someone, or their agent, made for this space. Nothing changes until someone who can add
           collections adds one. What each allows is worked out from its rules, not from what its author says
           about it.
         </p>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={stack(8)}>
         {proposals.map((record) => (
           <Proposal
             key={record.key}
@@ -163,7 +163,7 @@ function Proposal({
           <strong style={{ ...tileTitle, fontSize: 15 }}>
             {body?.title ?? 'An app that could not be read'}
           </strong>
-          <p style={{ fontSize: 12, color: palette.ink.faint, marginTop: 2 }}>
+          <p style={{ ...styles.faint, marginTop: 2 }}>
             {wasAdded ? 'Changed by' : 'Proposed by'} <Person did={by} />
             {record.recordsOnly && <AgentBadge />} · {ago(record.updatedAt)}
             {plan?.from && ' · copied from another space'}
@@ -173,7 +173,7 @@ function Proposal({
               ' · an update to an app no longer here; adding it adds it as its own'}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+        <div style={{ ...hstack(6), flexShrink: 0 }}>
           {mine && (
             <button
               onClick={() => void remove()}
@@ -209,7 +209,7 @@ function Proposal({
       </header>
 
       {body?.description && (
-        <p style={{ fontSize: 13, color: palette.ink.muted, lineHeight: 1.5 }}>
+        <p style={{ ...styles.quiet, lineHeight: 1.5 }}>
           <span style={{ color: palette.ink.faint }}>What they say it's for: </span>“{body.description}”
         </p>
       )}
@@ -221,7 +221,7 @@ function Proposal({
       {!problem && reviewed.length > 0 && (
         <>
           {changes.length > 0 && (
-            <p style={{ fontSize: 13, color: palette.accent.danger, lineHeight: 1.5 }}>
+            <p style={{ ...styles.dangerText, lineHeight: 1.5 }}>
               It changes{' '}
               {changes
                 .map(
@@ -241,7 +241,7 @@ function Proposal({
           )}
           {body?.shows?.length ? (
             // What opens here is what it learns the person opens, from anywhere in the space.
-            <p style={{ fontSize: 13, color: palette.ink.muted, lineHeight: 1.5 }}>
+            <p style={{ ...styles.quiet, lineHeight: 1.5 }}>
               {body.shows.map((name) => collections.find((c) => c.name === name)?.title ?? name).join(', ')}{' '}
               opened anywhere in {space.name} can open here.
             </p>
@@ -267,7 +267,7 @@ function Proposal({
               }}
             >
               {reviewed.map((need) => (
-                <li key={need.definition.name} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <li key={need.definition.name} style={stack(4)}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 13 }}>
                     <span style={{ color: palette.ink.strong, fontWeight: 500 }}>
                       {need.definition.title ?? need.definition.name}{' '}
@@ -288,9 +288,7 @@ function Proposal({
                       {need.status === 'new' ? 'new' : need.status === 'same' ? 'already here' : 'changes it'}
                     </span>
                   </div>
-                  <ul
-                    style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 2 }}
-                  >
+                  <ul style={{ margin: 0, paddingLeft: 18, ...stack(2) }}>
                     {need.summary.map((sentence) => (
                       <li key={sentence} style={{ fontSize: 13, color: palette.ink.body, lineHeight: 1.45 }}>
                         {sentence}
@@ -305,9 +303,7 @@ function Proposal({
       )}
 
       {!mayDefine && !problem && (
-        <p style={{ fontSize: 12, color: palette.ink.faint }}>
-          Someone whose role lets them add collections can add it.
-        </p>
+        <p style={styles.faint}>Someone whose role lets them add collections can add it.</p>
       )}
       {error && <p style={styles.error}>{error}</p>}
     </article>
@@ -325,9 +321,7 @@ function ScreenNote({ screen, network }: { screen: string; network: ReadonlyArra
   return (
     <div
       style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 6,
+        ...stack(6),
         padding: '10px 12px',
         background: palette.surface.sunken,
         borderRadius: palette.radius.lg,

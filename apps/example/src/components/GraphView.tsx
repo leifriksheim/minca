@@ -17,7 +17,7 @@ import { ago } from '@minca/ui/time';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { RecordPanel } from './RecordPanel';
 import { SHAPE_CYCLE } from '@minca/ui/tokens';
-import { styles, palette, ui } from '../styles';
+import { styles, palette, ui, stack } from '../styles';
 import { Person } from './Person';
 import { Loader } from '@minca/app-shared/Loader';
 
@@ -631,7 +631,7 @@ export function GraphView({
   const header = (
     <header>
       <h2 style={{ ...styles.appTitle, fontSize: 22 }}>Explore</h2>
-      <p style={{ fontSize: 13, color: palette.ink.muted, marginTop: 4, lineHeight: 1.6 }}>
+      <p style={{ ...styles.quiet, marginTop: 4, lineHeight: 1.6 }}>
         The records in this space, with a line wherever one points at another. Drag to move around, scroll to
         zoom, and click a dot to see what it is and follow its lines.
       </p>
@@ -640,10 +640,7 @@ export function GraphView({
 
   if (!hasGraph) {
     return (
-      <section
-        aria-label="Explore"
-        style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}
-      >
+      <section aria-label="Explore" style={{ ...stack(16), minWidth: 0 }}>
         {header}
         <div style={styles.emptyState}>
           Nothing here yet. Once records are added to this space, they show up here — joined by a line
@@ -660,7 +657,7 @@ export function GraphView({
   const hoverAt = hover ? drawn.get(hover.id) : undefined;
 
   return (
-    <section aria-label="Explore" style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+    <section aria-label="Explore" style={{ ...stack(16), minWidth: 0 }}>
       {header}
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
@@ -1018,7 +1015,7 @@ function Details({
             <h3 style={{ ...styles.appTitle, fontSize: 16 }}>
               <Person did={did} />
             </h3>
-            <p style={{ fontSize: 12, color: palette.ink.faint }}>
+            <p style={styles.faint}>
               Wrote {wrote.length} {wrote.length === 1 ? 'record' : 'records'} on the map
             </p>
           </div>

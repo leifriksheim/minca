@@ -20,7 +20,7 @@ import { PairPhone } from './PairPhone';
 import { ConfirmItsYou } from './ConfirmItsYou';
 import { Hosting } from './Hosting';
 import { Notifications } from './Notifications';
-import { styles, palette } from '../styles';
+import { styles, palette, hstack, stack } from '../styles';
 import type { TabId } from '../tabs';
 
 /**
@@ -190,7 +190,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
               />
             ) : (
               <Row label={hasPassword ? 'A password is set.' : 'No password.'}>
-                <span style={{ display: 'flex', gap: 6 }}>
+                <span style={hstack(6)}>
                   <button
                     onClick={() => guarded('change the password', () => setChangingPassword(true))}
                     disabled={state.busy}
@@ -606,7 +606,7 @@ function SignOut() {
           </span>
         </span>
       </label>
-      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+      <div style={{ ...hstack(8), marginTop: 12 }}>
         <button
           onClick={() => signOut({ disconnect })}
           disabled={busy}
@@ -697,7 +697,7 @@ function PasswordForm({
         style={styles.input}
       />
       {mismatch && <p style={styles.error}>Those two do not match.</p>}
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div style={hstack(8)}>
         <button type="submit" disabled={busy || !password} data-variant="primary" style={styles.darkSmall}>
           {busy ? 'Saving…' : 'Save password'}
         </button>
@@ -757,7 +757,7 @@ function RecoveryCode({ reveal, name, did }: { reveal: () => string | null; name
           >
             {code}
           </code>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={hstack(8)}>
             <button onClick={() => copy(code)} data-variant="quiet" style={styles.smallButton}>
               {copied ? 'Copied' : 'Copy'}
             </button>
@@ -880,8 +880,8 @@ function Strength({ password }: { password: string }) {
     check.strength
   ];
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div aria-hidden style={{ display: 'flex', gap: 4 }}>
+    <div style={stack(6)}>
+      <div aria-hidden style={hstack(4)}>
         {[1, 2, 3].map((step) => (
           <span
             key={step}

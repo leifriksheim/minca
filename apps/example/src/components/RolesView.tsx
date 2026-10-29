@@ -15,7 +15,7 @@ import { nameOf, peopleFrom, type People } from '../derive/people';
 import { PersonAvatar } from './std/PersonAvatar';
 import { RingButton } from './calls/Calls';
 import { createInviteLink } from '../spaces';
-import { styles, palette, variants } from '../styles';
+import { styles, palette, variants, hstack, stack } from '../styles';
 import { Person } from './Person';
 import { Loader } from '@minca/app-shared/Loader';
 import { ask } from '@minca/app-shared/Ask';
@@ -150,7 +150,7 @@ export function RolesView({
       </p>
     );
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 36 }}>
+    <div style={stack(36)}>
       <Members space={space} access={access} me={account.did} people={people} powers={powers} />
       <Roles space={space} access={access} powers={powers} />
       <WhatYouCanDo access={access} />
@@ -224,7 +224,7 @@ function Roles({ space, access, powers }: { space: SpaceSummary; access: SpaceAc
           New role
         </button>
       </div>
-      <p style={{ fontSize: 13, color: palette.ink.muted, lineHeight: 1.5 }}>
+      <p style={{ ...styles.quiet, lineHeight: 1.5 }}>
         A role is what it grants. Whoever defines a role can give it only what they may do themselves.
       </p>
 
@@ -241,17 +241,17 @@ function Roles({ space, access, powers }: { space: SpaceSummary; access: SpaceAc
           return (
             <li key={role.name} style={card}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ flex: 1, minWidth: 0, ...stack(6) }}>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
                     <strong style={{ color: palette.ink.strong, fontSize: 15 }}>{titleOf(role)}</strong>
                     {access.mine.includes(role.name) && <span style={styles.badge}>yours</span>}
-                    <span style={{ fontSize: 12, color: palette.ink.faint }}>
+                    <span style={styles.faint}>
                       <code>{role.name}</code> · {count} {count === 1 ? 'person' : 'people'}
                     </span>
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {grants.length === 0 ? (
-                      <span style={{ fontSize: 12, color: palette.ink.faint }}>Grants nothing</span>
+                      <span style={styles.faint}>Grants nothing</span>
                     ) : (
                       grantLines(grants).map((line) => (
                         <span key={line} style={chip}>
@@ -261,7 +261,7 @@ function Roles({ space, access, powers }: { space: SpaceSummary; access: SpaceAc
                     )}
                   </div>
                   {rivals && (
-                    <span style={{ fontSize: 12, color: palette.ink.faint }}>
+                    <span style={styles.faint}>
                       Defined twice apart: it grants only what both definitions share, until someone defines
                       it again.
                     </span>
@@ -351,9 +351,7 @@ function RoleEditor({
   return (
     <div
       style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 16,
+        ...stack(16),
         marginTop: existing ? 14 : 0,
         padding: 16,
         borderRadius: palette.radius.md,
@@ -371,15 +369,13 @@ function RoleEditor({
           style={styles.input}
           autoFocus={!existing}
         />
-        <p style={{ fontSize: 12, color: palette.ink.faint, marginTop: 4 }}>
+        <p style={{ ...styles.faint, marginTop: 4 }}>
           {existing ? 'Its key stays ' : 'Its key will be '}
           <code>{name || '…'}</code>
         </p>
       </label>
 
-      <fieldset
-        style={{ border: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 6 }}
-      >
+      <fieldset style={{ border: 'none', padding: 0, margin: 0, ...stack(6) }}>
         <legend style={{ ...styles.fieldLabel, padding: 0 }}>What it grants</legend>
         {GRANT_CHOICES.map((c) => (
           <label key={c.key} style={{ ...styles.checkboxRow, alignItems: 'flex-start' }}>
@@ -406,14 +402,14 @@ function RoleEditor({
           </label>
         )}
       </fieldset>
-      <p style={{ fontSize: 12, color: palette.ink.faint }}>
+      <p style={styles.faint}>
         A grant counts only as far as you may do it yourself. Narrowing a role keeps what its holders already
         wrote.
       </p>
 
-      {problem && <p style={{ fontSize: 13, color: palette.ink.muted }}>{problem}</p>}
+      {problem && <p style={styles.quiet}>{problem}</p>}
       {error && <p style={styles.error}>{plainError(error)}</p>}
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div style={hstack(8)}>
         <button
           onClick={() => void save()}
           disabled={!!problem || saving}
@@ -711,9 +707,7 @@ function Invite({
   return (
     <div
       style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 12,
+        ...stack(12),
         padding: 16,
         borderRadius: palette.radius.md,
         background: palette.surface.sunken,
@@ -747,7 +741,7 @@ function Invite({
         {role && ' You can close it later.'}
       </p>
       {offered.length === 0 && (
-        <p style={{ fontSize: 12, color: palette.ink.faint }}>
+        <p style={styles.faint}>
           Inviting with a role takes a grant of /role/assign, so you can only share it to view.
         </p>
       )}
@@ -773,8 +767,8 @@ function Invite({
   );
 }
 
-const section: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 12 };
-const list: CSSProperties = { listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 };
+const section: CSSProperties = stack(12);
+const list: CSSProperties = { listStyle: 'none', ...stack(4) };
 const item: CSSProperties = { fontSize: 13, lineHeight: 1.6 };
 const card: CSSProperties = {
   padding: 14,

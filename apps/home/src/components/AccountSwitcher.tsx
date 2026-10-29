@@ -1,10 +1,9 @@
 import { useCallback, useRef, useState } from 'react';
-import { useAuth, useSession } from '@minca/react';
+import { useAccountPicture, useAuth, useSession } from '@minca/react';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { useDismiss } from '@minca/app-shared/useDismiss';
 import { useCopy } from '@minca/app-shared/action';
-import { palette, styles } from '../styles';
-import { useAccountPicture } from '../picture';
+import { palette, styles, hstack } from '../styles';
 
 const { ink, surface, radius } = palette;
 
@@ -80,7 +79,7 @@ export function AccountSwitcher() {
                   event.preventDefault();
                   void auth.rename(draft).then((ok) => ok && setRenaming(false));
                 }}
-                style={{ display: 'flex', gap: 6, width: '100%', marginTop: 4 }}
+                style={{ ...hstack(6), width: '100%', marginTop: 4 }}
               >
                 <input
                   value={draft}
@@ -108,7 +107,7 @@ export function AccountSwitcher() {
                 ? shortId(session.did)
                 : `${session.did.slice(0, 14)}…${session.did.slice(-4)}`}
             </p>
-            <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+            <div style={{ ...hstack(6), marginTop: 4 }}>
               {!renaming && (
                 <button
                   onClick={() => {

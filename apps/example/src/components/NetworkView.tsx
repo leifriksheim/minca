@@ -14,7 +14,7 @@ import {
   type Health,
   type PeerKind,
 } from '../derive/network';
-import { styles, palette, variants } from '../styles';
+import { styles, palette, variants, hstack, stack } from '../styles';
 import { Person } from './Person';
 import { DocsNote } from './DocsNote';
 import { useAction } from '@minca/app-shared/action';
@@ -71,7 +71,7 @@ export function NetworkView({ space, status }: { space: SpaceSummary; status: Sp
   const health = healthOf(status, network);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 36 }}>
+    <div style={stack(36)}>
       <Summary
         health={health}
         status={status}
@@ -408,7 +408,7 @@ function SpaceRelays({
         </ul>
       )}
       {manages && (
-        <form onSubmit={(event) => void add(event)} style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <form onSubmit={(event) => void add(event)} style={{ ...hstack(8), flexWrap: 'wrap' }}>
           <label htmlFor="space-relay" style={visuallyHidden}>
             Relay address
           </label>
@@ -574,12 +574,12 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section aria-label={title} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <section aria-label={title} style={stack(10)}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'space-between' }}>
         <h2 style={{ ...styles.appTitle, fontSize: 20 }}>{title}</h2>
         {action}
       </div>
-      {hint && <p style={{ fontSize: 13, color: palette.ink.muted, margin: 0, lineHeight: 1.6 }}>{hint}</p>}
+      {hint && <p style={{ ...styles.quiet, margin: 0, lineHeight: 1.6 }}>{hint}</p>}
       {children}
     </section>
   );

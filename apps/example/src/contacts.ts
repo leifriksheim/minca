@@ -1,7 +1,6 @@
 /** Contacts (`node.contacts`) and the inbox (`node.inbox`), for the screens that show them. */
 import type { ContactView, P2PNode } from '@minca/core';
-import { useAsync, useLive, useNode } from '@minca/react';
-import { useWatched } from './use-watched';
+import { useAsync, useLive, useNode, useWatched } from '@minca/react';
 
 /** What a new space for two means when no carrier holds it yet (`spaces.carried`) */
 export const NOT_CARRIED =

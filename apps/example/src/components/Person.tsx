@@ -120,7 +120,7 @@ function PersonCard({ did, scope, onClose }: { did: string; scope: PersonScope; 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
         <PersonAvatar spaceId={space.id} did={did} size={48} />
         <div style={{ minWidth: 0 }}>
-          <p style={{ fontSize: 13, color: palette.ink.muted }}>
+          <p style={styles.quiet}>
             {did === me ? 'You' : profile ? `In ${space.name}` : `No profile in ${space.name}`}
             {role && ` · ${role.toLowerCase()}`}
           </p>

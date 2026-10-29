@@ -32,7 +32,7 @@ import { NEW } from './DataView';
 import { SpaceRail } from './SpaceRail';
 import { SpaceMark } from './SpaceList';
 import { AccountMenu } from './AccountMenu';
-import { styles, palette } from '../styles';
+import { styles, palette, stack } from '../styles';
 import { Icon, type IconName } from './Icon';
 import { WhoIsHere } from './WhoIsHere';
 import { RelayDown } from './RelayNotice';
@@ -382,7 +382,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
               </div>
             )}
 
-            <nav aria-label="This space" style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <nav aria-label="This space" style={stack(1)}>
               <SideItem
                 icon={<Icon name="apps" size={16} />}
                 label="All apps"
@@ -457,10 +457,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
               ))}
             </nav>
 
-            <nav
-              aria-label="Under the hood"
-              style={{ display: 'flex', flexDirection: 'column', gap: 1, marginTop: 'auto', paddingTop: 24 }}
-            >
+            <nav aria-label="Under the hood" style={{ ...stack(1), marginTop: 'auto', paddingTop: 24 }}>
               <button
                 onClick={() => openHood(!hoodOpen)}
                 aria-expanded={hoodOpen}
@@ -522,7 +519,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
               </span>
             )}
             {open && <AppIcon id={open.id} size={28} />}
-            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <div style={{ flex: 1, minWidth: 0, ...stack(1) }}>
               <h1 style={{ ...styles.appTitle, ...ellipsis, fontSize: 18 }}>{title}</h1>
               {/* Under the space's name on a phone, as the sidebar has it beside a wide screen. */}
               {onApps && (
@@ -587,7 +584,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
               )}
 
               {hood && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
+                <div style={{ ...stack(10), marginBottom: 24 }}>
                   <div role="tablist" aria-label="Under the hood" className="segmented phone-only scroll-x">
                     {HOOD.map((h) => (
                       <button key={h.id} role="tab" aria-selected={hood.id === h.id} onClick={() => go(h.to)}>
@@ -596,7 +593,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
                       </button>
                     ))}
                   </div>
-                  {'about' in hood && <p style={{ fontSize: 13, color: palette.ink.muted }}>{hood.about}</p>}
+                  {'about' in hood && <p style={styles.quiet}>{hood.about}</p>}
                 </div>
               )}
 

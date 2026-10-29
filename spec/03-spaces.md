@@ -1090,7 +1090,7 @@ becomes due (§9.2), and someone granted `/key/change` changes the key (§9.3).
 What the library does, and how long it waits for a peer, is in
 [its docs](../packages/core/docs/node.md#leaving-a-space).
 
-_Source: `packages/core/src/node/node.ts` (`spaces.leave`, `giveUpPlace`, `reconcileOnce`), `packages/core/src/node/space-runtime.ts` (`giveUpPlace`, `assign`, `removeAccount`, `defineRole`). Tests: `packages/core/tests/key-change.test.ts` ("leaving a private space"), `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/roles.test.ts` ("a founder steps down by leaving…"), `packages/core/tests/constitution.test.ts` ("stepping down")._
+_Source: `packages/core/src/node/node.ts` (`spaces.leave`, `giveUpPlace`, `reconcileOnce`), `packages/core/src/node/space-runtime.ts` (`giveUpPlace`, `assign`, `removeAccount`, `defineRole`), `packages/core/src/node/space-peers.ts` (`writeUntilStored`). Tests: `packages/core/tests/key-change.test.ts` ("leaving a private space"), `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/roles.test.ts` ("a founder steps down by leaving…"), `packages/core/tests/constitution.test.ts` ("stepping down")._
 
 ### 6.3 Cutoffs
 
@@ -1146,7 +1146,7 @@ not a note, so every note to that key goes with it.
 A key can't pass its note on ([01](01-identity.md) §7.5), so no other key
 acts through a revoked one: the revoke of a key is all there is to undo.
 
-_Source: `packages/core/src/node/space-runtime.ts` (`assign`, `removeAccount`, `revoke`, `cutoffFor`, `linesOf`), `packages/core/src/node/node.ts` (`spaces.leave`). Tests: `packages/core/tests/roles.test.ts` ("a revoked key…"), `packages/core/tests/cutoff-limits.test.ts`, `packages/core/tests/space-access.test.ts` ("taking it back", "a key cannot pass its note on: a two-link proof counts for no peer")._
+_Source: `packages/core/src/node/space-runtime.ts` (`assign`, `removeAccount`, `revoke`, `cutoffFor`, `linesOf`), `packages/core/src/node/space-peers.ts` (`writeUntilStored`), `packages/core/src/node/node.ts` (`spaces.leave`). Tests: `packages/core/tests/roles.test.ts` ("a revoked key…"), `packages/core/tests/cutoff-limits.test.ts`, `packages/core/tests/space-access.test.ts` ("taking it back", "a key cannot pass its note on: a two-link proof counts for no peer")._
 
 ### 6.5 Proving a fork
 
@@ -1422,7 +1422,7 @@ Closing an invite by its link: derive the invite DID from the link's secret
 (§7.1; for a short link, from the invite secret §7.7 derives) and close that
 record.
 
-_Source: `packages/core/src/space/space-access.ts` (`generateInviteSecret`, `deriveInviteKey`, `signInvite`, `verifyInvite`), `packages/core/src/space/space-manager.ts` (`encodeSpaceInvite`, `parseSpaceInvite`, `join`), `packages/core/src/node/space-runtime.ts` (`openInvite`, `closeInvite`, `join`), `packages/core/src/node/node.ts` (`spaces.invite`, `preview`, `join`, `closeInvite`, `bareInvite`). Tests: `packages/core/tests/space-access.test.ts` ("the keys", "invites"), `packages/core/tests/space.test.ts` ("invites"), `packages/core/tests/roles.test.ts` ("invites")._
+_Source: `packages/core/src/space/space-access.ts` (`generateInviteSecret`, `deriveInviteKey`, `signInvite`, `verifyInvite`), `packages/core/src/space/space-manager.ts` (`encodeSpaceInvite`, `parseSpaceInvite`, `join`), `packages/core/src/node/space-runtime.ts` (`openInvite`, `closeInvite`, `join`), `packages/core/src/node/node.ts` (`spaces.invite`, `preview`, `join`, `closeInvite`, `bareInvite`), `packages/core/src/node/node-invites.ts` (`inviteKeyOf`). Tests: `packages/core/tests/space-access.test.ts` ("the keys", "invites"), `packages/core/tests/space.test.ts` ("invites"), `packages/core/tests/roles.test.ts` ("invites")._
 
 ### 7.7 Short links
 
@@ -1510,7 +1510,7 @@ link          AAECAwQFBgcICQoLDA0OD_Dx8vP09fb3-Pn6-_z9_v8@host.example,relay.exa
 Where the inviter keeps a link, and how its host serves it, is in §13.2 and
 [06](06-nodes-and-sessions.md) §4.2.
 
-_Source: `packages/core/src/space/invite-link.ts` (`encodeInviteLink`, `parseInviteLink`, `inviteLinkKeys`, `linkTopic`, `pinOf`, `sealInvite`, `openInvite`, `checkInviteNodes`), `packages/core/src/node/node.ts` (`shortInvite`, `resolveInvite`, `fetchInvite`). Tests: `packages/core/tests/invite-link.test.ts` ("the link", "the sealed invite", "short links between nodes")._
+_Source: `packages/core/src/space/invite-link.ts` (`encodeInviteLink`, `parseInviteLink`, `inviteLinkKeys`, `linkTopic`, `pinOf`, `sealInvite`, `openInvite`, `checkInviteNodes`), `packages/core/src/node/node-invites.ts` (`shortInvite`, `resolveInvite`, `fetchInvite`). Tests: `packages/core/tests/invite-link.test.ts` ("the link", "the sealed invite", "short links between nodes")._
 
 ---
 
@@ -1774,7 +1774,7 @@ write, and proves it may read with the newest key it holds (see
 [04](04-network.md)). A view-only invite made before a change carries only the
 old key; its holder is not a reader and gets no box.
 
-_Source: `packages/core/src/node/space-runtime.ts` (`learnKeys`, `malformedKeys`, `rotateKey`, `changeKeyNow`, `formerMembers`, `boxForMembers`, `upkeep`, `loadMemberKeys`), `packages/core/src/space/space-access.ts` (`MEMBER_KEY_COLLECTION`, `BOX_COLLECTION`, `boxKey`, `BOX_LABEL`, `boxBound`, `SPACE_KEY_RECORD`), `packages/core/src/identity/contact-key.ts` (`deriveMemberKeyBytes`), `packages/core/src/identity/hpke.ts` (`sealTo`). Tests: `packages/core/tests/key-change.test.ts` ("is taken as malformed: a manager replaces it, and a newcomer still gets the first key", "forces no key change, however malformed", "gives no reader a key the history doesn’t name", and the rest), `packages/core/tests/envelope.test.ts` ("a box opened with the wrong bound, label or key opens nothing")._
+_Source: `packages/core/src/node/space-keys.ts` (`learnKeys`, `malformedKeys`, `rotateKey`, `boxForMembers`, `upkeep`), `packages/core/src/node/space-runtime.ts` (`changeKeyNow`, `formerMembers`, `loadMemberKeys`), `packages/core/src/space/space-access.ts` (`MEMBER_KEY_COLLECTION`, `BOX_COLLECTION`, `boxKey`, `BOX_LABEL`, `boxBound`, `SPACE_KEY_RECORD`), `packages/core/src/identity/contact-key.ts` (`deriveMemberKeyBytes`), `packages/core/src/identity/hpke.ts` (`sealTo`). Tests: `packages/core/tests/key-change.test.ts` ("is taken as malformed: a manager replaces it, and a newcomer still gets the first key", "forces no key change, however malformed", "gives no reader a key the history doesn’t name", and the rest), `packages/core/tests/envelope.test.ts` ("a box opened with the wrong bound, label or key opens nothing")._
 
 ---
 
@@ -1798,7 +1798,7 @@ at most 200 characters, each `name` a string of at most 80 characters, no
 `/space/keepers` may set it.
 What keepers do is in [05 — Sync and storage](05-sync-and-storage.md).
 
-_Source: `packages/core/src/space/roles.ts` (`checkRelays`, `checkKeepers`, `MAX_RELAYS`, `MAX_KEEPERS`), `packages/core/src/node/space-runtime.ts` (`nameRelays`, `setRelays`, `setKeepers`). Tests: `packages/core/tests/space-relays.test.ts`, `packages/core/tests/carrier.test.ts` ("is named a keeper…")._
+_Source: `packages/core/src/space/roles.ts` (`checkRelays`, `checkKeepers`, `MAX_RELAYS`, `MAX_KEEPERS`), `packages/core/src/node/space-keys.ts` (`nameRelays`), `packages/core/src/node/space-runtime.ts` (`setRelays`, `setKeepers`). Tests: `packages/core/tests/space-relays.test.ts`, `packages/core/tests/carrier.test.ts` ("is named a keeper…")._
 
 ---
 
@@ -1917,7 +1917,7 @@ counts only the account's own. It is a system collection so that
 nothing defines it: no key of the account can redefine it to keep the person
 from pausing or removing one.
 
-_Source: `packages/core/src/space/account-registry.ts` (`LINK_COLLECTION`, `isKeptLink`), `packages/core/src/node/node.ts` (`memberships`, `remember`, `forget`, `reconcileOnce`, `ownName`, `keepLink`, `keepLinks`). Tests: `packages/core/tests/invite-link.test.ts` ("past its until, the account closes its invite", "a key change ends a role link…"), `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/account-vault.test.ts` ("the account key, and the spaces derived from it, match the spec's examples"), `packages/core/tests/account.test.ts` ("the account name"), `packages/core/tests/space-access.test.ts` ("invite secrets are never kept…")._
+_Source: `packages/core/src/space/account-registry.ts` (`LINK_COLLECTION`, `isKeptLink`), `packages/core/src/node/node.ts` (`memberships`, `remember`, `forget`, `reconcileOnce`), `packages/core/src/node/node-account.ts` (`ownName`), `packages/core/src/node/node-invites.ts` (`keepLink`, `keepLinks`). Tests: `packages/core/tests/invite-link.test.ts` ("past its until, the account closes its invite", "a key change ends a role link…"), `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/account-vault.test.ts` ("the account key, and the spaces derived from it, match the spec's examples"), `packages/core/tests/account.test.ts` ("the account name"), `packages/core/tests/space-access.test.ts` ("invite secrets are never kept…")._
 
 ---
 
@@ -1959,7 +1959,7 @@ A `sys.carrier` record written before carry spaces were derived also has
 `space` and `invite`: its carry space is the one `invite` names, which a
 device joins with it. Such records are read, never written.
 
-_Source: `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts` (`deriveCarrySpace`), `packages/core/src/node/node.ts` (`syncPasses`, `carriers`, `carrySpaceOf`, `carrierRecords`). Tests: `packages/core/tests/carrier.test.ts` ("passes", "a carrier", "added again after it was removed…"), `packages/core/tests/account-vault.test.ts` ("the account key, and the spaces derived from it, match the spec's examples")._
+_Source: `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts` (`deriveCarrySpace`), `packages/core/src/node/node-carriers.ts` (`syncPasses`, `carriers`, `carrySpaceOf`, `carrierRecords`). Tests: `packages/core/tests/carrier.test.ts` ("passes", "a carrier", "added again after it was removed…"), `packages/core/tests/account-vault.test.ts` ("the account key, and the spaces derived from it, match the spec's examples")._
 
 ---
 
@@ -2030,7 +2030,7 @@ A carrier on one of the account's own devices may show a match there itself,
 as the desktop app's does; a wake is also what a carrier needs to wake an app
 that is closed ([06](06-nodes-and-sessions.md) §4.4).
 
-_Source: `packages/core/src/space/own-automations.ts` (`readWake`, `wakes`, `wakeFor`, `linkedWakes`), `packages/core/src/node/node.ts` (`syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`), `apps/desktop/src/bun/notify.ts`. Tests: `packages/core/tests/carrier.test.ts` ("a carrier gets tags, never the values it matches", "someone mentions you in a private space: the carrier says so, and nothing else"), `packages/core/tests/computed.test.ts` ("a wake for a filter on a computed field also wakes on what that field reads"), `apps/desktop/tests/notify.test.ts`._
+_Source: `packages/core/src/space/own-automations.ts` (`readWake`, `wakes`, `wakeFor`, `linkedWakes`), `packages/core/src/node/node-carriers.ts` (`syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`), `apps/desktop/src/bun/notify.ts`. Tests: `packages/core/tests/carrier.test.ts` ("a carrier gets tags, never the values it matches", "someone mentions you in a private space: the carrier says so, and nothing else"), `packages/core/tests/computed.test.ts` ("a wake for a filter on a computed field also wakes on what that field reads"), `apps/desktop/tests/notify.test.ts`._
 
 > **Planned: devices deliver wakes, by Web Push.** Issue:
 > [#60](https://github.com/leifriksheim/minca/issues/60). Delivery moves to

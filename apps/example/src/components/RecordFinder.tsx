@@ -79,8 +79,7 @@ export function RecordFinder({
           >
             <span
               style={{
-                color: palette.ink.faint,
-                fontSize: 12,
+                ...styles.faint,
                 width: 90,
                 flexShrink: 0,
                 overflow: 'hidden',

@@ -8,7 +8,7 @@ import { ago } from '@minca/ui/time';
 import { SpaceMark } from './SpaceList';
 import { Icon } from './Icon';
 import { WatchBuilder } from './automations/WatchBuilder';
-import { palette, styles } from '../styles';
+import { palette, styles, hstack, stack } from '../styles';
 
 type Tab = 'activity' | 'settings';
 
@@ -77,7 +77,7 @@ export function Bell({
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '10px 10px 6px 14px' }}>
             <p style={{ flex: 1, fontWeight: 600, fontSize: 14, color: palette.ink.strong }}>Notifications</p>
-            <div role="tablist" aria-label="Notifications" style={{ display: 'flex', gap: 2 }}>
+            <div role="tablist" aria-label="Notifications" style={hstack(2)}>
               <TabButton on={tab === 'activity'} onClick={() => setTab('activity')}>
                 Activity
               </TabButton>
@@ -149,9 +149,9 @@ function Activity({
           <li key={item.record}>
             <button data-menu-item style={row} onClick={() => onOpenSpace(item.space)}>
               {space ? <SpaceMark space={space} size={28} /> : <span style={{ width: 28 }} />}
-              <span style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ minWidth: 0, flex: 1, ...stack(2) }}>
                 <span style={{ fontSize: 13, fontWeight: 500, color: palette.ink.strong }}>{item.label}</span>
-                <span style={{ fontSize: 12, color: palette.ink.faint }}>
+                <span style={styles.faint}>
                   {space ? `${space.name} · ` : ''}
                   {ago(item.at)}
                 </span>
@@ -225,9 +225,9 @@ function Settings({
                 <span style={{ color: palette.ink.muted, display: 'inline-flex' }}>
                   <Icon name={sub.paused ? 'bell' : 'bellOn'} size={14} />
                 </span>
-                <span style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <span style={{ minWidth: 0, flex: 1, ...stack(1) }}>
                   <span style={{ fontSize: 13, fontWeight: 500, color: palette.ink.strong }}>{sub.name}</span>
-                  <span style={{ fontSize: 12, color: palette.ink.faint }}>
+                  <span style={styles.faint}>
                     {where(sub.spaces ?? 'all')}
                     {sub.when?.query.where !== undefined ? ' · with conditions' : ''}
                     {sub.paused ? ' · paused' : ''}
@@ -295,7 +295,7 @@ function Action({
 }) {
   return (
     <button data-menu-item onClick={onClick} disabled={disabled} style={row}>
-      <span style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
+      <span style={{ minWidth: 0, flex: 1, ...stack(1) }}>
         <span
           style={{
             fontSize: 13,
@@ -305,7 +305,7 @@ function Action({
         >
           {title}
         </span>
-        {hint && <span style={{ fontSize: 12, color: palette.ink.faint }}>{hint}</span>}
+        {hint && <span style={styles.faint}>{hint}</span>}
       </span>
     </button>
   );

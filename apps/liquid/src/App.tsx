@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { SpaceSummary } from '@minca/core';
 import { useAsync, useConnection, useNode, useSpaces } from '@minca/react';
 import { Loader } from '@minca/app-shared/Loader';
-import { styles, palette } from '@minca/app-shared/styles';
+import { styles, palette, stack } from '@minca/app-shared/styles';
 import { Wordmark } from '@minca/app-shared/Wordmark';
 import { AssemblySpace } from './Assembly';
 import { becomeAssembly } from './setup';
@@ -64,7 +64,7 @@ function Spaces() {
             Liquid has no spaces yet. Connect again, and give it one at your account home.
           </p>
         ) : (
-          <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8, padding: 0 }}>
+          <ul style={{ listStyle: 'none', ...stack(8), padding: 0 }}>
             {spaces.map((one) => (
               <li key={one.id}>
                 <button

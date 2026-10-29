@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useMinca } from '@minca/react';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { wantedAccount } from '../minca';
-import { palette, styles } from '../styles';
+import { palette, styles, hstack } from '../styles';
 
 /**
  * Which account the app that opened this page acts for, when it is not the one
@@ -37,7 +37,7 @@ export function AccountHint() {
   if (!wanted) {
     if (session ? stage !== 'ready' : stage !== 'signIn' && stage !== 'welcome') return null;
     return (
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16 }}>
+      <div style={{ ...hstack(10), alignItems: 'center', marginBottom: 16 }}>
         <Avatar did={wantedAccount} size={28} />
         <p style={{ ...styles.errorHint, margin: 0, flex: 1 }}>
           The app you came from uses an account that isn't in this browser. If you don't recognise it, ignore
@@ -54,7 +54,7 @@ export function AccountHint() {
   if (session && stage === 'ready') {
     return (
       <div style={{ ...styles.panel, marginTop: 0, marginBottom: 16 }}>
-        <div style={{ ...styles.panelBody, paddingTop: 14, display: 'flex', gap: 12 }}>
+        <div style={{ ...styles.panelBody, paddingTop: 14, ...hstack(12) }}>
           <Avatar did={wantedAccount} size={32} />
           <div style={{ flex: 1 }}>
             <p style={{ ...styles.ok, color: palette.ink.strong }}>

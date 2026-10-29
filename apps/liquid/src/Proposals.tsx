@@ -38,7 +38,7 @@ import {
   ago,
 } from './ui';
 import { useAction } from '@minca/app-shared/action';
-import { palette, tone } from './styles';
+import { palette, tone, hstack, stack } from './styles';
 
 type Sort = 'top' | 'new' | 'decided';
 
@@ -61,9 +61,9 @@ export function Proposals({ a, writable }: { a: Assembly; writable: boolean }) {
     );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={stack(16)}>
       <div className="lq-toolbar" style={{ justifyContent: 'space-between' }}>
-        <div role="group" aria-label="Sort" style={{ display: 'flex', gap: 4 }}>
+        <div role="group" aria-label="Sort" style={hstack(4)}>
           {(
             [
               ['top', 'Top'],
@@ -121,7 +121,7 @@ export function Proposals({ a, writable }: { a: Assembly; writable: boolean }) {
           )}
         </Empty>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={stack(10)}>
           {shown.map((p, i) => (
             <ProposalCard
               key={p.key}
@@ -198,7 +198,7 @@ function ProposalCard({
         disabled={!writable || supportIt.busy || p.result !== 'open'}
         onToggle={supportIt.toggle}
       />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
+      <div style={{ ...stack(10), minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12.5 }}>
           {topic && <TopicChip topic={topic} />}
           <span className="lq-faint">
@@ -324,7 +324,7 @@ function ProposalPage({
     });
 
   return (
-    <div className="lq-fade" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div className="lq-fade" style={stack(20)}>
       <button
         className="lq-btn"
         data-variant="ghost"
@@ -334,15 +334,15 @@ function ProposalPage({
         ← All proposals
       </button>
       <div className="lq-two">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
-          <div style={{ display: 'flex', gap: 14 }}>
+        <div style={{ ...stack(20), minWidth: 0 }}>
+          <div style={hstack(14)}>
             <Upvote
               count={p.supporters.size}
               pressed={p.mySupportKey !== null}
               disabled={!writable || supportIt.busy || p.result !== 'open'}
               onToggle={supportIt.toggle}
             />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
+            <div style={{ ...stack(8), minWidth: 0 }}>
               <div
                 style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12.5 }}
               >
@@ -390,7 +390,7 @@ function ProposalPage({
           <Breakdown a={a} p={p} />
         </div>
 
-        <aside className="lq-aside" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <aside className="lq-aside" style={stack(12)}>
           <Results a={a} p={p} />
         </aside>
       </div>
@@ -445,7 +445,7 @@ function VotePanel({
     );
 
   return (
-    <section className="lq-card" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <section className="lq-card" style={{ padding: 18, ...stack(14) }}>
       <p className="lq-display" style={{ fontSize: 19 }}>
         Your vote
       </p>
@@ -498,7 +498,7 @@ function PathNote({
 }) {
   return (
     <div className="lq-note" data-tone={warn ? 'warn' : undefined}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={stack(8)}>
         <PathView path={path} a={a} from={a.me} />
         <span>{children}</span>
       </div>
@@ -572,7 +572,7 @@ const NEXT_SAYS = {
 function Disputes({ a, p }: { a: Assembly; p: ProposalView }) {
   return (
     <div className="lq-note" data-tone="warn" style={{ fontSize: 13, lineHeight: 1.55 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={stack(8)}>
         <span>
           <b>Disputed.</b> Someone signed two different versions of something this proposal counts. Every
           device shows it as disputed, whatever the count says:
@@ -610,7 +610,7 @@ function Results({ a, p }: { a: Assembly; p: ProposalView }) {
   const own = p.votes.size - followed;
   const comingCount = coming.for + coming.against + coming.abstain;
   return (
-    <section className="lq-card" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <section className="lq-card" style={{ padding: 18, ...stack(14) }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
         <p className="lq-display" style={{ fontSize: 17 }}>
           {p.result === 'open' ? 'Standing now' : 'Result'}
@@ -672,7 +672,7 @@ function PartyStands({ a, p }: { a: Assembly; p: ProposalView }) {
   });
   if (rolls.length === 0) return null;
   return (
-    <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <section style={stack(10)}>
       <p className="lq-section-title">Parties</p>
       <div className="lq-card">
         {rolls.map(({ party, roll, stand }) => (
@@ -719,7 +719,7 @@ function Breakdown({ a, p }: { a: Assembly; p: ProposalView }) {
     );
 
   return (
-    <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <section style={stack(10)}>
       <p className="lq-section-title">How the votes came in</p>
       <div className="lq-card">
         {rows.map(({ did, cast, path }) => (
@@ -810,7 +810,7 @@ function Compose({
   return (
     <Modal title="New proposal" onClose={onClose} width={560}>
       <form
-        style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+        style={stack(16)}
         onSubmit={(event) => {
           event.preventDefault();
           if (!title.trim() || problem) return;

@@ -142,6 +142,12 @@ const button: CSSProperties = {
   width: '100%',
 };
 
+/** A column of children `gap` pixels apart */
+export const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap });
+
+/** A row of children `gap` pixels apart */
+export const hstack = (gap: number): CSSProperties => ({ display: 'flex', gap });
+
 /** Shared inline styles — kept in one place so the app has a single visual vocabulary. */
 export const styles = {
   /** Onboarding is a column on the page, not a box: a sign-in, not a dialog. */
@@ -162,7 +168,7 @@ export const styles = {
   subtitle: { fontSize: 15, color: ink.muted, marginBottom: 32, lineHeight: 1.5 },
   hint: { fontSize: 14, color: ink.muted, marginBottom: 20, lineHeight: 1.6 },
 
-  form: { display: 'flex', flexDirection: 'column', gap: 8 },
+  form: stack(8),
   /** A field for one line: a pill, like every control. Many lines: {@link styles.textarea}. */
   input: {
     width: '100%',
@@ -280,7 +286,7 @@ export const styles = {
     whiteSpace: 'nowrap',
   },
 
-  todoList: { listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 },
+  todoList: { listStyle: 'none', ...stack(8) },
   emptyState: {
     textAlign: 'center',
     color: ink.faint,
@@ -415,7 +421,7 @@ export const styles = {
     marginBottom: 16,
   },
 
-  saveForm: { display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 },
+  saveForm: { ...stack(8), marginTop: 16 },
   checkboxRow: {
     display: 'flex',
     alignItems: 'center',
@@ -426,7 +432,7 @@ export const styles = {
   },
 
   diagnostics: { marginTop: 12 },
-  factList: { display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 },
+  factList: { ...stack(6), marginTop: 8 },
   factLabel: { color: ink.muted, fontSize: 12 },
   factValue: { color: ink.strong, fontSize: 12, fontWeight: 500 },
   infoList: {
@@ -636,6 +642,13 @@ export const styles = {
 
   ok: { color: accent.good, fontSize: 13, fontWeight: 500 },
   bad: { color: accent.danger, fontSize: 13, fontWeight: 500 },
+
+  /** Secondary text: a line under a heading, a status, a short explanation */
+  quiet: { fontSize: 13, color: ink.muted },
+  /** The smallest text: a time, a count, a fine-print note */
+  faint: { fontSize: 12, color: ink.faint },
+  /** A short failure said in place, without the weight of `error` */
+  dangerText: { fontSize: 13, color: accent.danger },
 } satisfies Record<string, CSSProperties>;
 
 export const palette = { ink, surface, accent, radius, font, display, mono, shadow, shapes: shapeColours };

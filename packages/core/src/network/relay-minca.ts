@@ -14,22 +14,19 @@
  *   client → { type: 'ice' }                           relay → { type: 'ice', payload: { servers, expiresAt } }
  *   client → { type: 'ping' }                          relay → { type: 'pong' }
  */
-import { createEmitter } from '../utils/events.js';
 import { isObject } from '../utils/guards.js';
-import { converse, createRelaySocket, iceFrom } from './relay-socket.js';
-import type { MailboxClient, MailboxOptions, MailItem, RelayLink, RelayLinkEvents } from './relays.js';
+import { createTopicLink } from './relay-link.js';
+import { converse, iceFrom } from './relay-socket.js';
+import type { MailboxClient, MailboxOptions, MailItem, RelayLink } from './relays.js';
 
 /** A socket to a Minca relay, watching the topics of the rooms this node is in */
 export function createMincaLink(url: string): RelayLink {
-  const topics = new Set<string>();
-  const { on, off, emit } = createEmitter<RelayLinkEvents>();
-  const socket = createRelaySocket({
-    url,
+  return createTopicLink(url, {
     dial: url,
-    opened: (send) => {
-      for (const topic of topics) send({ type: 'fetch', topic, watch: true });
-    },
-    heard: (message) => {
+    watch: (send, topic) => send({ type: 'fetch', topic, watch: true }),
+    unwatch: (send, topic) => send({ type: 'unwatch', topic }),
+    publish: (topic, blob) => ({ type: 'drop', topic, blob, ttl: 0 }),
+    heard: (message, { emit, watching }) => {
       if (!isObject(message)) return;
       if (message.type === 'ice') {
         const offered = iceFrom(message.payload);
@@ -37,42 +34,13 @@ export function createMincaLink(url: string): RelayLink {
         return;
       }
       const { topic, items } = message;
-      if (message.type !== 'mail' || typeof topic !== 'string' || !topics.has(topic) || !Array.isArray(items))
+      if (message.type !== 'mail' || typeof topic !== 'string' || !watching(topic) || !Array.isArray(items))
         return;
       for (const item of items)
         if (isObject(item) && typeof item.blob === 'string') emit('blob', topic, item.blob);
     },
     ping: { ask: { type: 'ping' }, isAnswer: (message) => isObject(message) && message.type === 'pong' },
-  });
-  socket.on('connected', () => emit('connected'));
-  socket.on('disconnected', () => emit('disconnected'));
-  socket.on('status', (status) => emit('status', status));
-
-  return Object.freeze({
-    url,
-    connect: socket.connect,
-    disconnect: () => {
-      topics.clear();
-      socket.disconnect();
-    },
-    reconnect: socket.reconnect,
-    watch: (topic: string) => {
-      if (topics.has(topic)) return;
-      topics.add(topic);
-      socket.send({ type: 'fetch', topic, watch: true });
-      socket.count(topics.size);
-    },
-    unwatch: (topic: string) => {
-      if (!topics.delete(topic)) return;
-      socket.send({ type: 'unwatch', topic });
-      socket.count(topics.size);
-    },
-    publish: (topic: string, blob: string) => socket.send({ type: 'drop', topic, blob, ttl: 0 }),
-    requestIce: () => socket.send({ type: 'ice' }),
-    isConnected: socket.isConnected,
-    status: socket.status,
-    on,
-    off,
+    askIce: { type: 'ice' },
   });
 }
 
@@ -81,11 +49,6 @@ const MAX_PAGES = 16;
 
 /** A Minca relay's mailbox: each call opens its own short-lived socket, so the relay can't tie it to a peer */
 function createMincaMailbox(options: MailboxOptions = {}): MailboxClient {
-  const talk = {
-    timeoutMs: options.timeoutMs ?? 8000,
-    ...(options.WebSocket ? { WebSocket: options.WebSocket } : {}),
-  };
-
   /** Sends one message, and resolves with the first answer `pick` accepts */
   const ask = <T>(
     relay: string,
@@ -94,7 +57,7 @@ function createMincaMailbox(options: MailboxOptions = {}): MailboxClient {
   ) =>
     converse(
       relay,
-      talk,
+      options,
       (send) => send(message),
       (answer) => (isObject(answer) ? pick(answer) : undefined),
     );
@@ -132,7 +95,7 @@ function createMincaMailbox(options: MailboxOptions = {}): MailboxClient {
     purge(relay, topic, sign, ids, signChallenge) {
       return converse(
         relay,
-        talk,
+        options,
         (send) => send({ type: 'challenge' }),
         async (answer, send) => {
           if (!isObject(answer)) return undefined;

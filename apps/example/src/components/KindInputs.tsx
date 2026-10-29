@@ -11,10 +11,10 @@ import { fileRefOf } from '../derive/kinds';
 import { isObject } from '../derive/schema-ui';
 import { useSpaceHere } from './Person';
 import { FileValue } from './KindValue';
-import { styles } from '../styles';
+import { styles, hstack } from '../styles';
 
 const labelStyle = { display: 'flex', flexDirection: 'column' as const, gap: 4, fontSize: 13 };
-const row = { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' as const };
+const row = { ...hstack(8), alignItems: 'center', flexWrap: 'wrap' as const };
 
 /** What a timed value starts at when "all day" is turned off */
 const MORNING = '09:00';

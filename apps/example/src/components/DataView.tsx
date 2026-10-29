@@ -6,7 +6,7 @@ import { CollectionView } from './CollectionView';
 import { CollectionsOverview, namespaceLabel } from './CollectionsOverview';
 import { Library } from './Library';
 import { CollectionEditor } from './CollectionDesigner';
-import { styles, palette } from '../styles';
+import { styles, palette, stack } from '../styles';
 
 /** Where the Data view is: which collection, and which record is open beside it */
 export interface Place {
@@ -65,7 +65,7 @@ export function DataView({
     <div className="space-layout">
       <aside className="space-side">
         {namespaces.length > 1 && (
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <label style={stack(6)}>
             <span className="collection-nav-heading" style={sideHeading}>
               Namespace
             </span>
@@ -96,7 +96,7 @@ export function DataView({
               style={{ ...navItem, ...(selected === ALL ? navItemOn : {}) }}
             >
               <span>All collections</span>
-              <span style={{ color: palette.ink.faint, fontSize: 12 }}>{shown.length}</span>
+              <span style={styles.faint}>{shown.length}</span>
             </button>
           )}
           {groups.map((g) => (
@@ -116,7 +116,7 @@ export function DataView({
                   style={{ ...navItem, ...(selected === c.name ? navItemOn : {}) }}
                 >
                   <span>{collectionLabel(c)}</span>
-                  <span style={{ color: palette.ink.faint, fontSize: 12 }}>{c.records}</span>
+                  <span style={styles.faint}>{c.records}</span>
                 </button>
               ))}
             </div>
@@ -139,9 +139,9 @@ export function DataView({
 
       <main style={{ minWidth: 0 }}>
         {selected === NEW ? (
-          <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <section style={stack(8)}>
             <h2 style={{ ...styles.appTitle, fontSize: 22 }}>New collection</h2>
-            <p style={{ fontSize: 13, color: palette.ink.muted }}>
+            <p style={styles.quiet}>
               Give it a name and some fields. Everything else — forms, lists, boards — is worked out from
               this.
             </p>

@@ -125,7 +125,7 @@ When a node joins, leaves and reconciles, which spaces it hides from its own
 list, and when it publishes the account's profile are the node's own; the
 reference node is in [the node](../packages/core/docs/node.md#following-the-account).
 
-_Source: `packages/core/src/node/node.ts` (`reconcileOnce`, `syncPasses`, `nameKeepers`), `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/records-only.test.ts` ("it never writes the account itself…", "in the account's own spaces, a version under a records-only note does not stand")._
+_Source: `packages/core/src/node/node.ts` (`reconcileOnce`), `packages/core/src/node/node-carriers.ts` (`syncPasses`, `nameKeepers`), `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/records-only.test.ts` ("it never writes the account itself…", "in the account's own spaces, a version under a records-only note does not stand")._
 
 ## 2. The account home protocol
 
@@ -434,7 +434,7 @@ from a key that writes records here and nothing more) is in
 [contacts](../packages/core/docs/contacts.md) and
 [calls](../packages/calls/README.md#messages).
 
-_Source: `packages/core/src/session/connect.ts` (`grantTerms`), `packages/core/src/identity/abilities.ts` (`noteTerms`), `packages/core/src/session/auth.ts` (`grant`), `packages/core/src/identity/abilities.ts`, `packages/core/src/node/space-runtime.ts` (`buildEvent`, `judgeStanding`, `write`, `upkeep`). Tests: `packages/core/tests/records-only.test.ts` ("a definition signed by hand under a records-only note is ignored by every peer", "what counts is what the note grants", "it never writes the account itself…", "in the account's own spaces, a version under a records-only note does not stand", "a program on a computer gets the whole account, records only, for as long as asked; each is its own connection"), `packages/core/tests/connect.test.ts` ("the grant is a note from the account to the app key, for the chosen spaces only")._
+_Source: `packages/core/src/session/connect.ts` (`grantTerms`), `packages/core/src/identity/abilities.ts` (`noteTerms`), `packages/core/src/session/auth.ts` (`grant`), `packages/core/src/identity/abilities.ts`, `packages/core/src/node/space-runtime.ts` (`buildEvent`, `judgeStanding`, `write`), `packages/core/src/node/space-keys.ts` (`upkeep`). Tests: `packages/core/tests/records-only.test.ts` ("a definition signed by hand under a records-only note is ignored by every peer", "what counts is what the note grants", "it never writes the account itself…", "in the account's own spaces, a version under a records-only note does not stand", "a program on a computer gets the whole account, records only, for as long as asked; each is its own connection"), `packages/core/tests/connect.test.ts` ("the grant is a note from the account to the app key, for the chosen spaces only")._
 
 Either way the app never gets the seed: it cannot sign in as the account, change
 its password or passkeys. Its note stops working for live checks at
@@ -628,7 +628,7 @@ against the account's own automations is in
 > chose from the kinds of record it sees go by would be a guess at the
 > person's words. An app they are looking at knows what its records mean.
 
-_Source: `packages/core/src/session/connect.ts` (`ProposeRequest`, `Proposed`, `proposeToHome`, `isRequest`), `packages/core/src/session/auth.ts` (`propose`, `automationsFrom`), `packages/core/src/session/connection.ts` (`propose`), `packages/core/src/node/node.ts` (`automations.versions`, `automations.take`), `packages/core/src/node/space-runtime.ts` (`versionsOf`, `take`), `packages/core/src/space/own-automations.ts` (`checkProposal`, `proposalSpaces`, `fromProposal`, `sameAutomation`), `apps/home/src/components/ConnectPage.tsx` (`ApproveProposal`). Tests: `packages/core/tests/connect.test.ts` ("an app proposing automations", "the home receiving a request"), `packages/core/tests/topics.test.ts` ("a proposal has only the members the home checks")._
+_Source: `packages/core/src/session/connect.ts` (`ProposeRequest`, `Proposed`, `proposeToHome`, `isRequest`), `packages/core/src/session/auth.ts` (`propose`, `automationsFrom`), `packages/core/src/session/connection.ts` (`propose`), `packages/core/src/node/node-carriers.ts` (`automations.versions`, `automations.take`), `packages/core/src/node/space-runtime.ts` (`versionsOf`, `take`), `packages/core/src/space/own-automations.ts` (`checkProposal`, `proposalSpaces`, `fromProposal`, `sameAutomation`), `apps/home/src/components/ConnectPage.tsx` (`ApproveProposal`). Tests: `packages/core/tests/connect.test.ts` ("an app proposing automations", "the home receiving a request"), `packages/core/tests/topics.test.ts` ("a proposal has only the members the home checks")._
 
 > **Planned: a wallet as the account home.** The same job — hold the root and
 > hand an app's key a note — done by a credential wallet through the Digital
@@ -926,7 +926,7 @@ its keepers (`{ did, name }`, at most 16, [03](03-spaces.md)) and stops naming
 carriers the account removed. Other keepers stay. So apps holding part of a
 space ([05](05-sync-and-storage.md) §5) can rely on the carriers.
 
-_Source: `packages/core/src/node/node.ts` (`carriers`, `syncPasses`, `passAll`, `nameKeepers`), `packages/core/src/node/carrier.ts` (`linksIn`, `linksAt`), `packages/cli/src/host.ts` (`mailboxFrom`), `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts`. Tests: `packages/cli/tests/host.test.ts` ("a short link: the host keeps it…"), `packages/core/tests/carrier.test.ts` ("added twice at once, it gets one carry space", "added on two devices at once, it gets one carry space…", "added again after it was removed…", "its carry space cannot be left…", "adding one that fails leaves no carry space behind…", "removed while a refill runs, no pass is written back", "a removal reaches the carrier even when the home closes straight after")._
+_Source: `packages/core/src/node/node-carriers.ts` (`carriers`, `syncPasses`, `passAll`, `nameKeepers`), `packages/core/src/node/carrier.ts` (`linksIn`, `linksAt`), `packages/cli/src/host.ts` (`mailboxFrom`), `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts`. Tests: `packages/cli/tests/host.test.ts` ("a short link: the host keeps it…"), `packages/core/tests/carrier.test.ts` ("added twice at once, it gets one carry space", "added on two devices at once, it gets one carry space…", "added again after it was removed…", "its carry space cannot be left…", "adding one that fails leaves no carry space behind…", "removed while a refill runs, no pass is written back", "a removal reaches the carrier even when the home closes straight after")._
 
 ### 4.3 Connecting a carrier through the account home
 
@@ -966,7 +966,7 @@ or a while has passed (the reference home waits at most 30 s in all). Once level
 holds its passes and its own record, and hands both to the account's other
 devices as they come online.
 
-_Source: `packages/core/src/session/connect.ts` (`connectCarrier`, `checkCarryGrant`, `CarryGrant`, `receiveConnectRequest`), `packages/core/src/session/auth.ts` (`grantCarry`), `packages/core/src/node/node.ts` (`carriers.reached`, `carriers.settled`), `apps/home/src/components/ConnectPage.tsx` (`ApproveCarrier`, `ApproveProposal`). Tests: `packages/core/tests/connect.test.ts` ("connecting a carrier to an account home"), `packages/core/tests/carrier.test.ts` ("a home that closes once the carrier is reached…", "the same carrier connecting again…")._
+_Source: `packages/core/src/session/connect.ts` (`connectCarrier`, `checkCarryGrant`, `CarryGrant`, `receiveConnectRequest`), `packages/core/src/session/auth.ts` (`grantCarry`), `packages/core/src/node/node-carriers.ts` (`carriers.reached`, `carriers.settled`), `apps/home/src/components/ConnectPage.tsx` (`ApproveCarrier`, `ApproveProposal`). Tests: `packages/core/tests/connect.test.ts` ("connecting a carrier to an account home"), `packages/core/tests/carrier.test.ts` ("a home that closes once the carrier is reached…", "the same carrier connecting again…")._
 
 ### 4.4 Wakes, and carriers
 
@@ -983,7 +983,7 @@ account's own devices may show a match there itself, saying no more than it
 sees: which space, which kind of record, and the wake's `open`. None sends a
 match to another device yet: that is what the wakes are for (below).
 
-_Source: `packages/core/src/space/own-automations.ts`, `packages/core/src/node/node.ts` (`automations`, `syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`), `packages/cli/src/carry.ts` (`runCarrier`), `apps/desktop/src/bun/notify.ts`. Tests: `packages/core/tests/carrier.test.ts` ("notifications through a carrier"), `apps/desktop/tests/notify.test.ts`._
+_Source: `packages/core/src/space/own-automations.ts`, `packages/core/src/node/node-carriers.ts` (`automations`, `syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`), `packages/cli/src/carry.ts` (`runCarrier`), `apps/desktop/src/bun/notify.ts`. Tests: `packages/core/tests/carrier.test.ts` ("notifications through a carrier"), `apps/desktop/tests/notify.test.ts`._
 
 > **Planned: devices deliver wakes, by Web Push.** Issue:
 > [#60](https://github.com/leifriksheim/minca/issues/60). The account's own

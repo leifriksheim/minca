@@ -1,13 +1,13 @@
 import type { SpaceSummary } from '@minca/core';
 import { SpaceHosting } from '@minca/app-shared/SpaceHosting';
 import { SpaceBots } from '@minca/app-shared/CommunitySetup';
-import { styles, palette } from '../styles';
+import { styles, palette, stack } from '../styles';
 
 /** Keeping a space online: its host, its fund, and the AI helpers that host runs */
 export function HostingView({ space, onAutomations }: { space: SpaceSummary; onAutomations: () => void }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 28, maxWidth: 760 }}>
-      <header style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div style={{ ...stack(28), maxWidth: 760 }}>
+      <header style={stack(6)}>
         <h2 style={{ ...styles.appTitle, fontSize: 22 }}>Hosting</h2>
         <p style={{ fontSize: 14, color: palette.ink.muted, lineHeight: 1.55 }}>
           Keep {space.name} reachable when everyone is offline, paid from one fund anyone here can add to. The

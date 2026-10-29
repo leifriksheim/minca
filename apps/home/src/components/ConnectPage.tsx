@@ -10,14 +10,13 @@ import {
   type IncomingRequest,
   type ProposeRequest,
 } from '@minca/core/session';
-import { useAuth, useSession, useMinca } from '@minca/react';
+import { useAccountPicture, useAuth, useSession, useMinca } from '@minca/react';
 import { Wordmark } from '@minca/app-shared/Wordmark';
 import { Avatar } from '@minca/app-shared/Avatar';
-import { useAccountPicture } from '../picture';
 import { Shape } from '@minca/app-shared/shapes';
 import { shapeFor } from '@minca/ui/shapes';
 import { useAction } from '@minca/app-shared/action';
-import { styles, palette } from '../styles';
+import { styles, palette, stack } from '../styles';
 import { Loader } from '@minca/app-shared/Loader';
 import { relayUrls } from '@minca/app-shared/relay';
 import { connectCode as code } from '../minca';
@@ -176,7 +175,7 @@ function ChooseAccount({
       <p style={styles.subtitle}>
         to continue to <strong style={{ color: palette.ink.strong }}>{asker(incoming.origin)}</strong>
       </p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+      <div style={{ ...stack(6), marginBottom: 16 }}>
         {state.accounts.map((account) => (
           <button
             key={account.id}
@@ -400,7 +399,7 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
         <section style={{ marginBottom: 20 }}>
           <p style={styles.fieldLabel}>{byCode ? 'Which spaces it may work in' : 'Which spaces'}</p>
           {offered.length === 0 && <p style={styles.errorHint}>You have no spaces it could use.</p>}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={stack(6)}>
             {offered.map((space) => (
               <label key={space.id} data-choice style={styles.choice}>
                 <input
@@ -411,7 +410,7 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
                 />
                 <Shape {...shapeFor(space.id)} size={18} />
                 <span style={{ flex: 1 }}>{space.name}</span>
-                <span style={{ color: palette.ink.faint, fontSize: 12 }}>
+                <span style={styles.faint}>
                   {space.visibility} · {space.role ?? 'following'}
                 </span>
               </label>
@@ -423,11 +422,11 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
       {creating.length > 0 && (
         <section style={{ marginBottom: 20 }}>
           <p style={styles.fieldLabel}>New spaces for it</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={stack(6)}>
             {creating.map((space, index) => (
               <div key={index} style={{ ...styles.choice, flexWrap: 'wrap', cursor: 'default' }}>
                 <span style={{ flex: 1 }}>{space.name}</span>
-                <span style={{ color: palette.ink.faint, fontSize: 12 }}>
+                <span style={styles.faint}>
                   {space.visibility} · {constitution(space, session.did)}
                 </span>
                 {space.top !== 'none' && cofoundersOf(space, session.did).length > 0 && (
@@ -641,7 +640,7 @@ function ApproveProposal({ incoming, request }: { incoming: IncomingRequest; req
       </p>
 
       <section style={{ marginBottom: 20 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={stack(6)}>
           {request.automations.map((proposal, index) => (
             <label key={index} data-choice style={styles.choice}>
               <input
@@ -651,7 +650,7 @@ function ApproveProposal({ incoming, request }: { incoming: IncomingRequest; req
                 style={{ ...styles.checkbox, marginTop: 0 }}
               />
               <span style={{ flex: 1 }}>{proposal.name}</span>
-              <span style={{ color: palette.ink.faint, fontSize: 12 }}>{where(proposal.spaces)}</span>
+              <span style={styles.faint}>{where(proposal.spaces)}</span>
             </label>
           ))}
         </div>
@@ -794,7 +793,7 @@ function Answer({
           <p style={styles.error}>{error}</p>
         </div>
       )}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={stack(8)}>
         <button onClick={onAllow} disabled={busy || blocked} data-variant="primary" style={styles.button}>
           {allowLabel}
         </button>

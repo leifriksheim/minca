@@ -1,8 +1,8 @@
-import { palette } from '@minca/app-shared/styles';
+import { hstack, palette, stack } from '@minca/app-shared/styles';
 import { SHAPE_CYCLE, type ShapeColour } from '@minca/ui/tokens';
 import { shapeFor, type ShapeKind } from '@minca/ui/shapes';
 
-export { palette };
+export { hstack, palette, stack };
 
 const { ink, surface, accent, radius, display } = palette;
 

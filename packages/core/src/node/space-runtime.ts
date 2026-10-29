@@ -21,21 +21,17 @@
  * before it counts again, where the store still has one.
  */
 import { contactKeyPair, isContactPublicKey } from '../identity/contact-key.js';
-import { openValueFrom, sealValueTo } from '../identity/hpke.js';
-import { openValue, sealValue } from '../identity/envelope.js';
 import type { CryptoProvider, Link, NetworkMessage, PeerInfo, StorageAdapter, Version } from '../types.js';
 import type { Signer } from '../schema/signer.js';
 import type { SchemaEngine } from '../schema/schema-engine.js';
 import type { SpaceRecord } from '../space/space-manager.js';
 import { verifyNote, type Delegation } from '../identity/ucan.js';
 import {
-  ACCESS_COMMAND,
   accessRequirement,
   actsForAccount,
   DEFINE_COMMAND,
   noteGrants,
   writeRequirement,
-  writesRecords,
 } from '../identity/abilities.js';
 import {
   bodyProblem,
@@ -44,7 +40,6 @@ import {
   getVersionId,
   isStub,
   signedPart,
-  stubOf,
 } from '../schema/version.js';
 import { createStorageProvider, type StorageProvider } from '../storage/storage-provider.js';
 import { chainProblem, MAX_SEEN, nextVersion } from '../records/version.js';
@@ -80,27 +75,22 @@ import { createMirror, type Mirror, type Taken } from '../storage/mirror.js';
 import type { FolderAdapter } from '../storage/folder-adapter.js';
 import { createVersionCheck } from '../validation/check-version.js';
 import type { Writers } from './writers.js';
+import { copyKey, grantsBeyondRecords, idsKey, isStringList, setCapped } from './space-common.js';
+import { createSpaceKeys } from './space-keys.js';
+import { createSpacePeers } from './space-peers.js';
+import { openSpaceHolding } from './space-holding.js';
+import { createSpaceWarrants } from './space-warrants.js';
 import { breaksLine, checkFork, forkProof } from '../records/fork.js';
-import { knownKind, readWarrant, type Warrant, type WarrantKind } from '../records/warrant.js';
 import {
-  EARLIER_KEYS_LABEL,
-  generateSpaceKey,
   isSealedBody,
-  MEMBERSHIP_LABEL,
   openBody as openSealedBody,
   sealBody,
-  spaceKeyFromRaw,
   type SpaceKey,
 } from '../privacy/space-encryption.js';
 import { createNetworkManager, type NetworkManager } from '../network/network-manager.js';
 import { createMesh, type Mesh } from '../network/mesh.js';
 import { createWebSocketTransport } from '../network/ws-transport.js';
-import {
-  createClientAuth,
-  createMeshAuth,
-  MAX_EARLIER_READ_KEYS,
-  type ReadAccess,
-} from '../network/peer-auth.js';
+import { createClientAuth, createMeshAuth } from '../network/peer-auth.js';
 import {
   BOX_COLLECTION,
   MEMBER_KEY_COLLECTION,
@@ -108,11 +98,7 @@ import {
   SPACE_RELAYS_RECORD,
   SPACE_KEEPERS_RECORD,
   memberKeyRecordKey,
-  BOX_LABEL,
-  boxBound,
-  boxKey,
   deriveInviteKey,
-  deriveReadKey,
   generateInviteSecret,
   inviteKey as inviteRecordKey,
   assignKey,
@@ -152,7 +138,6 @@ import {
   may,
   readers,
   replayAccess,
-  refusal,
   rolesOf,
   type AccessEvent,
   type AccessHistory,
@@ -163,15 +148,13 @@ import {
 import {
   checkFoundingRole,
   definitionBody,
-  KEY_CHANGE,
   readDefinition,
   RECORD_DELETE,
   RECORD_WRITE,
-  SPACE_RELAYS,
   type FoundingRole,
 } from '../space/grants.js';
 import { FOUNDER } from '../space/space-manager.js';
-import { createSyncEngine, type Holds } from '../sync/sync-engine.js';
+import { createSyncEngine } from '../sync/sync-engine.js';
 import { SYNC_PROTOCOL_VERSION } from '../sync/sync-messages.js';
 import { createSpaceFiles, DEVICE_LIMITS, type SealedFile, type SpaceFiles } from '../files/space-files.js';
 import { fileRefsIn, MAX_FILES } from '../files/file-id.js';
@@ -193,11 +176,10 @@ import {
   type AvatarRef,
 } from '../space/account-registry.js';
 import { PASS_COLLECTION } from '../space/pass.js';
-import { base32Encode, cidOfDigest, hashedKey, sha256 } from '../utils/hash.js';
+import { base32Encode, hashedKey, sha256 } from '../utils/hash.js';
 import { sameTags, tagsFor, topicKey, topicTag } from '../records/topics.js';
-import { base64UrlDecode, base64UrlEncode, utf8Decode, utf8Encode } from '../utils/encoding.js';
-import { isObject, isRecord, unref } from '../utils/guards.js';
-import { serial } from '../utils/serial.js';
+import { base64UrlEncode, utf8Decode, utf8Encode } from '../utils/encoding.js';
+import { isRecord, unref } from '../utils/guards.js';
 import type {
   CacheConfig,
   ConnectionState,
@@ -207,7 +189,6 @@ import type {
   NodeEvent,
   NodeNetworkConfig,
   NodeRecord,
-  FlaggedAccount,
   RecordContracts,
   SpaceAccess,
   SpaceProfile,
@@ -259,30 +240,8 @@ const NO_CUTOFF: Cutoff = new Map();
 const MAX_OPENED = 100_000;
 /** Line heads whose `once` claims are kept: each set holds its whole chain's, so fewer */
 const MAX_ONCE_CLAIMED = 1024;
-/** Access states replayed for warrants */
-const MAX_VIEWS = 256;
 /** Records waiting on a cited version that are read again whenever anything arrives */
 const MAX_PENDING_REREAD = 256;
-
-/** How long a peer checked here has to become a peer before the check is forgotten: past any handshake's timeout */
-const STALE_ADMISSION_MS = 60_000;
-/** How long a removed member's socket stays open after nothing more is sent on it, for frames already on their way */
-const LET_GO_AFTER_MS = 1000;
-/** How long a peer let in on an older key has to show its account before it counts as nobody's */
-const WHO_WAIT_MS = 10_000;
-
-/** A peer's note, sent once when it connects (see "Live messages") */
-const WHO_MESSAGE = 'who';
-/** A live message: `spaces.send` */
-const LIVE_MESSAGE = 'live';
-const MAX_LIVE_BYTES = 64 * 1024;
-const MAX_NOTE_LENGTH = 16 * 1024;
-/** Live messages a peer may send at once, and per second after that */
-const LIVE_BURST = 60;
-const LIVE_PER_SECOND = 20;
-
-const HOUR = 3_600_000;
-const DAY = 24 * HOUR;
 
 /**
  * The key of a person's profile record in a space: one per identity, named by
@@ -384,14 +343,6 @@ export interface SpaceRuntimeDeps {
 /** One open space, as `openSpaceRuntime` gives it */
 export type SpaceRuntime = Awaited<ReturnType<typeof openSpaceRuntime>>;
 
-/** Which account a connected peer showed it acts for */
-interface PeerAccount {
-  readonly account: string | null;
-  /** Its note grants writing records here and nothing more (`/record`): it can't define collections in this space */
-  readonly recordsOnly: boolean;
-}
-const NO_ACCOUNT: PeerAccount = Object.freeze({ account: null, recordsOnly: false });
-
 interface Verdict {
   readonly verified: boolean;
   readonly root: string | null;
@@ -439,19 +390,8 @@ const UNJUDGED: ChecksVerdict = Object.freeze({
 
 type Opened = { readonly body: unknown; readonly links: ReadonlyArray<Link>; readonly encrypted: boolean };
 
-/**
- * What the caches of verdicts on a version are keyed by: its id and
- * signature, which a stub shares with the whole version, and which of the two
- * it is. A verdict on a stub never stands for the whole.
- */
-const copyKey = (version: Version) =>
-  `${version.id}|${version.signature}|${isStub(version) ? 'stub' : 'whole'}`;
-
 /** A signature never changes, but the id doesn't cover it: a mangled copy shares the genuine one's id */
 const signedKey = (version: Version) => `${version.id}|${version.signature}`;
-
-/** A set of ids as one cache key */
-const idsKey = (ids: ReadonlyArray<string>) => [...new Set(ids)].sort().join(',');
 
 /** The key a sealed body names, as the keyring is looked up by */
 const sealedKeyId = (body: unknown) => String(isRecord(body) ? body.keyId : undefined);
@@ -461,10 +401,6 @@ const isFolderAdapter = (adapter: StorageAdapter): adapter is FolderAdapter =>
 const isLinks = (links: unknown): links is ReadonlyArray<Link> => checkLinks(links) === null;
 const isLine = (line: unknown): line is Line => checkLine(line) === null;
 const areKeepers = (keepers: unknown): keepers is Keeper[] => checkKeepers(keepers) === null;
-const isStringList = (value: unknown): value is string[] =>
-  Array.isArray(value) && value.every((v) => typeof v === 'string');
-const isPending = (value: unknown): value is Pending =>
-  isRecord(value) && typeof value.collection === 'string' && isStringList(value.by);
 
 /**
  * The cached answer for `key`, or `make`'s, which is cached while `keep` says
@@ -485,13 +421,6 @@ function memo<T>(
     () => cache.delete(key),
   );
   return made;
-}
-
-/** Sets a value in a map that lets its oldest entry go past `max` */
-function setCapped<K, V>(map: Map<K, V>, key: K, value: V, max: number): void {
-  map.set(key, value);
-  const oldest = map.keys().next();
-  if (map.size > max && !oldest.done) map.delete(oldest.value);
 }
 
 /** A cutoff from a record's body — key DID → collection → the place covered up to — or null when it isn't one */
@@ -522,13 +451,6 @@ function deepFreeze(value: unknown): void {
   Object.freeze(value);
   for (const inner of Object.values(value)) deepFreeze(inner);
 }
-
-/**
- * Whether a proof would let its key do anything in a space beyond writing
- * records: define a collection there, or change who may do what.
- */
-const grantsBeyondRecords = (proof: unknown, spaceId: string, cmd: string) =>
-  noteGrants(proof, { space: spaceId, cmd, args: { space: spaceId } });
 
 /**
  * Whether a version is about the account that signs it: its own place in the
@@ -583,69 +505,6 @@ function definitionProblem(
   );
 }
 
-// ─── What a node holding part of a space remembers ──────────────────
-
-/** Where it is kept in the space's store */
-const CACHE_KEY = 'cache';
-/** One entry per write of this node's still waiting for keepers: `pending/<id>` */
-const PENDING_PREFIX = 'pending/';
-
-interface CacheState {
-  /**
-   * Whether this node has caught up with a node holding the whole space at
-   * least once: until then it can't know whether the space names keepers.
-   */
-  settled: boolean;
-  /** Collection → when a query last used it: what this node holds */
-  used: Record<string, number>;
-  /** Collection → when it was first level with a node holding the whole space */
-  level: Record<string, number>;
-  /**
-   * Collection → versions a writer's line there names as the one before, that
-   * this node doesn't hold (02 §4.10). A collection is complete when it has
-   * been level with a node holding everything and lacks nothing a line names.
-   */
-  missing: Record<string, string[]>;
-}
-
-/** A write waiting for keepers: its collection, and the keepers that have it */
-interface Pending {
-  readonly collection: string;
-  readonly by: string[];
-}
-
-async function loadCacheState(adapter: StorageAdapter): Promise<CacheState> {
-  try {
-    const bytes = await adapter.get(CACHE_KEY);
-    const parsed: unknown = bytes ? JSON.parse(utf8Decode(bytes)) : null;
-    const saved = isRecord(parsed) ? parsed : {};
-    return {
-      settled: saved.settled === true,
-      used: numbersIn(saved.used),
-      level: numbersIn(saved.level),
-      missing: listsIn(saved.missing),
-    };
-  } catch {
-    return { settled: false, used: {}, level: {}, missing: {} };
-  }
-}
-
-const numbersIn = (value: unknown): Record<string, number> =>
-  Object.fromEntries(
-    Object.entries(isObject(value) ? value : {}).flatMap(([name, v]) =>
-      typeof v === 'number' ? [[name, v]] : [],
-    ),
-  );
-
-const listsIn = (value: unknown): Record<string, string[]> =>
-  Object.fromEntries(
-    Object.entries(isRecord(value) ? value : {}).flatMap(([name, ids]) =>
-      Array.isArray(ids) ? [[name, ids.filter((id): id is string => typeof id === 'string')]] : [],
-    ),
-  );
-
-const encodeJson = (value: unknown) => utf8Encode(JSON.stringify(value));
-
 export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   const { record, provider, signer, schemas, session, emit } = deps;
   const { space } = record;
@@ -664,14 +523,22 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   const adapter = await deps.stores(`spaces/${space.id}`);
   const storage: StorageProvider = createStorageProvider(adapter);
 
-  // What this node holds (see "Holding part of the space"): settled here, since sync asks on every hello.
-  const cache = deps.cache ?? null;
-  const cacheState = await loadCacheState(adapter);
-  for (const collection of cache?.collections ?? [])
-    if (!collection.startsWith('sys.')) cacheState.used[collection] ??= Date.now();
-  // Only what it uses, until it has caught up enough to know whether the space names keepers.
-  let partial = cache !== null;
-  const holds = (): Holds => (partial ? new Set(Object.keys(cacheState.used)) : 'all');
+  // What this node holds (`node/space-holding.ts`): settled here, since sync asks on every hello.
+  const holding = await openSpaceHolding({
+    cache: deps.cache ?? null,
+    adapter,
+    storage,
+    spaceId: space.id,
+    sessionDid: session.did,
+    emit,
+    statusChanged,
+    isClosed: () => closed,
+    access: () => access(),
+    sync: () => sync,
+    connectedPeers: () => connectedPeers(),
+    recordsChanged: () => recordsChanged(),
+  });
+  const { holds, refreshHolds, use, noteGap, noteArrived, markPending } = holding;
 
   // The note behind a key must cover this space; whether its account may write is the history's question.
   const checkVersion = createVersionCheck({
@@ -2185,329 +2052,30 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     void letGoOfOutsiders().catch(() => {});
   };
 
-  // ─── The space's keys ──────────────────────────────────────────────
-  //
-  // A private space's key changes when someone loses their place in it
-  // (`sys.key`, part of the access history): whoever manages the space makes
-  // a new one, and seals a copy to each member's member key (`sys.box`). The
-  // key record carries every earlier key sealed under the new one, so holding
-  // the current key opens everything written before it — which is how
-  // someone who joins later reads the old records, and someone removed reads
-  // nothing new. This is how Keybase changes a team's key.
+  // ─── The space's keys (`node/space-keys.ts`) ───────────────────────
 
-  /** The key the history names now, if this node holds it */
-  function currentKey(state: AccessState): SpaceKey | null {
-    const epoch = state.keys.at(-1);
-    return epoch ? (keyring.get(epoch.keyId) ?? null) : null;
-  }
-
-  /** The newest key this node holds that the history names — what it proves it may read with while behind */
-  function newestKey(state: AccessState): SpaceKey | null {
-    for (const epoch of [...state.keys].reverse()) {
-      const held = keyring.get(epoch.keyId);
-      if (held) return held;
-    }
-    return record.key;
-  }
-
-  /** Box and key record versions already opened, so each is tried once */
-  const opened = new Set<string>();
-  /**
-   * Key records already opened, for the keys the history named then. Which
-   * key event counts, and which keys it names, can change as changes arrive,
-   * so they are opened again when that does.
-   */
-  const openedKeyRecords = new Set<string>();
-  let openedFor = '';
-  /**
-   * Keys whose key change is malformed: its earlier keys don't open, or leave
-   * out the space's first key, which every reader needs for onePer keys
-   * (03 §9.3). Nothing is taken from them, and a manager replaces them.
-   */
-  const malformedKeys = new Set<string>();
-
-  /** Takes in what this node can open: boxes sealed to its member key, and the earlier keys each key record carries */
-  async function learnKeys(): Promise<void> {
-    const { history } = await access();
-    const epochs = history.current.keys;
-    const learned: SpaceKey[] = [];
-    const take = (found: SpaceKey) => {
-      if (keyring.has(found.id)) return false;
-      keyring.set(found.id, found);
-      learned.push(found);
-      return true;
-    };
-
-    if (memberPair && epochs.some((epoch) => !keyring.has(epoch.keyId))) {
-      for (const versions of (await boxIndex()).values()) {
-        for (const version of versions) {
-          if (version.collection !== BOX_COLLECTION || version.deleted || opened.has(version.id)) continue;
-          const body = isRecord(version.body) ? version.body : null;
-          if (body?.to !== deps.rootDid || typeof body.keyId !== 'string' || typeof body.sealed !== 'string')
-            continue;
-          const epoch = epochs.find((known) => known.keyId === body.keyId);
-          if (!epoch || keyring.has(epoch.keyId)) continue;
-          opened.add(version.id);
-          const content = await openValueFrom(
-            memberPair,
-            BOX_LABEL,
-            boxBound(space.id, epoch.keyId, deps.rootDid),
-            body.sealed,
-          );
-          if (!isRecord(content) || typeof content.key !== 'string') continue;
-          // Whoever sealed it, it is the key the history names or it is nothing.
-          const found = await spaceKeyFromRaw(base64UrlDecode(content.key)).catch(() => null);
-          if (found?.id === epoch.keyId && (await deriveReadKey(found, provider)).did === epoch.readKey)
-            take(found);
-        }
-      }
-    }
-
-    const named = epochs.map((epoch) => `${epoch.keyId}/${epoch.readKey}/${epoch.event}`).join('|');
-    if (named !== openedFor) {
-      openedFor = named;
-      openedKeyRecords.clear();
-      malformedKeys.clear();
-    }
-    // Each newer key opens the ones before it — which may open more.
-    let more = true;
-    while (more) {
-      more = false;
-      for (const versions of (await storage.histories('key:')).values()) {
-        for (const version of versions) {
-          const body = isRecord(version.body) ? version.body : null;
-          if (
-            version.collection !== KEY_COLLECTION ||
-            openedKeyRecords.has(version.id) ||
-            typeof body?.keyId !== 'string'
-          )
-            continue;
-          // Only the key change that counted for that key: anyone may store a version at `key:space`.
-          const epoch = epochs.find((known) => known.keyId === body.keyId);
-          if (!epoch || epoch.event !== version.id) continue;
-          const holder = keyring.get(body.keyId);
-          if (!holder) continue;
-          openedKeyRecords.add(version.id);
-          const earlier = await openValue(
-            holder.seal,
-            EARLIER_KEYS_LABEL,
-            { space: space.id, keyId: holder.id },
-            body.earlier,
-          );
-          const found: SpaceKey[] = [];
-          for (const raw of isStringList(earlier) ? earlier.slice(0, 1000) : []) {
-            const key = await spaceKeyFromRaw(base64UrlDecode(raw)).catch(() => null);
-            if (key) found.push(key);
-          }
-          // Without the first key, a reader holding only this one couldn't derive onePer keys (02 §7.3).
-          if (!isStringList(earlier) || !found.some((key) => key.id === space.encryptionKeyId)) {
-            malformedKeys.add(body.keyId);
-            continue;
-          }
-          // And only keys the history names, each with the read key it names.
-          for (const key of found) {
-            const named = epochs.find((known) => known.keyId === key.id);
-            if (named && (await deriveReadKey(key, provider)).did === named.readKey && take(key)) more = true;
-          }
-        }
-      }
-    }
-
-    if (learned.length === 0) return;
-    // A definition this node couldn't read may open now.
-    definitions.clear();
-    const writeWith = newestKey((await access()).history.current);
-    if (writeWith) await deps.onKeys?.([...keyring.values()], writeWith.id);
-    recordsChanged();
-  }
-
-  /** Makes a new key current, with every key before it sealed inside, and seals it to each member */
-  async function rotateKey(): Promise<void> {
-    if (space.visibility !== 'private') throw new Error('A public space has no key to change');
-    const { history } = await access();
-    if (!may(history.current, deps.rootDid, KEY_CHANGE, {}))
-      throw new Error(`Only someone granted ${KEY_CHANGE} in "${space.name}" can change its key`);
-    if (!currentKey(history.current))
-      throw new Error(`This device doesn't hold the current key of "${space.name}" yet`);
-    // Every key change carries the first key, so every reader holds it (03 §9.3).
-    if (!space.encryptionKeyId || !keyring.has(space.encryptionKeyId))
-      throw new Error(`This device doesn't hold the first key of "${space.name}"`);
-    const next = await generateSpaceKey();
-    const earlier = [...keyring.values()].map((held) => base64UrlEncode(held.raw));
-    const body = {
-      keyId: next.id,
-      readKey: (await deriveReadKey(next, provider)).did,
-      earlier: await sealValue(next.seal, EARLIER_KEYS_LABEL, { space: space.id, keyId: next.id }, earlier),
-    };
-    keyring.set(next.id, next);
-    try {
-      await upsert(KEY_COLLECTION, SPACE_KEY_RECORD, body);
-    } catch (error) {
-      keyring.delete(next.id);
-      throw error;
-    }
-    await deps.onKeys?.([...keyring.values()], next.id);
-    await boxForMembers();
-  }
-
-  /**
-   * Seals the current key to each member who has no copy from someone who
-   * manages the space. Members show their member key on their profile; one
-   * who hasn't yet gets their copy once they do.
-   */
-  async function boxForMembers(): Promise<void> {
-    const { history } = await access();
-    const state = history.current;
-    const epoch = state.keys.at(-1);
-    const key = currentKey(state);
-    if (!epoch || !key) return;
-
-    const boxed = new Set<string>();
-    for (const versions of (await boxIndex()).values()) {
-      for (const version of versions) {
-        const body = isRecord(version.body) ? version.body : null;
-        if (
-          version.collection !== BOX_COLLECTION ||
-          body?.keyId !== epoch.keyId ||
-          typeof body.to !== 'string'
-        )
-          continue;
-        const { root } = await judge(version);
-        if (root && (root === deps.rootDid || may(state, root, KEY_CHANGE, {}))) boxed.add(body.to);
-      }
-    }
-    const memberKeys = await memberKeyMap();
-    const raw = base64UrlEncode(key.raw);
-    for (const did of [...readers(state)].sort()) {
-      const publicKey = memberKeys.get(did);
-      if (boxed.has(did) || !publicKey) continue;
-      const sealed = await sealValueTo(publicKey, BOX_LABEL, boxBound(space.id, epoch.keyId, did), {
-        key: raw,
-      });
-      await upsert(BOX_COLLECTION, await boxKey(epoch.keyId, did, deps.rootDid), {
-        keyId: epoch.keyId,
-        to: did,
-        sealed,
-      });
-    }
-  }
-
-  /**
-   * Keeps the keys in step with the history: says where to seal this
-   * account's copy, learns what it can, and — managing the space — changes
-   * the key when due and seals it to whoever lacks it.
-   */
-  async function upkeep(): Promise<void> {
-    // A note that can't change access keeps no keys for others: it only reads.
-    if (!grantsBeyondRecords(session.proof(), space.id, ACCESS_COMMAND)) {
-      if (space.visibility === 'private') await learnKeys();
-      return;
-    }
-    await nameRelays();
-    if (space.visibility !== 'private') return;
-    if (deps.accountOnly) {
-      await learnKeys();
-      return;
-    }
-    const mine = await memberKeyMap();
-    if (
-      memberPair &&
-      mine.get(deps.rootDid) !== memberPair.publicKey &&
-      actsForAccount(session.proof()) &&
-      !(await cannotWrite())
-    ) {
-      await upsert(MEMBER_KEY_COLLECTION, await memberKeyRecordKey(deps.rootDid), {
-        key: memberPair.publicKey,
-      });
-    }
-    await learnKeys();
-    const { history } = await access();
-    const state = history.current;
-    if (!currentKey(state)) return;
-    if (!may(state, deps.rootDid, KEY_CHANGE, {})) return;
-    // A current key whose change left out the first key is replaced, as one that is due.
-    const malformed = malformedKeys.has(state.keys.at(-1)?.keyId ?? '');
-    if (state.keyDue || (malformed && space.encryptionKeyId && keyring.has(space.encryptionKeyId)))
-      await rotateKey();
-    else await boxForMembers();
-  }
-
-  /**
-   * A space nobody has said where to meet yet: whoever manages it names the
-   * relays this node uses, so the invites and devices that follow meet there.
-   */
-  async function nameRelays(): Promise<void> {
-    const own = usableRelays(deps.network).slice(0, MAX_RELAYS);
-    if (own.length === 0) return;
-    const { history } = await access();
-    if (history.current.relays.length > 0 || !may(history.current, deps.rootDid, SPACE_RELAYS, {})) return;
-    await upsert(RELAYS_COLLECTION, SPACE_RELAYS_RECORD, { relays: own });
-  }
-
-  /** Runs the upkeep once more after whatever changed — one run at a time */
-  const keepingUp = serial(async () => {
-    if (closed) return;
-    await upkeep().catch(() => {
-      // A write refused, a peer's junk: the next change tries again.
-    });
+  const { currentKey, newestKey, rotateKey, keepUp, keepingUp } = createSpaceKeys({
+    space,
+    rootDid: deps.rootDid,
+    provider,
+    proof: session.proof,
+    ownRelays: () => usableRelays(deps.network),
+    accountOnly: deps.accountOnly,
+    keyring,
+    heldKey: record.key,
+    memberPair,
+    storage,
+    isClosed: () => closed,
+    access,
+    judge,
+    boxIndex,
+    memberKeyMap,
+    cannotWrite,
+    upsert,
+    onKeys: deps.onKeys,
+    forgetDefinitions: () => definitions.clear(),
+    recordsChanged: () => recordsChanged(),
   });
-  function keepUp(): void {
-    if (!closed) void keepingUp();
-  }
-
-  /** The read key each peer checked here was let in on, by session DID, and when */
-  const admittedOn = new Map<string, { readonly readKey: string; readonly at: number }>();
-
-  /** How this node proves it may read, and checks the peers that connect — against the history at that moment */
-  const readAccess: ReadAccess | null =
-    space.visibility !== 'private'
-      ? null
-      : {
-          async key() {
-            const held = newestKey((await access()).history.current);
-            // A carrier holds the read key pair without the key it comes from: it may be served the space, and cannot open it.
-            return held ? deriveReadKey(held, provider) : (record.read ?? null);
-          },
-          current: () => currentReadKey,
-          async earlier() {
-            const { current } = (await access()).history;
-            const newest = newestKey(current);
-            const older = [...current.keys]
-              .reverse()
-              .map((epoch) => keyring.get(epoch.keyId))
-              .filter((held): held is SpaceKey => held !== undefined && held !== newest);
-            return Promise.all(
-              older.slice(0, MAX_EARLIER_READ_KEYS).map((held) => deriveReadKey(held, provider)),
-            );
-          },
-          async membership() {
-            const held = newestKey((await access()).history.current);
-            return held ? sealValue(held.seal, MEMBERSHIP_LABEL, { space: space.id }, session.proof()) : null;
-          },
-          async admits(peerDid: string, readKey: string, membership: unknown) {
-            const { history } = await access();
-            const epoch = history.current.keys.find((known) => known.readKey === readKey);
-            const held = epoch ? keyring.get(epoch.keyId) : undefined;
-            if (!held) return false;
-            const { account } = await accountOf(
-              peerDid,
-              await openValue(held.seal, MEMBERSHIP_LABEL, { space: space.id }, membership),
-            );
-            return account !== null && readers(history.current).has(account);
-          },
-          async removed(peerDid: string, readKey: string, membership: unknown) {
-            const { history } = await access();
-            const epoch = history.current.keys.find((known) => known.readKey === readKey);
-            const held = epoch ? keyring.get(epoch.keyId) : undefined;
-            if (!held) return false;
-            const note = await openValue(held.seal, MEMBERSHIP_LABEL, { space: space.id }, membership);
-            const { account } = await accountOf(peerDid, note);
-            return account !== null && (await formerMembers({ untilNewKey: true })).has(account);
-          },
-          admitted(peerDid: string, readKey: string) {
-            admittedOn.set(peerDid, { readKey, at: Date.now() });
-          },
-        };
 
   // ─── Mirrors ───────────────────────────────────────────────────────
   //
@@ -2591,6 +2159,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   });
   /** Which network a peer was met on, so replies go back the same way */
   const routes = new Map<string, NetworkManager>();
+  const connectedPeers = () => [
+    ...new Set(networks.flatMap((network) => network.getPeers().map((peer) => peer.did))),
+  ];
 
   // ─── Files ─────────────────────────────────────────────────────────
   //
@@ -2658,6 +2229,29 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     emit({ type: 'rejected', space: space.id, peer, reason });
   });
 
+  // ─── Who is at the other end (`node/space-peers.ts`) ───────────────
+
+  const peers = createSpacePeers({
+    space,
+    rootDid: deps.rootDid,
+    session,
+    provider,
+    keyring,
+    readKeyPair: record.read,
+    newestKey,
+    currentReadKey: () => currentReadKey,
+    access,
+    formerMembers,
+    emit,
+    statusChanged,
+    networks,
+    routes,
+    sync,
+    connectedPeers,
+  });
+  /** How this node proves it may read, and checks the peers that connect — against the history at that moment */
+  const { readAccess, letGoOfOutsiders } = peers;
+
   // Both sides of a socket to a node prove who they are; in a private space the client also proves it may read.
   let authenticator: ReturnType<typeof createClientAuth> | null = null;
   /** A socket to an always-on node, for this space */
@@ -2689,130 +2283,18 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     }
   }
 
-  const connectedPeers = () => [
-    ...new Set(networks.flatMap((network) => network.getPeers().map((peer) => peer.did))),
-  ];
-
-  // ─── Live messages ─────────────────────────────────────────────────
-  //
-  // A connection proves which session key is at the other end — not whose it
-  // is. So the first thing each side sends is its note, the delegation from
-  // its account to that key: the same note its records carry. It names the
-  // key it was made out to, and that must be the key the connection proved,
-  // so a note copied off someone's record is no use to anyone else.
-
-  const peerAccounts = new Map<string, Promise<PeerAccount>>();
-  /** Peers let go of because their account was removed, by session DID: turned away again when they redial */
-  const cutOff = new Map<string, string>();
-  const knownAccounts = new Map<string, PeerAccount>();
-  const liveAllowance = new Map<string, { tokens: number; at: number }>();
-
-  async function accountOf(peer: string, note: unknown): Promise<PeerAccount> {
-    if (!isRecord(note) || canonicalize(note).length > MAX_NOTE_LENGTH) return NO_ACCOUNT;
-    const checked = await verifyNote(note, provider).catch(() => null);
-    if (!checked?.valid || checked.audience !== peer) return NO_ACCOUNT;
-    return {
-      account: checked.root,
-      // A key that writes records somewhere but can't define here. Judged on the
-      // whole note, so a key for another space doesn't pass as the account here.
-      // A note that only reads is not one: it writes nothing. The note is the
-      // account's own, one link, so its key can't sign itself a wider one.
-      recordsOnly:
-        writesRecords(checked.note) && !grantsBeyondRecords(checked.note, space.id, DEFINE_COMMAND),
-    };
-  }
-
-  /** A peer's share of live messages: a burst, then a steady rate — as the relay limits them */
-  function withinAllowance(peer: string): boolean {
-    const now = Date.now();
-    const held = liveAllowance.get(peer) ?? { tokens: LIVE_BURST, at: now };
-    const tokens = Math.min(LIVE_BURST, held.tokens + ((now - held.at) / 1000) * LIVE_PER_SECOND);
-    liveAllowance.set(peer, { tokens: Math.max(0, tokens - 1), at: now });
-    return tokens >= 1;
-  }
-
-  async function onLive(peer: string, payload: unknown): Promise<void> {
-    if (!withinAllowance(peer)) return;
-    if ((JSON.stringify(payload ?? null)?.length ?? 0) > MAX_LIVE_BYTES) return;
-    const { account, recordsOnly } = (await peerAccounts.get(peer)) ?? NO_ACCOUNT;
-    // Gone while its note was being checked.
-    if (!routes.has(peer)) return;
-    if (account !== null && (await formerMembers()).has(account)) return;
-    emit({ type: 'message', space: space.id, from: account, peer, recordsOnly, message: payload });
-  }
-
-  /**
-   * Lets go of the peers a handshake would refuse now. A handshake checks a
-   * reader once, but the space's key changes when someone is removed: a peer
-   * let in on a key that is no longer current stays only while it acts for
-   * someone who may still read, as it would get in again (`checkRead`).
-   * Anyone else — someone removed, a view-only link from before — stops
-   * getting anything the moment this node knows the new key.
-   */
-  async function letGoOfOutsiders(): Promise<void> {
-    const connected = new Set(connectedPeers());
-    // Someone removed is let go of as soon as this node knows, on any key:
-    // the key may not have changed yet, if nobody who manages the space is here.
-    const gone = await formerMembers({ untilNewKey: true });
-    for (const [peer, account] of cutOff) if (!gone.has(account)) cutOff.delete(peer);
-    for (const peer of connected) {
-      const account = knownAccounts.get(peer)?.account ?? null;
-      if (account === null || !gone.has(account) || cutOff.has(peer)) continue;
-      cutOff.set(peer, account);
-      admittedOn.delete(peer);
-      // Nothing more goes to them from now; the socket closes a moment later,
-      // so what was already sent — the "stored" for their own leaving — arrives.
-      sync.removePeer(peer);
-      routes.delete(peer);
-      setTimeout(() => {
-        peerAccounts.delete(peer);
-        knownAccounts.delete(peer);
-        liveAllowance.delete(peer);
-        for (const network of networks) network.drop(peer);
-      }, LET_GO_AFTER_MS);
-    }
-    if (admittedOn.size === 0) return;
-    for (const [peer, { at }] of admittedOn) {
-      // Checked, and never let in: a handshake the other side refused.
-      if (!connected.has(peer) && Date.now() - at > STALE_ADMISSION_MS) admittedOn.delete(peer);
-    }
-    const allowed = readers((await access()).history.current);
-    for (const peer of connected) {
-      const admission = admittedOn.get(peer);
-      if (!admission || admission.readKey === currentReadKey) continue;
-      // Its note is said first, but may still be on its way; this runs again when it lands.
-      if (!peerAccounts.has(peer) && Date.now() - admission.at < WHO_WAIT_MS) continue;
-      const { account } = (await peerAccounts.get(peer)) ?? NO_ACCOUNT;
-      if (account !== null && allowed.has(account)) continue;
-      // Let in again meanwhile, on the key it holds now.
-      if (admittedOn.get(peer) !== admission) continue;
-      admittedOn.delete(peer);
-      for (const network of networks) network.drop(peer);
-    }
-  }
-
   function listen(network: NetworkManager): void {
     network.on('message', (message: NetworkMessage) => {
       if (message.type === 'sync') void sync.handleMessage(message.from, message.payload);
-      else if (message.type === WHO_MESSAGE) {
-        const note = isRecord(message.payload) ? message.payload.note : undefined;
-        const checked = accountOf(message.from, note);
-        peerAccounts.set(message.from, checked);
-        void checked.then((known) => {
-          if (peerAccounts.get(message.from) !== checked) return;
-          knownAccounts.set(message.from, known);
-          statusChanged();
-          void letGoOfOutsiders().catch(() => {});
-        });
-      } else if (message.type === LIVE_MESSAGE) void onLive(message.from, message.payload);
+      else peers.onMessage(message);
     });
     network.on('peer-connected', (info: PeerInfo) => {
-      if (cutOff.has(info.did)) {
+      if (peers.isCutOff(info.did)) {
         network.drop(info.did);
         return;
       }
       // Said first, so it reaches them before any live message from here.
-      network.send(info.did, { type: WHO_MESSAGE, from: session.did, payload: { note: session.proof() } });
+      peers.introduce(network, info.did);
       routes.set(info.did, network);
       sync.addPeer(info.did);
       // Reconcile at once rather than waiting for the heartbeat.
@@ -2828,11 +2310,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       if (routes.get(info.did) === network) {
         routes.delete(info.did);
         sync.removePeer(info.did);
-        peerAccounts.delete(info.did);
-        knownAccounts.delete(info.did);
-        liveAllowance.delete(info.did);
+        peers.forget(info.did);
       }
-      if (!connectedPeers().includes(info.did)) admittedOn.delete(info.did);
+      peers.disconnected(info.did);
       statusChanged();
     });
     network.on('error', () => {
@@ -2915,196 +2395,10 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     unref(channel);
   }
 
-  // ─── Holding part of the space ─────────────────────────────────────
-  //
-  // With `cache` set, and once the space names a keeper, this node holds only
-  // the collections it uses, besides the space's own. Sync takes in nothing
-  // else. Its own writes are pending until enough keepers have them, and a
-  // collection holding a pending write is never dropped. Without a keeper the
-  // space is held whole: then this node may be one of its copies.
+  // ─── Holding part of the space (`node/space-holding.ts`) ───────────
 
-  const declared = new Set((cache?.collections ?? []).filter((c) => !c.startsWith('sys.')));
-  let cacheTimer: ReturnType<typeof setTimeout> | null = null;
-  const saveCache = () => {
-    if (cacheTimer || !cache) return;
-    cacheTimer = setTimeout(() => {
-      cacheTimer = null;
-      void adapter.put(CACHE_KEY, encodeJson(cacheState)).catch(() => {});
-    }, 500);
-    unref(cacheTimer);
-  };
-  const flushCache = async () => {
-    if (!cacheTimer) return;
-    clearTimeout(cacheTimer);
-    cacheTimer = null;
-    await adapter.put(CACHE_KEY, encodeJson(cacheState)).catch(() => {});
-  };
-  saveCache();
-
-  /**
-   * Holds part of the space from the moment it names a keeper, and all of it
-   * again if it stops — once this node has caught up enough to know.
-   */
-  async function refreshHolds(): Promise<void> {
-    if (!cache || closed) return;
-    const next = (await access()).history.current.keepers.length > 0 || !cacheState.settled;
-    if (next === partial) return;
-    partial = next;
-    // Peers learn what this node holds now; anything newly held comes across.
-    sync.notifyPeers(connectedPeers());
-    statusChanged();
-  }
-
-  /** Collections a query or a screen uses: held from now on. Whether all of them are here yet. */
-  function use(collections: ReadonlyArray<string>): boolean {
-    if (!cache) return true;
-    const now = Date.now();
-    let added = false;
-    for (const collection of collections) {
-      if (typeof collection !== 'string' || collection.startsWith('sys.')) continue;
-      const was = cacheState.used[collection];
-      if (was === undefined) added = true;
-      if (was === undefined || now - was > HOUR) {
-        cacheState.used[collection] = now;
-        saveCache();
-      }
-    }
-    if (added && partial) sync.notifyPeers(connectedPeers());
-    return !partial || collections.every((c) => c.startsWith('sys.') || completeHere(c));
-  }
-
-  /** Level with a node holding everything once, and lacking nothing a writer's line in it names */
-  function completeHere(collection: string): boolean {
-    return cacheState.level[collection] !== undefined && !(cacheState.missing[collection]?.length ?? 0);
-  }
-
-  /**
-   * Keeps track of what each writer's line in a held collection names that
-   * this node lacks: a version that names one not here adds it, and asks
-   * every peer for it; one that arrives takes itself off.
-   */
-  async function noteGap(version: Version): Promise<void> {
-    if (!cache || !version.log || version.collection.startsWith('sys.')) return;
-    const { collection } = version;
-    const missing = cacheState.missing[collection] ?? [];
-    const before = version.log.prev;
-    if (!before || missing.includes(before) || (await storage.getVersion(before))) return;
-    cacheState.missing[collection] = [...missing, before];
-    sync.ask(collection, [before]);
-    saveCache();
-    // A query that said "complete" says so no longer.
-    if (partial) emit({ type: 'records', space: space.id });
-  }
-
-  /**
-   * Takes versions just stored off what was missing — only once they are in
-   * the store, so a query never says "complete" for what it can't read yet.
-   */
-  function noteArrived(placed: ReadonlyArray<Version>): void {
-    if (!cache) return;
-    let changed = false;
-    for (const version of placed) {
-      const missing = cacheState.missing[version.collection];
-      if (!missing?.includes(version.id)) continue;
-      const left = missing.filter((id) => id !== version.id);
-      if (left.length) cacheState.missing[version.collection] = left;
-      else delete cacheState.missing[version.collection];
-      changed = true;
-    }
-    if (changed) saveCache();
-  }
-
-  /** A write of this node's, waiting for keepers — only on a node that may hold part of a space */
-  async function markPending(version: Version): Promise<void> {
-    if (!cache || version.author !== session.did || version.collection.startsWith('sys.')) return;
-    const pending: Pending = { collection: version.collection, by: [] };
-    await adapter.put(`${PENDING_PREFIX}${version.id}`, encodeJson(pending));
-  }
-
-  /**
-   * A keeper has some of this node's pending writes: those it named, or every
-   * one in a collection it is level on. Once enough keepers have one, it
-   * stops being pending. Only keepers the space names count.
-   */
-  async function confirm(
-    peer: string,
-    which: { ids?: ReadonlySet<string>; collection?: string },
-  ): Promise<void> {
-    if (!cache) return;
-    const state = (await access()).history.current;
-    if (!state.keepers.some((keeper) => keeper.did === peer)) return;
-    const target = Math.min(state.keepers.length, Math.max(state.copies ?? 2, cache.copies ?? 0));
-    for (const name of await adapter.list(PENDING_PREFIX)) {
-      const id = name.slice(PENDING_PREFIX.length);
-      if (which.ids && !which.ids.has(id)) continue;
-      const bytes = await adapter.get(name);
-      if (!bytes) continue;
-      const pending: unknown = JSON.parse(utf8Decode(bytes));
-      if (!isPending(pending)) continue;
-      if (which.collection !== undefined && pending.collection !== which.collection) continue;
-      if (!pending.by.includes(peer)) pending.by.push(peer);
-      if (pending.by.length >= target) await adapter.delete(name);
-      else await adapter.put(name, encodeJson(pending));
-    }
-  }
-
-  sync.on('synced', (_peer: string, full: boolean) => {
-    if (!cache || !full || cacheState.settled) return;
-    // Caught up with a node holding everything: the access history here is the space's now.
-    cacheState.settled = true;
-    saveCache();
-    void refreshHolds().catch(() => {});
-  });
-  sync.on('stored', (peer: string, ids: ReadonlyArray<string>) => {
-    void confirm(peer, { ids: new Set(ids) }).catch(() => {});
-  });
-  sync.on('level', (peer: string, collection: string, full: boolean) => {
-    // What a line names and is not here yet: asked again, of whoever holds it now.
-    const missing = cacheState.missing[collection];
-    if (cache && missing?.length) sync.ask(collection, missing);
-    if (cache && full && cacheState.level[collection] === undefined) {
-      cacheState.level[collection] = Date.now();
-      saveCache();
-      // A query that said "not complete" says so no longer.
-      if (partial) emit({ type: 'records', space: space.id });
-    }
-    void confirm(peer, { collection }).catch(() => {});
-  });
-
-  /**
-   * Drops collections no query has touched for a while: their records go,
-   * and they are no longer held. Never one the app declared, nor one holding
-   * a write still waiting for keepers.
-   */
-  async function dropUnused(): Promise<void> {
-    if (!cache || !partial || closed) return;
-    const cutoff = Date.now() - (cache.unusedAfterDays ?? 30) * DAY;
-    const waiting = new Set<string>();
-    for (const name of await adapter.list(PENDING_PREFIX)) {
-      const bytes = await adapter.get(name);
-      const pending: unknown = bytes ? JSON.parse(utf8Decode(bytes)) : null;
-      if (isPending(pending)) waiting.add(pending.collection);
-    }
-    let dropped = false;
-    for (const [collection, at] of Object.entries(cacheState.used)) {
-      if (at > cutoff || declared.has(collection) || waiting.has(collection)) continue;
-      // No longer held first, so nothing syncs it back while it goes.
-      delete cacheState.used[collection];
-      delete cacheState.level[collection];
-      delete cacheState.missing[collection];
-      for (const item of (await storage.items(collection)).items)
-        await storage.removeVersion(cidOfDigest(item.id));
-      dropped = true;
-    }
-    if (!dropped) return;
-    saveCache();
-    recordsChanged();
-    sync.notifyPeers(connectedPeers());
-  }
-  // When the app opens the space, then every few hours while it stays open.
-  const dropTimer = cache ? setInterval(() => void dropUnused().catch(() => {}), 6 * HOUR) : null;
-  const tidying = cache ? dropUnused().catch(() => {}) : Promise.resolve();
-  unref(dropTimer);
+  // Here and not earlier: it registers sync handlers and starts timers that need the network connected.
+  holding.start();
 
   // ─── Writing ───────────────────────────────────────────────────────
 
@@ -3544,230 +2838,25 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       );
   }
 
-  // ─── Warrants ──────────────────────────────────────────────────────
-  //
-  // A version the protocol refuses, that no honest writer could have signed —
-  // judged as of what it says it had seen — is proof against the account
-  // behind its key. A peer that refuses one writes it down for every member,
-  // once per account; every peer checks the proof itself (docs/warrants.md).
+  // ─── Warrants (`node/space-warrants.ts`) ───────────────────────────
 
-  type WarrantVerdict = 'holds' | 'false' | 'later' | 'unjudgeable';
-
-  /** Whether a version's account is one the space has known: only those can be warranted, so a stranger minting keys costs nobody a write */
-  async function accountable(version: Version): Promise<string | null> {
-    const verdict = await judge(version);
-    if (!verdict.verified || !verdict.root || version.space !== space.id) return null;
-    return (await access()).history.named(verdict.root) ? verdict.root : null;
-  }
-
-  /** Views already replayed, by the changes they hold: a set of ids always replays to the same state */
-  const views = new Map<string, AccessState>();
-
-  /**
-   * The access state a writer had when it signed: the changes it names as
-   * seen and everything they saw, replayed alone. Unlike `history.at`, no
-   * change outside them — a rival that arrives late, or a change made later —
-   * can alter it, so a verdict on misconduct judged by it is final. Null
-   * while one of them hasn't arrived.
-   */
-  async function ownView(seen: ReadonlyArray<string>): Promise<AccessState | null> {
-    const cacheKey = idsKey(seen);
-    const known = views.get(cacheKey);
-    if (known) return known;
-    const { events } = await access();
-    const byId = new Map(events.map((event) => [event.id, event]));
-    const cut: AccessEvent[] = [];
-    const visited = new Set<string>([accessGenesis.id]);
-    const waiting = [...seen];
-    while (waiting.length > 0) {
-      const id = waiting.pop()!;
-      if (visited.has(id)) continue;
-      visited.add(id);
-      const event = byId.get(id);
-      if (!event) return null;
-      cut.push(event);
-      waiting.push(...event.seen);
-    }
-    const state = replayAccess(accessGenesis, cut).current;
-    setCapped(views, cacheKey, state, MAX_VIEWS);
-    return state;
-  }
-
-  /** Whether a version broke a rule of its standing, as of what it had seen: no place, or `who` or `final` against it */
-  async function standingBroken(version: Version, root: string): Promise<WarrantVerdict> {
-    const state = await ownView(version.seen ?? []);
-    if (!state) return 'later';
-    return standingBrokenIn(state, version, root);
-  }
-
-  /** The same check, in a given state */
-  async function standingBrokenIn(
-    state: AccessState,
-    version: Version,
-    root: string,
-  ): Promise<WarrantVerdict> {
-    if (!isMember(state, root)) return 'holds';
-    if (version.collection.startsWith('sys.')) return 'false';
-    const found = await rulesAt(state, version.collection);
-    if (found?.rules.final && version.seq > 0) return 'holds';
-    // An edit's grant may rest on whose record it is; only a first version is judged here.
-    if (version.seq !== 0) return 'false';
-    const needs = await needsOf(version, version, root);
-    return needs(state) ? 'false' : 'holds';
-  }
-
-  /** Whether proof of one kind holds: the offending version first, then what checking it needs */
-  async function evidenceHolds(kind: string, evidence: ReadonlyArray<Version>): Promise<WarrantVerdict> {
-    // A kind this peer doesn't know flags nobody.
-    if (!knownKind(kind)) return 'false';
-    const [offending, context] = evidence;
-    if (!offending || !(await accountable(offending))) return 'false';
-    const root = (await judge(offending)).root!;
-    switch (kind) {
-      case 'chain': {
-        if (!context || 'body' in offending || 'body' in context) return 'false';
-        if (!(await judge(context)).verified || context.id !== offending.prev) return 'false';
-        return chainProblem(offending, context) ? 'holds' : 'false';
-      }
-      case 'standing':
-        if (
-          context ||
-          'body' in offending ||
-          ACCESS_COLLECTIONS.has(offending.collection) ||
-          offending.collection === WARRANT_COLLECTION
-        )
-          return 'false';
-        return standingBroken(offending, root);
-      case 'access': {
-        if (context || !ACCESS_COLLECTIONS.has(offending.collection) || !('body' in offending))
-          return 'false';
-        const event = await buildEvent(offending);
-        if (!event) return 'false';
-        const state = await ownView(event.seen);
-        if (!state) return 'later';
-        return refusal(event, state) ? 'holds' : 'false';
-      }
-    }
-  }
-
-  /** Whether a warrant record proves what it says, against the account its key names, and is its writer's own */
-  async function warrantVerdict(version: Version): Promise<WarrantVerdict> {
-    const cacheKey = copyKey(version);
-    const known = judgedWarrants.get(cacheKey);
-    if (known) return known;
-    const warrant = await warrantShape(version);
-    if (warrant === 'unnamed') return 'false';
-    const verdict = warrant ? await evidenceHolds(warrant.kind, warrant.evidence) : 'false';
-    // Judged in the offending version's own view, a proof that holds, or fails, always will.
-    if (verdict === 'holds' || verdict === 'false') judgedWarrants.set(cacheKey, verdict);
-    return verdict;
-  }
-
-  /** Warrants already judged: each checked once, not on every look at who is flagged */
-  const judgedWarrants = new Map<string, WarrantVerdict>();
-
-  /**
-   * A warrant's body, if the version has a warrant's shape: a first version
-   * of `std.warrant`, not a delete, and not against its writer. Anything else
-   * flags nobody.
-   */
-  async function warrantShape(version: Version): Promise<Warrant | 'unnamed' | null> {
-    if (version.deleted || version.seq !== 0 || version.collection !== WARRANT_COLLECTION) return null;
-    const warrant = readWarrant((await openBody(version)).body);
-    const offending = warrant?.evidence[0];
-    if (!warrant || !offending || !(await judge(offending)).verified) return null;
-    // The one answer that can change: the account may be named once more of the history arrives.
-    const against = await accountable(offending);
-    if (!against) return 'unnamed';
-    const by = (await judge(version)).root;
-    return by && against !== by ? warrant : null;
-  }
-
-  /** The proof a version gives against its account, or null when it gives none */
-  async function violationIn(version: Version): Promise<{ kind: WarrantKind; evidence: Version[] } | null> {
-    const root = await accountable(version);
-    if (!root) return null;
-    const previous = await previousOf(version);
-    if (previous && chainProblem(version, previous))
-      return { kind: 'chain', evidence: [stubOf(version), stubOf(previous)] };
-    if (ACCESS_COLLECTIONS.has(version.collection)) {
-      const event = await buildEvent(version);
-      const quick = event && (await access()).history.at(event.seen);
-      if (!event || (quick && !refusal(event, quick))) return null;
-      return (await evidenceHolds('access', [version])) === 'holds'
-        ? { kind: 'access', evidence: [version] }
-        : null;
-    }
-    // A warrant is a record like any other: a false one flags nobody, and proves nothing against its writer.
-    if (version.collection === WARRANT_COLLECTION) return null;
-    // The global view first, which is cheap; the own view, a replay, only for what it finds broken.
-    // Proof only the own view would show goes unwritten: a flag missed, never a false one.
-    const quick = (await access()).history.at(version.seen ?? []);
-    if (quick && (await standingBrokenIn(quick, version, root)) !== 'holds') return null;
-    return (await standingBroken(version, root)) === 'holds'
-      ? { kind: 'standing', evidence: [stubOf(version)] }
-      : null;
-  }
-
-  /**
-   * Writes down, as this account's own record, the proof a version gives
-   * against its account — unless a warrant of its own against that account
-   * stands already, so one account's misconduct costs each member one record
-   * at a time. It doesn't lean on anyone else's warrant, which would go if
-   * its writer were removed. One that can't write leaves it to one that can.
-   */
-  async function warrantIfDue(version: Version): Promise<void> {
-    if (closed || (await cannotWrite())) return;
-    // Only an account the history names can be warranted: anything else stops here, for free.
-    const root = await accountable(version);
-    if (!root || root === deps.rootDid) return;
-    // With a warrant of its own against that account standing, its next offences cost nothing to look at.
-    if ((await flagged()).some((flag) => flag.account === root && flag.by === deps.rootDid)) return;
-    const violation = await violationIn(version);
-    // Taken only once there is something to write, so a decoy can't hide an offence behind it.
-    if (!violation || warranting.has(root)) return;
-    warranting.add(root);
-    try {
-      if (!(await flagged()).some((flag) => flag.account === root && flag.by === deps.rootDid))
-        await warrantOnce(violation);
-    } finally {
-      warranting.delete(root);
-    }
-  }
-
-  /** Accounts this node is writing a warrant against now: offences that arrive meanwhile wait for the next */
-  const warranting = new Set<string>();
-
-  async function warrantOnce(violation: { kind: WarrantKind; evidence: Version[] }): Promise<void> {
-    // Checked again: the space may have closed while the proof was being worked out.
-    if (closed) return;
-    await upsert(WARRANT_COLLECTION, await newRecordKey(deps.rootDid), violation);
-  }
-
-  /** The accounts proven to have broken the protocol's rules here, by the warrants that stand */
-  async function flagged(): Promise<ReadonlyArray<FlaggedAccount>> {
-    const found: FlaggedAccount[] = [];
-    // Each warrant's first version, kept whole, whatever came after it: like any record, anyone
-    // may write a later version or a delete, and neither takes the proof back.
-    const firsts: Version[] = [];
-    for (const current of await storage.queryVersions(WARRANT_COLLECTION))
-      for (const version of await storage.history(current.key))
-        if (version.seq === 0 && version.collection === WARRANT_COLLECTION) firsts.push(version);
-    for (const version of firsts) {
-      if (version.deleted || isStub(version) || !(await standingOf(version)).ok) continue;
-      // Only proof this peer checked: one that stands unjudged, for want of rules it can't read, flags nobody.
-      if ((await warrantVerdict(version)) !== 'holds') continue;
-      const warrant = readWarrant((await openBody(version)).body);
-      const offending = warrant?.evidence[0];
-      const account = offending && (await accountable(offending));
-      if (!warrant || !offending || !account || !knownKind(warrant.kind)) continue;
-      const by = (await judge(version)).root ?? version.author;
-      // One flag per offence and writer, however many records say it.
-      if (found.some((flag) => flag.offence === offending.id && flag.by === by)) continue;
-      found.push({ account, key: offending.author, kind: warrant.kind, by, offence: offending.id });
-    }
-    return found;
-  }
+  const { warrantIfDue, flagged } = createSpaceWarrants({
+    spaceId: space.id,
+    rootDid: deps.rootDid,
+    accessGenesis,
+    storage,
+    isClosed: () => closed,
+    access,
+    judge,
+    standingOf,
+    openBody,
+    previousOf,
+    buildEvent,
+    rulesAt,
+    needsOf,
+    cannotWrite,
+    upsert,
+  });
 
   /** Display order: when a record was created, then its key. It decides nothing. */
   const createdAtOf = async (version: Version) => (await genesisOf(version))?.createdAt ?? version.createdAt;
@@ -4272,34 +3361,15 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       if (!isMember(state, deps.rootDid)) return true;
       // Nobody else holds a place, so nobody else needs to know.
       if ([...readers(state)].every((did) => did === deps.rootDid)) return true;
-      const taken = new Set<string>();
-      let wanted: string | null = null;
-      let found: () => void = () => {};
-      const onStored = (peer: string, ids: ReadonlyArray<string>) => {
-        void peerAccounts.get(peer)?.then(({ account }) => {
-          if (account === deps.rootDid) return;
-          for (const id of ids) taken.add(id);
-          if (wanted !== null && taken.has(wanted)) found();
-        });
-      };
-      // Listening before writing: a peer can answer before the write returns.
-      sync.on('stored', onStored);
       try {
-        wanted = (await removeAccount(deps.rootDid)).version;
-        if (taken.has(wanted)) return true;
-        if (waitMs <= 0) return false;
-        return await new Promise<boolean>((resolve) => {
-          const timer = setTimeout(() => resolve(false), waitMs);
-          found = () => {
-            clearTimeout(timer);
-            resolve(true);
-          };
+        return await peers.writeUntilStored(async () => (await removeAccount(deps.rootDid)).version, {
+          waitMs,
+          othersOnly: true,
+          reachable: true,
         });
       } catch {
         // A note that may not change access; another of the account's devices can.
         return false;
-      } finally {
-        sync.off('stored', onStored);
       }
     },
 
@@ -4365,33 +3435,18 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
      */
     async revoke(key: string, options: { readonly waitMs?: number } = {}): Promise<boolean> {
       const waitMs = options.waitMs ?? 0;
-      const taken = new Set<string>();
-      let wanted: string | null = null;
-      let found: () => void = () => {};
-      const onStored = (_peer: string, ids: ReadonlyArray<string>) => {
-        for (const id of ids) taken.add(id);
-        if (wanted !== null && taken.has(wanted)) found();
-      };
-      // Listening before writing: a peer can answer before the write returns.
-      if (waitMs > 0) sync.on('stored', onStored);
-      try {
+      const write = async () => {
         const cutoff = await cutoffFor(deps.rootDid, key);
         const body = withCutoff({ key }, cutoff);
-        wanted = (await upsert(REVOKE_COLLECTION, await revokeKey(key, deps.rootDid), body)).version;
-        if (waitMs <= 0 || taken.has(wanted)) return true;
-        // With a network configured a peer may still be on its way, through a socket not yet
-        // joined or a host not yet reached; with none, nobody can come.
-        if (!net) return false;
-        return await new Promise<boolean>((resolve) => {
-          const timer = setTimeout(() => resolve(false), waitMs);
-          found = () => {
-            clearTimeout(timer);
-            resolve(true);
-          };
-        });
-      } finally {
-        if (waitMs > 0) sync.off('stored', onStored);
+        return (await upsert(REVOKE_COLLECTION, await revokeKey(key, deps.rootDid), body)).version;
+      };
+      if (waitMs <= 0) {
+        await write();
+        return true;
       }
+      // With a network configured a peer may still be on its way, through a socket not yet
+      // joined or a host not yet reached; with none, nobody can come.
+      return peers.writeUntilStored(write, { waitMs, othersOnly: false, reachable: !!net });
     },
 
     async isRevoked(key: string) {
@@ -4454,32 +3509,17 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         space: space.id,
         connection: liveConnection(),
         peers: connectedPeers(),
-        accounts: Object.fromEntries(
-          [...knownAccounts].flatMap(([peer, known]) =>
-            known.account && routes.has(peer) ? [[peer, known.account]] : [],
-          ),
-        ),
+        accounts: peers.accounts(),
         fingerprint: await storage.fingerprint(),
         rejected,
-        holds: partial ? Object.keys(cacheState.used).sort() : ('all' as const),
-        pending: (await adapter.list(PENDING_PREFIX)).length,
+        holds: holding.held(),
+        pending: await holding.pending(),
       };
     },
 
     use,
 
-    async send(message: unknown, to?: string) {
-      const encoded = JSON.stringify(message ?? null);
-      if (encoded.length > MAX_LIVE_BYTES) throw new Error('A live message can be at most 64 KB');
-      const gone = await formerMembers();
-      for (const peer of connectedPeers()) {
-        const account = (await peerAccounts.get(peer))?.account ?? null;
-        if (to && to !== peer && account !== to) continue;
-        // Removed, or left: live messages stop with everything else.
-        if (account !== null && gone.has(account)) continue;
-        routes.get(peer)?.send(peer, { type: LIVE_MESSAGE, from: session.did, payload: message ?? null });
-      }
-    },
+    send: peers.send,
 
     /**
      * Always-on nodes to hold a socket to besides those configured: the hosts
@@ -4517,9 +3557,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     async close(): Promise<void> {
       closed = true;
       stopWatchingMesh?.();
-      if (dropTimer) clearInterval(dropTimer);
-      await tidying;
-      await flushCache();
+      await holding.close();
       await keepingUp.done();
       await pulling;
       await Promise.all(mirrors.map((mirror) => mirror.close()));

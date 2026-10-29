@@ -9,7 +9,7 @@ import { markFor } from '@minca/ui/shapes';
 import type { ShapeColour } from '@minca/ui/tokens';
 import { useMyName } from '@minca/react';
 import { NameField } from './NameField';
-import { styles, palette } from '../styles';
+import { styles, palette, stack } from '../styles';
 import { useSpaceUnread } from '../seen';
 import { Loader } from '@minca/app-shared/Loader';
 
@@ -100,7 +100,7 @@ export function SpaceList({
             <div key={space.id} data-tile style={tile}>
               <button onClick={() => onOpen(space)} style={tileButton}>
                 <SpaceMark space={space} />
-                <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                <span style={{ ...stack(2), minWidth: 0 }}>
                   <span
                     style={{
                       ...styles.todoText,

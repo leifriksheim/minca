@@ -8,7 +8,7 @@ import { Proposals } from './MadeApps';
 import { moveApp, removeApp } from './launcher';
 import { Icon } from '../Icon';
 import { unreadOf, type Unread } from '../../seen';
-import { styles, palette, variants } from '../../styles';
+import { styles, palette, variants, hstack, stack } from '../../styles';
 import { ask } from '@minca/app-shared/Ask';
 
 /**
@@ -52,16 +52,16 @@ export function AppsView({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 36 }}>
-      <section aria-label="Apps in this space" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div style={stack(36)}>
+      <section aria-label="Apps in this space" style={stack(14)}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
           <div>
             <h2 style={{ ...styles.appTitle, fontSize: 20 }}>Apps</h2>
-            <p style={{ fontSize: 13, color: palette.ink.muted, marginTop: 2 }}>
+            <p style={{ ...styles.quiet, marginTop: 2 }}>
               What you use together here. Everything they save stays in the space.
             </p>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          <div style={{ ...hstack(8), flexShrink: 0 }}>
             {mayDefine && apps.ready.length > 0 && (
               <button
                 onClick={() => setArranging((was) => !was)}
@@ -122,7 +122,7 @@ export function AppsView({
                 >
                   <Icon name="plus" size={20} />
                 </span>
-                <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                <span style={{ ...stack(2), minWidth: 0 }}>
                   <strong style={cardTitle}>New app</strong>
                   <span className="app-card-text" style={cardText}>
                     Add a ready-made one, or have an agent build your own
@@ -134,9 +134,7 @@ export function AppsView({
         )}
         {arrange.error && <p style={styles.error}>{arrange.error}</p>}
         {apps.ready.length === 0 && (
-          <p style={{ fontSize: 13, color: palette.ink.muted }}>
-            No apps here yet. Add a ready-made one, or have an agent build your own.
-          </p>
+          <p style={styles.quiet}>No apps here yet. Add a ready-made one, or have an agent build your own.</p>
         )}
       </section>
 
@@ -176,7 +174,7 @@ function AppCard({ app, unread, onClick }: { app: AppEntry; unread: Unread; onCl
           <Count unread={unread} />
         </span>
       </span>
-      <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+      <span style={{ ...stack(2), minWidth: 0 }}>
         <strong style={cardTitle}>{app.title}</strong>
         {app.description && (
           <span className="app-card-text" style={cardText}>
@@ -208,7 +206,7 @@ function ArrangeRow({
     <li style={{ ...arrangeRow, borderTop: first ? 'none' : `1px solid ${palette.surface.line}` }}>
       <AppIcon id={app.id} size={32} />
       <strong style={{ ...cardTitle, ...ellipsis, flex: 1, minWidth: 0 }}>{app.title}</strong>
-      <span style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+      <span style={{ ...hstack(6), flexShrink: 0 }}>
         <button
           onClick={() => onMove(-1)}
           disabled={busy || first}

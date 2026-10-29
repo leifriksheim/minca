@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
-import { baseCss, hoverCss, palette, styles } from '@minca/app-shared/styles';
+import { baseCss, hoverCss, hstack, palette, stack, styles } from '@minca/app-shared/styles';
 
-export { palette, styles };
+export { hstack, palette, stack, styles };
 
 const { ink, surface, accent, radius, shadow } = palette;
 
@@ -507,7 +507,7 @@ const line = `1px solid ${surface.line}`;
 
 /**
  * Pieces many views share: a pill, a table's cells, a bordered card, a
- * clipped line, a column. The chip and the card are the shared ones
+ * clipped line. The chip and the card are the shared ones
  * (`styles.chip`, `styles.tile`); the chip is spelled in longhands here so a
  * chip that is on can change its colour alone.
  */
@@ -542,5 +542,4 @@ export const ui = {
   td: { padding: '10px 14px', borderBottom: line, color: ink.body },
   card: styles.tile,
   ellipsis: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-  stack: { display: 'flex', flexDirection: 'column' },
 } satisfies Record<string, CSSProperties>;

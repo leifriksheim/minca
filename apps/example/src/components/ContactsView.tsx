@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import type {
   ContactRequest,
   ContactView,
@@ -11,7 +11,7 @@ import type {
 } from '@minca/core';
 import { readInbox } from '@minca/core/inbox';
 import { createP256Provider } from '@minca/core';
-import { useAccount, useNode } from '@minca/react';
+import { useAccount, useAsync, useNode, useWatched } from '@minca/react';
 import {
   clearInboxFromUrl,
   inboxLink,
@@ -21,12 +21,11 @@ import {
   useContacts,
   useStanding,
 } from '../contacts';
-import { useWatched } from '../use-watched';
 import { nameOf, peopleFrom } from '../derive/people';
 import { ago } from '@minca/ui/time';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { Modal } from '@minca/app-shared/Modal';
-import { styles, palette } from '../styles';
+import { styles, palette, stack } from '../styles';
 import { message, useAction, useCopy } from '@minca/app-shared/action';
 import { Loader } from '@minca/app-shared/Loader';
 import { ask } from '@minca/app-shared/Ask';
@@ -111,7 +110,7 @@ export function ContactsView({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div style={stack(8)}>
       {error && (
         <div style={{ ...styles.errorBox, marginTop: 0 }}>
           <p style={styles.error}>{error}</p>
@@ -123,10 +122,7 @@ export function ContactsView({
       <KnockFromLink onKnock={(code, note) => act(() => knock(code, note))} />
 
       {asking > 0 && (
-        <section
-          style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 16 }}
-          aria-label="Asking to be your contact"
-        >
+        <section style={{ ...stack(4), marginBottom: 16 }} aria-label="Asking to be your contact">
           <h2 style={styles.sectionTitle}>Asking to be your contact</h2>
           <ul style={styles.todoList}>
             {requests.map((request) => (
@@ -205,7 +201,7 @@ export function ContactsView({
         </section>
       )}
 
-      <section style={{ display: 'flex', flexDirection: 'column', gap: 4 }} aria-label="Contacts">
+      <section style={stack(4)} aria-label="Contacts">
         <h2 style={styles.sectionTitle}>Contacts{listed.length > 0 ? ` (${listed.length})` : ''}</h2>
         {contacts === undefined ? (
           <p style={styles.todoMeta}>
@@ -288,20 +284,10 @@ function ContactRow({
 }) {
   const node = useNode();
   const account = useAccount();
-  const [others, setOthers] = useState<ReadonlyArray<string>>([]);
+  const othersFound = useAsync(() => node.contacts.others(contact.did), [node, contact.did, contact.space]);
+  const others = othersFound.status === 'done' ? othersFound.value : [];
   const [renaming, setRenaming] = useState<string | null>(null);
   const standing = useStanding(contact);
-
-  useEffect(() => {
-    let stopped = false;
-    void node.contacts
-      .others(contact.did)
-      .then((found) => !stopped && setOthers(found))
-      .catch(() => {});
-    return () => {
-      stopped = true;
-    };
-  }, [node, contact.did, contact.space]);
 
   const rename = () => {
     const name = renaming?.trim();
@@ -509,25 +495,11 @@ function KnockDialog({
 }) {
   const [code, setCode] = useState(initial);
   const [note, setNote] = useState('');
-  const [read, setRead] = useState<{ code: string; name: string | null; problem: string | null } | null>(
-    null,
-  );
   // An inbox code is signed: checked as it is typed.
-  useEffect(() => {
-    let stopped = false;
-    const text = code.trim();
-    if (!text) return;
-    readInbox(text, provider).then(
-      (inbox) => !stopped && setRead({ code: text, name: inbox.name ?? null, problem: null }),
-      (caught: unknown) => !stopped && setRead({ code: text, name: null, problem: message(caught) }),
-    );
-    return () => {
-      stopped = true;
-    };
-  }, [code]);
-  const current = read?.code === code.trim() ? read : null;
-  const name = current?.name ?? null;
-  const problem = current?.problem ?? null;
+  const text = code.trim();
+  const inbox = useAsync(async () => (text ? readInbox(text, provider) : null), [text]);
+  const name = inbox.status === 'done' ? (inbox.value?.name ?? null) : null;
+  const problem = inbox.status === 'failed' ? message(inbox.error) : null;
   return (
     <Modal title={name ? `Knock on ${name}'s inbox` : "Knock on someone's inbox"} onClose={onClose}>
       <form
@@ -569,7 +541,7 @@ function KnockDialog({
         </p>
         <button
           type="submit"
-          disabled={!code.trim() || !current || !!problem}
+          disabled={!text || inbox.status !== 'done' || !inbox.value}
           data-variant="primary"
           style={{ ...styles.addButton, marginTop: 12 }}
         >

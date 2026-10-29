@@ -243,7 +243,7 @@ does nothing different. No key hashes to such a topic, so a purge of it always
 fails: nobody can clear it. A host's relay also answers a fetch with the
 links its accounts keep ([06](06-nodes-and-sessions.md) §4.2).
 
-_Source: `packages/relay/relay.mjs` (`handleMail`, `purge`, `sweepMail`, `MAILBOX_LIMITS`, `mailboxFrom`), `packages/core/src/network/relays.ts` (`createMailboxClient`), `packages/core/src/network/relay-minca.ts` (`createMincaMailbox`, `mincaRelay`), `packages/core/src/network/relay-nostr.ts` (`createNostrMailbox`, `nostrRelay`), `packages/core/src/node/node.ts` (`purgeInbox`). Tests: `packages/core/tests/inbox.test.ts` ("the relay's mailbox"), `packages/core/tests/invite-link.test.ts` ("a mailbox that keeps blobs for others", "nobody can clear it…"), `packages/core/tests/relay-nostr.test.ts` ("a Nostr relay as a mailbox")._
+_Source: `packages/relay/relay.mjs` (`handleMail`, `purge`, `sweepMail`, `MAILBOX_LIMITS`, `mailboxFrom`), `packages/core/src/network/relays.ts` (`createMailboxClient`), `packages/core/src/network/relay-minca.ts` (`createMincaMailbox`, `mincaRelay`), `packages/core/src/network/relay-nostr.ts` (`createNostrMailbox`, `nostrRelay`), `packages/core/src/node/node-inbox.ts` (`purgeInbox`). Tests: `packages/core/tests/inbox.test.ts` ("the relay's mailbox"), `packages/core/tests/invite-link.test.ts` ("a mailbox that keeps blobs for others", "nobody can clear it…"), `packages/core/tests/relay-nostr.test.ts` ("a Nostr relay as a mailbox")._
 
 ## 6. Knocks
 

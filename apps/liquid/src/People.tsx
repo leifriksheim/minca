@@ -17,7 +17,7 @@ import { PARTY_RULE_LABEL, PartyChip, PartyMark, Problem, Who, decidesText } fro
 import { useAction } from '@minca/app-shared/action';
 import { Shape } from '@minca/app-shared/shapes';
 import { SHAPE_CYCLE } from '@minca/ui/tokens';
-import { SHADE_HUES, colourOf, palette, partyMarkOf } from './styles';
+import { SHADE_HUES, colourOf, palette, partyMarkOf, hstack, stack } from './styles';
 import { ask } from '@minca/app-shared/Ask';
 
 /** A party picks one of the shapes' colours; its record keeps it as a hue */
@@ -28,8 +28,8 @@ export function People({ a, writable }: { a: Assembly; writable: boolean }) {
   const [editing, setEditing] = useState<PartyFull | null>(null);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
-      <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div style={stack(32)}>
+      <section style={stack(12)}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
           <div>
             <h2 className="lq-display" style={{ fontSize: 26 }}>
@@ -59,7 +59,7 @@ export function People({ a, writable }: { a: Assembly; writable: boolean }) {
         )}
       </section>
 
-      <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <section style={stack(12)}>
         <div>
           <h2 className="lq-display" style={{ fontSize: 26 }}>
             Members
@@ -231,7 +231,7 @@ function PartyCard({
           <Avatar key={did} did={did} size={22} />
         ))}
       </div>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 'auto' }}>
+      <div style={{ ...hstack(6), flexWrap: 'wrap', marginTop: 'auto' }}>
         {writable &&
           (steward ? (
             <span className="lq-chip">You’re a steward</span>
@@ -277,15 +277,7 @@ function PartyCard({
         )}
       </div>
       {requests && steward && waiting.length > 0 && (
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 6,
-            paddingTop: 10,
-            borderTop: `1px solid ${palette.surface.line}`,
-          }}
-        >
+        <div style={{ ...stack(6), paddingTop: 10, borderTop: `1px solid ${palette.surface.line}` }}>
           {waiting.map((did) => (
             <div key={did} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Who did={did} a={a} size={22} />
@@ -358,7 +350,7 @@ function PartyForm({ a, editing, onClose }: { a: Assembly; editing?: PartyFull; 
   return (
     <Modal title={editing ? `Edit ${editing.name}` : 'Start a party'} onClose={onClose} width={480}>
       <form
-        style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+        style={stack(16)}
         onSubmit={(event) => {
           event.preventDefault();
           if (name.trim()) void save(editing ? [...editing.listed] : []);
@@ -378,7 +370,7 @@ function PartyForm({ a, editing, onClose }: { a: Assembly; editing?: PartyFull; 
             />
           </label>
         </div>
-        <div role="radiogroup" aria-label="Colour" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <div role="radiogroup" aria-label="Colour" style={{ ...hstack(6), flexWrap: 'wrap' }}>
           {SHAPE_CYCLE.map((colour) => {
             const picked = colourOf(shade) === colour;
             return (
@@ -414,7 +406,7 @@ function PartyForm({ a, editing, onClose }: { a: Assembly; editing?: PartyFull; 
             style={{ minHeight: 96 }}
           />
         </label>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={stack(8)}>
           <p className="lq-label">How it takes a position</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }} role="group" aria-label="How it decides">
             {PARTY_RULES.map((rule) => (
@@ -461,7 +453,7 @@ function PartyForm({ a, editing, onClose }: { a: Assembly; editing?: PartyFull; 
           </p>
         </div>
         {editing && members.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={stack(6)}>
             <p className="lq-label">Members</p>
             {members.map((did) => (
               <div key={did} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -514,7 +506,7 @@ function PartyForm({ a, editing, onClose }: { a: Assembly; editing?: PartyFull; 
           </p>
         )}
         <Problem>{action.error}</Problem>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={hstack(8)}>
           {editing && (
             <button
               type="button"

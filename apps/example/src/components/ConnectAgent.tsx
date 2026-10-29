@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Modal } from '@minca/app-shared/Modal';
 import { useCopy } from '@minca/app-shared/action';
-import { styles, palette } from '../styles';
+import { styles, palette, hstack } from '../styles';
 
 /** What people run: it opens their account home, where they allow it */
 const COMMAND = import.meta.env.VITE_MINCA_CONNECT ?? 'npx @minca/cli connect';
@@ -125,7 +125,7 @@ function AgentStep({
   children?: ReactNode;
 }) {
   return (
-    <li style={{ display: 'flex', gap: 14 }} aria-current={at === 'now' ? 'step' : undefined}>
+    <li style={hstack(14)} aria-current={at === 'now' ? 'step' : undefined}>
       <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
         <span style={marker[at]}>{at === 'done' ? '✓' : n}</span>
         {!last && <span style={{ flex: 1, width: 1.5, minHeight: 16, background: palette.surface.line }} />}

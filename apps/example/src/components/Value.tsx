@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { itemKindOf, labelOf, textOf, valueKindOf, type Field, type LinkedByRel } from '../derive/schema-ui';
 import { byKind, PeopleValue } from './KindValue';
-import { styles, palette } from '../styles';
+import { styles, palette, stack } from '../styles';
 
 /** Text longer than this folds away behind "Show": a screen's HTML is a field too */
 const LONG = 400;
@@ -159,7 +159,7 @@ const inner = {
 /** A list of objects, each set apart by a rule on its left */
 function Items({ items, depth }: { items: ReadonlyArray<unknown>; depth: number }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
+    <div style={{ ...stack(10), minWidth: 0 }}>
       {items.map((item, i) => (
         <div
           key={i}
@@ -178,7 +178,7 @@ function LongText({ text }: { text: string }) {
   const size = new TextEncoder().encode(text).length;
   const kb = size >= 1024 ? `${Math.round(size / 1024)} KB` : `${size} bytes`;
   return (
-    <span style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+    <span style={{ ...stack(4), minWidth: 0 }}>
       <span style={{ color: palette.ink.muted }}>
         {open ? null : `${text.slice(0, 120).replace(/\s+/g, ' ')}…`}{' '}
         <button

@@ -32,7 +32,7 @@ import { Value } from './Value';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { reactionSummary } from './std/Reactions';
 import { chip, tagLabel } from './std/Tags';
-import { styles, palette, ui } from '../styles';
+import { styles, palette, ui, hstack, stack } from '../styles';
 import { useAction } from '@minca/app-shared/action';
 import { Lane, Card } from './Lane';
 import { Person } from './Person';
@@ -193,7 +193,7 @@ export function CollectionView({
   }
 
   return (
-    <section aria-label={label} style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+    <section aria-label={label} style={{ ...stack(16), minWidth: 0 }}>
       <header
         style={{
           display: 'flex',
@@ -205,7 +205,7 @@ export function CollectionView({
       >
         <div>
           <h2 style={{ ...styles.appTitle, fontSize: 22 }}>{label}</h2>
-          <p style={{ fontSize: 13, color: palette.ink.muted, marginTop: 4 }}>
+          <p style={{ ...styles.quiet, marginTop: 4 }}>
             {collection?.description ?? <code style={{ fontSize: 12 }}>{name}</code>}
           </p>
         </div>
@@ -269,9 +269,7 @@ export function CollectionView({
       </header>
 
       {onOthers && (
-        <p style={{ fontSize: 13, color: palette.ink.muted }}>
-          These are added on the record they're about — open any record to add one.
-        </p>
+        <p style={styles.quiet}>These are added on the record they're about — open any record to add one.</p>
       )}
 
       {mayCreate &&
@@ -350,11 +348,11 @@ export function CollectionView({
           aria-label="Pages"
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}
         >
-          <span style={{ fontSize: 13, color: palette.ink.muted }}>
+          <span style={styles.quiet}>
             {visible.length ? `${from + 1}–${from + visible.length}` : 'None'}
             {!filtered && collection ? ` of ${collection.records}` : ''}
           </span>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={hstack(8)}>
             <button
               onClick={() => setCursors(cursors.slice(0, -1))}
               disabled={cursors.length <= 1}
@@ -417,9 +415,9 @@ function QuickAdd({
           setText('');
         });
       }}
-      style={{ display: 'flex', flexDirection: 'column', gap: 6 }}
+      style={stack(6)}
     >
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div style={hstack(8)}>
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -499,7 +497,7 @@ function ListLayout({
                 }
               />
             )}
-            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ flex: 1, minWidth: 0, ...stack(4) }}>
               <span
                 style={{
                   ...ui.ellipsis,

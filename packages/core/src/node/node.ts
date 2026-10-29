@@ -6,192 +6,74 @@
  * **The root key signs once.** A node signs with a session key the root
  * delegates to for an hour at a time, renewed before it runs out: one
  * signature an hour, never one per write.
+ *
+ * This file owns the session, the spaces the node holds and the account's
+ * memberships; each other part lives in a `node-*.ts` file beside it and is
+ * wired together here, sharing one `NodeContext`.
  */
-import { runQuery } from '../query/engine.js';
-import {
-  nameOf,
-  plainQuery,
-  type CollectionRef,
-  type Include,
-  type Query,
-  type IncludeMap,
-  type ResultFor,
-} from '../query/types.js';
 import { createP256Provider } from '../identity/crypto-p256.js';
-import type { Link, SpaceRole } from '../types.js';
+import type { SpaceRole } from '../types.js';
 import { didOf } from '../identity/did.js';
-import { verifyNote, type Delegation } from '../identity/ucan.js';
-import { actsForAccount, ALL_COMMAND, grantsRecordsOnly, noteSpaces } from '../identity/abilities.js';
+import type { Delegation } from '../identity/ucan.js';
+import { actsForAccount, ALL_COMMAND } from '../identity/abilities.js';
 import { createSigner } from '../schema/signer.js';
 import { createSchemaEngine } from '../schema/schema-engine.js';
 import {
   createSpaceManager,
   encodeSpaceInvite,
   parseSpaceInvite,
-  bareInvite,
   previewInvite,
   type InviteLinkOptions,
   type SpaceRecord,
 } from '../space/space-manager.js';
-import { MAX_KEEPERS, MAX_RELAYS, type Keeper } from '../space/roles.js';
-import { KEY_CHANGE, MEMBER_REMOVE, ROLE_ASSIGN, SPACE_KEEPERS } from '../space/grants.js';
+import type { Keeper } from '../space/roles.js';
+import { ROLE_ASSIGN } from '../space/grants.js';
 import { createWriters } from './writers.js';
-import {
-  meshFor,
-  CANNOT_DEFINE,
-  usableRelays,
-  openSpaceRuntime,
-  type ActiveSession,
-  type SpaceRuntime,
-} from './space-runtime.js';
+import { meshFor, openSpaceRuntime, type ActiveSession, type SpaceRuntime } from './space-runtime.js';
 import { createServerAuth } from '../network/peer-auth.js';
 import { DEFAULT_ICE_SERVERS } from '../network/rtc-transport.js';
-import { deriveInviteKey } from '../space/space-access.js';
-import {
-  encodeInviteLink,
-  generateLinkSecret,
-  inviteLinkKeys,
-  isShortInvite,
-  linkInviteSecret,
-  linkTopic,
-  MAX_INVITE_NODES,
-  MAX_LINK_PLACES,
-  openInvite,
-  parseInviteLink,
-  pinOf,
-  relayOfNode,
-  sealInvite,
-} from '../space/invite-link.js';
-import { checkInvitation, readInvitation, writeInvitation } from '../space/invitation.js';
+import { generateLinkSecret, linkInviteSecret } from '../space/invite-link.js';
+import { checkInvitation } from '../space/invitation.js';
 import type { LooseSigner } from '../records/loose.js';
 import { foundersOf } from '../space/constitution.js';
-import { base64UrlDecode, base64UrlEncode, bytesToHex, hexToBytes } from '../utils/encoding.js';
-import { isRecord, unref } from '../utils/guards.js';
+import { unref } from '../utils/guards.js';
 import { createListeners } from '../utils/events.js';
-import { serial, queue } from '../utils/serial.js';
-import { buildNamespaces, callMethod, givenFor, type Namespace, type OwnMethods } from './api.js';
+import { serial } from '../utils/serial.js';
+import { contactKeyPair, deriveMemberKeyBytes } from '../identity/contact-key.js';
+import { createMailboxClient } from '../network/relays.js';
 import {
-  contactKeyPair,
-  contactPublicKey,
-  deriveInboxKeyBytes,
-  deriveInboxSignKeyBytes,
-  deriveMemberKeyBytes,
-} from '../identity/contact-key.js';
-import { direct as directSchema } from '../schemas/library/publishing.js';
-import { openDirect, sealDirect, type DirectBody } from '../privacy/direct.js';
-import {
-  contact as contactSchema,
-  contactRequest as contactRequestSchema,
-  inbox as inboxSchema,
-  knock as knockSchema,
-  type Contact,
-  type ContactRequestRecord,
-  type Inbox,
-  type Knock,
-} from '../schemas/contacts.js';
-import {
-  clip,
-  encodeInbox,
-  inboxTopic,
-  KNOCK_TTL_SECONDS,
-  knockId,
-  MAX_INBOX_PLACES,
-  openKnock,
-  readInbox as readInboxCode,
-  sealKnock,
-  signPurge,
-  type OpenedKnock,
-} from '../inbox/inbox.js';
-import { createMailboxClient, relayKind } from '../network/relays.js';
-import { team } from '../space/presets.js';
-import {
-  CARRIER_COLLECTION,
-  isKeptLink,
-  LINK_COLLECTION,
-  type KeptLink,
   deriveAccountRegistry,
-  deriveCarrySpace,
   deriveContactsSpace,
   MEMBERSHIP_COLLECTION,
-  PROFILE_COLLECTION,
-  PROFILE_KEY,
-  type AccountProfile,
-  type AvatarRef,
-  isAvatarRef,
-  type Carrier,
   type Membership,
 } from '../space/account-registry.js';
-import { CARRY_CLOSED_KEY, makePass, PASS_COLLECTION, passKey, type SpacePass } from '../space/pass.js';
-import {
-  checkOwnAutomation,
-  OWN_AUTOMATIONS,
-  WAKE_COLLECTION,
-  linkedWakes,
-  wakeFor,
-  type WakeSpace,
-} from '../space/own-automations.js';
-import type { Automation } from '../schemas/automations.js';
-import {
-  createHostClient,
-  connectorOffers,
-  createSpaceHostClient,
-  describeHost,
-  hostPeerAddress,
-  HOSTING_COLLECTION,
-  HostError,
-  newSubscriptionSeed,
-  readStatus,
-  subscriptionKey,
-  type HostClient,
-  type HostDescription,
-  type HostStatus,
-  type OverSpace,
-  type Hosting,
-  type SignedStatus,
-} from '../session/hosting.js';
-import { base32Encode, hashedKey } from '../utils/hash.js';
 import type {
-  ContactRequest,
-  ContactView,
-  InboxView,
-  KnockView,
-  NodeInbox,
   DefineCollection,
   ListOptions,
   NodeConfig,
   NodeEvent,
   NodeRecord,
-  NodeAccount,
-  NodeCarriers,
-  NodeAutomations,
-  OwnAutomationView,
-  NodeHosting,
-  HostingView,
-  SpaceHostingView,
   NodeCollections,
-  NodeContacts,
-  NodeDirect,
-  DirectMessage,
-  NodeRecords,
-  FileRef,
-  AccountProfileView,
   NodeSpaces,
   P2PNode,
   RevokeOptions,
   SpaceSummary,
 } from './types.js';
+import { inBackground, type NodeContext, type OwnSpaceKind } from './node-context.js';
+import { createNodeInvites } from './node-invites.js';
+import { createNodeCarriers } from './node-carriers.js';
+import { createNodeHosting } from './node-hosting.js';
+import { createNodeAccount } from './node-account.js';
+import { createNodeContacts } from './node-contacts.js';
+import { createNodeInbox } from './node-inbox.js';
+import { createNodeDirect } from './node-direct.js';
+import { createNodeRecords } from './node-records.js';
+import { startAgent } from './node-agent.js';
 
 /** Everything a session key may do: every command, about the whole account */
 export const SESSION_COMMAND = ALL_COMMAND;
 
 const DEFAULT_TTL_SECONDS = 3600;
-
-/** A carrier record of the account's, with its carry space */
-interface CarrierEntry {
-  readonly key: string;
-  readonly body: Carrier;
-  readonly carry: SpaceRecord;
-}
 
 /** How long leaving waits for a peer to take the account's removal before forgetting the space anyway */
 const LEAVE_WAIT_MS = 5000;
@@ -212,21 +94,6 @@ function summarize(record: SpaceRecord): SpaceSummary {
     role: record.role,
     joining: record.invite !== null,
   });
-}
-
-/** Every collection a query reads: its own, and each `include … from` */
-function collectionsOf(query: Query): string[] {
-  const plain = plainQuery(query);
-  const found = new Set<string>();
-  if (typeof plain.collection === 'string') found.add(plain.collection);
-  const walk = (includes: Readonly<Record<string, Include>> | undefined) => {
-    for (const include of Object.values(includes ?? {})) {
-      if (typeof include?.from === 'string') found.add(include.from);
-      walk(include?.include);
-    }
-  };
-  walk(plain.include);
-  return [...found];
 }
 
 /** Starts a node; call `close()` when done */
@@ -332,55 +199,21 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     await joinRegistry(await encodeSpaceInvite(contactsRecord, looseSigner(), provider));
   }
   /** Which of the account's own spaces this is, or null for one it uses */
-  async function kindOf(spaceId: string): Promise<'registry' | 'contacts' | 'carry' | null> {
+  async function kindOf(spaceId: string): Promise<OwnSpaceKind | null> {
     if (spaceId === accountSpaceId) return 'registry';
     if (spaceId === contactsSpaceId) return 'contacts';
-    return (await isCarrySpace(spaceId)) ? 'carry' : null;
+    return (await carrying.isCarrySpace(spaceId)) ? 'carry' : null;
   }
 
   /** The contact key, for a node allowed to open contact requests */
   const contactKeys = config.contactKey ? await contactKeyPair(config.contactKey) : null;
 
-  /**
-   * An invite to a space, naming where its members meet: the relays the space
-   * names, or before it names any, this node's — so the joiner finds the
-   * inviter even when their app uses other relays.
-   */
-  async function inviteTo(spaceId: string, options: InviteLinkOptions = {}): Promise<string> {
-    const named = (await findRecord(spaceId))?.relays ?? [];
-    const own = usableRelays(config.network).slice(0, MAX_RELAYS);
-    const nodes = await nodesOf(spaceId);
-    return registry.createInvite(spaceId, looseSigner(), {
-      ...options,
-      ...(named.length ? {} : own.length ? { relays: own } : {}),
-      ...(nodes.length ? { nodes } : {}),
-    });
-  }
-
-  /**
-   * The always-on nodes an invite names, so a joiner reaches one with nobody
-   * else online: the account's hosts, the space's own, and those the invite
-   * that brought this node here named. A host that can't be described in a
-   * few seconds is left out rather than holding the invite up.
-   */
-  async function nodesOf(spaceId: string): Promise<ReadonlyArray<string>> {
-    if (!config.network) return [];
-    const hosts = [
-      ...(await hostingRecords()),
-      ...((await kindOf(spaceId)) ? [] : await namedHosts(spaceId).catch(() => [])),
-    ];
-    const inTime = (host: (typeof hosts)[number]) =>
-      Promise.race([peerOf(host).catch(() => null), sleep(3000).then(() => null)]);
-    // Not the nodes an invite gave this node: nothing vouches for them, so they are never passed on.
-    const peers = await Promise.all(hosts.map(inTime));
-    const pinned = peers.filter((peer): peer is string => peer !== null && peer.includes('#did:key:'));
-    return [...new Set(pinned)].slice(0, MAX_INVITE_NODES);
-  }
-
   async function findRecord(spaceId: string): Promise<SpaceRecord | null> {
     if (spaceId === accountSpaceId) return account;
     const held = await registry.get(spaceId);
-    return held ?? (await carrierRecords()).find(({ carry }) => carry.space.id === spaceId)?.carry ?? null;
+    return (
+      held ?? (await carrying.carrierRecords()).find(({ carry }) => carry.space.id === spaceId)?.carry ?? null
+    );
   }
 
   async function requireRecord(spaceId: string): Promise<SpaceRecord> {
@@ -408,14 +241,14 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     }
     if (event.type !== 'records') return;
     whenOpen(event.space, checkRevoked);
-    inBackground(keepSpaceHosts(event.space));
+    inBackground(hosts.keepSpaceHosts(event.space));
     // A space joined with an invite whose record had not arrived: perhaps it has now.
     void finishJoining(event.space);
     if (event.space === accountSpaceId) {
       emit({ type: 'account' });
       void reconcile();
       // A rename on another device reaches the spaces open here too.
-      void publishProfileToOpenSpaces();
+      void profile.publishProfileToOpenSpaces();
     }
   };
 
@@ -436,72 +269,13 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     );
   }
 
-  /**
-   * The account's profile, from its registry — null without an account key,
-   * or before one is set. One record: its current version is the name, by the
-   * ordering rule, the same on every device whatever their clocks say.
-   */
-  async function ownProfile(): Promise<AccountProfileView | null> {
-    if (!accountSpaceId) return null;
-    const profile = await (await runtime(accountSpaceId)).get<AccountProfile>(PROFILE_KEY);
-    if (!profile?.verified || profile.root !== config.signer.did || typeof profile.body?.name !== 'string')
-      return null;
-    const avatar = profile.body.avatar;
-    return {
-      name: profile.body.name,
-      updatedAt: profile.updatedAt,
-      ...(isAvatarRef(avatar) ? { avatar } : {}),
-    };
-  }
-  const ownName = async () => (await ownProfile())?.name ?? null;
-
-  /**
-   * Tells a space who this account is. Done when the space opens and when the
-   * name changes — not by opening every space, which would start syncing them
-   * all; a space not open now hears on its next open.
-   */
-  async function publishProfile(spaceId: string, open: SpaceRuntime): Promise<void> {
-    if (narrowNote || (await kindOf(spaceId))) return;
-    const own = await ownProfile();
-    if (!own) return;
-    const base = { name: own.name, ...(contactKeys ? { contactKey: contactKeys.publicKey } : {}) };
-    const held = await heldAvatar(open);
-    const copied = held?.source === own.avatar?.hash ? held : undefined;
-    // The name goes out now with the picture the space has; a new picture follows once copied,
-    // which may wait on its bytes reaching this device.
-    const shown = own.avatar ? (copied ?? held) : undefined;
-    await open.publishProfile({ ...base, ...(shown ? { avatar: shown } : {}) });
-    if (own.avatar && !copied)
-      inBackground(
-        avatarIn(spaceId, open, own.avatar).then((avatar) => open.publishProfile({ ...base, avatar })),
-      );
-  }
-
-  /** The account's picture as this space shows it */
-  async function heldAvatar(open: SpaceRuntime): Promise<AvatarRef | undefined> {
-    const avatar = (await open.profiles()).find((profile) => profile.did === config.signer.did)?.avatar;
-    return isAvatarRef(avatar) ? avatar : undefined;
-  }
-
-  const avatarCopies = new Map<string, Promise<AvatarRef>>();
-  /**
-   * The account's picture as a file of this space: members can't read the
-   * registry, so each space holds its own copy, made once per picture.
-   */
-  function avatarIn(spaceId: string, open: SpaceRuntime, avatar: AvatarRef): Promise<AvatarRef> {
-    return cached(avatarCopies, `${spaceId}:${avatar.hash}`, async () => {
-      const held = await heldAvatar(open);
-      if (held?.source === avatar.hash) return held;
-      const registryRt = await runtime(accountSpaceId!);
-      const copy = await open.addFile(await registryRt.readFile(avatar));
-      return { ...copy, mime: avatar.mime, source: avatar.hash };
-    });
-  }
-
-  async function publishProfileToOpenSpaces(): Promise<void> {
-    for (const [spaceId, open] of runtimes) {
-      await open.then((rt) => publishProfile(spaceId, rt)).catch(() => {});
-    }
+  /** The same, in the account registry; none without one */
+  async function accountRecords<T>(
+    options: ListOptions,
+    check?: (record: NodeRecord<T>) => boolean,
+  ): Promise<NodeRecord<T>[]> {
+    if (!accountSpaceId) return [];
+    return ownRecords<T>(await runtime(accountSpaceId), options, check);
   }
 
   function runtime(spaceId: string): Promise<SpaceRuntime> {
@@ -513,8 +287,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     open.catch(() => runtimes.delete(spaceId));
     runtimes.set(spaceId, open);
     // Its profile, a revoke from an earlier visit, carriers added since, and the hosts to reach.
-    for (const step of [publishProfile, checkRevoked, nameKeepers]) whenOpen(spaceId, step);
-    inBackground(open.then(() => reachHosts(spaceId)));
+    for (const step of [profile.publishProfile, checkRevoked, carrying.nameKeepers]) whenOpen(spaceId, step);
+    inBackground(open.then(() => hosts.reachHosts(spaceId)));
     return open;
   }
 
@@ -547,8 +321,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       onRole: (role) => {
         // Holding a role now, perhaps just joined: the space may hear who this is.
         if (role !== null) {
-          whenOpen(spaceId, publishProfile);
-          inBackground(keepSpaceHosts(spaceId));
+          whenOpen(spaceId, profile.publishProfile);
+          inBackground(hosts.keepSpaceHosts(spaceId));
         }
         if (record.role !== role) void registry.setRole(spaceId, role).then(() => emit({ type: 'spaces' }));
       },
@@ -562,7 +336,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         await registry.addKeys(spaceId, keys, currentKey);
         // The account's other devices and its carriers follow the new key.
         if (!kind) await remember(spaceId, { refresh: true });
-        inBackground(passAll());
+        inBackground(carrying.passAll());
       },
     });
   }
@@ -609,7 +383,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
   async function closeRuntime(spaceId: string): Promise<void> {
     holds.delete(spaceId);
-    reaching.delete(spaceId);
+    hosts.forgetReach(spaceId);
     const open = runtimes.get(spaceId);
     if (!open) return;
     runtimes.delete(spaceId);
@@ -637,9 +411,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   };
 
   async function memberships(): Promise<ReadonlyArray<NodeRecord<Membership>>> {
-    if (!accountSpaceId) return [];
-    return ownRecords<Membership>(
-      await runtime(accountSpaceId),
+    return accountRecords<Membership>(
       { collection: MEMBERSHIP_COLLECTION, includeDeleted: true },
       (record) =>
         record.deleted ||
@@ -659,7 +431,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     if (known && (!options.refresh || known.deleted)) return;
     // A view-only invite: what lets the account write is its role in the
     // space, which every device reads there. Invite secrets are never kept.
-    const invite = await inviteTo(spaceId);
+    const invite = await invites.inviteTo(spaceId);
     if (known && inviteKeyOf(known.body?.invite) === inviteKeyOf(invite)) return;
     await open.upsertSystem<Membership>(MEMBERSHIP_COLLECTION, membershipKey(spaceId), {
       space: spaceId,
@@ -682,174 +454,6 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     if (!accountSpaceId) return;
     const open = await runtime(accountSpaceId);
     if (await open.get(membershipKey(spaceId))) await open.removeSystem(membershipKey(spaceId));
-  }
-
-  // ─── Carriers ──────────────────────────────────────────────────────
-  //
-  // One record per carrier in the registry. Its carry space is derived from
-  // the account key and the carrier's key, so every device finds the same one
-  // and none is stored. Every device of the account opens it and keeps a pass
-  // in it for each of the account's spaces (`space/pass.ts`) — so a space
-  // joined in any app is carried, with nothing to do in the home.
-
-  const carrierKey = async (spaceId: string) => (await passKey(spaceId)).replace(/^pass:/, 'carrier:');
-
-  /** Whether a `sys.carrier` record of the account's, live or not, is keyed by this space */
-  async function isCarrySpace(spaceId: string): Promise<boolean> {
-    if (!accountSpaceId) return false;
-    const versions = await (await runtime(accountSpaceId)).history(await carrierKey(spaceId));
-    return versions.some(
-      (version) =>
-        version.collection === CARRIER_COLLECTION && version.verified && version.root === config.signer.did,
-    );
-  }
-
-  const derivedCarry = new Map<string, Promise<SpaceRecord>>();
-  /** A carrier's carry space: derived, or for one added before they were, the one its invite names */
-  async function carrySpaceOf(carrier: Carrier): Promise<SpaceRecord | null> {
-    if (carrier.invite && carrier.space)
-      return (await registry.get(carrier.space)) ?? joinRegistry(carrier.invite).catch(() => null);
-    const { accountKey } = config;
-    if (!accountKey) return null;
-    const gen = carrier.gen ?? 0;
-    return cached(derivedCarry, `${carrier.did}|${gen}`, () =>
-      deriveCarrySpace(accountKey, config.signer.did, carrier.did, gen, provider),
-    );
-  }
-
-  /** The account's carriers, live and removed, each with its carry space */
-  async function carrierRecords(): Promise<ReadonlyArray<CarrierEntry>> {
-    if (!accountSpaceId) return [];
-    const registryRt = await runtime(accountSpaceId);
-    const listed = await ownRecords<Carrier>(registryRt, { collection: CARRIER_COLLECTION }, hasCarrierBody);
-    const found: CarrierEntry[] = [];
-    for (const { key, body } of listed) {
-      const carry = await carrySpaceOf(body!);
-      // Its key names its carry space: that is how every device knows the space is one.
-      if (carry && key === (await carrierKey(carry.space.id))) found.push({ key, body: body!, carry });
-    }
-    return found;
-  }
-
-  /** Makes a carrier's space hold exactly the account's passes, kept links and wakes as they are now */
-  async function syncPasses(carrier: CarrierEntry): Promise<void> {
-    if (!account || narrowNote) return;
-    const owned = await ownAutomations();
-    const { passes, spaces } = await passesFor(account);
-    // Removed meanwhile, on this device or another: its passes stay deleted.
-    if (!(await liveCarriers()).some((live) => live.key === carrier.key)) return;
-    const carry = await runtime(carrier.carry.space.id);
-    await writeExactly(carry, PASS_COLLECTION, passes, (key) => key.startsWith('pass:'));
-    // The links the account keeps, for the carrier to serve while every device is away.
-    const links = new Map((await keptLinks()).map((link) => [link.key, link.body]));
-    await writeExactly(carry, LINK_COLLECTION, links, (key) => key.startsWith('link:'));
-    await writeExactly(carry, WAKE_COLLECTION, await wakesOf(owned, spaces), () => true);
-  }
-
-  /**
-   * A pass for each of the account's spaces, its registry and contacts too so a
-   * restore can come through a carrier; and what a wake needs of each space.
-   */
-  async function passesFor(account: SpaceRecord) {
-    const passes = new Map<string, SpacePass>();
-    const spaces: WakeSpace[] = [];
-    for (const own of contactsRecord ? [account, contactsRecord] : [account])
-      passes.set(await passKey(own.space.id), await makePass(own));
-    for (const membership of await memberships()) {
-      if (membership.deleted || !membership.body || (await kindOf(membership.body.space))) continue;
-      const record = await registry.get(membership.body.space);
-      if (!record) continue;
-      spaces.push(await wakeSpaceOf(record));
-      // Held without its key: nothing to pass on until it arrives.
-      const pass = await makePass(record).catch(() => null);
-      if (pass) passes.set(await passKey(record.space.id), pass);
-    }
-    return { passes, spaces };
-  }
-
-  /** What a wake needs of a space. Opening it is also how this device learns its key changed. */
-  async function wakeSpaceOf(record: SpaceRecord): Promise<WakeSpace> {
-    const rt = await runtime(record.space.id);
-    const declared = new Map((await rt.collections()).map((c) => [c.name, c]));
-    return {
-      id: record.space.id,
-      key: record.key,
-      visibility: record.space.visibility,
-      topics: (collection) => declared.get(collection)?.topics ?? [],
-      computed: (collection) => declared.get(collection)?.computed,
-    };
-  }
-
-  /** A wake for each automation, every value replaced by the space's tag: the carrier matches, never learns */
-  async function wakesOf(
-    owned: ReadonlyArray<OwnAutomationView>,
-    spaces: ReadonlyArray<WakeSpace>,
-  ): Promise<Map<string, unknown>> {
-    const wakes = new Map<string, unknown>();
-    for (const own of owned) {
-      const wake = await wakeFor(own, spaces, config.signer.did);
-      wakes.set(`wake:${own.id}`, wake);
-      // A computed field the automation names reads wakes too: a 👍 can make a todo done.
-      for (const also of linkedWakes(own, wake, spaces)) wakes.set(`wake:${own.id}:${also.collection}`, also);
-    }
-    return wakes;
-  }
-
-  /** Makes what this account wrote in a collection, among the keys `mine` takes, say exactly `wanted` */
-  async function writeExactly(
-    rt: SpaceRuntime,
-    collection: string,
-    wanted: ReadonlyMap<string, unknown>,
-    mine: (key: string) => boolean,
-  ): Promise<void> {
-    const records = await ownRecords(rt, { collection, includeDeleted: true }, (record) => mine(record.key));
-    const held = new Map(records.map((record) => [record.key, record]));
-    for (const [key, body] of wanted) {
-      const existing = held.get(key);
-      held.delete(key);
-      if (!existing || existing.deleted || !sameJson(existing.body, body))
-        await rt.upsertSystem(collection, key, body);
-    }
-    for (const [key, record] of held) if (!record.deleted) await rt.removeSystem(key);
-  }
-
-  /** The account's own automations, as it made them */
-  async function ownAutomations(): Promise<ReadonlyArray<OwnAutomationView>> {
-    if (!accountSpaceId) return [];
-    const found = await ownRecords<Automation>(
-      await runtime(accountSpaceId),
-      { collection: OWN_AUTOMATIONS },
-      (record) => record.key.startsWith('automation:') && checkOwnAutomation(record.body) === null,
-    );
-    return found
-      .map((record) => ({ ...record.body!, id: record.key }))
-      .sort((a, b) => a.since.localeCompare(b.since));
-  }
-
-  /** The carriers the account uses now */
-  const liveCarriers = async () => (await carrierRecords()).filter(({ body }) => !body.removed);
-
-  /**
-   * Names the account's carriers — its extensions, its hosts — as keepers of
-   * a space it manages, and stops naming ones it removed, so apps there hold
-   * only what they use. Other keepers the space names stay. Done as each space
-   * opens and whenever the carriers change; a space this account doesn't
-   * manage is left to whoever does.
-   */
-  async function nameKeepers(spaceId: string, rt: SpaceRuntime): Promise<void> {
-    if (!account || narrowNote || (await kindOf(spaceId))) return;
-    if (!(await rt.may(SPACE_KEEPERS))) return;
-    const access = await rt.access();
-    const carriers = await carrierRecords();
-    const active = carriers.filter(({ body }) => !body.removed).map(({ body }) => body);
-    const gone = new Set(carriers.filter(({ body }) => body.removed).map(({ body }) => body.did));
-    for (const carrier of active) gone.delete(carrier.did);
-    const kept = access.keepers.filter((keeper) => !gone.has(keeper.did));
-    const added = active
-      .filter((carrier) => !kept.some((keeper) => keeper.did === carrier.did))
-      .map((c) => ({ did: c.did, name: c.name.slice(0, 80) }));
-    if (added.length === 0 && kept.length === access.keepers.length) return;
-    await rt.setKeepers([...kept, ...added].slice(0, MAX_KEEPERS), access.copies);
   }
 
   /**
@@ -892,244 +496,61 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
     // Not awaited: it opens every space the account holds, which from a data
     // folder takes long, and nothing here needs it done. Signing in waits on this.
-    inBackground(passAll());
+    inBackground(carrying.passAll());
     // Carriers came or went: the open spaces this account manages say so.
-    for (const spaceId of runtimes.keys()) whenOpen(spaceId, nameKeepers);
+    for (const spaceId of runtimes.keys()) whenOpen(spaceId, carrying.nameKeepers);
     // Not awaited: a host that is slow to answer must not hold up the rest.
-    inBackground(keepHosted());
+    inBackground(hosts.keepHosted());
     // Hosts came or went: every open space holds a socket to those the account uses now.
-    for (const spaceId of runtimes.keys()) inBackground(reachHosts(spaceId));
+    for (const spaceId of runtimes.keys()) inBackground(hosts.reachHosts(spaceId));
 
     if (changed) emit({ type: 'spaces' });
   }
-
-  /** Writing in carry spaces, one thing at a time: a removal never lands in the middle of a refill */
-  const inCarryTurn = queue();
-
-  const mailbox = config.mailbox ?? createMailboxClient();
-
-  // ── Short invite links (spec 03 §7.7) ──
-  //
-  // The link holds a secret and the hash of one sealed invite; the invite
-  // sits in mailboxes: the account's host's first, which keeps it while every
-  // device is away, then the relays where the space's members meet.
-
-  /** Where a link's sealed invite is left: its nodes' relays, then the space's or this node's */
-  async function linkPlaces(spaceId: string, nodes: ReadonlyArray<string>): Promise<ReadonlyArray<string>> {
-    const named = (await findRecord(spaceId))?.relays ?? [];
-    const relays = named.length ? named : usableRelays(config.network).slice(0, MAX_RELAYS);
-    return [...new Set([...nodes.map(relayOfNode), ...relays])];
-  }
-
-  /**
-   * A short link to a space: the invite `inviteTo` would give, sealed under a
-   * fresh secret and left in mailboxes. Where none takes it, or it is too large
-   * for one, the long invite is given instead: it works the same.
-   */
-  async function shortInvite(
-    spaceId: string,
-    secret: Uint8Array,
-    options: InviteLinkOptions,
-    until: number | undefined,
-  ): Promise<string> {
-    const long = await inviteTo(spaceId, options);
-    // The invitation as signed: its secret is the link's to give.
-    const invite = parseSpaceInvite(long);
-    const sealed = await sealInvite(secret, {
-      invite: invite.signed,
-      ...(until !== undefined ? { until } : {}),
-    }).catch(() => null);
-    if (!sealed) return long;
-    const nodes = invite.nodes ?? [];
-    const ttl = until !== undefined ? Math.max(60, Math.ceil((until - Date.now()) / 1000)) : undefined;
-    const places = await linkPlaces(spaceId, nodes);
-    const kept = await dropAt(places, await linkTopic(sealed.pin), sealed.blob, ttl);
-    if (kept.length === 0) return long;
-    await keepLink(spaceId, sealed, options, until);
-    // A host first, which keeps it; then a relay, so one going away leaves the other.
-    const hosts = new Set(nodes.map(relayOfNode));
-    const named = [kept.find((place) => hosts.has(place)), kept.find((place) => !hosts.has(place))];
-    const linked = named.filter((place) => place !== undefined);
-    return encodeInviteLink({ secret, pin: sealed.pin, places: linked.slice(0, MAX_LINK_PLACES) });
-  }
-
-  /** Leaves a blob at each place; the places that took it */
-  async function dropAt(
-    places: ReadonlyArray<string>,
-    topic: string,
-    blob: string,
-    ttl: number | undefined,
-  ): Promise<string[]> {
-    const drop = (place: string) =>
-      mailbox.drop(place, topic, blob, ttl).then(
-        () => place,
-        () => null,
-      );
-    const taken = await Promise.all(places.map(drop));
-    return taken.filter((place) => place !== null);
-  }
-
-  /** The links the account keeps, as its registry holds them */
-  async function keptLinks(): Promise<ReadonlyArray<{ readonly key: string; readonly body: KeptLink }>> {
-    if (!accountSpaceId || narrowNote) return [];
-    const records = await ownRecords<KeptLink>(
-      await runtime(accountSpaceId),
-      { collection: LINK_COLLECTION },
-      (record) => record.key.startsWith('link:') && isKeptLink(record.body),
-    );
-    return records.map((record) => ({ key: record.key, body: record.body! }));
-  }
-
-  /**
-   * Keeps a short link's sealed invite in the account registry: what it is
-   * for, never its secret. Every device then drops it again while it lasts,
-   * and closes its invite when it ends; carriers serve it meanwhile.
-   */
-  async function keepLink(
-    spaceId: string,
-    sealed: { readonly blob: string; readonly pin: Uint8Array },
-    options: InviteLinkOptions,
-    until: number | undefined,
-  ): Promise<void> {
-    if (!accountSpaceId || narrowNote) return;
-    const record = await findRecord(spaceId);
-    const body: KeptLink = {
-      space: spaceId,
-      blob: sealed.blob,
-      ...(options.secret ? { invite: (await deriveInviteKey(options.secret, provider)).did } : {}),
-      ...(record?.key ? { keyId: record.key.id } : {}),
-      ...(until !== undefined ? { until } : {}),
-    };
-    await (
-      await runtime(accountSpaceId)
-    ).upsertSystem(LINK_COLLECTION, `link:${bytesToHex(sealed.pin)}`, body);
-    inBackground(passAll());
-  }
-
-  /** Stops keeping the links `which` picks */
-  async function forgetLinks(which: (link: KeptLink) => boolean): Promise<void> {
-    if (!accountSpaceId || narrowNote) return;
-    const registryRt = await runtime(accountSpaceId);
-    let forgot = false;
-    for (const { key, body } of await keptLinks())
-      if (which(body)) {
-        await registryRt.removeSystem(key);
-        forgot = true;
-      }
-    if (forgot) inBackground(passAll());
-  }
-
-  /**
-   * Looks after every link the account keeps. One past its `until`, for a
-   * space this device no longer holds, or carrying a key the space has moved
-   * on from, has ended: its role invite is closed, so nobody holding the
-   * space's current key can still join with it, and it is forgotten. The
-   * rest are dropped again where the space's members meet; a relay already
-   * holding one stores nothing new.
-   */
-  const keepLinks = serial(async () => {
-    for (const { key, body } of await keptLinks()) {
-      if (closed) return;
-      const record = await registry.get(body.space);
-      // Ended only on what this device knows: one not holding the space yet would end a link
-      // another device of the account just made.
-      if (!record) continue;
-      if (linkEnded(body, record)) {
-        if (body.invite) await closeIfOpen(body.space, body.invite).catch(() => {});
-        await forgetLinks((link) => link.blob === body.blob);
-        continue;
-      }
-      const topic = await linkTopic(hexToBytes(key.slice('link:'.length)));
-      const ttl = body.until !== undefined ? Math.ceil((body.until - Date.now()) / 1000) : undefined;
-      for (const place of await linkPlaces(body.space, []))
-        inBackground(mailbox.drop(place, topic, body.blob, ttl));
-    }
-  });
-
-  /** Closes an invite unless it is closed already, or this account may not */
-  async function closeIfOpen(spaceId: string, inviteDid: string): Promise<void> {
-    const rt = await runtime(spaceId);
-    const invite = (await rt.access()).invites.find((held) => held.key === inviteDid);
-    if (invite?.open) await rt.closeInvite(inviteDid);
-  }
-
-  // Relays forget after two weeks or a restart: every hour, whatever is gone goes back.
-  const linkTimer = setInterval(() => void keepLinks().catch(() => {}), 60 * 60 * 1000);
-  unref(linkTimer);
-
-  /** A short link's invite, fetched once and kept: a preview and the join that follows ask once */
-  const resolved = new Map<string, Promise<{ readonly long: string; readonly until?: number }>>();
-
-  /** The long invite a text holds or a short link names, and when its inviter stops sharing it */
-  function resolveInvite(text: string): Promise<{ readonly long: string; readonly until?: number }> {
-    const bare = bareInvite(text);
-    if (!isShortInvite(bare)) return Promise.resolve({ long: bare });
-    // A few links are remembered, not every one ever read.
-    const oldest = resolved.keys().next().value;
-    if (!resolved.has(bare) && resolved.size >= 16 && oldest !== undefined) resolved.delete(oldest);
-    return cached(resolved, bare, () => fetchInvite(bare));
-  }
-
-  /**
-   * Asks every place the link names, and this node's relays, for its topic.
-   * Of what comes back, only the blob that hashes to the pin is taken — any
-   * other, whoever left it, is ignored unopened.
-   */
-  async function fetchInvite(bare: string): Promise<{ readonly long: string; readonly until?: number }> {
-    const link = parseInviteLink(bare);
-    const { topic, inviteSecret } = await inviteLinkKeys(link.secret, link.pin);
-    const places = [...new Set([...link.places, ...usableRelays(config.network)])];
-    if (places.length === 0)
-      throw new Error('That invite names no place to find it, and this app knows none');
-    // A slow place can't hold the join up for long: what has come back by then is all there is.
-    const blobs = await fetchBlobs(places, topic, 20_000);
-    // Only blobs whose hash is the pin; any other, whoever left it, is never opened.
-    const named: string[] = [];
-    for (const blob of blobs) if (await hasPin(blob, link.pin)) named.push(blob);
-    // Only the inviter could make two blobs share a pin, and then neither is trusted.
-    if (named.length > 1) throw new Error('That invite link names more than one invite, so it is not used');
-    const opened = named[0] ? await openInvite(link, named[0]) : null;
-    if (!opened)
-      throw new Error('That invite was not found. It may have expired, or the places it names may be down.');
-    const { invite, until } = opened;
-    // The invitation as its inviter signed it, and beside it the secret the link's own gives a role link.
-    const signed = readInvitation(writeInvitation(invite)).version;
-    const long = writeInvitation(signed, typeof signed.body.role === 'string' ? inviteSecret : undefined);
-    return { long, ...(until !== undefined ? { until } : {}) };
-  }
-
-  /** What the places hold under a topic, as much as came back within `waitMs` */
-  async function fetchBlobs(
-    places: ReadonlyArray<string>,
-    topic: string,
-    waitMs: number,
-  ): Promise<Set<string>> {
-    const blobs = new Set<string>();
-    const fetchAt = async (place: string) => {
-      for (const item of await mailbox.fetch(place, topic)) blobs.add(item.blob);
-    };
-    await Promise.race([sleep(waitMs), Promise.all(places.map((place) => fetchAt(place).catch(() => {})))]);
-    return blobs;
-  }
-
-  /** Every carrier the account uses gets its passes and wakes as they are now, one run at a time */
-  const passAll = serial(() =>
-    inCarryTurn(async () => {
-      // First: a key change that ends a link is seen here, before its record would be copied on.
-      await keepLinks().catch(() => {});
-      for (const carrier of await liveCarriers()) {
-        if (closed) return;
-        // Only a device that may write in the carry space can do this; others leave it to one that can.
-        await syncPasses(carrier).catch(() => {});
-      }
-    }),
-  );
 
   const reconcile = serial(() =>
     reconcileOnce().catch((error: unknown) => {
       if (!closed) console.error('Could not reconcile the account registry:', error);
     }),
   );
+
+  // ─── The parts ─────────────────────────────────────────────────────
+
+  const ctx: NodeContext = Object.freeze({
+    config,
+    provider,
+    registry,
+    account,
+    accountSpaceId,
+    contactsRecord,
+    contactsSpaceId,
+    contactKeys,
+    narrowNote,
+    mailbox: config.mailbox ?? createMailboxClient(),
+    emit,
+    isClosed: () => closed,
+    looseSigner,
+    runtime,
+    runtimes,
+    findRecord,
+    kindOf,
+    joinRegistry,
+    requireAccount,
+    ownRecords,
+    accountRecords,
+  });
+
+  // Invites and carriers each need the other once running: a kept link is handed to carriers, and
+  // a refill drops the links again first. Hosting needs the spaces it hands over, made below.
+  const invites = createNodeInvites(ctx, {
+    nodesOf: (spaceId) => hosts.nodesOf(spaceId),
+    passAll: () => carrying.passAll(),
+  });
+  const carrying = createNodeCarriers(ctx, {
+    memberships,
+    keptLinks: invites.keptLinks,
+    keepLinks: invites.keepLinks,
+  });
+  const profile = createNodeAccount(ctx);
 
   const spaces = Object.freeze<NodeSpaces>({
     async list() {
@@ -1164,7 +585,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       // A short link's secret comes first: a role invite's own secret is derived from it.
       const link = options.short ? generateLinkSecret() : null;
       const share = (opened: InviteLinkOptions = {}) =>
-        link ? shortInvite(spaceId, link, opened, options.until) : inviteTo(spaceId, opened);
+        link ? invites.shortInvite(spaceId, link, opened, options.until) : invites.inviteTo(spaceId, opened);
       if (options.write === false) return share();
       const open = await runtime(spaceId);
       const { roles, founder, mine } = await open.access();
@@ -1188,7 +609,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     },
 
     async preview(invite) {
-      const { long, until } = await resolveInvite(invite);
+      const { long, until } = await invites.resolveInvite(invite);
       // Who it says invited is shown before joining, so it is checked as joining checks it.
       const parsed = parseSpaceInvite(long);
       const unsigned = await checkInvitation(parsed.signed, provider, parsed.invite);
@@ -1197,7 +618,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     },
 
     async join(invite, options = {}) {
-      const record = await joinRegistry((await resolveInvite(invite)).long);
+      const record = await joinRegistry((await invites.resolveInvite(invite)).long);
       if (options.memberKey) await registry.setMemberKey(record.space.id, options.memberKey);
       // A runtime opened before the key arrived would still be unable to read.
       await closeRuntime(record.space.id);
@@ -1247,7 +668,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       // A peer's key does not say whose it is. But only this account's devices
       // and apps can read the account registry, so a peer there is one of ours
       // — except a carrier, which the registry names by its key.
-      const carrierKeys = new Set((await liveCarriers()).map(({ body }) => body.did));
+      const carrierKeys = new Set((await carrying.liveCarriers()).map(({ body }) => body.did));
       const inRegistry = new Set((await (await runtime(accountSpaceId)).status()).peers);
       return {
         ...status,
@@ -1259,14 +680,14 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     async carried(spaceId, options = {}) {
       if (!accountSpaceId || narrowNote || !config.network) return false;
       // Only with a carrier connected now, as the account registry shows it: else nothing is coming.
-      const carriers = new Set((await liveCarriers()).map(({ body }) => body.did));
+      const carriers = new Set((await carrying.liveCarriers()).map(({ body }) => body.did));
       const online = (await (await runtime(accountSpaceId)).status()).peers;
       if (!online.some((peer) => carriers.has(peer))) return false;
       const deadline = Date.now() + (options.waitMs ?? CARRIED_WAIT_MS);
       const open = await runtime(spaceId);
       // Named a keeper, and given its pass now rather than whenever the next round comes.
-      await nameKeepers(spaceId, open).catch(() => {});
-      inBackground(passAll());
+      await carrying.nameKeepers(spaceId, open).catch(() => {});
+      inBackground(carrying.passAll());
       while (!closed && Date.now() < deadline) {
         // Level with a carrier: it holds the genesis, and any invite opened since.
         for (const peer of (await spaces.status(spaceId)).carriers)
@@ -1297,23 +718,10 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     },
 
     async closeInvite(spaceId, keyOrLink) {
-      let key = keyOrLink;
-      // The link itself will do: its secret names the invite.
-      if (!keyOrLink.startsWith('did:key:') && isShortInvite(bareInvite(keyOrLink))) {
-        // A short link's invite secret is derived from its own; a view-only one has no record to close.
-        const secret = await linkInviteSecret(parseInviteLink(bareInvite(keyOrLink)).secret);
-        key = (await deriveInviteKey(secret, provider)).did;
-      } else if (!keyOrLink.startsWith('did:key:')) {
-        const secret = parseSpaceInvite(bareInvite(keyOrLink)).invite;
-        if (!secret)
-          throw new Error(
-            'That invite is view-only — there is nothing to close. To stop it working, give the space a new key (changeKey).',
-          );
-        key = (await deriveInviteKey(base64UrlDecode(secret), provider)).did;
-      }
+      const key = await invites.inviteKeyOf(keyOrLink);
       await (await runtime(spaceId)).closeInvite(key);
       // Its link, if the account keeps one, is no longer served.
-      await forgetLinks((link) => link.space === spaceId && link.invite === key);
+      await invites.forgetLinks((link) => link.space === spaceId && link.invite === key);
     },
 
     revoke: perSpace((rt, key: string, options?: RevokeOptions) => rt.revoke(key, options)),
@@ -1334,1212 +742,16 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     },
   });
 
-  // With an account key, start following the registry at once: it is how this
-  // node learns which spaces it belongs to.
-  if (accountSpaceId) {
-    await runtime(accountSpaceId);
-    await reconcile();
-  }
-
-  /** Writes one of the account's own automations, checked, and hands every carrier the wakes as they are now */
-  async function writeOwn(id: string, body: Automation): Promise<OwnAutomationView> {
-    const registryRt = await requireAccount('Making an automation');
-    const problem = checkOwnAutomation(body);
-    if (problem) throw new Error(problem);
-    // A system collection: nothing defines it, so no other key of the account can make it final.
-    await registryRt.upsertSystem<Automation>(OWN_AUTOMATIONS, id, body);
-    // Every carrier gets the wakes as they are now, in the background (`carriers.settled`).
-    inBackground(passAll());
-    return { ...body, id };
-  }
-
-  const automations = Object.freeze<NodeAutomations>({
-    list: ownAutomations,
-
-    add: (own) =>
-      writeOwn(`automation:${base32Encode(globalThis.crypto.getRandomValues(new Uint8Array(10)))}`, {
-        ...own,
-        name: own.name.trim(),
-        since: own.since ?? new Date().toISOString(),
-      }),
-
-    async update(id, changes) {
-      await requireAccount('Making an automation');
-      const current = (await ownAutomations()).find((view) => view.id === id);
-      if (!current) throw new Error('There is no such automation');
-      const { id: _id, ...was } = current;
-      return writeOwn(id, {
-        ...was,
-        ...(changes.name !== undefined ? { name: changes.name.trim() } : {}),
-        ...(changes.paused !== undefined ? { paused: changes.paused } : {}),
-      });
-    },
-
-    async remove(id) {
-      const registryRt = await requireAccount('Making an automation');
-      if (!(await ownAutomations()).some((view) => view.id === id)) return;
-      await registryRt.removeSystem(id);
-      inBackground(passAll());
-    },
-
-    async versions(ids) {
-      if (!accountSpaceId) return [];
-      const keys = ids.filter((id) => id.startsWith('automation:'));
-      return (await (await runtime(accountSpaceId)).versionsOf(keys)).filter(
-        (version) => version.collection === OWN_AUTOMATIONS,
-      );
-    },
-
-    async take(versions) {
-      if (!accountSpaceId) return 0;
-      // The account's own automations only: whatever else rides along waits for sync.
-      const mine = versions.filter(
-        (version) =>
-          typeof version === 'object' &&
-          version !== null &&
-          version.collection === OWN_AUTOMATIONS &&
-          version.space === accountSpaceId,
-      );
-      if (mine.length === 0) return 0;
-      const taken = await (await runtime(accountSpaceId)).take(mine);
-      if (taken > 0) inBackground(passAll());
-      return taken;
-    },
+  const hosts = createNodeHosting(ctx, {
+    spaces,
+    carriers: carrying.carriers,
+    liveCarriers: carrying.liveCarriers,
   });
-
-  const carriers = Object.freeze<NodeCarriers>({
-    list: async () =>
-      (await liveCarriers()).map(({ body: { did, name, since }, carry }) => ({
-        space: carry.space.id,
-        did,
-        name,
-        since,
-      })),
-
-    async add(carrier) {
-      const registryRt = await requireAccount('Using a carrier');
-      const all = await carrierRecords();
-      // The same carrier again keeps its carry space: what it holds stays good, and nothing is closed under it.
-      let entry = all.find(({ body }) => body.did === carrier.did && !body.removed);
-      if (entry) inBackground(passAll());
-      else {
-        // Added again after a removal, a new carry space: the last one tells it to forget. One past the
-        // highest seen, not a count: a device that hasn't synced every earlier one must not land on a closed space.
-        const gens = all.filter(({ body }) => body.did === carrier.did).map(({ body }) => body.gen ?? 0);
-        const gen = gens.length ? Math.max(...gens) + 1 : 0;
-        const body: Carrier = {
-          did: carrier.did,
-          name: carrier.name.trim().slice(0, 80) || 'Carrier',
-          since: new Date().toISOString(),
-          ...(gen ? { gen } : {}),
-        };
-        const carry = (await carrySpaceOf(body))!;
-        // Two devices adding it at once write the one record, for the one space.
-        entry = { key: await carrierKey(carry.space.id), body, carry };
-        await registryRt.upsertSystem<Carrier>(CARRIER_COLLECTION, entry.key, body);
-        // Its passes before its invite, as one batch: a carrier joining an empty carry space takes spaces as they trickle in.
-        // Not in turn behind a refill: nothing removes a carrier that is only now being added.
-        await syncPasses(entry);
-      }
-      return {
-        space: entry.carry.space.id,
-        invite: await encodeSpaceInvite(entry.carry, looseSigner(), provider),
-      };
-    },
-
-    settled: (waitMs) => within(passAll.done(), waitMs),
-
-    async reached(spaceId, waitMs) {
-      const did = (await liveCarriers()).find(({ carry }) => carry.space.id === spaceId)?.body.did;
-      if (!did || !accountSpaceId) return false;
-      const deadline = Date.now() + waitMs;
-      // Level with the passes and wakes as they are now: a refill under way first, within the same time.
-      await within(passAll.done(), waitMs);
-      // Its passes first: only through them does it come to the registry, and hold its own record there.
-      if (!(await (await runtime(spaceId)).syncedWith(did, Math.max(0, deadline - Date.now())))) return false;
-      return (await runtime(accountSpaceId)).syncedWith(did, Math.max(0, deadline - Date.now()));
-    },
-
-    async remove(spaceId) {
-      const registryRt = await requireAccount('Removing a carrier');
-      // In turn with any refill, which would otherwise put the passes back.
-      await inCarryTurn(async () => {
-        const live = await liveCarriers();
-        const did = live.find(({ carry }) => carry.space.id === spaceId)?.body.did;
-        // Every carry space it has: one added on two devices at once, before they were derived, has two.
-        for (const { key, body, carry } of live.filter((one) => one.body.did === did)) {
-          const rt = await runtime(carry.space.id);
-          // Passes gone first, then the word to forget everything, then the carrier's record.
-          for (const pass of await ownRecords(rt, { collection: PASS_COLLECTION }, (r) =>
-            r.key.startsWith('pass:'),
-          ))
-            await rt.removeSystem(pass.key);
-          await rt.upsertSystem(PASS_COLLECTION, CARRY_CLOSED_KEY, { v: 1, closed: true });
-          // Kept, so adding it again counts this one and takes a new carry space.
-          await registryRt.upsertSystem<Carrier>(CARRIER_COLLECTION, key, {
-            ...body,
-            removed: new Date().toISOString(),
-          });
-        }
-      });
-    },
-  });
-
-  // ─── Hosting ───────────────────────────────────────────────────────
-  //
-  // A host is a carrier the account pays for. The subscription key lives in
-  // the registry (`sys.hosting`), so every device signs as the same
-  // subscription, and any of them hands the host the carry space once it is
-  // paid — the one that paid, or the next one to notice.
-
-  const hostingKey = (url: string) => hashedKey('hosting', url);
-
-  /** The hosting records the account wrote, live */
-  async function hostingRecords(): Promise<ReadonlyArray<Hosting>> {
-    if (!accountSpaceId) return [];
-    const records = await ownRecords<Hosting>(
-      await runtime(accountSpaceId),
-      { collection: HOSTING_COLLECTION },
-      (record) => typeof record.body?.url === 'string' && typeof record.body.seed === 'string',
-    );
-    return records.map((record) => record.body!);
-  }
-
-  async function hostClient(hosting: Hosting): Promise<{ client: HostClient; subscription: string }> {
-    const key = await subscriptionKey(base64UrlDecode(hosting.seed), provider);
-    return { client: createHostClient(hosting.url, hosting.host, key, provider), subscription: key.did };
-  }
-
-  /** What the host at a known address says about itself — refused when it's another host now */
-  async function describeKnown(hosting: Hosting): Promise<HostDescription> {
-    const description = await describeHost(hosting.url);
-    if (description.did !== hosting.host)
-      throw new Error("The host at this address has another key now, so it's another host");
-    return description;
-  }
-
-  /** Last time each host was handed the spaces, or refused them — so asking again waits a while */
-  const handedAt = new Map<string, number>();
-  const HAND_AGAIN_MS = 60_000;
-  /** Handovers under way, so a second look waits for the first instead of reporting the spaces not carried */
-  const handing = new Map<string, Promise<{ status: HostStatus; receipt: SignedStatus }>>();
-
-  /**
-   * Keeps what the host signed in the registry, so every device shows it and
-   * the person holds the host's word — written only when what it says changed.
-   */
-  async function keepReceipt(
-    hosting: Hosting,
-    kept: HostStatus | null,
-    status: HostStatus,
-    receipt: SignedStatus,
-    description: HostDescription,
-  ): Promise<void> {
-    if (narrowNote || !accountSpaceId) return;
-    const { name } = description;
-    const peer = hostPeerAddress(hosting.url, description) ?? undefined;
-    if (kept && sameStatus(kept, status) && hosting.name === name && hosting.peer === peer) return;
-    const { peer: _before, ...rest } = hosting;
-    const record: Hosting = { ...rest, name, receipt, ...(peer ? { peer } : {}) };
-    await (
-      await runtime(accountSpaceId)
-    ).upsertSystem<Hosting>(HOSTING_COLLECTION, await hostingKey(hosting.url), record);
-  }
-
-  /** Asks a host how it stands, and hands it the spaces if it is paid for but not carrying them */
-  async function viewHosting(hosting: Hosting, force = false): Promise<HostingView> {
-    const { client, subscription } = await hostClient(hosting);
-    const kept = hosting.receipt ? await readStatus(hosting.receipt, hosting.host, provider) : null;
-    const base = { url: hosting.url, host: hosting.host, subscription, since: hosting.since };
-    try {
-      const description = await describeKnown(hosting);
-      const { status, receipt } = await handOverIfDue(hosting, client, description, force);
-      await keepReceipt(hosting, kept, status, receipt, description);
-      const live = { status, live: true, fund: fundOf(description), reminds: description.remind === true };
-      return { ...base, name: description.name, ...live };
-    } catch (error) {
-      const name = hosting.name ?? new URL(hosting.url).host;
-      return {
-        ...base,
-        name,
-        status: kept,
-        live: false,
-        fund: null,
-        reminds: false,
-        error: errorText(error),
-      };
-    }
-  }
-
-  /** How a host stands, after handing it the spaces if it is paid for but not carrying them */
-  async function handOverIfDue(
-    hosting: Hosting,
-    client: HostClient,
-    description: HostDescription,
-    force: boolean,
-  ): Promise<{ status: HostStatus; receipt: SignedStatus }> {
-    const told = await client.status();
-    if (told.status.carrying) return told;
-    // Another look is handing the spaces over now: wait for it, rather than answer "not carrying".
-    const inFlight = handing.get(hosting.url);
-    if (inFlight) return (await inFlight.catch(() => null)) ?? told;
-    const due = force || Date.now() - (handedAt.get(hosting.url) ?? 0) > HAND_AGAIN_MS;
-    if (!accountPaid(told.status, description) || !due || narrowNote) return told;
-    handedAt.set(hosting.url, Date.now());
-    const attaching = carriers
-      .add({ did: hosting.host, name: new URL(hosting.url).host })
-      .then(({ invite }) => client.attach(config.signer.did, invite));
-    handing.set(hosting.url, attaching);
-    try {
-      return await attaching;
-    } catch (error) {
-      // Not paid after all (it lapsed in between): the status says so.
-      if (error instanceof HostError && error.status === 402) return told;
-      throw error;
-    } finally {
-      handing.delete(hosting.url);
-    }
-  }
-
-  /** Every device keeps its hosts carrying: after the registry changes, ask each once more */
-  async function keepHosted(): Promise<void> {
-    if (narrowNote) return;
-    for (const hosting of await hostingRecords()) await viewHosting(hosting).catch(() => {});
-  }
-
-  async function requireHosting(url: string): Promise<Hosting> {
-    const found = (await hostingRecords()).find((hosting) => hosting.url === url);
-    if (!found) throw new Error(`This account doesn't use the host at ${url}`);
-    return found;
-  }
-
-  // ─── A space paying for itself ─────────────────────────────────────
-  //
-  // A space names the hosts it pays in `std.host` records, which only those
-  // who may manage it write. Any member's device holding the space key hands
-  // such a host the space's pass once someone has paid there, and again when
-  // the space's key changes, so the host carries it without reading it.
-
-  /** When each space last asked its hosts, and what it named then: asked again after a while, or when that changed */
-  const spaceHostsAsked = new Map<string, { at: number; named: string }>();
-  const SPACE_HOSTS_EVERY_MS = 10 * 60_000;
-
-  async function namedHosts(spaceId: string): Promise<ReadonlyArray<NamedHost>> {
-    const rt = await runtime(spaceId);
-    // Only where the space keeps hosts: listing a collection makes a space held in part hold it.
-    if (!(await rt.collections()).some((c) => c.name === 'std.host' && c.version !== null)) return [];
-    const records = await rt.list<unknown>({ collection: 'std.host' });
-    return records.map(namedHostOf).filter((host) => host !== null);
-  }
-
-  /** The read key a space is carried with now, as a DID: what a host should hold */
-  const currentReadKey = (pass: SpacePass): string | undefined => pass.readKey ?? pass.space.readKey;
-
-  async function askSpaceHost(spaceId: string, named: NamedHost, hand: boolean): Promise<SpaceHostingView> {
-    try {
-      const { client, description } = await reachNamedHost(named);
-      let { status } = await client.status(spaceId);
-      const record = hand && spacePaid(status, description) ? await findRecord(spaceId) : null;
-      if (record && (record.space.visibility === 'public' || record.key)) {
-        const pass = await makePass(record);
-        if (!status.carrying || (pass.read && status.readKey !== currentReadKey(pass)))
-          ({ status } = await client.hand(spaceId, pass));
-      }
-      const runsBots = description.bots === true;
-      return {
-        url: named.url,
-        name: named.name ?? description.name,
-        host: description.did,
-        status,
-        free: description.free === true,
-        fund: fundOf(description),
-        reminds: description.remind === true,
-        runsBots,
-        bots: status.bots ?? [],
-        connectors: runsBots ? connectorOffers(description.connectors) : [],
-      };
-    } catch (error) {
-      const name = named.name ?? new URL(named.url).hostname;
-      return { url: named.url, name, ...UNREACHED_HOST, error: errorText(error) };
-    }
-  }
-
-  /** A client for a host a space names, checked to be the host it chose */
-  async function reachNamedHost(named: NamedHost) {
-    const description = await describeHost(named.url);
-    // A host whose key changed since the space chose it is not the host it chose.
-    if (named.did && named.did !== description.did) throw new Error('The host’s key changed');
-    return { description, client: createSpaceHostClient(named.url, description.did, provider) };
-  }
-
-  async function requireNamedHost(spaceId: string, url: string): Promise<NamedHost> {
-    const named = (await namedHosts(spaceId)).find((known) => known.url === url);
-    if (!named) throw new Error('This space doesn’t use the host at that address');
-    return named;
-  }
-
-  const spaceHostClient = async (spaceId: string, url: string) =>
-    (await reachNamedHost(await requireNamedHost(spaceId, url))).client;
-
-  /** Hands the hosts a space names its pass, when they were paid and don't carry it with its key yet */
-  async function keepSpaceHosts(spaceId: string): Promise<void> {
-    // Only while it is open: a change heard as it closed must not open it again.
-    if ((await kindOf(spaceId)) || !runtimes.has(spaceId)) return;
-    const hosts = await namedHosts(spaceId);
-    await reachHosts(spaceId, hosts);
-    if (narrowNote) return;
-    const named = hosts.map((h) => h.url).join(' ');
-    const asked = spaceHostsAsked.get(spaceId);
-    if (!hosts.length || (asked?.named === named && Date.now() - asked.at < SPACE_HOSTS_EVERY_MS)) return;
-    spaceHostsAsked.set(spaceId, { at: Date.now(), named });
-    for (const known of hosts) await askSpaceHost(spaceId, known, true);
-  }
-
-  // ─── Reaching hosts ────────────────────────────────────────────────
-  //
-  // A host is reached over its socket, at the address its description names
-  // (`peer`). Every space holds one to each host the account uses, as the
-  // account's carry space names them all; a space also holds one to each host
-  // it pays itself (`std.host`). The account registry also tries the hosts
-  // the node was built with (`network.hosts`), so a new device with only the
-  // recovery code finds its registry there, and every space from it.
-
-  const describedPeers = new Map<string, Promise<string | null>>();
-  /** A host's socket address, as its description said: asked once, and again after a failure */
-  function describedPeer(url: string): Promise<string | null> {
-    const describe = async () => {
-      const description = await describeHost(url);
-      return pinnedTo(hostPeerAddress(url, description), description.did);
-    };
-    return cached(describedPeers, url, describe).catch(() => null);
-  }
-  /**
-   * A host's socket address: the one written down with it, or its
-   * description's. Pinned to the key written down with it when there is one,
-   * else the key it described itself with, so another node answering there is refused.
-   */
-  const peerOf = async (host: {
-    url: string;
-    peer?: string;
-    host?: string;
-    did?: string;
-  }): Promise<string | null> => {
-    const address =
-      (host.peer ? hostPeerAddress(host.url, { peer: host.peer }) : null) ?? (await describedPeer(host.url));
-    return pinnedTo(address, host.host ?? host.did);
-  };
-
-  /** What each space was last told to reach, so nothing reconnects when nothing changed */
-  const reaching = new Map<string, string>();
-
-  /** Gives a space's runtime the hosts to hold sockets to: the account's, and those it pays itself */
-  async function reachHosts(
-    spaceId: string,
-    spaceHosts?: ReadonlyArray<{ url: string; peer?: string; did?: string }>,
-  ): Promise<void> {
-    if (!config.network) return;
-    const open = runtimes.get(spaceId);
-    if (!open) return;
-    const hosts: Array<{ url: string; peer?: string; host?: string; did?: string }> = [
-      ...(await hostingRecords()),
-    ];
-    if (spaceId === accountSpaceId) hosts.push(...(config.network.hosts ?? []).map((url) => ({ url })));
-    // Asked only while it is still open: asking would open it again.
-    if (!(await kindOf(spaceId)) && runtimes.get(spaceId) === open)
-      hosts.push(...(spaceHosts ?? (await namedHosts(spaceId))));
-    const invited = await invitedNodes(spaceId, open);
-    const found = [...(await Promise.all(hosts.map(peerOf))), ...invited].filter((peer) => peer !== null);
-    const peers = [...new Set(found)].sort();
-    const said = peers.join(' ');
-    if (reaching.get(spaceId) === said || runtimes.get(spaceId) !== open) return;
-    reaching.set(spaceId, said);
-    (await open).useNodes(peers);
-  }
-
-  /**
-   * The nodes the invite that brought this node here named: the inviter's hosts, reached before the
-   * space's records are. Once the space names keepers, only those: an invite is unauthenticated.
-   */
-  async function invitedNodes(spaceId: string, open: Promise<SpaceRuntime>): Promise<string[]> {
-    const named = (await registry.get(spaceId))?.nodes ?? [];
-    if (named.length === 0) return [];
-    const access = await (await open).access().catch(() => null);
-    const keepers = new Set((access?.keepers ?? []).map((keeper) => keeper.did));
-    return named.filter((node) => keepers.size === 0 || keepers.has(nodeDid(node)));
-  }
-
-  const hosting = Object.freeze<NodeHosting>({
-    async space(spaceId) {
-      const hand = !narrowNote;
-      const views = await Promise.all(
-        (await namedHosts(spaceId)).map((known) => askSpaceHost(spaceId, known, hand)),
-      );
-      if (hand) spaceHostsAsked.set(spaceId, { at: Date.now(), named: views.map((v) => v.url).join(' ') });
-      return views;
-    },
-
-    async list() {
-      return Promise.all((await hostingRecords()).map((known) => viewHosting(known)));
-    },
-
-    async over(spaceId) {
-      const found: Array<{ url: string; name: string; over: OverSpace }> = [];
-      for (const hosting of await hostingRecords()) {
-        const status = hosting.receipt ? await readStatus(hosting.receipt, hosting.host, provider) : null;
-        const over = status?.over?.find((one) => one.space === spaceId);
-        if (over) found.push({ url: hosting.url, name: hosting.name ?? new URL(hosting.url).host, over });
-      }
-      return found;
-    },
-
-    async use(address) {
-      const registryRt = await requireAccount('Using a host');
-      const base = checkAddress(address, 'A host').origin;
-      const known = (await hostingRecords()).find((existing) => existing.url === base);
-      if (known) return viewHosting(known, true);
-      const description = await describeHost(base);
-      const peer = hostPeerAddress(base, description);
-      const record: Hosting = {
-        url: base,
-        host: description.did,
-        name: description.name,
-        ...(peer ? { peer } : {}),
-        seed: base64UrlEncode(newSubscriptionSeed()),
-        since: new Date().toISOString(),
-      };
-      await registryRt.upsertSystem<Hosting>(HOSTING_COLLECTION, await hostingKey(base), record);
-      return viewHosting(record, true);
-    },
-
-    async pay(url, payment) {
-      return (await hostClient(await requireHosting(url))).client.pay(payment);
-    },
-
-    async remind(url, email) {
-      await (await hostClient(await requireHosting(url))).client.remind(email);
-    },
-
-    async payForSpace(spaceId, url, payment) {
-      return (await spaceHostClient(spaceId, url)).pay(spaceId, payment);
-    },
-
-    async remindForSpace(spaceId, url, email) {
-      await (await spaceHostClient(spaceId, url)).remind(spaceId, email);
-    },
-
-    async stopForSpace(spaceId, url) {
-      const named = await requireNamedHost(spaceId, url);
-      // Which bots are the host's is its own word, signed: asked before it is let go.
-      const view = await askSpaceHost(spaceId, named, false);
-      // Un-named first, so no device hands it the key that follows.
-      const rt = await runtime(spaceId);
-      for (const record of await rt.list<unknown>({ collection: 'std.host' })) {
-        const body = record.body;
-        if (record.deleted || !isRecord(body) || typeof body.url !== 'string') continue;
-        const address = body.url;
-        if (attempt(() => new URL(address).origin) === url) await rt.remove(record.key);
-      }
-      const access = await spaces.access(spaceId);
-      const members = new Map(access.members.map((member) => [member.did, member.roles]));
-      const bots: string[] = [];
-      for (const bot of view.bots.map((one) => one.bot)) {
-        const roles = members.get(bot);
-        if (roles && (await spaces.may(spaceId, MEMBER_REMOVE, { self: false, roles }))) bots.push(bot);
-      }
-      if (bots.length === 0 && !(await spaces.may(spaceId, KEY_CHANGE))) return { bots: [], newKey: false };
-      for (const bot of bots) await spaces.removeMember(spaceId, bot);
-      // A host that can't say whether it holds a pass is taken to hold one.
-      const handed = view.status ? view.status.carrying : true;
-      const newKey = access.key !== null && (bots.length > 0 || handed);
-      // Removing a member changes the key by itself; with none removed it is changed here.
-      if (newKey && bots.length === 0) await spaces.changeKey(spaceId);
-      return { bots, newKey };
-    },
-
-    async startBot(spaceId, url, bot) {
-      const client = await spaceHostClient(spaceId, url);
-      const invite = await spaces.invite(spaceId, bot.role ? { role: bot.role } : {});
-      const { bot: did, status } = await client.startBot(spaceId, bot.name, invite);
-      return { bot: did, status };
-    },
-
-    async stop(url) {
-      const registryRt = await requireAccount('Stopping a host');
-      const known = await requireHosting(url);
-      const { client } = await hostClient(known);
-      await client.detach().catch(() => {});
-      const carrier = (await liveCarriers()).find(({ body }) => body.did === known.host);
-      if (carrier) await carriers.remove(carrier.carry.space.id);
-      await registryRt.removeSystem(await hostingKey(known.url));
-    },
-  });
-
-  // ─── Contacts ──────────────────────────────────────────────────────
-  //
-  // One `std.contact` per person in the contacts space, keyed by their DID, so
-  // there is one per person on every device. Asking someone is a knock left
-  // as a `std.contact-request` in a space you share: the signed invite to a new space for
-  // two, sealed to their contact key, so it opens only for them, and only as
-  // coming from the account that left it.
-
-  // The key `onePer: ['did']` derives, so the record for someone is the same one on every device.
-  const contactRecordKey = async (did: string) =>
-    (await contactsRuntime()).onePerKey(contactSchema.name, { did }, { onePer: contactSchema.rules.onePer });
-
-  async function contactsRuntime(): Promise<SpaceRuntime> {
-    if (!contactsSpaceId)
-      throw new Error(
-        'This app was not given your contacts. Connect to your account home again, and allow contacts.',
-      );
-    return runtime(contactsSpaceId);
-  }
-
-  /** Making and joining spaces for two needs a note good for every space — whole-account access. */
-  function requireEverywhere(what: string): void {
-    // As a knock needs: `/account/write` for the whole account (spec 01 §8, 07).
-    if (narrowNote) {
-      throw new Error(
-        `${what} makes or joins a space, which needs access to your whole account. Connect to your account home again, and ask for it.`,
-      );
-    }
-  }
-
-  /** Defines a collection in a space that has none by that name yet */
-  async function ensureDefined(open: SpaceRuntime, definition: DefineCollection): Promise<void> {
-    if (
-      (await open.collections()).some(
-        (collection) => collection.name === definition.name && collection.version !== null,
-      )
-    )
-      return;
-    try {
-      await open.define(definition);
-    } catch {
-      throw new Error(
-        `This space has no ${definition.title ?? definition.name} collection yet, and you can't add one here. Ask someone who manages it.`,
-      );
-    }
-  }
-
-  async function contactRecords(): Promise<ReadonlyArray<NodeRecord<Contact>>> {
-    if (!contactsSpaceId) return [];
-    const found: NodeRecord<Contact>[] = [];
-    const listed = await ownRecords<Contact>(
-      await contactsRuntime(),
-      { collection: contactSchema.name },
-      (record) => typeof record.body?.did === 'string' && typeof record.body.name === 'string',
-    );
-    // One record per person, under the key their DID gives.
-    for (const record of listed)
-      if (record.key === (await contactRecordKey(record.body!.did))) found.push(record);
-    return found;
-  }
-
-  /** Whoever the account blocked */
-  const blockedDids = async () =>
-    new Set((await contactRecords()).flatMap(({ body }) => (body!.blocked === true ? [body!.did] : [])));
-
-  function requireContactKeys(): void {
-    if (!contactKeys)
-      throw new Error(
-        "This app can't read contact requests. Connect to your account home again, and allow contacts.",
-      );
-  }
-
-  function contactView(record: NodeRecord<Contact>): ContactView {
-    const body = record.body!;
-    return Object.freeze({
-      did: body.did,
-      name: body.name,
-      space: typeof body.space === 'string' ? body.space : null,
-      ...(typeof body.note === 'string' ? { note: body.note } : {}),
-      blocked: body.blocked === true,
-      updatedAt: record.updatedAt,
-    });
-  }
-
-  async function writeContact(body: Contact): Promise<ContactView> {
-    const open = await contactsRuntime();
-    await ensureDefined(open, contactSchema);
-    // One per person: writing again is the next version of their record.
-    return contactView(await open.put<Contact>(contactSchema.name, body));
-  }
-
-  /** Leaves a space for two, unless another contact still names it */
-  async function leavePairSpace(spaceId: string | null, did: string): Promise<void> {
-    if (!spaceId || !(await registry.get(spaceId))) return;
-    if ((await contactRecords()).some((record) => record.body!.did !== did && record.body!.space === spaceId))
-      return;
-    await spaces.leave(spaceId);
-  }
-
-  /**
-   * A knock left in a space as a contact request, opened — or null when it
-   * isn't one sealed to this account's contact key, by the account that wrote it.
-   */
-  async function openMail(record: NodeRecord<unknown> | null): Promise<OpenedKnock | null> {
-    if (
-      !config.contactKey ||
-      !contactKeys ||
-      !record?.verified ||
-      record.collection !== contactRequestSchema.name
-    )
-      return null;
-    const body = record.body;
-    if (!isRecord(body) || body.to !== contactKeys.publicKey || typeof body.sealed !== 'string') return null;
-    const opened = await openKnock([config.contactKey], body.sealed, provider);
-    if (!opened || opened.from !== record.root || opened.from === config.signer.did) return null;
-    return opened;
-  }
-
-  /**
-   * A space for two and a knock that invites someone to it, sealed to `to`:
-   * their inbox key or their contact key. The space waits for a carrier to
-   * hold it before the knock is made, so they can join with every device of
-   * this account away (`spaces.carried`).
-   */
-  async function makePair(
-    to: string,
-    names: { readonly mine: string; readonly theirs: string },
-    note: string | undefined,
-  ): Promise<{
-    readonly space: string;
-    readonly invite: string;
-    readonly sealed: string;
-    readonly carried: boolean;
-  }> {
-    const pair = await spaces.create({
-      name: `${clip(names.mine, 64)} & ${clip(names.theirs, 64)}`,
-      visibility: 'private',
-      ...team,
-    });
-    try {
-      const invite = await spaces.invite(pair.id, { role: 'editor' });
-      const { signed, invite: secret } = parseSpaceInvite(invite);
-      if (!secret) throw new Error('The invite to the space for two opens no role');
-      const carried = await spaces.carried(pair.id);
-      const sealed = await sealKnock(
-        to,
-        { invite: signed, secret: base64UrlDecode(secret), name: names.mine, ...(note ? { note } : {}) },
-        looseSigner(),
-        provider,
-      );
-      return { space: pair.id, invite, sealed, carried };
-    } catch (error) {
-      await spaces.leave(pair.id).catch(() => {});
-      throw error;
-    }
-  }
-
-  const contacts: NodeContacts = Object.freeze<NodeContacts>({
-    async space() {
-      return contactsSpaceId;
-    },
-
-    async list() {
-      return (await contactRecords())
-        .map(contactView)
-        .sort((a, b) => a.name.localeCompare(b.name) || a.did.localeCompare(b.did));
-    },
-
-    async get(did) {
-      const record = (await contactRecords()).find((found) => found.body!.did === did);
-      return record ? contactView(record) : null;
-    },
-
-    async put(contact: {
-      readonly did: string;
-      readonly name: string;
-      readonly space?: string | null;
-      readonly note?: string;
-    }) {
-      if (!contact.did.startsWith('did:')) throw new Error('A contact needs their account DID');
-      const name = contact.name.trim().slice(0, 200);
-      if (!name) throw new Error('A contact needs a name');
-      return writeContact({
-        did: contact.did,
-        name,
-        ...(contact.space ? { space: contact.space } : {}),
-        ...(contact.note ? { note: contact.note.slice(0, 2000) } : {}),
-      });
-    },
-
-    async remove(did) {
-      const found = await contacts.get(did);
-      if (!found) return;
-      await leavePairSpace(found.space, did);
-      const key = await contactRecordKey(did);
-      if (key) await (await contactsRuntime()).remove(key);
-    },
-
-    async block(did) {
-      const found = await contacts.get(did);
-      await leavePairSpace(found?.space ?? null, did);
-      await writeContact({
-        did,
-        name: found?.name ?? did,
-        blocked: true,
-        ...(found?.note ? { note: found.note } : {}),
-      });
-    },
-
-    async ask(spaceId, did, options = {}) {
-      requireEverywhere('Adding a contact');
-      if (did === config.signer.did) throw new Error('That is you');
-      if (!contactsSpaceId) await contactsRuntime();
-      const shared = await runtime(spaceId);
-      const profiles = await shared.profiles();
-      const theirs = profiles.find((profile) => profile.did === did);
-      if (!theirs?.contactKey) {
-        throw new Error(
-          "They can't be asked here yet: their profile in this space has no contact key. It appears once they open the space in an up-to-date app.",
-        );
-      }
-      const mine =
-        (await ownName()) ?? profiles.find((profile) => profile.did === config.signer.did)?.name ?? 'Me';
-      const note = options.note?.trim().slice(0, 2000);
-      const made = await makePair(theirs.contactKey, { mine, theirs: theirs.name }, note);
-      await ensureDefined(shared, contactRequestSchema);
-      await writeContact({ did, name: theirs.name, space: made.space });
-      const request = await shared.put<ContactRequestRecord>(contactRequestSchema.name, {
-        to: theirs.contactKey,
-        sealed: made.sealed,
-      });
-      return { space: made.space, request: request.key, carried: made.carried };
-    },
-
-    async requests(spaceId) {
-      requireContactKeys();
-      const shared = await runtime(spaceId);
-      const blocked = await blockedDids();
-      const names = new Map((await shared.profiles()).map((profile) => [profile.did, profile.name]));
-      const found: ContactRequest[] = [];
-      for (const record of await shared.list<unknown>({ collection: contactRequestSchema.name })) {
-        const opened = await openMail(record);
-        if (!opened || blocked.has(opened.from)) continue;
-        // Already accepted, here or on another device.
-        if (await registry.get(opened.pairSpace)) continue;
-        found.push({
-          space: spaceId,
-          key: record.key,
-          from: opened.from,
-          name: names.get(opened.from) ?? null,
-          ...(opened.note ? { note: opened.note } : {}),
-          pairSpace: opened.pairSpace,
-          createdAt: record.createdAt,
-        });
-      }
-      return found;
-    },
-
-    async accept(spaceId, requestKey) {
-      requireEverywhere('Accepting a contact request');
-      requireContactKeys();
-      const shared = await runtime(spaceId);
-      const opened = await openMail(await shared.get<unknown>(requestKey));
-      if (!opened) throw new Error('That contact request is gone, or is not for you.');
-      await spaces.join(opened.invite);
-      const name =
-        (await shared.profiles()).find((profile) => profile.did === opened.from)?.name ??
-        (await contacts.get(opened.from))?.name ??
-        opened.name;
-      return writeContact({ did: opened.from, name, space: opened.pairSpace });
-    },
-
-    async others(did) {
-      const found = await contacts.get(did);
-      if (!found?.space || !(await registry.get(found.space))) return [];
-      const open = await runtime(found.space);
-      const [{ members }, profiles, status] = await Promise.all([
-        open.access(),
-        open.profiles(),
-        open.status(),
-      ]);
-      const seen = new Set([
-        ...members.map((member) => member.did),
-        ...profiles.map((profile) => profile.did),
-        ...Object.values(status.accounts),
-      ]);
-      return [...seen].filter((account) => account !== config.signer.did && account !== did).sort();
-    },
-  });
-
-  // ─── The inbox ─────────────────────────────────────────────────────
-  //
-  // The inbox's settings are a `std.inbox` in the contacts space; its keys
-  // are derived from the contact key and its `gen`, so every device with the
-  // contact key opens the same inbox. Knocks wait in the mailboxes it names.
-  //
-  // A knock you left is a `std.knock` until someone other than you joins
-  // the space for two: only the holder of the inbox key could open the
-  // invite, so whoever joins is them. Then it becomes a contact, and the
-  // invite is closed. See `packages/core/src/inbox/inbox.ts`.
-
-  /** Knocks seen in this node's inbox, by id: opened (null when they didn't check out), and until when to keep them */
-  const knockCache = new Map<string, { readonly opened: OpenedKnock | null; readonly until: number }>();
-  /** Knocks that didn't check out, by id, and until when they are not opened again: one dated a little ahead may pass later */
-  const failed = new Map<string, number>();
-  const DAY_MS = 24 * 3600 * 1000;
-
-  /** The inbox is the account's own, in its contacts space: only a key acting as the account opens one, as every peer checks */
-  const inboxAllowed = () => contactsSpaceId !== null && !narrowNote;
-
-  function requireContactKey(what: string): Uint8Array {
-    // The inbox is the account's: a key whose note doesn't grant `/account/write` never opens one or knocks.
-    if (!inboxAllowed())
-      throw new Error(`This key's note doesn't let it use your inbox. ${what} is the person's to do.`);
-    if (!config.contactKey)
-      throw new Error(
-        `${what} needs your contact key. Connect to your account home again, and allow contacts.`,
-      );
-    return config.contactKey;
-  }
-
-  /** An inbox's keys, from the contact key and its gen */
-  async function inboxKeys(gen: number) {
-    const contactKey = requireContactKey('Your inbox');
-    const key = await deriveInboxKeyBytes(contactKey, gen);
-    const sign = await deriveInboxSignKeyBytes(contactKey, gen);
-    const signPublic = contactPublicKey(sign);
-    return { key, sign, publicKey: contactPublicKey(key), signPublic, topic: await inboxTopic(signPublic) };
-  }
-
-  /** The account's inbox: the newest `std.inbox` of the highest gen */
-  async function inboxRecord(): Promise<NodeRecord<Inbox> | null> {
-    if (!contactsSpaceId) return null;
-    const records = await ownRecords<Inbox>(
-      await contactsRuntime(),
-      { collection: inboxSchema.name },
-      (record) =>
-        Number.isSafeInteger(record.body?.gen) && record.body!.gen >= 0 && Array.isArray(record.body!.places),
-    );
-    return (
-      records.sort((a, b) => b.body!.gen - a.body!.gen || b.updatedAt.localeCompare(a.updatedAt))[0] ?? null
-    );
-  }
-
-  async function inboxView(record: NodeRecord<Inbox>): Promise<InboxView> {
-    const body = record.body!;
-    const keys = await inboxKeys(body.gen);
-    return Object.freeze({
-      gen: body.gen,
-      ...(body.name ? { name: body.name } : {}),
-      key: keys.publicKey,
-      sign: keys.signPublic,
-      places: Object.freeze([...body.places]),
-      code: await encodeInbox(
-        keys.sign,
-        {
-          key: keys.publicKey,
-          sign: keys.signPublic,
-          gen: body.gen,
-          places: body.places,
-          ...(body.name ? { name: body.name } : {}),
-        },
-        provider,
-      ),
-      updatedAt: record.updatedAt,
-    });
-  }
-
-  /** Writes the inbox's settings, checked the way a knocker will read its code */
-  async function writeInbox(body: Inbox, current: NodeRecord<Inbox> | null): Promise<InboxView> {
-    const keys = await inboxKeys(body.gen);
-    await encodeInbox(keys.sign, { ...body, key: keys.publicKey, sign: keys.signPublic }, provider);
-    const open = await contactsRuntime();
-    await ensureDefined(open, inboxSchema);
-    return inboxView(
-      current ? await open.update<Inbox>(current.key, body) : await open.put<Inbox>(inboxSchema.name, body),
-    );
-  }
-
-  /** Clears knocks from every mailbox an inbox names that can purge, as its owner; how many did */
-  async function purgeInbox(body: Inbox, ids: ReadonlyArray<string> | null): Promise<number> {
-    const keys = await inboxKeys(body.gen);
-    const done = await Promise.allSettled(
-      body.places
-        .filter((place) => relayKind(place)?.can.purge)
-        .map((place) =>
-          mailbox.purge(place, keys.topic, keys.signPublic, ids, (nonce) =>
-            signPurge(keys.sign, keys.topic, nonce, ids),
-          ),
-        ),
-    );
-    return done.filter((result) => result.status === 'fulfilled').length;
-  }
-
-  async function sentRecords(): Promise<ReadonlyArray<NodeRecord<Knock>>> {
-    if (!contactsSpaceId) return [];
-    return ownRecords<Knock>(
-      await contactsRuntime(),
-      { collection: knockSchema.name },
-      (record) => typeof record.body?.space === 'string' && typeof record.body.invite === 'string',
-    );
-  }
-
-  /**
-   * Knocks of yours: one someone joined becomes a contact, and its invite is
-   * closed; one nobody joined within the knock's life is let go, space and all.
-   */
-  async function settleSent(): Promise<void> {
-    for (const record of await sentRecords()) {
-      const { space, name, invite } = record.body!;
-      if (!(await registry.get(space))) {
-        await (await contactsRuntime()).remove(record.key);
-        continue;
-      }
-      const open = await runtime(space);
-      // Only the holder of the inbox key could open the invite: whoever joined first is them.
-      const joiner = (await open.access()).members.find((member) => member.did !== config.signer.did)?.did;
-      if (joiner) {
-        // Whoever else the invite reached, nobody more joins with it.
-        await spaces.closeInvite(space, invite).catch(() => {});
-        const given = (await open.profiles()).find((profile) => profile.did === joiner)?.name;
-        await writeContact({ did: joiner, name: given ?? name, space });
-        await (await contactsRuntime()).remove(record.key);
-      } else if (Date.now() - Date.parse(record.createdAt) > KNOCK_TTL_SECONDS * 1000 + DAY_MS) {
-        await spaces.leave(space).catch(() => {});
-        await (await contactsRuntime()).remove(record.key);
-      }
-    }
-  }
-
-  /** What the mailboxes of this node's inbox hold now, opened and cached */
-  async function readKnocks(): Promise<ReadonlyArray<{ readonly id: string; readonly opened: OpenedKnock }>> {
-    const now = Date.now();
-    for (const [id, cached] of knockCache) if (cached.until <= now) knockCache.delete(id);
-    const record = await inboxRecord();
-    if (!record) return [];
-    const { gen, places } = record.body!;
-    const keys = await inboxKeys(gen);
-    // Every mailbox in full: an inbox holds 64 knocks at most, and one cleared on another device goes here too.
-    const held = await knocksAt(places, keys.topic);
-    const found: { id: string; opened: OpenedKnock }[] = [];
-    for (const [id, blob] of held) {
-      const opened = knockCache.get(id)?.opened ?? (await openOnce(id, blob, keys.key, now));
-      if (opened) found.push({ id, opened });
-    }
-    return found;
-  }
-
-  /** What the mailboxes hold under a topic, by knock id */
-  async function knocksAt(places: ReadonlyArray<string>, topic: string): Promise<Map<string, string>> {
-    const held = new Map<string, string>();
-    const fetched = await Promise.allSettled(places.map((place) => mailbox.fetch(place, topic)));
-    for (const result of fetched) {
-      if (result.status !== 'fulfilled') continue;
-      // A relay's id is only its word: a knock is filed under the hash of what it is.
-      for (const item of result.value) held.set(await knockId(item.blob), item.blob);
-    }
-    return held;
-  }
-
-  /** Opens a knock; one that failed waits a while before it is tried again */
-  async function openOnce(
-    id: string,
-    blob: string,
-    key: Uint8Array,
-    now: number,
-  ): Promise<OpenedKnock | null> {
-    if ((failed.get(id) ?? 0) > now) return null;
-    const opened = await openKnock([key], blob, provider);
-    if (opened) knockCache.set(id, { opened, until: opened.at + KNOCK_TTL_SECONDS * 1000 });
-    else failed.set(id, now + 15 * 60_000);
-    return opened;
-  }
-
-  /** A direct message as this account reads it — null when it is neither by nor for this account */
-  async function directView(
-    spaceId: string,
-    open: SpaceRuntime,
-    record: NodeRecord<DirectBody>,
-  ): Promise<DirectMessage | null> {
-    // Who wrote it is whoever created it: the context binds that account, so a copy posted by anyone else opens nothing.
-    const from = record.createdBy;
-    if (!record.verified || record.collection !== directSchema.name || !from || record.root !== from)
-      return null;
-    const to = Array.isArray(record.body?.to) ? record.body.to.filter((did) => typeof did === 'string') : [];
-    const me = config.signer.did;
-    if (from !== me && !to.includes(me)) return null;
-    const pair = open.ownMemberKey();
-    const opened = pair ? await openDirect(spaceId, from, record.body, me, pair) : null;
-    return Object.freeze({
-      key: record.key,
-      from,
-      to: [...to].sort(),
-      text: opened?.text ?? null,
-      createdAt: record.createdAt,
-      ...(record.recordsOnly ? { recordsOnly: true as const } : {}),
-    });
-  }
-
-  const direct = Object.freeze<NodeDirect>({
-    async reachable(spaceId) {
-      const open = await runtime(spaceId);
-      const { members } = await open.access();
-      const keys = await open.memberKeys();
-      return members
-        .map((member) => member.did)
-        .filter((did) => did !== config.signer.did && keys.has(did))
-        .sort();
-    },
-
-    async send(spaceId, to, text) {
-      const open = await runtime(spaceId);
-      const pair = open.ownMemberKey();
-      if (!pair)
-        throw new Error(
-          "This node can't seal direct messages here: it wasn't given your member key for this space.",
-        );
-      const trimmed = text.trim();
-      if (!trimmed) throw new Error('A direct message needs some text');
-      // Your own key as this node holds it, so your other devices read what you sent even before it is published.
-      const keys = new Map(await open.memberKeys());
-      keys.set(config.signer.did, pair.publicKey);
-      const body = await sealDirect(spaceId, config.signer.did, to, { text: trimmed }, keys);
-      await ensureDefined(open, directSchema);
-      const record = await open.put<DirectBody>(directSchema.name, body);
-      const view = await directView(spaceId, open, record);
-      if (!view) throw new Error('The direct message was written, but could not be read back');
-      return view;
-    },
-
-    async list(spaceId) {
-      const open = await runtime(spaceId);
-      const found: DirectMessage[] = [];
-      for (const record of await open.list<DirectBody>({ collection: directSchema.name })) {
-        const view = await directView(spaceId, open, record);
-        if (view) found.push(view);
-      }
-      return found.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.key.localeCompare(b.key));
-    },
-  });
-
-  const inbox: NodeInbox = Object.freeze<NodeInbox>({
-    async get() {
-      if (!config.contactKey || !inboxAllowed()) return null;
-      const record = await inboxRecord();
-      return record ? inboxView(record) : null;
-    },
-
-    async open(options = {}) {
-      requireContactKey('Opening your inbox');
-      if (!contactsSpaceId) await contactsRuntime();
-      const current = await inboxRecord();
-      const places = [...(options.places ?? current?.body?.places ?? usableRelays(config.network))].slice(
-        0,
-        MAX_INBOX_PLACES,
-      );
-      if (places.length === 0)
-        throw new Error('An inbox needs a mailbox to hold its knocks, and this node has none.');
-      const name = clip((options.name ?? current?.body?.name ?? (await ownName()) ?? '').trim(), 64);
-      return writeInbox({ gen: current?.body?.gen ?? 0, places, ...(name ? { name } : {}) }, current);
-    },
-
-    async rotate() {
-      requireContactKey('Replacing your inbox');
-      const current = await inboxRecord();
-      if (!current) return inbox.open();
-      // What waits in the old one goes with it.
-      await purgeInbox(current.body!, null).catch(() => 0);
-      knockCache.clear();
-      failed.clear();
-      return writeInbox({ ...current.body!, gen: current.body!.gen + 1 }, current);
-    },
-
-    async clear() {
-      requireContactKey('Clearing your inbox');
-      const current = await inboxRecord();
-      if (!current) throw new Error('Your inbox is not open');
-      if ((await purgeInbox(current.body!, null)) === 0)
-        throw new Error("None of your inbox's mailboxes could be reached and cleared.");
-      knockCache.clear();
-      failed.clear();
-    },
-
-    async knock(code, options = {}) {
-      requireContactKey('Knocking');
-      requireEverywhere('Knocking');
-      const theirs = await readInboxCode(code, provider);
-      if ((await inbox.get())?.key === theirs.key) throw new Error('That is your own inbox');
-      if (!contactsSpaceId) await contactsRuntime();
-      const mine = (await ownName()) ?? 'Someone';
-      const name = theirs.name ?? 'Contact';
-      const made = await makePair(theirs.key, { mine, theirs: name }, options.note);
-      const topic = await inboxTopic(theirs.sign);
-      const left = await Promise.allSettled(
-        theirs.places.map((place) => mailbox.drop(place, topic, made.sealed, KNOCK_TTL_SECONDS)),
-      );
-      if (!left.some((result) => result.status === 'fulfilled')) {
-        await spaces.leave(made.space).catch(() => {});
-        const reasons = left
-          .map((result) => (result.status === 'rejected' ? errorText(result.reason) : ''))
-          .filter(Boolean);
-        throw new Error(`None of their inbox's mailboxes took the knock. ${reasons.join('; ')}`);
-      }
-      const open = await contactsRuntime();
-      await ensureDefined(open, knockSchema);
-      await open.put<Knock>(knockSchema.name, { space: made.space, name, invite: made.invite });
-      return { space: made.space, carried: made.carried };
-    },
-
-    async knocks() {
-      requireContactKey('Reading knocks');
-      await settleSent().catch(() => {});
-      const blocked = await blockedDids();
-      const found: KnockView[] = [];
-      for (const { id, opened } of await readKnocks()) {
-        if (opened.from === config.signer.did || blocked.has(opened.from)) continue;
-        // Already accepted, here or on another device.
-        if (await registry.get(opened.pairSpace)) continue;
-        found.push(
-          Object.freeze({
-            id,
-            from: opened.from,
-            name: opened.name,
-            ...(opened.note ? { note: opened.note } : {}),
-            pairSpace: opened.pairSpace,
-            at: new Date(opened.at).toISOString(),
-          }),
-        );
-      }
-      return found.sort((a, b) => b.at.localeCompare(a.at));
-    },
-
-    async sent() {
-      await settleSent().catch(() => {});
-      return (await sentRecords()).map((record) =>
-        Object.freeze({ space: record.body!.space, name: record.body!.name, at: record.createdAt }),
-      );
-    },
-
-    async accept(id) {
-      requireContactKey('Accepting a knock');
-      requireEverywhere('Accepting a knock');
-      if (!knockCache.get(id)?.opened) await readKnocks();
-      const knocked = knockCache.get(id)?.opened;
-      if (!knocked) throw new Error('That knock is gone: it expired, or your inbox was cleared or replaced.');
-      await spaces.join(knocked.invite);
-      const known = await contacts.get(knocked.from);
-      const contact = await writeContact({
-        did: knocked.from,
-        name: known?.name ?? knocked.name,
-        space: knocked.pairSpace,
-      });
-      // Done with: nobody needs it in the mailboxes any more.
-      const current = await inboxRecord();
-      if (current) await purgeInbox(current.body!, [id]).catch(() => 0);
-      knockCache.delete(id);
-      return contact;
-    },
-
-    async dismiss(id) {
-      requireContactKey('Dismissing a knock');
-      const current = await inboxRecord();
-      if (current) await purgeInbox(current.body!, [id]);
-      knockCache.delete(id);
-    },
-  });
+  const contacts = createNodeContacts(ctx, { spaces, ownName: profile.ownName });
+  const inbox = createNodeInbox(ctx, { spaces, contacts, ownName: profile.ownName });
+  const direct = createNodeDirect(ctx);
+  const recordsNeeds = { runtime, subscribe: events.subscribe };
+  const records = createNodeRecords(recordsNeeds);
 
   const collections = Object.freeze<NodeCollections>({
     list: perSpace((rt) => rt.collections()),
@@ -2550,227 +762,11 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     ),
   });
 
-  const accountApi = Object.freeze<NodeAccount>({
-    profile: ownProfile,
-    async setName(name) {
-      const registryRt = await requireAccount('Renaming across devices');
-      const trimmed = name.trim();
-      if (!trimmed) throw new Error('A name cannot be empty');
-      const avatar = (await ownProfile())?.avatar;
-      const written = await registryRt.upsertSystem<AccountProfile>(PROFILE_COLLECTION, PROFILE_KEY, {
-        name: trimmed,
-        ...(avatar ? { avatar } : {}),
-      });
-      emit({ type: 'account' });
-      await publishProfileToOpenSpaces();
-      return { name: trimmed, updatedAt: written.updatedAt, ...(avatar ? { avatar } : {}) };
-    },
-    async setAvatar(image, options = {}) {
-      const registryRt = await requireAccount('Changing the picture across devices');
-      const name = (await ownName()) ?? options.name?.trim();
-      if (!name) throw new Error('Give the account a name first');
-      if (image && !image.mime.startsWith('image/')) throw new Error('A picture is an image');
-      const avatar = image ? { ...(await registryRt.addFile(image.bytes)), mime: image.mime } : null;
-      const written = await registryRt.upsertSystem<AccountProfile>(PROFILE_COLLECTION, PROFILE_KEY, {
-        name,
-        ...(avatar ? { avatar } : {}),
-      });
-      emit({ type: 'account' });
-      await publishProfileToOpenSpaces();
-      return { name, updatedAt: written.updatedAt, ...(avatar ? { avatar } : {}) };
-    },
-    async picture() {
-      const avatar = (await ownProfile())?.avatar;
-      if (!avatar || !accountSpaceId) return null;
-      return { bytes: await (await runtime(accountSpaceId)).readFile(avatar), mime: avatar.mime };
-    },
-    revoke: async (key, options) =>
-      (await requireAccount('Revoking in the account registry')).revoke(key, options),
-  });
-
-  /** The records namespace, writing as `as` when given: an agent's key and note */
-  function makeRecords(as?: ActiveSession): NodeRecords {
-    const self: NodeRecords = Object.freeze({
-      list: async <T>(spaceId: string, options?: ListOptions) => (await runtime(spaceId)).list<T>(options),
-      get: async <T>(spaceId: string, key: string) => (await runtime(spaceId)).get<T>(key),
-      contracts: async (spaceId: string, key: string, version?: string) =>
-        (await runtime(spaceId)).contracts(key, version),
-      keyFor: async (spaceId: string, name: string, account?: string) =>
-        (await runtime(spaceId)).keyFor(name, account),
-      onePerKey: async (
-        spaceId: string,
-        collection: string,
-        body: unknown,
-        options?: { links?: ReadonlyArray<Link>; account?: string },
-      ) => (await runtime(spaceId)).onePerKey(collection, body, options),
-      put: async <T>(
-        spaceId: string,
-        collection: CollectionRef,
-        body: T,
-        options?: { key?: string; links?: ReadonlyArray<Link> },
-      ) => (await runtime(spaceId)).put<T>(nameOf(collection), body, as ? { ...options, as } : options),
-      update: async <T>(spaceId: string, key: string, body: T, options?: { links?: ReadonlyArray<Link> }) =>
-        (await runtime(spaceId)).update<T>(key, body, as ? { ...options, as } : options),
-      linked: async <T>(spaceId: string, key: string, options?: { rel?: string; collection?: string }) =>
-        (await runtime(spaceId)).linked<T>(key, options),
-      delete: async (spaceId: string, key: string) =>
-        (await runtime(spaceId)).remove(key, as ? { as } : undefined),
-      history: async <T>(spaceId: string, key: string) => (await runtime(spaceId)).history<T>(key),
-      addFile: async (spaceId: string, bytes: Uint8Array, about: { mime: string; name?: string }) => ({
-        ...(await (await runtime(spaceId)).addFile(bytes)),
-        mime: about.mime,
-        ...(about.name !== undefined ? { name: about.name } : {}),
-      }),
-      readFile: async (spaceId: string, ref: FileRef) => (await runtime(spaceId)).readFile(ref),
-      can: perSpace((rt, action: 'create' | 'edit' | 'delete', target: string) => rt.can(action, target)),
-      async query<const C extends CollectionRef, const I extends IncludeMap | undefined = undefined>(
-        spaceId: string,
-        query: Query<C, I>,
-      ): Promise<ResultFor<C, I>> {
-        const space = await runtime(spaceId);
-        // Asked before running, so a node holding part of the space starts fetching what it lacks.
-        const complete = space.use(collectionsOf(plainQuery(query)));
-        const result = await runQuery(
-          {
-            list: (collection) => space.list({ collection }),
-            get: (key) => space.get(key),
-            linked: (key, options) => space.linked(key, options),
-            computed: (collection) => space.computed(collection),
-          },
-          query,
-        );
-        // The query's type says what it finds; running it can't prove that.
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- typed from the query
-        return { ...result, complete } as ResultFor<C, I>;
-      },
-      watch<const C extends CollectionRef, const I extends IncludeMap | undefined = undefined>(
-        spaceId: string,
-        query: Query<C, I>,
-        onResult: (result: ResultFor<C, I>) => void,
-        onError?: (error: Error) => void,
-      ) {
-        let stopped = false;
-        // Changes arrive in bursts during sync: one run at a time, never a queue of stale runs.
-        const run = serial(async () => {
-          if (stopped) return;
-          try {
-            const result = await self.query(spaceId, query);
-            if (!stopped) onResult(result);
-          } catch (error) {
-            if (!stopped) onError?.(error instanceof Error ? error : new Error(String(error)));
-          }
-        });
-        const unsubscribe = events.subscribe((event) => {
-          if (event.type === 'records' && event.space === spaceId) void run();
-        });
-        void run();
-        return () => {
-          stopped = true;
-          unsubscribe();
-        };
-      },
-    });
-    return self;
-  }
-  const records = makeRecords();
-
-  // ─── Agents ────────────────────────────────────────────────────────
-
-  async function asAgent(agent: {
-    readonly keys: CryptoKeyPair;
-    readonly note: Delegation;
-  }): Promise<P2PNode> {
-    const agentDid = await didOf(agent.keys.publicKey, provider);
-    const checked = await verifyNote(agent.note, provider);
-    if (!checked.valid) throw new Error(`The agent's note does not check out: ${checked.reason}`);
-    const { note } = checked;
-    if (!grantsRecordsOnly(note))
-      throw new Error(
-        'That note grants more than records — ask the account home for one with `recordsOnly: true`.',
-      );
-    if (note.payload.aud !== agentDid) throw new Error('That note was made out to a different key.');
-    if (note.payload.iss !== config.signer.did) throw new Error('That note is from a different account.');
-
-    // The spaces its note names; all of them for an agent granted the whole account.
-    // What it may do there is its note's to say; this node also refuses, by the label, what needs a person.
-    const reach = noteSpaces(note);
-    const named = new Set(reach === 'all' ? [] : reach);
-    const allowed = (spaceId: unknown) =>
-      reach === 'all' || (typeof spaceId === 'string' && named.has(spaceId));
-    const contactsGiven = () => contactsSpaceId !== null && allowed(contactsSpaceId);
-    // Written with the agent's key, under its note.
-    const writes = makeRecords({ did: agentDid, key: agent.keys.privateKey, proof: () => note });
-
-    // What the table in `node/api.ts` marks `own`; the rest it decides there.
-    const own: { readonly [N in Namespace as keyof OwnMethods<N> extends never ? never : N]: OwnMethods<N> } =
-      {
-        spaces: {
-          list: async () => (await spaces.list()).filter((space) => allowed(space.id)),
-          get: async (spaceId) => (allowed(spaceId) ? spaces.get(spaceId) : null),
-          authenticator: async () => null,
-        },
-        records: {
-          can: async (spaceId, action, target) => allowed(spaceId) && records.can(spaceId, action, target),
-          watch: (spaceId, query, onResult, onError) => {
-            if (allowed(spaceId)) return records.watch(spaceId, query, onResult, onError);
-            onError?.(new Error('The agent was not given this space.'));
-            return () => {};
-          },
-        },
-        // The runtime refuses this too, and every peer ignores it — said early, with what to do instead.
-        collections: {
-          define: async () => {
-            throw new Error(CANNOT_DEFINE);
-          },
-        },
-        hosting: {
-          space: async (spaceId) => {
-            if (!allowed(spaceId)) throw new Error('That space was not given to this agent');
-            return hosting.space(spaceId);
-          },
-          over: async (spaceId) => (allowed(spaceId) ? hosting.over(spaceId) : []),
-        },
-        contacts: {
-          space: async () => (contactsGiven() ? contactsSpaceId : null),
-          list: async () => (contactsGiven() ? contacts.list() : []),
-          get: async (did) => (contactsGiven() ? contacts.get(did) : null),
-        },
-        direct: { reachable: async (spaceId) => (allowed(spaceId) ? direct.reachable(spaceId) : []) },
-        inbox: { get: async () => null },
-      };
-    const person = (what: string) => async (): Promise<never> => {
-      throw new Error(`An agent can't ${what}. Ask the person to do it.`);
-    };
-
-    return Object.freeze({
-      did: config.signer.did,
-      sessionDid: agentDid,
-      ...buildNamespaces((namespace, name, policy) => {
-        if (policy === 'own') return givenFor(own, namespace, name);
-        const source: unknown = namespace === 'records' ? writes : Reflect.get(node, namespace);
-        if (!isRecord(source)) throw new Error(`A node has no ${namespace}`);
-        if (policy === 'pass') return (...args: unknown[]) => callMethod(source, name, args);
-        if (policy !== 'scoped') return person(policy);
-        return async (...args: unknown[]) => {
-          if (!allowed(args[0]))
-            throw new Error(
-              'The agent was not given this space. The person can give it more in their account home.',
-            );
-          return callMethod(source, name, args);
-        };
-      }),
-      delegation: () => note,
-      iceServers: () => node.iceServers(),
-      asAgent: person('start another agent'),
-      revokeKey: person('revoke a key'),
-      revokeSelf: person('sign the account out'),
-      subscribe: (listener: (event: NodeEvent) => void) =>
-        node.subscribe((event) => {
-          if (!('space' in event) || allowed(event.space)) listener(event);
-        }),
-      // The agent stops; the node it acts through keeps running.
-      close: async () => {},
-    }) satisfies P2PNode;
+  // With an account key, start following the registry at once: it is how this
+  // node learns which spaces it belongs to.
+  if (accountSpaceId) {
+    await runtime(accountSpaceId);
+    await reconcile();
   }
 
   async function anyoneOnline(): Promise<boolean> {
@@ -2787,14 +783,19 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     spaces,
     records,
     collections,
-    account: accountApi,
-    carriers,
-    hosting,
-    automations,
-    contacts,
+    account: profile.account,
+    carriers: carrying.carriers,
+    hosting: hosts.hosting,
+    automations: carrying.automations,
+    contacts: contacts.contacts,
     direct,
     inbox,
-    asAgent,
+    asAgent: (agent: { readonly keys: CryptoKeyPair; readonly note: Delegation }) =>
+      startAgent(node, agent, {
+        provider,
+        contactsSpaceId,
+        recordsAs: (as) => createNodeRecords(recordsNeeds, as),
+      }),
 
     delegation: () => current,
 
@@ -2812,7 +813,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       const ids = options.spaces ?? [
         ...new Set([
           ...(await spaces.list()).filter((space) => space.writable).map((space) => space.id),
-          ...(await carrierRecords()).map(({ carry }) => carry.space.id),
+          ...(await carrying.carrierRecords()).map(({ carry }) => carry.space.id),
           ...(contactsSpaceId ? [contactsSpaceId] : []),
         ]),
       ];
@@ -2838,7 +839,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       closed = true;
       stopWatchingNetwork?.();
       if (renewTimer) clearTimeout(renewTimer);
-      clearInterval(linkTimer);
+      invites.stop();
       const open = [...runtimes.keys()];
       await Promise.all(open.map((spaceId) => closeRuntime(spaceId)));
       // Let go of the registry too: an open database connection blocks the
@@ -2861,150 +862,3 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   }
   return node;
 }
-
-/** What an error says: its message when it has one */
-function errorText(error: unknown): string {
-  return String((isRecord(error) ? error.message : undefined) ?? error);
-}
-
-/** Lets work run on its own: a failure is dropped, and the next change tries again */
-function inBackground(work: Promise<unknown>): void {
-  void work.catch(() => {});
-}
-
-/** Resolves after `ms`, without keeping the process alive */
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => unref(setTimeout(resolve, ms)));
-}
-
-/** Whether `work` settled within `waitMs` */
-function within(work: Promise<unknown>, waitMs: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(false), waitMs);
-    const settle = (done: boolean) => () => {
-      clearTimeout(timer);
-      resolve(done);
-    };
-    void work.then(settle(true), settle(false));
-  });
-}
-
-/** The promise kept under `key`, made once; forgotten if it fails, so the next ask tries again */
-function cached<T>(cache: Map<string, Promise<T>>, key: string, make: () => Promise<T>): Promise<T> {
-  const known = cache.get(key);
-  if (known) return known;
-  const made = make();
-  cache.set(key, made);
-  made.catch(() => cache.delete(key));
-  return made;
-}
-
-/** The value `make` gives, or null if it throws */
-function attempt<T>(make: () => T): T | null {
-  try {
-    return make();
-  } catch {
-    return null;
-  }
-}
-
-/** Whether a sealed invite hashes to a link's pin */
-async function hasPin(blob: string, pin: Uint8Array): Promise<boolean> {
-  return (await pinOf(blob)).every((byte, i) => byte === pin[i]);
-}
-
-const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-
-/** An address a device may reach: https://, or http:// on this machine */
-function checkAddress(address: string, what: string): URL {
-  const url = new URL(address);
-  const local = ['localhost', '127.0.0.1'].includes(url.hostname);
-  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && local))
-    throw new Error(`${what} is reached over https://`);
-  return url;
-}
-
-/** A node address pinned to a key (spec 04 §5.2); one without a key to pin stays as it is */
-function pinnedTo(address: string | null, did: string | undefined): string | null {
-  return address && did?.startsWith('did:key:') ? `${address.split('#')[0]}#${did}` : address;
-}
-
-/** The DID a node address is pinned to, or '' */
-const nodeDid = (node: string) => decodeURIComponent(node.split('#')[1] ?? '');
-
-interface NamedHost {
-  readonly url: string;
-  readonly did?: string;
-  readonly name?: string;
-}
-
-/** A `std.host` record's host, when its address is one a device may reach */
-function namedHostOf(record: NodeRecord<unknown>): NamedHost | null {
-  const body = record.body;
-  if (!record.verified || record.deleted || !isRecord(body) || typeof body.url !== 'string') return null;
-  const address = body.url;
-  const url = attempt(() => checkAddress(address, 'A host').origin);
-  if (!url) return null;
-  return {
-    url,
-    ...(typeof body.did === 'string' ? { did: body.did } : {}),
-    ...(typeof body.name === 'string' ? { name: body.name } : {}),
-  };
-}
-
-/** A carrier record whose generation is a count: anything else names no carry space */
-function hasCarrierBody(record: NodeRecord<Carrier>): boolean {
-  const gen = record.body?.gen;
-  return (
-    typeof record.body?.did === 'string' && (gen === undefined || (Number.isSafeInteger(gen) && gen >= 0))
-  );
-}
-
-/** A kept link has ended once its time is up, or the space's key has moved on from the one it carries */
-function linkEnded(link: KeptLink, record: SpaceRecord): boolean {
-  if (link.until !== undefined && link.until <= Date.now()) return true;
-  const { keyId } = link;
-  if (keyId === undefined || record.key === null || record.key.id === keyId) return false;
-  return (record.keys ?? []).some((held) => held.id === keyId);
-}
-
-interface PaidState {
-  readonly state: string;
-}
-
-/** Paid, or on the host's free plan: a host with limits keeps an account's spaces with nothing paid */
-function accountPaid(status: PaidState, description: HostDescription): boolean {
-  const free = description.free || description.limits !== undefined;
-  return status.state === 'active' || status.state === 'grace' || (free && status.state !== 'lapsed');
-}
-
-/** Paid, or at a free host that hasn't let it lapse */
-function spacePaid(status: PaidState, description: HostDescription): boolean {
-  return (
-    status.state === 'active' || status.state === 'grace' || (description.free && status.state !== 'lapsed')
-  );
-}
-
-const fundOf = (description: HostDescription) => (description.free ? null : (description.fund ?? null));
-
-function sameStatus(a: HostStatus, b: HostStatus): boolean {
-  return (
-    a.state === b.state &&
-    a.paidUntil === b.paidUntil &&
-    a.renews === b.renews &&
-    a.plan === b.plan &&
-    sameJson(a.over ?? [], b.over ?? [])
-  );
-}
-
-/** What a space host's view says when the host can't be reached */
-const UNREACHED_HOST = {
-  host: null,
-  status: null,
-  free: false,
-  fund: null,
-  reminds: false,
-  runsBots: false,
-  bots: [],
-  connectors: [],
-} as const;

@@ -1,6 +1,6 @@
 /** Notifications: each app's `notify` offered through the account home, then matched and shown by this app while it is open. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useAccount, useConnection, useNode } from '@minca/react';
+import { useAccount, useConnection, useNode, useWatched } from '@minca/react';
 import {
   MAX_PROPOSALS,
   ownQuery,
@@ -16,7 +16,6 @@ import { isForMe, madeNotify } from './components/apps/entries';
 import { launcherApp, sortLauncher, type LauncherApp } from './components/apps/launcher';
 import { message } from '@minca/app-shared/action';
 import { addAlert } from './alerts';
-import { useWatched } from './use-watched';
 
 /** Offered whatever apps a space has */
 const CONTACTS: AutomationProposal = notifyOn('Someone asks to be your contact', 'std.contact-request');

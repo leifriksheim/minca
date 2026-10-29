@@ -12,7 +12,7 @@ import {
 import { ideas, ruleWords, type PickedRule } from '../../automations';
 import { Person, usePeopleHere } from '../Person';
 import { Icon } from '../Icon';
-import { styles, palette } from '../../styles';
+import { styles, palette, hstack, stack } from '../../styles';
 import { AutomationBuilder } from './AutomationBuilder';
 import { Empty, SectionHead, iconDot, list, section } from './parts';
 import { SpaceBots } from '@minca/app-shared/CommunitySetup';
@@ -79,8 +79,8 @@ export function AutomationsView({
   const act = (work: () => Promise<unknown>) => void run(work);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 36, maxWidth: 760 }}>
-      <header style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div style={{ ...stack(36), maxWidth: 760 }}>
+      <header style={stack(6)}>
         <h2 style={{ ...styles.appTitle, fontSize: 22 }}>Automations</h2>
         <p style={{ fontSize: 14, color: palette.ink.muted, lineHeight: 1.55 }}>
           Let {space.name} look after itself: close a poll once enough people voted, tell the chat when a task
@@ -153,7 +153,7 @@ export function AutomationsView({
                     >
                       <Icon name="bolt" size={14} />
                     </span>
-                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    <div style={{ flex: 1, minWidth: 0, ...stack(3) }}>
                       <strong style={{ color: palette.ink.strong, fontSize: 14.5 }}>{automation.name}</strong>
                       <span style={{ fontSize: 14, color: palette.ink.body, lineHeight: 1.5 }}>
                         {ruleWords(automation, collections, who)}
@@ -174,7 +174,7 @@ export function AutomationsView({
                         )}
                       </span>
                     </div>
-                    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    <div style={{ ...hstack(6), flexShrink: 0 }}>
                       {mine && (
                         <button
                           onClick={() =>
@@ -243,10 +243,7 @@ export function AutomationsView({
                       }}
                     >
                       {runs.slice(0, 3).map((run) => (
-                        <li
-                          key={run.key}
-                          style={{ fontSize: 12.5, display: 'flex', gap: 6, color: palette.ink.muted }}
-                        >
+                        <li key={run.key} style={{ fontSize: 12.5, ...hstack(6), color: palette.ink.muted }}>
                           <span style={{ color: run.body?.ok ? palette.accent.good : palette.accent.danger }}>
                             {run.body?.ok ? '✓' : '!'}
                           </span>
@@ -254,11 +251,7 @@ export function AutomationsView({
                           <span style={{ color: palette.ink.faint }}>{ago(run.updatedAt)}</span>
                         </li>
                       ))}
-                      {runs.length > 3 && (
-                        <li style={{ fontSize: 12, color: palette.ink.faint }}>
-                          and {runs.length - 3} earlier
-                        </li>
-                      )}
+                      {runs.length > 3 && <li style={styles.faint}>and {runs.length - 3} earlier</li>}
                     </ul>
                   )}
                 </li>
@@ -269,7 +262,7 @@ export function AutomationsView({
         {error && <p style={{ ...styles.error, fontSize: 13 }}>{error}</p>}
 
         {space.writable && starters.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+          <div style={{ ...stack(8), marginTop: 8 }}>
             <p style={styles.fieldLabel}>Ideas for {space.name}</p>
             <div
               style={{

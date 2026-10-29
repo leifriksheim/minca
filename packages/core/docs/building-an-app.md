@@ -148,6 +148,9 @@ All from `@minca/react`, below a `MincaProvider`:
 | `useCan(space, action, target)`                                     | Whether to show an edit or delete button                                |
 | `useHoldSpace(space)`                                               | Keeps a space syncing while the view is on screen                       |
 | `useLive(space, load, deps)`                                        | Anything else, reloaded as the space changes                            |
+| `useWatched(load, deps, { when, settle, every })`                   | Anything else, reloaded after the node events you pick                  |
+| `useAsync(load, deps)`                                              | One answer: `loading`, `done` with its value, or `failed`               |
+| `useAccountPicture()`                                               | The account's picture as a URL, or null                                 |
 | `useNames(space)`                                                   | `name(did)`: what someone is called there, never passing for another    |
 | `useMyName()`                                                       | The account's name, to ask for when making or joining a space           |
 | `useInviteLink()`                                                   | The invite this page was opened with, what it is for, and `dismiss`     |

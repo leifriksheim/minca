@@ -5,7 +5,7 @@ import { comment } from '@minca/core/schemas';
 import { bodyOf } from '../../derive/schema-ui';
 import { ago } from '@minca/ui/time';
 import { PersonAvatar } from './PersonAvatar';
-import { styles, palette } from '../../styles';
+import { styles, palette, hstack, stack } from '../../styles';
 import { Person } from '../Person';
 import { peopleFrom, respondingTo } from '../../derive/people';
 import { MentionField, MentionList, MentionText, useMentions } from './Mentions';
@@ -37,7 +37,7 @@ export function Comments({
   const sorted = [...comments].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
   return (
-    <section aria-label="Comments" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <section aria-label="Comments" style={stack(14)}>
       <h3 style={styles.sectionTitle}>
         Comments{' '}
         {comments.length > 0 && (
@@ -45,7 +45,7 @@ export function Comments({
         )}
       </h3>
       {sorted.map((c) => (
-        <div key={c.key} style={{ display: 'flex', gap: 10 }}>
+        <div key={c.key} style={hstack(10)}>
           <PersonAvatar spaceId={space.id} did={c.root ?? c.author} size={26} />
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 13 }}>
@@ -94,7 +94,7 @@ export function Comments({
               { links: [{ rel: 'about', to: target }] },
             );
           }}
-          style={{ display: 'flex', gap: 8 }}
+          style={hstack(8)}
         >
           <MentionField
             input={input}

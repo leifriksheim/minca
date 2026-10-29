@@ -1,9 +1,9 @@
-import { styles } from '../styles';
+import { styles, stack } from '../styles';
 
 /** The name others see, asked when making or joining a space */
 export function NameField({ value, onChange }: { value: string; onChange: (name: string) => void }) {
   return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+    <label style={stack(4)}>
       <span style={styles.factLabel}>What should people call you?</span>
       <input
         type="text"

@@ -49,7 +49,7 @@ import {
   type Within,
 } from '../../automations';
 import { usePeopleHere } from '../Person';
-import { styles, palette } from '../../styles';
+import { styles, palette, hstack, stack } from '../../styles';
 import { ClauseList, Pill, PlacePill, Sentence, Step, ValueInput, card, chip, previewBox } from './parts';
 
 /** In the schedule picker, a time of one's own */
@@ -229,7 +229,7 @@ export function AutomationBuilder({
 
         <div style={card}>
           <Step label="When">
-            <div style={{ display: 'flex', gap: 6 }}>
+            <div style={hstack(6)}>
               {[
                 { value: false, label: 'Something happens' },
                 { value: true, label: 'At set times' },
@@ -275,7 +275,7 @@ export function AutomationBuilder({
                   />
                 </Sentence>
                 {ownTime && (
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <label style={stack(4)}>
                     <input
                       aria-label="Minute hour day month weekday"
                       value={every}
@@ -402,7 +402,7 @@ export function AutomationBuilder({
                 )}
                 {count && countFields.length > 0 && (
                   <details open={!!count.clauses?.length}>
-                    <summary style={{ fontSize: 13, color: palette.ink.muted }}>
+                    <summary style={styles.quiet}>
                       Count only some {noun(collections, count.collection, true)}
                     </summary>
                     <div style={{ marginTop: 8 }}>
@@ -586,7 +586,7 @@ export function AutomationBuilder({
           )
         )}
 
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <label style={stack(6)}>
           <span style={styles.fieldLabel}>Name</span>
           <input
             value={shownName}
@@ -606,7 +606,7 @@ export function AutomationBuilder({
         </p>
         {error && <p style={{ ...styles.error, fontSize: 13 }}>{error}</p>}
 
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <div style={{ ...hstack(8), justifyContent: 'flex-end' }}>
           <button onClick={onClose} data-variant="quiet" style={{ ...styles.smallButton, height: 40 }}>
             Cancel
           </button>
@@ -700,7 +700,7 @@ function ActionDetail({
     onChange({ ...then, text: `${then.text}${then.text.endsWith(' ') || !then.text ? '' : ' '}${token}` });
   const target = then.kind === 'add' ? targets.find((t) => t.collection.name === then.collection) : undefined;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div style={stack(6)}>
       {then.kind === 'add' && (
         <Sentence>
           <span>Add a</span>
@@ -744,9 +744,7 @@ function ActionDetail({
         style={styles.input}
       />
       {about && (
-        <div
-          style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: palette.ink.faint }}
-        >
+        <div style={{ ...hstack(6), alignItems: 'center', fontSize: 12, color: palette.ink.faint }}>
           Insert
           <button type="button" onClick={() => insert('{title}')} data-variant="quiet" style={token}>
             its name

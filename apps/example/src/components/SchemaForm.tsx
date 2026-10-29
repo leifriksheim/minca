@@ -15,7 +15,7 @@ import { FileInput, FileListInput, MoneyInput, WhenInput } from './KindInputs';
 import { fieldTypeOf } from '../derive/field-types';
 import { nameOf } from '../derive/people';
 import { usePeopleHere } from './Person';
-import { styles, palette } from '../styles';
+import { styles, palette, hstack } from '../styles';
 import { useAction } from '@minca/app-shared/action';
 
 /**
@@ -339,7 +339,7 @@ function ListInput({
     <div style={labelStyle}>
       {label}
       {value.map((item, index) => (
-        <div key={index} style={{ display: 'flex', gap: 6 }}>
+        <div key={index} style={hstack(6)}>
           <input
             aria-label={`${field.label} ${index + 1}`}
             type={numeric ? 'number' : 'text'}

@@ -5,7 +5,7 @@ import { ConnectAgent, stepText } from '../ConnectAgent';
 import { useNode } from '@minca/react';
 import { useLauncherRecords } from './entries';
 import { checkLauncherApp, prepareLauncher } from './launcher';
-import { styles, palette } from '../../styles';
+import { styles, palette, hstack, stack } from '../../styles';
 
 const TITLE = 'Add your own app';
 
@@ -90,7 +90,7 @@ function AskForApp({
       </p>
       <ul style={ideas}>
         {IDEAS.map((idea) => (
-          <li key={idea} style={{ display: 'flex', gap: 8 }}>
+          <li key={idea} style={hstack(8)}>
             <span aria-hidden style={{ color: palette.ink.faint }}>
               “
             </span>
@@ -102,9 +102,7 @@ function AskForApp({
       </ul>
 
       {proposed ? (
-        <div
-          style={{ ...styles.note, display: 'flex', flexDirection: 'column', gap: 4, padding: '12px 14px' }}
-        >
+        <div style={{ ...styles.note, ...stack(4), padding: '12px 14px' }}>
           <p style={{ fontSize: 14, fontWeight: 600, color: palette.ink.strong }}>
             <span style={{ color: palette.accent.good }}>✓</span> Your agent proposed “{proposed.title}”
           </p>
