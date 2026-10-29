@@ -832,7 +832,7 @@ export interface NodeContacts {
    * first. Also closes invites of yours a contact has used, and deletes them.
    */
   invites(): Promise<ReadonlyArray<SpaceInviteView>>;
-  /** Joins the space an invite from a contact is for, and deletes the invite */
+  /** Joins the space an invite from a contact is for; its maker closes the invite once they see you there */
   join(pairSpace: string, key: string): Promise<SpaceSummary>;
 }
 

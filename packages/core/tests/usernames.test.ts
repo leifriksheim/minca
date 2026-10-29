@@ -229,7 +229,7 @@ describe('node.contacts.invite', () => {
     await assert.rejects(leif.contacts.invite(anna.did, bills.id), /haven't joined/);
   });
 
-  test('a used invite is gone, so someone removed is never offered it again', async () => {
+  test('a used invite is closed and gone, so someone removed is never offered it again', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const { anna, leif, bills, invite } = await invited(hub);
     await anna.contacts.join(invite.pairSpace, invite.key);
@@ -240,11 +240,16 @@ describe('node.contacts.invite', () => {
       (there) => there,
       'Leif to see Anna in Bills',
     );
-    // Joining deleted the invite, on both sides: no client offers it again.
+    // Leif's node closes the invite it sees used, and deletes it, when it next looks.
     await until(
-      async () => (await leif.records.list(invite.pairSpace, { collection: 'std.space-invite' })).length,
-      (left) => left === 0,
-      'the used invite to be gone',
+      async () => {
+        await leif.contacts.invites();
+        const open = (await leif.spaces.access(bills.id)).invites.filter((invite) => invite.open).length;
+        const left = (await leif.records.list(invite.pairSpace, { collection: 'std.space-invite' })).length;
+        return open + left;
+      },
+      (rest) => rest === 0,
+      'the used invite to be closed and gone',
     );
     await anna.spaces.leave(bills.id);
     assert.deepEqual(await anna.contacts.invites(), []);
@@ -267,6 +272,32 @@ describe('node.contacts.invite', () => {
     assert.deepEqual(
       (await anna.contacts.invites()).map((invite) => [invite.space, invite.name]),
       [[bills.id, 'Bills']],
+    );
+  });
+
+  test("a space name the invite's signature does not cover is never shown", async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const { anna, leif, space: pair } = await contacts(hub);
+    const bills = await leif.spaces.create({ name: 'Bills', visibility: 'private', ...team });
+    const real = await leif.spaces.invite(bills.id, { role: 'editor' });
+    const [encoded, secret] = real.split('.');
+    // The space's name changed after signing; the secret kept.
+    const text = Buffer.from(encoded!, 'base64url').toString('utf8');
+    assert.ok(text.includes('"name":"Bills"'));
+    const edited = text.replace('"name":"Bills"', '"name":"Your bank: verify your account"');
+    const forged = `${Buffer.from(edited, 'utf8').toString('base64url')}.${secret}`;
+    await leif.records.put(pair, 'std.space-invite', { space: bills.id, invite: forged });
+    // The honest one beside it arrives; the forged one never shows.
+    const family = await leif.spaces.create({ name: 'Family', visibility: 'private', ...team });
+    await leif.contacts.invite(anna.did, family.id, { role: 'editor' });
+    await until(
+      () => anna.contacts.invites(),
+      (found) => found.length >= 1,
+      'the honest invite',
+    );
+    assert.deepEqual(
+      (await anna.contacts.invites()).map((invite) => invite.name),
+      ['Family'],
     );
   });
 

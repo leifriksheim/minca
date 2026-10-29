@@ -703,9 +703,9 @@ _Source: 03 §2, §4, §5, §8.3, §9; 02 §4.1, §6.3, §7.3; 01 §9; `packages
   - It can rejoin through any open role invite it saw: removal closes none
     ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_.
     That includes an invite a contact left it in a space for two
-    (`std.space-invite`, `packages/core/docs/contacts.md`): joining deletes
-    it, so an honest client never offers it again, but its maker closes it
-    only if its node saw it used first.
+    (`std.space-invite`, `packages/core/docs/contacts.md`), until its maker's
+    node sees it used and closes it; one with no role, to view, is never
+    closed ([#172](https://github.com/leifriksheim/minca/issues/172)).
   - A key change is only a SHOULD, and only a member granted `/key/change`
     can make one. In a space where nobody holds it, it reads everything new
     ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_.

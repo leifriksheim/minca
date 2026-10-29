@@ -33,6 +33,11 @@ the new code, and reading knocks renews it a month before its year is up.
 knocks by username, and the contact it becomes keeps the username
 (`ContactView.username`). See [node.md](node.md#the-inbox).
 
+Renewing claims the code of the inbox this device knows. A device that
+hasn't yet synced a replacement made on another one points the name back at
+the old inbox until the inbox next changes; renewal starts only within a
+month of the name lapsing, so this is rare.
+
 ## Claiming a name
 
 ```ts

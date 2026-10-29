@@ -5,6 +5,8 @@
  */
 import { cached } from '../utils/map.js';
 import { parseSpaceInvite } from '../space/space-manager.js';
+import { checkInvitation } from '../space/invitation.js';
+import { checkSpace } from '../space/constitution.js';
 import { team } from '../space/presets.js';
 import {
   isAvatarRef,
@@ -257,10 +259,19 @@ export function createNodeContacts(ctx: NodeContext) {
     return (await (await ctx.runtime(spaceId)).access()).members.some((member) => member.did === did);
   }
 
-  /** The space a signed invite is for, its id and name; null when it isn't an invite */
-  function invitedTo(invite: string): { readonly id: string; readonly name: string } | null {
+  /**
+   * The space an invite from `did` is for, its id and name, checked as joining
+   * would check it: signed by `did`, for the space whose constitution it
+   * carries. Null for anything less.
+   */
+  async function invitedTo(
+    invite: string,
+    did: string,
+  ): Promise<{ readonly id: string; readonly name: string } | null> {
     try {
-      const { space } = parseSpaceInvite(invite);
+      const { space, signed, invite: secret, invitedBy } = parseSpaceInvite(invite);
+      if (invitedBy !== did || (await checkSpace(space)) !== null) return null;
+      if ((await checkInvitation(signed, provider, secret)) !== null) return null;
       return { id: space.id, name: space.name };
     } catch {
       return null;
@@ -477,6 +488,7 @@ export function createNodeContacts(ctx: NodeContext) {
     async invite(did, spaceId, options = {}) {
       requireEverywhere('Inviting someone');
       const contact = await contacts.get(did);
+      if (contact?.blocked) throw new Error(`You blocked ${contact.name}`);
       // Only someone whose account you have seen join your space for two: never whoever a name leads to.
       if (!contact?.space || !(await registry.get(contact.space)) || !(await joined(contact.space, did)))
         throw new Error(`${contact?.name ?? 'They'} haven't joined your space for two yet`);
@@ -502,7 +514,7 @@ export function createNodeContacts(ctx: NodeContext) {
             continue;
           }
           // Only the contact leaves invites here, and the invite itself says which space.
-          const space = record.root === did ? invitedTo(record.body.invite) : null;
+          const space = record.root === did ? await invitedTo(record.body.invite, did) : null;
           if (!space || space.id !== record.body.space || held.has(space.id)) continue;
           found.push(
             Object.freeze({
@@ -521,14 +533,12 @@ export function createNodeContacts(ctx: NodeContext) {
     },
 
     async join(pairSpace, key) {
-      const pair = await ctx.runtime(pairSpace);
-      const record = await pair.get<SpaceInviteRecord>(key);
-      if (!record?.verified || typeof record.body?.invite !== 'string')
+      const contact = (await contactRecords()).find(({ body }) => body!.space === pairSpace)?.body;
+      const record = await (await ctx.runtime(pairSpace)).get<SpaceInviteRecord>(key);
+      if (!contact || contact.blocked || record?.root !== contact.did || !record.verified)
         throw new Error('That invite is gone: they may have taken it back');
-      const joined = await ctx.spaces.join(record.body.invite);
-      // Used: nobody, this account included, is offered it again.
-      await pair.remove(key).catch(() => {});
-      return joined;
+      // Its maker closes and deletes it once they see you there; until then it is hidden, as you hold the space.
+      return ctx.spaces.join(record.body!.invite);
     },
   });
 

@@ -92,7 +92,7 @@ export function InviteToSpace({
       )}
       {error && <p style={{ ...styles.bad, marginTop: 10 }}>{error}</p>}
       <p style={{ fontSize: 13, lineHeight: 1.5, color: ink.muted, marginTop: 12 }}>
-        The invite waits in your private space with {contact.name}, so only they can use it.
+        The invite waits in your private space with {contact.name}.
       </p>
     </Modal>
   );
