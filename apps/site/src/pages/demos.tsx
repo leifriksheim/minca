@@ -150,32 +150,3 @@ export function Meetup({
     </div>
   );
 }
-
-/** The meetup after an open mic made it theirs: the same sign-up, as slots in a running order */
-export function OpenMic() {
-  return (
-    <div className="app">
-      <EventHead day="Fri" date="15" title="Open mic" meta="8pm · The Crown" />
-      <div className="app-rota">
-        <Slot time="8:00" who="anna" act="Anna · songs" />
-        <Slot time="8:15" who="sam" act="Sam · synths" />
-        <Slot time="8:30" />
-      </div>
-    </div>
-  );
-}
-
-function Slot({ time, who, act }: { time: string; who?: Person; act?: string }) {
-  return (
-    <>
-      <span className="app-rota-label">{time}</span>
-      {who ? (
-        <span className="app-shift">
-          <Face who={who} /> {act}
-        </span>
-      ) : (
-        <span className="app-shift open">Take it</span>
-      )}
-    </>
-  );
-}
