@@ -379,28 +379,58 @@ grants records only ([06 §2.8](06-nodes-and-sessions.md)).
   Knocks go to every place an inbox names; a relay can drop them but can't
   read, forge or alter them, nor hide one another relay holds.
 
-## 9. Planned: names
+## 9. Usernames
 
-> **Planned.** Not normative. A handle that leads to an inbox, so a person can
-> paste `@anna.bsky.social`, sent to them anywhere, where a code works today.
+A **username** is a name at a domain, `leif@minca.social`, that leads to an
+inbox code: someone can say it aloud or put it in a bio where a code works
+today. It never leads to the account's DID, which would tie everything the
+account signed to the name. The code is signed by the inbox's own key (§3),
+so whoever answers for the domain can hand out another inbox, but can't change
+where this one's knocks go.
 
-A name resolves to an inbox code, never to the account DID, which would link
-everything the account signed to the handle. The code is signed by the
-inbox's own key (§3), so whoever serves the name can't change where knocks
-go, only hand out another inbox.
+```
+username = name "@" domain
+name     = 1–64 of a–z 0–9 . _ -, starting and ending with a letter or digit
+domain   = a hostname with at least one dot, ≤253 characters, labels of a–z 0–9 -
+           not starting or ending with -; or localhost[:port], for trying it out
+```
 
-- **ATProto first.** Handle → DID (DNS TXT `_atproto.<handle>`, else
-  `https://<handle>/.well-known/atproto-did`; the DID document must name the
-  handle back) → PDS → `com.atproto.repo.getRecord`, collection
-  `org.minca.inbox`, key `self`, `{ "code": "<inbox code>", "createdAt" }`.
-  ATProto is used only to publish that record, never to sign in. The account
-  home links a handle with ATProto OAuth asking only to write it.
-- **Plain DNS next:** `_minca.<domain>` TXT holding an inbox code, for people
-  with a domain and no ATProto account.
+A reader MUST compare usernames in lower case, and MAY accept one written with
+a leading `@` (`@leif@minca.social`). It looks one up at its domain:
 
-Name services become dependencies of discovery only: contacts already made
-are Minca spaces and survive them. Publishing a record makes "this handle
-uses Minca" public, which is opt-in.
+```
+GET https://<domain>/.well-known/minca.json?name=<name>
+← 200 { "names": { "<name>": "<inbox code>" } }
+```
+
+The scheme is `http` only for `localhost`, with or without a port. A reader
+MUST refuse a username unless:
+
+1. the domain answers the request itself, with 2xx: a redirect is refused;
+2. the answer is a JSON object whose `names` holds a string under `name`;
+3. that string is an inbox code a reader accepts (§3).
+
+A reader ignores other members, and MAY refuse an answer larger than 1 MiB. A
+domain that answers for names MUST send `Access-Control-Allow-Origin: *`, so
+that a page anywhere can look a name up, and answers `404` for a name it
+doesn't hold. A file served as it is, listing every name, answers correctly:
+the query is only a hint.
+
+Who may have which name at a domain, and how they claim it, is the domain's
+business, not the protocol's. The name service minca.social runs, which
+anyone can run, is described in
+[Usernames](../packages/core/docs/usernames.md) in the library's docs.
+
+Name services are dependencies of finding someone only: contacts already made
+are Minca spaces and survive them. A domain can always answer with an inbox of
+its own, so a username is as good as the domain that answers for it, and a
+reader shows which domain that is. ATProto handles as usernames are an idea
+for later ([#340](https://github.com/leifriksheim/minca/issues/340)).
+
+> Rationale: the lookup is NIP-05's, so a domain with only a static web
+> server can answer for its people.
+
+_Source: `packages/core/src/inbox/names.ts` (`parseUsername`, `usernameUrl`, `resolveUsername`). Tests: `packages/names/tests/names.test.ts` ("a username", "a lookup that is redirected is refused…", "a code that doesn't check out…")._
 
 ## 10. Not yet specified
 

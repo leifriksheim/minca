@@ -6,6 +6,7 @@
   "workspaces": [
     "packages/core",
     "packages/relay",
+    "packages/names",
     "packages/cli",
     "packages/ui",
     "packages/calls",

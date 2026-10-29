@@ -31,17 +31,17 @@ and metadata through relays and hosts (§3.7, §3.8).
 
 ## 2. Adversaries
 
-| Adversary            | Holds                                                                                                              |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| **Stranger**         | Network access; any number of keys and accounts of its own; a space's id, or a leaked invite string                |
-| **Member**           | Roles in the space and their grants, its own keys, the space key of a private space; a modified client             |
-| **Former member**    | Everything it held while a member: old keys, space keys, notes, invite secrets, its copy of the space              |
-| **Key thief**        | One of an account's delegated keys (session, writer or app key), with its note                                     |
-| **Root thief**       | The account's seed or recovery code                                                                                |
-| **App or program**   | A grant from the account, by popup or by code: a note, and perhaps the account, contact or member keys (06 §2, §3) |
-| **Relay**            | Of any kind: the sealed blobs under the topics it serves, and what it keeps for inboxes and short links            |
-| **Host or carrier**  | Every version of the spaces it keeps and their envelopes, a pass's read seed, a connection to members              |
-| **Network attacker** | Can watch, delay, drop and replay traffic between peers                                                            |
+| Adversary            | Holds                                                                                                                                       |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Stranger**         | Network access; any number of keys and accounts of its own; a space's id, or a leaked invite string                                         |
+| **Member**           | Roles in the space and their grants, its own keys, the space key of a private space; a modified client                                      |
+| **Former member**    | Everything it held while a member: old keys, space keys, notes, invite secrets, its copy of the space                                       |
+| **Key thief**        | One of an account's delegated keys (session, writer or app key), with its note                                                              |
+| **Root thief**       | The account's seed or recovery code                                                                                                         |
+| **App or program**   | A grant from the account, by popup or by code: a note, and perhaps the account, contact or member keys (06 §2, §3)                          |
+| **Relay**            | Of any kind: the sealed blobs under the topics it serves, what it keeps for inboxes and short links, and the usernames a domain answers for |
+| **Host or carrier**  | Every version of the spaces it keeps and their envelopes, a pass's read seed, a connection to members                                       |
+| **Network attacker** | Can watch, delay, drop and replay traffic between peers                                                                                     |
 
 A key thief is answered by revoking the key, not by detecting the copy (§3.4).
 
@@ -907,7 +907,9 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     key, and with it the inbox keys (06 §2.8, 07 §1): it can open every
     knock on the account's inbox, join a space for two first under its
     operator's own account and be taken for the account, clear the inbox,
-    and sign a code for it naming mailboxes of its own. The library refuses
+    sign a code for it naming mailboxes of its own, and take over the
+    account's usernames on a Minca name service, whose name keys are derived
+    from the contact key too. The library refuses
     those calls on such a node; no peer can tell
     ([#313](https://github.com/leifriksheim/minca/issues/313)).
   - An app or site the person opens their pod in reads the vault, and can
@@ -978,6 +980,8 @@ _Source: 01 §7.5, §8, §11; 06 §2, §3; 05 §14, §15; 02 §4.1. Tests: `pack
 
 A relay of any kind (04 §1.2), or anyone else watching a topic on one: all
 see the same sealed blobs.
+Whoever answers for a username's domain (07 §9) counts as one here, and so
+does whoever controls that domain's DNS or certificates, or hosts it.
 
 - **Holds.** It can always drop and delay. Beyond that:
   - A relay that doesn't know the room learns no session DID: neither who is
@@ -1042,6 +1046,12 @@ see the same sealed blobs.
     link's fragment, so the relay never sees it, and no request to the
     home's server carries it. It can stay in the browser's history, and the
     link is printed, or handed to the model, when no browser opens.
+  - Answering for a username, it can't change where an inbox's knocks go, nor
+    the name an inbox's code gives: a reader takes only a code signed by the
+    inbox's own key, and only from the domain itself, never through a
+    redirect (07 §9; `packages/names/tests/names.test.ts`, "a code that
+    doesn't check out…", "a lookup that is redirected is refused…").
+  - A username leads to no DID: nothing a domain serves names the account.
 - **Does not hold yet.**
   - That it can't answer in peers' place: they talk over DTLS channels whose
     fingerprints both sign in the mesh proof (04 §5.1, §6.2), so a relay, or
@@ -1117,8 +1127,15 @@ see the same sealed blobs.
   - Someone else who holds the code can also ask before the program does,
     posing as it. The person sees only the name it gives itself, and may
     allow a note for its key; the real program is then never answered.
+  - Whoever answers for a username can answer with an inbox of its own, and
+    take the first knock of everyone who looks the name up; or with an older
+    inbox of the same account, whose knocks are no longer opened. A username
+    is as good as its domain. Contacts already made are spaces, and a lookup
+    can't touch them (07 §9).
+  - It learns which address looks up which name, and when. Names that lead
+    to the same inbox code are tied together by it.
 
-_Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6; 01 §15.2; 06 §3. Tests: `packages/core/tests/rendezvous.test.ts`, `packages/core/tests/relay-nostr.test.ts`, `packages/core/tests/relay-socket.test.ts`, `packages/core/tests/pairing.test.ts` ("a message sent back to the side that sealed it does not open there", "someone who learns the secret later cannot open a recording of the exchange"), `packages/core/tests/connect-code.test.ts` ("a relay that relabels or repeats messages changes nothing", "a recording of the room, and the code learned later, open nothing", "a code works for one program: a second with the same code is not answered", "the program asks only the home it opened, and keeps that home, whatever the answer names", "the program keeps its note only once the person gives the code the home shows; a point that breaks its commitment is ignored")._
+_Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6, §9; 01 §15.2; 06 §3. Tests: `packages/core/tests/rendezvous.test.ts`, `packages/names/tests/names.test.ts`, `packages/core/tests/relay-nostr.test.ts`, `packages/core/tests/relay-socket.test.ts`, `packages/core/tests/pairing.test.ts` ("a message sent back to the side that sealed it does not open there", "someone who learns the secret later cannot open a recording of the exchange"), `packages/core/tests/connect-code.test.ts` ("a relay that relabels or repeats messages changes nothing", "a recording of the room, and the code learned later, open nothing", "a code works for one program: a second with the same code is not answered", "the program asks only the home it opened, and keeps that home, whatever the answer names", "the program keeps its note only once the person gives the code the home shows; a point that breaks its commitment is ignored")._
 
 ### 3.8 Host or carrier
 

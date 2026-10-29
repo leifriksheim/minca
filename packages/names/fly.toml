@@ -1,0 +1,41 @@
+# The name service on Fly — deployed as minca-names, answering for
+# minca.social, whose site proxies /.well-known/minca.json here
+# (apps/site/public/_redirects). Claims come here directly, so the service
+# sees each client's address. To run your own, change `app` and the env.
+#
+#   cd packages/names
+#   fly launch --no-deploy --copy-config --name my-names
+#   fly volumes create names --size 1 --region ams
+#   fly deploy
+
+app = "minca-names"
+primary_region = "ams"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NAMES_DOMAIN = "minca.social"
+  NAMES_CLAIM_URL = "https://minca-names.fly.dev/.well-known/minca.json"
+  NAMES_DIR = "/data/names"
+
+[mounts]
+  source = "names"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    path = "/health"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

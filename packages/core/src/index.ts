@@ -80,6 +80,7 @@ export {
   deriveContactKeyBytes,
   deriveInboxKeyBytes,
   deriveInboxSignKeyBytes,
+  deriveNameKeyBytes,
   contactKeyPair,
   contactPublicKey,
   isContactPublicKey,
