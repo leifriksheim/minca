@@ -91,6 +91,23 @@ export async function resolveUsername(
 }
 
 /**
+ * Whether nobody holds a username yet, as its domain answers: null when it
+ * couldn't say (down, slow, or not a name service), so a caller never takes
+ * an outage for a free name.
+ */
+export async function usernameFree(
+  text: string,
+  fetcher: typeof fetch = globalThis.fetch,
+): Promise<boolean | null> {
+  const username = parseUsername(text);
+  if (!username) return null;
+  // A name nobody has is answered 404, with the service's answer all the same.
+  const json = await lookUp(username, fetcher, true);
+  if (!isObject(json) || !isObject(json.names)) return null;
+  return typeof json.names[username.name] !== 'string';
+}
+
+/**
  * The domain's answer for a name, or null when it gave none worth reading: no
  * 2xx, a redirect, too slow, or too large. A 404 is read too, for where claims go.
  */
@@ -232,20 +249,36 @@ async function bindTo(username: Username, contactKey: Uint8Array, code: string):
   return signWithScalar(signKey, bindMessage(username));
 }
 
+/** Letters NFKD leaves whole, as they are usually written in ASCII */
+const TRANSLITERATED: Readonly<Record<string, string>> = {
+  æ: 'ae',
+  ø: 'o',
+  ß: 'ss',
+  đ: 'd',
+  ł: 'l',
+  þ: 'th',
+};
+
 /**
  * Names to offer someone called `name`, best first: their first name, the
  * whole of it, then the first name with a number.
  */
 export function usernameIdeas(name: string): string[] {
   const words = name
+    .toLowerCase()
+    .replace(/[æøßđłþ]/g, (letter) => TRANSLITERATED[letter] ?? '')
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
     .split(/[^a-z0-9]+/)
     .filter(Boolean);
   const first = words[0]?.slice(0, 30);
   if (!first) return [];
   // The same number for the same name, so the ideas don't change while it is typed.
   const number = 10 + ([...name].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 90);
-  return [...new Set([first, words.join('.').slice(0, 64), `${first}${number}`])];
+  // Cut to length, a name may end on a dot: it must end on a letter or digit.
+  const whole = words
+    .join('.')
+    .slice(0, 64)
+    .replace(/[._-]+$/, '');
+  return [...new Set([first, whole, `${first}${number}`])];
 }

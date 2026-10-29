@@ -487,7 +487,7 @@ export interface NodeSpaces {
   status(spaceId: string): Promise<SpaceStatus>;
   /** Waits up to `waitMs` (default 3 s) for a connected carrier to hold all this node does of a space */
   carried(spaceId: string, options?: { readonly waitMs?: number }): Promise<boolean>;
-  /** Waits up to `waitMs` for one peer, by its key, to hold all this node does of a space; for a node about to close */
+  /** Waits up to `waitMs` (at most a minute) for one peer, by its key, to hold all this node does of a space; for a node about to close */
   reached(spaceId: string, peer: string, waitMs: number): Promise<boolean>;
   /** How a node serving this space checks connecting peers and signs its welcome; null for a space it does not hold */
   authenticator(spaceId: string): Promise<ServerAuth | null>;

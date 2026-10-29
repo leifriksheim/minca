@@ -29,6 +29,7 @@ export {
   claimMessage,
   bindMessage,
   usernameIdeas,
+  usernameFree,
 } from './names.js';
 export type { Username, ResolvedUsername } from './names.js';
 export { createMailboxClient } from '../network/relays.js';

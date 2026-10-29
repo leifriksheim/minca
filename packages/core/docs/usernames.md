@@ -44,9 +44,12 @@ meanwhile or the service was down). The account is made either way.
 
 The claim is made on the home's node, which may be the only one holding the
 inbox: a connect page that closes once it answers keeps the window open
-until the app's node holds the contacts space too (`spaces.reached`, below),
-or else the app would read no knocks until the two next met. The account
-home waits up to 30 s, only for an account that claimed a name there.
+until the app's node holds the contacts space too (`spaces.reached`, keyed
+by the app's key from its request), or else the app would read no knocks
+until the two next met. The account home waits for the claim to finish,
+however long, so it is never cut off halfway; then up to 30 s for the app,
+and only for an account that claimed a name there. If the claim failed, the
+app's contacts screen asks for a name again.
 
 _Source: `packages/core/src/session/auth.ts` (`createAccount`, `claimInBackground`), `packages/core/src/elements/minca-auth.ts` (`#create`), `packages/core/src/inbox/names.ts` (`usernameIdeas`), `apps/home/src/components/ConnectPage.tsx` (`handOver`). Tests: `packages/core/tests/usernames.test.ts` ("a username at sign-up")._
 

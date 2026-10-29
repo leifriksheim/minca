@@ -462,21 +462,20 @@ const HAND_OVER_MS = 30_000;
  */
 async function handOver(auth: MincaAuth, node: P2PNode, app: string): Promise<unknown> {
   if (!auth.getState().username) return;
-  const deadline = Date.now() + HAND_OVER_MS;
-  // The claim first: a few seconds of work, begun when the account was made.
+  // The claim first, however long it takes: closed halfway, the name could
+  // lead to an inbox no record says it does. Its work and its requests end
+  // by themselves.
   await new Promise<void>((resolve) => {
     const settled = () => auth.getState().username?.status !== 'claiming';
     if (settled()) return resolve();
-    const done = () => {
+    const stop = auth.subscribe(() => {
+      if (!settled()) return;
       stop();
-      clearTimeout(timer);
       resolve();
-    };
-    const stop = auth.subscribe(() => settled() && done());
-    const timer = setTimeout(done, HAND_OVER_MS);
+    });
   });
   const contacts = await node.contacts.space();
-  return contacts && node.spaces.reached(contacts, app, Math.max(0, deadline - Date.now()));
+  return contacts && node.spaces.reached(contacts, app, HAND_OVER_MS);
 }
 
 /**

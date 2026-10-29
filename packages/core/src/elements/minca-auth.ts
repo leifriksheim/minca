@@ -29,8 +29,7 @@ import { accountCredentialName, offerToSave, recoveryKit } from '../session/cred
 import { passwordStrength } from '../session/password-strength.js';
 import type { PairingStage } from '../session/pairing.js';
 import type { AccountSummary } from '../identity/account-store.js';
-import { createP256Provider } from '../identity/crypto-p256.js';
-import { formatUsername, parseUsername, resolveUsername, usernameIdeas } from '../inbox/names.js';
+import { formatUsername, parseUsername, usernameFree, usernameIdeas } from '../inbox/names.js';
 import { adoptStyles, h, svg, type Child } from './dom.js';
 import { AUTH_CSS } from './auth-styles.js';
 
@@ -40,10 +39,7 @@ export interface MincaSessionEventDetail {
 }
 
 /** Where a username on the create screen stands */
-type NameState = 'empty' | 'checking' | 'free' | 'taken' | 'invalid';
-
-/** Looks usernames up as they are typed */
-const provider = createP256Provider();
+type NameState = 'empty' | 'checking' | 'free' | 'taken' | 'invalid' | 'unknown';
 
 // Where there is no DOM the module still loads; the element is only ever made where there is one.
 const Base = globalThis.HTMLElement ?? class {};
@@ -841,11 +837,13 @@ export class MincaAuthElement extends Base {
           ? `${typed}@${domain} is yours if you want it`
           : now === 'taken'
             ? 'Someone has that one. Try another?'
-            : now === 'invalid'
-              ? 'Letters, numbers, dots, dashes and underscores'
-              : now === 'checking'
-                ? 'Checking…'
-                : 'How people find you and add you. Leave it empty to skip.';
+            : now === 'unknown'
+              ? `Couldn't check ${typed}@${domain} just now. It's tried when you continue.`
+              : now === 'invalid'
+                ? 'Letters, numbers, dots, dashes and underscores'
+                : now === 'checking'
+                  ? 'Checking…'
+                  : 'How people find you and add you. Leave it empty to skip.';
     };
     // Looks the name up a moment after typing stops; picked from the name, a taken one gives way to the next idea.
     const check = (ideas: ReadonlyArray<string>) => {
@@ -857,22 +855,18 @@ export class MincaAuthElement extends Base {
       show();
       if (!parsed) return;
       this.#usernameTimer = setTimeout(() => {
-        void resolveUsername(formatUsername(parsed), provider)
-          .then(
-            () => 'taken' as const,
-            () => 'free' as const,
-          )
-          .then((found) => {
-            if (this.#username.checked !== typed) return;
-            const next = ideas[ideas.indexOf(typed) + 1];
-            if (found === 'taken' && !this.#username.typed && next) {
-              username.value = next;
-              this.#drafts.set('username', next);
-              return check(ideas);
-            }
-            this.#username.state = found;
-            show();
-          });
+        void usernameFree(formatUsername(parsed)).then((free) => {
+          const found = free === null ? 'unknown' : free ? 'free' : 'taken';
+          if (this.#username.checked !== typed) return;
+          const next = ideas[ideas.indexOf(typed) + 1];
+          if (found === 'taken' && !this.#username.typed && next) {
+            username.value = next;
+            this.#drafts.set('username', next);
+            return check(ideas);
+          }
+          this.#username.state = found;
+          show();
+        });
       }, 300);
     };
     name.addEventListener('input', () => {

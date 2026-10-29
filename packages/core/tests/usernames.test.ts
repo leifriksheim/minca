@@ -13,7 +13,7 @@ import { createNames } from '../../names/names.mjs';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { createFolderAccountStore } from '../src/identity/account-store.js';
 import { createMincaAuth, type MincaAuth } from '../src/session/auth.js';
-import { resolveUsername } from '../src/inbox/names.js';
+import { parseUsername, resolveUsername, usernameFree, usernameIdeas } from '../src/inbox/names.js';
 import { team } from '../src/space/presets.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { portOf } from './helpers/net.js';
@@ -374,12 +374,35 @@ describe('a username at sign-up', () => {
     assert.equal((await auth.getState().session!.node.inbox.get())?.username, undefined);
   });
 
-  test("the home waits on spaces.reached for the app's node to hold the inbox, and never for a stranger", async () => {
+  test('spaces.reached is true once a peer holds the space, and false for one who never comes', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const { leif, space } = await contacts(hub);
     const [peer] = (await leif.spaces.status(space)).peers;
     assert.ok(peer, 'Anna is connected in the space for two');
     assert.equal(await leif.spaces.reached(space, peer, 2000), true);
     assert.equal(await leif.spaces.reached(space, 'did:key:zDnaeNobodyAtAll', 100), false);
+  });
+});
+
+describe('usernameIdeas and usernameFree', () => {
+  test('ideas are always valid names, with letters NFKD keeps whole written out', () => {
+    assert.deepEqual(usernameIdeas('Ærøskøbing Ødegård'), [
+      'aeroskobing',
+      'aeroskobing.odegard',
+      'aeroskobing21',
+    ]);
+    for (const idea of usernameIdeas(`Ann ${'x'.repeat(59)} Yu`))
+      assert.ok(parseUsername(`${idea}@minca.social`), `${idea} is a name`);
+    assert.deepEqual(usernameIdeas('  '), []);
+  });
+
+  test('a service that is down is not a free name', async () => {
+    const down: typeof fetch = () => Promise.reject(new Error('offline'));
+    assert.equal(await usernameFree(fresh('ada'), down), null);
+    assert.equal(await usernameFree(fresh('ada')), true);
+    const anna = await person(createFakeHub({ latencyMs: 1 }), 'Anna');
+    const username = fresh('anna');
+    await anna.inbox.claim(username);
+    assert.equal(await usernameFree(username), false);
   });
 });

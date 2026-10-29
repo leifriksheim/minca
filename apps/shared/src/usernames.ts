@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react';
 import { createP256Provider } from '@minca/core';
-import { formatUsername, parseUsername, resolveUsername, type ResolvedUsername } from '@minca/core/inbox';
+import {
+  formatUsername,
+  parseUsername,
+  resolveUsername,
+  usernameFree,
+  type ResolvedUsername,
+} from '@minca/core/inbox';
 
 /** Where this build's people claim their usernames: `leif@minca.social` */
 export const NAMES_DOMAIN = import.meta.env.VITE_NAMES_DOMAIN || 'minca.social';
@@ -60,12 +66,10 @@ export function useFreeUsername(ideas: ReadonlyArray<string>): string | null {
       for (const idea of key.split(',')) {
         const username = usernameFrom(idea);
         if (!username) continue;
-        const taken = await resolveUsername(username, provider).then(
-          () => true,
-          () => false,
-        );
+        // Only a name the service says nobody has: not one it couldn't answer for.
+        const free = await usernameFree(username);
         if (!current) return;
-        if (!taken) return setFree(idea);
+        if (free) return setFree(idea);
       }
     })();
     return () => {
