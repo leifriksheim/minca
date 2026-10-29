@@ -92,7 +92,7 @@ but nobody can change roles, and nothing in the constitution can change. An
 app says so plainly ("No one can change roles here any more") and offers the
 way on: naming a successor (below), which any member may do once no member holds `/space/succeed`.
 
-_Source: `packages/core/src/node/space-runtime.ts` (`stepDown`, `access`), `packages/core/src/space/roles.ts` (`headless`). Tests: `packages/core/tests/constitution.test.ts` ("stepping down", "a founder steps down, keeping a role…")._
+_Source: `packages/core/src/node/space-membership.ts` (`stepDown`, `access`), `packages/core/src/space/roles.ts` (`headless`). Tests: `packages/core/tests/constitution.test.ts` ("stepping down", "a founder steps down, keeping a role…")._
 
 ## Successors
 
@@ -125,7 +125,7 @@ What an app shows:
   invite to a space that claims to succeed another, with no succeed for it
   there, is a copy, and is shown as one.
 
-_Source: `packages/core/src/node/node.ts` (`spaces.succeed`), `packages/core/src/node/space-runtime.ts` (`succeed`, `access`), `packages/core/src/space/space-manager.ts` (`previewInvite`). Tests: `packages/core/tests/constitution.test.ts` ("/space/succeed", "a successor: made with succeeds…")._
+_Source: `packages/core/src/node/node.ts` (`spaces.succeed`), `packages/core/src/node/space-membership.ts` (`succeed`, `access`), `packages/core/src/space/space-manager.ts` (`previewInvite`). Tests: `packages/core/tests/constitution.test.ts` ("/space/succeed", "a successor: made with succeeds…")._
 
 ## Invites
 
@@ -201,7 +201,7 @@ The node does the protocol's key upkeep by itself, in each space it opens:
 - In a space with no relays named yet, a node whose account may invoke
   `/space/relays` names its own.
 
-_Source: `packages/core/src/node/space-runtime.ts` (`upkeep`, `rotateKey`, `nameRelays`). Tests: `packages/core/tests/key-change.test.ts`, `packages/core/tests/space-relays.test.ts`._
+_Source: `packages/core/src/node/space-keys.ts` (`upkeep`, `rotateKey`, `nameRelays`). Tests: `packages/core/tests/key-change.test.ts`, `packages/core/tests/space-relays.test.ts`._
 
 ## Flagged accounts
 
@@ -263,7 +263,7 @@ publishes nothing
 > whether nicknames for people who are not contacts get a collection of their
 > own. `profile:` keys may also change (spec 03 §8.6).
 
-_Source: `packages/core/src/node/space-runtime.ts` (`loadProfiles`, `publishProfile`), `packages/core/src/node/node-contacts.ts` (`publishProfile`, `ownName`, `account.setName`), `packages/core/src/space/account-registry.ts` (`PROFILE_COLLECTION`, `PROFILE_KEY`). Tests: `packages/core/tests/profiles.test.ts`, `packages/core/tests/contacts.test.ts` ("the contact key"), `packages/core/tests/account.test.ts` ("the account name")._
+_Source: `packages/core/src/node/space-profiles.ts` (`loadProfiles`), `packages/core/src/node/space-runtime.ts` (`publishProfile`), `packages/core/src/node/node-contacts.ts` (`publishProfile`, `ownName`, `account.setName`), `packages/core/src/space/account-registry.ts` (`PROFILE_COLLECTION`, `PROFILE_KEY`). Tests: `packages/core/tests/profiles.test.ts`, `packages/core/tests/contacts.test.ts` ("the contact key"), `packages/core/tests/account.test.ts` ("the account name")._
 
 ## The space manager
 

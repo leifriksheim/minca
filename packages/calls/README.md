@@ -164,7 +164,7 @@ Reference values, all in `createCalls`'s options or constants: `heartbeatMs`
 giving up on a declined or missed ring, 1 s before letting go of the space,
 10 s for the member list.
 
-_Source: `packages/calls/src/calls.ts` (`createCalls`, `isCallMessage`, `RINGS_PER_MINUTE`, `GIVE_UP_MS`, `LEAVE_LINGER_MS`, `MEMBERS_MS`, `RETRY_MS`), `packages/calls/src/react.ts`, `packages/core/src/node/space-runtime.ts` (`accountOf`). Tests: `packages/calls/tests/calls.test.ts`, `packages/core/tests/live.test.ts` ("recordsOnly marks a note that writes records here and nothing more, not one that only reads"), `packages/core/tests/live-elsewhere.test.ts`._
+_Source: `packages/calls/src/calls.ts` (`createCalls`, `isCallMessage`, `RINGS_PER_MINUTE`, `GIVE_UP_MS`, `LEAVE_LINGER_MS`, `MEMBERS_MS`, `RETRY_MS`), `packages/calls/src/react.ts`, `packages/core/src/node/space-peers.ts` (`accountOf`). Tests: `packages/calls/tests/calls.test.ts`, `packages/core/tests/live.test.ts` ("recordsOnly marks a note that writes records here and nothing more, not one that only reads"), `packages/core/tests/live-elsewhere.test.ts`._
 
 ## Planned
 

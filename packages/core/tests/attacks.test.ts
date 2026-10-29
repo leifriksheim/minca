@@ -23,7 +23,7 @@ import { hold, letGo } from './helpers/hold.js';
 import { stored } from './helpers/stored.js';
 import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { contactPublicKey, deriveContactKeyBytes } from '../src/identity/contact-key.js';
-import { profileKey } from '../src/node/space-runtime.js';
+import { profileKey } from '../src/node/space-profiles.js';
 import { until } from './helpers/until.js';
 import type { Version } from '../src/types.js';
 import { seenBy } from './helpers/as-member.js';

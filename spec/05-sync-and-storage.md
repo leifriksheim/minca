@@ -553,7 +553,7 @@ A (initiator: its DID sorts first)                       B
 ```
 
 _Source: `packages/core/src/sync/sync-engine.ts` (`onReconciled`, `byRecord`, `want`),
-`packages/core/src/node/space-runtime.ts` (peer connect). Tests: `packages/core/tests/reconcile.test.ts`
+`packages/core/src/node/space-peers.ts` (`listen`). Tests: `packages/core/tests/reconcile.test.ts`
 ("sync by reconciliation", "joining, a deleted record never shows as it once
 was", "joining, a canvas cleared and half painted again never shows a pixel
 that ends cleared", "a want whose answer is lost is given up, and the peer is
@@ -996,7 +996,7 @@ _Source: `packages/core/src/node/stores.ts` (`folderStores`),
 `packages/core/src/storage/blob/directory.ts`,
 `packages/core/src/storage/folder-adapter.ts` (the registry, and a device's own directory stores),
 `packages/core/src/storage/folder-reconcile.ts` (a command beside a daemon),
-`packages/core/src/node/space-runtime.ts` ("Mirrors", "Writers outside this process"),
+`packages/core/src/node/space-mirrors.ts` (`openMirrors`, `watch`),
 `packages/core/src/identity/account-store.ts`,
 `packages/cli/src/fs-directory.ts` (path safety). Tests:
 `packages/core/tests/folder-adapter.test.ts` ("a data folder", "two nodes of one account on one folder"),
@@ -1140,7 +1140,7 @@ duplicates, which are harmless.
 `<space id>/` and under `files/<space id>/`.
 
 _Source: `packages/core/src/storage/segment.ts`, `packages/core/src/storage/mirror.ts`,
-`packages/core/src/node/space-runtime.ts` ("Mirrors"), `packages/core/src/node/host.ts`. Tests:
+`packages/core/src/node/space-mirrors.ts` (`openMirrors`), `packages/core/src/node/host.ts`. Tests:
 `packages/core/tests/mirror.test.ts`._
 
 ### 16.5 Planned: mirrors in your own storage
@@ -1318,7 +1318,7 @@ under a store writer that has gone quiet, as its segments do
 
 _Source: `packages/core/src/files/file-id.ts`, `packages/core/src/files/seal.ts`,
 `packages/core/src/files/space-files.ts`, `packages/core/src/sync/sync-messages.ts`,
-`packages/core/src/sync/sync-engine.ts` (files), `packages/core/src/node/space-runtime.ts` ("Files").
+`packages/core/src/sync/sync-engine.ts` (files), `packages/core/src/node/space-runtime.ts` (`filesChanged`).
 Tests: `packages/core/tests/files.test.ts`._
 
 ---

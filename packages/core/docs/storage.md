@@ -38,7 +38,7 @@ records changed once per message taken in, not once per version.
 
 _Source: `packages/core/src/sync/sync-engine.ts` (`MAX_WANTS_IN_FLIGHT`,
 `MAX_ROUNDS`, `STALE_MS`, `MAX_WAITING`, `MAX_REFUSED`, `want`, `pump`,
-`sweep`), `packages/core/src/node/space-runtime.ts` (heartbeat,
+`sweep`), `packages/core/src/node/space-peers.ts` (heartbeat,
 `announceSoon`). Tests: `packages/core/tests/reconcile.test.ts` ("a want whose
 answer is lost is given up, and the peer is synced again"),
 `packages/core/tests/sync.test.ts`._
@@ -213,8 +213,7 @@ _Source: `packages/core/src/node/stores.ts` (`folderStores`),
 `packages/core/src/storage/blob/directory.ts`,
 `packages/core/src/storage/directory-access.ts`,
 `packages/cli/src/fs-directory.ts`, `packages/cli/src/home.ts` (`unlock`),
-`packages/core/src/node/space-runtime.ts` ("Mirrors", "Writers outside this
-process"). Tests: `packages/core/tests/folder-adapter.test.ts`,
+`packages/core/src/node/space-mirrors.ts` (`openMirrors`, `watch`). Tests: `packages/core/tests/folder-adapter.test.ts`,
 `packages/cli/tests/path-safety.test.ts`._
 
 ## Blob stores
@@ -279,7 +278,7 @@ and twice as many as its last compaction left, it compacts them, keeping
 only what its store holds.
 
 _Source: `packages/core/src/storage/mirror.ts`,
-`packages/core/src/node/space-runtime.ts` ("Mirrors"),
+`packages/core/src/node/space-mirrors.ts` (`openMirrors`),
 `packages/core/src/node/host.ts`. Tests: `packages/core/tests/mirror.test.ts`._
 
 ### Planned: mirrors in your own storage
@@ -369,7 +368,7 @@ type: ref.mime }))` shows it.
   writer's copies of files no longer named.
 
 _Source: `packages/core/src/files/space-files.ts`, `packages/core/src/files/file-id.ts`,
-`packages/core/src/files/seal.ts`, `packages/core/src/node/space-runtime.ts` ("Files").
+`packages/core/src/files/seal.ts`, `packages/core/src/node/space-runtime.ts` (`filesChanged`).
 Tests: `packages/core/tests/files.test.ts`._
 
 ### Planned: video and pictures
