@@ -2,34 +2,29 @@ import { base64UrlEncode, base64UrlDecode } from '../utils/encoding.js';
 import { protocolError } from '../utils/errors.js';
 import { bufferSource, isPublicKeyCredential } from '../utils/guards.js';
 
+type PasskeyHint = 'client-device' | 'security-key' | 'hybrid';
+
 export interface PasskeyOptions {
   readonly rpId: string;
   readonly rpName: string;
   readonly userName: string;
   readonly userId?: Uint8Array;
-  /**
-   * WebAuthn L3 hints steering which authenticator the browser offers first.
-   * `client-device` favours the platform passkey (Touch ID, Windows Hello).
-   */
-  readonly hints?: ReadonlyArray<'client-device' | 'security-key' | 'hybrid'>;
+  /** Which authenticator the browser offers first; `client-device` favours Touch ID or Windows Hello */
+  readonly hints?: ReadonlyArray<PasskeyHint>;
   /** Restrict to platform or roaming authenticators */
   readonly attachment?: AuthenticatorAttachment;
 }
 
 export interface PasskeyRegistration {
   readonly credentialId: string;
-  /**
-   * The user handle the passkey was made for, base64url. Keep it: it is the
-   * only way to ask the provider to relabel the passkey later
-   * ({@link renamePasskey}).
-   */
+  /** The user handle, base64url: keep it to rename the passkey later ({@link renamePasskey}) */
   readonly userHandle: string;
 }
 
 export interface AuthOptions {
   readonly rpId?: string;
   /** See {@link PasskeyOptions.hints} */
-  readonly hints?: ReadonlyArray<'client-device' | 'security-key' | 'hybrid'>;
+  readonly hints?: ReadonlyArray<PasskeyHint>;
 }
 
 export interface PasskeyAuth {
@@ -50,27 +45,19 @@ export async function hasPlatformAuthenticator(): Promise<boolean> {
 
 /** Registers a new passkey */
 export async function registerPasskey(options: PasskeyOptions): Promise<PasskeyRegistration> {
-  if (!globalThis.navigator?.credentials) {
-    throw protocolError('WEBAUTHN_UNAVAILABLE', 'WebAuthn is not supported in this environment.');
-  }
-
+  const credentials = credentialsApi();
   const userId = options.userId || globalThis.crypto.getRandomValues(new Uint8Array(32));
 
   const createOptions: PublicKeyCredentialCreationOptions & { hints?: string[] } = {
     rp: { id: options.rpId, name: options.rpName },
-    user: {
-      id: bufferSource(userId),
-      name: options.userName,
-      displayName: options.userName,
-    },
+    user: { id: bufferSource(userId), name: options.userName, displayName: options.userName },
     challenge: globalThis.crypto.getRandomValues(new Uint8Array(32)),
     pubKeyCredParams: [
       { type: 'public-key', alg: -7 }, // ES256
       { type: 'public-key', alg: -257 }, // RS256
     ],
     authenticatorSelection: {
-      // Discoverable ("resident") so the passkey can be found again on a later
-      // visit without the app having to remember anything about the user.
+      // Discoverable, so a later visit finds it without remembering anything about the user.
       residentKey: 'required',
       requireResidentKey: true,
       userVerification: 'required',
@@ -79,18 +66,9 @@ export async function registerPasskey(options: PasskeyOptions): Promise<PasskeyR
     ...(options.hints ? { hints: [...options.hints] } : {}),
   };
 
-  const credential = await globalThis.navigator.credentials.create({
-    publicKey: createOptions,
-  });
-
-  if (!isPublicKeyCredential(credential)) {
-    throw new Error('Failed to create passkey.');
-  }
-
-  return Object.freeze({
-    credentialId: base64UrlEncode(new Uint8Array(credential.rawId)),
-    userHandle: base64UrlEncode(userId),
-  });
+  const credential = await credentials.create({ publicKey: createOptions });
+  if (!isPublicKeyCredential(credential)) throw new Error('Failed to create passkey.');
+  return Object.freeze({ credentialId: idOf(credential), userHandle: base64UrlEncode(userId) });
 }
 
 /**
@@ -134,17 +112,13 @@ export async function authenticatePasskey(
   credentialId?: string,
   options?: AuthOptions,
 ): Promise<PasskeyAuth> {
-  if (!globalThis.navigator?.credentials) {
-    throw protocolError('WEBAUTHN_UNAVAILABLE', 'WebAuthn is not supported in this environment.');
-  }
-
+  const credentials = credentialsApi();
   const getOptions: PublicKeyCredentialRequestOptions & { hints?: string[] } = {
     challenge: globalThis.crypto.getRandomValues(new Uint8Array(32)),
     rpId: options?.rpId,
     userVerification: 'required',
     ...(options?.hints ? { hints: [...options.hints] } : {}),
-    // Narrow the ceremony to the known credential; without this the browser
-    // would prompt for any passkey on the origin.
+    // Without it the browser offers any passkey on the origin.
     ...(credentialId
       ? {
           allowCredentials: [
@@ -154,13 +128,16 @@ export async function authenticatePasskey(
       : {}),
   };
 
-  const credential = await globalThis.navigator.credentials.get({
-    publicKey: getOptions,
-  });
-
-  if (!isPublicKeyCredential(credential)) {
-    throw new Error('Failed to authenticate passkey.');
-  }
-
-  return Object.freeze({ credentialId: base64UrlEncode(new Uint8Array(credential.rawId)) });
+  const credential = await credentials.get({ publicKey: getOptions });
+  if (!isPublicKeyCredential(credential)) throw new Error('Failed to authenticate passkey.');
+  return Object.freeze({ credentialId: idOf(credential) });
 }
+
+function credentialsApi(): CredentialsContainer {
+  const credentials = globalThis.navigator?.credentials;
+  if (!credentials)
+    throw protocolError('WEBAUTHN_UNAVAILABLE', 'WebAuthn is not supported in this environment.');
+  return credentials;
+}
+
+const idOf = (credential: PublicKeyCredential) => base64UrlEncode(new Uint8Array(credential.rawId));

@@ -10,7 +10,7 @@ import { topic as topicCollection } from './schema';
 import { Problem, TopicChip } from './ui';
 import { useAction } from '@minca/app-shared/action';
 import { useDuties } from './duties';
-import { palette } from './styles';
+import { palette, hstack, stack } from './styles';
 import { Loader } from '@minca/app-shared/Loader';
 import { ask } from '@minca/app-shared/Ask';
 
@@ -159,7 +159,7 @@ function Topics({ a, onClose }: { a: Assembly; onClose: () => void }) {
       <p className="lq-muted" style={{ fontSize: 13.5, lineHeight: 1.55 }}>
         Every proposal belongs to one topic, and people can trust someone with just that topic.
       </p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={stack(6)}>
         {a.topics.map((t) => (
           <div key={t.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <TopicChip topic={t} />
@@ -192,7 +192,7 @@ function Topics({ a, onClose }: { a: Assembly; onClose: () => void }) {
         {a.topics.length === 0 && <p className="lq-faint">No topics yet.</p>}
       </div>
       <form
-        style={{ display: 'flex', gap: 8 }}
+        style={hstack(8)}
         onSubmit={(event) => {
           event.preventDefault();
           const trimmed = name.trim();
@@ -311,18 +311,18 @@ function HowItWorks({ onClose }: { onClose: () => void }) {
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <section style={stack(8)}>
       <p className="lq-display" style={{ fontSize: 17 }}>
         {title}
       </p>
-      <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>{children}</ul>
+      <ul style={{ listStyle: 'none', ...stack(8) }}>{children}</ul>
     </section>
   );
 }
 
 function Li({ children }: { children: ReactNode }) {
   return (
-    <li style={{ display: 'flex', gap: 10, fontSize: 13.5, lineHeight: 1.55, color: palette.ink.body }}>
+    <li style={{ ...hstack(10), fontSize: 13.5, lineHeight: 1.55, color: palette.ink.body }}>
       <span aria-hidden style={{ color: palette.ink.faint, flexShrink: 0 }}>
         –
       </span>

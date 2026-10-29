@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import type { CarrierSummary } from '@minca/core/node';
+import type { CarrierSummary, P2PNode } from '@minca/core/node';
 import {
   STAY_SIGNED_IN_CHOICES,
   passwordStrength,
@@ -11,7 +11,7 @@ import {
   type Connection,
   type StaySignedIn,
 } from '@minca/core/session';
-import { useAuth, useSession } from '@minca/react';
+import { useAsync, useAuth, useSession } from '@minca/react';
 import { Shape } from '@minca/app-shared/shapes';
 import { shapeFor, type ShapeKind } from '@minca/ui/shapes';
 import type { ShapeColour } from '@minca/ui/tokens';
@@ -20,7 +20,7 @@ import { PairPhone } from './PairPhone';
 import { ConfirmItsYou } from './ConfirmItsYou';
 import { Hosting } from './Hosting';
 import { Notifications } from './Notifications';
-import { styles, palette } from '../styles';
+import { styles, palette, hstack, stack } from '../styles';
 import type { TabId } from '../tabs';
 
 /**
@@ -89,48 +89,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
     });
   };
 
-  // Carriers are in the account registry, so every device lists them — not
-  // only the home that connected one, which is all `connections()` knows.
-  const [carriers, setCarriers] = useState<ReadonlyArray<CarrierSummary> | null>(null);
-  // A host is a carrier too, but it has its own section.
-  const [hostKeys, setHostKeys] = useState<ReadonlySet<string>>(new Set());
-  useEffect(() => {
-    void session.node.hosting.list().then(
-      (hosts) => setHostKeys(new Set(hosts.map((host) => host.host))),
-      () => {},
-    );
-  }, [session]);
-  // Which carriers are online now: each is a peer in its own carry space. One
-  // that never is may be keeping another account online instead.
-  const [online, setOnline] = useState<ReadonlySet<string>>(new Set());
-  useEffect(() => {
-    let current: ReadonlyArray<CarrierSummary> = [];
-    const look = async () => {
-      const seen = new Set<string>();
-      for (const carrier of current) {
-        const status = await session.node.spaces.status(carrier.space).catch(() => null);
-        // By key: a carrier set up on two devices at once has two carry spaces, and is online in one.
-        if (status?.peers.includes(carrier.did))
-          for (const same of current) if (same.did === carrier.did) seen.add(same.space);
-      }
-      setOnline(seen);
-    };
-    const load = () =>
-      void session.node.carriers.list().then(
-        (found) => {
-          current = found;
-          setCarriers(onePerKey(found));
-          void look();
-        },
-        () => {},
-      );
-    load();
-    return session.node.subscribe((event) => {
-      if (event.type === 'records' || event.type === 'account') load();
-      else if (event.type === 'status' && current.some((carrier) => carrier.space === event.space))
-        void look();
-    });
-  }, [session]);
+  const { carriers, hostKeys, online, reload: reloadCarriers } = useCarriers();
   const presence = (space: string | undefined) =>
     space && online.has(space) ? 'online now' : 'not online right now';
   const anyAway = (carriers ?? []).some((carrier) => !online.has(carrier.space));
@@ -150,8 +109,38 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
   const removeCarrier = (space: string) =>
     leave(space, 'it', async () => {
       await session.node.carriers.remove(space);
-      setCarriers(onePerKey(await session.node.carriers.list()));
+      await reloadCarriers();
     });
+
+  const disconnectButton = (id: string, onClick: () => void) => (
+    <button
+      onClick={onClick}
+      disabled={disconnecting !== null}
+      data-variant="quiet"
+      style={styles.smallButton}
+    >
+      {disconnecting === id ? 'Disconnecting…' : 'Disconnect'}
+    </button>
+  );
+  /** Removes a way in, unless it is the only one: then the other must be set up first */
+  const removeButton = (shortcut: 'passkey' | 'passphrase', other: string) => (
+    <button
+      onClick={() =>
+        guarded(
+          `remove the ${shortcut === 'passkey' ? 'passkey' : 'password'}`,
+          () => void auth.removeShortcut(shortcut),
+        )
+      }
+      disabled={state.busy || onlyWayIn}
+      title={
+        onlyWayIn ? `${other} first — otherwise you would need your recovery code to get back in.` : undefined
+      }
+      data-variant="quiet"
+      style={{ ...styles.smallButton, color: palette.accent.danger }}
+    >
+      Remove
+    </button>
+  );
 
   const choose = async (choice: StaySignedIn) => {
     setStay(choice);
@@ -182,19 +171,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
           >
             {hasPasskey ? (
               <Row label="A passkey signs you in on this device.">
-                <button
-                  onClick={() => guarded('remove the passkey', () => void auth.removeShortcut('passkey'))}
-                  disabled={state.busy || onlyWayIn}
-                  title={
-                    onlyWayIn
-                      ? 'Set a password first — otherwise you would need your recovery code to get back in.'
-                      : undefined
-                  }
-                  data-variant="quiet"
-                  style={{ ...styles.smallButton, color: palette.accent.danger }}
-                >
-                  Remove
-                </button>
+                {removeButton('passkey', 'Set a password')}
               </Row>
             ) : (
               <Row label="No passkey on this device.">
@@ -231,7 +208,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
               />
             ) : (
               <Row label={hasPassword ? 'A password is set.' : 'No password.'}>
-                <span style={{ display: 'flex', gap: 6 }}>
+                <span style={hstack(6)}>
                   <button
                     onClick={() => guarded('change the password', () => setChangingPassword(true))}
                     disabled={state.busy}
@@ -240,23 +217,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
                   >
                     {hasPassword ? 'Change' : 'Set a password'}
                   </button>
-                  {hasPassword && (
-                    <button
-                      onClick={() =>
-                        guarded('remove the password', () => void auth.removeShortcut('passphrase'))
-                      }
-                      disabled={state.busy || onlyWayIn}
-                      title={
-                        onlyWayIn
-                          ? 'Set up a passkey first — otherwise you would need your recovery code to get back in.'
-                          : undefined
-                      }
-                      data-variant="quiet"
-                      style={{ ...styles.smallButton, color: palette.accent.danger }}
-                    >
-                      Remove
-                    </button>
-                  )}
+                  {hasPassword && removeButton('passphrase', 'Set up a passkey')}
                 </span>
               </Row>
             )}
@@ -328,14 +289,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
                     : describeConnection(app)
                 }
               >
-                <button
-                  onClick={() => disconnect(app)}
-                  disabled={disconnecting !== null}
-                  data-variant="quiet"
-                  style={styles.smallButton}
-                >
-                  {disconnecting === connectionKey(app) ? 'Disconnecting…' : 'Disconnect'}
-                </button>
+                {disconnectButton(connectionKey(app), () => disconnect(app))}
               </Row>
             ))}
             {elsewhere.map((carrier) => (
@@ -344,14 +298,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
                 shape={carrier.space}
                 label={`${carrier.name} · keeps your spaces online · connected on another device · ${presence(carrier.space)}`}
               >
-                <button
-                  onClick={() => removeCarrier(carrier.space)}
-                  disabled={disconnecting !== null}
-                  data-variant="quiet"
-                  style={styles.smallButton}
-                >
-                  {disconnecting === carrier.space ? 'Disconnecting…' : 'Disconnect'}
-                </button>
+                {disconnectButton(carrier.space, () => removeCarrier(carrier.space))}
               </Row>
             ))}
             {disconnectError && <p style={styles.error}>{disconnectError}</p>}
@@ -503,22 +450,15 @@ function Overview({
 
 /** How much this site keeps in the browser, and whether the browser may clear it to make room */
 function useBrowserStorage(): { used: number | null; persisted: boolean | null } {
-  const [found, setFound] = useState<{ used: number | null; persisted: boolean | null }>({
-    used: null,
-    persisted: null,
-  });
-  useEffect(() => {
+  const found = useAsync(async () => {
     const storage = globalThis.navigator?.storage;
-    if (!storage) return;
-    void Promise.all([
-      storage.estimate?.().then(
-        (estimate) => estimate.usage ?? null,
-        () => null,
-      ) ?? null,
-      storage.persisted?.().catch(() => null) ?? null,
-    ]).then(([used, persisted]) => setFound({ used, persisted }));
+    const [estimate, persisted] = await Promise.all([
+      storage?.estimate?.().catch(() => null),
+      storage?.persisted?.().catch(() => null),
+    ]);
+    return { used: estimate?.usage ?? null, persisted: persisted ?? null };
   }, []);
-  return found;
+  return found.status === 'done' ? found.value : { used: null, persisted: null };
 }
 
 const megabytes = (bytes: number) => `${Math.max(1, Math.round(bytes / 1_000_000))} MB`;
@@ -647,7 +587,7 @@ function SignOut() {
           </span>
         </span>
       </label>
-      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+      <div style={{ ...hstack(8), marginTop: 12 }}>
         <button
           onClick={() => signOut({ disconnect })}
           disabled={busy}
@@ -670,7 +610,6 @@ function SignOut() {
   );
 }
 
-/** Who this is, with the name editable in place */
 /** A tab's title and what it is for */
 function PageHead({ title, line }: { title: string; line: string }) {
   return (
@@ -738,7 +677,7 @@ function PasswordForm({
         style={styles.input}
       />
       {mismatch && <p style={styles.error}>Those two do not match.</p>}
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div style={hstack(8)}>
         <button type="submit" disabled={busy || !password} data-variant="primary" style={styles.darkSmall}>
           {busy ? 'Saving…' : 'Save password'}
         </button>
@@ -798,7 +737,7 @@ function RecoveryCode({ reveal, name, did }: { reveal: () => string | null; name
           >
             {code}
           </code>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={hstack(8)}>
             <button onClick={() => copy(code)} data-variant="quiet" style={styles.smallButton}>
               {copied ? 'Copied' : 'Copy'}
             </button>
@@ -921,8 +860,8 @@ function Strength({ password }: { password: string }) {
     check.strength
   ];
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div aria-hidden style={{ display: 'flex', gap: 4 }}>
+    <div style={stack(6)}>
+      <div aria-hidden style={hstack(4)}>
         {[1, 2, 3].map((step) => (
           <span
             key={step}
@@ -949,6 +888,55 @@ function Strength({ password }: { password: string }) {
       </p>
     </div>
   );
+}
+
+/**
+ * The account's carriers, one per key, and which are online now. Carriers are
+ * in the account registry, so every device lists them, not only the home that
+ * connected one. A host is a carrier too, but it has its own section: `hostKeys`.
+ */
+function useCarriers() {
+  const { node } = useSession();
+  const [found, setFound] = useState<ReadonlyArray<CarrierSummary> | null>(null);
+  const [online, setOnline] = useState<ReadonlySet<string>>(new Set());
+  const hosts = useAsync(() => node.hosting.list(), [node]);
+  const hostKeys = new Set(hosts.status === 'done' ? hosts.value.map((host) => host.host) : []);
+
+  const reload = async () => setFound(await node.carriers.list());
+
+  useEffect(() => {
+    const load = () => void node.carriers.list().then(setFound, () => {});
+    load();
+    return node.subscribe((event) => {
+      if (event.type === 'records' || event.type === 'account') load();
+    });
+  }, [node]);
+
+  // Each carrier is a peer in its own carry space when it is online.
+  useEffect(() => {
+    if (!found) return;
+    const look = () => void onlineSpaces(node, found).then(setOnline);
+    look();
+    return node.subscribe((event) => {
+      if (event.type === 'status' && found.some((carrier) => carrier.space === event.space)) look();
+    });
+  }, [node, found]);
+
+  return { carriers: found && onePerKey(found), hostKeys, online, reload };
+}
+
+/** The carry spaces whose carrier is online, by key: one set up on two devices is online in one of its two */
+async function onlineSpaces(
+  node: P2PNode,
+  carriers: ReadonlyArray<CarrierSummary>,
+): Promise<ReadonlySet<string>> {
+  const seen = new Set<string>();
+  for (const carrier of carriers) {
+    const status = await node.spaces.status(carrier.space).catch(() => null);
+    if (status?.peers.includes(carrier.did))
+      for (const same of carriers) if (same.did === carrier.did) seen.add(same.space);
+  }
+  return seen;
 }
 
 /** Each carrier once, by key: one set up on two devices at once has two carry spaces (spec 06 §4.2) */

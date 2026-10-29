@@ -3,7 +3,8 @@ import { useNode } from '@minca/react';
 import type { NodeCollection, SpaceSummary } from '@minca/core';
 // `useSchemas` defines collections in a space; it is not a React hook, whatever its name says.
 import { standardAnnotations, useSchemas as addSchemas } from '@minca/core/schemas';
-import { styles, palette } from '../styles';
+import { styles, palette, stack } from '../styles';
+import { QuietButton } from './Buttons';
 
 const WHAT_IT_ADDS: Record<string, string> = {
   'std.reaction': 'Emoji reactions on anything — one of each per person.',
@@ -31,33 +32,19 @@ export function Library({
   if (!space.writable || missing.length === 0) return null;
 
   return (
-    <section
-      aria-label="Standard schemas"
-      style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 24 }}
-    >
+    <section aria-label="Standard schemas" style={{ ...stack(10), marginTop: 24 }}>
       <div>
         <h3 style={styles.sectionTitle}>{title}</h3>
-        <p style={{ fontSize: 13, color: palette.ink.muted, marginTop: 2 }}>
-          Shared shapes, so other apps understand them too.
-        </p>
+        <p style={{ ...styles.quiet, marginTop: 2 }}>Shared shapes, so other apps understand them too.</p>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
         {missing.map((schema) => (
-          <div
-            key={schema.name}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8,
-              padding: 14,
-              ...styles.tile,
-            }}
-          >
+          <div key={schema.name} style={{ ...stack(8), padding: 14, ...styles.tile }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
               <strong style={{ fontSize: 14, fontWeight: 600, color: palette.ink.strong }}>
                 {schema.title}
               </strong>
-              <button
+              <QuietButton
                 onClick={() => {
                   setBusy(schema.name);
                   void addSchemas(node, space.id, [schema])
@@ -66,11 +53,10 @@ export function Library({
                 }}
                 disabled={busy !== null}
                 aria-label={`Add ${schema.title}`}
-                data-variant="quiet"
-                style={{ ...styles.smallButton, height: 28 }}
+                style={{ height: 28 }}
               >
                 {busy === schema.name ? 'Adding…' : 'Add'}
-              </button>
+              </QuietButton>
             </div>
             <span style={{ fontSize: 13, lineHeight: 1.5, color: palette.ink.muted }}>
               {WHAT_IT_ADDS[schema.name] ?? schema.description}

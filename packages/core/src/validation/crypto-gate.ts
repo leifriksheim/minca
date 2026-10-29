@@ -13,39 +13,27 @@ export interface CryptoGate {
   validate(version: Version, resolvePublicKey: (did: string) => Promise<CryptoKey>): Promise<GateResult>;
 }
 
+const fail = (reason: string): GateResult => ({ passed: false, gate: 'crypto', reason });
+
 /** Creates a gate that performs cryptographic validation of versions. */
 export function createCryptoGate(provider: CryptoProvider): CryptoGate {
   return {
-    async validate(
-      version: Version,
-      resolvePublicKey: (did: string) => Promise<CryptoKey>,
-    ): Promise<GateResult> {
+    async validate(version, resolvePublicKey) {
       try {
-        // Only the envelope is signed — the id is a hash of it, the signature
-        // is not part of what was hashed, and the body is there as its hash.
-        const { id, signature } = version;
-        const unsignedPayload = signedPart(version);
-
-        const expectedId = await getVersionId(unsignedPayload);
-        if (id !== expectedId) {
-          return { passed: false, gate: 'crypto', reason: 'Version id does not match its content' };
-        }
-
-        const data = utf8Encode(canonicalize(unsignedPayload));
+        // Only the envelope is signed; the id is its hash, and the body is in it as a hash.
+        const envelope = signedPart(version);
+        if (version.id !== (await getVersionId(envelope)))
+          return fail('Version id does not match its content');
 
         const publicKey = await resolvePublicKey(version.author);
-        const sigBytes = base64UrlDecode(signature);
+        const signature = base64UrlDecode(version.signature);
+        const signed = await provider.verify(publicKey, signature, utf8Encode(canonicalize(envelope)));
+        if (!signed) return fail('Signature verification failed');
 
-        const isValid = await provider.verify(publicKey, sigBytes, data);
-        if (isValid) {
-          const problem = await bodyProblem(version);
-          if (problem) return { passed: false, gate: 'crypto', reason: problem };
-          return { passed: true, gate: 'crypto' };
-        } else {
-          return { passed: false, gate: 'crypto', reason: 'Signature verification failed' };
-        }
+        const problem = await bodyProblem(version);
+        return problem ? fail(problem) : { passed: true, gate: 'crypto' };
       } catch (err) {
-        return { passed: false, gate: 'crypto', reason: messageOf(err, 'Unknown crypto error') };
+        return fail(messageOf(err, 'Unknown crypto error'));
       }
     },
   };

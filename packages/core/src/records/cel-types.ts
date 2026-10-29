@@ -177,23 +177,15 @@ export function typeCheckCel(
     readonly anything?: boolean;
   } = {},
 ): string | null {
-  linkedBodies = options.linked;
-  try {
-    const result = typeOf(node, names);
-    if (!options.anything && known(result) && result.t !== 'bool')
-      return `gives ${named(result)}, so it is never true: a condition must give a bool`;
-    return null;
-  } catch (error) {
-    if (isMistake(error)) return error.message;
-    throw error;
-  } finally {
-    linkedBodies = undefined;
-  }
+  const result = typeOfCel(node, names, options.linked);
+  if (typeof result === 'string') return result;
+  if (!options.anything && known(result) && result.t !== 'bool')
+    return `gives ${named(result)}, so it is never true: a condition must give a bool`;
+  return null;
 }
 
 /** The body type of what `linked(collection, rel)` finds, or why that can't link here */
 export type LinkedBodies = (collection: string, rel: string) => CelType | string;
-let linkedBodies: LinkedBodies | undefined;
 
 /** The type a whole expression gives, or a mistake in it: what a computed field holds */
 export function typeOfCel(
@@ -201,14 +193,11 @@ export function typeOfCel(
   names: ReadonlyMap<string, CelType>,
   linked?: LinkedBodies,
 ): CelType | string {
-  linkedBodies = linked;
   try {
-    return typeOf(node, names);
+    return typeOf(node, names, linked);
   } catch (error) {
     if (isMistake(error)) return error.message;
     throw error;
-  } finally {
-    linkedBodies = undefined;
   }
 }
 
@@ -226,8 +215,8 @@ function equatable(a: CelType, b: CelType, an: CelNode, bn: CelNode) {
     fail(`compares ${shown(an)}, ${named(a)}, with ${shown(bn)}, ${named(b)}: never equal`);
 }
 
-function typeOf(n: CelNode, names: ReadonlyMap<string, CelType>): CelType {
-  const of = (child: CelNode) => typeOf(child, names);
+function typeOf(n: CelNode, names: ReadonlyMap<string, CelType>, linked?: LinkedBodies): CelType {
+  const of = (child: CelNode) => typeOf(child, names, linked);
   switch (n.k) {
     case 'lit':
       return typeOfLiteral(n.v);
@@ -296,17 +285,21 @@ function typeOf(n: CelNode, names: ReadonlyMap<string, CelType>): CelType {
       else if (known(range) && range.t !== 'null')
         fail(`${n.macro}() goes through a list or a map, and ${shown(n.range)} is ${named(range)}`);
       const inner = new Map(names).set(n.v, item);
-      if (n.pred) bool(n.pred, typeOf(n.pred, inner), `${n.macro}()`);
-      if (n.macro === 'map') return listOf(n.out ? typeOf(n.out, inner) : DYN);
+      if (n.pred) bool(n.pred, typeOf(n.pred, inner, linked), `${n.macro}()`);
+      if (n.macro === 'map') return listOf(n.out ? typeOf(n.out, inner, linked) : DYN);
       if (n.macro === 'filter') return range.t === 'list' ? range : listOf(item);
       return BOOL;
     }
     case 'call':
-      return callType(n, of);
+      return callType(n, of, linked);
   }
 }
 
-function callType(n: Extract<CelNode, { k: 'call' }>, of: (n: CelNode) => CelType): CelType {
+function callType(
+  n: Extract<CelNode, { k: 'call' }>,
+  of: (n: CelNode) => CelType,
+  linkedBodies: LinkedBodies | undefined,
+): CelType {
   if (n.target?.k === 'ident' && n.target.name === 'math') {
     const args = n.args.map(of);
     const first = args[0];

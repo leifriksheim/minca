@@ -32,15 +32,19 @@ export function readAccountHint(): string | null {
   if (!match?.[1]) return null;
   try {
     const did = decodeURIComponent(match[1]);
-    // An account is a compressed P-256 key; `didToPublicKey` alone does not check which kind.
-    const { publicKeyBytes, multicodecPrefix } = didToPublicKey(did);
-    const p256 =
-      multicodecPrefix.length === P256_MULTICODEC.length &&
-      multicodecPrefix.every((byte, at) => byte === P256_MULTICODEC[at]);
-    return p256 && publicKeyBytes.length === 33 ? did : null;
+    return isAccountDid(did) ? did : null;
   } catch {
     return null;
   }
+}
+
+/** An account is a compressed P-256 key; `didToPublicKey` alone does not check which kind */
+function isAccountDid(did: string): boolean {
+  const { publicKeyBytes, multicodecPrefix } = didToPublicKey(did);
+  const p256 =
+    multicodecPrefix.length === P256_MULTICODEC.length &&
+    multicodecPrefix.every((byte, at) => byte === P256_MULTICODEC[at]);
+  return p256 && publicKeyBytes.length === 33;
 }
 
 /** Takes the hint out of the address, leaving any section, so a refresh or a shared link does not carry it */

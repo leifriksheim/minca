@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react';
 import type { NodeCollection } from '@minca/core';
 import { collectionLabel, fieldsOf } from '../derive/schema-ui';
 import { namespaceOf } from '../derive/filters';
-import { styles, palette, ui } from '../styles';
+import { styles, palette, ui, stack } from '../styles';
 
 /** How a namespace reads in a list: its name, or a word for having none */
 export const namespaceLabel = (namespace: string) => namespace || 'No namespace';
@@ -19,15 +19,12 @@ export function CollectionsOverview({
 }) {
   const total = collections.reduce((sum, c) => sum + c.records, 0);
   return (
-    <section
-      aria-label="All collections"
-      style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}
-    >
+    <section aria-label="All collections" style={{ ...stack(16), minWidth: 0 }}>
       <header>
         <h2 style={{ ...styles.appTitle, fontSize: 22 }}>
           {namespace === null ? 'All collections' : namespaceLabel(namespace)}
         </h2>
-        <p style={{ fontSize: 13, color: palette.ink.muted, marginTop: 4 }}>
+        <p style={{ ...styles.quiet, marginTop: 4 }}>
           {collections.length} collection{collections.length === 1 ? '' : 's'}, {total} record
           {total === 1 ? '' : 's'}
         </p>
@@ -63,9 +60,9 @@ export function CollectionsOverview({
                   style={{ cursor: 'pointer' }}
                 >
                   <td style={td}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <div style={stack(2)}>
                       <span style={{ fontWeight: 500, color: palette.ink.strong }}>{collectionLabel(c)}</span>
-                      <code style={{ fontSize: 12, color: palette.ink.faint }}>{c.name}</code>
+                      <code style={styles.faint}>{c.name}</code>
                       {c.description && (
                         <span style={{ fontSize: 12, color: palette.ink.muted, whiteSpace: 'normal' }}>
                           {c.description}

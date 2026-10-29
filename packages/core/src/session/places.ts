@@ -100,17 +100,16 @@ export async function listAccounts(place: Place): Promise<ReadonlyArray<AccountS
 /** What a pod holds of this account and others, and whether it is the one in use. */
 export async function inspectPod(pod: Place, current: Place, did: string): Promise<PodContents> {
   const accounts = await listAccounts(pod);
-  const same =
-    current.kind === 'folder' &&
-    !!current.directory &&
-    !!pod.directory &&
-    canCompare(pod.directory) &&
-    (await pod.directory.isSameEntry(current.directory).catch(() => false)) === true;
   return {
     account: accounts.find((account) => account.did === did) ?? null,
     others: accounts.filter((account) => account.did !== did).length,
-    same,
+    same: current.kind === 'folder' && (await sameFolder(pod.directory, current.directory)),
   };
+}
+
+async function sameFolder(a: DirectoryHandleLike | null, b: DirectoryHandleLike | null): Promise<boolean> {
+  if (!a || !b || !canCompare(a)) return false;
+  return (await a.isSameEntry(b).catch(() => false)) === true;
 }
 
 /**
@@ -148,25 +147,27 @@ export function describeStores(
 ): WorkerStores {
   return folder
     ? { directory: folder.directory, basePath: account.dataPath, localKey: folder.localKey }
-    : { indexedDB: `minca:${account.dataPath.replace(/\//g, ':')}` };
+    : { indexedDB: databaseName(account) };
 }
 
 /** Deletes the IndexedDB databases an account kept in this browser, or every one whose name starts with a prefix. */
 export async function deleteBrowserData(account: AccountSummary | string): Promise<void> {
-  const prefix = typeof account === 'string' ? account : `minca:${account.dataPath.replace(/\//g, ':')}`;
+  const prefix = typeof account === 'string' ? account : databaseName(account);
   const databases = (await globalThis.indexedDB.databases?.()) ?? [];
-  await Promise.all(
-    databases
-      .map((db) => db.name)
-      .filter((name): name is string => typeof name === 'string' && name.startsWith(prefix))
-      .map(
-        (name) =>
-          new Promise<void>((resolve) => {
-            const request = globalThis.indexedDB.deleteDatabase(name);
-            request.onsuccess = request.onerror = request.onblocked = () => resolve();
-          }),
-      ),
-  );
+  const names = databases
+    .map((db) => db.name)
+    .filter((name): name is string => name?.startsWith(prefix) === true);
+  await Promise.all(names.map(deleteDatabase));
+}
+
+const databaseName = (account: AccountSummary) => `minca:${account.dataPath.replace(/\//g, ':')}`;
+
+/** Deletes one database, settling however the browser answers */
+function deleteDatabase(name: string): Promise<void> {
+  return new Promise((resolve) => {
+    const request = globalThis.indexedDB.deleteDatabase(name);
+    request.onsuccess = request.onerror = request.onblocked = () => resolve();
+  });
 }
 
 /** `FileSystemHandle.isSameEntry`, which not every handle a test or an older browser gives has */

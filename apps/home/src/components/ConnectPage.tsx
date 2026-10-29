@@ -10,14 +10,13 @@ import {
   type IncomingRequest,
   type ProposeRequest,
 } from '@minca/core/session';
-import { useAuth, useSession, useMinca } from '@minca/react';
+import { useAccountPicture, useAuth, useSession, useMinca, useWatched } from '@minca/react';
 import { Wordmark } from '@minca/app-shared/Wordmark';
 import { Avatar } from '@minca/app-shared/Avatar';
-import { useAccountPicture } from '../picture';
 import { Shape } from '@minca/app-shared/shapes';
 import { shapeFor } from '@minca/ui/shapes';
 import { useAction } from '@minca/app-shared/action';
-import { styles, palette } from '../styles';
+import { styles, palette, stack } from '../styles';
 import { Loader } from '@minca/app-shared/Loader';
 import { relayUrls } from '@minca/app-shared/relay';
 import { connectCode as code } from '../minca';
@@ -55,8 +54,7 @@ export function ConnectPage() {
 
   if (answered)
     return (
-      <Frame>
-        <h1 style={styles.title}>{answered.allowed ? 'Connected' : 'Not connected'}</h1>
+      <Frame title={answered.allowed ? 'Connected' : 'Not connected'}>
         <p style={styles.hint}>
           {answered.allowed
             ? 'You can close this tab and go back to your AI. It can use Minca now.'
@@ -77,8 +75,7 @@ export function ConnectPage() {
 
   if (incoming === null && code) {
     return (
-      <Frame>
-        <h1 style={styles.title}>This link was used, or has run out</h1>
+      <Frame title="This link was used, or has run out">
         <p style={styles.hint}>
           The program that opened it isn’t waiting for it any more. Ask it to connect again for a new link. If
           it says it connected and you didn’t allow it here, it joined someone else’s account: disconnect it
@@ -90,8 +87,7 @@ export function ConnectPage() {
 
   if (incoming === null) {
     return (
-      <Frame>
-        <h1 style={styles.title}>Your account home</h1>
+      <Frame title="Your account home">
         <p style={styles.hint}>
           Apps open this page to ask for access to your Minca account. Nothing has asked right now.
         </p>
@@ -171,12 +167,11 @@ function ChooseAccount({
   const current = state.session?.account.id ?? null;
   const named = (name: string) => state.accounts.filter((account) => account.name === name).length;
   return (
-    <Frame>
-      <h1 style={styles.title}>Choose an account</h1>
+    <Frame title="Choose an account">
       <p style={styles.subtitle}>
         to continue to <strong style={{ color: palette.ink.strong }}>{asker(incoming.origin)}</strong>
       </p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+      <div style={{ ...stack(6), marginBottom: 16 }}>
         {state.accounts.map((account) => (
           <button
             key={account.id}
@@ -308,8 +303,6 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
   const contacts = request.contacts === true && !recordsOnly && !whole;
   const nothing = !whole && !contacts && chosen.size === 0 && creating.length === 0;
 
-  // Proof given on the way here lasts a few minutes: after that, it asks again.
-  const [proving, setProving] = useState(false);
   // A program keeps its note only once the person gives it the check code: this page then waits for that.
   const [sent, setSent] = useState(false);
   const grant = () =>
@@ -317,12 +310,10 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
       incoming.approve(await auth.grant({ origin, request, spaceIds: [...chosen] }));
       if (incoming.check) setSent(true);
     });
-  const allow = () => (auth.mayGrant() ? grant() : setProving(true));
 
   if (sent && incoming.check)
     return (
-      <Frame>
-        <h1 style={styles.title}>Now give it the code</h1>
+      <Frame title="Now give it the code">
         <p style={styles.subtitle}>
           Type this into the terminal where you started it, or tell your AI, so it knows this is your account.
         </p>
@@ -334,27 +325,15 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
     );
 
   return (
-    <Frame>
-      {byCode ? (
-        <>
-          <h1 style={styles.title}>Connect “{request.name ?? 'a program'}”</h1>
-          <p style={styles.subtitle}>
-            A program on your computer or a server, such as your AI, opened this page. It wants to{' '}
-            {writes ? 'read and change' : 'read'} {whole ? 'everything in' : 'spaces in'} your account,{' '}
-            <strong style={{ color: palette.ink.strong }}>{session.account.name}</strong>. Allow it only if
-            you started it just now.
-          </p>
-        </>
-      ) : (
-        <>
-          <h1 style={styles.title}>Connect to {host}</h1>
-          <p style={styles.subtitle}>
-            {request.name ? <>It calls itself “{request.name}”. </> : null}It wants to{' '}
-            {writes ? 'read and change' : 'read'} {whole ? 'everything in' : 'spaces in'} your account,{' '}
-            <strong style={{ color: palette.ink.strong }}>{session.account.name}</strong>.
-          </p>
-        </>
-      )}
+    <Frame title={byCode ? `Connect “${request.name ?? 'a program'}”` : `Connect to ${host}`}>
+      <p style={styles.subtitle}>
+        {byCode
+          ? 'A program on your computer or a server, such as your AI, opened this page. '
+          : request.name && <>It calls itself “{request.name}”. </>}
+        It wants to {writes ? 'read and change' : 'read'} {whole ? 'everything in' : 'spaces in'} your
+        account, <strong style={{ color: palette.ink.strong }}>{session.account.name}</strong>.
+        {byCode && ' Allow it only if you started it just now.'}
+      </p>
 
       <WhichAccount label={byCode ? 'The account it will work in' : 'The account it will use'} busy={busy} />
 
@@ -400,21 +379,17 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
         <section style={{ marginBottom: 20 }}>
           <p style={styles.fieldLabel}>{byCode ? 'Which spaces it may work in' : 'Which spaces'}</p>
           {offered.length === 0 && <p style={styles.errorHint}>You have no spaces it could use.</p>}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={stack(6)}>
             {offered.map((space) => (
-              <label key={space.id} data-choice style={styles.choice}>
-                <input
-                  type="checkbox"
-                  checked={chosen.has(space.id)}
-                  onChange={() => setChosen((was) => toggled(was, space.id))}
-                  style={{ ...styles.checkbox, marginTop: 0 }}
-                />
+              <Tick
+                key={space.id}
+                on={chosen.has(space.id)}
+                onToggle={() => setChosen((was) => toggled(was, space.id))}
+                note={`${space.visibility} · ${space.role ?? 'following'}`}
+              >
                 <Shape {...shapeFor(space.id)} size={18} />
-                <span style={{ flex: 1 }}>{space.name}</span>
-                <span style={{ color: palette.ink.faint, fontSize: 12 }}>
-                  {space.visibility} · {space.role ?? 'following'}
-                </span>
-              </label>
+                {space.name}
+              </Tick>
             ))}
           </div>
         </section>
@@ -423,11 +398,11 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
       {creating.length > 0 && (
         <section style={{ marginBottom: 20 }}>
           <p style={styles.fieldLabel}>New spaces for it</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={stack(6)}>
             {creating.map((space, index) => (
               <div key={index} style={{ ...styles.choice, flexWrap: 'wrap', cursor: 'default' }}>
                 <span style={{ flex: 1 }}>{space.name}</span>
-                <span style={{ color: palette.ink.faint, fontSize: 12 }}>
+                <span style={styles.faint}>
                   {space.visibility} · {constitution(space, session.did)}
                 </span>
                 {space.top !== 'none' && cofoundersOf(space, session.did).length > 0 && (
@@ -450,25 +425,15 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
           ' It can read the private spaces it gets from now on — that cannot be taken back yet.'}
       </p>
 
-      {proving ? (
-        <ConfirmItsYou
-          why={`continue to ${host}`}
-          onConfirmed={() => {
-            setProving(false);
-            void grant();
-          }}
-          onCancel={() => setProving(false)}
-        />
-      ) : (
-        <Answer
-          error={error}
-          busy={busy}
-          blocked={nothing}
-          allowLabel={busy ? 'Giving access…' : 'Allow'}
-          onAllow={() => void allow()}
-          onDeny={() => incoming.deny()}
-        />
-      )}
+      <Answer
+        error={error}
+        busy={busy}
+        blocked={nothing}
+        allowLabel={busy ? 'Giving access…' : 'Allow'}
+        proveTo={`continue to ${host}`}
+        onAllow={grant}
+        onDeny={() => incoming.deny()}
+      />
 
       <p style={{ ...styles.errorHint, marginTop: 20 }}>
         {byCode ? 'The program' : 'The app'} gets a note signed by your account, for its own key. It never
@@ -497,7 +462,6 @@ function ApproveCarrier({ incoming, request }: { incoming: IncomingRequest; requ
   const elsewhere = auth.connectedElsewhere(origin);
 
   const [handing, setHanding] = useState(false);
-  const [proving, setProving] = useState(false);
 
   const grant = () =>
     run(async () => {
@@ -508,11 +472,9 @@ function ApproveCarrier({ incoming, request }: { incoming: IncomingRequest; requ
       setHanding(true);
       await reached;
     });
-  const allow = () => (auth.mayGrant() ? grant() : setProving(true));
 
   return (
-    <Frame>
-      <h1 style={styles.title}>Keep your spaces online</h1>
+    <Frame title="Keep your spaces online">
       <p style={styles.subtitle}>
         {/* Where it asks from, always: a name is only what the asker calls itself (spec 06 §2.3). */}
         {request.name ? (
@@ -555,24 +517,14 @@ function ApproveCarrier({ incoming, request }: { incoming: IncomingRequest; requ
         time in your account.
       </p>
 
-      {proving ? (
-        <ConfirmItsYou
-          why="keep your spaces online with it"
-          onConfirmed={() => {
-            setProving(false);
-            void grant();
-          }}
-          onCancel={() => setProving(false)}
-        />
-      ) : (
-        <Answer
-          error={error}
-          busy={busy}
-          allowLabel={handing ? 'Handing your spaces over…' : busy ? 'Connecting…' : 'Allow'}
-          onAllow={() => void allow()}
-          onDeny={() => incoming.deny()}
-        />
-      )}
+      <Answer
+        error={error}
+        busy={busy}
+        allowLabel={handing ? 'Handing your spaces over…' : busy ? 'Connecting…' : 'Allow'}
+        proveTo="keep your spaces online with it"
+        onAllow={grant}
+        onDeny={() => incoming.deny()}
+      />
     </Frame>
   );
 }
@@ -614,8 +566,7 @@ function ApproveProposal({ incoming, request }: { incoming: IncomingRequest; req
 
   if (!connection) {
     return (
-      <Frame>
-        <h1 style={styles.title}>Not connected here</h1>
+      <Frame title="Not connected here">
         <p style={styles.subtitle}>
           {asker(origin)} suggested what to notify you about, but it isn't connected to your account,{' '}
           {session.account.name}, in this home. Connect it first — or, if it keeps another account, switch to
@@ -633,26 +584,23 @@ function ApproveProposal({ incoming, request }: { incoming: IncomingRequest; req
   }
 
   return (
-    <Frame>
-      <h1 style={styles.title}>Notify you when…</h1>
+    <Frame title="Notify you when…">
       <p style={styles.subtitle}>
         “{who}” suggests these for your account,{' '}
         <strong style={{ color: palette.ink.strong }}>{session.account.name}</strong>. Keep the ones you want.
       </p>
 
       <section style={{ marginBottom: 20 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={stack(6)}>
           {request.automations.map((proposal, index) => (
-            <label key={index} data-choice style={styles.choice}>
-              <input
-                type="checkbox"
-                checked={kept.has(index)}
-                onChange={() => setKept((was) => toggled(was, index))}
-                style={{ ...styles.checkbox, marginTop: 0 }}
-              />
-              <span style={{ flex: 1 }}>{proposal.name}</span>
-              <span style={{ color: palette.ink.faint, fontSize: 12 }}>{where(proposal.spaces)}</span>
-            </label>
+            <Tick
+              key={index}
+              on={kept.has(index)}
+              onToggle={() => setKept((was) => toggled(was, index))}
+              note={where(proposal.spaces)}
+            >
+              {proposal.name}
+            </Tick>
           ))}
         </div>
         <p style={styles.errorHint}>
@@ -666,11 +614,32 @@ function ApproveProposal({ incoming, request }: { incoming: IncomingRequest; req
         busy={busy}
         blocked={kept.size === 0}
         allowLabel={busy ? 'Adding…' : kept.size === 1 ? 'Notify me' : `Notify me about ${kept.size}`}
-        onAllow={() => void allow()}
+        onAllow={allow}
         denyLabel="Not now"
         onDeny={() => incoming.deny('You chose not to.')}
       />
     </Frame>
+  );
+}
+
+/** A line to tick, with a note on the right */
+function Tick({
+  on,
+  onToggle,
+  note,
+  children,
+}: {
+  on: boolean;
+  onToggle: () => void;
+  note: string;
+  children: ReactNode;
+}) {
+  return (
+    <label data-choice style={styles.choice}>
+      <input type="checkbox" checked={on} onChange={onToggle} style={{ ...styles.checkbox, marginTop: 0 }} />
+      <span style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10 }}>{children}</span>
+      <span style={styles.faint}>{note}</span>
+    </label>
   );
 }
 
@@ -688,31 +657,23 @@ function toggled<T>(set: ReadonlySet<T>, item: T): Set<T> {
  * isn't known yet is opened, which syncs its access history and so its role.
  */
 function useSpaces(hold: boolean): ReadonlyArray<SpaceSummary> {
-  const session = useSession();
-  const [spaces, setSpaces] = useState<ReadonlyArray<SpaceSummary>>([]);
-  useEffect(() => {
-    const opened = new Set<string>();
-    const load = () =>
-      void session.node.spaces.list().then(
-        (found) => {
-          setSpaces(found);
-          for (const space of found) {
-            if (!hold || space.role !== null || opened.has(space.id)) continue;
-            opened.add(space.id);
-            void session.node.spaces.hold(space.id).catch(() => {});
-          }
-        },
-        () => {},
-      );
-    load();
-    return session.node.subscribe((event) => {
-      if (event.type === 'spaces' || event.type === 'account' || event.type === 'records') load();
-    });
-  }, [session, hold]);
-  return spaces;
+  const [opened] = useState(() => new Set<string>());
+  const spaces = useWatched(
+    async (node) => {
+      const found = await node.spaces.list();
+      for (const space of found) {
+        if (!hold || space.role !== null || opened.has(space.id)) continue;
+        opened.add(space.id);
+        void node.spaces.hold(space.id).catch(() => {});
+      }
+      return found;
+    },
+    [hold],
+    { when: (event) => event.type === 'spaces' || event.type === 'account' || event.type === 'records' },
+  );
+  return spaces ?? [];
 }
 
-/** A boxed explanation: what something may do, or may not */
 /**
  * Who is signed in here, and a way to answer as someone else: the request
  * waits while the person signs in to another account, and is answered from it.
@@ -740,40 +701,27 @@ function WhichAccount({ label, busy, onSwitch }: { label: string; busy: boolean;
   );
 }
 
-function Note({
-  title,
-  below = 20,
-  warn = false,
-  children,
-}: {
-  title: string;
-  below?: number;
-  /** Something the person should weigh before allowing */
-  warn?: boolean;
-  children: ReactNode;
-}) {
+/** A boxed explanation: what something may do, or may not */
+function Note({ title, below = 20, children }: { title: string; below?: number; children: ReactNode }) {
   return (
-    <div
-      style={{
-        ...styles.note,
-        marginBottom: below,
-        ...(warn
-          ? { border: `1px solid ${palette.accent.danger}`, background: palette.accent.dangerSoft }
-          : {}),
-      }}
-    >
-      <p style={{ ...styles.todoText, ...(warn ? { color: palette.accent.danger } : {}) }}>{title}</p>
+    <div style={{ ...styles.note, marginBottom: below }}>
+      <p style={styles.todoText}>{title}</p>
       <p style={styles.errorHint}>{children}</p>
     </div>
   );
 }
 
-/** What went wrong, if anything, then the two answers to a request */
+/**
+ * What went wrong, if anything, then the two answers to a request. With
+ * `proveTo`, allowing is a grant: proof given on the way here lasts a few
+ * minutes, and after that it asks again first.
+ */
 function Answer({
   error,
   busy,
   blocked = false,
   allowLabel,
+  proveTo,
   onAllow,
   denyLabel = "Don't allow",
   onDeny,
@@ -783,10 +731,26 @@ function Answer({
   /** Nothing to allow yet */
   blocked?: boolean;
   allowLabel: string;
-  onAllow: () => void;
+  /** What proving it is you is for, when allowing grants access */
+  proveTo?: string;
+  onAllow: () => Promise<unknown>;
   denyLabel?: string;
   onDeny: () => void;
 }) {
+  const { auth } = useAuth();
+  const [proving, setProving] = useState(false);
+  if (proving && proveTo)
+    return (
+      <ConfirmItsYou
+        why={proveTo}
+        onConfirmed={() => {
+          setProving(false);
+          void onAllow();
+        }}
+        onCancel={() => setProving(false)}
+      />
+    );
+  const allow = () => (proveTo && !auth.mayGrant() ? setProving(true) : void onAllow());
   return (
     <>
       {error && (
@@ -794,8 +758,8 @@ function Answer({
           <p style={styles.error}>{error}</p>
         </div>
       )}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <button onClick={onAllow} disabled={busy || blocked} data-variant="primary" style={styles.button}>
+      <div style={stack(8)}>
+        <button onClick={allow} disabled={busy || blocked} data-variant="primary" style={styles.button}>
           {allowLabel}
         </button>
         <button
@@ -817,15 +781,15 @@ function Answer({
   );
 }
 
-/**
- * A new space's constitution in a few words: who founds it, and its roles.
- * "You found it · Admin, Member"; "No founder · Steward, Member".
- */
 /** The other founders an app names, each once, never the person themselves */
 function cofoundersOf(space: NewSpace, me: string): string[] {
   return [...new Set(space.cofounders ?? [])].filter((did) => did !== me);
 }
 
+/**
+ * A new space's constitution in a few words: who founds it, and its roles.
+ * "You found it · Admin, Member"; "No founder · Steward, Member".
+ */
 function constitution(space: NewSpace, me: string): string {
   const roles = (space.roles ?? []).map((role) => role.title ?? role.name);
   const others = cofoundersOf(space, me).length;
@@ -866,13 +830,14 @@ function lasts(days: number): string {
 }
 
 /** The page around it, under Minca's mark; the sign-in element's own is hidden in the home's styles */
-function Frame({ children }: { children: ReactNode }) {
+function Frame({ title, children }: { title?: ReactNode; children: ReactNode }) {
   return (
     <div className="page" style={{ paddingTop: 32 }}>
       <div style={{ ...styles.card, paddingTop: 0 }}>
         <div style={{ marginBottom: 32 }}>
           <Wordmark compact />
         </div>
+        {title && <h1 style={styles.title}>{title}</h1>}
         {children}
       </div>
     </div>

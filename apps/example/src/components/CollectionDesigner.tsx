@@ -17,8 +17,9 @@ import {
   type FieldTypeName,
 } from '../derive/field-types';
 import { SchemaForm } from './SchemaForm';
-import { styles, palette, ui } from '../styles';
-import { ask } from '@minca/app-shared/Ask';
+import { styles, palette, ui, hstack, stack } from '../styles';
+import { PrimaryButton, QuietButton } from './Buttons';
+import { confirmThen } from '../confirm';
 
 type LinkDeclaration = NonNullable<DefineCollection['links']>[string];
 
@@ -99,15 +100,18 @@ const TEMPLATES: ReadonlyArray<{
 let nextId = 0;
 const id = () => ++nextId;
 
+/** A template's fields, as drafts to change */
+const fromTemplate = (template: (typeof TEMPLATES)[number]): FieldDraft[] =>
+  template.fields.map((f) => ({
+    id: id(),
+    label: f.label,
+    type: f.type,
+    options: f.options ?? [],
+    required: !!f.required,
+  }));
+
 function draftsFrom(collection: NodeCollection | null): FieldDraft[] {
-  if (!collection)
-    return TEMPLATES[0]!.fields.map((f) => ({
-      id: id(),
-      label: f.label,
-      type: f.type,
-      options: [],
-      required: !!f.required,
-    }));
+  if (!collection) return fromTemplate(TEMPLATES[0]!);
   const schema = collection.schema ?? {};
   const properties = isObject(schema.properties) ? schema.properties : {};
   const required = new Set(Array.isArray(schema.required) ? schema.required : []);
@@ -226,15 +230,7 @@ export function CollectionEditor({
   };
   const applyTemplate = (picked: (typeof TEMPLATES)[number]) => {
     setTemplate(picked.title);
-    setFields(
-      picked.fields.map((f) => ({
-        id: id(),
-        label: f.label,
-        type: f.type,
-        options: f.options ?? [],
-        required: !!f.required,
-      })),
-    );
+    setFields(fromTemplate(picked));
     if (!title.trim() && picked.thing) setTitle(picked.thing);
   };
 
@@ -302,22 +298,20 @@ export function CollectionEditor({
   const cannotDelete = collection?.records
     ? `Delete its ${collection.records === 1 ? 'one record' : `${collection.records} records`} first. A definition can only be deleted once nothing uses it.`
     : null;
-  const remove = async (gone: NodeCollection) => {
-    const sure = await ask(`It's removed for everyone in the space.`, {
-      title: `Delete the definition of ${label}?`,
-      yes: 'Delete',
-      danger: true,
-    });
-    if (!sure) return;
-    await run(async () => {
-      await node.collections.delete(space.id, gone.name);
-      onDone(null);
-    });
-  };
+  const remove = (gone: NodeCollection) =>
+    confirmThen(
+      `It's removed for everyone in the space.`,
+      { title: `Delete the definition of ${label}?`, yes: 'Delete' },
+      () =>
+        run(async () => {
+          await node.collections.delete(space.id, gone.name);
+          onDone(null);
+        }),
+    );
 
   const designer = (
     <div className="designer" style={{ display: 'grid', gap: 28, alignItems: 'start' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 28, minWidth: 0 }}>
+      <div style={{ ...stack(28), minWidth: 0 }}>
         <section style={section}>
           <input
             value={title}
@@ -520,7 +514,7 @@ export function CollectionEditor({
           />
           {links.map((link) => (
             <div key={link.id} style={fieldCard}>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ ...hstack(8), alignItems: 'center', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 14, color: palette.ink.muted }}>Each {thing} is</span>
                 <input
                   aria-label="Connection name"
@@ -607,7 +601,7 @@ export function CollectionEditor({
             </label>
           )}
           {!making && collection?.rules.onePer && (
-            <p style={{ fontSize: 13, color: palette.ink.muted }}>
+            <p style={styles.quiet}>
               One per{' '}
               {collection.rules.onePer
                 .map((part) =>
@@ -626,28 +620,17 @@ export function CollectionEditor({
           </p>
         )}
         {error && <p style={styles.error}>{error}</p>}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            onClick={() => void save()}
-            disabled={busy}
-            data-variant="primary"
-            style={{ ...styles.button, width: 'auto' }}
-          >
+        <div style={{ ...hstack(8), alignItems: 'center', flexWrap: 'wrap' }}>
+          <PrimaryButton type="button" onClick={() => void save()} disabled={busy} style={{ width: 'auto' }}>
             {busy ? 'Saving…' : making ? `Create ${title.trim() || 'collection'}` : 'Save changes'}
-          </button>
-          <button
-            type="button"
-            onClick={() => onDone(null)}
-            data-variant="quiet"
-            style={{ ...styles.smallButton, height: 40 }}
-          >
+          </PrimaryButton>
+          <QuietButton type="button" onClick={() => onDone(null)} style={{ height: 40 }}>
             Cancel
-          </button>
+          </QuietButton>
           {collection && (
             <button
               type="button"
-              onClick={() => void remove(collection)}
+              onClick={() => remove(collection)}
               disabled={busy || !!cannotDelete}
               title={cannotDelete ?? undefined}
               data-variant="danger"
@@ -657,9 +640,7 @@ export function CollectionEditor({
             </button>
           )}
         </div>
-        {cannotDelete && (
-          <p style={{ fontSize: 12, color: palette.ink.faint, marginTop: -16 }}>{cannotDelete}</p>
-        )}
+        {cannotDelete && <p style={{ ...styles.faint, marginTop: -16 }}>{cannotDelete}</p>}
       </div>
 
       <aside aria-label="Preview" className="designer-preview" style={preview}>
@@ -680,10 +661,10 @@ export function CollectionEditor({
   );
   if (!collection) return designer;
   return (
-    <section aria-label={`Edit what ${label} is`} style={{ ...ui.stack, gap: 20 }}>
-      <header style={{ ...ui.stack, gap: 4 }}>
+    <section aria-label={`Edit what ${label} is`} style={stack(20)}>
+      <header style={stack(4)}>
         <h2 style={{ ...styles.appTitle, fontSize: 22 }}>Edit {label}</h2>
-        <p style={{ fontSize: 13, color: palette.ink.muted, lineHeight: 1.5 }}>
+        <p style={{ ...styles.quiet, lineHeight: 1.5 }}>
           What every {label.toLowerCase()} is. Every device in the space checks new ones against it.
         </p>
       </header>
@@ -749,19 +730,13 @@ function Heading({ title, about }: { title: string; about: string }) {
   return (
     <div>
       <h3 style={{ ...styles.sectionTitle, fontSize: 15 }}>{title}</h3>
-      <p style={{ fontSize: 13, color: palette.ink.muted, marginTop: 2 }}>{about}</p>
+      <p style={{ ...styles.quiet, marginTop: 2 }}>{about}</p>
     </div>
   );
 }
 
-const section: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 10 };
-const fieldCard: CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 10,
-  padding: 8,
-  ...styles.tile,
-};
+const section: CSSProperties = stack(10);
+const fieldCard: CSSProperties = { ...stack(10), padding: 8, ...styles.tile };
 const nudge: CSSProperties = {
   border: 'none',
   background: 'none',

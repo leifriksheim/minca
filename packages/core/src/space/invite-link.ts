@@ -12,7 +12,7 @@
  * The pin is what makes a link fixed: whoever holds `S` can seal other
  * blobs, but only the inviter's hashes to the pin, so only it is taken.
  */
-import { base64UrlDecode, base64UrlEncode, utf8Decode, utf8Encode } from '../utils/encoding.js';
+import { base64UrlDecode, base64UrlEncode, concatBytes, utf8Decode, utf8Encode } from '../utils/encoding.js';
 import { bufferSource, isRecord } from '../utils/guards.js';
 import { sha256 } from '../utils/hash.js';
 import { expandSecret } from './space-access.js';
@@ -92,36 +92,43 @@ export function isShortInvite(value: string): boolean {
 /** A place as a link writes it: no scheme for wss://, nor for ws:// on this machine */
 function writePlace(url: string): string {
   const parsed = new URL(url);
+  const local = LOOPBACK.has(parsed.hostname);
+  const implied = parsed.protocol === 'wss:' ? !local : local;
   const bare = `${parsed.host}${parsed.pathname === '/' ? '' : parsed.pathname}${parsed.search}`;
-  const plain = parsed.protocol === 'wss:' ? !LOOPBACK.has(parsed.hostname) : LOOPBACK.has(parsed.hostname);
-  return (plain ? bare : url).replace(
-    /[%@,#&\s]/g,
-    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`,
-  );
+  return escapePlace(implied ? bare : url);
 }
 
 /** A place as a link wrote it, or null for one that is no usable mailbox */
 function readPlace(written: string): string | null {
-  let text: string;
+  const text = decodeOrNull(written);
+  if (!text) return null;
+  const url = text.includes('://') ? text : `${schemeFor(text)}://${text}`;
+  return checkRelays([url]) === null ? url : null;
+}
+
+/** The scheme a place written without one has: ws:// on this machine, wss:// elsewhere */
+function schemeFor(place: string): 'ws' | 'wss' {
+  const host = place.split('/')[0]!.replace(/:\d+$/, '');
+  return LOOPBACK.has(host) ? 'ws' : 'wss';
+}
+
+/** Percent-escapes what would end a place, or the link, early */
+const escapePlace = (text: string) =>
+  text.replace(/[%@,#&\s]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`);
+
+function decodeOrNull(text: string): string | null {
   try {
-    text = decodeURIComponent(written);
+    return decodeURIComponent(text);
   } catch {
     return null;
   }
-  if (!text) return null;
-  let url = text;
-  if (!text.includes('://')) {
-    const host = text.split('/')[0]!.replace(/:\d+$/, '');
-    url = `${LOOPBACK.has(host) ? 'ws' : 'wss'}://${text}`;
-  }
-  return checkRelays([url]) === null ? url : null;
 }
 
 /** Writes a short link's text: what goes after `#invite=` */
 export function encodeInviteLink(link: InviteLink): string {
   if (link.secret.length !== LINK_SECRET_BYTES || link.pin.length !== LINK_PIN_BYTES)
     throw new Error('A short invite is a 16-byte secret and a 16-byte pin');
-  const code = base64UrlEncode(new Uint8Array([...link.secret, ...link.pin]));
+  const code = base64UrlEncode(concatBytes(link.secret, link.pin));
   const places = link.places.slice(0, MAX_LINK_PLACES).map(writePlace);
   return places.length ? `${code}@${places.join(',')}` : code;
 }
@@ -197,13 +204,7 @@ async function pipe(
     }
     chunks.push(value);
   }
-  const out = new Uint8Array(size);
-  let at = 0;
-  for (const chunk of chunks) {
-    out.set(chunk, at);
-    at += chunk.length;
-  }
-  return out;
+  return concatBytes(...chunks);
 }
 
 /**
@@ -216,13 +217,15 @@ export async function sealInvite(
 ): Promise<{ readonly blob: string; readonly pin: Uint8Array }> {
   const json = utf8Encode(JSON.stringify({ v: 2, ...sealed }));
   if (json.length > MAX_SEALED_INVITE_BYTES) throw new Error('That invite is too large for a short link');
-  const plain = await pipe(json, new CompressionStream('deflate'), MAX_SEALED_INVITE_BYTES);
+  const deflated = await pipe(json, new CompressionStream('deflate'), MAX_SEALED_INVITE_BYTES);
   const nonce = globalThis.crypto.getRandomValues(new Uint8Array(12));
   const key = await sealKeyOf(secret);
-  const cipher = new Uint8Array(
-    await globalThis.crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce }, key, bufferSource(plain)),
+  const cipher = await globalThis.crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: nonce },
+    key,
+    bufferSource(deflated),
   );
-  const blob = base64UrlEncode(new Uint8Array([...nonce, ...cipher]));
+  const blob = base64UrlEncode(concatBytes(nonce, new Uint8Array(cipher)));
   if (blob.length > MAX_SEALED_BLOB_CHARS) throw new Error('That invite is too large for a short link');
   return { blob, pin: await pinOf(blob) };
 }
@@ -238,24 +241,26 @@ export async function openInvite(link: InviteLink, blob: string): Promise<Sealed
   if (!pin.every((byte, i) => byte === link.pin[i])) return null;
   const bytes = base64UrlDecode(blob);
   if (bytes.length < 12 + 16) return null;
-  const sealKey = await sealKeyOf(link.secret);
-  let json: unknown;
-  try {
-    const plain = new Uint8Array(
-      await globalThis.crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv: bufferSource(bytes.slice(0, 12)) },
-        sealKey,
-        bufferSource(bytes.slice(12)),
-      ),
-    );
-    json = JSON.parse(
-      utf8Decode(await pipe(plain, new DecompressionStream('deflate'), MAX_SEALED_INVITE_BYTES)),
-    );
-  } catch {
-    return null;
-  }
+  const key = await sealKeyOf(link.secret);
+  const json = await unseal(key, bytes).catch(() => null);
   if (!isRecord(json) || json.v !== 2 || !isRecord(json.invite)) return null;
   const until = typeof json.until === 'number' && Number.isFinite(json.until) ? json.until : undefined;
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- an object; whoever joins with it reads it as an invitation and checks its signature
   return { invite: json.invite as unknown as Version, ...(until !== undefined ? { until } : {}) };
+}
+
+/** The JSON inside `nonce(12) ‖ AES-256-GCM(deflate(JSON))`; throws when it doesn't open */
+async function unseal(key: CryptoKey, bytes: Uint8Array): Promise<unknown> {
+  const iv = bufferSource(bytes.slice(0, 12));
+  const deflated = await globalThis.crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    bufferSource(bytes.slice(12)),
+  );
+  const json = await pipe(
+    new Uint8Array(deflated),
+    new DecompressionStream('deflate'),
+    MAX_SEALED_INVITE_BYTES,
+  );
+  return JSON.parse(utf8Decode(json));
 }

@@ -27,36 +27,46 @@ function cronField(text: string, min: number, max: number): Set<number> | string
   return allowed;
 }
 
+type FieldName = (typeof CRON_FIELDS)[number]['name'];
+
 /** Why a cron version can't be read, or null */
 export function checkCron(version: string): string | null {
-  const parts = version.trim().split(/\s+/);
-  if (parts.length !== 5) return 'A schedule is five fields: minute hour day month weekday';
-  for (const [index, field] of CRON_FIELDS.entries()) {
-    const read = cronField(parts[index] ?? '', field.min, field.max);
-    if (typeof read === 'string') return `${field.name}: ${read}`;
-  }
-  return null;
+  const read = readCron(version);
+  return typeof read === 'string' ? read : null;
 }
 
 /** Whether a cron version names this minute, in local time. As in cron, a day and a weekday both given means either. */
 export function cronMatches(version: string, at: Date): boolean {
+  const read = readCron(version);
+  return typeof read !== 'string' && read(at);
+}
+
+/** A schedule as a test for a minute, or why it can't be read */
+function readCron(version: string): ((at: Date) => boolean) | string {
   const parts = version.trim().split(/\s+/);
-  if (parts.length !== 5) return false;
-  const sets = CRON_FIELDS.map((field, index) => cronField(parts[index] ?? '', field.min, field.max));
-  const [minute, hour, day, month, weekday] = sets;
-  if (!(minute instanceof Set && hour instanceof Set && day instanceof Set && month instanceof Set))
-    return false;
-  if (!(weekday instanceof Set)) return false;
-  if (weekday.has(7)) weekday.add(0);
-  if (!minute.has(at.getMinutes()) || !hour.has(at.getHours()) || !month.has(at.getMonth() + 1)) return false;
-  const anyDay = parts[2] === '*';
-  const anyWeekday = parts[4] === '*';
-  const onDay = day.has(at.getDate());
-  const onWeekday = weekday.has(at.getDay());
-  if (anyDay && anyWeekday) return true;
-  if (anyDay) return onWeekday;
-  if (anyWeekday) return onDay;
-  return onDay || onWeekday;
+  if (parts.length !== 5) return 'A schedule is five fields: minute hour day month weekday';
+  const allowed = new Map<FieldName, Set<number>>();
+  for (const [index, field] of CRON_FIELDS.entries()) {
+    const read = cronField(parts[index] ?? '', field.min, field.max);
+    if (typeof read === 'string') return `${field.name}: ${read}`;
+    allowed.set(field.name, read);
+  }
+  // Sunday is 0 or 7.
+  if (allowed.get('weekday')?.has(7)) allowed.get('weekday')?.add(0);
+  const has = (name: FieldName, value: number) => allowed.get(name)?.has(value) ?? false;
+  // Only when both are narrowed does either one do.
+  const narrowed = parts[2] !== '*' && parts[4] !== '*';
+  return (at) => {
+    const onDay = has('day', at.getDate());
+    const onWeekday = has('weekday', at.getDay());
+    const dayMatches = narrowed ? onDay || onWeekday : onDay && onWeekday;
+    return (
+      has('minute', at.getMinutes()) &&
+      has('hour', at.getHours()) &&
+      has('month', at.getMonth() + 1) &&
+      dayMatches
+    );
+  };
 }
 
 /** Times people pick most, in words, for a builder to offer before five cron fields */

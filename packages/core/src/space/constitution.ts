@@ -135,23 +135,41 @@ function topProblem(top: unknown): string | null {
   return new Set(founders).size === founders.length ? null : 'A founder is named twice';
 }
 
-/** Why the roles a constitution assigns are malformed, or null */
-function assignedProblem(assigned: unknown, roles: ReadonlySet<string>): string | null {
+/** Why the roles a constitution assigns are malformed, or null. With no founders, someone must be assigned. */
+function assignedProblem(assigned: unknown, top: unknown, roles: unknown): string | null {
+  if (assigned === undefined)
+    return top === 'none' ? 'With no founders, it must assign someone a role' : null;
   if (!isRecord(assigned)) return 'What it assigns is a map from account to role names';
   const accounts = Object.keys(assigned);
   if (accounts.length === 0 || accounts.length > MAX_ASSIGNED)
     return `It assigns roles to 1 to ${MAX_ASSIGNED} accounts, or leaves assigned out`;
+  const founded = new Set(
+    Array.isArray(roles) ? roles.map((role: { readonly name: string }) => role.name) : [],
+  );
   for (const account of accounts) {
     if (!isAccount(account)) return 'An account is assigned by its did:key';
     const names: unknown = assigned[account];
     if (!Array.isArray(names) || names.length === 0 || names.length > MAX_ASSIGNED_ROLES)
       return `It assigns an account 1 to ${MAX_ASSIGNED_ROLES} roles`;
     const list: unknown[] = names;
-    if (!list.every((name) => typeof name === 'string' && roles.has(name)))
+    if (!list.every((name) => typeof name === 'string' && founded.has(name)))
       return 'It assigns only roles it founds';
     if (new Set(list).size !== list.length) return 'It assigns an account a role once';
   }
   return null;
+}
+
+/** Why a space's read key and first key don't fit its visibility, or null */
+function keysProblem(
+  visibility: 'public' | 'private',
+  readKey: unknown,
+  encryptionKeyId: unknown,
+): string | null {
+  if (visibility === 'public')
+    return readKey !== undefined || encryptionKeyId !== undefined ? 'A public space has no read key' : null;
+  return isKeyDid(readKey) && typeof encryptionKeyId === 'string' && KEY_ID.test(encryptionKeyId)
+    ? null
+    : 'A private space must name its read key, a did:key, and its first key, by id';
 }
 
 /**
@@ -165,9 +183,9 @@ export function constitutionProblem(constitution: unknown): string | null {
     return `It is not a ${CONSTITUTION} this peer knows, so it can't judge the space`;
   if (typeof constitution.resolver !== 'string' || !RESOLVERS.has(constitution.resolver))
     return 'It names a resolver this peer doesn’t know, so it can’t judge the space';
-  for (const field of Object.keys(constitution))
-    if (!FIELDS.has(field))
-      return `It has a field this peer doesn’t know, ${field}, so it can’t judge the space`;
+  const unknown = Object.keys(constitution).find((field) => !FIELDS.has(field));
+  if (unknown !== undefined)
+    return `It has a field this peer doesn’t know, ${unknown}, so it can’t judge the space`;
   const { name, visibility, top, roles, assigned, succeeds } = constitution;
   if (typeof name !== 'string' || Array.from(name).length > MAX_NAME)
     return `Its name is text of at most ${MAX_NAME} characters`;
@@ -175,27 +193,13 @@ export function constitutionProblem(constitution: unknown): string | null {
   if (!isTime(constitution.createdAt)) return 'Its createdAt is an ISO 8601 time, as toISOString writes it';
   if (typeof constitution.nonce !== 'string' || !NONCE.test(constitution.nonce))
     return 'Its nonce is 16 base64url characters';
-  const top_ = topProblem(top);
-  if (top_) return top_;
-  const roles_ = checkFoundingRoles(roles);
-  if (roles_) return roles_;
-  const names = new Set(
-    Array.isArray(roles) ? roles.map((role: { readonly name: string }) => role.name) : [],
+  return (
+    topProblem(top) ??
+    checkFoundingRoles(roles) ??
+    assignedProblem(assigned, top, roles) ??
+    (succeeds !== undefined && !isSpaceId(succeeds) ? 'It succeeds a space, named by its id' : null) ??
+    keysProblem(visibility, constitution.readKey, constitution.encryptionKeyId)
   );
-  if (assigned !== undefined) {
-    const problem = assignedProblem(assigned, names);
-    if (problem) return problem;
-  } else if (top === 'none') return 'With no founders, it must assign someone a role';
-  if (succeeds !== undefined && !isSpaceId(succeeds)) return 'It succeeds a space, named by its id';
-  const { readKey, encryptionKeyId } = constitution;
-  if (
-    visibility === 'private' &&
-    !(isKeyDid(readKey) && typeof encryptionKeyId === 'string' && KEY_ID.test(encryptionKeyId))
-  )
-    return 'A private space must name its read key, a did:key, and its first key, by id';
-  if (visibility === 'public' && (readKey !== undefined || encryptionKeyId !== undefined))
-    return 'A public space has no read key';
-  return null;
 }
 
 /**

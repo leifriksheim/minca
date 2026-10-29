@@ -1,15 +1,17 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import type {
   ContactRequest,
   ContactView,
   InboxView,
+  NodeEvent,
+  P2PNode,
   KnockView,
   SentKnockView,
   SpaceSummary,
 } from '@minca/core';
 import { readInbox } from '@minca/core/inbox';
 import { createP256Provider } from '@minca/core';
-import { useAccount, useNode } from '@minca/react';
+import { useAccount, useAsync, useNode, useWatched } from '@minca/react';
 import {
   clearInboxFromUrl,
   inboxLink,
@@ -23,13 +25,23 @@ import { nameOf, peopleFrom } from '../derive/people';
 import { ago } from '@minca/ui/time';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { Modal } from '@minca/app-shared/Modal';
-import { styles, palette } from '../styles';
+import { styles, palette, stack } from '../styles';
 import { message, useAction, useCopy } from '@minca/app-shared/action';
-import { Loader } from '@minca/app-shared/Loader';
-import { ask } from '@minca/app-shared/Ask';
+import { Loading } from './Loading';
+import { AddButton, LinkButton, QuietButton } from './Buttons';
+import { confirmThen } from '../confirm';
 
 /** How often to look in the inbox's mailboxes: knocks wait on relays, which tell nobody */
 const KNOCK_POLL_MS = 30_000;
+
+async function readMailbox(node: P2PNode) {
+  const [inbox, knocks, sent] = await Promise.all([
+    node.inbox.get().catch(() => null),
+    node.inbox.knocks().catch((): KnockView[] => []),
+    node.inbox.sent().catch((): SentKnockView[] => []),
+  ]);
+  return { inbox, knocks, sent };
+}
 
 /** Checks inbox codes as they are typed */
 const provider = createP256Provider();
@@ -47,10 +59,6 @@ export function ContactsView({
 }) {
   const node = useNode();
   const contacts = useContacts();
-  const [requests, setRequests] = useState<ReadonlyArray<ContactRequest>>([]);
-  const [knocks, setKnocks] = useState<ReadonlyArray<KnockView>>([]);
-  const [sent, setSent] = useState<ReadonlyArray<SentKnockView>>([]);
-  const [inbox, setInbox] = useState<InboxView | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const { run, error } = useAction();
   const [tick, setTick] = useState(0);
@@ -68,53 +76,27 @@ export function ContactsView({
   // Requests are records in the spaces you share, so a change in any of them may bring one.
   const shared = spaces.filter((space) => !space.joining);
   const sharedIds = shared.map((space) => space.id).join(',');
-  useEffect(() => {
-    let stopped = false;
-    void Promise.all(
-      shared.map((space) => node.contacts.requests(space.id).catch((): ContactRequest[] => [])),
-    ).then((found) => !stopped && setRequests(found.flat()));
-    return () => {
-      stopped = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [node, sharedIds, tick]);
-
-  useEffect(() => {
-    const ids = new Set(sharedIds.split(','));
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const unsubscribe = node.subscribe((event) => {
-      if ((event.type === 'records' && ids.has(event.space)) || event.type === 'spaces') {
-        clearTimeout(timer);
-        timer = setTimeout(reload, 400);
-      }
-    });
-    return () => {
-      clearTimeout(timer);
-      unsubscribe();
-    };
-  }, [node, sharedIds, reload]);
-
+  const watch = {
+    when: (event: NodeEvent) =>
+      (event.type === 'records' && sharedIds.split(',').includes(event.space)) || event.type === 'spaces',
+    settle: 400,
+  };
+  const requests =
+    useWatched(
+      async (node) => {
+        const found = await Promise.all(
+          shared.map((space) => node.contacts.requests(space.id).catch((): ContactRequest[] => [])),
+        );
+        return found.flat();
+      },
+      [sharedIds, tick],
+      watch,
+    ) ?? [];
   // The inbox, and the knocks in it. Reading knocks also turns knocks of yours someone joined into contacts.
-  useEffect(() => {
-    let stopped = false;
-    const load = async () => {
-      const [open, waiting, left] = await Promise.all([
-        node.inbox.get().catch(() => null),
-        node.inbox.knocks().catch(() => []),
-        node.inbox.sent().catch(() => []),
-      ]);
-      if (stopped) return;
-      setInbox(open);
-      setKnocks(waiting);
-      setSent(left);
-    };
-    void load();
-    const timer = setInterval(() => void load(), KNOCK_POLL_MS);
-    return () => {
-      stopped = true;
-      clearInterval(timer);
-    };
-  }, [node, tick]);
+  const mailbox = useWatched(readMailbox, [sharedIds, tick], { ...watch, every: KNOCK_POLL_MS });
+  const inbox = mailbox?.inbox ?? null;
+  const knocks = mailbox?.knocks ?? [];
+  const sent = mailbox?.sent ?? [];
 
   // Where a request of yours may be waiting, to take back with it.
   const writable = shared.filter((space) => space.writable).map((space) => space.id);
@@ -129,7 +111,7 @@ export function ContactsView({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div style={stack(8)}>
       {error && (
         <div style={{ ...styles.errorBox, marginTop: 0 }}>
           <p style={styles.error}>{error}</p>
@@ -141,10 +123,7 @@ export function ContactsView({
       <KnockFromLink onKnock={(code, note) => act(() => knock(code, note))} />
 
       {asking > 0 && (
-        <section
-          style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 16 }}
-          aria-label="Asking to be your contact"
-        >
+        <section style={{ ...stack(4), marginBottom: 16 }} aria-label="Asking to be your contact">
           <h2 style={styles.sectionTitle}>Asking to be your contact</h2>
           <ul style={styles.todoList}>
             {requests.map((request) => (
@@ -159,21 +138,18 @@ export function ContactsView({
                     <p style={{ ...styles.todoMeta, color: palette.ink.body }}>“{request.note}”</p>
                   )}
                 </div>
-                <button
+                <AddButton
                   onClick={() => void act(() => node.contacts.accept(request.space, request.key))}
-                  data-variant="primary"
-                  style={{ ...styles.addButton, height: 32 }}
+                  style={{ height: 32 }}
                 >
                   Accept
-                </button>
-                <button
+                </AddButton>
+                <LinkButton
                   onClick={() => void act(() => node.contacts.block(request.from))}
-                  data-variant="ghost"
-                  style={styles.linkButton}
                   title="Hide their knocks, in every space"
                 >
                   Block
-                </button>
+                </LinkButton>
               </li>
             ))}
             {knocks.map((knock) => (
@@ -194,41 +170,31 @@ export function ContactsView({
                     <p style={{ ...styles.todoMeta, color: palette.ink.body }}>“{knock.note}”</p>
                   )}
                 </div>
-                <button
-                  onClick={() => void act(() => node.inbox.accept(knock.id))}
-                  data-variant="primary"
-                  style={{ ...styles.addButton, height: 32 }}
-                >
+                <AddButton onClick={() => void act(() => node.inbox.accept(knock.id))} style={{ height: 32 }}>
                   Accept
-                </button>
-                <button
+                </AddButton>
+                <LinkButton
                   onClick={() => void act(() => node.inbox.dismiss(knock.id))}
-                  data-variant="ghost"
-                  style={styles.linkButton}
                   title="Let this knock go; they can knock again"
                 >
                   Dismiss
-                </button>
-                <button
+                </LinkButton>
+                <LinkButton
                   onClick={() => void act(() => node.contacts.block(knock.from))}
-                  data-variant="ghost"
-                  style={styles.linkButton}
                   title="Hide their knocks and requests from now on"
                 >
                   Block
-                </button>
+                </LinkButton>
               </li>
             ))}
           </ul>
         </section>
       )}
 
-      <section style={{ display: 'flex', flexDirection: 'column', gap: 4 }} aria-label="Contacts">
+      <section style={stack(4)} aria-label="Contacts">
         <h2 style={styles.sectionTitle}>Contacts{listed.length > 0 ? ` (${listed.length})` : ''}</h2>
         {contacts === undefined ? (
-          <p style={styles.todoMeta}>
-            <Loader label="Loading" showLabel />
-          </p>
+          <Loading label="Loading" style={styles.todoMeta} />
         ) : listed.length === 0 ? (
           <div style={styles.emptyState}>
             No contacts yet. Add someone from a space you share — their name under People — or give them your
@@ -271,14 +237,12 @@ export function ContactsView({
                 <span style={{ flex: 1, fontSize: 14 }}>
                   {contact.name === contact.did ? nameOf(contact.did, nobody) : contact.name}
                 </span>
-                <button
+                <LinkButton
                   onClick={() => void act(() => node.contacts.remove(contact.did))}
-                  data-variant="ghost"
-                  style={styles.linkButton}
                   title="They can ask or knock again"
                 >
                   Unblock
-                </button>
+                </LinkButton>
               </li>
             ))}
           </ul>
@@ -306,20 +270,10 @@ function ContactRow({
 }) {
   const node = useNode();
   const account = useAccount();
-  const [others, setOthers] = useState<ReadonlyArray<string>>([]);
+  const othersFound = useAsync(() => node.contacts.others(contact.did), [node, contact.did, contact.space]);
+  const others = othersFound.status === 'done' ? othersFound.value : [];
   const [renaming, setRenaming] = useState<string | null>(null);
   const standing = useStanding(contact);
-
-  useEffect(() => {
-    let stopped = false;
-    void node.contacts
-      .others(contact.did)
-      .then((found) => !stopped && setOthers(found))
-      .catch(() => {});
-    return () => {
-      stopped = true;
-    };
-  }, [node, contact.did, contact.space]);
 
   const rename = () => {
     const name = renaming?.trim();
@@ -374,50 +328,36 @@ function ContactRow({
         )}
       </div>
       {contact.space && standing !== 'gone' && (
-        <button onClick={() => onOpen(contact.space!)} data-variant="quiet" style={styles.smallButton}>
-          Open
-        </button>
+        <QuietButton onClick={() => onOpen(contact.space!)}>Open</QuietButton>
       )}
-      <button
-        onClick={() => setRenaming(contact.name)}
-        data-variant="ghost"
-        style={styles.linkButton}
-        title="Only you see what you call them"
-      >
+      <LinkButton onClick={() => setRenaming(contact.name)} title="Only you see what you call them">
         Rename
-      </button>
-      <button
+      </LinkButton>
+      <LinkButton
         onClick={() =>
-          void ask(
+          confirmThen(
             standing === 'waiting'
               ? 'Your request is taken back and you leave the space for two.'
               : 'You leave the space for two; they keep their copy.',
-            { title: `Remove ${contact.name}?`, yes: 'Remove', danger: true },
-          ).then(async (sure) => {
-            if (sure)
-              await act(() => takeBack(node, standing === 'waiting' ? shared : [], account.did, contact.did));
-          })
+            { title: `Remove ${contact.name}?`, yes: 'Remove' },
+            () => act(() => takeBack(node, standing === 'waiting' ? shared : [], account.did, contact.did)),
+          )
         }
-        data-variant="ghost"
-        style={styles.linkButton}
       >
         Remove
-      </button>
-      <button
+      </LinkButton>
+      <LinkButton
         onClick={() =>
-          void ask('You leave the space for two, and their requests and knocks are hidden from now on.', {
-            title: `Block ${contact.name}?`,
-            yes: 'Block',
-            danger: true,
-          }).then(async (sure) => {
-            if (sure) await act(() => node.contacts.block(contact.did));
-          })
+          confirmThen(
+            'You leave the space for two, and their requests and knocks are hidden from now on.',
+            { title: `Block ${contact.name}?`, yes: 'Block' },
+            () => act(() => node.contacts.block(contact.did)),
+          )
         }
-        data-variant="ghost"
-        style={{ ...styles.linkButton, color: palette.accent.danger }}
+        style={{ color: palette.accent.danger }}
       >
         Block
-      </button>
+      </LinkButton>
     </li>
   );
 }
@@ -456,52 +396,35 @@ function Inbox({
               </p>
               <p style={styles.todoMeta}>Since {ago(inbox.updatedAt)}</p>
             </div>
-            <button
-              onClick={() => copy(inboxLink(inbox.code))}
-              data-variant="quiet"
-              style={styles.smallButton}
-            >
+            <QuietButton onClick={() => copy(inboxLink(inbox.code))}>
               {copied ? 'Copied' : 'Copy link'}
-            </button>
-            <button
+            </QuietButton>
+            <LinkButton
               onClick={() => void act(() => node.inbox.clear())}
-              data-variant="ghost"
-              style={styles.linkButton}
               title="Clear every knock waiting, for an inbox someone is flooding"
             >
               Clear knocks
-            </button>
-            <button
+            </LinkButton>
+            <LinkButton
               onClick={() =>
-                void ask('The link you shared stops working everywhere. You get a new one.', {
-                  title: 'Replace your inbox?',
-                  yes: 'Replace it',
-                  danger: true,
-                }).then(async (sure) => {
-                  if (sure) await act(() => node.inbox.rotate());
-                })
+                confirmThen(
+                  'The link you shared stops working everywhere. You get a new one.',
+                  { title: 'Replace your inbox?', yes: 'Replace it' },
+                  () => act(() => node.inbox.rotate()),
+                )
               }
-              data-variant="ghost"
-              style={{ ...styles.linkButton, color: palette.accent.danger }}
+              style={{ color: palette.accent.danger }}
             >
               Replace
-            </button>
+            </LinkButton>
           </li>
         </ul>
       )}
       <div style={styles.linkRow}>
         {!inbox && (
-          <button
-            onClick={() => void act(() => node.inbox.open())}
-            data-variant="quiet"
-            style={styles.smallButton}
-          >
-            Open your inbox
-          </button>
+          <QuietButton onClick={() => void act(() => node.inbox.open())}>Open your inbox</QuietButton>
         )}
-        <button onClick={() => setKnocking(true)} data-variant="ghost" style={styles.linkButton}>
-          Knock on someone's inbox
-        </button>
+        <LinkButton onClick={() => setKnocking(true)}>Knock on someone's inbox</LinkButton>
       </div>
       {knocking && (
         <KnockDialog
@@ -527,25 +450,11 @@ function KnockDialog({
 }) {
   const [code, setCode] = useState(initial);
   const [note, setNote] = useState('');
-  const [read, setRead] = useState<{ code: string; name: string | null; problem: string | null } | null>(
-    null,
-  );
   // An inbox code is signed: checked as it is typed.
-  useEffect(() => {
-    let stopped = false;
-    const text = code.trim();
-    if (!text) return;
-    readInbox(text, provider).then(
-      (inbox) => !stopped && setRead({ code: text, name: inbox.name ?? null, problem: null }),
-      (caught: unknown) => !stopped && setRead({ code: text, name: null, problem: message(caught) }),
-    );
-    return () => {
-      stopped = true;
-    };
-  }, [code]);
-  const current = read?.code === code.trim() ? read : null;
-  const name = current?.name ?? null;
-  const problem = current?.problem ?? null;
+  const text = code.trim();
+  const inbox = useAsync(async () => (text ? readInbox(text, provider) : null), [text]);
+  const name = inbox.status === 'done' ? (inbox.value?.name ?? null) : null;
+  const problem = inbox.status === 'failed' ? message(inbox.error) : null;
   return (
     <Modal title={name ? `Knock on ${name}'s inbox` : "Knock on someone's inbox"} onClose={onClose}>
       <form
@@ -585,14 +494,13 @@ function KnockDialog({
           account and the name you go by. The name an inbox shows is the owner's to choose, so be sure the
           link came from them.
         </p>
-        <button
+        <AddButton
           type="submit"
-          disabled={!code.trim() || !current || !!problem}
-          data-variant="primary"
-          style={{ ...styles.addButton, marginTop: 12 }}
+          disabled={!text || inbox.status !== 'done' || !inbox.value}
+          style={{ marginTop: 12 }}
         >
           Knock
-        </button>
+        </AddButton>
       </form>
     </Modal>
   );

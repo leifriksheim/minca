@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { NodeCollection, NodeRecord } from '@minca/core';
 import { useLive } from '@minca/react';
 import { collectionLabel, recordLabel } from '../derive/schema-ui';
-import { styles, palette } from '../styles';
+import { styles, palette, ui } from '../styles';
 
 /**
  * Records in a space to choose one of, newest first, found by what they say
@@ -77,30 +77,10 @@ export function RecordFinder({
             data-row
             style={pickRow}
           >
-            <span
-              style={{
-                color: palette.ink.faint,
-                fontSize: 12,
-                width: 90,
-                flexShrink: 0,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
+            <span style={{ ...styles.faint, ...ui.ellipsis, width: 90, flexShrink: 0 }}>
               {kindOf(r.collection)}
             </span>
-            <span
-              style={{
-                flex: 1,
-                minWidth: 0,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {labelOf(r)}
-            </span>
+            <span style={{ ...ui.ellipsis, flex: 1, minWidth: 0 }}>{labelOf(r)}</span>
           </button>
         ))}
         {candidates.length === 0 && (

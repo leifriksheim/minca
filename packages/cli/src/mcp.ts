@@ -12,7 +12,8 @@
  */
 import { createInterface } from 'node:readline';
 import { callAction, offeredActions, type NodeAction, type P2PNode } from '@minca/core';
-import { isRecord } from './json.js';
+import { isRecord, messageOf } from './json.js';
+import { queue } from './queue.js';
 
 const SUPPORTED_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 
@@ -86,6 +87,25 @@ function mcpTools(options: McpOptions = {}) {
   }));
 }
 
+/** The protocol version to answer `initialize` with: the client's, when this server speaks it */
+function protocolVersionFor(message: JsonRpcRequest): string | undefined {
+  const requested = message.params?.protocolVersion;
+  return typeof requested === 'string' && SUPPORTED_VERSIONS.includes(requested)
+    ? requested
+    : SUPPORTED_VERSIONS[0];
+}
+
+/** How to answer a message: never a notification, which wants no answer */
+function answerer(message: JsonRpcRequest) {
+  const id = message.id ?? null;
+  const answers = message.id !== undefined;
+  return {
+    reply: (result: unknown): JsonRpcResponse | null => (answers ? { jsonrpc: '2.0', id, result } : null),
+    fail: (code: number, text: string): JsonRpcResponse | null =>
+      answers ? { jsonrpc: '2.0', id, error: { code, message: text } } : null,
+  };
+}
+
 /**
  * Handles one JSON-RPC message.
  * @returns The response, or null for a notification
@@ -96,27 +116,15 @@ export async function handleMcpMessage(
   serverInfo: { name: string; version: string },
   options: McpOptions = {},
 ): Promise<JsonRpcResponse | null> {
-  const isNotification = message.id === undefined;
-  const id = message.id ?? null;
-  const reply = (result: unknown): JsonRpcResponse | null =>
-    isNotification ? null : { jsonrpc: '2.0', id, result };
-  const fail = (code: number, text: string): JsonRpcResponse | null =>
-    isNotification ? null : { jsonrpc: '2.0', id, error: { code, message: text } };
-
+  const { reply, fail } = answerer(message);
   switch (message.method) {
-    case 'initialize': {
-      const requested = message.params?.protocolVersion;
-      const protocolVersion =
-        typeof requested === 'string' && SUPPORTED_VERSIONS.includes(requested)
-          ? requested
-          : SUPPORTED_VERSIONS[0];
+    case 'initialize':
       return reply({
-        protocolVersion,
+        protocolVersion: protocolVersionFor(message),
         capabilities: { tools: { listChanged: false } },
         serverInfo,
         instructions: toolInstructions(node, options),
       });
-    }
     case 'notifications/initialized':
     case 'notifications/cancelled':
       return null;
@@ -321,9 +329,9 @@ export function waitingMcp(
 ) {
   let node: P2PNode | null = null;
   // One start at a time: the retry and the tool never race for the lock.
-  let queue: Promise<unknown> = Promise.resolve();
-  const exclusive = (start: () => Promise<P2PNode | string | null>): Promise<P2PNode | string | null> => {
-    const next = queue.then(async () => {
+  const oneAtATime = queue();
+  const exclusive = (start: () => Promise<P2PNode | string | null>): Promise<P2PNode | string | null> =>
+    oneAtATime(async () => {
       if (node) return node;
       const result = await start();
       if (result !== null && typeof result !== 'string') {
@@ -333,9 +341,6 @@ export function waitingMcp(
       }
       return result;
     });
-    queue = next.catch(() => {});
-    return next;
-  };
   const attempt = () => exclusive(waiting.tryStart).catch(() => null);
   const timer = setInterval(() => void attempt(), RETRY_MS);
   timer.unref();
@@ -356,9 +361,7 @@ export function waitingMcp(
 
   async function handle(message: JsonRpcRequest): Promise<JsonRpcResponse | null> {
     const running = live();
-    const id = message.id ?? null;
-    const reply = (result: unknown): JsonRpcResponse | null =>
-      message.id === undefined ? null : { jsonrpc: '2.0', id, result };
+    const { reply, fail } = answerer(message);
     const text = (said: string, isError: boolean) =>
       reply({ content: [{ type: 'text', text: said }], isError });
     // Its tool, called again once it runs here, says whose account it joined.
@@ -367,18 +370,13 @@ export function waitingMcp(
     if (running) return handleMcpMessage(running, message, serverInfo, options);
 
     switch (message.method) {
-      case 'initialize': {
-        const requested = message.params?.protocolVersion;
+      case 'initialize':
         return reply({
-          protocolVersion:
-            typeof requested === 'string' && SUPPORTED_VERSIONS.includes(requested)
-              ? requested
-              : SUPPORTED_VERSIONS[0],
+          protocolVersion: protocolVersionFor(message),
           capabilities: { tools: { listChanged: true } },
           serverInfo,
           instructions: waiting.why,
         });
-      }
       case 'tools/list': {
         const started = (await attempt()) && live();
         return started ? handleMcpMessage(started, message, serverInfo, options) : reply({ tools: [tool] });
@@ -392,7 +390,7 @@ export function waitingMcp(
               ? text(result, false)
               : text(`Done: Minca runs in this session now, with ${mcpTools(options).length} tools.`, false);
           } catch (error) {
-            return text(error instanceof Error ? error.message : String(error), true);
+            return text(messageOf(error), true);
           }
         }
         const started = (await attempt()) && live();
@@ -401,9 +399,7 @@ export function waitingMcp(
       case 'ping':
         return reply({});
       default:
-        return message.id === undefined
-          ? null
-          : { jsonrpc: '2.0', id, error: { code: -32601, message: `Method not found: ${message.method}` } };
+        return fail(-32601, `Method not found: ${message.method}`);
     }
   }
 

@@ -168,6 +168,11 @@ function form(onSubmit: () => void, props: Record<string, unknown>, ...children:
   );
 }
 
+/** The step's one main button */
+function button(label: string, onclick: () => void, disabled: boolean, key?: string): HTMLElement {
+  return h('button', { type: 'button', class: 'wa-button', 'data-key': key, disabled, onclick }, label);
+}
+
 function submit(busy: boolean, label: string, busyLabel: string): HTMLElement {
   return h('button', { type: 'submit', class: 'wa-button', disabled: busy }, busy ? busyLabel : label);
 }
@@ -197,6 +202,11 @@ function download({ filename, text }: { filename: string; text: string }): void 
   anchor.click();
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** How a pairing is going, in a line: red once it failed */
+function pairingLine(stage: PairingStage, quiet: string, style: string): HTMLElement {
+  return h('p', { class: stage.kind === 'failed' ? 'wa-error' : quiet, style }, describePairing(stage));
 }
 
 function describePairing(stage: PairingStage): string {
@@ -239,18 +249,17 @@ export class MincaAuthElement extends Base {
   get auth(): MincaAuth {
     this.#auth ??= createMincaAuth({
       ...(this.getAttribute('app-name') ? { appName: this.getAttribute('app-name')! } : {}),
-      network: {
-        relays: (this.getAttribute('relays') ?? '')
-          .split(',')
-          .map((url) => url.trim())
-          .filter(Boolean),
-        nodes: (this.getAttribute('nodes') ?? '')
-          .split(',')
-          .map((url) => url.trim())
-          .filter(Boolean),
-      },
+      network: { relays: this.#urls('relays'), nodes: this.#urls('nodes') },
     });
     return this.#auth;
+  }
+
+  /** A comma-separated attribute's addresses */
+  #urls(name: string): string[] {
+    return (this.getAttribute(name) ?? '')
+      .split(',')
+      .map((url) => url.trim())
+      .filter(Boolean);
   }
 
   set auth(auth: MincaAuth) {
@@ -627,16 +636,11 @@ export class MincaAuthElement extends Base {
         ];
       return [
         hasPasskey
-          ? h(
-              'button',
-              {
-                type: 'button',
-                class: 'wa-button',
-                'data-key': 'passkey',
-                disabled: state.busy,
-                onclick: () => void auth.signInWithPasskey(),
-              },
+          ? button(
               state.busy ? 'Waiting…' : 'Sign in with passkey',
+              () => void auth.signInWithPasskey(),
+              state.busy,
+              'passkey',
             )
           : null,
         hasPasskey && open.hasPassword ? h('div', { class: 'wa-or' }, 'or') : null,
@@ -854,11 +858,7 @@ export class MincaAuthElement extends Base {
         }),
         h('span', null, "I've stored my recovery code somewhere safe."),
       ),
-      h(
-        'button',
-        { type: 'button', class: 'wa-button', disabled: !this.#stored, onclick: () => auth.codeSaved() },
-        'Continue',
-      ),
+      button('Continue', () => auth.codeSaved(), !this.#stored),
     );
   }
 
@@ -976,14 +976,7 @@ export class MincaAuthElement extends Base {
           )
         : null,
       state.setup === 'paired' && state.pairingStage
-        ? h(
-            'p',
-            {
-              class: state.pairingStage.kind === 'failed' ? 'wa-error' : 'wa-small',
-              style: 'margin-top:16px',
-            },
-            describePairing(state.pairingStage),
-          )
+        ? pairingLine(state.pairingStage, 'wa-small', 'margin-top:16px')
         : null,
       // The app waits in the tab it opened; the camera opened this one.
       state.setup === 'paired'
@@ -1064,24 +1057,9 @@ export class MincaAuthElement extends Base {
           )
         : null,
       state.pairing && !code && !arriving
-        ? h(
-            'button',
-            {
-              type: 'button',
-              class: 'wa-button',
-              disabled: state.busy,
-              onclick: () => void auth.acceptPairing(),
-            },
-            state.busy ? 'Looking…' : 'Continue',
-          )
+        ? button(state.busy ? 'Looking…' : 'Continue', () => void auth.acceptPairing(), state.busy)
         : null,
-      stage
-        ? h(
-            'p',
-            { class: stage.kind === 'failed' ? 'wa-error' : 'wa-hint', style: 'margin-top:12px' },
-            describePairing(stage),
-          )
-        : null,
+      stage ? pairingLine(stage, 'wa-hint', 'margin-top:12px') : null,
       errorBox(state.error),
       h('p', { class: 'wa-small' }, 'Keep the code showing on your computer until this finishes.'),
       links(link(state.pairing ? 'Not now' : 'Back', () => auth.dismissPairing(), state.busy && !code)),
@@ -1110,15 +1088,10 @@ export class MincaAuthElement extends Base {
             : `The computer that showed the code sent a different account from ${current}, one this phone doesn't have. Add it only if it is yours: if you meant to add this phone to ${current}, it already is, and this account is someone else's.`,
         ),
       ),
-      h(
-        'button',
-        {
-          type: 'button',
-          class: 'wa-button',
-          disabled: state.busy,
-          onclick: () => void auth.answerPairing(true),
-        },
+      button(
         known ? `Switch to ${known.name}` : 'Add and switch',
+        () => void auth.answerPairing(true),
+        state.busy,
       ),
       errorBox(state.error),
       links(link(`Stay as ${current}`, () => void auth.answerPairing(false), state.busy)),

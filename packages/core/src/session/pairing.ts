@@ -129,51 +129,57 @@ export async function offerToPhone(
     }
   };
 
+  /** The first phone to commit spends the code: nobody after it is answered */
+  const onCommit = (message: NetworkMessage) => {
+    const commit = bytesField(message, 'commit');
+    if (!commit) return;
+    phone = { peer: message.from, commit: base64UrlEncode(commit) };
+    globalThis.clearTimeout(expiry);
+    room.send(message.from, KEY, { key: base64UrlEncode(mine.point) });
+  };
+
+  const onReveal = async (message: NetworkMessage, { peer, commit }: NonNullable<typeof phone>) => {
+    const point = bytesField(message, 'key');
+    if (!point || (await pairingCommitment(point)) !== commit) {
+      finish({ kind: 'failed', reason: 'The phone did not pair cleanly. Show a new code.' });
+      return;
+    }
+    try {
+      const open = await deriveChannel({
+        kind: PAIRING_CHANNEL,
+        secret,
+        privateKey: mine.privateKey,
+        offer: mine.point,
+        join: point,
+        side: 'offer',
+      });
+      channel = open;
+      onStage({
+        kind: 'compare',
+        code: await pairingCode(open),
+        same: () => void handOver(peer, open),
+        different: () =>
+          finish({
+            kind: 'failed',
+            reason: 'The codes did not match, so nothing was sent. Show a new code to try again.',
+          }),
+      });
+    } catch (error) {
+      finish(failure(error, 'The phone did not pair cleanly.'));
+    }
+  };
+
+  const onDone = async (message: NetworkMessage, open: Channel) => {
+    const said = await room.open(message, open);
+    if (isObject(said) && typeof said.spaces === 'number') finish({ kind: 'sent', spaces: said.spaces });
+  };
+
   room.net.on('message', (message: NetworkMessage) => {
     if (settled) return;
-    void (async () => {
-      if (message.type === COMMIT && !phone) {
-        const commit = bytesField(message, 'commit');
-        if (!commit) return;
-        // The code is spent: nobody after this phone is answered.
-        phone = { peer: message.from, commit: base64UrlEncode(commit) };
-        globalThis.clearTimeout(expiry);
-        room.send(message.from, KEY, { key: base64UrlEncode(mine.point) });
-      } else if (message.type === REVEAL && phone && message.from === phone.peer && !channel) {
-        const point = bytesField(message, 'key');
-        if (!point || (await pairingCommitment(point)) !== phone.commit) {
-          finish({ kind: 'failed', reason: 'The phone did not pair cleanly. Show a new code.' });
-          return;
-        }
-        try {
-          const open = await deriveChannel({
-            kind: PAIRING_CHANNEL,
-            secret,
-            privateKey: mine.privateKey,
-            offer: mine.point,
-            join: point,
-            side: 'offer',
-          });
-          channel = open;
-          const peer = phone.peer;
-          onStage({
-            kind: 'compare',
-            code: await pairingCode(open),
-            same: () => void handOver(peer, open),
-            different: () =>
-              finish({
-                kind: 'failed',
-                reason: 'The codes did not match, so nothing was sent. Show a new code to try again.',
-              }),
-          });
-        } catch (error) {
-          finish(failure(error, 'The phone did not pair cleanly.'));
-        }
-      } else if (message.type === DONE && channel && phone && message.from === phone.peer) {
-        const said = await room.open(message, channel);
-        if (isObject(said) && typeof said.spaces === 'number') finish({ kind: 'sent', spaces: said.spaces });
-      }
-    })();
+    const fromPhone = phone !== null && message.from === phone.peer;
+    if (message.type === COMMIT && !phone) onCommit(message);
+    else if (message.type === REVEAL && phone && fromPhone && !channel) void onReveal(message, phone);
+    else if (message.type === DONE && channel && fromPhone) void onDone(message, channel);
   });
 
   room.net.on('error', () => {
@@ -271,49 +277,50 @@ export async function receiveFromDesktop(
       if (!desktop) room.send(peer.did, COMMIT, { commit });
     });
 
+    const onKey = async (message: NetworkMessage) => {
+      const point = bytesField(message, 'key');
+      if (!point) return;
+      try {
+        const open = await deriveChannel({
+          kind: PAIRING_CHANNEL,
+          secret,
+          privateKey: mine.privateKey,
+          offer: point,
+          join: mine.point,
+          side: 'join',
+        });
+        const code = await pairingCode(open);
+        desktop = message.from;
+        channel = open;
+        room.send(message.from, REVEAL, { key: base64UrlEncode(mine.point) });
+        onStage({ kind: 'confirm', code });
+        wait(
+          options.confirmTimeoutMs ?? 10 * 60_000,
+          'Nobody confirmed the code on the computer. Show a new code to try again.',
+        );
+      } catch (error) {
+        fail(error instanceof Error ? error.message : 'The computer did not pair cleanly.');
+      }
+    };
+
+    const onHandover = async (message: NetworkMessage, open: Channel) => {
+      const handover = readHandover(await room.open(message, open));
+      // Stopped while it opened: the room is left, and the computer is told nothing.
+      if (settled) {
+        handover?.seed.fill(0);
+        return;
+      }
+      if (!handover) return fail('That handover could not be read.');
+      // So the computer can say it arrived, and stop showing the code.
+      await room.seal(message.from, DONE, open, { spaces: handover.spaces.length });
+      settle(() => resolve(handover));
+    };
+
     room.net.on('message', (message: NetworkMessage) => {
       if (settled) return;
-      void (async () => {
-        if (message.type === KEY && !desktop) {
-          const point = bytesField(message, 'key');
-          if (!point) return;
-          try {
-            const open = await deriveChannel({
-              kind: PAIRING_CHANNEL,
-              secret,
-              privateKey: mine.privateKey,
-              offer: point,
-              join: mine.point,
-              side: 'join',
-            });
-            const code = await pairingCode(open);
-            desktop = message.from;
-            channel = open;
-            room.send(message.from, REVEAL, { key: base64UrlEncode(mine.point) });
-            onStage({ kind: 'confirm', code });
-            wait(
-              options.confirmTimeoutMs ?? 10 * 60_000,
-              'Nobody confirmed the code on the computer. Show a new code to try again.',
-            );
-          } catch (error) {
-            fail(error instanceof Error ? error.message : 'The computer did not pair cleanly.');
-          }
-        } else if (message.type === HANDOVER && channel && message.from === desktop) {
-          const handover = readHandover(await room.open(message, channel));
-          // Stopped while it opened: the room is left, and the computer is told nothing.
-          if (settled) {
-            handover?.seed.fill(0);
-            return;
-          }
-          if (!handover) {
-            fail('That handover could not be read.');
-            return;
-          }
-          // So the computer can say it arrived, and stop showing the code.
-          await room.seal(message.from, DONE, channel, { spaces: handover.spaces.length });
-          settle(() => resolve(handover));
-        }
-      })();
+      if (message.type === KEY && !desktop) void onKey(message);
+      else if (message.type === HANDOVER && channel && message.from === desktop)
+        void onHandover(message, channel);
     });
 
     if (options.signal?.aborted) return fail('Pairing stopped.');

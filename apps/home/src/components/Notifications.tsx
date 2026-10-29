@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { OwnAutomationView, P2PNode, SpaceSummary } from '@minca/core/node';
 import { message, useAction } from '@minca/app-shared/action';
-import { styles, palette } from '../styles';
+import { styles, palette, hstack, stack } from '../styles';
 
 /**
  * "Notify me when…": what apps asked to let you know about, and you allowed.
@@ -60,7 +60,7 @@ export function Notifications({ node }: { node: P2PNode }) {
       {subscriptions?.length === 0 && <p style={styles.errorHint}>No app notifies you yet.</p>}
 
       {groups.map(([app, subs]) => (
-        <div key={app?.origin ?? ''} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div key={app?.origin ?? ''} style={stack(6)}>
           <p style={{ ...styles.fieldLabel, margin: 0 }}>
             {app ? `From ${app.name ?? new URL(app.origin).host}` : 'Made here before'}
           </p>
@@ -73,7 +73,7 @@ export function Notifications({ node }: { node: P2PNode }) {
                   : [...(sub.spaces ?? [])].map(spaceName).join(', ')}
                 {sub.paused ? ' · paused' : ''}
               </span>
-              <span style={{ display: 'flex', gap: 8 }}>
+              <span style={hstack(8)}>
                 <button
                   onClick={() =>
                     void act(

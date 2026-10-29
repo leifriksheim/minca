@@ -17,9 +17,9 @@ import { ago } from '@minca/ui/time';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { RecordPanel } from './RecordPanel';
 import { SHAPE_CYCLE } from '@minca/ui/tokens';
-import { styles, palette, ui } from '../styles';
+import { styles, palette, ui, stack } from '../styles';
 import { Person } from './Person';
-import { Loader } from '@minca/app-shared/Loader';
+import { Loading } from './Loading';
 
 /** A dot on the map: a record, or — when people are shown — a person */
 interface Dot {
@@ -601,37 +601,30 @@ export function GraphView({
     return set;
   }, [selected, graph, dotById]);
 
-  /** With everything shown, a click isolates one collection; after that, clicks add and remove them */
-  const toggle = (name: string) => {
+  /** Another pick of collections: a fresh map, at the first budget */
+  const choose = (next: (old: ReadonlySet<string> | null) => ReadonlySet<string> | null) => {
     setBudget(BUDGET);
     setWalked([]);
     fitted.current = false;
-    setChosen((old) => {
+    setChosen(next);
+  };
+  /** With everything shown, a click isolates one collection; after that, clicks add and remove them */
+  const toggle = (name: string) =>
+    choose((old) => {
       if (!old) return new Set([name]);
       const next = new Set(old);
       if (next.has(name)) next.delete(name);
       else next.add(name);
       return next.size ? next : null;
     });
-  };
-  const showEverything = () => {
-    setBudget(BUDGET);
-    setWalked([]);
-    fitted.current = false;
-    setChosen(null);
-  };
 
   if (records === undefined)
-    return (
-      <p style={{ fontSize: 13, color: palette.ink.faint }}>
-        <Loader label="Loading" showLabel />
-      </p>
-    );
+    return <Loading label="Loading" style={{ fontSize: 13, color: palette.ink.faint }} />;
 
   const header = (
     <header>
       <h2 style={{ ...styles.appTitle, fontSize: 22 }}>Explore</h2>
-      <p style={{ fontSize: 13, color: palette.ink.muted, marginTop: 4, lineHeight: 1.6 }}>
+      <p style={{ ...styles.quiet, marginTop: 4, lineHeight: 1.6 }}>
         The records in this space, with a line wherever one points at another. Drag to move around, scroll to
         zoom, and click a dot to see what it is and follow its lines.
       </p>
@@ -640,10 +633,7 @@ export function GraphView({
 
   if (!hasGraph) {
     return (
-      <section
-        aria-label="Explore"
-        style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}
-      >
+      <section aria-label="Explore" style={{ ...stack(16), minWidth: 0 }}>
         {header}
         <div style={styles.emptyState}>
           Nothing here yet. Once records are added to this space, they show up here — joined by a line
@@ -660,7 +650,7 @@ export function GraphView({
   const hoverAt = hover ? drawn.get(hover.id) : undefined;
 
   return (
-    <section aria-label="Explore" style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+    <section aria-label="Explore" style={{ ...stack(16), minWidth: 0 }}>
       {header}
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
@@ -702,7 +692,7 @@ export function GraphView({
           );
         })}
         {chosen !== null && (
-          <button onClick={showEverything} style={{ ...ui.chip, color: palette.ink.muted }}>
+          <button onClick={() => choose(() => null)} style={{ ...ui.chip, color: palette.ink.muted }}>
             Show everything
           </button>
         )}
@@ -1018,7 +1008,7 @@ function Details({
             <h3 style={{ ...styles.appTitle, fontSize: 16 }}>
               <Person did={did} />
             </h3>
-            <p style={{ fontSize: 12, color: palette.ink.faint }}>
+            <p style={styles.faint}>
               Wrote {wrote.length} {wrote.length === 1 ? 'record' : 'records'} on the map
             </p>
           </div>

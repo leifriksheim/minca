@@ -27,7 +27,7 @@ import { DataView } from './components/DataView';
 import { GraphView } from './components/GraphView';
 import { QueryPlayground } from './components/QueryPlayground';
 import { NetworkView } from './components/NetworkView';
-import { styles } from './styles';
+import { styles, stack } from './styles';
 
 /**
  * Where you are in the app, and the small state that belongs in the address:
@@ -116,7 +116,7 @@ const more = createRoute({
   getParentRoute: inSpace,
   path: 'more',
   component: page(({ go }) => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+    <div style={stack(2)}>
       {SECTIONS.filter((section) => section.to !== '/spaces/$spaceId/people').map((section) => (
         <MoreRow key={section.to} icon={section.icon} label={section.label} onClick={() => go(section.to)} />
       ))}

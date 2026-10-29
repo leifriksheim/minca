@@ -32,12 +32,13 @@ import { Tags } from './std/Tags';
 import { Comments } from './std/Comments';
 import { Attachments } from './std/Attachments';
 import { LinkPicker } from './LinkPicker';
-import { styles, palette, ui } from '../styles';
+import { styles, palette, ui, hstack, stack } from '../styles';
 import { useAction } from '@minca/app-shared/action';
 import { Person } from './Person';
 import { useDraft } from './useDraft';
-import { Loader } from '@minca/app-shared/Loader';
-import { ask } from '@minca/app-shared/Ask';
+import { Loading } from './Loading';
+import { QuietButton } from './Buttons';
+import { confirmThen } from '../confirm';
 
 /** Standard collections with a place of their own on every record, so not offered as "+ Add …" */
 const ANNOTATIONS = new Set<string>([reaction.name, comment.name, tag.name, file.name]);
@@ -176,9 +177,7 @@ export function RecordPanel({
             borderBottom: `1px solid ${palette.surface.line}`,
           }}
         >
-          <span style={{ fontSize: 13, color: palette.ink.muted }}>
-            {collection ? collectionLabel(collection) : record?.collection}
-          </span>
+          <span style={styles.quiet}>{collection ? collectionLabel(collection) : record?.collection}</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {openWith && (
               <button onClick={openWith} style={styles.smallButton}>
@@ -192,9 +191,7 @@ export function RecordPanel({
         </header>
 
         {!data ? (
-          <p style={{ ...styles.emptyState, margin: 20 }}>
-            <Loader label="Opening" showLabel />
-          </p>
+          <Loading label="Opening" style={{ ...styles.emptyState, margin: 20 }} />
         ) : !record ? (
           <p style={{ ...styles.emptyState, margin: 20 }}>This record is gone — deleted, or not here yet.</p>
         ) : (
@@ -207,7 +204,7 @@ export function RecordPanel({
               overflowY: 'auto',
             }}
           >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={stack(10)}>
               {title && editable ? (
                 <InlineText
                   value={textOf(body[title] ?? '')}
@@ -262,7 +259,7 @@ export function RecordPanel({
               />
             )}
 
-            <dl style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <dl style={{ margin: 0, ...stack(2) }}>
               {fields.map((f) => (
                 <Property key={f.name} label={f.label}>
                   <FieldEditor
@@ -383,7 +380,7 @@ export function RecordPanel({
                 <section
                   key={group}
                   aria-label={`${c ? collectionLabel(c) : name} pointing here`}
-                  style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
+                  style={stack(8)}
                 >
                   <h3 style={styles.sectionTitle}>
                     {c ? collectionLabel(c) : name}
@@ -396,7 +393,7 @@ export function RecordPanel({
                     <span style={{ color: palette.ink.faint, fontWeight: 400 }}>{records.length}</span>
                   </h3>
                   {counted && (
-                    <div aria-label="Tally" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div aria-label="Tally" style={stack(6)}>
                       {counted.counts.map(({ label, count }) => (
                         <div
                           key={label}
@@ -436,7 +433,7 @@ export function RecordPanel({
                       <button key={r.key} data-row onClick={() => onOpen(r)} style={miniRow}>
                         <Avatar did={r.root ?? r.author} size={18} />
                         <span style={{ ...ui.ellipsis, flex: 1, minWidth: 0 }}>{labelFor(r)}</span>
-                        <span style={{ color: palette.ink.faint, fontSize: 12 }}>
+                        <span style={styles.faint}>
                           {writerOf(r, people)} · {ago(r.createdAt)}
                         </span>
                       </button>
@@ -448,7 +445,7 @@ export function RecordPanel({
 
             {space.writable &&
               (adding ? (
-                <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <section style={stack(10)}>
                   <h3 style={styles.sectionTitle}>New {collectionLabel(adding.collection).toLowerCase()}</h3>
                   <SchemaForm
                     schema={adding.collection.schema}
@@ -467,18 +464,16 @@ export function RecordPanel({
                 addable.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                     {addable.map((a) => (
-                      <button
+                      <QuietButton
                         key={`${a.collection.name}-${a.rel}`}
                         onClick={() => setAdding(a)}
                         title={a.collection.links[a.rel]?.description}
-                        data-variant="quiet"
-                        style={styles.smallButton}
                       >
                         + Add {collectionLabel(a.collection).toLowerCase()}
                         {/* One kind added two ways, like a task under a column or a project, says which */}
                         {addable.filter((b) => b.collection.name === a.collection.name).length > 1 &&
                           ` · ${humanize(a.rel).toLowerCase()}`}
-                      </button>
+                      </QuietButton>
                     ))}
                   </div>
                 )
@@ -524,21 +519,18 @@ export function RecordPanel({
                 {record.seq > 0 && ` · version ${record.seq + 1}`}
               </span>
               {may?.delete && (
-                <button
-                  onClick={() => {
-                    void ask('It is deleted for everyone in the space.', {
-                      title: 'Delete this?',
-                      yes: 'Delete',
-                      danger: true,
-                    }).then(async (sure) => {
-                      if (sure) await node.records.delete(space.id, record.key).then(onClose);
-                    });
-                  }}
-                  data-variant="quiet"
-                  style={{ ...styles.smallButton, color: palette.accent.danger }}
+                <QuietButton
+                  onClick={() =>
+                    confirmThen(
+                      'It is deleted for everyone in the space.',
+                      { title: 'Delete this?', yes: 'Delete' },
+                      () => node.records.delete(space.id, record.key).then(onClose),
+                    )
+                  }
+                  style={{ color: palette.accent.danger }}
                 >
                   Delete
-                </button>
+                </QuietButton>
               )}
             </footer>
           </div>
@@ -561,7 +553,7 @@ function Property({ label, children }: { label: string; children: ReactNode }) {
         padding: '4px 0',
       }}
     >
-      <dt style={{ fontSize: 13, color: palette.ink.muted, paddingTop: 6 }}>{label}</dt>
+      <dt style={{ ...styles.quiet, paddingTop: 6 }}>{label}</dt>
       <dd style={{ margin: 0, fontSize: 14, minWidth: 0 }}>{children}</dd>
     </div>
   );
@@ -609,7 +601,7 @@ function FieldEditor({
           onChange={(e) => void onSave(e.target.checked)}
           aria-label={field.label}
         />
-        <span style={{ color: palette.ink.muted, fontSize: 13 }}>{value === true ? 'Yes' : 'No'}</span>
+        <span style={styles.quiet}>{value === true ? 'Yes' : 'No'}</span>
       </label>
     );
   }
@@ -646,9 +638,9 @@ function FieldEditor({
     );
   }
   return editing ? (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div style={stack(8)}>
       <FieldInput field={bare} value={draft} linked={linked} onChange={setDraft} />
-      <div style={{ display: 'flex', gap: 6 }}>
+      <div style={hstack(6)}>
         <button
           onClick={() => void onSave(draft).then(() => setEditing(false))}
           data-variant="primary"
@@ -656,9 +648,7 @@ function FieldEditor({
         >
           Save
         </button>
-        <button onClick={() => setEditing(false)} data-variant="quiet" style={styles.smallButton}>
-          Cancel
-        </button>
+        <QuietButton onClick={() => setEditing(false)}>Cancel</QuietButton>
       </div>
     </div>
   ) : (

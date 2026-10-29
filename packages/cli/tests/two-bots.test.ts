@@ -6,6 +6,8 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 
 import { aNode, onHub, tempDir } from './helpers/nodes.js';
 import { runAutomations, personaIn } from '../src/bot-runner.js';
@@ -43,6 +45,8 @@ test('bot B, steered once, gets nothing from bot A: no outside writes for its au
   });
 
   const offered: boolean[] = [];
+  const spent = await tempDir('minca-two-bots-');
+  const spend = fileSpend(spent);
   const stop = runAutomations({
     node: botA,
     account: botA.did,
@@ -65,7 +69,7 @@ test('bot B, steered once, gets nothing from bot A: no outside writes for its au
       return [];
     },
     isBot,
-    spend: fileSpend(await tempDir('minca-two-bots-')),
+    spend,
     dailyCap: 1,
     capEach: null,
     log: () => {},
@@ -84,6 +88,8 @@ test('bot B, steered once, gets nothing from bot A: no outside writes for its au
       10_000,
       'the run to end',
     );
+    // Its spend is written last: wait for it, or the folder is removed under the write.
+    await until(async () => existsSync(path.join(spent, 'spend.json')), 10_000, 'the spend');
   } finally {
     stop();
   }

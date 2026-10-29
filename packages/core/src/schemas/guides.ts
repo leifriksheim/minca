@@ -13,16 +13,22 @@
  */
 import type { NodeRecord, P2PNode } from '../node/types.js';
 import { guide, type Guide } from './library/collections.js';
+import { definedNames } from './defined.js';
+
+type GuideRecord = NodeRecord<Guide>;
 
 /** The space's guides, by the collections they are about */
 export async function guidesOf(
   node: P2PNode,
   spaceId: string,
-): Promise<ReadonlyMap<string, ReadonlyArray<NodeRecord<Guide>>>> {
-  const records = await node.records.list<Guide>(spaceId, { collection: guide.name });
-  const about = new Map<string, NodeRecord<Guide>[]>();
-  for (const record of records) {
-    for (const name of record.body?.collections ?? []) about.set(name, [...(about.get(name) ?? []), record]);
+): Promise<ReadonlyMap<string, ReadonlyArray<GuideRecord>>> {
+  const about = new Map<string, GuideRecord[]>();
+  for (const record of await listGuides(node, spaceId)) {
+    for (const name of record.body?.collections ?? []) {
+      const list = about.get(name) ?? [];
+      list.push(record);
+      about.set(name, list);
+    }
   }
   return about;
 }
@@ -33,17 +39,15 @@ export async function guidesOf(
  * name: theirs stays. Defines `std.guide` first when the space lacks it.
  */
 export async function writeGuide(node: P2PNode, spaceId: string, body: Guide): Promise<void> {
-  const collections = await node.collections.list(spaceId);
-  if (!collections.some((c) => c.name === guide.name && c.version !== null))
-    await node.collections.define(spaceId, guide);
-  const held = (await node.records.list<Guide>(spaceId, { collection: guide.name })).find(
-    (record) => record.body?.name === body.name,
-  );
+  if (!(await definedNames(node, spaceId)).has(guide.name)) await node.collections.define(spaceId, guide);
+  const held = (await listGuides(node, spaceId)).find((record) => record.body?.name === body.name);
   if (!held) {
     await node.records.put(spaceId, guide, body);
     return;
   }
-  if (held.createdBy !== node.did) return;
-  if (JSON.stringify(held.body) === JSON.stringify(body)) return;
-  await node.records.update(spaceId, held.key, body);
+  const unchanged = JSON.stringify(held.body) === JSON.stringify(body);
+  if (held.createdBy === node.did && !unchanged) await node.records.update(spaceId, held.key, body);
 }
+
+const listGuides = (node: P2PNode, spaceId: string) =>
+  node.records.list<Guide>(spaceId, { collection: guide.name });

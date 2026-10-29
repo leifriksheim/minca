@@ -10,18 +10,13 @@
  *
  * A version that arrives is compared with the one at `r/<key>` by the ordering
  * rule (`records/version.ts`). The winner takes `r/<key>`; the loser is kept
- * as a stub, its envelope without its body — unless its writer marked it
- * `retain`, when it is kept whole. So what a record said is forgotten once it
- * changes, and every version it had can still be checked: a later one names
- * the stub before it (`chainProblem`). The same set of versions gives the same
- * entries whatever order they arrive in, which is what lets two peers
- * converge.
+ * as a stub, its envelope without its body, unless its writer marked it
+ * `retain`. The same set of versions gives the same entries in any order of
+ * arrival, which is what lets two peers converge.
  *
- * Sync compares the `i/` entries: the set of versions kept, one collection at
- * a time (`sync/negentropy.ts`). Nothing else is stored for it. The sets are
- * read once and kept in memory, updated by every change made here; a change
- * made by another writer of the same store (a tab, a folder's other device)
- * reaches them through {@link StorageProvider.invalidate}.
+ * Sync compares the `i/` entries, one collection at a time
+ * (`sync/negentropy.ts`). They are read once and kept in memory; another
+ * writer's change reaches them through {@link StorageProvider.invalidate}.
  */
 
 import type { StorageAdapter, Version, BatchOp } from '../types.js';
@@ -29,6 +24,8 @@ import { byVersion, supersedes } from '../records/version.js';
 import { isStub, stubOf } from '../schema/version.js';
 import { utf8Encode, utf8Decode, bytesToHex } from '../utils/encoding.js';
 import { cidDigest } from '../utils/hash.js';
+import { getOrAdd } from '../utils/map.js';
+import { queue } from '../utils/serial.js';
 import {
   addToSum,
   combineSums,
@@ -130,17 +127,59 @@ interface Entries {
   drop(version: Version): void;
 }
 
+/** What a change, or a group of them, writes: entries, versions indexed and unindexed, bodies not held yet */
+interface Batch {
+  readonly writes: Map<string, Uint8Array | null>;
+  readonly added: Map<string, Version>;
+  readonly dropped: Map<string, Version>;
+  readonly toStore: Map<string, Version>;
+}
+
+const emptyBatch = (): Batch => ({
+  writes: new Map(),
+  added: new Map(),
+  dropped: new Map(),
+  toStore: new Map(),
+});
+
+/** Adds one change's batch to its group's */
+function mergeInto(group: Batch, layer: Batch): void {
+  for (const [key, value] of layer.writes) group.writes.set(key, value);
+  for (const [id, version] of layer.added) {
+    group.added.set(id, version);
+    group.dropped.delete(id);
+  }
+  for (const [id, version] of layer.dropped) {
+    group.dropped.set(id, version);
+    group.added.delete(id);
+    group.toStore.delete(id);
+  }
+  for (const [id, version] of layer.toStore) group.toStore.set(id, version);
+}
+
+const decodeId = (bytes: Uint8Array | null | undefined) => (bytes ? utf8Decode(bytes) : null);
+
+/** Every `i/` entry, by collection, then by id */
+async function readKept(adapter: StorageAdapter): Promise<Map<string, Map<string, Item>>> {
+  const kept = new Map<string, Map<string, Item>>();
+  for (const key of await adapter.list(ITEM_PREFIX)) {
+    const parsed = parseItemKey(key);
+    if (parsed) getOrAdd(kept, parsed.collection, () => new Map()).set(parsed.id, parsed.item);
+  }
+  return kept;
+}
+
+function sumOf(items: Iterable<Item>): Sum {
+  let sum = EMPTY_SUM;
+  for (const item of items) sum = addToSum(sum, item.id);
+  return sum;
+}
+
 /** Creates a StorageProvider wrapping an adapter. */
 export function createStorageProvider(adapter: StorageAdapter): StorageProvider {
-  // Every change reads the current version, then writes. Two of those
-  // interleaved would each decide against the same current version, and one
-  // would lose its place. So changes take turns.
-  let tail: Promise<unknown> = Promise.resolve();
-  const exclusively = <T>(change: () => Promise<T>): Promise<T> => {
-    const run = tail.then(change, change);
-    tail = run.catch(() => {});
-    return run;
-  };
+  // A change reads the current version, then writes: two interleaved would
+  // decide against the same one. So changes take turns.
+  const exclusively = queue();
 
   // ─── What is read often, in memory ─────────────────────────────────
   //
@@ -189,21 +228,9 @@ export function createStorageProvider(adapter: StorageAdapter): StorageProvider 
     kept ??
     exclusively(async () => {
       if (kept) return kept;
-      const loaded = new Map<string, Map<string, Item>>();
-      for (const key of await adapter.list(ITEM_PREFIX)) {
-        const parsed = parseItemKey(key);
-        if (!parsed) continue;
-        (
-          loaded.get(parsed.collection) ?? loaded.set(parsed.collection, new Map()).get(parsed.collection)!
-        ).set(parsed.id, parsed.item);
-      }
+      const loaded = await readKept(adapter);
       kept = loaded;
-      totals = new Map();
-      for (const [collection, byId] of loaded) {
-        let sum = EMPTY_SUM;
-        for (const item of byId.values()) sum = addToSum(sum, item.id);
-        totals.set(collection, sum);
-      }
+      totals = new Map([...loaded].map(([collection, byId]) => [collection, sumOf(byId.values())]));
       return loaded;
     });
 
@@ -219,7 +246,7 @@ export function createStorageProvider(adapter: StorageAdapter): StorageProvider 
     }
     for (const e of added) {
       const digest = cidDigest(e.id);
-      const byId = kept.get(e.collection) ?? kept.set(e.collection, new Map()).get(e.collection)!;
+      const byId = getOrAdd(kept, e.collection, () => new Map<string, Item>());
       if (!digest || byId.has(e.id)) continue;
       byId.set(e.id, { timestamp: syncTime(e), id: digest });
       totals.set(e.collection, addToSum(totals.get(e.collection) ?? EMPTY_SUM, digest));
@@ -262,87 +289,30 @@ export function createStorageProvider(adapter: StorageAdapter): StorageProvider 
   }
 
   async function land(group: ReadonlyArray<Pending>): Promise<void> {
-    const writes = new Map<string, Uint8Array | null>();
-    const added = new Map<string, Version>();
-    const dropped = new Map<string, Version>();
-    /** Bodies not held yet */
-    const toStore = new Map<string, Version>();
+    const batch = emptyBatch();
     const ran: Pending[] = [];
-
     for (const one of group) {
       // Each change on a layer of its own, so one that fails leaves nothing behind.
-      const layer = {
-        writes: new Map<string, Uint8Array | null>(),
-        added: new Map<string, Version>(),
-        dropped: new Map<string, Version>(),
-        toStore: new Map<string, Version>(),
-      };
-      const entries: Entries = {
-        get: async (key) => {
-          const written = layer.writes.has(key) ? layer.writes : writes.has(key) ? writes : null;
-          if (!written) return readId(key);
-          const bytes = written.get(key)!;
-          return bytes ? utf8Decode(bytes) : null;
-        },
-        set: (key, id) => void layer.writes.set(key, utf8Encode(id)),
-        unset: (key) => void layer.writes.set(key, null),
-        keep: async (version) => {
-          // A copy already held as this — a current version kept whole — is not written again.
-          const held = bodies.get(version.id);
-          if (!held || isStub(held) !== isStub(version)) {
-            layer.toStore.set(version.id, version);
-            staging.set(version.id, version);
-          }
-          layer.writes.set(itemKey(version), utf8Encode(version.id));
-          layer.added.set(version.id, version);
-          layer.dropped.delete(version.id);
-        },
-        drop: (version) => {
-          layer.writes.set(itemKey(version), null);
-          layer.dropped.set(version.id, version);
-          layer.added.delete(version.id);
-          layer.toStore.delete(version.id);
-        },
-      };
+      const layer = emptyBatch();
       try {
-        await one.run(entries);
+        await one.run(entriesOn(layer, batch));
       } catch (error) {
-        for (const id of layer.toStore.keys()) if (!toStore.has(id)) staging.delete(id);
+        for (const id of layer.toStore.keys()) if (!batch.toStore.has(id)) staging.delete(id);
         one.reject(error);
         continue;
       }
-      for (const [key, value] of layer.writes) writes.set(key, value);
-      for (const [id, version] of layer.added) {
-        added.set(id, version);
-        dropped.delete(id);
-      }
-      for (const [id, version] of layer.dropped) {
-        dropped.set(id, version);
-        added.delete(id);
-        toStore.delete(id);
-      }
-      for (const [id, version] of layer.toStore) toStore.set(id, version);
+      mergeInto(batch, layer);
       ran.push(one);
     }
 
-    if (writes.size === 0 && dropped.size === 0) {
+    if (batch.writes.size === 0 && batch.dropped.size === 0) {
       staging.clear();
       for (const one of ran) one.resolve();
       return;
     }
-    const ops = [...writes].map(([key, value]): BatchOp =>
-      value ? { type: 'put', key, value } : { type: 'delete', key },
-    );
     landed++;
     try {
-      if (adapter.commit) {
-        await adapter.commit({ store: [...toStore.values()], ops, remove: [...dropped.keys()] });
-      } else {
-        // Bodies first and deletes last, so no entry ever names a version that is not there.
-        for (const version of toStore.values()) await adapter.putVersion(version);
-        await adapter.batch(ops);
-        for (const id of dropped.keys()) await adapter.deleteVersion(id);
-      }
+      await write(batch);
     } catch (error) {
       // Whether any of it landed is unknown: read it all again.
       pointers.clear();
@@ -355,12 +325,54 @@ export function createStorageProvider(adapter: StorageAdapter): StorageProvider 
       landed++;
     }
     staging.clear();
-    for (const version of toStore.values()) remember(version);
-    for (const [key, value] of writes)
-      if (isPointer(key)) pointers.set(key, value ? utf8Decode(value) : null);
-    for (const id of dropped.keys()) bodies.delete(id);
-    track([...added.values()], [...dropped.values()]);
+    for (const version of batch.toStore.values()) remember(version);
+    for (const [key, value] of batch.writes) if (isPointer(key)) pointers.set(key, decodeId(value));
+    for (const id of batch.dropped.keys()) bodies.delete(id);
+    track([...batch.added.values()], [...batch.dropped.values()]);
     for (const one of ran) one.resolve();
+  }
+
+  /** What a change reads and writes: its own layer, over what its group wrote before it */
+  function entriesOn(layer: Batch, group: Batch): Entries {
+    return {
+      get: async (key) => {
+        const source = [layer.writes, group.writes].find((writes) => writes.has(key));
+        return source ? decodeId(source.get(key)) : readId(key);
+      },
+      set: (key, id) => void layer.writes.set(key, utf8Encode(id)),
+      unset: (key) => void layer.writes.set(key, null),
+      keep: async (version) => {
+        // A copy already held as this — a current version kept whole — is not written again.
+        const held = bodies.get(version.id);
+        if (!held || isStub(held) !== isStub(version)) {
+          layer.toStore.set(version.id, version);
+          staging.set(version.id, version);
+        }
+        layer.writes.set(itemKey(version), utf8Encode(version.id));
+        layer.added.set(version.id, version);
+        layer.dropped.delete(version.id);
+      },
+      drop: (version) => {
+        layer.writes.set(itemKey(version), null);
+        layer.dropped.set(version.id, version);
+        layer.added.delete(version.id);
+        layer.toStore.delete(version.id);
+      },
+    };
+  }
+
+  /** Writes a group's batch, in one commit where the adapter can */
+  async function write({ writes, toStore, dropped }: Batch): Promise<void> {
+    const ops = [...writes].map(([key, value]): BatchOp =>
+      value ? { type: 'put', key, value } : { type: 'delete', key },
+    );
+    if (adapter.commit) {
+      return adapter.commit({ store: [...toStore.values()], ops, remove: [...dropped.keys()] });
+    }
+    // Bodies first and deletes last, so no entry ever names a version that is not there.
+    for (const version of toStore.values()) await adapter.putVersion(version);
+    await adapter.batch(ops);
+    for (const id of dropped.keys()) await adapter.deleteVersion(id);
   }
 
   /**
@@ -419,15 +431,14 @@ export function createStorageProvider(adapter: StorageAdapter): StorageProvider 
     const pointer = isPointer(key);
     if (pointer && pointers.has(key)) return pointers.get(key)!;
     const before = landed;
-    const bytes = await adapter.get(key);
-    const id = bytes ? utf8Decode(bytes) : null;
+    const id = decodeId(await adapter.get(key));
     if (pointer && before === landed) pointers.set(key, id);
     return id;
   };
 
   async function histories(prefix: string): Promise<Map<string, Version[]>> {
     const ids = new Map<string, Set<string>>();
-    const add = (key: string, id: string) => (ids.get(key) ?? ids.set(key, new Set()).get(key)!).add(id);
+    const add = (key: string, id: string) => getOrAdd(ids, key, () => new Set<string>()).add(id);
     for (const entry of [CURRENT_PREFIX, GENESIS_PREFIX]) {
       for (const [name, id] of await pointersUnder(`${entry}${prefix}`)) add(name.slice(entry.length), id);
     }
@@ -436,14 +447,10 @@ export function createStorageProvider(adapter: StorageAdapter): StorageProvider 
       const [, key, , id] = name.split('/');
       if (key && id) add(key, id);
     }
-    const found = new Map(
-      (await load(new Set([...ids.values()].flatMap((held) => [...held])))).map((v) => [v.id, v]),
-    );
-    const result = new Map<string, Version[]>();
-    for (const [key, held] of ids) {
-      result.set(key, [...held].flatMap((id) => found.get(id) ?? []).sort(byVersion));
-    }
-    return result;
+    const allIds = new Set([...ids.values()].flatMap((held) => [...held]));
+    const found = new Map((await load(allIds)).map((version) => [version.id, version]));
+    const versionsOf = (held: Set<string>) => [...held].flatMap((id) => found.get(id) ?? []).sort(byVersion);
+    return new Map([...ids].map(([key, held]) => [key, versionsOf(held)]));
   }
 
   async function items(collection: string): Promise<ItemSet> {

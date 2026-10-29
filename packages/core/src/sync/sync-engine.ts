@@ -2,29 +2,21 @@
  * Keeps one store in step with its peers.
  *
  * 1. A peer says hello with a fingerprint of each collection it keeps. Equal
- *    fingerprints mean the same versions: nothing to do for that collection.
- * 2. For each collection that differs, one side — the initiator — reconciles
- *    it with the other (`negentropy.ts`). A few rounds of fingerprints of
- *    ever smaller ranges end with the initiator knowing which versions each
- *    side lacks.
+ *    fingerprints mean the same versions.
+ * 2. For each collection that differs, the initiator reconciles it with the
+ *    other (`negentropy.ts`), and ends up knowing which versions each side lacks.
  * 3. The initiator asks for what it lacks, and sends what the other lacks.
  *    Everything that arrives passes the gatekeeper before it is stored.
  *
- * Cost follows the difference, not the size: two stores differing by one
- * version exchange a few hundred bytes.
+ * Cost follows the difference, not the size. The initiator is the peer whose
+ * id sorts first; the other answers a hello with its own, which starts it.
  *
- * The initiator is the peer whose id sorts first, so two peers that hear each
- * other's hello at once don't both do the work. A peer that isn't the
- * initiator answers a hello with its own, which starts the other.
- *
- * **Holding part of a space.** A node may hold every collection, or only
- * some (plus the space's own `sys.*`, which every node holds). Each hello
- * says which. Two peers reconcile only the collections both hold, and a
- * version for a collection this node doesn't hold is not taken in. Whatever
- * a node does take in from a peer, it tells that peer it has (`stored`): a
- * node holding part of a space keeps its own writes until enough keepers have
- * said so.
+ * A node may hold every collection, or only some (plus `sys.*`, which every
+ * node holds), and says which in its hello. Two peers reconcile only what both
+ * hold. Whatever a node takes in from a peer, it tells that peer (`stored`), so
+ * a node holding part of a space can let go of its own writes.
  */
+import { getOrAdd } from '../utils/map.js';
 import type { Version } from '../types.js';
 import type { StorageProvider } from '../storage/storage-provider.js';
 import { cidDigest, cidOfDigest } from '../utils/hash.js';
@@ -43,46 +35,28 @@ export interface IncomingValidation {
   readonly valid: boolean;
   readonly reason?: string;
   /**
-   * Not judged yet, rather than refused: it depends on something that has not
-   * arrived — a record's first version, the definition it was written under.
-   * It is held and tried again as other records come in, and fetched again on
-   * the next round if it is still waiting.
+   * Not judged yet: it depends on something that has not arrived. It is held
+   * and tried again as other records come in.
    */
   readonly later?: boolean;
 }
 
-/** At most this many records wait for what they depend on; the oldest give way */
-const MAX_WAITING = 1000;
-/** Refusals remembered, so reconciling doesn't ask a peer for the same bad version every round */
-const MAX_REFUSED = 10_000;
-
 /** What a node holds of a space: every collection, or these (besides `sys.*`, which every node holds) */
 export type Holds = 'all' | ReadonlySet<string>;
-
-/** Whether a collection is held, given what a node holds */
-const holdsCollection = (holds: Holds, collection: string): boolean =>
-  collection.startsWith('sys.') || holds === 'all' || holds.has(collection);
-
-/** Collection definitions first, then records by version — what others depend on comes first */
-const rank = (e: Version): number => (e?.collection === 'sys.collection' ? -1 : (e?.seq ?? 0));
 
 export interface SyncEngineConfig {
   readonly storageProvider: StorageProvider;
   readonly sendToPeer: (peerId: string, message: SyncMessage) => void;
   /**
-   * This node's id among its peers. The one of two peers whose id sorts first
-   * starts reconciling. Without it, this node starts whenever it hears of a
-   * difference — harmless, just sometimes twice the work.
+   * This node's id among its peers; of two peers, the one that sorts first
+   * starts reconciling. Without it this node always starts, sometimes doubling the work.
    */
   readonly self?: string;
   readonly heartbeatInterval?: number;
   /**
-   * Gatekeeper for versions arriving from peers — typically
-   * `createVersionCheck`. Anything it rejects is dropped instead of committed,
-   * and surfaces as a `rejected` event.
-   *
-   * Leaving it out accepts whatever peers send, which is only ever appropriate
-   * for a trusted transport or a test.
+   * Gatekeeper for versions from peers, typically `createVersionCheck`. What it
+   * rejects is dropped and surfaces as `rejected`. Without it, everything is
+   * accepted: only for a trusted transport or a test.
    */
   readonly validate?: (version: Version) => Promise<IncomingValidation>;
   /** What this node holds, asked afresh for every hello. Default: everything. */
@@ -92,12 +66,11 @@ export interface SyncEngineConfig {
 }
 
 /**
- * - `synced` (peer, full): nothing left in flight with the peer; `full` when the peer holds every collection
- * - `level` (peer, collection, full): this node holds what the peer holds of a
- *   collection, as far as it could take it in; `full` when the peer holds every collection
+ * - `synced` (peer, full): nothing left in flight with the peer; `full` when it holds every collection
+ * - `level` (peer, collection, full): this node holds what the peer holds of a collection
  * - `stored` (peer, ids): the peer says it now has these versions
  * - `version-received` (version): each version taken in
- * - `received` (versions): every version one message brought, once all are in — what to redraw after
+ * - `received` (versions): every version one message brought, once all are in
  * - `rejected` (peer, version, reason), `error` (error)
  */
 interface SyncEvents {
@@ -130,26 +103,45 @@ export interface SyncEngine {
   off<K extends SyncEvent>(event: K, callback: SyncEvents[K]): void;
 }
 
-/** Records asked for, or sent, in one message. */
+/** At most this many records wait for what they depend on; the oldest give way */
+const MAX_WAITING = 1000;
+/** Refusals remembered, so reconciling doesn't ask a peer for the same bad version every round */
+const MAX_REFUSED = 10_000;
+/** Records asked for, or sent, in one message */
 const MAX_IDS_PER_REQUEST = 200;
 /** `want`s in flight to one peer at a time; the rest queue */
 const MAX_WANTS_IN_FLIGHT = 4;
-/** Largest Negentropy message, in bytes before base64. Stays well inside a data channel's limit. */
+/** Largest Negentropy message, in bytes before base64: well inside a data channel's limit */
 const FRAME_SIZE_LIMIT = 32_000;
+/** Collections one hello may name. Past this it is hostile, not big. */
+const MAX_COLLECTIONS = 1000;
+/** Rounds one reconciliation may take before it is given up as runaway */
+const MAX_ROUNDS = 64;
+/** A session or want that has heard nothing for this long is given up on */
+const STALE_MS = 30_000;
+
+/** Whether a collection is held, given what a node holds */
+const holdsCollection = (holds: Holds, collection: string): boolean =>
+  collection.startsWith('sys.') || holds === 'all' || holds.has(collection);
+
+/** What a hello says the peer holds; anything malformed counts as holding nothing past `sys.*` */
+function readHolds(value: unknown): Holds {
+  if (value === undefined || value === 'all') return 'all';
+  if (!Array.isArray(value) || value.length > MAX_COLLECTIONS) return new Set();
+  return new Set(value.filter((c): c is string => typeof c === 'string'));
+}
+
+/** Collection definitions first, then records by version: what others depend on comes first */
+const rank = (e: Version): number => (e?.collection === 'sys.collection' ? -1 : (e?.seq ?? 0));
+
 /**
- * Versions in messages of at most `size`, newest first, with every version of
- * one record in the same message where they fit. A message is taken in whole
- * (§8 of the sync spec), so a record arrives with its first version and the
- * versions that changed or deleted it, and is never shown as it once was —
- * nor waits for the rest while the peer sends everything else.
+ * Versions in messages of at most `size`, with every version of one record in
+ * the same message where they fit. A message is taken in whole, so a record
+ * arrives with the versions that changed or deleted it, never as it once was.
  */
 function byRecord(versions: ReadonlyArray<Version>, size: number): Version[][] {
   const records = new Map<string, Version[]>();
-  for (const version of versions) {
-    const record = records.get(version.key);
-    if (record) record.push(version);
-    else records.set(version.key, [version]);
-  }
+  for (const version of versions) getOrAdd(records, version.key, () => []).push(version);
   const messages: Version[][] = [];
   let message: Version[] = [];
   for (const record of records.values()) {
@@ -157,7 +149,7 @@ function byRecord(versions: ReadonlyArray<Version>, size: number): Version[][] {
       messages.push(message);
       message = [];
     }
-    // A record with more versions than fit in one message goes over several, newest first.
+    // A record with more versions than fit in one message goes over several.
     for (let i = 0; i < record.length; i += size) {
       const part = record.slice(i, i + size);
       if (message.length + part.length > size) {
@@ -171,13 +163,6 @@ function byRecord(versions: ReadonlyArray<Version>, size: number): Version[][] {
   return messages;
 }
 
-/** Collections one hello may name. Past this it is hostile, not big. */
-const MAX_COLLECTIONS = 1000;
-/** Rounds one reconciliation may take before it is given up as runaway. */
-const MAX_ROUNDS = 64;
-/** A session that has heard nothing for this long is given up on. */
-const STALE_MS = 30_000;
-
 /** Reconciling one collection with one peer, as initiator */
 interface Session {
   readonly id: number;
@@ -187,28 +172,27 @@ interface Session {
   touchedAt: number;
   /** The peer said something new about this collection mid-session: go again once done */
   again: boolean;
-  /**
-   * Ids already sent or asked for. A round cut short by the frame limit can
-   * name some ids again in the next — the reference implementation does too.
-   */
+  /** Ids already found: a round cut short by the frame limit can name some again */
   readonly handled: Set<string>;
   /** Ids found so far, oldest first: what they lack, and what we lack */
   readonly have: string[];
   readonly need: string[];
 }
 
+interface Want {
+  readonly ids: ReadonlySet<string>;
+  readonly collection: string;
+  readonly at: number;
+}
+
 /** Everything in flight with one peer */
 interface PeerState {
   readonly sessions: Map<string, Session>;
-  /** `want` requests in flight, by request id, and the collection they are for */
-  readonly wants: Map<
-    number,
-    { readonly ids: ReadonlySet<string>; readonly collection: string; readonly at: number }
-  >;
+  /** `want`s in flight, by request id */
+  readonly wants: Map<number, Want>;
   /**
-   * Ids to ask for once fewer wants are in flight, front first. An id counts
-   * as queued while it is in `queuedIds`; an entry whose id is not (it was
-   * moved to the front, and asked for there) is passed over.
+   * Ids to ask for once fewer wants are in flight, front first. An entry
+   * counts only while its id is in `queuedIds`; the rest are passed over.
    */
   readonly queued: Array<{ readonly id: string; readonly collection: string }>;
   readonly queuedIds: Set<string>;
@@ -216,76 +200,55 @@ interface PeerState {
   holds: Holds;
 }
 
+/** What one message brought in: the versions stored, and the versions they wait for */
+interface Intake {
+  readonly placed: Version[];
+  readonly firsts: Map<string, string>;
+}
+
 /** Creates a sync engine orchestrator. */
 export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
   const { storageProvider: storage, sendToPeer, heartbeatInterval = 30000, validate, self } = config;
   const ourHolds = config.holds ?? (() => 'all' as const);
+  const { on, off, emit } = createEmitter<SyncEvents>();
+  const report = (err: unknown) => emit('error', err);
+
   /** Peers to say hello to and push to */
   const peers = new Set<string>();
-  /** What's in flight with each peer */
   const states = new Map<string, PeerState>();
+  /** Peers found level with this node, until it takes in or writes anything more */
+  const level = new Set<string>();
+  /** Records that could not be judged yet, tried again whenever something new is admitted */
+  const waiting = new Map<string, { peerId: string; version: Version }>();
+  /**
+   * Refused versions, by peer and id, oldest first. An id doesn't cover the
+   * signature, so a stranger's mangled copy must not stop us fetching the real one.
+   */
+  const refused = new Set<string>();
+  /** Which connection to each peer is open now, so a message from a closed one is dropped */
+  const connections = new Map<string, number>();
+  /** Where each peer's messages are up to */
+  const inOrder = new Map<string, Promise<void>>();
+  let lastConnection = 0;
   let intervalId: ReturnType<typeof setInterval> | null = null;
   let nextId = 1;
 
-  const { on, off, emit } = createEmitter<SyncEvents>();
-
-  const stamp = (msg: SyncMessageBody): SyncMessage => ({ v: SYNC_PROTOCOL_VERSION, ...msg });
-  const send = (peerId: string, msg: SyncMessageBody) => sendToPeer(peerId, stamp(msg));
-  const stateOf = (peerId: string): PeerState =>
-    states.get(peerId) ??
-    states
-      .set(peerId, { sessions: new Map(), wants: new Map(), queued: [], queuedIds: new Set(), holds: 'all' })
-      .get(peerId)!;
+  const send = (peerId: string, msg: SyncMessageBody) =>
+    sendToPeer(peerId, { v: SYNC_PROTOCOL_VERSION, ...msg });
+  const stateOf = (peerId: string): PeerState => getOrAdd(states, peerId, newPeerState);
+  const peerHolds = (peerId: string, collection: string) =>
+    holdsCollection(states.get(peerId)?.holds ?? 'all', collection);
+  const isRefused = (peerId: string, id: string) => refused.has(refusal(peerId, id));
 
   // ─── Taking in versions ────────────────────────────────────────────
 
-  /** Records that could not be judged yet — tried again whenever something new is admitted */
-  const waiting = new Map<string, { peerId: string; version: Version }>();
-  /**
-   * Versions the gatekeeper refused, as `peer + id`, oldest first. By peer,
-   * not by id alone: an id doesn't cover the signature, so a stranger's
-   * mangled copy shares the real record's id — refusing it must not stop us
-   * fetching the real one from someone else.
-   */
-  const refused = new Set<string>();
-  /**
-   * Which connection to each peer is open now, numbered across all of them:
-   * what a message arrived on, so one from a connection since closed is not
-   * taken for the new one's.
-   */
-  const connections = new Map<string, number>();
-  let lastConnection = 0;
-  const refusal = (peerId: string, id: string) => `${peerId}\n${id}`;
-
-  /** What one message brought in: the versions stored, and the versions they wait for, to ask for */
-  interface Intake {
-    readonly placed: Version[];
-    readonly firsts: Map<string, string>;
-  }
-
-  /**
-   * Commits a version from a peer, but only if the gatekeeper allows it.
-   * A version waiting for its first version, or for the version before it,
-   * names them, so they are asked for at once rather than on the next round.
-   */
+  /** Stores a version from a peer if the gatekeeper allows it; one that must wait names what it waits for */
   const admit = async (peerId: string, version: Version, intake: Intake): Promise<boolean> => {
-    if (validate) {
-      const verdict = await validate(version);
-      if (!verdict.valid) {
-        if (verdict.later) {
-          waiting.set(version.id, { peerId, version });
-          if (waiting.size > MAX_WAITING) waiting.delete(waiting.keys().next().value!);
-          for (const needed of version.seq > 0 ? [version.genesis, version.prev] : []) {
-            if (typeof needed === 'string' && !(await storage.getVersion(needed)))
-              intake.firsts.set(needed, version.collection);
-          }
-        } else {
-          refused.add(refusal(peerId, version.id));
-          if (refused.size > MAX_REFUSED) refused.delete(refused.values().next().value!);
-          emit('rejected', peerId, version, verdict.reason);
-        }
-        return false;
-      }
+    const verdict: IncomingValidation = validate ? await validate(version) : { valid: true };
+    if (!verdict.valid) {
+      if (verdict.later) await holdBack(peerId, version, intake);
+      else refuse(peerId, version, verdict.reason);
+      return false;
     }
     waiting.delete(version.id);
     await storage.addVersion(version);
@@ -294,6 +257,23 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     return true;
   };
 
+  const holdBack = async (peerId: string, version: Version, intake: Intake) => {
+    waiting.set(version.id, { peerId, version });
+    dropOldest(waiting, MAX_WAITING);
+    const dependsOn = version.seq > 0 ? [version.genesis, version.prev] : [];
+    for (const needed of dependsOn) {
+      if (typeof needed === 'string' && !(await storage.getVersion(needed)))
+        intake.firsts.set(needed, version.collection);
+    }
+  };
+
+  const refuse = (peerId: string, version: Version, reason: string | undefined) => {
+    refused.add(refusal(peerId, version.id));
+    dropOldest(refused, MAX_REFUSED);
+    emit('rejected', peerId, version, reason);
+  };
+
+  /** Tries every waiting version again until nothing more goes in; each sender hears what was stored */
   const retryWaiting = async (intake: Intake) => {
     const stored = new Map<string, string[]>();
     let progressed = true;
@@ -303,19 +283,15 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
         waiting.delete(id);
         if (!(await admit(held.peerId, held.version, intake))) continue;
         progressed = true;
-        (stored.get(held.peerId) ?? stored.set(held.peerId, []).get(held.peerId)!).push(id);
+        getOrAdd(stored, held.peerId, () => []).push(id);
       }
     }
-    // Stored at last: the peer that sent it hears so, as it would have had it gone in at once.
     for (const [peerId, ids] of stored) if (peers.has(peerId)) send(peerId, { type: 'stored', ids });
   };
 
   /**
-   * Queues these versions to ask a peer for, in this order, or ahead of
-   * everything queued (`first`), as the space's own records always are: who
-   * may do what decides whether the rest counts. A few wants are in flight at
-   * a time: what arrives can then pull what it waits for ahead of the rest,
-   * and fewer versions wait at once.
+   * Queues ids to ask a peer for, behind the rest or ahead of them (`ahead`,
+   * and always for `sys.*`: who may do what decides whether the rest counts).
    */
   const want = (peerId: string, collection: string, ids: ReadonlyArray<string>, ahead = false) => {
     const first = ahead || collection.startsWith('sys.');
@@ -327,41 +303,20 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     pump(peerId);
   };
 
-  /** Sends wants from the front of the queue while there is room in flight, at most 200 ids each, one collection each */
+  /** Sends wants from the front of the queue while there is room in flight */
   const pump = (peerId: string) => {
     const state = states.get(peerId);
     if (!state) return;
     while (state.wants.size < MAX_WANTS_IN_FLIGHT && state.queuedIds.size > 0) {
-      const ids: string[] = [];
-      let collection: string | null = null;
-      while (state.queued.length > 0 && ids.length < MAX_IDS_PER_REQUEST) {
-        const next = state.queued[0]!;
-        if (!state.queuedIds.has(next.id)) {
-          state.queued.shift();
-          continue;
-        }
-        if (collection !== null && next.collection !== collection) break;
-        collection = next.collection;
-        state.queued.shift();
-        state.queuedIds.delete(next.id);
-        ids.push(next.id);
-      }
-      if (collection === null) break;
-      const wantId = nextId++;
-      state.wants.set(wantId, { ids: new Set(ids), collection, at: Date.now() });
-      send(peerId, { type: 'want', id: wantId, ids });
+      const batch = takeBatch(state);
+      if (!batch) break;
+      const id = nextId++;
+      state.wants.set(id, { ids: new Set(batch.ids), collection: batch.collection, at: Date.now() });
+      send(peerId, { type: 'want', id, ids: batch.ids });
     }
   };
 
-  /** Ids this node has asked a peer for and not yet been answered */
-  const asked = (peerId: string) =>
-    new Set([...(states.get(peerId)?.wants.values() ?? [])].flatMap((w) => [...w.ids]));
-
-  /**
-   * Admits a batch: definitions and first versions before what depends on
-   * them, so little has to wait. Versions of collections this node doesn't
-   * hold are passed over. The peer is told which it now has.
-   */
+  /** Admits a batch, what others depend on first, passing over collections not held here */
   const admitAll = async (peerId: string, versions: ReadonlyArray<Version>) => {
     const holds = ourHolds();
     const stored: string[] = [];
@@ -375,21 +330,27 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
       send(peerId, { type: 'stored', ids: stored });
       await retryWaiting(intake);
     }
-    // First versions still missing once everything that could go in has.
-    if (intake.firsts.size > 0 && peers.has(peerId)) {
-      const inFlight = asked(peerId);
-      const byCollection = new Map<string, string[]>();
-      for (const [id, collection] of intake.firsts) {
-        if (inFlight.has(id) || refused.has(refusal(peerId, id)) || (await storage.getVersion(id))) continue;
-        (byCollection.get(collection) ?? byCollection.set(collection, []).get(collection)!).push(id);
-      }
-      for (const [collection, ids] of byCollection) want(peerId, collection, ids, true);
-    }
+    if (intake.firsts.size > 0 && peers.has(peerId)) await askFirsts(peerId, intake.firsts);
     if (intake.placed.length > 0) {
       level.clear();
       emit('received', intake.placed);
     }
   };
+
+  /** Asks at once for the versions still waited on, unless asked, refused or already here */
+  const askFirsts = async (peerId: string, firsts: ReadonlyMap<string, string>) => {
+    const inFlight = askedOf(peerId);
+    const byCollection = new Map<string, string[]>();
+    for (const [id, collection] of firsts) {
+      if (inFlight.has(id) || isRefused(peerId, id) || (await storage.getVersion(id))) continue;
+      getOrAdd(byCollection, collection, () => []).push(id);
+    }
+    for (const [collection, ids] of byCollection) want(peerId, collection, ids, true);
+  };
+
+  /** Ids asked of a peer and not yet answered */
+  const askedOf = (peerId: string) =>
+    new Set([...(states.get(peerId)?.wants.values() ?? [])].flatMap((w) => [...w.ids]));
 
   // ─── Hello ─────────────────────────────────────────────────────────
 
@@ -412,12 +373,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     });
   };
 
-  /** What a hello says the peer holds; anything malformed counts as holding nothing past `sys.*` */
-  const readHolds = (value: unknown): Holds => {
-    if (value === undefined || value === 'all') return 'all';
-    if (!Array.isArray(value) || value.length > MAX_COLLECTIONS) return new Set();
-    return new Set(value.filter((c): c is string => typeof c === 'string'));
-  };
+  const sayHello = (peerId: string, reply = false) => void hello(peerId, reply).catch(report);
 
   const onHello = async (
     peerId: string,
@@ -432,17 +388,14 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     state.holds = readHolds(theirHolds);
     const holds = ourHolds();
     const ours = await ourSums(holds);
-    // Everything either side names, and every collection this node holds even if it has none of it yet.
+    // Every collection this node holds counts, even one it has nothing of yet.
     const named = new Set([...names, ...Object.keys(ours), ...(holds === 'all' ? [] : holds)]);
     const shared = [...named].filter((c) => holdsCollection(holds, c) && holdsCollection(state.holds, c));
     const differing = shared.filter((c) => theirs[c] !== ours[c]);
     for (const c of shared) if (theirs[c] === ours[c]) emit('level', peerId, c, state.holds === 'all');
-    if (differing.length === 0) {
-      if (!busy(peerId)) synced(peerId);
-      return;
-    }
+    if (differing.length === 0) return settleIfDone(peerId);
     if (self !== undefined && self > peerId) {
-      // The other side starts. It may not have heard from us yet: tell it.
+      // The other side starts. It may not have heard from us yet.
       if (!reply) await hello(peerId, true);
       return;
     }
@@ -457,15 +410,18 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
   };
 
   const settleIfDone = (peerId: string) => {
-    if (!busy(peerId)) synced(peerId);
-  };
-
-  /** Peers found level with this node, until it takes in or writes anything more */
-  const level = new Set<string>();
-  const synced = (peerId: string) => {
+    if (busy(peerId)) return;
     level.add(peerId);
     emit('synced', peerId, states.get(peerId)?.holds === 'all');
   };
+
+  const sendRound = (peerId: string, session: Session, message: Uint8Array) =>
+    send(peerId, {
+      type: 'reconcile',
+      id: session.id,
+      collection: session.collection,
+      message: base64UrlEncode(message),
+    });
 
   const begin = async (peerId: string, collection: string) => {
     if (typeof collection !== 'string') return;
@@ -491,27 +447,36 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
       need: [],
     };
     state.sessions.set(collection, session);
-    send(peerId, {
-      type: 'reconcile',
-      id: session.id,
-      collection,
-      message: base64UrlEncode(await reconciler.initiate()),
-    });
+    sendRound(peerId, session, await reconciler.initiate());
   };
 
   /**
-   * A collection's session and every request it made are over: level with the
-   * peer, as far as could be. The peer is told where things stand now, so it
-   * knows it is level too — marked a reply, so it never starts another round.
+   * When a collection's session and its wants are over, this node is level
+   * with the peer, and tells it so in a reply hello that starts no new round.
    */
   const levelIfDone = (peerId: string, collection: string) => {
     const state = states.get(peerId);
     if (!state || state.sessions.has(collection)) return;
-    for (const want of state.wants.values()) if (want.collection === collection) return;
-    for (const queued of state.queued)
-      if (queued.collection === collection && state.queuedIds.has(queued.id)) return;
+    const wanting = [...state.wants.values()].some((w) => w.collection === collection);
+    const queued = state.queued.some((q) => q.collection === collection && state.queuedIds.has(q.id));
+    if (wanting || queued) return;
     emit('level', peerId, collection, state.holds === 'all');
-    void hello(peerId, true).catch((err) => emit('error', err));
+    sayHello(peerId, true);
+  };
+
+  /**
+   * Ends a session: asks for what we lack and sends what they lack, newest
+   * first. Only now, since rounds find versions oldest first, and sending as
+   * they go would show a record as it once was.
+   */
+  const endSession = async (peerId: string, state: PeerState, session: Session) => {
+    // Asked for before the session goes, so the peer never looks idle in between.
+    want(peerId, session.collection, session.need.reverse());
+    state.sessions.delete(session.collection);
+    const found = await Promise.all(session.have.reverse().map((id) => storage.getVersion(id)));
+    const have = found.filter((v): v is Version => v !== null);
+    for (const versions of byRecord(have, MAX_IDS_PER_REQUEST)) send(peerId, { type: 'versions', versions });
+    if (session.again) void begin(peerId, session.collection).catch(report);
   };
 
   const onReconciled = async (peerId: string, id: number, message: string, held: boolean) => {
@@ -520,25 +485,9 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     if (!state || !session) return; // not ours, or already over
     session.touchedAt = Date.now();
 
-    // What they lack goes, and what we lack is asked for, once the session
-    // has found it all — newest first. Rounds find items oldest first, so
-    // sending as they go would show a record as it once was (its first
-    // version) until the version that deleted or changed it came along.
-    const end = async () => {
-      // Asked for before the session goes, so the peer never looks idle in between.
-      want(peerId, session.collection, session.need.reverse());
-      state.sessions.delete(session.collection);
-      const have = (await Promise.all(session.have.reverse().map((v) => storage.getVersion(v)))).filter(
-        (v): v is Version => v !== null,
-      );
-      for (const versions of byRecord(have, MAX_IDS_PER_REQUEST))
-        send(peerId, { type: 'versions', versions });
-      if (session.again) void begin(peerId, session.collection).catch((err) => emit('error', err));
-    };
-
     if (!held) {
-      // They don't hold it after all — they changed what they hold since their hello.
-      await end();
+      // They changed what they hold since their hello.
+      await endSession(peerId, state, session);
       return settleIfDone(peerId);
     }
 
@@ -546,32 +495,22 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     try {
       round = await session.reconciler.reconcile(base64UrlDecode(message));
     } catch (err) {
-      await end();
-      emit(
-        'error',
-        new Error(`Sync with ${peerId} abandoned: ${err instanceof Error ? err.message : String(err)}`),
-      );
+      await endSession(peerId, state, session);
+      emit('error', abandoned(peerId, err instanceof Error ? err.message : String(err)));
       return settleIfDone(peerId);
     }
 
-    const fresh = (id: string) => !session.handled.has(id) && !!session.handled.add(id);
-    session.have.push(...round.have.map(cidOfDigest).filter(fresh));
-    session.need.push(
-      ...round.need.map(cidOfDigest).filter((v) => fresh(v) && !refused.has(refusal(peerId, v))),
-    );
+    const isNew = (versionId: string) => {
+      if (session.handled.has(versionId)) return false;
+      session.handled.add(versionId);
+      return true;
+    };
+    session.have.push(...round.have.map(cidOfDigest).filter(isNew));
+    session.need.push(...round.need.map(cidOfDigest).filter((v) => isNew(v) && !isRefused(peerId, v)));
 
-    if (round.message && ++session.rounds < MAX_ROUNDS) {
-      send(peerId, {
-        type: 'reconcile',
-        id: session.id,
-        collection: session.collection,
-        message: base64UrlEncode(round.message),
-      });
-      return;
-    }
-    if (round.message)
-      emit('error', new Error(`Sync with ${peerId} abandoned: more than ${MAX_ROUNDS} rounds`));
-    await end();
+    if (round.message && ++session.rounds < MAX_ROUNDS) return sendRound(peerId, session, round.message);
+    if (round.message) emit('error', abandoned(peerId, `more than ${MAX_ROUNDS} rounds`));
+    await endSession(peerId, state, session);
     levelIfDone(peerId, session.collection);
     settleIfDone(peerId);
   };
@@ -603,15 +542,11 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
   };
 
   const onVersions = async (peerId: string, id: number | undefined, versions: ReadonlyArray<Version>) => {
+    // Sent unasked, because we lacked them: each still passes the gatekeeper.
+    if (id === undefined) return admitAll(peerId, versions.slice(0, MAX_IDS_PER_REQUEST));
     const state = states.get(peerId);
-    if (id === undefined) {
-      // Sent because we lacked them. Nothing is taken on trust: each passes the gatekeeper.
-      await admitAll(peerId, versions.slice(0, MAX_IDS_PER_REQUEST));
-      return;
-    }
     const asked = state?.wants.get(id);
     if (!state || !asked) return;
-    // Only versions asked for are considered.
     await admitAll(
       peerId,
       versions.filter((v) => asked.ids.has(v?.id)),
@@ -622,100 +557,86 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     settleIfDone(peerId);
   };
 
+  const onStored = (peerId: string, ids: unknown) => {
+    if (!Array.isArray(ids)) return;
+    const named = ids.filter((v): v is string => typeof v === 'string');
+    emit('stored', peerId, named.slice(0, 10 * MAX_IDS_PER_REQUEST));
+  };
+
   // ─── Housekeeping ──────────────────────────────────────────────────
 
-  /** Drops sessions and requests a peer stopped answering, so a lost message can't wedge sync */
+  /** Drops sessions and wants a peer stopped answering, so a lost message can't wedge sync */
   const sweep = () => {
     const now = Date.now();
+    const stale = (at: number) => now - at > STALE_MS;
     for (const [peerId, state] of states) {
       for (const [collection, session] of state.sessions)
-        if (now - session.touchedAt > STALE_MS) state.sessions.delete(collection);
-      // A want whose answer was lost: what it asked for is found again on the next round.
-      let dropped = false;
-      for (const [id, want] of state.wants) {
-        if (now - want.at <= STALE_MS) continue;
-        state.wants.delete(id);
-        dropped = true;
-      }
-      if (!dropped) continue;
+        if (stale(session.touchedAt)) state.sessions.delete(collection);
+      // What a lost want asked for is found again on the next round.
+      const lost = [...state.wants].filter(([, want]) => stale(want.at));
+      if (lost.length === 0) continue;
+      for (const [id] of lost) state.wants.delete(id);
       pump(peerId);
       settleIfDone(peerId);
     }
   };
 
-  /** Handles one message from a peer; anything that is not a sync message this peer speaks is ignored */
   const handle = async (peerId: string, message: unknown): Promise<void> => {
     try {
       const msg = parseSyncMessage(message);
-      // Malformed, a protocol version this peer does not speak, or a peer not
-      // added yet: an answer to it would have no way back and be lost, leaving
-      // a session waiting. Each side says hello once it adds the other, so
-      // nothing said before then is needed.
+      // A peer not added yet has no way back for an answer. Each side says
+      // hello once it adds the other, so nothing said before then is needed.
       if (!msg || !peers.has(peerId)) return;
-
       switch (msg.type) {
         case 'hello':
-          await onHello(peerId, msg.sums, msg.holds, msg.reply === true);
-          break;
+          return await onHello(peerId, msg.sums, msg.holds, msg.reply === true);
         case 'reconcile':
-          await onReconcile(peerId, msg.id, msg.collection, msg.message);
-          break;
+          return await onReconcile(peerId, msg.id, msg.collection, msg.message);
         case 'reconciled':
-          await onReconciled(peerId, msg.id, msg.message, msg.held !== false);
-          break;
+          return await onReconciled(peerId, msg.id, msg.message, msg.held !== false);
         case 'want':
-          await serveWant(peerId, msg.id, Array.isArray(msg.ids) ? msg.ids : []);
-          break;
+          return await serveWant(peerId, msg.id, Array.isArray(msg.ids) ? msg.ids : []);
         case 'versions':
-          await onVersions(peerId, msg.id, Array.isArray(msg.versions) ? msg.versions : []);
-          break;
+          return await onVersions(peerId, msg.id, Array.isArray(msg.versions) ? msg.versions : []);
         case 'push-update':
           if (msg.version && typeof msg.version === 'object') await admitAll(peerId, [msg.version]);
-          break;
+          return;
         case 'want-file':
         case 'file':
         case 'file-done':
-          await config.files?.(peerId, msg);
-          break;
+          return await config.files?.(peerId, msg);
         case 'stored':
-          if (Array.isArray(msg.ids))
-            emit(
-              'stored',
-              peerId,
-              msg.ids.filter((v): v is string => typeof v === 'string').slice(0, 10 * MAX_IDS_PER_REQUEST),
-            );
-          break;
+          return onStored(peerId, msg.ids);
       }
     } catch (err) {
-      emit('error', err);
+      report(err);
     }
   };
 
-  /** Where each peer's messages are up to */
-  const inOrder = new Map<string, Promise<void>>();
+  const forget = (peerId: string) => {
+    states.delete(peerId);
+    level.delete(peerId);
+  };
 
   return {
     start() {
       if (intervalId !== null) return;
       intervalId = setInterval(() => {
         sweep();
-        for (const peer of peers) void hello(peer).catch((err) => emit('error', err));
+        for (const peer of peers) sayHello(peer);
       }, heartbeatInterval);
     },
 
     stop() {
-      if (intervalId !== null) {
-        clearInterval(intervalId);
-        intervalId = null;
-      }
+      if (intervalId !== null) clearInterval(intervalId);
+      intervalId = null;
       states.clear();
     },
 
     handleMessage(peerId: string, message: unknown): Promise<void> {
-      // One peer's messages are handled in the order they came: a hello saying
-      // where things stand must not overtake the versions sent before it.
-      // One that came on a connection since closed is dropped when its turn
-      // comes: the peer may be back on a new one, which knows nothing of it.
+      // One peer's messages run in the order they came: a hello must not
+      // overtake the versions sent before it. One from a connection closed
+      // since is dropped when its turn comes.
       const connection = connections.get(peerId);
       const run = (inOrder.get(peerId) ?? Promise.resolve()).then(() =>
         connections.get(peerId) === connection ? handle(peerId, message) : undefined,
@@ -728,43 +649,75 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     },
 
     notifyPeers(peerIds: ReadonlyArray<string>) {
-      for (const peer of peerIds) if (peers.has(peer)) void hello(peer).catch((err) => emit('error', err));
+      for (const peer of peerIds) if (peers.has(peer)) sayHello(peer);
     },
 
     ask(collection: string, ids: ReadonlyArray<string>) {
       if (ids.length === 0) return;
-      for (const peer of peers)
-        if (holdsCollection(states.get(peer)?.holds ?? 'all', collection)) want(peer, collection, ids, true);
+      for (const peer of peers) if (peerHolds(peer, collection)) want(peer, collection, ids, true);
     },
 
     levelWith: (peerId: string) => level.has(peerId),
 
     onLocalChange(version: Version) {
       level.clear();
-      // Not to a peer whose hello said it doesn't hold the collection: it would pass it by.
-      for (const peer of peers) {
-        if (holdsCollection(states.get(peer)?.holds ?? 'all', version.collection))
-          send(peer, { type: 'push-update', version });
-      }
+      // Not to a peer that doesn't hold the collection: it would pass it by.
+      for (const peer of peers)
+        if (peerHolds(peer, version.collection)) send(peer, { type: 'push-update', version });
     },
 
     addPeer(peerId: string) {
       // A new connection: nothing half-finished from an earlier one carries over.
       connections.set(peerId, ++lastConnection);
-      states.delete(peerId);
-      level.delete(peerId);
+      forget(peerId);
       peers.add(peerId);
     },
 
     removePeer(peerId: string) {
-      // A dropped peer must not leave half-finished sessions holding memory.
       connections.delete(peerId);
       peers.delete(peerId);
-      states.delete(peerId);
-      level.delete(peerId);
+      forget(peerId);
     },
 
     on,
     off,
   };
+}
+
+/** Takes up to one want's worth of queued ids, all of one collection, off the front of the queue */
+function takeBatch(state: PeerState): { collection: string; ids: string[] } | null {
+  const ids: string[] = [];
+  let collection: string | null = null;
+  while (state.queued.length > 0 && ids.length < MAX_IDS_PER_REQUEST) {
+    const next = state.queued[0]!;
+    if (!state.queuedIds.has(next.id)) {
+      state.queued.shift();
+      continue;
+    }
+    if (collection !== null && next.collection !== collection) break;
+    collection = next.collection;
+    state.queued.shift();
+    state.queuedIds.delete(next.id);
+    ids.push(next.id);
+  }
+  return collection === null ? null : { collection, ids };
+}
+
+const newPeerState = (): PeerState => ({
+  sessions: new Map(),
+  wants: new Map(),
+  queued: [],
+  queuedIds: new Set(),
+  holds: 'all',
+});
+
+const refusal = (peerId: string, id: string) => `${peerId}\n${id}`;
+
+const abandoned = (peerId: string, why: string) => new Error(`Sync with ${peerId} abandoned: ${why}`);
+
+/** Drops the oldest entry once a map or set is over `max` */
+function dropOldest<K>(items: Map<K, unknown> | Set<K>, max: number): void {
+  if (items.size <= max) return;
+  const oldest = items.keys().next();
+  if (!oldest.done) items.delete(oldest.value);
 }

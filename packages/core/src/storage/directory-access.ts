@@ -1,11 +1,8 @@
 /**
  * Getting hold of the user's data folder, and getting it back on the next visit.
  *
- * A directory handle is the one capability a web page can hold that outlives the
- * origin sandbox, so the browser guards it carefully: it can only be obtained
- * from a user gesture, and permission has to be re-confirmed when a new session
- * starts. The handle itself is structured-cloneable, which means it can be kept
- * in IndexedDB — origin-local storage of a *pointer* to origin-independent data.
+ * A directory handle comes only from a user gesture, and its permission must
+ * be confirmed again each session. The handle itself can be kept in IndexedDB.
  */
 
 import type { DirectoryHandleLike } from './folder-adapter.js';
@@ -53,13 +50,7 @@ function isDirectoryHandle(value: unknown): value is DirectoryHandleLike {
   return isObject(value) && typeof value.getDirectoryHandle === 'function';
 }
 
-/**
- * Whether this browser can hand out a directory at all.
- *
- * Chrome, Edge and Opera on the desktop can. Firefox and Safari cannot, and
- * neither can any mobile browser, so a caller has to have something else to
- * offer — this returning false is a normal state, not a broken one.
- */
+/** Whether this browser can hand out a directory at all: only desktop Chrome, Edge and Opera can */
 export function isFolderStorageAvailable(): boolean {
   return hasPicker(globalThis);
 }
@@ -67,9 +58,7 @@ export function isFolderStorageAvailable(): boolean {
 /**
  * Asks the user to choose their data folder. Must be called from a click.
  *
- * @param options.id Groups the picker's memory of where it last opened. Keeping
- *   this stable across apps means the second view of the same data opens the
- *   picker already pointing at the right folder.
+ * @param options.id Groups the picker's memory of where it last opened.
  */
 export async function pickDataFolder(options?: { id?: string }): Promise<DirectoryHandleLike> {
   const scope: object = globalThis;
@@ -95,16 +84,14 @@ export async function queryFolderPermission(
   handle: DirectoryHandleLike,
   mode: FolderAccessMode = 'readwrite',
 ): Promise<PermissionState> {
-  if (!canQuery(handle)) return 'granted'; // a handle from a runtime without the extension
+  // A handle from a runtime without permissions
+  if (!canQuery(handle)) return 'granted';
   return handle.queryPermission({ mode });
 }
 
 /**
- * Makes sure this origin may use a folder, prompting if it has to.
- *
- * The prompt needs a user gesture, so `request` should only be true on a path
- * that began with a click — call it with `false` on page load to find out
- * whether a button needs showing at all.
+ * Makes sure this origin may use a folder, prompting if `request` is true.
+ * The prompt needs a user gesture, so only pass it on a path that began with a click.
  */
 export async function ensureFolderPermission(
   handle: DirectoryHandleLike,
@@ -112,28 +99,16 @@ export async function ensureFolderPermission(
 ): Promise<boolean> {
   const mode = options?.mode ?? 'readwrite';
   if ((await queryFolderPermission(handle, mode)) === 'granted') return true;
-  if (!options?.request) return false;
-
-  if (!canRequest(handle)) return false;
+  if (!options?.request || !canRequest(handle)) return false;
   return (await handle.requestPermission({ mode })) === 'granted';
 }
 
-/**
- * Remembers a folder so the next visit can skip the picker.
- *
- * Only the handle is stored, never the contents — this origin keeps a pointer,
- * and the data stays where the user put it.
- */
+/** Remembers a folder's handle, so the next visit can skip the picker */
 export async function rememberDataFolder(handle: DirectoryHandleLike): Promise<void> {
   await idbOnce(HANDLE_DB, HANDLE_STORE, 'readwrite', (store) => store.put(handle, HANDLE_KEY));
 }
 
-/**
- * The folder this origin used last, if the browser still has it.
- *
- * Says nothing about permission — a recalled handle usually needs
- * {@link ensureFolderPermission} with a gesture before it can be read.
- */
+/** The folder this origin used last, if the browser still has it; it may still need {@link ensureFolderPermission} */
 export async function recallDataFolder(): Promise<DirectoryHandleLike | null> {
   try {
     const value = await idbOnce(HANDLE_DB, HANDLE_STORE, 'readonly', (store) => store.get(HANDLE_KEY));

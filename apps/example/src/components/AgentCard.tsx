@@ -4,7 +4,8 @@ import { Morph } from '@minca/app-shared/shapes';
 import { type RoundKind } from '@minca/ui/shapes';
 import type { ShapeColour } from '@minca/ui/tokens';
 import { Icon } from './Icon';
-import { styles, palette } from '../styles';
+import { palette } from '../styles';
+import { QuietButton } from './Buttons';
 
 /** An app you make can be anything, so its shape keeps turning into the next */
 const BECOMES: ReadonlyArray<{ kind: RoundKind; colour: ShapeColour }> = [
@@ -39,13 +40,12 @@ export function AgentCard() {
           builds it in your space.
         </p>
       </div>
-      <button
+      <QuietButton
         onClick={() => setConnecting(true)}
-        data-variant="quiet"
-        style={{ ...styles.smallButton, height: 36, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+        style={{ height: 36, display: 'inline-flex', alignItems: 'center', gap: 6 }}
       >
         <Icon name="terminal" size={14} /> Connect an agent
-      </button>
+      </QuietButton>
       {connecting && <ConnectAgent onClose={() => setConnecting(false)} />}
     </section>
   );

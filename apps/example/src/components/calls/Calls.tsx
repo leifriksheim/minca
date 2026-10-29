@@ -7,8 +7,10 @@ import { useAccount, useProfiles } from '@minca/react';
 import { nameOf, peopleFrom } from '../../derive/people';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { Icon, type ICONS } from '../Icon';
-import { styles, palette } from '../../styles';
+import { styles, palette, hstack } from '../../styles';
 import { ask } from '@minca/app-shared/Ask';
+import { useNow } from '../NetworkView';
+import { QuietButton } from '../Buttons';
 
 /** Calls, drawn once above every space, so moving between spaces never touches one. */
 export function CallLayer({
@@ -152,7 +154,7 @@ function CallPanel({
       )}
 
       {outgoing}
-      {call.problem && <p style={{ fontSize: 13, color: palette.accent.danger }}>{call.problem}</p>}
+      {call.problem && <p style={styles.dangerText}>{call.problem}</p>}
 
       {pip.window ? (
         <>
@@ -165,7 +167,7 @@ function CallPanel({
         tiles
       )}
 
-      <footer style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+      <footer style={{ ...hstack(8), justifyContent: 'center', flexWrap: 'wrap' }}>
         <RoundButton
           icon={call.muted ? 'micOff' : 'mic'}
           label={call.muted ? 'Unmute' : 'Mute'}
@@ -224,7 +226,7 @@ function Tiles({
       ))}
       <Tile name="You" did={me} stream={call.local} camera={call.camera} muted={call.muted} self />
       {others.length === 0 && !call.outgoing && (
-        <p style={{ fontSize: 13, color: palette.ink.muted, alignSelf: 'center' }}>Nobody else here yet.</p>
+        <p style={{ ...styles.quiet, alignSelf: 'center' }}>Nobody else here yet.</p>
       )}
     </div>
   );
@@ -365,7 +367,7 @@ function Ringing({
         </p>
         <p style={{ fontSize: 14, color: palette.ink.muted }}>is calling you · {spaceName}</p>
       </div>
-      <div style={{ display: 'flex', gap: 24, justifyContent: 'center' }}>
+      <div style={{ ...hstack(24), justifyContent: 'center' }}>
         <Choice
           icon="hangUp"
           label="Decline"
@@ -443,14 +445,10 @@ function Rejoin({ call, spaceName }: { call: CallAround; spaceName: string }) {
       <p style={{ color: palette.ink.strong }}>
         You were in a call in <strong>{spaceName}</strong>. It's still going on.
       </p>
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button
-          onClick={() => calls?.forgetRejoin()}
-          data-variant="quiet"
-          style={{ ...styles.smallButton, flex: 1 }}
-        >
+      <div style={hstack(8)}>
+        <QuietButton onClick={() => calls?.forgetRejoin()} style={{ flex: 1 }}>
           Dismiss
-        </button>
+        </QuietButton>
         <button
           onClick={() => void calls?.start(call.space, { call: call.id }).catch(() => {})}
           data-variant="primary"
@@ -596,7 +594,7 @@ export function RingButton({ space, did, name }: { space: SpaceSummary; did: str
   const ringing = state.current?.outgoing?.to === did && state.current.outgoing.state === 'ringing';
   const withThem = state.current?.people.some((p) => p.account === did);
   return (
-    <button
+    <QuietButton
       onClick={() =>
         void mayLeaveFor(state.current?.space === space.id ? null : state.current, `call ${name}`).then(
           (go) => {
@@ -605,13 +603,12 @@ export function RingButton({ space, did, name }: { space: SpaceSummary; did: str
         )
       }
       disabled={ringing || withThem}
-      data-variant="quiet"
-      style={{ ...styles.smallButton, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
       title={`Call ${name}. It rings wherever they have this space open.`}
     >
       <Icon name="phone" size={12} />
       {withThem ? 'In call' : ringing ? 'Ringing…' : 'Call'}
-    </button>
+    </QuietButton>
   );
 }
 
@@ -689,11 +686,7 @@ const linkish: CSSProperties = {
 };
 
 function useElapsed(since: number): string {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+  const now = useNow();
   const seconds = Math.max(0, Math.floor((now - since) / 1000));
   const two = (n: number) => String(n).padStart(2, '0');
   return seconds >= 3600

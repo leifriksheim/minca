@@ -3,7 +3,7 @@ import { describeHost, type HostDescription } from '@minca/core';
 import { DEFAULT_HOST } from './relay';
 import { HostAddressForm, type Wanted } from './HostAddress';
 import { FeatureIcon, StatusPill, type Tone } from './Feature';
-import { styles, palette } from './styles';
+import { styles, palette, hstack } from './styles';
 
 /** Bytes as people read them: 12 KB, 3.4 MB, 10 GB */
 export function size(bytes: number): string {
@@ -102,7 +102,7 @@ export function HostOfferPicker({
         }}
       >
         <span style={{ fontSize: 14, fontWeight: 500, color: palette.ink.strong }}>{offer.name}</span>
-        <span style={{ fontSize: 13, color: palette.ink.muted }}>{price}</span>
+        <span style={styles.quiet}>{price}</span>
       </div>
       <button onClick={onContinue} disabled={busy} data-variant="primary" style={styles.button}>
         {busy ? 'One moment…' : 'Continue'}
@@ -131,11 +131,11 @@ export function StopFooter({
   return (
     <>
       {error && (
-        <p role="alert" style={{ fontSize: 13, color: palette.accent.danger }}>
+        <p role="alert" style={styles.dangerText}>
           {error}
         </p>
       )}
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap', marginTop: 4 }}>
+      <div style={{ ...hstack(8), justifyContent: 'flex-end', flexWrap: 'wrap', marginTop: 4 }}>
         <button onClick={onKeep} disabled={busy} data-variant="quiet" style={styles.smallButton}>
           Keep it
         </button>
@@ -174,11 +174,9 @@ export function HostStatusRow({
           <strong style={{ fontSize: 14, color: palette.ink.strong }}>{name}</strong>
           {pill && <StatusPill tone={pill.tone}>{pill.pill}</StatusPill>}
         </div>
-        <p style={{ fontSize: 13, color: palette.ink.muted, marginTop: 2, overflowWrap: 'anywhere' }}>
-          {line}
-        </p>
+        <p style={{ ...styles.quiet, marginTop: 2, overflowWrap: 'anywhere' }}>{line}</p>
       </div>
-      <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{children}</span>
+      <span style={{ ...hstack(8), flexWrap: 'wrap' }}>{children}</span>
     </>
   );
 }

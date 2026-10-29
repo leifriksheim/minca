@@ -12,8 +12,9 @@ import {
 import { nameOf, type People } from '../../derive/people';
 import { recordLabel } from '../../derive/schema-ui';
 import { noun, type Within } from '../../automations';
-import { styles, palette } from '../../styles';
+import { styles, palette, stack } from '../../styles';
 import { Icon } from '../Icon';
+import { AddButton } from '../Buttons';
 
 /** One choice inside a sentence, drawn as a word you can change */
 export function Pill<T extends string>({
@@ -172,8 +173,8 @@ export function ClauseList({
   const suggestions = suggest && clauses.length === 0 ? suggestionsFor(fields) : [];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {clauses.length === 0 && empty && <p style={{ fontSize: 13, color: palette.ink.muted }}>{empty}</p>}
+    <div style={stack(8)}>
+      {clauses.length === 0 && empty && <p style={styles.quiet}>{empty}</p>}
       {clauses.map((clause, i) => {
         const field = fields.find((f) => f.name === clause.field);
         if (!field) return null;
@@ -291,7 +292,7 @@ export function Step({ label, children }: { label: string; children: ReactNode }
       style={{ display: 'grid', gridTemplateColumns: '64px minmax(0, 1fr)', gap: 12, alignItems: 'start' }}
     >
       <span style={stepLabel}>{label}</span>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>{children}</div>
+      <div style={{ ...stack(10), minWidth: 0 }}>{children}</div>
     </div>
   );
 }
@@ -413,23 +414,15 @@ export function SectionHead({
     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
       <div style={{ flex: 1, minWidth: 200 }}>
         <h3 style={{ ...styles.sectionTitle, fontSize: 16 }}>{title}</h3>
-        <p style={{ fontSize: 13, color: palette.ink.muted, marginTop: 2 }}>{about}</p>
+        <p style={{ ...styles.quiet, marginTop: 2 }}>{about}</p>
       </div>
-      <button
+      <AddButton
         onClick={onAction}
         disabled={disabled}
-        data-variant="primary"
-        style={{
-          ...styles.addButton,
-          height: 34,
-          fontSize: 13,
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-        }}
+        style={{ height: 34, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}
       >
         <Icon name="plus" size={13} /> {action}
-      </button>
+      </AddButton>
     </div>
   );
 }
@@ -451,8 +444,8 @@ export function Empty({ children }: { children: ReactNode }) {
   );
 }
 
-export const section = { display: 'flex', flexDirection: 'column', gap: 12 } as const;
-export const list = { listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 } as const;
+export const section = stack(12);
+export const list = styles.todoList;
 export const iconDot = {
   width: 28,
   height: 28,

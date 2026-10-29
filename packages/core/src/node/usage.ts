@@ -3,19 +3,14 @@
  * How much each space a host carries is used: how many accounts wrote there
  * and how many devices read, over a rolling window (spec 08 §1.1).
  *
- * The host sees both already: a version's note names its account in the
- * clear, and a socket's hello its session key. What it keeps to count them
- * is one set per space per UTC day. Writers are kept on disk, so a restart
- * does not count someone twice, as salted hashes rather than DIDs, so the
- * meter's own entries name nobody. Readers stay in memory: they only ever
- * hint, and a restart that forgets some counts fewer, never more.
- *
- * Not mirrored to the bucket. A lost disk counts from nothing again; the
- * history a space brings back then is skipped only for the first minutes,
- * so a large space restored slowly may count its old writers once.
+ * One set per space per UTC day. Writers are kept on disk, as salted hashes
+ * so the meter names nobody, and a restart doesn't count anyone twice.
+ * Readers stay in memory: they only hint, and forgetting some counts fewer.
+ * Not mirrored: a lost disk counts from nothing again.
  */
+import { queue } from '../utils/serial.js';
 import type { StorageAdapter } from '../types.js';
-import { utf8Decode, utf8Encode } from '../utils/encoding.js';
+import { bytesToHex, concatBytes, utf8Decode, utf8Encode } from '../utils/encoding.js';
 import { sha256 } from '../utils/hash.js';
 
 const DAY = 86_400;
@@ -26,11 +21,7 @@ const FIRST_PREFIX = 'first:';
 const MAX_READERS_A_SPACE = 10_000;
 /** Readers kept for every space together, however many spaces someone makes to read */
 const MAX_READERS = 1_000_000;
-/**
- * Writers kept for one space on one day: so far past any free line that only
- * as many accounts joining in one day could fill it, which costs whoever does
- * it as much as the host, and the day's set is written in batches.
- */
+/** Writers kept for one space on one day: far past any free line, so filling it costs whoever does it as much as the host */
 const MAX_WRITERS_A_DAY = 50_000;
 
 export interface UsageMeterConfig {
@@ -47,69 +38,36 @@ interface Counted {
   readonly windowDays: number;
 }
 
-/** A UTC day as the meter keys it: `2026-10-20` */
-const dayOf = (seconds: number) =>
-  new Date(Math.floor(seconds / DAY) * DAY * 1000).toISOString().slice(0, 10);
-
-const hex = (bytes: Uint8Array) => Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+/** Entries by space, then by UTC day */
+type Days = Map<string, Set<string>>;
+type BySpace = Map<string, Days>;
 
 /** Opens the meter, reading back what it counted before a restart */
 export async function createUsageMeter(config: UsageMeterConfig) {
   const { store } = config;
   const now = config.now ?? (() => Math.floor(Date.now() / 1000));
-  let salt = await store.get(SALT_KEY);
-  if (!salt) {
-    salt = globalThis.crypto.getRandomValues(new Uint8Array(32));
-    await store.put(SALT_KEY, salt);
-  }
-  const salted = salt;
-
-  const hashOf = async (spaceId: string, account: string) =>
-    hex((await sha256(new Uint8Array([...salted, ...utf8Encode(`${spaceId}\n${account}`)]))).slice(0, 16));
+  const salt = await readOrCreateSalt(store);
+  /** When the meter first saw each space, unix seconds */
+  const first = await loadFirstSeen(store);
+  /** Salted hashes of accounts, kept on disk */
+  const writers = await loadWriters(store);
+  /** Session DIDs, in memory only */
+  const readers: BySpace = new Map();
+  /** How many reader entries are kept, across every space and day */
+  let kept = 0;
   /** Each space's members, hashed, as last asked: hashed again only when they change */
   const memberHashes = new Map<string, { readonly members: string; readonly hashes: ReadonlySet<string> }>();
-  const hashesOf = async (spaceId: string, members: ReadonlyArray<string>) => {
+
+  const hashOf = async (spaceId: string, account: string) =>
+    bytesToHex((await sha256(concatBytes(salt, utf8Encode(`${spaceId}\n${account}`)))).slice(0, 16));
+
+  async function hashesOf(spaceId: string, members: ReadonlyArray<string>): Promise<ReadonlySet<string>> {
     const joined = members.join('\n');
     const known = memberHashes.get(spaceId);
     if (known?.members === joined) return known.hashes;
     const hashes = new Set(await Promise.all(members.map((member) => hashOf(spaceId, member))));
     memberHashes.set(spaceId, { members: joined, hashes });
     return hashes;
-  };
-  /** When the meter first saw each space, unix seconds */
-  const first = new Map<string, number>();
-  for (const key of await store.list(FIRST_PREFIX)) {
-    const bytes = await store.get(key);
-    const at = bytes ? Number(utf8Decode(bytes)) : NaN;
-    if (Number.isFinite(at)) first.set(key.slice(FIRST_PREFIX.length), at);
-  }
-
-  /** Writers by space, then by day: hashes */
-  const writers = new Map<string, Map<string, Set<string>>>();
-  /** Readers by space, then by day: session DIDs, in memory only */
-  const readers = new Map<string, Map<string, Set<string>>>();
-  /** How many reader entries are kept, across every space and day */
-  let kept = 0;
-  const keptIn = (days: Map<string, Set<string>> | undefined) =>
-    [...(days?.values() ?? [])].reduce((sum, set) => sum + set.size, 0);
-
-  const setFor = (sets: Map<string, Map<string, Set<string>>>, spaceId: string, day: string) => {
-    let days = sets.get(spaceId);
-    if (!days) sets.set(spaceId, (days = new Map<string, Set<string>>()));
-    let set = days.get(day);
-    if (!set) days.set(day, (set = new Set<string>()));
-    return set;
-  };
-
-  for (const key of await store.list(PREFIX)) {
-    const rest = key.slice(PREFIX.length);
-    const at = rest.lastIndexOf(':');
-    const bytes = await store.get(key);
-    if (at <= 0 || !bytes) continue;
-    const kept: unknown = JSON.parse(utf8Decode(bytes));
-    if (!Array.isArray(kept)) continue;
-    const set = setFor(writers, rest.slice(0, at), rest.slice(at + 1));
-    for (const one of kept) if (typeof one === 'string') set.add(one);
   }
 
   /** The days still inside the window, today included */
@@ -118,44 +76,28 @@ export async function createUsageMeter(config: UsageMeterConfig) {
     return new Set(Array.from({ length: config.windowDays }, (_, back) => dayOf(today - back * DAY)));
   };
 
-  const distinct = (
-    days: Map<string, Set<string>> | undefined,
-    within: ReadonlySet<string>,
-    only?: ReadonlySet<string>,
-  ) => {
-    const all = new Set<string>();
-    for (const [day, set] of days ?? [])
-      if (within.has(day)) for (const one of set) if (!only || only.has(one)) all.add(one);
-    return all.size;
-  };
+  // Writes go one after another, so a later one never loses to an earlier.
+  const later = queue();
 
-  // Writes to one day's entry one after another, so a later one never loses to an earlier.
-  let writing: Promise<unknown> = Promise.resolve();
-  const later = (work: () => Promise<void>): Promise<void> => {
-    const next = writing.then(work, work);
-    writing = next.catch(() => {});
-    return next;
-  };
-
-  // A day's set is written whole, but once for however many writers joined it while the last write was
-  // under way, so many new writers in a day cost a few writes, not one each.
+  // A day's set is written whole, once for however many writers joined it while the last write ran.
   const dirty = new Set<string>();
   let flushing: Promise<void> | null = null;
   const persist = (spaceId: string, day: string): Promise<void> => {
     dirty.add(`${spaceId}:${day}`);
     flushing ??= later(async () => {
-      // Writers that join while a write is under way go out with the next, not one each.
-      while (dirty.size > 0) {
-        const key = dirty.values().next().value!;
+      for (const key of dirty) {
         dirty.delete(key);
-        const at = key.lastIndexOf(':');
-        const set = writers.get(key.slice(0, at))?.get(key.slice(at + 1));
+        const [spaceId, day] = splitDayKey(key);
+        const set = writers.get(spaceId)?.get(day);
         if (set) await store.put(`${PREFIX}${key}`, utf8Encode(JSON.stringify([...set])));
       }
       flushing = null;
     });
     return flushing;
   };
+
+  const deleteWriterDay = (spaceId: string, day: string) =>
+    later(() => store.delete(`${PREFIX}${spaceId}:${day}`));
 
   return Object.freeze({
     /** An account wrote in a space: counted once a day, whatever it wrote */
@@ -170,17 +112,14 @@ export async function createUsageMeter(config: UsageMeterConfig) {
 
     /** A session key proved it may read a space */
     read(spaceId: string, session: string): void {
-      if (kept >= MAX_READERS || keptIn(readers.get(spaceId)) >= MAX_READERS_A_SPACE) return;
+      if (kept >= MAX_READERS || sizeOf(readers.get(spaceId)) >= MAX_READERS_A_SPACE) return;
       const set = setFor(readers, spaceId, dayOf(now()));
       if (set.has(session)) return;
       set.add(session);
       kept += 1;
     },
 
-    /**
-     * When the meter first saw a space, kept from now if it never did: what
-     * arrives soon after is the host catching up on its history.
-     */
+    /** When the meter first saw a space, kept from now if it never did: what arrives soon after is history */
     async firstSeen(spaceId: string): Promise<number> {
       const known = first.get(spaceId);
       if (known !== undefined) return known;
@@ -190,10 +129,7 @@ export async function createUsageMeter(config: UsageMeterConfig) {
       return at;
     },
 
-    /**
-     * How a space was used over the window. With `members`, only the writers
-     * among them count: one removed since counts no more.
-     */
+    /** How a space was used over the window; with `members`, only the writers among them count */
     async usage(spaceId: string, members?: ReadonlyArray<string>): Promise<Counted> {
       const within = window();
       const only = members ? await hashesOf(spaceId, members) : undefined;
@@ -207,24 +143,27 @@ export async function createUsageMeter(config: UsageMeterConfig) {
     /** Drops every day past the window */
     async prune(): Promise<void> {
       const within = window();
-      for (const sets of [writers, readers])
-        for (const [spaceId, days] of sets) {
-          for (const day of [...days.keys()]) {
-            if (within.has(day)) continue;
-            if (sets === readers) kept -= days.get(day)?.size ?? 0;
-            days.delete(day);
-            if (sets === writers) await later(() => store.delete(`${PREFIX}${spaceId}:${day}`));
-          }
-          if (days.size === 0) sets.delete(spaceId);
+      for (const [spaceId, days] of writers)
+        for (const day of [...days.keys()]) {
+          if (within.has(day)) continue;
+          days.delete(day);
+          await deleteWriterDay(spaceId, day);
         }
+      for (const days of readers.values())
+        for (const [day, set] of days) {
+          if (within.has(day)) continue;
+          kept -= set.size;
+          days.delete(day);
+        }
+      dropEmpty(writers);
+      dropEmpty(readers);
     },
 
     /** Forgets a space altogether */
     async forget(spaceId: string): Promise<void> {
-      for (const day of writers.get(spaceId)?.keys() ?? [])
-        await later(() => store.delete(`${PREFIX}${spaceId}:${day}`));
+      for (const day of writers.get(spaceId)?.keys() ?? []) await deleteWriterDay(spaceId, day);
       writers.delete(spaceId);
-      kept -= keptIn(readers.get(spaceId));
+      kept -= sizeOf(readers.get(spaceId));
       readers.delete(spaceId);
       memberHashes.delete(spaceId);
       if (first.delete(spaceId)) await later(() => store.delete(`${FIRST_PREFIX}${spaceId}`));
@@ -233,4 +172,69 @@ export async function createUsageMeter(config: UsageMeterConfig) {
     /** Waits for what is being written */
     flushed: () => later(async () => {}),
   });
+}
+
+async function readOrCreateSalt(store: StorageAdapter): Promise<Uint8Array> {
+  const existing = await store.get(SALT_KEY);
+  if (existing) return existing;
+  const salt = globalThis.crypto.getRandomValues(new Uint8Array(32));
+  await store.put(SALT_KEY, salt);
+  return salt;
+}
+
+async function loadFirstSeen(store: StorageAdapter): Promise<Map<string, number>> {
+  const first = new Map<string, number>();
+  for (const key of await store.list(FIRST_PREFIX)) {
+    const bytes = await store.get(key);
+    const at = bytes ? Number(utf8Decode(bytes)) : NaN;
+    if (Number.isFinite(at)) first.set(key.slice(FIRST_PREFIX.length), at);
+  }
+  return first;
+}
+
+async function loadWriters(store: StorageAdapter): Promise<BySpace> {
+  const writers: BySpace = new Map();
+  for (const key of await store.list(PREFIX)) {
+    const [spaceId, day] = splitDayKey(key.slice(PREFIX.length));
+    const bytes = await store.get(key);
+    if (!spaceId || !bytes) continue;
+    const hashes: unknown = JSON.parse(utf8Decode(bytes));
+    if (!Array.isArray(hashes)) continue;
+    const set = setFor(writers, spaceId, day);
+    for (const hash of hashes) if (typeof hash === 'string') set.add(hash);
+  }
+  return writers;
+}
+
+/** A UTC day as the meter keys it: `2026-10-20` */
+const dayOf = (seconds: number) =>
+  new Date(Math.floor(seconds / DAY) * DAY * 1000).toISOString().slice(0, 10);
+
+/** `<space>:<day>` into its parts; the space is empty when there is no day */
+function splitDayKey(key: string): [string, string] {
+  const at = key.lastIndexOf(':');
+  return at <= 0 ? ['', ''] : [key.slice(0, at), key.slice(at + 1)];
+}
+
+function setFor(sets: BySpace, spaceId: string, day: string): Set<string> {
+  let days = sets.get(spaceId);
+  if (!days) sets.set(spaceId, (days = new Map()));
+  let set = days.get(day);
+  if (!set) days.set(day, (set = new Set()));
+  return set;
+}
+
+const sizeOf = (days: Days | undefined) =>
+  [...(days?.values() ?? [])].reduce((sum, set) => sum + set.size, 0);
+
+/** How many distinct entries fall on days `within`, counting only `only` when given */
+function distinct(days: Days | undefined, within: ReadonlySet<string>, only?: ReadonlySet<string>): number {
+  const all = new Set<string>();
+  for (const [day, set] of days ?? [])
+    if (within.has(day)) for (const one of set) if (!only || only.has(one)) all.add(one);
+  return all.size;
+}
+
+function dropEmpty(sets: BySpace): void {
+  for (const [spaceId, days] of sets) if (days.size === 0) sets.delete(spaceId);
 }

@@ -12,7 +12,7 @@
  * root can sign a note that peers accept, so a stolen key can't mint keys.
  */
 import type { CryptoProvider } from '../types.js';
-import { base64UrlEncode, base64UrlDecode, utf8Encode } from '../utils/encoding.js';
+import { base64UrlEncode, base64UrlDecode, bytesToHex, utf8Encode } from '../utils/encoding.js';
 import { cidFromBytes } from '../utils/hash.js';
 import { isRecord } from '../utils/guards.js';
 import { canonicalize } from '../schema/version.js';
@@ -102,13 +102,8 @@ function isP256Did(did: unknown): did is string {
   if (typeof did !== 'string' || did.length > 128) return false;
   try {
     const { publicKeyBytes, multicodecPrefix } = didToPublicKey(did);
-    return (
-      multicodecPrefix.length === 2 &&
-      multicodecPrefix[0] === P256_MULTICODEC[0] &&
-      multicodecPrefix[1] === P256_MULTICODEC[1] &&
-      publicKeyBytes.length === 33 &&
-      publicKeyToDid(publicKeyBytes, P256_MULTICODEC) === did
-    );
+    const isP256 = bytesToHex(multicodecPrefix) === bytesToHex(P256_MULTICODEC);
+    return isP256 && publicKeyBytes.length === 33 && publicKeyToDid(publicKeyBytes, P256_MULTICODEC) === did;
   } catch {
     return false;
   }
@@ -126,11 +121,9 @@ const isTime = (value: unknown): value is number =>
 const signedBytes = (payload: DelegationPayload) =>
   utf8Encode(canonicalize({ payload, type: DELEGATION_TYPE }));
 
-/** A token in canonical JSON: what its id hashes, and what caches know it by */
-const delegationBytes = (token: Delegation) => utf8Encode(canonicalize(token));
-
 /** A token's id: the content id of its canonical form, signature included (spec 02 §2) */
-export const delegationId = (token: Delegation): Promise<string> => cidFromBytes(delegationBytes(token));
+export const delegationId = (token: Delegation): Promise<string> =>
+  cidFromBytes(utf8Encode(canonicalize(token)));
 
 /** What is wrong with a token's shape, or null: the type, the exact fields, each one's form */
 function shapeProblem(value: unknown): string | null {
@@ -255,34 +248,49 @@ export async function verifyDelegation(
   provider: CryptoProvider,
   options: VerifyOptions = {},
 ): Promise<Verified> {
-  const problem = shapeProblem(value);
-  if (problem) return { valid: false, reason: problem };
+  const shape = shapeProblem(value);
+  if (shape) return { valid: false, reason: shape };
   const token = copyOf(value);
-  const { payload } = token;
-  if (!options.untimed) {
-    const at = options.at ?? Math.floor(Date.now() / 1000);
-    if (payload.exp === undefined || payload.nbf === undefined)
-      return { valid: false, reason: 'Token must say when it starts and ends' };
-    if (payload.exp <= at) return { valid: false, reason: 'Token has expired' };
-    if (payload.nbf > at) return { valid: false, reason: 'Token not yet valid' };
-  }
-  const known = canonicalize(token);
-  if (!signedTokens.has(known)) {
-    const signature = base64UrlDecode(token.sig);
-    // One token, one id: the other form of the same signature is refused.
-    if (scalar(signature.subarray(32, 64)) > HALF_N)
-      return { valid: false, reason: 'Its signature is in the high-S form' };
-    try {
-      const publicKey = await provider.importPublicKey(didToPublicKey(payload.iss).publicKeyBytes);
-      if (!(await provider.verify(publicKey, signature, signedBytes(payload))))
-        return { valid: false, reason: 'Invalid signature' };
-    } catch {
-      return { valid: false, reason: 'Invalid signature' };
-    }
-    signedTokens.add(known);
-    if (signedTokens.size > MAX_SIGNED_TOKENS) signedTokens.delete(signedTokens.values().next().value!);
-  }
+  const time = options.untimed
+    ? null
+    : timeProblem(token.payload, options.at ?? Math.floor(Date.now() / 1000));
+  if (time) return { valid: false, reason: time };
+  const signature = await signatureProblem(token, provider);
+  if (signature) return { valid: false, reason: signature };
   return { valid: true, token };
+}
+
+function timeProblem({ exp, nbf }: DelegationPayload, at: number): string | null {
+  if (exp === undefined || nbf === undefined) return 'Token must say when it starts and ends';
+  if (exp <= at) return 'Token has expired';
+  if (nbf > at) return 'Token not yet valid';
+  return null;
+}
+
+/** Whether the issuer signed the token, in the low-S form; remembered, since the same notes come back often */
+async function signatureProblem(token: Delegation, provider: CryptoProvider): Promise<string | null> {
+  const known = canonicalize(token);
+  if (signedTokens.has(known)) return null;
+  const signature = base64UrlDecode(token.sig);
+  // One token, one id: the other form of the same signature is refused.
+  if (scalar(signature.subarray(32, 64)) > HALF_N) return 'Its signature is in the high-S form';
+  if (!(await signedBy(token.payload, signature, provider))) return 'Invalid signature';
+  signedTokens.add(known);
+  if (signedTokens.size > MAX_SIGNED_TOKENS) signedTokens.delete(signedTokens.values().next().value!);
+  return null;
+}
+
+async function signedBy(
+  payload: DelegationPayload,
+  signature: Uint8Array,
+  provider: CryptoProvider,
+): Promise<boolean> {
+  try {
+    const publicKey = await provider.importPublicKey(didToPublicKey(payload.iss).publicKeyBytes);
+    return await provider.verify(publicKey, signature, signedBytes(payload));
+  } catch {
+    return false;
+  }
 }
 
 /** The outcome of checking a note */

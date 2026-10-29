@@ -5,7 +5,8 @@ import { ConnectAgent, stepText } from '../ConnectAgent';
 import { useNode } from '@minca/react';
 import { useLauncherRecords } from './entries';
 import { checkLauncherApp, prepareLauncher } from './launcher';
-import { styles, palette } from '../../styles';
+import { styles, palette, hstack, stack } from '../../styles';
+import { LinkButton, PrimaryButton } from '../Buttons';
 
 const TITLE = 'Add your own app';
 
@@ -90,7 +91,7 @@ function AskForApp({
       </p>
       <ul style={ideas}>
         {IDEAS.map((idea) => (
-          <li key={idea} style={{ display: 'flex', gap: 8 }}>
+          <li key={idea} style={hstack(8)}>
             <span aria-hidden style={{ color: palette.ink.faint }}>
               “
             </span>
@@ -102,9 +103,7 @@ function AskForApp({
       </ul>
 
       {proposed ? (
-        <div
-          style={{ ...styles.note, display: 'flex', flexDirection: 'column', gap: 4, padding: '12px 14px' }}
-        >
+        <div style={{ ...styles.note, ...stack(4), padding: '12px 14px' }}>
           <p style={{ fontSize: 14, fontWeight: 600, color: palette.ink.strong }}>
             <span style={{ color: palette.accent.good }}>✓</span> Your agent proposed “{proposed.title}”
           </p>
@@ -115,20 +114,13 @@ function AskForApp({
               Nothing changes in {space.name} until {adds}.
             </p>
           )}
-          <button
+          <PrimaryButton
             type="button"
             onClick={onReview}
-            data-variant="primary"
-            style={{
-              ...styles.button,
-              alignSelf: 'flex-start',
-              width: 'auto',
-              padding: '0 18px',
-              marginTop: 6,
-            }}
+            style={{ alignSelf: 'flex-start', width: 'auto', padding: '0 18px', marginTop: 6 }}
           >
             Review it
-          </button>
+          </PrimaryButton>
         </div>
       ) : (
         <p style={{ ...stepText, color: palette.ink.muted, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -138,14 +130,13 @@ function AskForApp({
       )}
 
       {onBuildByHand && (
-        <button
+        <LinkButton
           type="button"
           onClick={onBuildByHand}
-          data-variant="ghost"
-          style={{ ...styles.linkButton, fontSize: 13, padding: 0, alignSelf: 'flex-start' }}
+          style={{ fontSize: 13, padding: 0, alignSelf: 'flex-start' }}
         >
           Or build one by hand
-        </button>
+        </LinkButton>
       )}
     </>
   );

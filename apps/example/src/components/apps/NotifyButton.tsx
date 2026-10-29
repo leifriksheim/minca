@@ -1,11 +1,12 @@
-import { useCallback, useRef, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { NodeCollection, SpaceSummary } from '@minca/core';
-import { useDismiss } from '@minca/app-shared/useDismiss';
+import { usePopover } from '../usePopover';
 import { useNotifyFor } from '../../notifications';
 import { Icon } from '../Icon';
-import { styles, palette } from '../../styles';
+import { styles, palette, stack } from '../../styles';
 import type { AppEntry } from './entries';
 import { WatchBuilder } from '../automations/WatchBuilder';
+import { QuietButton } from '../Buttons';
 
 /** The bell on an open app: what it says is worth hearing about, managed in the account home. */
 export function NotifyButton({
@@ -21,14 +22,8 @@ export function NotifyButton({
     space.id,
     app.notify,
   );
-  const [open, setOpen] = useState(false);
+  const { open, setOpen, root } = usePopover();
   const [building, setBuilding] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
-  useDismiss(
-    open,
-    root,
-    useCallback(() => setOpen(false), []),
-  );
   const own = [...new Set(app.notify.map((n) => n.when.query.collection))];
   if (everything.length === 0 && forMe.length === 0 && own.length === 0) return null;
 
@@ -44,10 +39,9 @@ export function NotifyButton({
 
   return (
     <div ref={root} style={{ position: 'relative' }}>
-      <button
+      <QuietButton
         onClick={() => setOpen((was) => !was)}
         disabled={asking}
-        data-variant="quiet"
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label={
@@ -61,7 +55,6 @@ export function NotifyButton({
         }
         title={error ?? (asking ? 'Answer in the account home window' : undefined)}
         style={{
-          ...styles.smallButton,
           display: 'inline-flex',
           alignItems: 'center',
           gap: 6,
@@ -80,7 +73,7 @@ export function NotifyButton({
                   ? 'For me'
                   : 'Notify me'}
         </span>
-      </button>
+      </QuietButton>
 
       {open && (
         <div role="menu" className="popover" style={menu}>
@@ -141,7 +134,7 @@ export function NotifyButton({
               <span aria-hidden style={{ width: 16, flexShrink: 0, color: palette.ink.muted }}>
                 +
               </span>
-              <span style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+              <span style={{ ...stack(1), minWidth: 0 }}>
                 <span style={{ color: palette.ink.strong, fontWeight: 500 }}>Something more specific…</span>
                 <span style={{ fontSize: 12, color: palette.ink.muted }}>Pick what, and only when</span>
               </span>
@@ -201,7 +194,7 @@ function Choice({
       >
         ✓
       </span>
-      <span style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+      <span style={{ ...stack(1), minWidth: 0 }}>
         <span style={{ color: palette.ink.strong, fontWeight: 500 }}>{title}</span>
         <span style={{ fontSize: 12, color: palette.ink.muted }}>{hint}</span>
       </span>

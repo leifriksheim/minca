@@ -1,5 +1,5 @@
 import type { ComponentProps, ReactNode } from 'react';
-import { palette } from '../styles';
+import { palette, stack } from '../styles';
 
 /** A board's column: its name and count over its cards; whoever moves cards brings the drop handlers */
 export function Lane({
@@ -14,9 +14,7 @@ export function Lane({
     <section
       {...rest}
       style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 6,
+        ...stack(6),
         padding: 8,
         borderRadius: palette.radius.lg,
         background: over ? palette.surface.line : palette.surface.sunken,

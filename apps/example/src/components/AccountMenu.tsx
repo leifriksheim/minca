@@ -1,161 +1,91 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { useAccount, useConnection, useNode } from '@minca/react';
+import { useRef, useState, type ReactNode } from 'react';
+import { useAccount, useAccountPicture, useConnection, useNode, useObjectUrl } from '@minca/react';
 import { accountHomeLink } from '@minca/core/session';
 import { Avatar } from '@minca/app-shared/Avatar';
-import { useDismiss } from '@minca/app-shared/useDismiss';
-import { useCopy } from '@minca/app-shared/action';
+import { usePopover } from './usePopover';
+import { message, useCopy } from '@minca/app-shared/action';
 import { useNavigate } from '@tanstack/react-router';
 import { ConnectAgent } from './ConnectAgent';
 import { shortAccount } from '../account-address';
 import { shrinkImage } from '../files';
-import { palette, styles } from '../styles';
+import { palette, styles, ui, hstack } from '../styles';
+
+type Place = 'header' | 'sidebar';
 
 /**
  * Who this app acts for, and its menu; the account itself lives in the account home. A pill in a
  * header, or the whole of the bar at the foot of a space's sidebar.
  */
-export function AccountMenu({ place = 'header' }: { place?: 'header' | 'sidebar' }) {
+export function AccountMenu({ place = 'header' }: { place?: Place }) {
   const account = useAccount();
   const { connection, state } = useConnection();
-  const [open, setOpen] = useState(false);
-  const { copied, copy } = useCopy();
-  const [connecting, setConnecting] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
-  const { picture, choose, picker, problem } = usePicture(account.name);
   const navigate = useNavigate();
+  const { copied, copy } = useCopy();
+  const { picture, choose, picker, problem } = usePicture(account.name);
+  const { open, setOpen, close, root } = usePopover();
+  const [connecting, setConnecting] = useState(false);
+
+  const home = new URL(state.home).host;
   const others = state.accounts.filter((other) => other.did !== account.did);
+  const shortDid = `${account.did.slice(8, 16)}…${account.did.slice(-6)}`;
+
   // Switching is moving the address: the tab acts for whichever account it names (`account-address.ts`).
   const switchTo = (did: string) => {
-    setOpen(false);
+    close();
     void navigate({ to: '/', search: { as: shortAccount(did) } });
   };
-
-  useDismiss(
-    open,
-    root,
-    useCallback(() => setOpen(false), []),
-  );
-
+  // The home may be signed in to another account, so the link says which one this app acts for.
   const openHome = () => {
-    setOpen(false);
-    // The account page sits beside the connect page, at whichever home the person uses. It may
-    // be signed in to another account there, so the link says which one this app acts for.
+    close();
     globalThis.open(accountHomeLink(state.home, account.did), 'minca-account', 'popup,width=720,height=820');
+  };
+  const connectAgent = () => {
+    close();
+    setConnecting(true);
   };
 
   return (
     // In the sidebar the menu hangs from the whole bar, so it lines up with the bell's panel.
     <div ref={root} style={place === 'sidebar' ? { flex: 1, minWidth: 0 } : { position: 'relative' }}>
-      {place === 'sidebar' ? (
-        <button
-          onClick={() => setOpen((was) => !was)}
-          aria-expanded={open}
-          aria-label="Account"
-          className="you-button"
-        >
-          <Avatar did={account.did} size={32} round src={picture} />
-          <span style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column' }}>
-            <span style={{ ...ellipsis, fontSize: 13.5, fontWeight: 600, color: palette.ink.strong }}>
-              {account.name}
-            </span>
-            <span style={{ ...ellipsis, fontSize: 11.5, color: palette.ink.faint }}>
-              {new URL(state.home).host}
-            </span>
-          </span>
-        </button>
-      ) : (
-        <button
-          onClick={() => setOpen((was) => !was)}
-          aria-expanded={open}
-          aria-label="Account"
-          className="account-button"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            height: 36,
-            padding: '0 12px 0 4px',
-            border: `1px solid ${palette.surface.rule}`,
-            borderRadius: palette.radius.pill,
-            background: palette.surface.card,
-            color: palette.ink.strong,
-            fontSize: 13,
-            fontWeight: 500,
-          }}
-        >
-          <Avatar did={account.did} size={28} round src={picture} />
-          <span className="account-name">{account.name}</span>
-        </button>
-      )}
+      <Trigger place={place} open={open} onClick={() => setOpen((was) => !was)} picture={picture} />
 
       {open && (
         <div role="menu" style={{ ...menu, ...(place === 'sidebar' ? above : below) }}>
-          <div style={{ padding: '14px 14px 12px', display: 'flex', gap: 10, alignItems: 'center' }}>
+          <div style={{ padding: '14px 14px 12px', ...hstack(10), alignItems: 'center' }}>
             <Avatar did={account.did} size={36} round src={picture} />
             <div style={{ minWidth: 0, flex: 1 }}>
-              <div
-                style={{
-                  fontWeight: 600,
-                  fontSize: 14,
-                  color: palette.ink.strong,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
+              <div style={{ ...ui.ellipsis, fontWeight: 600, fontSize: 14, color: palette.ink.strong }}>
                 {account.name}
               </div>
               <button
                 onClick={() => copy(account.did)}
                 title={`${account.did} — click to copy`}
-                style={{
-                  border: 'none',
-                  background: 'none',
-                  padding: 0,
-                  marginTop: 2,
-                  fontFamily: palette.mono,
-                  fontSize: 11.5,
-                  color: palette.ink.faint,
-                }}
+                style={didButton}
               >
-                {copied ? 'Copied' : `${account.did.slice(8, 16)}…${account.did.slice(-6)}`}
+                {copied ? 'Copied' : shortDid}
               </button>
             </div>
           </div>
 
-          <Divider />
-
-          <div style={{ padding: 6 }}>
-            <Item onClick={openHome} hint={new URL(state.home).host}>
+          <Section>
+            <Item onClick={openHome} hint={home}>
               Account settings
             </Item>
             <Item onClick={choose} hint="Shown in every space">
               {picture ? 'Change picture' : 'Add a picture'}
             </Item>
             {picker}
-            {problem && (
-              <p style={{ margin: '4px 10px 6px', fontSize: 12, lineHeight: 1.45, color: palette.ink.muted }}>
-                {problem}
-              </p>
-            )}
-            <Item
-              onClick={() => {
-                setOpen(false);
-                setConnecting(true);
-              }}
-              hint="Claude Code, Desktop, Cursor"
-            >
+            {problem && <Note>{problem}</Note>}
+            <Item onClick={connectAgent} hint="Claude Code, Desktop, Cursor">
               Connect an agent
             </Item>
-            <p style={{ margin: '4px 10px 6px', fontSize: 12, lineHeight: 1.45, color: palette.ink.faint }}>
+            <Note faint>
               An agent in this browser works as you, with nothing to set up. One on your computer connects
               here, and keeps working with this tab closed.
-            </p>
-          </div>
+            </Note>
+          </Section>
 
-          <Divider />
-
-          <div style={{ padding: 6 }}>
+          <Section>
             {others.map((other) => (
               <button
                 key={other.did}
@@ -165,26 +95,20 @@ export function AccountMenu({ place = 'header' }: { place?: 'header' | 'sidebar'
                 style={{ ...item, justifyContent: 'flex-start', height: 40 }}
               >
                 <Avatar did={other.did} size={24} round />
-                <span style={{ ...ellipsis, flex: 1, textAlign: 'left' }}>{other.name}</span>
+                <span style={{ ...ui.ellipsis, flex: 1, textAlign: 'left' }}>{other.name}</span>
               </button>
             ))}
-            <Item onClick={() => void connection.connect()} hint={new URL(state.home).host}>
+            <Item onClick={() => void connection.connect()} hint={home}>
               Add another account
             </Item>
-            {state.error && (
-              <p style={{ margin: '4px 10px 6px', fontSize: 12, lineHeight: 1.45, color: palette.ink.muted }}>
-                {state.error}
-              </p>
-            )}
-          </div>
+            {state.error && <Note>{state.error}</Note>}
+          </Section>
 
-          <Divider />
-
-          <div style={{ padding: 6 }}>
+          <Section>
             <Item onClick={() => void connection.disconnect()} hint="Your account is untouched">
               Disconnect {others.length > 0 ? account.name : 'this app'}
             </Item>
-          </div>
+          </Section>
         </div>
       )}
       {connecting && <ConnectAgent onClose={() => setConnecting(false)} />}
@@ -192,45 +116,75 @@ export function AccountMenu({ place = 'header' }: { place?: 'header' | 'sidebar'
   );
 }
 
-/** One row of the menu: a label, and optionally a quieter line on the right */
-function Item({
-  children,
-  hint,
+/** The button that opens the menu: the bar at the foot of the sidebar, or a pill in a header */
+function Trigger({
+  place,
+  open,
   onClick,
-  disabled,
+  picture,
 }: {
-  children: ReactNode;
-  hint?: string | undefined;
+  place: Place;
+  open: boolean;
   onClick: () => void;
-  disabled?: boolean;
+  picture: string | null;
 }) {
-  return (
-    <button role="menuitem" onClick={onClick} disabled={disabled} data-menu-item style={item}>
-      <span style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>{children}</span>
-      {hint && (
-        <span
-          style={{
-            color: palette.ink.faint,
-            fontSize: 12,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {hint}
+  const account = useAccount();
+  const { state } = useConnection();
+  if (place === 'sidebar')
+    return (
+      <button onClick={onClick} aria-expanded={open} aria-label="Account" className="you-button">
+        <Avatar did={account.did} size={32} round src={picture} />
+        <span style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <span style={{ ...ui.ellipsis, fontSize: 13.5, fontWeight: 600, color: palette.ink.strong }}>
+            {account.name}
+          </span>
+          <span style={{ ...ui.ellipsis, fontSize: 11.5, color: palette.ink.faint }}>
+            {new URL(state.home).host}
+          </span>
         </span>
-      )}
+      </button>
+    );
+  return (
+    <button
+      onClick={onClick}
+      aria-expanded={open}
+      aria-label="Account"
+      className="account-button"
+      style={pill}
+    >
+      <Avatar did={account.did} size={28} round src={picture} />
+      <span className="account-name">{account.name}</span>
     </button>
   );
 }
 
-function Divider() {
-  return <div style={{ height: 1, background: palette.surface.line }} />;
+/** A group of the menu's rows, under a line */
+function Section({ children }: { children: ReactNode }) {
+  return (
+    <>
+      <div style={{ height: 1, background: palette.surface.line }} />
+      <div style={{ padding: 6 }}>{children}</div>
+    </>
+  );
+}
+
+/** One row of the menu: a label, and optionally a quieter line on the right */
+function Item({ children, hint, onClick }: { children: ReactNode; hint?: string; onClick: () => void }) {
+  return (
+    <button role="menuitem" onClick={onClick} data-menu-item style={item}>
+      <span style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>{children}</span>
+      {hint && <span style={{ ...ui.ellipsis, color: palette.ink.faint, fontSize: 12 }}>{hint}</span>}
+    </button>
+  );
+}
+
+function Note({ children, faint = false }: { children: ReactNode; faint?: boolean }) {
+  const color = faint ? palette.ink.faint : palette.ink.muted;
+  return <p style={{ margin: '4px 10px 6px', fontSize: 12, lineHeight: 1.45, color }}>{children}</p>;
 }
 
 const below = { right: 0, top: 44 };
 const above = { left: 0, bottom: 'calc(100% + 8px)' };
-const ellipsis = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as const;
 
 const menu = {
   position: 'absolute' as const,
@@ -239,6 +193,30 @@ const menu = {
   ...styles.float,
   animation: 'minca-fade .1s ease',
   overflow: 'hidden',
+};
+
+const pill = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  height: 36,
+  padding: '0 12px 0 4px',
+  border: `1px solid ${palette.surface.rule}`,
+  borderRadius: palette.radius.pill,
+  background: palette.surface.card,
+  color: palette.ink.strong,
+  fontSize: 13,
+  fontWeight: 500,
+};
+
+const didButton = {
+  border: 'none',
+  background: 'none',
+  padding: 0,
+  marginTop: 2,
+  fontFamily: palette.mono,
+  fontSize: 11.5,
+  color: palette.ink.faint,
 };
 
 const item = {
@@ -264,59 +242,40 @@ const item = {
  */
 function usePicture(name: string) {
   const node = useNode();
-  const [picture, setPicture] = useState<string | null>(null);
+  const kept = useAccountPicture();
+  // What was just chosen shows at once, before the account says it changed.
+  const [chosen, setChosen] = useState<{ bytes: Uint8Array; mime: string } | null>(null);
+  const chosenUrl = useObjectUrl(chosen);
   const [problem, setProblem] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    let live = true;
-    void node.account
-      .picture()
-      .then((found) => {
-        if (live && found)
-          setPicture(URL.createObjectURL(new Blob([found.bytes.slice()], { type: found.mime })));
-      })
-      .catch(() => {
-        // An app without the account key reads no registry: the shape stands in.
-      });
-    return () => {
-      live = false;
-    };
-  }, [node]);
-
-  const take = async (file: File | undefined) => {
-    if (!file) return;
+  const take = async (file: File) => {
     setProblem(null);
     try {
       const image = await shrinkImage(file, 256);
       await node.account.setAvatar(image, { name });
-      setPicture(URL.createObjectURL(new Blob([image.bytes.slice()], { type: image.mime })));
+      setChosen(image);
     } catch (error) {
+      const noKey = /account key|registry/i.test(message(error));
       setProblem(
-        error instanceof Error && /account key|registry/i.test(error.message)
-          ? 'This app can’t change your picture. Change it in account settings.'
-          : error instanceof Error
-            ? error.message
-            : String(error),
+        noKey ? 'This app can’t change your picture. Change it in account settings.' : message(error),
       );
     }
   };
 
-  return {
-    picture,
-    problem,
-    choose: () => input.current?.click(),
-    picker: (
-      <input
-        ref={input}
-        type="file"
-        accept="image/*"
-        hidden
-        onChange={(event) => {
-          void take(event.target.files?.[0]);
-          event.target.value = '';
-        }}
-      />
-    ),
-  };
+  const picker = (
+    <input
+      ref={input}
+      type="file"
+      accept="image/*"
+      hidden
+      onChange={(event) => {
+        const file = event.target.files?.[0];
+        if (file) void take(file);
+        event.target.value = '';
+      }}
+    />
+  );
+
+  return { picture: chosenUrl ?? kept, problem, choose: () => input.current?.click(), picker };
 }

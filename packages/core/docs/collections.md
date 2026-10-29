@@ -399,7 +399,7 @@ differ, `collections.list` leaves it out and its records are judged by no
 rules
 ([spec 02 §6.3](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)).
 
-_Source: `packages/core/src/node/space-runtime.ts` (`define`, `undefine`, `unseenRules`, `write`), `packages/core/src/node/types.ts` (`NodeCollections`). Tests: `packages/core/tests/space-catalog.test.ts`, `packages/core/tests/rules.test.ts` ("grants: changing them")._
+_Source: `packages/core/src/node/space-runtime.ts` (`define`, `undefine`, `write`), `packages/core/src/node/types.ts` (`NodeCollections`). Tests: `packages/core/tests/space-catalog.test.ts`, `packages/core/tests/rules.test.ts` ("grants: changing them")._
 
 ## The standard library
 

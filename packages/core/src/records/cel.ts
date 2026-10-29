@@ -276,176 +276,179 @@ const RESERVED = new Set(
     ' ',
   ),
 );
-const OPS = [
-  '==',
-  '!=',
-  '<=',
-  '>=',
-  '&&',
-  '||',
-  '<',
-  '>',
-  '!',
-  '+',
-  '-',
-  '*',
-  '/',
-  '%',
-  '?',
-  ':',
-  '.',
-  '[',
-  ']',
-  '(',
-  ')',
-  '{',
-  '}',
-  ',',
-];
+/** Operators, longest first so `<=` is not read as `<` */
+const OPS = '== != <= >= && || < > ! + - * / % ? : . [ ] ( ) { } ,'.split(' ');
+const ESCAPES: Readonly<Record<string, string>> = {
+  a: '\x07',
+  b: '\b',
+  f: '\f',
+  n: '\n',
+  r: '\r',
+  t: '\t',
+  v: '\v',
+  '\\': '\\',
+  "'": "'",
+  '"': '"',
+  '`': '`',
+  '?': '?',
+};
+
+/** How many hex digits each hex escape takes */
+const HEX_ESCAPES: Readonly<Record<string, number>> = { x: 2, X: 2, u: 4, U: 8 };
+const isDigit = (c: string) => c >= '0' && c <= '9';
+const isHex = (c: string) => /^[0-9a-fA-F]$/.test(c);
 
 function lex(source: string): Token[] {
-  const out: Token[] = [];
+  const tokens: Token[] = [];
   let i = 0;
   const at = (n = 0) => source[i + n] ?? '';
-  const digit = (c: string) => c >= '0' && c <= '9';
-  const hex = (c: string) => /^[0-9a-fA-F]$/.test(c);
+
   while (i < source.length) {
-    const c = at();
-    if (c === ' ' || c === '\t' || c === '\n' || c === '\r' || c === '\f') {
+    if (' \t\n\r\f'.includes(at())) i++;
+    else if (source.startsWith('//', i)) skipLine();
+    else tokens.push(token(at()));
+  }
+  tokens.push({ t: 'eof' });
+  return tokens;
+
+  function token(c: string): Token {
+    if (isDigit(c) || (c === '.' && isDigit(at(1)))) return number();
+    const flags = stringFlags();
+    if (flags !== null) return string(flags);
+    if (c === '`') return quotedName();
+    if (/[A-Za-z_]/.test(c)) return identifier();
+    return operator();
+  }
+
+  function skipLine(): void {
+    while (i < source.length && at() !== '\n') i++;
+  }
+
+  function number(): Token {
+    const start = i;
+    if (at() === '0' && (at(1) === 'x' || at(1) === 'X')) {
+      i += 2;
+      while (isHex(at())) i++;
+      if (i === start + 2) throw problem('a hex number with no digits');
+      return integer(BigInt(source.slice(start, i)));
+    }
+    while (isDigit(at())) i++;
+    let isDouble = false;
+    if (at() === '.' && isDigit(at(1))) {
+      isDouble = true;
       i++;
-      continue;
+      while (isDigit(at())) i++;
     }
-    if (c === '/' && at(1) === '/') {
-      while (i < source.length && at() !== '\n') i++;
-      continue;
+    if (at() === 'e' || at() === 'E') {
+      let j = i + 1;
+      if (source[j] === '+' || source[j] === '-') j++;
+      if (isDigit(source[j] ?? '')) {
+        isDouble = true;
+        i = j;
+        while (isDigit(at())) i++;
+      }
     }
-    // Numbers
-    if (digit(c) || (c === '.' && digit(at(1)))) {
-      const start = i;
-      if (c === '0' && (at(1) === 'x' || at(1) === 'X')) {
-        i += 2;
-        while (hex(at())) i++;
-        if (i === start + 2) throw problem('a hex number with no digits');
-        const v = BigInt(source.slice(start, i));
-        if (at() === 'u' || at() === 'U') {
-          i++;
-          out.push({ t: 'uint', v });
-        } else out.push({ t: 'int', v });
+    const text = source.slice(start, i);
+    const token = isDouble ? double(text) : integer(BigInt(text));
+    if (/[A-Za-z_]/.test(at())) throw problem(`a number runs into "${at()}"`);
+    return token;
+  }
+
+  /** An int, or a uint when a `u` follows */
+  function integer(v: bigint): Token {
+    if (at() !== 'u' && at() !== 'U') return { t: 'int', v };
+    i++;
+    return { t: 'uint', v };
+  }
+
+  function double(text: string): Token {
+    const v = Number(text);
+    if (!Number.isFinite(v)) throw problem('a double literal out of range');
+    return { t: 'double', v };
+  }
+
+  /** The flags of a string starting here (`''`, `r`, `b`, `rb`, …), or null when none does */
+  function stringFlags(): string | null {
+    const prefix = /^([rRbB]{1,2})?['"]/.exec(source.slice(i, i + 3));
+    if (!prefix) return null;
+    const flags = (prefix[1] ?? '').toLowerCase();
+    return flags === 'rr' || flags === 'bb' ? null : flags;
+  }
+
+  function string(flags: string): Token {
+    if (flags.includes('b')) throw problem('bytes are not in the subset', true);
+    const raw = flags.includes('r');
+    i += flags.length;
+    const q = at();
+    const triple = at(1) === q && at(2) === q;
+    const close = triple ? q.repeat(3) : q;
+    i += close.length;
+    let value = '';
+    while (!source.startsWith(close, i)) {
+      if (i >= source.length) throw problem('a string that never ends');
+      const ch = at();
+      if (!triple && (ch === '\n' || ch === '\r')) throw problem('a new line in a string');
+      if (ch === '\\' && !raw) {
+        value += escape();
         continue;
       }
-      while (digit(at())) i++;
-      let isDouble = false;
-      if (at() === '.' && digit(at(1))) {
-        isDouble = true;
-        i++;
-        while (digit(at())) i++;
-      }
-      if (at() === 'e' || at() === 'E') {
-        let j = i + 1;
-        if (source[j] === '+' || source[j] === '-') j++;
-        if (digit(source[j] ?? '')) {
-          isDouble = true;
-          i = j;
-          while (digit(at())) i++;
-        }
-      }
-      const text = source.slice(start, i);
-      if (isDouble && !Number.isFinite(Number(text))) throw problem('a double literal out of range');
-      if (isDouble) out.push({ t: 'double', v: Number(text) });
-      else if (at() === 'u' || at() === 'U') {
-        i++;
-        out.push({ t: 'uint', v: BigInt(text) });
-      } else out.push({ t: 'int', v: BigInt(text) });
-      if (/[A-Za-z_]/.test(at())) throw problem(`a number runs into "${at()}"`);
-      continue;
+      const cp = source.codePointAt(i)!;
+      value += String.fromCodePoint(cp);
+      i += cp > 0xffff ? 2 : 1;
     }
-    // Strings, with their prefixes
-    const prefix = /^([rRbB]{1,2})?(['"])/.exec(source.slice(i, i + 3));
-    if (prefix && (prefix[1] === undefined || /^(r|R|b|B|rb|rB|Rb|RB|br|bR|Br|BR)$/.test(prefix[1]))) {
-      const flags = (prefix[1] ?? '').toLowerCase();
-      if (flags.includes('b')) throw problem('bytes are not in the subset', true);
-      const raw = flags.includes('r');
-      i += flags.length;
-      const q = at();
-      const triple = at(1) === q && at(2) === q;
-      const close = triple ? q.repeat(3) : q;
-      i += close.length;
-      let value = '';
-      for (;;) {
-        if (i >= source.length) throw problem('a string that never ends');
-        if (source.startsWith(close, i)) {
-          i += close.length;
-          break;
-        }
-        const ch = at();
-        if (!triple && (ch === '\n' || ch === '\r')) throw problem('a new line in a string');
-        if (ch === '\\' && !raw) {
-          const e = at(1);
-          const simple: Record<string, string> = {
-            a: '\x07',
-            b: '\b',
-            f: '\f',
-            n: '\n',
-            r: '\r',
-            t: '\t',
-            v: '\v',
-            '\\': '\\',
-            "'": "'",
-            '"': '"',
-            '`': '`',
-            '?': '?',
-          };
-          if (e in simple) {
-            value += simple[e];
-            i += 2;
-            continue;
-          }
-          let code: number;
-          if (e === 'x' || e === 'X' || e === 'u' || e === 'U') {
-            const n = e === 'u' ? 4 : e === 'U' ? 8 : 2;
-            const digits = source.slice(i + 2, i + 2 + n);
-            if (digits.length !== n || ![...digits].every(hex)) throw problem('a bad escape');
-            code = parseInt(digits, 16);
-            i += 2 + n;
-          } else if (/^[0-3][0-7][0-7]$/.test(source.slice(i + 1, i + 4))) {
-            code = parseInt(source.slice(i + 1, i + 4), 8);
-            i += 4;
-          } else throw problem('a bad escape');
-          if (code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff))
-            throw problem('an escape that is no character');
-          value += String.fromCodePoint(code);
-          continue;
-        }
-        const cp = source.codePointAt(i)!;
-        value += String.fromCodePoint(cp);
-        i += cp > 0xffff ? 2 : 1;
-      }
-      out.push({ t: 'str', v: value });
-      continue;
+    i += close.length;
+    return { t: 'str', v: value };
+  }
+
+  function escape(): string {
+    const e = at(1);
+    if (Object.hasOwn(ESCAPES, e)) {
+      i += 2;
+      return ESCAPES[e]!;
     }
-    if (c === '`') {
-      const end = source.indexOf('`', i + 1);
-      const name = end < 0 ? '' : source.slice(i + 1, end);
-      if (!/^[A-Za-z0-9_.\-/ ]+$/.test(name)) throw problem('a bad quoted field name');
-      out.push({ t: 'quoted', v: name });
-      i = end + 1;
-      continue;
+    const code = escapedCode(e);
+    if (code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff))
+      throw problem('an escape that is no character');
+    return String.fromCodePoint(code);
+  }
+
+  /** The code point a hex or octal escape names */
+  function escapedCode(e: string): number {
+    const width = Object.hasOwn(HEX_ESCAPES, e) ? HEX_ESCAPES[e]! : 0;
+    if (width) {
+      const digits = source.slice(i + 2, i + 2 + width);
+      if (digits.length !== width || ![...digits].every(isHex)) throw problem('a bad escape');
+      i += 2 + width;
+      return parseInt(digits, 16);
     }
-    if (/[A-Za-z_]/.test(c)) {
-      const start = i;
-      while (/[A-Za-z0-9_]/.test(at())) i++;
-      out.push({ t: 'id', v: source.slice(start, i) });
-      continue;
-    }
-    if ((c === '.' && at(1) === '?') || (c === '?' && at(1) === '.') || (c === '?' && at(1) === '['))
+    const octal = source.slice(i + 1, i + 4);
+    if (!/^[0-3][0-7][0-7]$/.test(octal)) throw problem('a bad escape');
+    i += 4;
+    return parseInt(octal, 8);
+  }
+
+  function quotedName(): Token {
+    const end = source.indexOf('`', i + 1);
+    const name = end < 0 ? '' : source.slice(i + 1, end);
+    if (!/^[A-Za-z0-9_.\-/ ]+$/.test(name)) throw problem('a bad quoted field name');
+    i = end + 1;
+    return { t: 'quoted', v: name };
+  }
+
+  function identifier(): Token {
+    const start = i;
+    while (/[A-Za-z0-9_]/.test(at())) i++;
+    return { t: 'id', v: source.slice(start, i) };
+  }
+
+  function operator(): Token {
+    if (['.?', '?.', '?['].includes(source.slice(i, i + 2)))
       throw problem('optionals are not in the subset', true);
     const op = OPS.find((o) => source.startsWith(o, i));
-    if (!op) throw problem(`unexpected "${c}"`);
-    out.push({ t: 'op', v: op });
+    if (!op) throw problem(`unexpected "${at()}"`);
     i += op.length;
+    return { t: 'op', v: op };
   }
-  out.push({ t: 'eof' });
-  return out;
 }
 
 const MACROS = new Set(['all', 'exists', 'exists_one', 'map', 'filter']);
@@ -745,45 +748,19 @@ export function celChildren(n: CelNode): ReadonlyArray<CelNode> {
 
 // -- Checking -----------------------------------------------------------------
 
-/** Functions called by name, with how many arguments each takes */
-const GLOBALS: Readonly<Record<string, ReadonlyArray<number>>> = {
-  size: [1],
-  int: [1],
-  uint: [1],
-  double: [1],
-  string: [1],
-  bool: [1],
-  dyn: [1],
-  sum: [1],
-  hash: [1],
-  versions: [1],
-  link: [1],
-  member: [1],
-  linked: [2],
-  '==': [2],
-  '!=': [2],
-  '<': [2],
-  '<=': [2],
-  '>': [2],
-  '>=': [2],
-  in: [2],
-  '+': [2],
-  '-': [2],
-  '*': [2],
-  '/': [2],
-  '%': [2],
-  '!': [1],
-  neg: [1],
-};
+/** Functions called by name, by how many arguments each takes */
+const GLOBALS = arities({
+  1: 'size int uint double string bool dyn sum hash versions link member ! neg',
+  2: 'linked == != < <= > >= in + - * / %',
+});
 /** Functions called on a value */
-const METHODS: Readonly<Record<string, ReadonlyArray<number>>> = {
-  size: [0],
-  contains: [1],
-  startsWith: [1],
-  endsWith: [1],
-  distinct: [0],
-  link: [1],
-};
+const METHODS = arities({ 0: 'size distinct', 1: 'contains startsWith endsWith link' });
+
+function arities(byCount: Readonly<Record<number, string>>): ReadonlyMap<string, number> {
+  return new Map(
+    Object.entries(byCount).flatMap(([count, names]) => names.split(' ').map((fn) => [fn, Number(count)])),
+  );
+}
 /** Functions read from the space: an expression that reads only a record leaves them out */
 const SPACE_FUNCTIONS = new Set(['versions', 'member']);
 
@@ -844,10 +821,9 @@ export function checkCel(node: CelNode, scope: CelScope, count = { nodes: 0 }): 
           if (n.args.length === 0) return `math.${n.fn} takes at least one argument`;
           return first(n.args.map((a) => () => walk(a, bound)));
         }
-        const table = n.target ? METHODS : GLOBALS;
-        const arity = Object.hasOwn(table, n.fn) ? table[n.fn] : undefined;
-        if (!arity) return `${n.target ? '.' : ''}${n.fn}() is not in the subset`;
-        if (!arity.includes(n.args.length)) return `${n.fn}() takes ${arity.join(' or ')} arguments`;
+        const arity = (n.target ? METHODS : GLOBALS).get(n.fn);
+        if (arity === undefined) return `${n.target ? '.' : ''}${n.fn}() is not in the subset`;
+        if (arity !== n.args.length) return `${n.fn}() takes ${arity} arguments`;
         if (!n.target && n.fn === 'linked') {
           if (!scope.linked)
             return 'linked() reads what one node holds, so only a computed field may: a contract cites versions instead';
@@ -913,33 +889,11 @@ export const MAX_CEL_STEPS = 100_000;
 export const MAX_CEL_WORK = 4_000_000;
 
 /** Calls whose work grows with what they are given: each also takes the size of its operands in steps */
-const CHARGED = new Set([
-  '==',
-  '!=',
-  'in',
-  '<',
-  '<=',
-  '>',
-  '>=',
-  '+',
-  'size',
-  'contains',
-  'startsWith',
-  'endsWith',
-  'int',
-  'uint',
-  'double',
-  'string',
-  'bool',
-  'distinct',
-  'sum',
-  'greatest',
-  'least',
-  'hash',
-  'link',
-  'versions',
-  'linked',
-]);
+const CHARGED = new Set(
+  '== != in < <= > >= + size contains startsWith endsWith int uint double string bool distinct sum greatest least hash link versions linked'.split(
+    ' ',
+  ),
+);
 
 /**
  * A value's size: 1 for `null`, a bool or a number; 1 and its code points for

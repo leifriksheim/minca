@@ -30,3 +30,13 @@ export function serial(
   };
   return Object.assign(run, { done: () => (next ?? running ?? Promise.resolve()).catch(() => {}) });
 }
+
+/** Runs async work one at a time, in the order it was asked for; one that fails does not stop the next */
+export function queue(): <T>(work: () => Promise<T>) => Promise<T> {
+  let last: Promise<unknown> = Promise.resolve();
+  return <T>(work: () => Promise<T>): Promise<T> => {
+    const next = last.then(work, work);
+    last = next.catch(() => {});
+    return next;
+  };
+}

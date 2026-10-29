@@ -48,25 +48,18 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 
 /**
  * A shape that keeps turning into the next one, and its colour with it. It
- * draws straight onto the path each frame, so React renders it once; `onTurn`
- * says which step it is melting into, for anything that should change with it.
+ * draws straight onto the path each frame, so React renders it once.
  */
 export function Morph({
   steps,
   size,
   className,
-  onTurn,
 }: {
   steps: ReadonlyArray<{ kind: RoundKind; colour: ShapeColour }>;
   size?: number;
   className?: string;
-  onTurn?: (index: number) => void;
 }) {
   const path = useRef<SVGPathElement>(null);
-  const turn = useRef(onTurn);
-  useEffect(() => {
-    turn.current = onTurn;
-  }, [onTurn]);
 
   useEffect(() => {
     const first = steps[0];
@@ -88,7 +81,6 @@ export function Morph({
         if (!turned) {
           turned = true;
           if (path.current) path.current.style.fill = shapeColours[to.colour];
-          turn.current?.((at + 1) % steps.length);
         }
         const t = Math.min(1, (elapsed - HOLD_MS) / MELT_MS);
         const k = ease(t);

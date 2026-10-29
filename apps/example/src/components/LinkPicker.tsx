@@ -2,9 +2,10 @@ import { useState } from 'react';
 import type { NodeCollection, NodeRecord, SpaceSummary } from '@minca/core';
 import { useNode } from '@minca/react';
 import { collectionLabel, humanize } from '../derive/schema-ui';
-import { styles, palette } from '../styles';
+import { styles, palette, stack } from '../styles';
 import { useAction } from '@minca/app-shared/action';
 import { RecordFinder } from './RecordFinder';
+import { LinkButton, QuietButton } from './Buttons';
 
 /**
  * Links this record to another, in one of the ways its collection allows —
@@ -58,9 +59,7 @@ export function LinkPicker({
     <section
       aria-label="Link to another record"
       style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 10,
+        ...stack(10),
         padding: 14,
         border: `1px solid ${palette.surface.line}`,
         borderRadius: palette.radius.md,
@@ -70,27 +69,25 @@ export function LinkPicker({
       {!initialRel && kinds.length > 1 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {kinds.map(([r, d]) => (
-            <button
+            <QuietButton
               key={r}
               type="button"
               onClick={() => setRel(r)}
               title={d.description}
               aria-pressed={rel === r}
-              data-variant="quiet"
               style={{
-                ...styles.smallButton,
                 height: 28,
                 ...(rel === r ? { borderColor: palette.ink.strong, color: palette.ink.strong } : {}),
               }}
             >
               {humanize(r).toLowerCase()}
-            </button>
+            </QuietButton>
           ))}
         </div>
       )}
       {declared && (
         <>
-          <p style={{ fontSize: 13, color: palette.ink.muted, lineHeight: 1.5 }}>
+          <p style={{ ...styles.quiet, lineHeight: 1.5 }}>
             <strong style={{ color: palette.ink.strong }}>{humanize(rel!).toLowerCase()}</strong>
             {declared.description && ` — ${declared.description}`}. Can point at {allowed}
             {one && current.length > 0 ? '; picking one replaces the one it has.' : '.'}
@@ -110,14 +107,9 @@ export function LinkPicker({
         </>
       )}
       {error && <p style={styles.error}>{error}</p>}
-      <button
-        type="button"
-        onClick={onDone}
-        data-variant="ghost"
-        style={{ ...styles.linkButton, alignSelf: 'flex-start' }}
-      >
+      <LinkButton type="button" onClick={onDone} style={{ alignSelf: 'flex-start' }}>
         Cancel
-      </button>
+      </LinkButton>
     </section>
   );
 }
