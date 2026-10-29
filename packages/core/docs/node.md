@@ -328,7 +328,7 @@ spaces cannot be left.
 
 `contacts.remove` and `contacts.block` leave the space for two this way.
 
-_Source: `packages/core/src/node/node.ts` (`spaces.leave`, `giveUpPlace`, `forget`, `LEAVE_WAIT_MS`), `packages/core/src/node/space-runtime.ts` (`giveUpPlace`, `writeUntilStored`). Tests: `packages/core/tests/key-change.test.ts` ("leaving a private space"), `packages/core/tests/contacts.test.ts` ("removing a contact gives up your place"), `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/carrier.test.ts` ("its carry space cannot be left…")._
+_Source: `packages/core/src/node/node.ts` (`spaces.leave`, `giveUpPlace`, `forget`, `LEAVE_WAIT_MS`), `packages/core/src/node/space-membership.ts` (`giveUpPlace`), `packages/core/src/node/space-peers.ts` (`writeUntilStored`). Tests: `packages/core/tests/key-change.test.ts` ("leaving a private space"), `packages/core/tests/contacts.test.ts` ("removing a contact gives up your place"), `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/carrier.test.ts` ("its carry space cannot be left…")._
 
 ## Holding part of a space
 
@@ -552,7 +552,7 @@ A received live message is emitted as a `message` event,
 > Rationale: a peer's key does not say whose it is, but only the account's own
 > devices and apps can read its registry, so a peer there is one of ours.
 
-_Source: `packages/core/src/node/node.ts` (`spaces.send`, `spaces.status`), `packages/core/src/node/space-runtime.ts` (`send`, `onLive`, `status`). Tests: `packages/core/tests/live.test.ts`._
+_Source: `packages/core/src/node/node.ts` (`spaces.send`, `spaces.status`), `packages/core/src/node/space-peers.ts` (`send`, `onLive`), `packages/core/src/node/space-runtime.ts` (`status`). Tests: `packages/core/tests/live.test.ts`._
 
 ## The rest of the node's surface
 
@@ -624,7 +624,7 @@ successors, mine, heads, key, relays, keepers, copies, forks, flagged }`
   Local only: nothing here goes over the wire.
 - `node.asAgent({ keys, note })` — [acting as an agent](#a-node-acting-as-an-agent).
 
-_Source: `packages/core/src/node/types.ts`, `packages/core/src/node/node.ts` (`spaces`), `packages/core/src/node/space-runtime.ts` (`access`, `may`, `holdsRole`, `defineRole`, `assign`, `removeAccount`), `packages/core/src/space/roles.ts` (`holdsRole`). Tests: `packages/core/tests/roles.test.ts` ("holding what a role gives"), `packages/core/tests/node.test.ts`, `packages/core/tests/space-access.test.ts`, `packages/core/tests/contacts.test.ts`, `packages/core/tests/direct.test.ts`, `packages/core/tests/profiles.test.ts`._
+_Source: `packages/core/src/node/types.ts`, `packages/core/src/node/node.ts` (`spaces`), `packages/core/src/node/space-membership.ts` (`access`, `may`, `holdsRole`, `defineRole`, `assign`, `removeAccount`), `packages/core/src/space/roles.ts` (`holdsRole`). Tests: `packages/core/tests/roles.test.ts` ("holding what a role gives"), `packages/core/tests/node.test.ts`, `packages/core/tests/space-access.test.ts`, `packages/core/tests/contacts.test.ts`, `packages/core/tests/direct.test.ts`, `packages/core/tests/profiles.test.ts`._
 
 ## The network
 
@@ -701,7 +701,7 @@ connected relay that can and waits up to 1.5 s for an answer (relays without
 TURN never answer), then returns what it has. A node with no relays returns
 the configured servers.
 
-_Source: `packages/core/src/network/relay-socket.ts` (`createRelaySocket`, `RelayStatus`), `packages/core/src/network/rendezvous.ts` (`createRendezvous`, `HELLO_MS`, `release`), `packages/core/src/network/relay-nostr.ts`, `packages/core/src/network/rtc-transport.ts` (`GATHER_MS`), `packages/core/src/network/ws-transport.ts`, `packages/core/src/network/local-transport.ts` (`createLocalHub`), `packages/core/src/node/carrier.ts` (`carry`), `packages/core/src/network/mesh.ts` (`CONNECT_TIMEOUT_MS`, `closeIfIdle`, `iceServers`, `ICE_REFRESH_MS`, `ICE_WAIT_MS`), `packages/core/src/network/introductions.ts` (`createSeenSignals`), `packages/core/src/network/rtc-transport.ts` (`DEFAULT_ICE_SERVERS`), `packages/core/src/node/space-runtime.ts` (`nameRelays`), `packages/core/src/node/node.ts` (`iceServers`), `packages/cli/src/serve.ts` (`onPeer`). Tests: `packages/core/tests/relay-socket.test.ts`, `packages/core/tests/rendezvous.test.ts`, `packages/core/tests/relay-nostr.test.ts`, `packages/core/tests/introductions.test.ts`, `packages/core/tests/space-relays.test.ts`, `packages/core/tests/ws-transport.test.ts`, `packages/core/tests/carrier.test.ts`; the client-side ICE refresh is untested._
+_Source: `packages/core/src/network/relay-socket.ts` (`createRelaySocket`, `RelayStatus`), `packages/core/src/network/rendezvous.ts` (`createRendezvous`, `HELLO_MS`, `release`), `packages/core/src/network/relay-nostr.ts`, `packages/core/src/network/rtc-transport.ts` (`GATHER_MS`), `packages/core/src/network/ws-transport.ts`, `packages/core/src/network/local-transport.ts` (`createLocalHub`), `packages/core/src/node/carrier.ts` (`carry`), `packages/core/src/network/mesh.ts` (`CONNECT_TIMEOUT_MS`, `closeIfIdle`, `iceServers`, `ICE_REFRESH_MS`, `ICE_WAIT_MS`), `packages/core/src/network/introductions.ts` (`createSeenSignals`), `packages/core/src/network/rtc-transport.ts` (`DEFAULT_ICE_SERVERS`), `packages/core/src/node/space-keys.ts` (`nameRelays`), `packages/core/src/node/node.ts` (`iceServers`), `packages/cli/src/serve.ts` (`onPeer`). Tests: `packages/core/tests/relay-socket.test.ts`, `packages/core/tests/rendezvous.test.ts`, `packages/core/tests/relay-nostr.test.ts`, `packages/core/tests/introductions.test.ts`, `packages/core/tests/space-relays.test.ts`, `packages/core/tests/ws-transport.test.ts`, `packages/core/tests/carrier.test.ts`; the client-side ICE refresh is untested._
 
 ## A node acting as an agent
 

@@ -12,7 +12,7 @@ import { didToPublicKey } from '../src/identity/did.js';
 import { hkdf } from '../src/identity/hkdf.js';
 import { contactPublicKey, deriveContactKeyBytes } from '../src/identity/contact-key.js';
 import { channelRoom, PAIRING_CHANNEL } from '../src/identity/channel.js';
-import { relayRoom } from '../src/node/space-runtime.js';
+import { relayRoom } from '../src/node/space-peers.js';
 import { deriveInviteKey, inviteKey } from '../src/space/space-access.js';
 import {
   base64UrlDecode,

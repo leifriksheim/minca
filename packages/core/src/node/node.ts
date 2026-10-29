@@ -29,7 +29,9 @@ import {
 import type { Keeper } from '../space/roles.js';
 import { ROLE_ASSIGN } from '../space/grants.js';
 import { createWriters } from './writers.js';
-import { meshFor, openSpaceRuntime, type ActiveSession, type SpaceRuntime } from './space-runtime.js';
+import { openSpaceRuntime, type SpaceRuntime } from './space-runtime.js';
+import { meshFor } from './space-peers.js';
+import type { ActiveSession } from './space-versions.js';
 import { createServerAuth } from '../network/peer-auth.js';
 import { DEFAULT_ICE_SERVERS } from '../network/rtc-transport.js';
 import { generateLinkSecret, linkInviteSecret } from '../space/invite-link.js';
