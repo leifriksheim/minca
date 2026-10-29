@@ -88,22 +88,34 @@ theirs to leave, and opens as nothing.
   `blocked: true`.
 - `others(did)` lists accounts other than the two seen in the space for two
   (members, profiles, connected peers).
-- `invite(pairSpace, spaceId, { role? })` invites whoever you share a space
-  for two with into another space you hold: it makes an invite for `role` and
-  leaves it as a `std.space-invite` in the space for two. Only the two of you
-  read that space, so the invite needs no sealing. `pairSpace` can be a knock's
-  space nobody joined yet, so whoever accepts the knock finds the invite there.
-- `invites()` lists the invites contacts left for you, in your spaces for two
+- `invite(did, spaceId, { role? })` invites a contact into a space you hold:
+  it makes an invite for `role` and leaves it as a `std.space-invite` in your
+  space for two with them. Only the two of you read that space, so the invite
+  needs no sealing. The contact must have joined the space for two: a knock
+  nobody answered yet is refused, so a space is never opened to whoever a
+  username happens to lead to before you have seen who they are.
+- `invites()` lists the invites a contact left for you in your space for two
   with them, to spaces you don't hold yet, newest first:
-  `{ from, space, name, invite, pairSpace, createdAt }`. Join one with
-  `spaces.join(invite)`; once held it is no longer listed. Invites from
-  someone blocked are not shown.
+  `{ from, space, name, invite, pairSpace, key, createdAt }`. Only the
+  contact's own records count, and `space` and `name` are read from the signed
+  invite, never from what was written beside it. Invites from someone blocked
+  are not shown. It also closes invites of yours a contact has used, and
+  deletes them.
+- `join(pairSpace, key)` joins the space an invite is for and deletes the
+  invite, so no client offers it again, to someone later removed included.
 
 ## `std.space-invite`
 
-An invite to a space, left in a space for two: `{ space, name, invite }`,
+An invite to a space, left in a space for two: `{ space, invite }`,
 `onePer: ['space']`, so inviting again to the same space replaces it. Either
-of the two may delete it.
+of the two may delete it. An invite used and deleted before its maker's node
+saw it is left open, as every role invite is until closed
+([#170](https://github.com/leifriksheim/minca/issues/170)); only whoever used
+it held its secret.
+
+A contact's `username` is what their domain answered when you found them by
+it. Nothing checks it again: once a name lapses and someone else claims it, a
+lookup leads to them, and the contact keeps the old one.
 
 `ask` and `accept` need a session note that grants `/account/write` for the
 whole account, as a knock does. An app granted `contacts` sees the list and

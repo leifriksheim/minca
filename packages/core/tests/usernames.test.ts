@@ -134,6 +134,34 @@ describe('node.inbox and usernames', () => {
     await assert.rejects(resolveUsername(next, provider), /doesn't know/);
   });
 
+  test('replacing the inbox while its name service is down changes nothing, so the name never leads nowhere', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    // A name service of its own, to stop.
+    const server = createServer();
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    const at = `localhost:${portOf(server)}`;
+    const names = createNames({
+      domain: at,
+      claim: `http://${at}/.well-known/minca.json`,
+      dir: mkdtempSync(join(tmpdir(), 'minca-names-')),
+      limits: { workBits: 4 },
+    });
+    server.on('request', (req, res) => {
+      if (!names.handle(req, res)) res.writeHead(404).end();
+    });
+    const anna = await person(hub, 'Anna');
+    const before = await anna.inbox.claim(`anna@${at}`);
+    names.close();
+    await new Promise((resolve) => server.close(resolve));
+
+    await assert.rejects(anna.inbox.rotate());
+    await assert.rejects(anna.inbox.open({ name: 'Anna B' }));
+    const after = await anna.inbox.get();
+    assert.equal(after?.gen, before.gen);
+    assert.equal(after?.name, 'Anna');
+    assert.equal(after?.username, `anna@${at}`);
+  });
+
   test('someone found by their username becomes a contact who keeps it', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const { anna, leif, space, username } = await contacts(hub);
@@ -153,26 +181,32 @@ describe('node.inbox and usernames', () => {
 });
 
 describe('node.contacts.invite', () => {
-  test('a contact invited into a space finds the invite, and joins', async () => {
-    const hub = createFakeHub({ latencyMs: 1 });
-    const { anna, leif, space: pair } = await contacts(hub);
+  /** Leif makes a team space and invites Anna into it; Anna's view of the invite once it arrives */
+  async function invited(hub: FakeHub) {
+    const pair = await contacts(hub);
+    const { anna, leif } = pair;
     const bills = await leif.spaces.create({ name: 'Bills', visibility: 'private', ...team });
-    await leif.contacts.invite(pair, bills.id, { role: 'editor' });
-
+    await leif.contacts.invite(anna.did, bills.id, { role: 'editor' });
     const [invite] = await until(
       () => anna.contacts.invites(),
       (found) => found.length === 1,
       'the invite',
     );
-    assert.equal(invite!.from, leif.did);
-    assert.equal(invite!.name, 'Bills');
-    assert.equal(invite!.space, bills.id);
+    return { ...pair, bills, invite: invite! };
+  }
+
+  test('a contact invited into a space finds the invite, and joins', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const { anna, leif, bills, invite } = await invited(hub);
+    assert.equal(invite.from, leif.did);
+    // The name and the space come from the signed invite, not from what was written beside it.
+    assert.equal(invite.name, 'Bills');
+    assert.equal(invite.space, bills.id);
     // Leif doesn't see his own.
     assert.deepEqual(await leif.contacts.invites(), []);
 
-    const joined = await anna.spaces.join(invite!.invite);
+    const joined = await anna.contacts.join(invite.pairSpace, invite.key);
     assert.equal(joined.id, bills.id);
-    // The role the invite gives arrives as the space syncs.
     await anna.spaces.hold(bills.id);
     await leif.spaces.hold(bills.id);
     await until(
@@ -180,20 +214,65 @@ describe('node.contacts.invite', () => {
       (writable) => writable === true,
       'Anna to hold the editor role',
     );
-    // Held now, so no longer offered.
     assert.deepEqual(await anna.contacts.invites(), []);
+  });
+
+  test('only a contact who joined your space for two can be invited: never whoever a name leads to', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const anna = await person(hub, 'Anna');
+    const leif = await person(hub, 'Leif');
+    const username = fresh('anna');
+    await anna.inbox.claim(username);
+    await leif.inbox.knock(username);
+    const bills = await leif.spaces.create({ name: 'Bills', visibility: 'private', ...team });
+    // Knocked, not answered: nobody whose account Leif has seen.
+    await assert.rejects(leif.contacts.invite(anna.did, bills.id), /haven't joined/);
+  });
+
+  test('a used invite is gone, so someone removed is never offered it again', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const { anna, leif, bills, invite } = await invited(hub);
+    await anna.contacts.join(invite.pairSpace, invite.key);
+    await anna.spaces.hold(bills.id);
+    await leif.spaces.hold(bills.id);
+    await until(
+      async () => (await leif.spaces.access(bills.id)).members.some((member) => member.did === anna.did),
+      (there) => there,
+      'Leif to see Anna in Bills',
+    );
+    // Joining deleted the invite, on both sides: no client offers it again.
+    await until(
+      async () => (await leif.records.list(invite.pairSpace, { collection: 'std.space-invite' })).length,
+      (left) => left === 0,
+      'the used invite to be gone',
+    );
+    await anna.spaces.leave(bills.id);
+    assert.deepEqual(await anna.contacts.invites(), []);
+  });
+
+  test('an invite whose record names another space than it is for is not shown', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const { anna, leif, space: pair } = await contacts(hub);
+    const bills = await leif.spaces.create({ name: 'Bills', visibility: 'private', ...team });
+    const family = await leif.spaces.create({ name: 'Family', visibility: 'private', ...team });
+    await leif.contacts.invite(anna.did, bills.id, { role: 'editor' });
+    // The record says Family, the invite inside it is for Bills.
+    const [record] = await leif.records.list<{ invite: string }>(pair, { collection: 'std.space-invite' });
+    await leif.records.put(pair, 'std.space-invite', { space: family.id, invite: record!.body!.invite });
+    await until(
+      () => anna.contacts.invites(),
+      (found) => found.length === 1,
+      'the honest invite',
+    );
+    assert.deepEqual(
+      (await anna.contacts.invites()).map((invite) => [invite.space, invite.name]),
+      [[bills.id, 'Bills']],
+    );
   });
 
   test('an invite from someone blocked is not shown', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
-    const { anna, leif, space: pair } = await contacts(hub);
-    const bills = await leif.spaces.create({ name: 'Bills', visibility: 'private', ...team });
-    await leif.contacts.invite(pair, bills.id, { role: 'editor' });
-    await until(
-      () => anna.contacts.invites(),
-      (found) => found.length === 1,
-      'the invite',
-    );
+    const { anna, leif } = await invited(hub);
     await anna.contacts.block(leif.did);
     assert.deepEqual(await anna.contacts.invites(), []);
   });

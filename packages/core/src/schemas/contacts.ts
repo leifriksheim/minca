@@ -116,8 +116,9 @@ export type Knock = BodyOf<typeof knock>;
 
 /**
  * An invite to a space, left for a contact in your space for two with them:
- * only the two of you read it there, so it needs no sealing. They join with
- * it, or let it be; one to a space they already hold isn't shown.
+ * only the two of you read it there, so it needs no sealing. What space it is,
+ * and its name, are read from the signed invite; `space` only keys the record.
+ * Joining deletes it, and the inviter closes the invite once they are in.
  */
 export const spaceInvite = define({
   name: 'std.space-invite',
@@ -127,10 +128,9 @@ export const spaceInvite = define({
     type: 'object',
     properties: {
       space: { type: 'string', maxLength: 256, description: 'The space it invites them to' },
-      name: { type: 'string', maxLength: 200, description: 'What the space is called' },
       invite: { type: 'string', maxLength: 12000, description: 'The invite, as spaces.join takes it' },
     },
-    required: ['space', 'name', 'invite'],
+    required: ['space', 'invite'],
   },
   rules: { onePer: ['space'] },
 });

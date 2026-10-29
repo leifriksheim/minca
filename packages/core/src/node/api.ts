@@ -128,6 +128,7 @@ export const API = Object.freeze({
     others: "look inside a contact's space",
     invite: 'invite a contact into a space',
     invites: 'read invites from contacts',
+    join: 'join a space a contact invited you to',
   },
   // Direct messages are sealed to the person's member key, which an agent isn't given.
   direct: { reachable: 'own', send: 'send direct messages', list: 'read direct messages' },

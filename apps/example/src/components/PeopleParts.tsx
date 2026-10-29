@@ -240,7 +240,7 @@ export function SpaceInvites({
     setJoining(invite.space);
     setError(null);
     try {
-      const joined = await node.spaces.join(invite.invite);
+      const joined = await node.contacts.join(invite.pairSpace, invite.key);
       onJoined(joined.id);
     } catch (reason) {
       setError(message(reason));

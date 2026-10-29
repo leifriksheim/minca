@@ -180,7 +180,7 @@ export function ContactsView({
                 tone="card"
                 face={knock.from}
                 name={knock.name}
-                detail={knock.note ? `“${knock.note}”` : `Found you by your username · ${ago(knock.at)}`}
+                detail={knock.note ? `“${knock.note}”` : `Asked ${ago(knock.at)}`}
               >
                 <AddButton onClick={() => void act(() => node.inbox.accept(knock.id))} style={{ height: 34 }}>
                   Accept

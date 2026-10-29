@@ -142,7 +142,8 @@ function Pick({
       await node.inbox.claim(wanted);
       onClaimed();
     } catch (reason) {
-      setError(message(reason));
+      // The service's own words, without who refused what: the card says that already.
+      setError(message(reason).replace(/^.* refused [^:]+: /, ''));
     } finally {
       setClaiming(false);
     }
@@ -171,7 +172,7 @@ function Pick({
       onSubmit={(event) => void claim(event)}
       style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
     >
-      <h2 style={{ ...big, fontSize: 'clamp(22px, 6vw, 26px)' }}>
+      <h2 style={{ ...big, fontSize: 'clamp(22px, 6vw, 26px)', maxWidth: 'calc(100% - 90px)' }}>
         {current ? 'Pick a new name' : 'Pick a name people can find you by'}
       </h2>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -233,12 +234,8 @@ const eyebrow = {
   color: ink.muted,
 } as const;
 
-const big = {
-  fontSize: 32,
-  lineHeight: 1.1,
-  overflowWrap: 'anywhere',
-  maxWidth: 'calc(100% - 90px)',
-} as const;
+/** The name as a heading: a piece breaks inside only when it is wider than the card */
+const big = { fontSize: 'clamp(24px, 7vw, 32px)', lineHeight: 1.1, overflowWrap: 'anywhere' } as const;
 
 const hint = { fontSize: 13, lineHeight: 1.5, color: ink.muted, maxWidth: 460 } as const;
 

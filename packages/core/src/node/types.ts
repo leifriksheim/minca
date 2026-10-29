@@ -766,8 +766,9 @@ export interface SpaceInviteView {
   readonly name: string;
   /** What `spaces.join` takes */
   readonly invite: string;
-  /** The space for two it was left in */
+  /** The space for two it was left in, and its record there: what `join` takes */
   readonly pairSpace: string;
+  readonly key: string;
   readonly createdAt: string;
 }
 
@@ -821,13 +822,18 @@ export interface NodeContacts {
   /** Accounts in your space for two besides the two of you */
   others(did: string): Promise<ReadonlyArray<string>>;
   /**
-   * Invites whoever you share a space for two with into another space: an
-   * invite for `role` (as `spaces.invite` makes one), left for them there. Works for a
-   * knock nobody joined yet too, so they find it when they do.
+   * Invites a contact into one of your spaces: an invite for `role` (as
+   * `spaces.invite` makes one), left in your space for two with them. Only a
+   * contact who has joined that space can be invited.
    */
-  invite(pairSpace: string, spaceId: string, options?: { readonly role?: string }): Promise<void>;
-  /** Invites contacts left for you, to spaces you don't hold yet, newest first */
+  invite(did: string, spaceId: string, options?: { readonly role?: string }): Promise<void>;
+  /**
+   * Invites your contacts left for you, to spaces you don't hold yet, newest
+   * first. Also closes invites of yours a contact has used, and deletes them.
+   */
   invites(): Promise<ReadonlyArray<SpaceInviteView>>;
+  /** Joins the space an invite from a contact is for, and deletes the invite */
+  join(pairSpace: string, key: string): Promise<SpaceSummary>;
 }
 
 /** A direct message, opened (`node.direct`) */

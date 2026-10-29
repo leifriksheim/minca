@@ -9,7 +9,7 @@ import { palette, styles } from '../styles';
 import { invitableRoles, useContacts } from '../contacts';
 import { useUsernameLookup } from '../usernames';
 import { AddButton } from './Buttons';
-import { Handle, PersonRow } from './PeopleParts';
+import { AddDialog, Handle, PersonRow } from './PeopleParts';
 
 const { ink, surface, radius } = palette;
 
@@ -37,12 +37,11 @@ export function InviteToSpace({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const invite = async (space: SpaceSummary) => {
-    if (!contact.space) return;
     setBusy(space.id);
     setError(null);
     try {
       const [role] = await invitableRoles(node, space.id);
-      await node.contacts.invite(contact.space, space.id, role ? { role } : {});
+      await node.contacts.invite(contact.did, space.id, role ? { role } : {});
       onDone(`${contact.name} is invited to ${space.name}${role ? ` as ${titled(role)}` : ', to view'}.`);
     } catch (reason) {
       setError(message(reason));
@@ -108,10 +107,10 @@ const letterOnShape = {
 } as const;
 
 /**
- * Adding people to a space the way a group chat does: tick contacts, or type
- * someone's username, choose what they join as, and send. A contact finds the
- * invite in your space for two; someone new gets a contact request with it,
- * and finds it once they accept.
+ * Adding people to a space the way a group chat does: tick contacts, choose
+ * what they join as, and send; each finds the invite in your space for two.
+ * Someone found by username who isn't a contact yet is asked to be one first:
+ * nobody gets into a space before you have seen who they are.
  */
 export function AddPeople({
   space,
@@ -132,7 +131,7 @@ export function AddPeople({
   const chosenRole = role === undefined ? (offered[0] ?? null) : role || null;
   const [query, setQuery] = useState('');
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
-  const [newcomers, setNewcomers] = useState<ReadonlyArray<string>>([]);
+  const [asking, setAsking] = useState<{ username: string; name?: string } | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -143,14 +142,11 @@ export function AddPeople({
   const shown = q
     ? candidates.filter((c) => c.name.toLowerCase().includes(q) || c.username?.includes(q))
     : candidates;
-  // Someone found by username who isn't a contact yet: added with a contact request.
+  // Someone found by username who isn't a contact: asked to be one, and invited once they are.
   const found =
-    lookup.status === 'found' &&
-    !candidates.some((c) => c.username === lookup.username) &&
-    !newcomers.includes(lookup.username)
+    lookup.status === 'found' && !(contacts ?? []).some((c) => c.username === lookup.username)
       ? lookup
       : null;
-  const count = picked.size + newcomers.length;
 
   const toggle = (did: string) =>
     setPicked((was) => {
@@ -164,24 +160,27 @@ export function AddPeople({
     setSending(true);
     setError(null);
     const options = chosenRole ? { role: chosenRole } : {};
-    try {
-      for (const did of picked) {
-        const contact = candidates.find((c) => c.did === did);
-        if (contact?.space) await node.contacts.invite(contact.space, space.id, options);
+    const waiting: string[] = [];
+    let invited = 0;
+    for (const did of picked) {
+      const contact = candidates.find((c) => c.did === did);
+      if (!contact) continue;
+      try {
+        await node.contacts.invite(did, space.id, options);
+        invited += 1;
+      } catch {
+        waiting.push(contact.name);
       }
-      for (const username of newcomers) {
-        const knock = await node.inbox.knock(username, { note: `Join me in ${space.name}` });
-        await node.contacts.invite(knock.space, space.id, options);
-      }
-      setDone(
-        `Invited ${count === 1 ? 'one person' : `${count} people`}. ` +
-          (newcomers.length > 0 ? 'Anyone new finds the invite once they accept your contact request.' : ''),
-      );
-    } catch (reason) {
-      setError(message(reason));
-    } finally {
-      setSending(false);
     }
+    setSending(false);
+    if (invited === 0 && waiting.length > 0) {
+      setError(`${waiting.join(', ')} haven't accepted your contact request yet, so they can't be invited.`);
+      return;
+    }
+    setDone(
+      `Invited ${invited === 1 ? 'one person' : `${invited} people`}. They find it with their invites.` +
+        (waiting.length > 0 ? ` ${waiting.join(', ')} haven't accepted your contact request yet.` : ''),
+    );
   };
 
   if (done)
@@ -192,6 +191,20 @@ export function AddPeople({
           Done
         </AddButton>
       </Modal>
+    );
+
+  if (asking)
+    return (
+      <AddDialog
+        username={asking.username}
+        {...(asking.name ? { name: asking.name } : {})}
+        onClose={() => setAsking(null)}
+        onSent={(text) => {
+          setAsking(null);
+          setQuery('');
+          setDone(`${text} Invite them here once they have.`);
+        }}
+      />
     );
 
   return (
@@ -212,26 +225,18 @@ export function AddPeople({
             detail={<>{found.username} · not a contact yet</>}
           >
             <AddButton
-              onClick={() => {
-                setNewcomers((was) => [...was, found.username]);
-                setQuery('');
-              }}
+              onClick={() =>
+                setAsking({
+                  username: found.username,
+                  ...(found.found.inbox.name ? { name: found.found.inbox.name } : {}),
+                })
+              }
               style={{ height: 32 }}
             >
-              Add
+              Add contact
             </AddButton>
           </PersonRow>
         )}
-        {newcomers.map((username) => (
-          <PersonRow
-            key={username}
-            face={username}
-            name={<Handle username={username} />}
-            detail="Gets a contact request"
-          >
-            <Tick checked onChange={() => setNewcomers((was) => was.filter((u) => u !== username))} />
-          </PersonRow>
-        ))}
         {shown.map((contact) => (
           <PersonRow
             key={contact.did}
@@ -246,7 +251,7 @@ export function AddPeople({
             />
           </PersonRow>
         ))}
-        {contacts !== undefined && shown.length === 0 && !found && newcomers.length === 0 && (
+        {contacts !== undefined && shown.length === 0 && !found && (
           <li style={{ listStyle: 'none', padding: '18px 4px', fontSize: 14, color: ink.muted }}>
             {q
               ? lookup.status === 'looking'
@@ -275,8 +280,8 @@ export function AddPeople({
           </select>
         </label>
         <span style={{ flex: 1 }} />
-        <AddButton onClick={() => void send()} disabled={count === 0 || sending} style={{ height: 40 }}>
-          {sending ? 'Inviting…' : count === 0 ? 'Invite' : `Invite ${count}`}
+        <AddButton onClick={() => void send()} disabled={picked.size === 0 || sending} style={{ height: 40 }}>
+          {sending ? 'Inviting…' : picked.size === 0 ? 'Invite' : `Invite ${picked.size}`}
         </AddButton>
       </div>
       {error && <p style={{ ...styles.bad, marginTop: 10 }}>{error}</p>}

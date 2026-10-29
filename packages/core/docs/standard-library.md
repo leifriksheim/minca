@@ -463,7 +463,7 @@ so "mentions me" and "assigned to me" match from then on.
 | `std.contact-request` | `to` ≤ 64 and `sealed` ≤ 16000, required                                                                  | —                 | [contacts](contacts.md) |
 | `std.inbox`           | `gen` ≥ 0 and `places` (1–3, each ≤ 200), required; `name` ≤ 64; `username` ≤ 320; `usernameUntil`        | —                 | [inbox.md](inbox.md)    |
 | `std.knock`           | `space` ≤ 256, `name` ≤ 64 and `invite` ≤ 12000, all required; `username` ≤ 320                           | `onePer: [space]` | [inbox.md](inbox.md)    |
-| `std.space-invite`    | `space` ≤ 256, `name` ≤ 200 and `invite` ≤ 12000, all required                                            | `onePer: [space]` | [contacts](contacts.md) |
+| `std.space-invite`    | `space` ≤ 256 and `invite` ≤ 12000, required                                                              | `onePer: [space]` | [contacts](contacts.md) |
 
 **Positions.** `position` is a string that sorts (by plain string comparison)
 where a record goes in a hand-made order. Digits are `0–9a–z`; a position
