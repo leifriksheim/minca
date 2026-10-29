@@ -36,6 +36,8 @@ input, textarea, select {
   background: var(--minca-card); border: 1px solid var(--minca-line-strong); border-radius: var(--minca-radius-md);
 }
 input:focus, textarea:focus, select:focus { outline: none; border-color: var(--minca-accent); }
+/* No field under 16px on a touchscreen, or iOS zooms the page every time one is tapped */
+@media (pointer: coarse) { input, textarea, select { font-size: max(16px, 1em); } }
 :focus-visible { outline: 2px solid var(--minca-accent); outline-offset: 2px; }
 .card { background: var(--minca-card); border: 1px solid var(--minca-line); border-radius: var(--minca-radius-lg); padding: 12px 14px; }
 .row { display: flex; align-items: center; gap: 8px; }

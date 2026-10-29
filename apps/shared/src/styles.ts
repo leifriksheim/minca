@@ -55,6 +55,12 @@ export const baseCss = `
     input::placeholder, textarea::placeholder { color: ${ink.faint}; }
     /* WebKit (Safari, the desktop shell) draws its own select and ignores our border and fill, so every select draws its chevron. */
     select:not([multiple]) { -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%235d6480' stroke-width='1.5'/%3E%3C/svg%3E") !important; background-repeat: no-repeat !important; background-position: right 12px center !important; padding-right: 30px !important; cursor: pointer; }
+    /* No text field under 16px on a touchscreen, or iOS zooms the page every
+       time one is tapped. Only the small ones are raised: a field drawn large,
+       like a record's title, keeps its size. */
+    @media (pointer: coarse) {
+      :is(input:not([type="checkbox"]):not([type="radio"]), textarea, select):is(:not([style*="font-size"]), [style*="font-size: 9"], [style*="font-size: 10"], [style*="font-size: 11"], [style*="font-size: 12"], [style*="font-size: 13"], [style*="font-size: 14"], [style*="font-size: 15"]) { font-size: 16px !important; }
+    }
     input:focus, textarea:focus, select:focus { border-color: ${accent.base} !important; box-shadow: 0 0 0 3px ${accent.soft}; outline: none; }
     [data-variant="quiet"], [data-variant="secondary"] { border: 1px solid ${surface.rule} !important; }
     tbody tr { transition: background-color .12s ease; }

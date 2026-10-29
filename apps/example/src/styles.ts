@@ -474,11 +474,8 @@ export function injectBaseStyles(): void {
       .chat-line:focus-within [data-row-action] { display: inline-flex; align-items: center; opacity: 1; }
     }
 
-    /* Fingers, not a mouse: bigger targets, and no text field under 16px,
-       or iOS zooms the page every time one is tapped. Only the small ones are
-       raised — a field drawn large, like a record's title, keeps its size. */
+    /* Fingers, not a mouse: bigger targets (fields are raised to 16px in baseCss). */
     @media (pointer: coarse) {
-      :is(input:not([type="checkbox"]):not([type="radio"]), textarea, select):is(:not([style*="font-size"]), [style*="font-size: 11"], [style*="font-size: 12"], [style*="font-size: 13"], [style*="font-size: 14"], [style*="font-size: 15"]) { font-size: 16px !important; }
       input:not([type="checkbox"]):not([type="radio"]), select { min-height: 40px; }
       button[data-variant], [role="tab"], [data-nav], [data-menu-item] { min-height: 40px; }
       [data-row-action] { min-width: 36px; min-height: 36px; }
