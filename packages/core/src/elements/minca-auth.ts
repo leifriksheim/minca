@@ -827,23 +827,23 @@ export class MincaAuthElement extends Base {
       disabled: state.busy,
       'aria-label': 'Username',
     });
-    const status = h('p', { class: 'wa-small', style: 'margin-top:0', 'aria-live': 'polite' });
+    const status = h('p', { class: 'wa-small wa-under', 'aria-live': 'polite' });
+    // In the field: a tick once it is free, a cross once it is taken.
+    const mark = h('span', { class: 'wa-mark', 'aria-hidden': 'true' });
     const show = () => {
       const { state: now } = this.#username;
-      const typed = username.value.trim().toLowerCase();
-      status.dataset.name = now;
+      mark.dataset.name = status.dataset.name = now;
+      mark.textContent = now === 'free' ? '✓' : now === 'taken' ? '✕' : '';
       status.textContent =
-        now === 'free'
-          ? `${typed}@${domain} is yours if you want it`
-          : now === 'taken'
-            ? 'Someone has that one. Try another?'
+        now === 'taken'
+          ? 'Someone has that one. Try another.'
+          : now === 'invalid'
+            ? 'Letters, numbers, dots, dashes and underscores.'
             : now === 'unknown'
-              ? `Couldn't check ${typed}@${domain} just now. It's tried when you continue.`
-              : now === 'invalid'
-                ? 'Letters, numbers, dots, dashes and underscores'
-                : now === 'checking'
-                  ? 'Checking…'
-                  : 'How people find you and add you. Leave it empty to skip.';
+              ? "Couldn't check it just now. It's tried when you continue."
+              : now === 'empty'
+                ? 'No username for now. You can pick one later.'
+                : 'How people find you and add you.';
     };
     // Looks the name up a moment after typing stops; picked from the name, a taken one gives way to the next idea.
     const check = (ideas: ReadonlyArray<string>) => {
@@ -884,7 +884,7 @@ export class MincaAuthElement extends Base {
 
     return card(
       'Create your account',
-      subtitle('What apps call you, and the name people find you by. You can change both later.'),
+      subtitle('Free, and yours. No email or phone number needed.'),
       form(
         () => {
           const typed = username.value.trim().toLowerCase();
@@ -893,17 +893,13 @@ export class MincaAuthElement extends Base {
           void auth.createAccount(name.value.trim(), typed ? { username: `${typed}@${domain}` } : {});
         },
         {},
-        h('label', { class: 'wa-label' }, 'Name'),
+        h('label', { class: 'wa-label' }, 'Your name'),
         name,
-        h('label', { class: 'wa-label' }, 'Username'),
-        h('div', { class: 'wa-username' }, username, h('span', null, `@${domain}`)),
+        h('p', { class: 'wa-small wa-under' }, 'Shown to the people in your spaces.'),
+        h('label', { class: 'wa-label' }, 'Username', h('span', { class: 'wa-optional' }, 'Optional')),
+        h('div', { class: 'wa-username' }, username, h('span', null, `@${domain}`), mark),
         status,
         submit(state.busy, 'Continue', 'Creating…'),
-      ),
-      h(
-        'p',
-        { class: 'wa-small' },
-        'Next: a recovery code to keep safe, then a passkey or password for signing in.',
       ),
       errorBox(state.error),
       links(link('I already have an account', () => auth.showExisting(), state.busy)),

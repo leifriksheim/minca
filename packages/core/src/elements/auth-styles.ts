@@ -73,7 +73,9 @@ minca-auth input {
   transition: border-color .15s ease, box-shadow .15s ease;
 }
 minca-auth input::placeholder { color: var(--minca-faint); }
-minca-auth .wa-label { font-size: 13px; font-weight: 500; color: var(--minca-ink); margin-top: 8px; }
+minca-auth .wa-label { display: flex; justify-content: space-between; font-size: 13px; font-weight: 500; color: var(--minca-ink); margin-top: 10px; }
+minca-auth .wa-optional { font-weight: 400; color: var(--minca-faint); }
+minca-auth .wa-under { margin-top: -2px; font-size: 12px; }
 minca-auth .wa-username {
   display: flex; align-items: center; height: 40px;
   border-radius: var(--minca-radius); border: 1px solid var(--minca-line-strong); background: var(--minca-surface);
@@ -82,7 +84,10 @@ minca-auth .wa-username {
 minca-auth .wa-username:focus-within { border-color: var(--minca-muted); box-shadow: 0 0 0 3px rgba(0, 0, 0, .06); }
 minca-auth .wa-username input, minca-auth .wa-username input:focus { flex: 1; min-width: 0; height: 100%; border: none; box-shadow: none; background: transparent; }
 minca-auth .wa-username > span { padding-right: 12px; color: var(--minca-muted); white-space: nowrap; }
-minca-auth .wa-small[data-name="free"] { color: var(--minca-good); }
+minca-auth .wa-mark { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin: 0 10px 0 -4px; padding: 0 !important; border-radius: 50%; font-size: 11px; font-weight: 700; }
+minca-auth .wa-mark:empty { display: none; }
+minca-auth .wa-mark[data-name="free"] { background: var(--minca-good); color: #fff !important; }
+minca-auth .wa-mark[data-name="taken"] { background: var(--minca-danger); color: #fff !important; }
 minca-auth .wa-small[data-name="taken"] { color: var(--minca-danger); }
 minca-auth input:focus { border-color: var(--minca-muted); box-shadow: 0 0 0 3px rgba(0, 0, 0, .06); }
 minca-auth .wa-offscreen {

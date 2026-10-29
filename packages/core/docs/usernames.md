@@ -46,8 +46,9 @@ The claim is made on the home's node, which may be the only one holding the
 inbox: a connect page that closes once it answers keeps the window open
 until the app's node holds the contacts space too (`spaces.reached`, keyed
 by the app's key from its request), or else the app would read no knocks
-until the two next met. The account home waits for the claim to finish,
-however long, so it is never cut off halfway; then up to 30 s for the app,
+until the two next met. The account home waits for what setup began in
+the background (`auth.settled()`: the claim, and the host's handover) to
+finish, however long, so neither is cut off halfway; then up to 30 s for the app,
 and only for an account that claimed a name there. If the claim failed, the
 app's contacts screen asks for a name again.
 

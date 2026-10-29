@@ -456,24 +456,16 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
 const HAND_OVER_MS = 30_000;
 
 /**
- * Until what this window wrote at sign-up reaches the app: the username
- * claimed then, and the inbox it leads to, which only this node holds yet.
- * Nothing waits for an account that claimed none here.
+ * Until what this window began at sign-up is done and has reached the app:
+ * the username's claim and the host's handover, then the inbox the name
+ * leads to, which only this node holds yet. Nothing waits for an account
+ * that claimed no name here.
  */
 async function handOver(auth: MincaAuth, node: P2PNode, app: string): Promise<unknown> {
+  // However long it takes: closed halfway, a name could lead to an inbox no record says it does.
+  // The claim's work and requests, and the handover's, end by themselves.
+  await auth.settled();
   if (!auth.getState().username) return;
-  // The claim first, however long it takes: closed halfway, the name could
-  // lead to an inbox no record says it does. Its work and its requests end
-  // by themselves.
-  await new Promise<void>((resolve) => {
-    const settled = () => auth.getState().username?.status !== 'claiming';
-    if (settled()) return resolve();
-    const stop = auth.subscribe(() => {
-      if (!settled()) return;
-      stop();
-      resolve();
-    });
-  });
   const contacts = await node.contacts.space();
   return contacts && node.spaces.reached(contacts, app, HAND_OVER_MS);
 }

@@ -160,7 +160,7 @@ export interface UsernameClaim {
  * `create` — name a new account.
  * `recovery` — signed in, and `freshCode` is the recovery code to keep safe.
  * `unlock` — signed in, choosing a passkey or a password for every day. Required.
- * `pod` — signed in, offered a pod to keep the new account in. Optional.
+ * `pod` — signed in, a new account with no host to keep it online is offered a pod. Optional.
  * `pair` — opened from a phone-pairing QR code.
  * `ready` — signed in; `session` is set.
  *
@@ -437,6 +437,8 @@ export interface MincaAuth {
   codeSaved(): void;
   /** Leaves the optional `pod` step with the data in this browser */
   finishSetup(): void;
+  /** Resolves once the work setup began in the background is done: the username's claim, the host's handover */
+  settled(): Promise<void>;
   /**
    * Meets the computer the pairing link names. Signed in to another account,
    * it stops once the account arrives and sets `pairingArrival`: answer with
@@ -636,6 +638,10 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     throw new Error('A node in a worker opens its own stores: pass worker or browser.stores, not both');
 
   const LAST_ACCOUNT = `${prefix}.last-account`;
+  /** The host a new account is kept online with, with nothing to choose: the first configured */
+  const host = config.network?.hosts?.[0] ?? null;
+  /** Work begun during setup that goes on in the background: the username's claim, the host's handover */
+  let background: Array<Promise<unknown>> = [];
 
   let state: AuthState = Object.freeze({
     stage: 'starting',
@@ -1030,10 +1036,16 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     const settle = (claim: UsernameClaim) => {
       if (state.session === session) update({ username: claim });
     };
-    session.node.inbox.claim(username).then(
-      () => settle({ username, status: 'claimed' }),
-      (error: unknown) =>
-        settle({ username, status: 'failed', error: error instanceof Error ? error.message : String(error) }),
+    background.push(
+      session.node.inbox.claim(username).then(
+        () => settle({ username, status: 'claimed' }),
+        (error: unknown) =>
+          settle({
+            username,
+            status: 'failed',
+            error: error instanceof Error ? error.message : String(error),
+          }),
+      ),
     );
   }
 
@@ -1058,9 +1070,20 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     }
   }
 
-  /** After a way in is set up: offer a pod to a new account that could use one, or go in. */
+  /**
+   * After a way in is set up: a new account is kept online with the host, if
+   * there is one, with nothing to choose (stopped on the account page); with
+   * none, it is offered a pod where it could use one. Then in.
+   */
   function afterUnlock(): void {
     setupOpen = false;
+    const session = state.session;
+    if (state.setup === 'new' && host && session) {
+      // Handed over in the background: the account goes in at once.
+      background.push(session.node.hosting.use(host).catch(() => null));
+      update({ stage: 'ready', setup: null });
+      return;
+    }
     const offerPod =
       config.offerPod !== false &&
       state.setup === 'new' &&
@@ -1504,6 +1527,10 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       if (!state.session || state.stage !== 'pod') return;
       setupOpen = false;
       update({ stage: 'ready', setup: null, error: null });
+    },
+
+    async settled() {
+      await Promise.allSettled(background);
     },
 
     async acceptPairing() {
@@ -2052,6 +2079,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
         moved: null,
         username: null,
       });
+      background = [];
       await stopNode(leaving).catch(() => {});
       const place = state.place;
       update({ stage: place ? afterStorage(await refresh(place)) : 'welcome', signingOut: false });

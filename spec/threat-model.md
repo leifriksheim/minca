@@ -1206,6 +1206,11 @@ _Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6, §9; 01 §15.2; 06 §3. Tests: 
     What it stops is being there for them: members meet only when two are
     online, wakes for the space stop, and after `keepDays` its copy goes.
 - **Does not hold yet.**
+  - An account home made with `network.hosts` keeps every new account online
+    with the first of them, with nothing to choose: that host carries all of
+    the account's spaces from sign-up, and sees what a host sees of each
+    (below) until the person stops it on the account page
+    (`packages/core/docs/sign-in.md`).
   - Live messages, such as typing, presence and call signalling, reach it in
     plaintext ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_.
   - A host asked for a bot receives a lasting role invite carrying the space

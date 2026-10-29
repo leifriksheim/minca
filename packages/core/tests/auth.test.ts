@@ -291,6 +291,23 @@ describe('createMincaAuth', () => {
     }
   });
 
+  test('with a host, a new account is kept online with nothing to choose: it goes in while the host is handed the spaces', async () => {
+    // Nothing answers at this address: the handover fails in the background, and nothing waits on it but `settled`.
+    Object.defineProperty(globalThis, 'showDirectoryPicker', { value: () => {}, configurable: true });
+    try {
+      const auth = started({ network: { hosts: ['http://127.0.0.1:9'] } });
+      await auth.start();
+      auth.startCreating();
+      await createAccount(auth, 'Ada');
+      // No pod offered either: kept online, a folder is for later, on the account page.
+      assert.equal(auth.getState().stage, 'ready');
+      assert.equal(auth.getState().setup, null);
+      await auth.settled();
+    } finally {
+      Reflect.deleteProperty(globalThis, 'showDirectoryPicker');
+    }
+  });
+
   test('reading the recovery code or offering the account to a phone takes proof it is you', async () => {
     const auth = started();
     await auth.start();
