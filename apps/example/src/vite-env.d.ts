@@ -13,6 +13,8 @@ interface ImportMetaEnv {
   readonly VITE_MINCA_CONNECT?: string;
   /** A Photon server for finding places (`@minca/app-shared/places`); photon.komoot.io when unset */
   readonly VITE_MINCA_PLACES?: string;
+  /** Where usernames are claimed, e.g. minca.social: names are `<name>@<this>` */
+  readonly VITE_NAMES_DOMAIN?: string;
 }
 
 interface ImportMeta {

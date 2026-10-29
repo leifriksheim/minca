@@ -63,6 +63,11 @@ export interface NodeConfig {
   readonly contactKey?: Uint8Array;
   /** The account's contacts space, for a node given it without the account key */
   readonly contactsSpace?: string;
+  /**
+   * The account's name as a grant gives it: what knocks and a new inbox say
+   * until the account's profile reaches this node from its registry
+   */
+  readonly accountName?: string;
   /** How the inbox and short links reach mailboxes. Default: `createMailboxClient` */
   readonly mailbox?: MailboxClient;
   /** Where the registry and each space's store live */

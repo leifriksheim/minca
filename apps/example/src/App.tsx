@@ -1,4 +1,7 @@
 import { Link, Outlet, useNavigate } from '@tanstack/react-router';
+import { useContacts } from './contacts';
+import { useHeldSpaces } from './usernames';
+import { SpaceInvites } from './components/PeopleParts';
 import type { NewSpace } from '@minca/core';
 import { inviteFromLink, useAccount, useConnection, useNode, useSpaces } from '@minca/react';
 import { CallsProvider } from '@minca/calls/react';
@@ -152,8 +155,17 @@ export function HomeLayout() {
 /** Your spaces, at `/` */
 export function SpacesPage() {
   const { spaces, loading, error, create, join, forget, openSpace } = useWorkspace();
+  const contacts = useContacts();
+  // Invites contacts leave wait in your spaces for two, so those keep syncing here.
+  useHeldSpaces(
+    (contacts ?? []).flatMap((contact) => (contact.space && !contact.blocked ? [contact.space] : [])),
+  );
+  const names = new Map((contacts ?? []).map((contact) => [contact.did, contact.name]));
   return (
     <>
+      <div style={{ marginBottom: 20 }}>
+        <SpaceInvites names={names} onJoined={openSpace} />
+      </div>
       <SpaceList
         spaces={spaces}
         loading={loading}

@@ -12,3 +12,6 @@ dist/
 packages/core/README.md
 
 .claude/worktrees
+
+# Names the dev name service keeps (scripts/dev.mjs)
+packages/names/.data

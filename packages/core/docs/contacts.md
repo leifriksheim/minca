@@ -88,13 +88,29 @@ theirs to leave, and opens as nothing.
   `blocked: true`.
 - `others(did)` lists accounts other than the two seen in the space for two
   (members, profiles, connected peers).
+- `invite(pairSpace, spaceId, { role? })` invites whoever you share a space
+  for two with into another space you hold: it makes an invite for `role` and
+  leaves it as a `std.space-invite` in the space for two. Only the two of you
+  read that space, so the invite needs no sealing. `pairSpace` can be a knock's
+  space nobody joined yet, so whoever accepts the knock finds the invite there.
+- `invites()` lists the invites contacts left for you, in your spaces for two
+  with them, to spaces you don't hold yet, newest first:
+  `{ from, space, name, invite, pairSpace, createdAt }`. Join one with
+  `spaces.join(invite)`; once held it is no longer listed. Invites from
+  someone blocked are not shown.
+
+## `std.space-invite`
+
+An invite to a space, left in a space for two: `{ space, name, invite }`,
+`onePer: ['space']`, so inviting again to the same space replaces it. Either
+of the two may delete it.
 
 `ask` and `accept` need a session note that grants `/account/write` for the
 whole account, as a knock does. An app granted `contacts` sees the list and
 requests, but may not ask or accept
 ([spec 06 §2.5](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
 
-_Source: `packages/core/src/schemas/contacts.ts` (`contact`), `packages/core/src/identity/contact-key.ts` (`deriveContactKeyBytes`), `packages/core/src/inbox/inbox.ts` (`sealKnock`, `openKnock`), `packages/core/src/node/node-contacts.ts` (`openMail`, `makePair`, `contacts`), `packages/core/src/schemas/contacts.ts` (`contactRequest`), `packages/core/src/node/types.ts` (`NodeContacts`), `packages/core/src/space/account-registry.ts` (`deriveContactsSpace`). Tests: `packages/core/tests/contacts.test.ts`, `packages/core/tests/attacks.test.ts` ("a knock re-posted by someone else…")._
+_Source: `packages/core/src/schemas/contacts.ts` (`contact`), `packages/core/src/identity/contact-key.ts` (`deriveContactKeyBytes`), `packages/core/src/inbox/inbox.ts` (`sealKnock`, `openKnock`), `packages/core/src/node/node-contacts.ts` (`openMail`, `makePair`, `contacts`), `packages/core/src/schemas/contacts.ts` (`contactRequest`), `packages/core/src/node/types.ts` (`NodeContacts`), `packages/core/src/space/account-registry.ts` (`deriveContactsSpace`). Tests: `packages/core/tests/contacts.test.ts`, `packages/core/tests/attacks.test.ts` ("a knock re-posted by someone else…"), `packages/core/tests/usernames.test.ts` ("node.contacts.invite")._
 
 ## Planned: requests that can be taken back
 

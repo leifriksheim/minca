@@ -86,7 +86,7 @@ export function createNodeContacts(ctx: NodeContext) {
       ...(isAvatarRef(avatar) ? { avatar } : {}),
     };
   }
-  const ownName = async () => (await ownProfile())?.name ?? null;
+  const ownName = async () => (await ownProfile())?.name ?? config.accountName ?? null;
 
   /**
    * Tells a space who this account is. Done when the space opens and when the
@@ -739,7 +739,7 @@ export function createNodeContacts(ctx: NodeContext) {
         current,
       );
       // A code that says something new: the name leads to it.
-      const said = (body: Inbox | undefined) => JSON.stringify([body?.places, body?.name ?? null]);
+      const said = (body: Inbox | null | undefined) => JSON.stringify([body?.places, body?.name ?? null]);
       return current && said(current.body) !== said({ gen: 0, places, ...(name ? { name } : {}) })
         ? pointName(written)
         : written;

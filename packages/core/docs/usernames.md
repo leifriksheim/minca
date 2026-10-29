@@ -23,6 +23,16 @@ It asks `https://minca.social/.well-known/minca.json?name=leif`, refuses a
 redirect, and checks the code it gets as any other. The code then works
 wherever one does: knock on it.
 
+## On the node
+
+`node.inbox.claim('leif@minca.social')` does all of the below for the
+account's inbox, and keeps the name in `std.inbox` so every device knows it:
+replacing the inbox, or changing its name or mailboxes, points the name at
+the new code, and reading knocks renews it a month before its year is up.
+`node.inbox.release()` gives it up. `node.inbox.knock('anna@minca.social')`
+knocks by username, and the contact it becomes keeps the username
+(`ContactView.username`). See [node.md](node.md#the-inbox).
+
 ## Claiming a name
 
 ```ts
