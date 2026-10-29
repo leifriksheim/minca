@@ -836,6 +836,22 @@
   margin: 0 0 20px;
   color: var(--body);
 }
+/* One quiet question under the hosting tabs */
+.site .hosting-how {
+  margin-top: 56px;
+}
+.site .hosting-how summary {
+  padding: 16px 0;
+  font-size: 16px;
+}
+.site .hosting-how details p {
+  max-width: 640px;
+  font-size: 15px;
+  color: var(--muted);
+}
+.site .hosting-how details p + p {
+  margin-top: -8px;
+}
 .site .browser {
   position: relative;
   padding-bottom: 96px;
@@ -1532,77 +1548,6 @@
   font-weight: 600;
   color: var(--ink);
 }
-.site .keychain {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-}
-.site .key {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  border: var(--hair);
-  border-radius: var(--r-md);
-  background: var(--card);
-}
-.site .key span,
-.site .key code {
-  font-size: 12px;
-  color: var(--faint);
-}
-.site .key.record {
-  border-color: var(--rule);
-}
-.site .key-step {
-  position: relative;
-  padding: 7px 0 7px calc(50% + 10px);
-  font-size: 11px;
-  color: var(--faint);
-}
-.site .key-step::before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 0;
-  bottom: 0;
-  border-left: 1px dashed var(--line-strong);
-}
-.site .space-card {
-  overflow: hidden;
-  border: var(--edge);
-  border-radius: var(--r-lg);
-  background: var(--card);
-}
-.site .space-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 14px;
-  border-bottom: var(--hair);
-  font-size: 15px;
-}
-.site .space-row {
-  display: grid;
-  grid-template-columns: 84px 1fr;
-  gap: 10px;
-  align-items: start;
-  padding: 10px 14px;
-}
-.site .space-row + .space-row {
-  border-top: var(--hair);
-}
-.site .space-row > span {
-  padding-top: 3px;
-  font-size: 12px;
-  color: var(--faint);
-}
-.site .space-row > div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
 .site .chip {
   padding: 2px 8px;
   border: var(--hair);
@@ -1611,111 +1556,85 @@
   font-size: 11px;
   color: var(--body);
 }
-.site .sealed-count {
-  padding-top: 2px;
-  font-size: 12px;
-  color: var(--muted);
+/* The protocol page's contents, set like a paper's: numbered parts, a dotted
+   leader, and the standards each part stands on */
+.site .toc {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 2px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
 }
-.site .checks {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.site .toc li + li {
+  border-top: var(--hair);
 }
-.site .refused,
-.site .relay {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 10px 14px;
-  border: 1px dashed var(--line-strong);
-  border-radius: var(--r-md);
-  background: var(--card);
-}
-.site .refused span,
-.site .relay span {
-  font-size: 12px;
-  color: var(--muted);
-}
-.site .refused span::before {
-  content: '✕ ';
-  color: var(--ink);
-}
-.site .mesh {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 18px;
-}
-.site .peers {
-  display: flex;
-  align-items: center;
-  width: 100%;
-}
-.site .peer {
-  flex: 0 0 auto;
-  padding: 8px 12px;
-  border: var(--edge);
-  border-radius: 999px;
-  background: var(--card);
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-  color: var(--ink);
-}
-.site .peers .link {
-  flex: 1;
-  min-width: 12px;
-  border-top: 1.5px solid var(--ink);
-}
-.site .relay {
-  position: relative;
-  align-items: center;
-  text-align: center;
-}
-.site .relay::before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  bottom: 100%;
-  height: 18px;
-  border-left: 1px dashed var(--line-strong);
-}
-
-/* Protocol page: each piece in words beside its drawing */
-.site .moments {
-  display: flex;
-  flex-direction: column;
-  gap: 56px;
-}
-.site .moment {
+.site .toc a {
   display: grid;
-  grid-template-columns: minmax(0, 4fr) minmax(0, 6fr);
-  gap: 56px;
-  align-items: center;
+  grid-template-columns: 56px minmax(0, auto) minmax(24px, 1fr) minmax(0, auto);
+  align-items: baseline;
+  gap: 16px;
+  padding: 18px 4px;
+  color: inherit;
+  text-decoration: none;
 }
-.site .moment .step-label {
-  margin-bottom: 8px;
+.site .toc-num {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--faint);
+}
+.site .toc-name b {
+  font-family: var(--display);
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+}
+.site .toc-name small {
+  display: block;
+  margin-top: 2px;
+  font-size: 14px;
+  font-style: italic;
+  color: var(--muted);
+}
+.site .toc-leader {
+  align-self: center;
+  border-bottom: 1px dotted var(--line-strong);
+}
+.site .toc-std {
   font-family: var(--mono);
   font-size: 12px;
+  text-align: right;
   color: var(--muted);
 }
-.site .moment h3 {
+@media (hover: hover) {
+  .site .toc a:hover .toc-name b {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    text-decoration-thickness: 1px;
+  }
+}
+.site .toc-head {
+  display: flex;
+  justify-content: space-between;
   margin-bottom: 10px;
-  font-family: var(--display);
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.035em;
-  color: var(--ink);
-}
-.site .moment p {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--muted);
 }
-.site .moment .mock {
-  background-color: var(--paper);
-  background-image:
-    linear-gradient(var(--line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--line) 1px, transparent 1px);
-  background-size: 24px 24px;
+@media (max-width: 640px) {
+  .site .toc a {
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 4px 12px;
+  }
+  .site .toc-leader {
+    display: none;
+  }
+  .site .toc-std {
+    grid-column: 2;
+    text-align: left;
+  }
 }
 
 /* ─── Proposals, tags and little buttons, as the app draws them ───── */
@@ -1985,36 +1904,6 @@
   background: var(--accent);
   color: #fff;
 }
-.site .app-rota {
-  display: grid;
-  grid-template-columns: 36px 1fr;
-  gap: 6px;
-  align-items: center;
-  padding-top: 8px;
-  border-top: var(--hair);
-}
-.site .app-rota-label {
-  font-size: 11.5px;
-  color: var(--faint);
-}
-.site .app-shift {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 5px;
-  border: var(--hair);
-  border-radius: 999px;
-  color: var(--body);
-  animation: pop 0.35s ease;
-}
-.site .app-shift.open {
-  justify-content: center;
-  border: 1px dashed var(--line-strong);
-  font-weight: 500;
-  color: var(--ink);
-}
-
 @keyframes rise {
   from {
     opacity: 0;
@@ -2066,41 +1955,337 @@
 .site .canvas-wrap {
   margin-top: 40px;
 }
-.site .canvas {
-  position: relative;
-  height: 300px;
+/* Minca's window on a laptop: the rail of spaces, the space's sidebar, and the app being made */
+.site .window {
+  container-type: inline-size;
+  max-width: 1040px;
+  margin: 0 auto;
+  border: var(--edge);
+  border-radius: var(--r-xl);
+  background: var(--card);
+  box-shadow: 0 40px 80px -48px color-mix(in srgb, var(--ink) 45%, transparent);
   text-align: left;
 }
-.site .canvas-stack {
-  position: absolute;
-  top: 32px;
-  left: 50%;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  width: min(440px, calc(100% - 32px));
-  transform: translateX(-50%);
-}
-.site .ask {
+.site .window-bar {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
-  height: 52px;
-  padding: 0 6px 0 20px;
-  border: var(--edge);
-  border-radius: 999px;
-  background: var(--card);
+  height: 40px;
+  padding: 0 16px;
+  border-bottom: var(--hair);
 }
-.site .ask-text {
-  flex: 1;
-  overflow: hidden;
+.site .window-dots {
+  display: flex;
+  gap: 7px;
+}
+.site .window-dots i {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+.site .window-title {
+  position: absolute;
+  left: 50%;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--faint);
+  transform: translateX(-50%);
+}
+.site .canvas {
+  position: relative;
+  display: grid;
+  grid-template-columns: 64px 220px minmax(0, 1fr);
+  height: 440px;
+}
+.site .w-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 0;
+  border-right: var(--hair);
+  border-bottom-left-radius: calc(var(--r-xl) - 1px);
+  background: var(--sunken);
+}
+.site .w-rail-rule {
+  width: 24px;
+  height: 1px;
+  background: var(--line-strong);
+}
+.site .w-badge {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+}
+.site .w-badge .shape {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.site .w-badge b {
+  position: relative;
+  font-family: var(--display);
   font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+/* The pill on the rail's edge says which space you are in, as in the app */
+.site .w-badge.is-on::before {
+  content: '';
+  position: absolute;
+  left: -14px;
+  width: 4px;
+  height: 22px;
+  border-radius: 0 4px 4px 0;
+  background: var(--ink);
+}
+.site .w-rail-add {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 999px;
+  color: var(--faint);
+}
+.site .w-side {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 14px 10px;
+  overflow: hidden;
+  border-right: var(--hair);
+}
+.site .w-space {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 6px 10px;
+}
+.site .w-space > span {
+  min-width: 0;
+}
+.site .w-space .w-badge {
+  width: 32px;
+  height: 32px;
+}
+.site .w-space b {
+  display: block;
+  overflow: hidden;
+  font-family: var(--display);
+  font-size: 15px;
+  letter-spacing: -0.03em;
   white-space: nowrap;
   text-overflow: ellipsis;
   color: var(--ink);
 }
-.site .ask-hint {
+.site .w-space small {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.site .w-heading {
+  padding: 12px 8px 4px;
+  font-size: 12px;
+  font-weight: 500;
   color: var(--faint);
+}
+.site .w-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: var(--r-md);
+  font-size: 14px;
+  color: var(--body);
+}
+.site .w-item.is-quiet {
+  color: var(--muted);
+}
+.site .w-item.is-on {
+  background: var(--sunken);
+  font-weight: 500;
+  color: var(--ink);
+}
+.site .w-item.is-fresh {
+  animation: rise 0.4s ease;
+}
+.site .w-item-dot {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+}
+.site .w-item-dot::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+.site .w-item-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.site .w-count,
+.site .w-new {
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+}
+.site .w-count {
+  background: var(--sunken);
+  color: var(--muted);
+}
+.site .w-new {
+  background: var(--accent);
+  color: #fff;
+  animation: pop 0.35s ease;
+}
+.site .w-online {
+  width: 8px;
+  height: 8px;
+  margin-right: 4px;
+  border-radius: 999px;
+  background: var(--good);
+  box-shadow: 0 0 0 3px var(--good-soft);
+}
+.site .w-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-bottom-right-radius: calc(var(--r-xl) - 1px);
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+.site .w-main-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 20px;
+  border-bottom: var(--hair);
+  background: var(--card);
+  font-size: 14.5px;
+  color: var(--ink);
+}
+.site .w-main-bar b {
+  font-weight: 600;
+}
+.site .canvas-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: min(440px, calc(100% - 32px));
+  margin: 32px auto 0;
+}
+/* A narrow window drops the rail and the sidebar, the way the app does on a phone */
+@container (max-width: 760px) {
+  .site .canvas {
+    grid-template-columns: minmax(0, 1fr);
+    height: 400px;
+  }
+  .site .w-rail,
+  .site .w-side {
+    display: none;
+  }
+  .site .w-main {
+    border-bottom-left-radius: calc(var(--r-xl) - 1px);
+  }
+  .site .canvas-stack {
+    margin-top: 20px;
+  }
+}
+/* The prompt box: the agent's, above the window, so asking happens outside
+   the app and what it makes appears inside */
+.site .prompt {
+  position: relative;
+  z-index: 1;
+  width: min(640px, calc(100% - 32px));
+  margin: 0 auto 28px;
+  padding: 18px 14px 12px 20px;
+  border: var(--edge);
+  border-radius: var(--r-xl);
+  background: var(--card);
+  box-shadow: var(--minca-shadow);
+  text-align: left;
+}
+.site .prompt-text {
+  min-height: 52px;
+  font-size: 17px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+.site .prompt-hint {
+  color: var(--faint);
+}
+.site .prompt-building {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  color: var(--muted);
+}
+.site .prompt-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.site .prompt-add {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: var(--hair);
+  border-radius: 999px;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--muted);
+}
+.site .prompt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px 0 10px;
+  border: var(--hair);
+  border-radius: 999px;
+  background: var(--sunken);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--body);
+}
+.site .prompt-send {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  margin-left: auto;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  transition: background-color 0.2s ease;
+}
+.site .prompt-send.pressed {
+  background: var(--ink);
 }
 .site .caret {
   display: inline-block;
@@ -2115,21 +2300,6 @@
   50% {
     opacity: 0;
   }
-}
-.site .ask-send {
-  display: inline-flex;
-  align-items: center;
-  height: 40px;
-  padding: 0 18px;
-  border-radius: 999px;
-  background: var(--accent);
-  font-size: 14px;
-  font-weight: 500;
-  color: #fff;
-  transition: background-color 0.2s ease;
-}
-.site .ask-send.pressed {
-  background: var(--ink);
 }
 .site .canvas-app {
   padding: 16px 18px 8px;
@@ -2317,6 +2487,205 @@
   letter-spacing: 0;
   color: var(--faint);
 }
+/* How a change gets made, step by step (story.tsx): the steps are the ask
+   list's buttons, with a number, and only the chosen one says more */
+.site .story-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.site .story .mend-ask {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+.site .mend-ask .story-num {
+  display: block;
+  min-width: 20px;
+  margin-top: 4px;
+  font-family: var(--minca-font);
+  font-size: 13px;
+  font-style: italic;
+  font-weight: 400;
+  color: var(--ink);
+}
+.site .story .mend-ask:not([aria-pressed='true']) small {
+  display: none;
+}
+.site .story .mend-ask small {
+  line-height: 1.45;
+  color: var(--muted);
+}
+/* How long the playing step has left, filling along its foot */
+.site .story-progress {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: var(--accent);
+  transform-origin: left;
+  animation: story-fill linear both;
+}
+@keyframes story-fill {
+  from {
+    transform: scaleX(0);
+  }
+}
+.site .story-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 340px;
+}
+/* Cards inside the frame take the hairline; the prompt sits in it, not over it */
+.site .story-body .proposal {
+  border: var(--hair);
+}
+.site .prompt.is-inline {
+  width: 100%;
+  margin: 0;
+  border: var(--hair);
+  box-shadow: none;
+}
+.site .story-reply {
+  margin-top: 18px;
+  padding-left: 4px;
+  /* The agent answers once the ask is typed out */
+  animation: story-in 0.3s ease 2.4s both;
+}
+/* The steps keep their place while the chosen one opens */
+.site .story {
+  align-items: start;
+}
+.site .story-facts {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0 0;
+  padding-top: 14px;
+  border-top: var(--hair);
+}
+.site .story-facts > div {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: center;
+}
+.site .story-facts dt {
+  font-size: 12.5px;
+  color: var(--faint);
+}
+.site .story-facts dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+}
+.site .story-facts .chip {
+  font-size: 12px;
+}
+.site .chip.is-new {
+  border: 1px dashed var(--rule);
+  background: var(--card);
+  color: var(--ink);
+}
+.site .chip.is-no {
+  background: none;
+  color: var(--faint);
+}
+/* Joe, who the group picked to look after things, comes in and adds it */
+.site .story-approver {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  animation: story-in 0.3s ease 0.4s both;
+}
+.site .story-approver b {
+  display: block;
+  font-size: 14px;
+  color: var(--ink);
+}
+.site .story-approver small {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+/* The tool is shared, and other groups take it one after another */
+.site .story-share {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 440px;
+  text-align: left;
+}
+.site .story-link,
+.site .story-spread li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.site .story-link {
+  padding: 14px 16px;
+  border: var(--hair);
+  border-radius: var(--r-lg);
+  background: var(--card);
+}
+.site .story-link > span:nth-child(2),
+.site .story-spread li > span:last-child {
+  flex: 1;
+  min-width: 0;
+}
+.site .story-link b,
+.site .story-spread b {
+  display: block;
+  font-size: 14px;
+  color: var(--ink);
+}
+.site .story-link small,
+.site .story-spread small {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.site .story-spread {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0 0 0 16px;
+  list-style: none;
+  border-left: 2px dashed var(--line-strong);
+}
+.site .story-spread li {
+  animation: story-in 0.35s ease both;
+}
+.site .story-spread .w-badge {
+  width: 30px;
+  height: 30px;
+}
+.site .story-spread .w-badge b {
+  font-size: 13px;
+}
+.site .story-count {
+  font-size: 13px;
+  color: var(--muted);
+  animation: story-in 0.35s ease 2.8s both;
+}
+.site .story-press {
+  animation: story-press 0.3s ease 1.6s both;
+}
+@keyframes story-press {
+  50% {
+    transform: scale(0.94);
+  }
+}
+.site .story-passed {
+  animation: story-in 0.3s ease 1.9s both;
+}
+@keyframes story-in {
+  from {
+    opacity: 0;
+  }
+}
 .site .mend-view {
   overflow: hidden;
   border: var(--edge);
@@ -2371,7 +2740,7 @@
   color: var(--good);
 }
 
-/* ─── Front page: the vote, the remixes ───────────────────────────── */
+/* ─── Front page: the splits ───────────────────────────── */
 
 .site .split-title {
   margin-bottom: 16px;
@@ -2395,456 +2764,145 @@
   max-width: 420px;
 }
 
-.site .remix {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  padding: 44px 24px 24px;
-}
-.site .remix-group {
-  font-family: var(--display);
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.035em;
-  color: var(--ink);
-}
-.site .ruled .remix p {
-  margin-top: 2px;
-}
-.site .remix-app {
-  flex: 1;
-  margin-top: 24px;
-  padding: 16px 16px 8px;
-  border: var(--edge);
-  border-radius: var(--r-lg);
-  background: var(--card);
-}
+/* ─── Front page: companies start over, groups build on (compounds.tsx) ─
 
-/* ─── Front page: the receipt, the same app, the compounding ──────── */
-
-.site .split .frame .receipt {
-  width: 100%;
-  max-width: 400px;
+.site .frame .proposal {
+  border: var(--hair);
 }
-.site .receipt {
-  padding: 22px 24px 18px;
-  border: var(--edge);
-  border-radius: var(--r-lg);
-  background: var(--card);
-  font-family: var(--mono);
-  font-size: 13.5px;
-  color: var(--body);
-}
-.site .receipt-head,
-.site .receipt-line,
-.site .receipt-total {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-}
-.site .receipt-head {
-  padding-bottom: 12px;
-  font-size: 12px;
-  color: var(--faint);
-}
-.site .receipt-head b {
-  font-family: var(--display);
-  font-size: 18px;
-  letter-spacing: -0.02em;
-  color: var(--ink);
-}
-.site .receipt-line {
-  padding: 9px 0;
-  border-top: 1px dashed var(--line-strong);
-}
-.site .receipt-what {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-.site .receipt-what small {
-  display: block;
-  font-size: 11.5px;
-  color: var(--faint);
-}
-.site .receipt-line {
-  align-items: center;
-}
-.site .receipt-line > span:last-child {
-  flex: none;
-  color: var(--coral);
-}
-.site .receipt-total {
-  margin-top: 6px;
-  padding-top: 12px;
-  border-top: var(--edge);
-  color: var(--ink);
-}
-.site .receipt-total b {
-  color: var(--coral);
-}
-
-/* The platforms' badges: their colour, their initial */
-.site .brand-uber {
-  --c: #000;
-  --on: #fff;
-}
-.site .brand-lyft {
-  --c: #ff00bf;
-  --on: #fff;
-}
-.site .brand-vinted {
-  --c: #09b1ba;
-  --on: #fff;
-}
-.site .brand-ticketmaster {
-  --c: #026cdf;
-  --on: #fff;
-}
-.site .brand-meta {
-  --c: #0866ff;
-  --on: #fff;
-}
-.site .brand-airbnb {
-  --c: #ff385c;
-  --on: #fff;
-}
-.site .brand-slack {
-  --c: #4a154b;
-  --on: #fff;
-}
-.site .brand-badge {
-  display: inline-grid;
-  flex: none;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  background: var(--c);
-  color: var(--on);
-  font-family: var(--minca-font);
-  font-size: 14px;
-  font-weight: 700;
-}
-
-/* Three apps of a kind, merged into one, then taken apart feature by feature */
-.site .brand-booking {
-  --c: #003a9a;
-  --on: #fff;
-}
-.site .brand-expedia {
-  --c: #191e3b;
-  --on: #fff;
-}
-.site .brand-grab {
-  --c: #00b14f;
-  --on: #fff;
-}
-.site .brand-discord {
-  --c: #5865f2;
-  --on: #fff;
-}
-.site .brand-googlechat {
-  --c: #34a853;
-  --on: #fff;
-}
-.site .brand-instagram {
-  --c: #ff0069;
-  --on: #fff;
-}
-.site .brand-tiktok,
-.site .brand-x {
-  --c: #000;
-  --on: #fff;
-}
-.site .brand-badge svg {
-  width: 62%;
-  height: 62%;
-  fill: currentColor;
-}
-/* The kinds as the site's tabs, centred along the frame's top */
-.site .same-app .tabs {
-  justify-content: safe center;
-  padding: 12px 16px;
-}
-.site .same-app .tab-panel {
-  padding-top: 0;
-}
-.site .same-stage {
-  --gap: 24px;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 220px));
-  justify-content: center;
-  gap: var(--gap);
-  padding: 40px 24px;
-}
-.site .app-phone {
-  grid-row: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px 12px 12px;
-  border: var(--edge);
-  border-radius: 28px;
-  background: var(--card);
-  animation: phone-in 0.5s cubic-bezier(0.3, 1.4, 0.5, 1) backwards;
-  transition:
-    transform 0.75s cubic-bezier(0.65, 0, 0.35, 1),
-    opacity 0.3s ease 0.6s;
-}
-@keyframes phone-in {
-  from {
-    opacity: 0;
-    transform: translateY(16px) scale(0.96);
-  }
-}
-/* Each phone keeps its column; the feature lists lie over the outer two */
-.site .app-phone:nth-child(2) {
-  grid-column: 1;
-}
-.site .app-phone:nth-child(3) {
-  grid-column: 2;
-}
-.site .app-phone:nth-child(4) {
-  grid-column: 3;
-}
-/* Merging: the outer phones slide onto the middle one, land a little askew like a stack, and are gone */
-.site .same-stage[data-sliding] .app-phone:nth-child(2) {
-  z-index: 1;
-  transform: translateX(calc(100% + var(--gap))) rotate(-4deg);
-  opacity: 0;
-}
-.site .same-stage[data-sliding] .app-phone:nth-child(4) {
-  z-index: 1;
-  transform: translateX(calc(-100% - var(--gap))) rotate(4deg);
-  opacity: 0;
-}
-.site .app-phone.is-merged {
-  --c: var(--ink);
-  --on: var(--paper);
-}
-.site .app-phone-name {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  font-family: var(--display);
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  color: var(--ink);
-}
-.site .app-phone-name > span:last-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.site .app-phone-name .brand-badge {
-  width: 22px;
-  height: 22px;
-  font-size: 13px;
-  border-radius: 7px;
-}
-.site .app-phone-logos {
-  display: flex;
-  flex: none;
-}
-.site .app-phone-logos .brand-badge {
-  box-shadow: 0 0 0 2px var(--card);
-}
-.site .app-phone-logos .brand-badge + .brand-badge {
-  margin-left: -7px;
-}
-.site .app-screen {
-  display: block;
-  width: 100%;
-  overflow: visible;
-  border-radius: var(--r-md);
-  background: var(--sunken);
-}
-.site .app-screen .screen-block,
-.site .app-screen .screen-line {
-  fill: var(--paper);
-  stroke: var(--line);
-}
-.site .app-screen .screen-accent {
-  fill: var(--c);
-  transition: fill 0.5s ease;
-}
-.site .app-screen .screen-route {
-  fill: none;
-  stroke: var(--c);
-  stroke-width: 3;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.site .app-screen .screen-you {
-  fill: var(--ink);
-}
-.site .app-screen .screen-text {
-  font-size: 7px;
-  font-weight: 600;
-  fill: var(--muted);
-}
-.site .app-screen .screen-text.is-on {
-  fill: var(--on);
-}
-/* The feature being named, ringed on the screen in its colour */
-.site .app-screen .screen-ring {
-  fill: color-mix(in srgb, var(--c) 22%, transparent);
-  stroke: var(--c);
-  stroke-width: 2;
-  animation: ring-in 0.35s ease both;
-}
-@keyframes ring-in {
-  from {
-    opacity: 0;
-    transform: scale(0.9);
-  }
-}
-.site .app-screen .screen-ring {
-  transform-box: fill-box;
-  transform-origin: center;
-}
-.site .app-phone-button {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 8px 6px;
-  border-radius: 999px;
-  background: var(--c);
-  font-size: 13.5px;
-  font-weight: 600;
-  line-height: 1.2;
-  color: var(--on);
-  transition:
-    background 0.5s ease,
-    box-shadow 0.3s ease;
-}
-.site .app-phone-button.is-lit {
-  box-shadow:
-    0 0 0 3px var(--card),
-    0 0 0 5px var(--c);
-}
-.site .app-phone-button small {
-  font-size: 11px;
-  font-weight: 500;
-  opacity: 0.85;
-}
-/* The features, named either side of the merged phone as each is ringed */
-.site .feature-list {
-  grid-row: 1;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 12px;
-  pointer-events: none;
-}
-.site .feature-list.is-left {
-  grid-column: 1;
-  align-items: flex-end;
-}
-.site .feature-list.is-right {
-  grid-column: 3;
-  align-items: flex-start;
-}
-.site .feature-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 14px 7px 10px;
-  border: 1px solid var(--rule);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--c) 28%, var(--card));
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--ink);
-  opacity: 0;
-  transform: translateY(6px) scale(0.9);
-  transition:
-    opacity 0.3s ease,
-    transform 0.4s cubic-bezier(0.3, 1.6, 0.5, 1);
-}
-.site .feature-chip[data-on] {
-  opacity: 1;
-  transform: none;
-}
-.site .feature-chip[data-now] {
-  transform: scale(1.08);
-}
-.site .feature-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--c);
-}
-@media (prefers-reduced-motion: reduce) {
-  .site .app-phone,
-  .site .app-screen .screen-ring {
-    animation: none;
-  }
-  .site .app-phone,
-  .site .feature-chip {
-    transition: none;
-  }
-}
-
-/* Two rows of five: copies that stay level, and versions that stack up */
-.site .compounds {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
+/* Two rows over the same five steps: copies that stay level, and a tool that grows */
 .site .compound {
-  padding: 28px 24px 20px;
-  background: var(--paper);
+  display: grid;
+  padding: 0;
 }
-.site .compound h3 {
-  margin-bottom: 20px;
+.site .compound-row {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr) 150px;
+  align-items: end;
+  gap: 32px;
+  padding: 28px 32px;
+}
+.site .compound-row + .compound-row {
+  border-top: var(--hair);
+}
+.site .compound-label b {
+  display: block;
   font-family: var(--display);
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 700;
   letter-spacing: -0.03em;
   color: var(--ink);
+}
+.site .compound-label small {
+  display: block;
+  margin-top: 4px;
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--muted);
 }
 .site .compound-cols {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 8px;
   align-items: end;
-  min-height: 200px;
+  gap: 10px;
 }
 .site .compound-col {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
   min-width: 0;
 }
 .site .compound-col small {
   margin-top: 6px;
-  font-size: 11.5px;
-  line-height: 1.25;
+  font-size: 12px;
   text-align: center;
   color: var(--faint);
+  transition: color 0.4s ease;
+}
+.site .compound-col[data-on] small {
+  color: var(--muted);
 }
 .site .compound-block {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   overflow: hidden;
-  padding: 6px 4px;
+  height: 30px;
+  padding: 0 6px;
+  border: var(--hair);
   border-radius: var(--r-sm);
-  background: color-mix(in srgb, var(--c) 30%, var(--paper));
-  font-size: 11px;
+  background: color-mix(in srgb, var(--c) calc(var(--tint-tile) * 0.5), var(--card));
+  font-size: 12px;
   font-weight: 500;
-  line-height: 1.2;
-  text-align: center;
-  text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--ink);
+  color: var(--body);
+  transition:
+    opacity 0.35s ease,
+    transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+.site .compound-block .shape {
+  flex: none;
+}
+/* The piece a group adds lands last, on its full colour */
+.site .compound-block.is-new {
+  background: color-mix(in srgb, var(--c) var(--tint-tile), var(--paper));
+  color: var(--ink);
+  transition-delay: 0.25s;
+}
+.site .compound-col:not([data-on]) .compound-block {
+  opacity: 0;
+  transform: translateY(-14px);
+  transition-delay: 0s;
+}
+/* A company's copy: built from scratch every time, the same each time */
 .site .compound-block.is-same {
+  position: relative;
   border: 1px dashed var(--line-strong);
   background: var(--card);
+  color: var(--muted);
+}
+.site .compound-block.is-same::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  transform-origin: left;
+  transform: scaleX(0);
+}
+.site .compound-col[data-on] .compound-block.is-same::before {
+  animation: compound-build 0.9s ease-out both;
+}
+@keyframes compound-build {
+  0% {
+    transform: scaleX(0);
+    opacity: 1;
+  }
+  80% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 0;
+  }
+}
+.site .compound-sum b {
+  display: block;
+  font-family: var(--display);
+  font-size: 44px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  color: var(--faint);
+}
+.site .compound-sum.is-ours b {
+  color: var(--ink);
+}
+.site .compound-sum small {
+  display: block;
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.35;
   color: var(--muted);
 }
 
@@ -2914,6 +2972,719 @@
 .site .asks-tool .shape {
   width: 20px;
   height: 20px;
+}
+
+/* ─── Front page: apps made of shared pieces (pieces.tsx) ────────── */
+
+/* The apps a space starts with, a cell each in one ruled grid */
+.site .basics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: var(--edge);
+  border-radius: var(--r-xl);
+}
+.site .basic {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  box-shadow: 0 0 0 1px var(--rule);
+  background: var(--paper);
+}
+/* The lit app and its pieces take their colour's tile ground, on a layer
+   under the content that fades in and out, so the colour never flickers */
+.site .basic,
+.site .piece {
+  position: relative;
+  isolation: isolate;
+  transition: color 0.4s ease;
+}
+.site .basic::before,
+.site .piece::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--c) var(--tint-tile), var(--paper));
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.site .basic[data-lit]::before,
+.site .piece[data-on]::before {
+  opacity: 1;
+}
+.site .basic.is-big {
+  grid-column: span 2;
+  grid-row: span 2;
+}
+.site .basic.is-wide {
+  grid-column: span 2;
+}
+.site .basic-shot {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  min-height: 210px;
+  padding: 20px 20px 4px;
+}
+.site .basic-shot > * {
+  width: 100%;
+}
+.site .basic-shot > .app,
+.site .mini-poll {
+  padding: 14px 16px 6px;
+  /* A card inside a cell: the hairline, so the navy rule is only the grid's */
+  border: var(--hair);
+  border-radius: var(--r-lg);
+  background: var(--card);
+}
+.site .basic-name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px 18px;
+}
+.site .basic-name b {
+  display: block;
+  font-family: var(--display);
+  font-size: 17px;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+}
+.site .basic-name small {
+  display: block;
+  margin-top: 2px;
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+/* Under the apps, quietly: the pieces they share, and new apps made of them */
+.site .pieces-key {
+  display: grid;
+  gap: 14px;
+  margin: 28px 0 0;
+}
+.site .pieces-key > div {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 8px 20px;
+}
+.site .pieces-key dt {
+  font-size: 14px;
+  color: var(--muted);
+}
+.site .pieces-key dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+}
+.site .piece {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px 5px 9px;
+  border: var(--hair);
+  border-radius: 999px;
+  background-color: var(--paper);
+  font-size: 14px;
+  color: var(--muted);
+}
+.site .piece[data-on] {
+  color: var(--ink);
+}
+.site .piece.is-own,
+.site .piece.is-ask {
+  padding-left: 12px;
+  border-style: dashed;
+}
+.site .piece.is-app {
+  cursor: default;
+}
+
+/* The chat: rooms down the side, a few messages, an event shared into it */
+.site .mini-chat {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  grid-template-rows: 1fr auto;
+  align-self: stretch;
+  overflow: hidden;
+  border: var(--hair);
+  border-radius: var(--r-lg);
+  background: var(--card);
+  font-size: 13.5px;
+  text-align: left;
+}
+.site .mini-rooms {
+  display: flex;
+  grid-row: span 2;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 8px;
+  border-right: var(--hair);
+  background: var(--sunken);
+  font-size: 13px;
+  color: var(--muted);
+}
+.site .mini-rooms span {
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  white-space: nowrap;
+}
+.site .mini-rooms .is-on {
+  background: var(--card);
+  font-weight: 500;
+  color: var(--ink);
+}
+.site .mini-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px 6px;
+}
+.site .msg {
+  display: flex;
+  gap: 10px;
+}
+.site .msg .app-face {
+  width: 30px;
+  height: 30px;
+}
+.site .msg-who {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.site .msg-who b {
+  font-weight: 600;
+  color: var(--ink);
+}
+.site .msg-who small {
+  font-size: 11.5px;
+  color: var(--faint);
+}
+.site .msg p {
+  line-height: 1.45;
+  color: var(--body);
+}
+.site .msg-card {
+  max-width: 300px;
+  margin-top: 8px;
+  padding: 10px 12px 0;
+  border: var(--hair);
+  border-radius: var(--r-md);
+  background: var(--paper);
+}
+.site .msg-card .app-event {
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.site .msg-card .app-event b {
+  color: var(--ink);
+}
+.site .msg-reacts {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.site .msg-reacts span {
+  padding: 1px 8px;
+  border: var(--hair);
+  border-radius: 999px;
+  background: var(--paper);
+  font-size: 12px;
+}
+.site .mini-compose {
+  margin: 6px 16px 14px;
+  padding: 8px 14px;
+  border: var(--hair);
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--faint);
+}
+
+.site .mini-poll {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 14px;
+  font-size: 13.5px;
+  text-align: left;
+}
+.site .mini-poll > b {
+  margin-bottom: 2px;
+  font-size: 14.5px;
+  color: var(--ink);
+}
+.site .mini-poll .tally-row {
+  height: 32px;
+}
+.site .mini-poll small {
+  font-size: 12px;
+  color: var(--faint);
+}
+
+/* The board: a small app of its own, columns of cards with a tag and whoever took them */
+.site .mini-board {
+  padding: 14px;
+  border: var(--hair);
+  border-radius: var(--r-lg);
+  background: var(--card);
+  text-align: left;
+}
+.site .mini-board-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 2px 12px;
+}
+.site .mini-board-head b {
+  font-size: 15px;
+  color: var(--ink);
+}
+.site .mini-board-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.site .mini-board-column {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px;
+  border-radius: var(--r-md);
+  background: var(--sunken);
+}
+.site .mini-board-column small {
+  display: flex;
+  gap: 6px;
+  padding: 0 2px 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.site .mini-board-column small span {
+  font-weight: 500;
+  color: var(--faint);
+}
+.site .mini-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px;
+  border: var(--hair);
+  border-radius: var(--r-sm);
+  background: var(--card);
+}
+.site .mini-card p {
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--ink);
+}
+.site .mini-card.is-done p {
+  text-decoration: line-through;
+  color: var(--faint);
+}
+.site .mini-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.site .mini-card-foot .app-face {
+  width: 20px;
+  height: 20px;
+}
+.site .mini-tag {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--lilac) var(--tint-tile), var(--paper));
+  font-size: 11px;
+  color: var(--body);
+}
+
+/* ─── Front page: a message locked on the way, and hosting (trust.tsx) ─ */
+
+.site .sealed {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: end;
+  padding: 44px 32px;
+}
+.site .sealed small {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12.5px;
+  text-align: center;
+  color: var(--faint);
+}
+.site .sealed-bubble {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 12px 14px;
+  border: var(--hair);
+  border-radius: var(--r-lg);
+  background: var(--card);
+}
+.site .sealed-bubble.is-theirs {
+  background: var(--accent-soft);
+}
+.site .sealed-bubble p {
+  font-size: 14.5px;
+  line-height: 1.4;
+  color: var(--ink);
+}
+.site .sealed-way {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+.site .sealed-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding-bottom: 14px;
+  font-size: 11.5px;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.site .sealed-lock {
+  width: 22px;
+  height: 22px;
+  color: var(--ink);
+}
+.site .sealed-middle {
+  position: relative;
+}
+.site .sealed-noise {
+  display: block;
+  min-height: 70px;
+  padding: 12px 14px;
+  overflow: hidden;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-lg);
+  background: var(--sunken);
+  font-size: 12.5px;
+  line-height: 1.5;
+  word-break: break-all;
+  color: var(--muted);
+}
+/* The message on its way, a dot crossing under the noise */
+.site .sealed-dot {
+  position: absolute;
+  bottom: -14px;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  animation: carry 2.6s ease-in-out infinite;
+}
+@keyframes carry {
+  from {
+    left: 0;
+    opacity: 0;
+  }
+  15%,
+  85% {
+    opacity: 1;
+  }
+  to {
+    left: calc(100% - 8px);
+    opacity: 0;
+  }
+}
+.site .private-points {
+  margin-top: 16px;
+}
+
+.site .split-even {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
+}
+.site .split p + p {
+  margin-top: 14px;
+}
+.site .split .install {
+  margin-top: 28px;
+}
+.site .hosting {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 400px;
+  padding: 20px 22px;
+  border: var(--hair);
+  border-radius: var(--r-lg);
+  background: var(--card);
+  font-size: 14px;
+  text-align: left;
+  color: var(--body);
+}
+.site .hosting-head,
+.site .hosting-host {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.site .hosting-head > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--display);
+  font-size: 18px;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+.site .hosting-online {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--good-soft);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--good);
+}
+.site .hosting-online::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
+}
+.site .hosting-host {
+  padding-bottom: 14px;
+  border-bottom: var(--hair);
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.site .hosting-host b {
+  font-weight: 600;
+  color: var(--ink);
+}
+.site .hosting-host .kept {
+  flex: none;
+  font-size: 12px;
+}
+.site .hosting-fund {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.site .hosting-sum {
+  font-family: var(--display);
+  font-size: 44px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  color: var(--ink);
+}
+.site .hosting-fund b {
+  display: block;
+  font-weight: 600;
+  color: var(--ink);
+}
+.site .hosting-fund small {
+  font-size: 12.5px;
+  color: var(--faint);
+}
+.site .hosting-meter {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--sunken);
+}
+.site .hosting-meter span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--sage);
+}
+.site .hosting-used > span {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.site .hosting-used b {
+  font-weight: 600;
+  color: var(--ink);
+}
+.site .hosting-used small {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--faint);
+}
+/* The group's fund, waiting below the free line for when it is needed */
+.site .hosting-ready {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: var(--hair);
+}
+.site .hosting-ready > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+.site .hosting-ready b {
+  display: block;
+  font-weight: 600;
+  color: var(--ink);
+}
+.site .hosting-ready small {
+  font-size: 12.5px;
+  color: var(--faint);
+}
+.site .hosting-faces {
+  display: flex;
+}
+.site .hosting-faces .app-face + .app-face {
+  margin-left: -6px;
+}
+.site .hosting-chip-in {
+  height: 34px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+/* One person's spaces: each a row with its shape and size */
+.site .split .hosting-spaces {
+  margin: 0;
+  font-size: 14px;
+}
+.site .split .hosting-spaces li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 9px 0;
+  border-top: var(--hair);
+}
+.site .split .hosting-spaces li::before,
+.site .split .hosting-free li::before {
+  content: none;
+}
+.site .hosting-spaces li > span {
+  flex: 1;
+  color: var(--ink);
+}
+.site .hosting-spaces small {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--faint);
+}
+/* What is free, each line marked with the tick */
+.site .split .hosting-free {
+  margin: 18px 0 20px;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.site .split .hosting-free li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 0;
+}
+.site .split .hosting-free .shape {
+  flex: none;
+}
+.site .hosting-own {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 24px;
+}
+.site .split .hosting-own .install {
+  margin: 0;
+}
+.site .split .install code {
+  padding: 0;
+  background: none;
+  color: var(--ink);
+}
+/* The closing panel's links, each on a line of its own under the buttons */
+.site .cta-panel .hero-aside,
+.site .cta-panel .aside-link {
+  display: flex;
+  justify-content: center;
+  width: fit-content;
+  margin-inline: auto;
+}
+.site .cta-minka {
+  max-width: 520px;
+  margin: 18px auto 0;
+  text-wrap: balance;
+}
+
+@media (max-width: 960px) {
+  .site .basics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .site .basic.is-big {
+    grid-row: auto;
+  }
+  .site .sealed {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+    padding: 28px 20px 36px;
+  }
+}
+@media (max-width: 640px) {
+  .site .basics {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .site .pieces-key > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .site .basic.is-big,
+  .site .basic.is-wide {
+    grid-column: auto;
+  }
+  /* Narrow columns: the cards keep their title and who took them */
+  .site .mini-board {
+    padding: 12px 10px;
+  }
+  .site .mini-board-columns {
+    gap: 6px;
+  }
+  .site .mini-board-column {
+    padding: 6px;
+  }
+  .site .mini-tag {
+    display: none;
+  }
+  .site .mini-card-foot {
+    justify-content: flex-end;
+  }
+  .site .basic-shot {
+    padding: 14px;
+  }
+  .site .mini-chat {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .site .mini-rooms {
+    display: none;
+  }
+  .site .split-even {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* ─── Closing call, and the footer ────────────────────────────────── */
@@ -3001,7 +3772,6 @@
   .site .points {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .site .remixes,
   .site .marked-3 {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -3018,60 +3788,22 @@
 /* ─── Phones ──────────────────────────────────────────────────────── */
 
 @media (max-width: 960px) {
-  .site .mend,
-  .site .compounds {
+  .site .mend {
     grid-template-columns: minmax(0, 1fr);
   }
-  /* Three phones squeeze into a row */
-  .site .same-app .tabs {
-    gap: 0;
-    padding: 10px 8px;
+  /* The label goes on top and the sum under the columns */
+  .site .compound-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+    padding: 24px 20px;
   }
-  .site .same-app .tabs [role='tab'] {
-    gap: 6px;
-    padding: 6px 8px;
-    font-size: 14px;
+  .site .compound-sum {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
   }
-  .site .same-stage {
-    --gap: 8px;
-    padding: 20px 12px;
-  }
-  .site .app-phone {
-    gap: 6px;
-    padding: 10px 6px 6px;
-    border-radius: 18px;
-  }
-  .site .app-phone-name {
-    font-size: 12px;
-  }
-  .site .app-phone-name .brand-badge {
-    width: 16px;
-    height: 16px;
-    font-size: 10px;
-    border-radius: 5px;
-  }
-  .site .app-phone-button {
-    padding: 6px 4px;
-    font-size: 11px;
-  }
-  .site .app-phone-button small {
-    font-size: 9.5px;
-  }
-  /* Merged, the three logos say which app it is */
-  .site .app-phone.is-merged .app-phone-name > span:last-child {
-    display: none;
-  }
-  .site .feature-list {
-    gap: 8px;
-  }
-  .site .feature-chip {
-    gap: 5px;
-    padding: 4px 8px 4px 6px;
-    font-size: 11px;
-  }
-  .site .feature-dot {
-    width: 7px;
-    height: 7px;
+  .site .compound-sum b {
+    font-size: 32px;
   }
 }
 
@@ -3110,7 +3842,6 @@
   }
   .site .steps,
   .site .split,
-  .site .moment,
   .site .concept {
     grid-template-columns: minmax(0, 1fr);
     gap: 24px;
@@ -3145,15 +3876,17 @@
   .site .canvas-wrap {
     margin-top: 48px;
   }
-  /* Room for the longest caption on two lines, so the hero keeps its height */
-  .site .canvas {
-    height: 400px;
+  .site .prompt {
+    margin-bottom: 20px;
+    padding: 14px 10px 10px 16px;
   }
-  .site .canvas-stack {
-    top: 24px;
+  .site .prompt-text {
+    min-height: 44px;
+    font-size: 15px;
   }
-  .site .ask-text {
-    font-size: 14px;
+  /* On a phone the space goes without saying; the agent picker stays */
+  .site .prompt-chip.is-space {
+    display: none;
   }
   .site .frame-body {
     padding: 20px 18px 12px;
@@ -3234,39 +3967,114 @@
   .site .table td {
     padding: 12px 14px;
   }
-  /* The remixes' cells keep room for their version under the corner */
-  .site .ruled > .remix {
-    padding-top: 44px;
-  }
-  .site .remix .cell-num {
-    top: 14px;
-    left: 20px;
-  }
-  /* The receipt keeps its width on a phone */
-  .site .split .frame {
-    padding: 24px 12px;
-  }
-  .site .receipt {
-    padding: 18px 16px 14px;
-    font-size: 12.5px;
-  }
-  /* Each version's name wraps rather than cut off */
-  .site .compound {
-    padding: 24px 16px 16px;
-  }
   .site .compound-cols {
     gap: 4px;
-    min-height: 140px;
   }
+  /* No room for the shapes; the shape sets its own display, so it goes to nothing */
   .site .compound-block {
-    padding: 5px 2px;
+    gap: 0;
+    height: 26px;
+    padding: 0 2px;
     font-size: 10px;
-    white-space: normal;
+  }
+  .site .compound-block .shape {
+    width: 0;
+    height: 0;
   }
   /* Footer links far enough apart for a thumb */
   .site footer a {
     display: inline-block;
     padding: 6px 0;
+  }
+}
+
+/* Only on a phone: the chosen step, told under the numbers */
+.site .story-now {
+  display: none;
+}
+
+/* ─── Phones: the front page, tighter ─────────────────────────────── */
+@media (max-width: 640px) {
+  /* The apps swipe sideways, the next one peeking in */
+  .site .basics {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: 84%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+  .site .basics::-webkit-scrollbar {
+    display: none;
+  }
+  .site .basic {
+    scroll-snap-align: start;
+  }
+  .site .basic.is-big {
+    grid-row: auto;
+  }
+
+  /* The steps become a row of numbers; the chosen one is told under them */
+  .site .story-steps {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .site .story .mend-ask {
+    justify-content: center;
+    padding: 12px 0;
+  }
+  .site .story .mend-ask > span:not(.story-num) {
+    display: none;
+  }
+  .site .mend-ask .story-num {
+    min-width: 0;
+    margin: 0;
+    font-size: 15px;
+  }
+  .site .story-now {
+    display: block;
+    min-height: 92px;
+    margin: 16px 0 8px;
+    font-size: 14.5px;
+    line-height: 1.5;
+    color: var(--muted);
+  }
+  .site .story-now b {
+    display: block;
+    margin-bottom: 4px;
+    font-family: var(--display);
+    font-size: 20px;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+  .site .mend.story {
+    gap: 8px;
+  }
+
+  /* Each promise: a small shape beside its title, not above it */
+  .site .marked > * {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr);
+    column-gap: 14px;
+    align-items: start;
+  }
+  .site .marked > * > .shape {
+    grid-row: span 2;
+    width: 32px;
+    height: 32px;
+    margin: 0;
+  }
+
+  /* Three asks say it; the rest wait for a wider screen */
+  .site .asks li:nth-child(n + 4) {
+    display: none;
+  }
+
+  /* The hosting card keeps its width */
+  .site .split .frame {
+    padding: 20px 12px;
   }
 }
 
