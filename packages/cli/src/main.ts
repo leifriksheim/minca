@@ -96,7 +96,7 @@ Usage:
   minca app-node --data DIR                  the desktop app's node; the desktop shell runs it
   minca connect [--account-home home.minca.social] [--name NAME] [--relay wss://…] [--no-configure]
   minca disconnect
-  minca mcp [--account]
+  minca mcp
   minca agent [--setup] [--model claude-opus-5-5] [--daily-cap 2] [--no-chat]
               [--provider anthropic|openai] [--base-url URL] [--price IN/OUT]
   minca agent --bot [--name NAME] [--invite LINK] [--daily-cap-each 0.5]
@@ -115,8 +115,7 @@ Agents (Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Zed, Codex, …)
   one tool, agent_connect, which opens your account home the same way.
   Your account home is home.minca.social unless you name another: at a
   terminal it asks, filled in, so Enter takes it; or --account-home, or
-  MINCA_ACCOUNT_HOME. Connecting again uses the one you used last. "minca mcp --account" serves the
-  unlocked account instead, as you rather than as an agent.
+  MINCA_ACCOUNT_HOME. Connecting again uses the one you used last.
 
   "minca agent" runs the connected agent on its own instead, chatting in this
   terminal, with your Anthropic API key (ANTHROPIC_API_KEY, or asked for once

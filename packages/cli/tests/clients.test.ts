@@ -107,7 +107,7 @@ test('disconnecting takes minca out of each agent connecting added it to, and no
 test('disconnecting leaves an entry added by hand, or for another home', async () => {
   const home = await tempDir();
   await mkdir(path.join(home, '.cursor'));
-  const byHand = { command: 'minca', args: ['mcp', '--account'] };
+  const byHand = { command: 'minca', args: ['mcp'] };
   await writeFile(path.join(home, '.cursor', 'mcp.json'), JSON.stringify({ mcpServers: { minca: byHand } }));
   assert.deepEqual(await unconfigureIn(home), []);
   assert.deepEqual(at(await readJson(path.join(home, '.cursor', 'mcp.json')), 'mcpServers', 'minca'), byHand);
