@@ -1,13 +1,14 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { ConfirmItsYou } from './ConfirmItsYou';
 import { SignIn } from './SignIn';
-import type { NewSpace, SpaceSummary } from '@minca/core';
+import type { NewSpace, P2PNode, SpaceSummary } from '@minca/core';
 import {
   isProposeRequest,
   receiveConnectCode,
   receiveConnectRequest,
   type ConnectRequest,
   type IncomingRequest,
+  type MincaAuth,
   type ProposeRequest,
 } from '@minca/core/session';
 import { useAccountPicture, useAuth, useSession, useMinca, useWatched } from '@minca/react';
@@ -305,10 +306,17 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
 
   // A program keeps its note only once the person gives it the check code: this page then waits for that.
   const [sent, setSent] = useState(false);
+  const [handing, setHanding] = useState(false);
   const grant = () =>
     run(async () => {
-      incoming.approve(await auth.grant({ origin, request, spaceIds: [...chosen] }));
-      if (incoming.check) setSent(true);
+      const answer = await auth.grant({ origin, request, spaceIds: [...chosen] });
+      // Only an app that reads the contacts reads the inbox: the whole account, or the contacts alone.
+      const contacts = answer.scope === 'account' || answer.contactsSpace !== undefined;
+      const handed = contacts ? handOver(auth, session.node, request.audience) : Promise.resolve();
+      incoming.approve(answer, handed);
+      if (incoming.check) return setSent(true);
+      setHanding(true);
+      await handed;
     });
 
   if (sent && incoming.check)
@@ -429,7 +437,7 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
         error={error}
         busy={busy}
         blocked={nothing}
-        allowLabel={busy ? 'Giving access…' : 'Allow'}
+        allowLabel={handing ? 'Finishing setting up…' : busy ? 'Giving access…' : 'Allow'}
         proveTo={`continue to ${host}`}
         onAllow={grant}
         onDeny={() => incoming.deny()}
@@ -446,6 +454,30 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
 
 /** How long the window stays open for the extension to take its passes, at most */
 const HAND_OVER_MS = 30_000;
+
+/**
+ * Until what this window wrote at sign-up reaches the app: the username
+ * claimed then, and the inbox it leads to, which only this node holds yet.
+ * Nothing waits for an account that claimed none here.
+ */
+async function handOver(auth: MincaAuth, node: P2PNode, app: string): Promise<unknown> {
+  if (!auth.getState().username) return;
+  const deadline = Date.now() + HAND_OVER_MS;
+  // The claim first: a few seconds of work, begun when the account was made.
+  await new Promise<void>((resolve) => {
+    const settled = () => auth.getState().username?.status !== 'claiming';
+    if (settled()) return resolve();
+    const done = () => {
+      stop();
+      clearTimeout(timer);
+      resolve();
+    };
+    const stop = auth.subscribe(() => settled() && done());
+    const timer = setTimeout(done, HAND_OVER_MS);
+  });
+  const contacts = await node.contacts.space();
+  return contacts && node.spaces.reached(contacts, app, Math.max(0, deadline - Date.now()));
+}
 
 /**
  * A carrier — the browser extension — asking to keep the spaces online. It

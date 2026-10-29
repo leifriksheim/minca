@@ -134,6 +134,20 @@ export interface MincaAuthConfig {
    * runs, so it is better offered where the person comes back.
    */
   readonly offerPod?: boolean;
+  /**
+   * Where a new account takes its username, as `minca.social`: creating one
+   * offers `<name>@<this>`, claimed in the background
+   * (`packages/core/docs/usernames.md`). Default: none offered.
+   */
+  readonly usernames?: string;
+}
+
+/** The username a new account asked for, while it is claimed and after */
+export interface UsernameClaim {
+  readonly username: string;
+  readonly status: 'claiming' | 'claimed' | 'failed';
+  /** Why it failed: the name was taken meanwhile, or the service was down */
+  readonly error?: string;
 }
 
 /**
@@ -377,6 +391,8 @@ export interface AuthState {
    * before opening it again: `reopenPod` from that click.
    */
   readonly podToReopen: string | null;
+  /** The username the account made here asked for; null when it asked for none */
+  readonly username: UsernameClaim | null;
 }
 
 export interface MincaAuth {
@@ -409,7 +425,14 @@ export interface MincaAuth {
   showExisting(): void;
   /** The recovery code form, for the selected account if there is one */
   showRestore(): void;
-  createAccount(name: string): Promise<void>;
+  /** Where new accounts take usernames (`usernames` in the config); null when none are offered */
+  readonly usernames: string | null;
+  /**
+   * Makes an account. With `username`, it is claimed for the account in the
+   * background while the rest of setup goes on, and `username` in the state
+   * says how that went.
+   */
+  createAccount(name: string, options?: { readonly username?: string }): Promise<void>;
   /** The recovery code has been kept somewhere safe; on to choosing a way in */
   codeSaved(): void;
   /** Leaves the optional `pod` step with the data in this browser */
@@ -633,6 +656,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     moved: null,
     signingOut: false,
     podToReopen: null,
+    username: null,
   });
   const listeners = new Set<(state: AuthState) => void>();
   const update = (patch: Partial<AuthState>) => {
@@ -997,6 +1021,22 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
    * in is chosen. A restored account skips the code, since the person just
    * typed it, and so does a paired device, which was never shown one.
    */
+  /**
+   * Claims a new account's username while setup goes on: a few seconds of
+   * work, which the recovery code and the password screens cover.
+   */
+  function claimInBackground(session: MincaSession, username: string): void {
+    update({ username: { username, status: 'claiming' } });
+    const settle = (claim: UsernameClaim) => {
+      if (state.session === session) update({ username: claim });
+    };
+    session.node.inbox.claim(username).then(
+      () => settle({ username, status: 'claimed' }),
+      (error: unknown) =>
+        settle({ username, status: 'failed', error: error instanceof Error ? error.message : String(error) }),
+    );
+  }
+
   async function arrive(session: MincaSession, setup: AuthSetup | null): Promise<void> {
     update({ podToReopen: null });
     const place = state.place;
@@ -1430,7 +1470,9 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       update({ error: null, stage: 'restore' });
     },
 
-    async createAccount(name) {
+    usernames: config.usernames?.trim().toLowerCase() || null,
+
+    async createAccount(name, options = {}) {
       await run(async () => {
         const place = state.place;
         if (!place) throw new Error('No place to keep the account yet.');
@@ -1448,6 +1490,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
         await session.node.account.setName(summary.name).catch(() => {});
         // Made just now, by whoever is here: an app asking next needs no more proof.
         provedSignIn(session.did);
+        if (options.username) claimInBackground(session, options.username);
         await arrive(session, 'new');
       });
     },
@@ -2007,6 +2050,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
         setup: null,
         podChoice: null,
         moved: null,
+        username: null,
       });
       await stopNode(leaving).catch(() => {});
       const place = state.place;

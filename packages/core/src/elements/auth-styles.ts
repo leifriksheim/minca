@@ -73,6 +73,17 @@ minca-auth input {
   transition: border-color .15s ease, box-shadow .15s ease;
 }
 minca-auth input::placeholder { color: var(--minca-faint); }
+minca-auth .wa-label { font-size: 13px; font-weight: 500; color: var(--minca-ink); margin-top: 8px; }
+minca-auth .wa-username {
+  display: flex; align-items: center; height: 40px;
+  border-radius: var(--minca-radius); border: 1px solid var(--minca-line-strong); background: var(--minca-surface);
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+minca-auth .wa-username:focus-within { border-color: var(--minca-muted); box-shadow: 0 0 0 3px rgba(0, 0, 0, .06); }
+minca-auth .wa-username input, minca-auth .wa-username input:focus { flex: 1; min-width: 0; height: 100%; border: none; box-shadow: none; background: transparent; }
+minca-auth .wa-username > span { padding-right: 12px; color: var(--minca-muted); white-space: nowrap; }
+minca-auth .wa-small[data-name="free"] { color: var(--minca-good); }
+minca-auth .wa-small[data-name="taken"] { color: var(--minca-danger); }
 minca-auth input:focus { border-color: var(--minca-muted); box-shadow: 0 0 0 3px rgba(0, 0, 0, .06); }
 minca-auth .wa-offscreen {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;

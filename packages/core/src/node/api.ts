@@ -57,6 +57,7 @@ export const API = Object.freeze({
     send: 'send live messages',
     status: 'scoped',
     carried: 'scoped',
+    reached: 'scoped',
     authenticator: 'own',
     profiles: 'scoped',
   },

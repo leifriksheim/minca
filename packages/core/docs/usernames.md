@@ -33,6 +33,23 @@ the new code, and reading knocks renews it a month before its year is up.
 knocks by username, and the contact it becomes keeps the username
 (`ContactView.username`). See [node.md](node.md#the-inbox).
 
+**At sign-up.** `createMincaAuth({ usernames: 'minca.social' })` offers a
+username on the create screen of `<minca-auth>`: it follows the name as it is
+typed (`usernameIdeas`: the first name, the whole name, then the first name
+with a number, the first free one), and can be changed or left empty.
+`createAccount(name, { username })` claims it in the background while the
+recovery code and password screens are up; `state.username` says how it
+went (`claiming`, `claimed`, or `failed` with an `error`, when it was taken
+meanwhile or the service was down). The account is made either way.
+
+The claim is made on the home's node, which may be the only one holding the
+inbox: a connect page that closes once it answers keeps the window open
+until the app's node holds the contacts space too (`spaces.reached`, below),
+or else the app would read no knocks until the two next met. The account
+home waits up to 30 s, only for an account that claimed a name there.
+
+_Source: `packages/core/src/session/auth.ts` (`createAccount`, `claimInBackground`), `packages/core/src/elements/minca-auth.ts` (`#create`), `packages/core/src/inbox/names.ts` (`usernameIdeas`), `apps/home/src/components/ConnectPage.tsx` (`handOver`). Tests: `packages/core/tests/usernames.test.ts` ("a username at sign-up")._
+
 Renewing claims the code of the inbox this device knows. A device that
 hasn't yet synced a replacement made on another one points the name back at
 the old inbox until the inbox next changes; renewal starts only within a

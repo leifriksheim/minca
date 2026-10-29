@@ -75,7 +75,7 @@ Transitions:
 | `welcome`, `existing`, `signIn` | `startCreating()`                                                                                                     | `create`                                                                                                                                                                 |
 | `signIn`                        | `signInWithPassword` / `signInWithPasskey` succeeds                                                                   | `ready`                                                                                                                                                                  |
 | `signIn`, `restore`             | `signInWithCode` (or a recovery code given to `signInWithPassword`) succeeds                                          | `ready` if the account has a usable passkey or a password here; else `unlock` with `setup: 'restored'`                                                                   |
-| `create`                        | `createAccount(name)`                                                                                                 | `recovery`, with `session`, `freshCode` and `setup: 'new'` set                                                                                                           |
+| `create`                        | `createAccount(name, { username? })`                                                                                  | `recovery`, with `session`, `freshCode` and `setup: 'new'` set                                                                                                           |
 | `recovery`                      | `codeSaved()`                                                                                                         | `unlock`                                                                                                                                                                 |
 | `unlock`                        | `addPasskey()` / `setPassword(p)` succeeds                                                                            | `pod` for a new account in a browser that can open folders, unless `offerPod` is false; else `ready`                                                                     |
 | `pair`                          | `acceptPairing()`                                                                                                     | once the computer confirms the code, `unlock` with `setup: 'paired'` if the account has no way in here, else `ready`; signed in to another, `pair` with `pairingArrival` |
@@ -98,6 +98,10 @@ A pod is brought up to date only by a node that has it open: this page's
 while it runs, or a carrier given the folder. A page that closes once signed
 in, such as an account home's connect page, passes `offerPod: false`, and
 offers the pod where the person comes back instead.
+
+With `usernames: '<domain>'`, the create screen asks for a username too,
+filled in from the name, and `createAccount` claims it in the background
+([usernames.md](usernames.md#on-the-node)).
 
 _Source: `packages/core/src/session/auth.ts` (`start`, `reopenPod`), `packages/core/src/session/places.ts` (`podToReopen`). Tests: `packages/core/tests/auth.test.ts`, `packages/core/tests/take-up.test.ts` ("a pod the browser wants a click to open again")._
 

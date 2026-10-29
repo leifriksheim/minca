@@ -24,7 +24,7 @@ import {
   usernameUrl,
   type Username,
 } from '@minca/core/inbox';
-import { createNames, type NamesLimits } from '../names.mjs';
+import { createNames, namesFromEnv, type NamesLimits } from '../names.mjs';
 
 const provider = createP256Provider();
 
@@ -486,4 +486,16 @@ describe('a name service, kept', () => {
       elsewhere.close();
     }
   });
+});
+
+test('settings from the environment: the limit on new names a day only when it is a number above none', () => {
+  const env = { NAMES_DOMAIN: 'Example.org', NAMES_CLAIM_URL: 'https://example.org/c', NAMES_DIR: '/data' };
+  assert.deepEqual(namesFromEnv(env), {
+    domain: 'example.org',
+    claim: 'https://example.org/c',
+    dir: '/data',
+  });
+  assert.deepEqual(namesFromEnv({ ...env, NAMES_NEW_PER_DAY: '1000' }).limits, { newNamesPerNetwork: 1000 });
+  assert.equal(namesFromEnv({ ...env, NAMES_NEW_PER_DAY: 'lots' }).limits, undefined);
+  assert.throws(() => namesFromEnv({ NAMES_DOMAIN: 'example.org' }), /Set NAMES_DOMAIN/);
 });

@@ -11,12 +11,16 @@ import { WebSocketServer } from 'ws';
 import { createRelay, MAX_MESSAGE_BYTES } from '../../relay/relay.mjs';
 import { createNames } from '../../names/names.mjs';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
+import { createFolderAccountStore } from '../src/identity/account-store.js';
+import { createMincaAuth, type MincaAuth } from '../src/session/auth.js';
 import { resolveUsername } from '../src/inbox/names.js';
 import { team } from '../src/space/presets.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { portOf } from './helpers/net.js';
 import { patience } from './helpers/until.js';
 import { open, person as somebody } from './helpers/person.js';
+import { createMemoryDirectory } from './helpers/memory-directory.js';
+import { memoryStores } from './helpers/memory-stores.js';
 
 const provider = createP256Provider();
 
@@ -306,5 +310,76 @@ describe('node.contacts.invite', () => {
     const { anna, leif } = await invited(hub);
     await anna.contacts.block(leif.did);
     assert.deepEqual(await anna.contacts.invites(), []);
+  });
+});
+
+describe('a username at sign-up', () => {
+  /** A sign-in flow kept in memory, whose new accounts take usernames at the test's domain */
+  function signUp(): MincaAuth {
+    const accounts = createFolderAccountStore(createMemoryDirectory().handle);
+    const stores = memoryStores();
+    const values = new Map<string, string>([['minca.stay-signed-in', JSON.stringify('never')]]);
+    const auth = createMincaAuth({
+      rpId: 'example.test',
+      network: { relays: [relayUrl] },
+      usernames: domain,
+      storage: {
+        getItem: (key) => values.get(key) ?? null,
+        setItem: (key, value) => void values.set(key, value),
+        removeItem: (key) => void values.delete(key),
+      },
+      browser: { accounts: async () => accounts, stores: () => stores },
+    });
+    signedUp.push(auth);
+    return auth;
+  }
+  const signedUp: MincaAuth[] = [];
+  after(async () => {
+    await Promise.all(signedUp.splice(0).map((auth) => auth.signOut()));
+  });
+
+  test('is claimed in the background as the account is made, and leads to its inbox', async () => {
+    const auth = signUp();
+    await auth.start();
+    const username = fresh('ada');
+    await auth.createAccount('Ada', { username });
+    // Setup goes on meanwhile: the recovery code is up before the claim is done.
+    assert.equal(auth.getState().stage, 'recovery');
+    const claim = await until(
+      async () => auth.getState().username,
+      (claim) => claim?.status !== 'claiming',
+      'the claim',
+    );
+    assert.deepEqual(claim, { username, status: 'claimed' });
+    const inbox = await auth.getState().session!.node.inbox.get();
+    assert.equal(inbox?.username, username);
+    // A code is signed afresh each time it is written out: the same inbox is the same key.
+    assert.equal((await resolveUsername(username, provider)).inbox.key, inbox?.key);
+  });
+
+  test('taken meanwhile, it fails and the account is made all the same', async () => {
+    const anna = await person(createFakeHub({ latencyMs: 1 }), 'Anna');
+    const username = fresh('anna');
+    await anna.inbox.claim(username);
+    const auth = signUp();
+    await auth.start();
+    await auth.createAccount('Anna', { username });
+    const claim = await until(
+      async () => auth.getState().username,
+      (claim) => claim?.status !== 'claiming',
+      'the claim',
+    );
+    assert.equal(claim?.status, 'failed');
+    assert.equal(auth.getState().stage, 'recovery');
+    assert.equal((await auth.getState().session!.node.inbox.get())?.username, undefined);
+  });
+
+  test("the home waits on spaces.reached for the app's node to hold the inbox, and never for a stranger", async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const { leif, space } = await contacts(hub);
+    const [peer] = (await leif.spaces.status(space)).peers;
+    assert.ok(peer, 'Anna is connected in the space for two');
+    assert.equal(await leif.spaces.reached(space, peer, 2000), true);
+    assert.equal(await leif.spaces.reached(space, 'did:key:zDnaeNobodyAtAll', 100), false);
   });
 });

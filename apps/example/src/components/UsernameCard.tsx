@@ -5,7 +5,8 @@ import { Shape } from '@minca/app-shared/shapes';
 import { message, useCopy } from '@minca/app-shared/action';
 import { shapeColours } from '@minca/ui/tokens';
 import { palette, styles } from '../styles';
-import { useFreeUsername, usernameIdeas } from '@minca/app-shared/usernames';
+import { usernameIdeas } from '@minca/core/inbox';
+import { useFreeUsername } from '@minca/app-shared/usernames';
 import { UsernamePicker } from '@minca/app-shared/UsernamePicker';
 import { AddButton, LinkButton, QuietButton } from './Buttons';
 import { confirmThen } from '../confirm';
@@ -17,7 +18,7 @@ const usernameLink = (username: string) =>
   `${globalThis.location.origin}/contacts#user=${encodeURIComponent(username)}`;
 
 /** Shares a username the way a phone shares anything; elsewhere its link is copied */
-export async function shareUsername(username: string, copy: (text: string) => void): Promise<void> {
+async function shareUsername(username: string, copy: (text: string) => void): Promise<void> {
   const url = usernameLink(username);
   if (globalThis.navigator.share)
     await globalThis.navigator.share({ title: 'Add me on Minca', text: username, url }).catch(() => {});

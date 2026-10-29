@@ -693,6 +693,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       return false;
     },
 
+    reached: perSpace((rt, peer: string, waitMs: number) => rt.syncedWith(peer, waitMs)),
+
     profiles: perSpace((rt) => rt.profiles()),
     access: perSpace((rt) => rt.access()),
     may: perSpace((rt, cmd: string, args?: Readonly<Record<string, unknown>>, account?: string) =>

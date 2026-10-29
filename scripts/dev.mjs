@@ -134,6 +134,8 @@ const children = [
     NAMES_DOMAIN: 'localhost:8789',
     NAMES_CLAIM_URL: 'http://localhost:8789/.well-known/minca.json',
     NAMES_DIR: `${root}packages/names/.data`,
+    // Everyone trying it here is one address.
+    NAMES_NEW_PER_DAY: '1000',
   }),
   ...extra.map((begin) => begin()),
   start('home', 'npm', ['run', 'dev'], `${root}apps/home`),

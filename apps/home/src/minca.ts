@@ -29,6 +29,8 @@ export const auth = createMincaAuth({
   // The name a passkey prompt shows; the passkey itself is tied to this site, not to it.
   appName: 'Minca',
   network: { relays: relayUrls(), nodes: CONFIGURED_NODES, hosts: CONFIGURED_HOSTS },
+  // A new account picks its username as it is made.
+  usernames: import.meta.env.VITE_NAMES_DOMAIN || 'minca.social',
   // A pod is only kept up to date while the home is open, so it is offered on
   // the account page, not on one that closes.
   offerPod: !isConnectPage,

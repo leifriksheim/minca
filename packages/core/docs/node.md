@@ -909,7 +909,13 @@ genesis and any invite opened before the call. It says whether it was: false
 at once when no carrier is connected. `contacts.ask` and `inbox.knock` wait on it before the knock goes
 out, and pass what it said on as `carried`, for the app to tell the person.
 
-_Source: `packages/core/src/node/node.ts` (`spaces.carried`), `packages/core/src/node/node-contacts.ts` (`makePair`). Tests: `packages/core/tests/carrier.test.ts` ("a space made just now, carried before its invite goes out…", "carried is false at once with no carrier…")._
+`node.spaces.reached(spaceId, peer, waitMs)` is the same wait for one peer
+named by its key, such as an app's key from the request it connected with:
+true once that peer holds all this node does of the space, false when
+`waitMs` passed first or the peer never came. For a node about to close,
+like a connect page waiting for the app to have what it wrote.
+
+_Source: `packages/core/src/node/node.ts` (`spaces.carried`, `spaces.reached`), `packages/core/src/node/node-contacts.ts` (`makePair`). Tests: `packages/core/tests/carrier.test.ts` ("a space made just now, carried before its invite goes out…", "carried is false at once with no carrier…"), `packages/core/tests/usernames.test.ts` ("the home waits on spaces.reached…")._
 
 **The account's own automations.** `node.automations` (needs the account
 key) lists, adds, updates (`name`, `paused`) and removes the account's own

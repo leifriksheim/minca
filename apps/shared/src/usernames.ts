@@ -50,24 +50,6 @@ export function useUsernameLookup(text: string, delayMs = 300): Lookup {
   return lookup;
 }
 
-/**
- * Names to offer someone called `name`, best first: their first name, the
- * whole of it, then the first name with a number.
- */
-export function usernameIdeas(name: string): string[] {
-  const words = name
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean);
-  const first = words[0]?.slice(0, 30);
-  if (!first) return [];
-  // The same number for the same name, so the ideas don't change between renders.
-  const number = 10 + ([...name].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 90);
-  return [...new Set([first, words.join('.').slice(0, 64), `${first}${number}`])];
-}
-
 /** The first of `ideas` nobody has yet, once looked up; null while looking, or when all are taken */
 export function useFreeUsername(ideas: ReadonlyArray<string>): string | null {
   const [free, setFree] = useState<string | null>(null);

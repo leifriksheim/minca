@@ -68,7 +68,9 @@ const P256_SPKI_PREFIX = Buffer.from('3039301306072a8648ce3d020106082a8648ce3d03
 
 /**
  * Name settings from the environment: `NAMES_DOMAIN` it answers for,
- * `NAMES_CLAIM_URL` where claims go, `NAMES_DIR` where names are kept.
+ * `NAMES_CLAIM_URL` where claims go, `NAMES_DIR` where names are kept, and
+ * `NAMES_NEW_PER_DAY` to change how many new names an address may claim a day
+ * (a development service, where every tester is one address).
  * @param {Record<string, string | undefined>} env
  */
 export function namesFromEnv(env) {
@@ -76,7 +78,8 @@ export function namesFromEnv(env) {
   const claim = env.NAMES_CLAIM_URL?.trim() ?? '';
   const dir = env.NAMES_DIR?.trim() ?? '';
   if (!domain || !claim || !dir) throw new Error('Set NAMES_DOMAIN, NAMES_CLAIM_URL and NAMES_DIR');
-  return { domain, claim, dir };
+  const perDay = Number(env.NAMES_NEW_PER_DAY);
+  return { domain, claim, dir, ...(perDay > 0 ? { limits: { newNamesPerNetwork: perDay } } : {}) };
 }
 
 /**

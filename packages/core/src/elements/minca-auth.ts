@@ -29,6 +29,8 @@ import { accountCredentialName, offerToSave, recoveryKit } from '../session/cred
 import { passwordStrength } from '../session/password-strength.js';
 import type { PairingStage } from '../session/pairing.js';
 import type { AccountSummary } from '../identity/account-store.js';
+import { createP256Provider } from '../identity/crypto-p256.js';
+import { formatUsername, parseUsername, resolveUsername, usernameIdeas } from '../inbox/names.js';
 import { adoptStyles, h, svg, type Child } from './dom.js';
 import { AUTH_CSS } from './auth-styles.js';
 
@@ -36,6 +38,12 @@ import { AUTH_CSS } from './auth-styles.js';
 export interface MincaSessionEventDetail {
   readonly session: MincaSession | null;
 }
+
+/** Where a username on the create screen stands */
+type NameState = 'empty' | 'checking' | 'free' | 'taken' | 'invalid';
+
+/** Looks usernames up as they are typed */
+const provider = createP256Provider();
 
 // Where there is no DOM the module still loads; the element is only ever made where there is one.
 const Base = globalThis.HTMLElement ?? class {};
@@ -152,6 +160,21 @@ function subtitle(...text: Child[]): HTMLElement {
   return h('p', { class: 'wa-subtitle' }, ...text);
 }
 
+/** How the username asked for at sign-up is going, above the setup screens that follow */
+function claimLine({ username: claim }: AuthState): HTMLElement | null {
+  if (!claim) return null;
+  const states = { claiming: 'checking', claimed: 'free', failed: 'taken' } as const;
+  return h(
+    'p',
+    { class: 'wa-small', 'data-name': states[claim.status], 'aria-live': 'polite', style: 'margin:0 0 12px' },
+    claim.status === 'claiming'
+      ? `Getting ${claim.username} for you…`
+      : claim.status === 'claimed'
+        ? `${claim.username} is yours.`
+        : `${claim.username} couldn't be yours: ${claim.error ?? 'the name service said no'}. Pick another in any app, under Contacts.`,
+  );
+}
+
 /** A form that stays on the page when submitted */
 function form(onSubmit: () => void, props: Record<string, unknown>, ...children: Child[]): HTMLElement {
   return h(
@@ -244,6 +267,13 @@ export class MincaAuthElement extends Base {
   #mismatch = false;
   #lastSelected: string | null = null;
   #lastStage: string | null = null;
+  /** The username on the create screen: picked from the name until it is typed, and whether it is free */
+  #username: { typed: boolean; checked: string; state: NameState } = {
+    typed: false,
+    checked: '',
+    state: 'empty',
+  };
+  #usernameTimer: ReturnType<typeof setTimeout> | undefined;
 
   /** The flow this element draws. Set it to share one with the rest of the page; otherwise one is made from the attributes. */
   get auth(): MincaAuth {
@@ -342,6 +372,8 @@ export class MincaAuthElement extends Base {
 
   #reset(): void {
     this.#drafts.clear();
+    clearTimeout(this.#usernameTimer);
+    this.#username = { typed: false, checked: '', state: 'empty' };
     this.#filledAs = '';
     this.#copied = false;
     this.#stored = false;
@@ -758,22 +790,120 @@ export class MincaAuthElement extends Base {
 
   #create(state: AuthState): HTMLElement {
     const auth = this.auth;
+    const domain = auth.usernames;
     const name = this.#input('name', {
       type: 'text',
       placeholder: 'Your name',
       autocomplete: 'off',
       autofocus: true,
       disabled: state.busy,
+      'aria-label': 'Your name',
     });
+    if (!domain)
+      return card(
+        'Create your account',
+        subtitle('What should apps call you? You can change it later.'),
+        form(
+          () => {
+            if (name.value.trim()) void auth.createAccount(name.value.trim());
+          },
+          {},
+          name,
+          submit(state.busy, 'Continue', 'Creating…'),
+        ),
+        h(
+          'p',
+          { class: 'wa-small' },
+          'Next: a recovery code to keep safe, then a passkey or password for signing in.',
+        ),
+        errorBox(state.error),
+        links(link('I already have an account', () => auth.showExisting(), state.busy)),
+        this.#podLine(state),
+      );
+
+    const username = this.#input('username', {
+      type: 'text',
+      placeholder: 'yourname',
+      autocomplete: 'off',
+      autocapitalize: 'none',
+      spellcheck: 'false',
+      maxlength: '64',
+      disabled: state.busy,
+      'aria-label': 'Username',
+    });
+    const status = h('p', { class: 'wa-small', style: 'margin-top:0', 'aria-live': 'polite' });
+    const show = () => {
+      const { state: now } = this.#username;
+      const typed = username.value.trim().toLowerCase();
+      status.dataset.name = now;
+      status.textContent =
+        now === 'free'
+          ? `${typed}@${domain} is yours if you want it`
+          : now === 'taken'
+            ? 'Someone has that one. Try another?'
+            : now === 'invalid'
+              ? 'Letters, numbers, dots, dashes and underscores'
+              : now === 'checking'
+                ? 'Checking…'
+                : 'How people find you and add you. Leave it empty to skip.';
+    };
+    // Looks the name up a moment after typing stops; picked from the name, a taken one gives way to the next idea.
+    const check = (ideas: ReadonlyArray<string>) => {
+      clearTimeout(this.#usernameTimer);
+      const typed = username.value.trim().toLowerCase();
+      const parsed = typed ? parseUsername(`${typed}@${domain}`) : null;
+      this.#username.checked = typed;
+      this.#username.state = !typed ? 'empty' : parsed ? 'checking' : 'invalid';
+      show();
+      if (!parsed) return;
+      this.#usernameTimer = setTimeout(() => {
+        void resolveUsername(formatUsername(parsed), provider)
+          .then(
+            () => 'taken' as const,
+            () => 'free' as const,
+          )
+          .then((found) => {
+            if (this.#username.checked !== typed) return;
+            const next = ideas[ideas.indexOf(typed) + 1];
+            if (found === 'taken' && !this.#username.typed && next) {
+              username.value = next;
+              this.#drafts.set('username', next);
+              return check(ideas);
+            }
+            this.#username.state = found;
+            show();
+          });
+      }, 300);
+    };
+    name.addEventListener('input', () => {
+      if (this.#username.typed) return;
+      const ideas = usernameIdeas(name.value);
+      username.value = ideas[0] ?? '';
+      this.#drafts.set('username', username.value);
+      check(ideas);
+    });
+    username.addEventListener('input', () => {
+      this.#username.typed = true;
+      check([]);
+    });
+    show();
+
     return card(
       'Create your account',
-      subtitle('What should apps call you? You can change it later.'),
+      subtitle('What apps call you, and the name people find you by. You can change both later.'),
       form(
         () => {
-          if (name.value.trim()) void auth.createAccount(name.value.trim());
+          const typed = username.value.trim().toLowerCase();
+          if (!name.value.trim() || this.#username.state === 'taken' || this.#username.state === 'invalid')
+            return;
+          void auth.createAccount(name.value.trim(), typed ? { username: `${typed}@${domain}` } : {});
         },
         {},
+        h('label', { class: 'wa-label' }, 'Name'),
         name,
+        h('label', { class: 'wa-label' }, 'Username'),
+        h('div', { class: 'wa-username' }, username, h('span', null, `@${domain}`)),
+        status,
         submit(state.busy, 'Continue', 'Creating…'),
       ),
       h(
@@ -801,6 +931,7 @@ export class MincaAuthElement extends Base {
     const account = state.session?.account;
     return card(
       'Your recovery code',
+      claimLine(state),
       h(
         'p',
         { class: 'wa-hint' },
@@ -935,6 +1066,7 @@ export class MincaAuthElement extends Base {
 
     return card(
       'How do you want to sign in?',
+      claimLine(state),
       subtitle(
         'This is what you will use every day.',
         info(

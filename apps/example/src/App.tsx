@@ -12,7 +12,6 @@ import { useRunAutomations } from './automations';
 import { ConnectScreen } from './components/ConnectScreen';
 import { useAccountInAddress } from './account-address';
 import { ContactsView } from './components/ContactsView';
-import { UsernameStep, useUsernameStep } from './components/UsernameStep';
 import { RelayDown } from './components/RelayNotice';
 import { DocsNote } from './components/DocsNote';
 import { SpaceList } from './components/SpaceList';
@@ -29,18 +28,12 @@ export function App() {
   const { state } = useConnection();
   useAccountInAddress();
   // Calls sit above the workspace, so moving between spaces never touches one.
-  return state.status === 'ready' ? <Connected /> : <ConnectScreen />;
-}
-
-/** In: a username first, the once, then the workspace */
-function Connected() {
-  const username = useUsernameStep();
-  if (username.looking) return null;
-  if (username.ask) return <UsernameStep onDone={username.done} />;
-  return (
+  return state.status === 'ready' ? (
     <CallsProvider>
       <Workspace />
     </CallsProvider>
+  ) : (
+    <ConnectScreen />
   );
 }
 
