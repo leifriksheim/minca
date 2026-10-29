@@ -74,10 +74,12 @@ const isNameList = (value: unknown) =>
 export async function onePerSecret(
   material: { readonly spaceKey: Uint8Array } | { readonly spaceId: string },
 ): Promise<CryptoKey> {
-  const secret =
-    'spaceKey' in material ? material.spaceKey : utf8Encode(`minca/public-one-per/v1|${material.spaceId}`);
-  return hkdfHmacKey(secret, 'minca/one-per/v1');
+  const seed = 'spaceKey' in material ? material.spaceKey : publicSeed(material.spaceId);
+  return hkdfHmacKey(seed, 'minca/one-per/v1');
 }
+
+/** What a public space's keys derive from: its id, which anyone can read */
+const publicSeed = (spaceId: string) => utf8Encode(`minca/public-one-per/v1|${spaceId}`);
 
 /**
  * The key a record must have under `onePer`, or null when something it names
