@@ -18,6 +18,7 @@ const CONTACT_KEY_INFO = 'minca/p256-contact-key/v1';
 const MEMBER_KEY_INFO = 'minca/p256-member-key/v1';
 const INBOX_KEY_INFO = 'minca/p256-inbox-key/v1';
 const INBOX_SIGN_KEY_INFO = 'minca/p256-inbox-sign-key/v1';
+const NAME_KEY_INFO = 'minca/p256-name-key/v1';
 
 /** 48 bytes reduce to a P-256 scalar without bias, as for the root key (`crypto-p256.ts`) */
 const P256_SEED_BYTES = 48;
@@ -83,6 +84,16 @@ export function deriveInboxKeyBytes(contactKey: Uint8Array, gen: number): Promis
 /** An inbox's signing key: signs the inbox and proves ownership to a relay. Separate, so no key both signs and decrypts. */
 export function deriveInboxSignKeyBytes(contactKey: Uint8Array, gen: number): Promise<Uint8Array> {
   return deriveScalar(contactKey, `${INBOX_SIGN_KEY_INFO}|${gen}`);
+}
+
+/**
+ * A username's name key, which claims it on a Minca name service
+ * (`packages/core/docs/usernames.md`). One per username, and nothing ties it
+ * to the account or to an inbox, so a new inbox keeps the name.
+ * @param username `name@domain`, as `formatUsername` writes it (`claimUsername` derives it so)
+ */
+export function deriveNameKeyBytes(contactKey: Uint8Array, username: string): Promise<Uint8Array> {
+  return deriveScalar(contactKey, `${NAME_KEY_INFO}|${username}`);
 }
 
 /** A private scalar as an ECDSA signing key */

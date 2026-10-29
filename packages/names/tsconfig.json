@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "customConditions": ["@minca/source"],
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["tests", "names.d.mts"]
+}

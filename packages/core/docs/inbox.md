@@ -133,13 +133,7 @@ _Source: `packages/core/src/network/relays.ts` (`createMailboxClient`)._
 - **Mailboxes that last.** A host that keeps its accounts' inbox topics
   across restarts, as it keeps short links.
 
-## Planned: names
+## Usernames
 
-The protocol side of names (a handle resolving to an inbox code) is planned in
-[spec 07 §9](https://github.com/leifriksheim/minca/blob/main/spec/07-inbox.md).
-On this side:
-
-- `node.inbox.knock` accepts a handle wherever it takes a code.
-- **Who may knock.** The inbox gains a policy in its `std.inbox` record (never
-  published): `anyone` (default), `follows` or `mutuals` on the handle's
-  network. Knocks that don't match are kept but shown apart.
+A username (`leif@minca.social`) leads to an inbox code: see
+[usernames.md](usernames.md).

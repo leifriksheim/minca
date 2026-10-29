@@ -75,7 +75,7 @@ and every version under it fails.
 §6.1), and never part of `rules`: a definition with `check` in its rules is
 invalid (02 §7.5). What peers check never names what only readers judge.
 
-_Source: `packages/core/src/records/contracts.ts` (`CollectionContract`, `checkContractShape`, `hasContract`), `packages/core/src/records/rules.ts` (`checkRules`), `packages/core/src/schema/collection-def.ts` (`StoredCollection`), `packages/core/src/node/space-runtime.ts` (`rulesAt`, `checksOf`). Tests: `packages/core/tests/contracts-shape.test.ts` (all)._
+_Source: `packages/core/src/records/contracts.ts` (`CollectionContract`, `checkContractShape`, `hasContract`), `packages/core/src/records/rules.ts` (`checkRules`), `packages/core/src/schema/collection-def.ts` (`StoredCollection`), `packages/core/src/node/space-rules.ts` (`rulesAt`), `packages/core/src/node/space-checks.ts` (`checksOf`). Tests: `packages/core/tests/contracts-shape.test.ts` (all)._
 
 ## 2. Verdicts
 
@@ -113,7 +113,7 @@ what it can't judge.
 > the collection uncounted and says so, as a peer stays out of a space with a
 > resolver it doesn't know (03 §1).
 
-_Source: `packages/core/src/node/space-runtime.ts` (`checksOf`, `counts`, `contractsFor`). Tests: `packages/core/tests/contracts.test.ts` ("a claim with too little evidence, signed anyway, reaches every peer and counts for no reader"), `packages/core/tests/contracts-pending.test.ts`, `packages/core/tests/contracts-line.test.ts` ("a line declared with a key it doesn't know leaves the collection unjudged…", "a version sealed with a key the reader lacks is unjudged…")._
+_Source: `packages/core/src/node/space-checks.ts` (`checksOf`, `counts`), `packages/core/src/node/space-writing.ts` (`contractsFor`). Tests: `packages/core/tests/contracts.test.ts` ("a claim with too little evidence, signed anyway, reaches every peer and counts for no reader"), `packages/core/tests/contracts-pending.test.ts`, `packages/core/tests/contracts-line.test.ts` ("a line declared with a key it doesn't know leaves the collection unjudged…", "a version sealed with a key the reader lacks is unjudged…")._
 
 ## 3. Format
 
@@ -201,7 +201,7 @@ Counted across all of one version's conditions:
 | Judging one version's conditions       | ≤ 100,000 steps, ≤ 4,000,000 work     |
 | Versions one version's conditions cite | ≤ 256 distinct                        |
 
-_Source: `packages/core/src/records/cel.ts` (`evaluateCel`, `MAX_CEL_DEPTH`, `MAX_CEL_STEPS`, `MAX_CEL_WORK`), `packages/core/src/records/contracts.ts` (`runContracts`, `MAX_CITED`), `packages/core/src/node/space-runtime.ts` (`checksOf`, `checkStanding`, `write`). Tests: `packages/core/tests/contracts.test.ts` ("keeping versions under a check whole is the writer’s part…", "a record whose versions are checked against the one before is a state machine"), `packages/core/tests/contracts-delete-launder.test.ts`, `packages/core/tests/contracts-delete-lockout.test.ts`, `packages/core/tests/contracts-stub-launder.test.ts`, `packages/core/tests/contracts-squat.test.ts`._
+_Source: `packages/core/src/records/cel.ts` (`evaluateCel`, `MAX_CEL_DEPTH`, `MAX_CEL_STEPS`, `MAX_CEL_WORK`), `packages/core/src/records/contracts.ts` (`runContracts`, `MAX_CITED`), `packages/core/src/node/space-checks.ts` (`checksOf`, `checkStanding`), `packages/core/src/node/space-writing.ts` (`write`). Tests: `packages/core/tests/contracts.test.ts` ("keeping versions under a check whole is the writer’s part…", "a record whose versions are checked against the one before is a state machine"), `packages/core/tests/contracts-delete-launder.test.ts`, `packages/core/tests/contracts-delete-lockout.test.ts`, `packages/core/tests/contracts-stub-launder.test.ts`, `packages/core/tests/contracts-squat.test.ts`._
 
 ## 5. The language
 
@@ -406,7 +406,7 @@ count Bob's vote.
 > removal ([#170](https://github.com/leifriksheim/minca/issues/170)). It must
 > itself hold a role as of what it claims to have seen.
 
-_Source: `packages/core/src/records/contracts.ts` (`runContracts`, `CitedVersion`), `packages/core/src/node/space-runtime.ts` (`cited`, `checkedVersion`). Tests: `packages/core/tests/contracts.test.ts` ("a proof stays a proof…"), `packages/core/tests/contracts-pending-squat.test.ts`, `scenarios/tests/fame.test.ts` (all)._
+_Source: `packages/core/src/records/contracts.ts` (`runContracts`, `CitedVersion`), `packages/core/src/node/space-checks.ts` (`cited`, `checkedVersion`). Tests: `packages/core/tests/contracts.test.ts` ("a proof stays a proof…"), `packages/core/tests/contracts-pending-squat.test.ts`, `scenarios/tests/fame.test.ts` (all)._
 
 ## 7. Lines
 
@@ -503,7 +503,7 @@ the fact ([threat model](threat-model.md) §3.2).
 > correction revive a version that failed for its own reasons, and is ruled
 > out ([the plan](drafts/constitution-grants-contracts.md) §3).
 
-_Source: `packages/core/src/records/contracts.ts` (`checkLine`, `onceCitations`, `Line`), `packages/core/src/records/key.ts` (`lineKey`), `packages/core/src/node/space-runtime.ts` (`lineBreak`, `lineIndex`, `checksOf`, `recordsChanged`, `define`, `write`), `packages/core/src/storage/storage-provider.ts` (`keptVersions`). Tests: `packages/core/tests/contracts-line.test.ts` (all: "two devices of one account pay after the same payment…", "no corrections…", "a payment claimed again later along the line fails…", "a second line of one account claims nothing…", "a payment arriving before the one it follows waits…", "a line declared with a key it doesn't know…", "a reader that counted a payment stops counting it…", "a delete written as a twin of a payment is a double spend…", "a delete ends a line for good…"), `scenarios/tests/credit.test.ts` (all)._
+_Source: `packages/core/src/records/contracts.ts` (`checkLine`, `onceCitations`, `Line`), `packages/core/src/records/key.ts` (`lineKey`), `packages/core/src/node/space-checks.ts` (`lineBreak`, `lineIndex`, `checksOf`), `packages/core/src/node/space-runtime.ts` (`recordsChanged`, `define`), `packages/core/src/node/space-writing.ts` (`write`), `packages/core/src/storage/storage-provider.ts` (`keptVersions`). Tests: `packages/core/tests/contracts-line.test.ts` (all: "two devices of one account pay after the same payment…", "no corrections…", "a payment claimed again later along the line fails…", "a second line of one account claims nothing…", "a payment arriving before the one it follows waits…", "a line declared with a key it doesn't know…", "a reader that counted a payment stops counting it…", "a delete written as a twin of a payment is a double spend…", "a delete ends a line for good…"), `scenarios/tests/credit.test.ts` (all)._
 
 ## 8. Checking a definition
 

@@ -40,7 +40,8 @@ import {
 import { relayKind } from '../network/relays.js';
 import { base64UrlDecode } from '../utils/encoding.js';
 import { isRecord } from '../utils/guards.js';
-import { usableRelays, type SpaceRuntime } from './space-runtime.js';
+import type { SpaceRuntime } from './space-runtime.js';
+import { usableRelays } from './space-peers.js';
 import type {
   AccountProfileView,
   ContactRequest,

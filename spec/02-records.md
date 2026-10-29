@@ -419,7 +419,7 @@ place of theirs.
 > The owner part says no more than the version does: its `author` and `proof`
 > name the account in the clear in every space.
 
-_Source: `packages/core/src/records/key.ts` (`keyKind`, `onePerForm`, `ownerTag`, `ownedKey`, `newRecordKey`, `ownsKey`), `packages/core/src/node/space-runtime.ts` (`keyProblem`, `onePerKeyProblem`, `judgeStanding`, `keyToWrite`, `keepsCollection`). Tests: `packages/core/tests/record-keys.test.ts` (all), `packages/core/tests/versions.test.ts` ("a fresh key is the account's owner part…")._
+_Source: `packages/core/src/records/key.ts` (`keyKind`, `onePerForm`, `ownerTag`, `ownedKey`, `newRecordKey`, `ownsKey`), `packages/core/src/node/space-standing.ts` (`keyProblem`, `onePerKeyProblem`, `judgeStanding`), `packages/core/src/node/space-writing.ts` (`keyToWrite`, `keepsCollection`). Tests: `packages/core/tests/record-keys.test.ts` (all), `packages/core/tests/versions.test.ts` ("a fresh key is the account's owner part…")._
 
 ### 4.2 Version fields
 
@@ -546,7 +546,7 @@ of the next one, and each verifies on its own.
 > Stubs rather than nothing, so that every later version can be checked
 > against the one before it (§4.7) by a peer that never saw the bodies.
 
-_Source: `packages/core/src/storage/storage-provider.ts` (`addVersion`, `demote`, `keepSuperseded`), `packages/core/src/schema/version.ts` (`isStub`, `stubOf`), `packages/core/src/node/space-runtime.ts` (`admit`, `write`, `judgeStanding`, `currentOf`, `genesisOf`), `packages/core/src/storage/mirror.ts` (`compactNow`). Tests: `packages/core/tests/versions.test.ts` ("an older version arriving after a later one is kept only as a stub", "a stub on top takes its body…", "a retained version is never cut down to a stub", "1,000 edits keep one body…", "a newcomer after a delete…"), `packages/core/tests/rules.test.ts` ("a first version its rules are checked against must be kept whole…"), `packages/core/tests/contracts.test.ts` ("keeping versions under a check whole is the writer’s part…"), `packages/core/tests/mirror.test.ts` ("compaction…")._
+_Source: `packages/core/src/storage/storage-provider.ts` (`addVersion`, `demote`, `keepSuperseded`), `packages/core/src/schema/version.ts` (`isStub`, `stubOf`), `packages/core/src/node/space-runtime.ts` (`admit`), `packages/core/src/node/space-writing.ts` (`write`), `packages/core/src/node/space-standing.ts` (`judgeStanding`), `packages/core/src/node/space-index.ts` (`currentOf`), `packages/core/src/node/space-versions.ts` (`genesisOf`), `packages/core/src/storage/mirror.ts` (`compactNow`). Tests: `packages/core/tests/versions.test.ts` ("an older version arriving after a later one is kept only as a stub", "a stub on top takes its body…", "a retained version is never cut down to a stub", "1,000 edits keep one body…", "a newcomer after a delete…"), `packages/core/tests/rules.test.ts` ("a first version its rules are checked against must be kept whole…"), `packages/core/tests/contracts.test.ts` ("keeping versions under a check whole is the writer’s part…"), `packages/core/tests/mirror.test.ts` ("compaction…")._
 
 ### 4.6 Shape of a version, alone
 
@@ -581,7 +581,7 @@ Checks that depend on what else a peer holds are **not** shape checks:
   record's"). If it is not held yet, judging waits (§9.5).
 - A first version's key must be one its root may write first (§4.1).
 
-_Source: `packages/core/src/records/version.ts` (`newRecordKey`, `supersedes`, `byVersion`, `nextVersion`, `checkVersionShape`, `checkLogShape`, `MAX_SEEN`), `packages/core/src/records/key.ts` (`RECORD_KEY_PATTERN`), `packages/core/src/schema/version.ts` (`bodyProblem`), `packages/core/src/storage/storage-provider.ts` (`addVersion`, `demote`, `keepSuperseded`), `packages/core/src/node/space-runtime.ts` (`admit`, `firstOf`, `genesisOf`, `consistent`, `write`, `after`). Tests: `packages/core/tests/versions.test.ts` (all), `packages/core/tests/writer-logs.test.ts` ("a version in a space without its place is malformed", "a version that still carries a line across collections is refused"), `packages/core/tests/attacks.test.ts` ("a version cannot escape its record's rules by naming another record as its first")._
+_Source: `packages/core/src/records/version.ts` (`newRecordKey`, `supersedes`, `byVersion`, `nextVersion`, `checkVersionShape`, `checkLogShape`, `MAX_SEEN`), `packages/core/src/records/key.ts` (`RECORD_KEY_PATTERN`), `packages/core/src/schema/version.ts` (`bodyProblem`), `packages/core/src/storage/storage-provider.ts` (`addVersion`, `demote`, `keepSuperseded`), `packages/core/src/node/space-runtime.ts` (`admit`), `packages/core/src/node/space-versions.ts` (`firstOf`, `genesisOf`, `consistent`), `packages/core/src/node/space-writing.ts` (`write`, `after`). Tests: `packages/core/tests/versions.test.ts` (all), `packages/core/tests/writer-logs.test.ts` ("a version in a space without its place is malformed", "a version that still carries a line across collections is refused"), `packages/core/tests/attacks.test.ts` ("a version cannot escape its record's rules by naming another record as its first")._
 
 ### 4.7 Versions whose history can be checked
 
@@ -619,7 +619,7 @@ The ordering rule (§4.3) does not change, but which versions reach it does.
 Every edit leaves a stub of the version it replaces, a few hundred bytes,
 kept and synced like any version.
 
-_Source: `packages/core/src/records/version.ts` (`chainProblem`), `packages/core/src/node/space-runtime.ts` (`chainStanding`, `admit`), `packages/core/src/sync/sync-engine.ts` (`admit`). Tests: `packages/core/tests/versions.test.ts` ("a later version must follow the version it names…"), `packages/core/tests/attacks.test.ts` ("a member cannot freeze a record by skipping ahead…")._
+_Source: `packages/core/src/records/version.ts` (`chainProblem`), `packages/core/src/node/space-standing.ts` (`chainStanding`), `packages/core/src/node/space-runtime.ts` (`admit`), `packages/core/src/sync/sync-engine.ts` (`admit`). Tests: `packages/core/tests/versions.test.ts` ("a later version must follow the version it names…"), `packages/core/tests/attacks.test.ts` ("a member cannot freeze a record by skipping ahead…")._
 
 A long history might later be compacted by a checkpoint, in place of its
 stubs: a proposal for review is in
@@ -799,7 +799,7 @@ after them do not. What K signs in `app.photos` is judged as before.
 > stubs (§4.5) and can walk its lines. A root would only shorten proofs, at
 > the price of another field every writer must keep exactly.
 
-_Source: `packages/core/src/records/version.ts` (`checkVersionShape`, `checkLogShape`), `packages/core/src/node/writers.ts` (`createWriters`), `packages/core/src/node/writer-keys.ts` (`browserWriterKeys`), `packages/cli/src/writer-keys.ts` (`fileWriterKeys`), `packages/core/src/records/fork.ts` (`checkFork`, `breaksLine`, `forkProof`), `packages/core/src/node/space-runtime.ts` (`write`, `placeInLog`, `reportFork`, `judgeStanding`), `packages/core/src/space/roles.ts` (`judge`, `forked`). Tests: `packages/core/tests/writer-logs.test.ts` ("a version that still carries a line across collections is refused", "a fork reaches only the line it is in…"), `packages/cli/tests/writer-keys.test.ts`, `packages/core/tests/access-convergence.test.ts`._
+_Source: `packages/core/src/records/version.ts` (`checkVersionShape`, `checkLogShape`), `packages/core/src/node/writers.ts` (`createWriters`), `packages/core/src/node/writer-keys.ts` (`browserWriterKeys`), `packages/cli/src/writer-keys.ts` (`fileWriterKeys`), `packages/core/src/records/fork.ts` (`checkFork`, `breaksLine`, `forkProof`), `packages/core/src/node/space-writing.ts` (`write`), `packages/core/src/node/space-lines.ts` (`placeInLog`, `reportFork`), `packages/core/src/node/space-standing.ts` (`judgeStanding`), `packages/core/src/space/roles.ts` (`judge`, `forked`). Tests: `packages/core/tests/writer-logs.test.ts` ("a version that still carries a line across collections is refused", "a fork reaches only the line it is in…"), `packages/cli/tests/writer-keys.test.ts`, `packages/core/tests/access-convergence.test.ts`._
 
 ---
 
@@ -863,7 +863,7 @@ a record on arrival** (§9.6): whether a link conforms depends on which
 definition and which target a peer holds. A writer SHOULD NOT write links that
 do not conform.
 
-_Source: `packages/core/src/records/links.ts` (`checkLinks`, `LINK_REL_PATTERN`, `MAX_LINKS`, `LinkDeclaration`), `packages/core/src/node/space-runtime.ts` (`openBody`, `linkIssues`, `write`). Tests: `packages/core/tests/links.test.ts` (all)._
+_Source: `packages/core/src/records/links.ts` (`checkLinks`, `LINK_REL_PATTERN`, `MAX_LINKS`, `LinkDeclaration`), `packages/core/src/node/space-versions.ts` (`openBody`), `packages/core/src/node/space-catalog.ts` (`linkIssues`), `packages/core/src/node/space-writing.ts` (`write`). Tests: `packages/core/tests/links.test.ts` (all)._
 
 ### 5.3 Planned: references to other spaces
 
@@ -1107,7 +1107,7 @@ Names are **local to a space**. Nothing registers or owns a name across
 spaces, so a name never says what shape a collection has; its definition in
 that space does.
 
-_Source: `packages/core/src/schema/collection-def.ts` (`StoredCollection`, `CATALOG_COLLECTION`, `checkStoredCollection`, `checkPublishableSchema`), `packages/core/src/node/space-runtime.ts` (`definitionIn`, `inForce`, `loadCatalog`), `packages/core/src/space/roles.ts` (`definition` events, `mergeDefinitions`, `definerOf`, `contested`, `refusal`). Tests: `packages/core/tests/record-keys.test.ts` ("rival first definitions by two accounts name no one…", "a backdated rival with a ground-low id does not put its rules in force", "on real nodes, rivals that differ put no rules in force; rivals that agree do", "a backdated delete of nothing, however low its id, is refused", "a ground-low delete of her own rival does not win by id…", "the definer and someone who may define it changing it apart…", "on real nodes, a ground-low backdated delete can’t take a collection from its definer"), `packages/core/tests/space-catalog.test.ts` ("an x-\* keyword is an annotation: any one publishes, and no value is checked against it", "but refused when publishing, where the author can fix it", "names are reverse-DNS, and sys.\* is reserved", "redefining bumps the version, and only the definer or someone who may define it may"), `packages/core/tests/attacks.test.ts` ("a member cannot take down a collection's definition they did not write")._
+_Source: `packages/core/src/schema/collection-def.ts` (`StoredCollection`, `CATALOG_COLLECTION`, `checkStoredCollection`, `checkPublishableSchema`), `packages/core/src/node/space-rules.ts` (`definitionIn`, `inForce`), `packages/core/src/node/space-catalog.ts` (`loadCatalog`), `packages/core/src/space/roles.ts` (`definition` events, `mergeDefinitions`, `definerOf`, `contested`, `refusal`). Tests: `packages/core/tests/record-keys.test.ts` ("rival first definitions by two accounts name no one…", "a backdated rival with a ground-low id does not put its rules in force", "on real nodes, rivals that differ put no rules in force; rivals that agree do", "a backdated delete of nothing, however low its id, is refused", "a ground-low delete of her own rival does not win by id…", "the definer and someone who may define it changing it apart…", "on real nodes, a ground-low backdated delete can’t take a collection from its definer"), `packages/core/tests/space-catalog.test.ts` ("an x-\* keyword is an annotation: any one publishes, and no value is checked against it", "but refused when publishing, where the author can fix it", "names are reverse-DNS, and sys.\* is reserved", "redefining bumps the version, and only the definer or someone who may define it may"), `packages/core/tests/attacks.test.ts` ("a member cannot take down a collection's definition they did not write")._
 
 ### 6.5 Planned: compatible definitions
 
@@ -1351,7 +1351,7 @@ non-empty strings; `final`: `true`). A definition with anything else,
 `create`, `edit`, `delete` and `check` included, is invalid (§6.1). A
 contract is not a rule: it is the definition's `contract` (§7.6).
 
-_Source: `packages/core/src/records/rules.ts` (`checkRules`, `onePerSecret`, `onePerKey`, `changedFixedField`), `packages/core/src/node/space-runtime.ts` (`judgeStanding`, `invocationOf`, `needsOf`, `judgeContent`, `onePerKeying`, `derivedKey`, `rulesAt`, `mayNow`, `put`). Tests: `packages/core/tests/rules.test.ts` (all; "final: written once…"), `packages/core/tests/contracts-shape.test.ts` ("a contract is not a rule…"), `packages/core/tests/record-keys.test.ts` ("onePer keys"; "a onePer key that names its author…"; "a key in another collection"), `packages/core/tests/schemas.test.ts` ("a poll: one vote per person…")._
+_Source: `packages/core/src/records/rules.ts` (`checkRules`, `onePerSecret`, `onePerKey`, `changedFixedField`), `packages/core/src/node/space-standing.ts` (`judgeStanding`, `invocationOf`, `needsOf`, `judgeContent`), `packages/core/src/node/space-rules.ts` (`onePerKeying`, `derivedKey`, `rulesAt`), `packages/core/src/node/space-writing.ts` (`mayNow`, `put`). Tests: `packages/core/tests/rules.test.ts` (all; "final: written once…"), `packages/core/tests/contracts-shape.test.ts` ("a contract is not a rule…"), `packages/core/tests/record-keys.test.ts` ("onePer keys"; "a onePer key that names its author…"; "a key in another collection"), `packages/core/tests/schemas.test.ts` ("a poll: one vote per person…")._
 
 ### 7.6 The contract
 
@@ -1373,7 +1373,7 @@ syncs, stores and judges every version's standing the same.
 > counts. They live apart so that what peers check (§7.5) never names
 > anything only readers judge.
 
-_Source: `packages/core/src/records/rules.ts` (`checkRules`), `packages/core/src/records/contracts.ts` (`CollectionContract`, `checkContractShape`), `packages/core/src/node/space-runtime.ts` (`judgeContent`, `checksOf`). Tests: `packages/core/tests/contracts.test.ts` ("a claim with too little evidence, signed anyway, reaches every peer and counts for no reader", "a decision without its quorum, signed anyway, reaches every peer and counts for no reader"), `packages/core/tests/contracts-shape.test.ts` ("the same condition under contract.check is judged…")._
+_Source: `packages/core/src/records/rules.ts` (`checkRules`), `packages/core/src/records/contracts.ts` (`CollectionContract`, `checkContractShape`), `packages/core/src/node/space-standing.ts` (`judgeContent`), `packages/core/src/node/space-checks.ts` (`checksOf`). Tests: `packages/core/tests/contracts.test.ts` ("a claim with too little evidence, signed anyway, reaches every peer and counts for no reader", "a decision without its quorum, signed anyway, reaches every peer and counts for no reader"), `packages/core/tests/contracts-shape.test.ts` ("the same condition under contract.check is judged…")._
 
 ---
 
@@ -1466,7 +1466,7 @@ To ask a keeper for records on a topic, a reader computes the tag the same way
 > Rationale: a blind index (as in CipherSweet) — equality only, never ranges or
 > substrings. The keeper learns co-occurrence and frequency, nothing more.
 
-_Source: `packages/core/src/records/topics.ts` (`checkTopics`, `topicValues`, `topicKey`, `topicTag`, `tagsFor`, `sameTags`, `MAX_TOPICS`, `MAX_TAGS`), `packages/core/src/records/links.ts` (`LINK_FIELD_PATTERN`), `packages/core/src/node/space-runtime.ts` (`tagKey`, `tagProblem`, `write`). Tests: `packages/core/tests/topics.test.ts` (all; "topic tags on links" for link roles)._
+_Source: `packages/core/src/records/topics.ts` (`checkTopics`, `topicValues`, `topicKey`, `topicTag`, `tagsFor`, `sameTags`, `MAX_TOPICS`, `MAX_TAGS`), `packages/core/src/records/links.ts` (`LINK_FIELD_PATTERN`), `packages/core/src/node/space-rules.ts` (`tagKey`, `tagProblem`), `packages/core/src/node/space-writing.ts` (`write`). Tests: `packages/core/tests/topics.test.ts` (all; "topic tags on links" for link roles)._
 
 ---
 
@@ -1587,7 +1587,7 @@ hold, and refusing would leave peers disagreeing forever. A reader may flag
 such a record instead. A writer
 checks them before signing and SHOULD NOT write what does not conform.
 
-_Source: `packages/core/src/validation/check-version.ts` (`createVersionCheck`), `packages/core/src/validation/crypto-gate.ts`, `packages/core/src/validation/capability-gate.ts`, `packages/core/src/identity/abilities.ts` (`writeRequirement`), `packages/core/src/node/space-runtime.ts` (`judge`, `judgeStanding`, `chainStanding`, `admit`, `currentOf`, `contentIssues`), `packages/core/src/sync/sync-engine.ts` (`admit`, `retryWaiting`). Tests: `packages/core/tests/validation.test.ts` (all), `packages/core/tests/rules.test.ts` ("a forged edit is refused by every peer…", "arriving in any order"), `packages/core/tests/space-catalog.test.ts` ("a record that does not fit is kept and flagged"), `packages/core/tests/links.test.ts` ("declared links"), `packages/core/tests/topics.test.ts` ("a record whose tags don’t match…"), `packages/core/tests/contracts.test.ts` ("a claim with too little evidence, signed anyway, reaches every peer and counts for no reader"; "a proof stays a proof…"), `packages/core/tests/space-access.test.ts` ("a removed member cannot write…"), `packages/core/tests/attacks.test.ts`._
+_Source: `packages/core/src/validation/check-version.ts` (`createVersionCheck`), `packages/core/src/validation/crypto-gate.ts`, `packages/core/src/validation/capability-gate.ts`, `packages/core/src/identity/abilities.ts` (`writeRequirement`), `packages/core/src/node/space-versions.ts` (`judge`), `packages/core/src/node/space-standing.ts` (`judgeStanding`, `chainStanding`), `packages/core/src/node/space-runtime.ts` (`admit`), `packages/core/src/node/space-index.ts` (`currentOf`), `packages/core/src/node/space-catalog.ts` (`contentIssues`), `packages/core/src/sync/sync-engine.ts` (`admit`, `retryWaiting`). Tests: `packages/core/tests/validation.test.ts` (all), `packages/core/tests/rules.test.ts` ("a forged edit is refused by every peer…", "arriving in any order"), `packages/core/tests/space-catalog.test.ts` ("a record that does not fit is kept and flagged"), `packages/core/tests/links.test.ts` ("declared links"), `packages/core/tests/topics.test.ts` ("a record whose tags don’t match…"), `packages/core/tests/contracts.test.ts` ("a claim with too little evidence, signed anyway, reaches every peer and counts for no reader"; "a proof stays a proof…"), `packages/core/tests/space-access.test.ts` ("a removed member cannot write…"), `packages/core/tests/attacks.test.ts`._
 
 ---
 

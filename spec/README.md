@@ -26,11 +26,11 @@ store, and judge every record the same way:
 if it takes part in them; a peer that doesn't still syncs, stores and judges
 everything the same:
 
-| Part                                                      | Covers                                                                                                                            |
-| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| [06 — Nodes, sessions and apps](06-nodes-and-sessions.md) | The session note and following the account, the account home and app grants, connecting by code, carriers                         |
-| [07 — Inbox](07-inbox.md)                                 | The inbox and names: how someone you share no space with can ask to become your contact, and the relay mailbox that holds a knock |
-| [08 — Hosting](08-hosting.md)                             | Hosts: subscriptions and payment, a space's own fund, bots a host runs                                                            |
+| Part                                                      | Covers                                                                                                                                |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| [06 — Nodes, sessions and apps](06-nodes-and-sessions.md) | The session note and following the account, the account home and app grants, connecting by code, carriers                             |
+| [07 — Inbox](07-inbox.md)                                 | The inbox and usernames: how someone you share no space with can ask to become your contact, and the relay mailbox that holds a knock |
+| [08 — Hosting](08-hosting.md)                             | Hosts: subscriptions and payment, a space's own fund, bots a host runs                                                                |
 
 **Judged by readers.** What a version must be to count. Peers keep and sync
 every version whatever it says; two readers that judge it must count the
@@ -170,7 +170,6 @@ they are described; the smaller ones share
 | Connecting by code: programs that can't run code of their own                   | [06 §3.1](06-nodes-and-sessions.md)                                                                                                        |
 | Wakes delivered per device, by Web Push to an app that is closed _(after v1)_   | [03 §15](03-spaces.md), [06 §4.4](06-nodes-and-sessions.md), [#60](https://github.com/leifriksheim/minca/issues/60)                        |
 | Hosts: stopping a host, user storage, metering, reminders, private payments     | [08 §4](08-hosting.md), [#220](https://github.com/leifriksheim/minca/issues/220), [#289](https://github.com/leifriksheim/minca/issues/289) |
-| Names: handles that lead to an inbox                                            | [07 §9](07-inbox.md)                                                                                                                       |
 | Corrections in a line, after a double spend                                     | [09 §7.5](09-contracts.md)                                                                                                                 |
 | Asking for what a version cites                                                 | [09 §9](09-contracts.md), [#138](https://github.com/leifriksheim/minca/issues/138)                                                         |
 | Content-addressed definitions; definition tiers, additive-only _(after v1)_     | [02 §6.5](02-records.md), [#11](https://github.com/leifriksheim/minca/issues/11), [#12](https://github.com/leifriksheim/minca/issues/12)   |

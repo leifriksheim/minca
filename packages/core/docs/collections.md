@@ -105,7 +105,7 @@ enforced on arrival, because two peers may have seen different versions of a
 definition ([spec 02 §9.6](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)).
 Rules, below, are enforced everywhere.
 
-_Source: `packages/core/src/schema/collection-def.ts` (`validateJsonSchema`, `toJsonSchema`, `asStandardSchema`), `packages/core/src/node/space-runtime.ts` (`contentIssues`). Tests: `packages/core/tests/space-catalog.test.ts` ("validate and reject within the supported subset", "an unknown keyword is ignored when validating, so newer spaces stay readable", "choices can carry labels, or come from a linked record", "an x-\* keyword is an annotation: any one publishes, and no value is checked against it", "a record that does not fit is kept and flagged when it arrives, never rejected"), `packages/core/tests/attacks.test.ts` ("a definition the validator can't use can't break reading the collection, or the space"), `packages/core/tests/schemas.test.ts` ("schemas from a validator you already use")._
+_Source: `packages/core/src/schema/collection-def.ts` (`validateJsonSchema`, `toJsonSchema`, `asStandardSchema`), `packages/core/src/node/space-catalog.ts` (`contentIssues`). Tests: `packages/core/tests/space-catalog.test.ts` ("validate and reject within the supported subset", "an unknown keyword is ignored when validating, so newer spaces stay readable", "choices can carry labels, or come from a linked record", "an x-\* keyword is an annotation: any one publishes, and no value is checked against it", "a record that does not fit is kept and flagged when it arrives, never rejected"), `packages/core/tests/attacks.test.ts` ("a definition the validator can't use can't break reading the collection, or the space"), `packages/core/tests/schemas.test.ts` ("schemas from a validator you already use")._
 
 ## Links
 
@@ -135,7 +135,7 @@ Like a schema, link declarations are checked when you write: the node refuses
 to sign links that don't conform. A record that arrives with links that
 don't conform is kept and comes back with `conforms: false`.
 
-_Source: `packages/core/src/records/links.ts` (`checkLinks`), `packages/core/src/node/space-runtime.ts` (`linkIssues`, `write`). Tests: `packages/core/tests/links.test.ts` ("refused on write when they break the declaration; flagged, never rejected, when they arrive")._
+_Source: `packages/core/src/records/links.ts` (`checkLinks`), `packages/core/src/node/space-catalog.ts` (`linkIssues`), `packages/core/src/node/space-writing.ts` (`write`). Tests: `packages/core/tests/links.test.ts` ("refused on write when they break the declaration; flagged, never rejected, when they arrive")._
 
 ## Rules
 
@@ -399,7 +399,7 @@ differ, `collections.list` leaves it out and its records are judged by no
 rules
 ([spec 02 §6.3](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)).
 
-_Source: `packages/core/src/node/space-runtime.ts` (`define`, `undefine`, `write`), `packages/core/src/node/types.ts` (`NodeCollections`). Tests: `packages/core/tests/space-catalog.test.ts`, `packages/core/tests/rules.test.ts` ("grants: changing them")._
+_Source: `packages/core/src/node/space-runtime.ts` (`define`, `undefine`), `packages/core/src/node/space-writing.ts` (`write`), `packages/core/src/node/types.ts` (`NodeCollections`). Tests: `packages/core/tests/space-catalog.test.ts`, `packages/core/tests/rules.test.ts` ("grants: changing them")._
 
 ## The standard library
 

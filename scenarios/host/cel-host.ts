@@ -2,7 +2,7 @@
  * A stand-in host for the chess club's and the co-op's contracts: what a
  * peer does around Minca's CEL contracts
  * (`packages/core/src/records/contracts.ts`, `runContracts`), simplified from
- * `packages/core/src/node/space-runtime.ts` and spec 03:
+ * `packages/core/src/node/space-checks.ts` and spec 03:
  *
  * - a version counts only when the version before it does (the chain);
  * - it counts only when its author is a member as of what it had seen;

@@ -21,7 +21,9 @@ import { direct as directSchema } from '../schemas/library/publishing.js';
 import { openDirect, sealDirect, type DirectBody } from '../privacy/direct.js';
 import { isRecord } from '../utils/guards.js';
 import { serial } from '../utils/serial.js';
-import { CANNOT_DEFINE, type ActiveSession, type SpaceRuntime } from './space-runtime.js';
+import type { SpaceRuntime } from './space-runtime.js';
+import { CANNOT_DEFINE } from './space-writing.js';
+import type { ActiveSession } from './space-versions.js';
 import { buildNamespaces, callMethod, givenFor, type Namespace, type OwnMethods } from './api.js';
 import type {
   DirectMessage,

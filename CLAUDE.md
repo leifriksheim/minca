@@ -37,6 +37,7 @@ implement and less to get wrong, not more.
 | `packages/core`                               | `@minca/core`: the protocol library, its tests (`tests/*.test.ts`) and docs (`docs/`)          |
 | `packages/cli`                                | `@minca/cli`: `minca`, the always-on node, hosting, agents, MCP                                |
 | `packages/relay`                              | The Minca relay: a mailbox peers meet through, and inboxes and short links wait in             |
+| `packages/names`                              | The name service: usernames at a domain (`leif@minca.social`) that lead to inbox codes         |
 | `packages/ui`                                 | `@minca/ui`: the design system (tokens, shapes, avatars) and the kit every app's screen gets   |
 | `apps/home`, `apps/example`, `apps/extension` | The account home, the app, the Chrome extension                                                |
 | `apps/liquid`                                 | Liquid: liquid democracy as an app of its own, a reference for what can be built on Minca      |
