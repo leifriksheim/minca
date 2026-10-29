@@ -55,10 +55,16 @@ async function startNames(
   };
 }
 
-/** Someone's contact key, an inbox code of theirs, and the name key for a username */
+/** Someone's contact key, an inbox code of theirs, the name key for a username, and their inbox's say-so for it */
 async function someone(username: string) {
   const contact = await deriveContactKeyBytes(generateSeed());
-  return { contact, code: await inboxCode(contact, 0), nameKey: await deriveNameKeyBytes(contact, username) };
+  const bind = signAs(await deriveInboxSignKeyBytes(contact, 0), `minca/name-bind/v1|${username}`);
+  return {
+    contact,
+    code: await inboxCode(contact, 0),
+    nameKey: await deriveNameKeyBytes(contact, username),
+    bind,
+  };
 }
 
 async function inboxCode(contact: Uint8Array, gen: number) {
@@ -194,6 +200,7 @@ describe('a name service', () => {
       at,
       work,
       code: bea.code,
+      bind: bea.bind,
       sig: signAs(bea.nameKey, signed),
       ...sent,
     });
@@ -222,6 +229,7 @@ describe('a name service', () => {
       at,
       work,
       code: cleo.code,
+      bind: cleo.bind,
       sig: signAs(cleo.nameKey, `minca/name-claim/v1|${username}|${at}|${cleo.code}`),
     });
     const old = Date.now() - 11 * 60_000;
@@ -246,6 +254,7 @@ describe('a name service', () => {
       at,
       work: workFor(username, key, at, 4),
       code: dora.code,
+      bind: dora.bind,
       sig: signAs(dora.nameKey, `minca/name-claim/v1|${username}|${at}|${dora.code}`),
     };
     assert.equal((await post(names.url, earlier)).status, 200);
@@ -254,12 +263,48 @@ describe('a name service', () => {
     await assert.rejects(resolveUsername(username, provider), /doesn't know/);
   });
 
-  test("a code that doesn't check out, or is larger than an inbox code can be, is refused", async () => {
-    const username = names.at('junk');
-    const junk = await someone(username);
-    await claimUsername(username, junk.contact, 'AAAA');
-    await assert.rejects(resolveUsername(username, provider), /inbox code/);
-    await assert.rejects(claimUsername(username, junk.contact, 'A'.repeat(5000)), /Not a claim/);
+  test('a name leads only to an inbox whose owner chose it', async () => {
+    const username = names.at('ceo');
+    const alice = await someone(names.at('alice'));
+    const mallory = await someone(username);
+    // The library won't send someone else's code, nor an empty one.
+    await assert.rejects(claimUsername(username, mallory.contact, alice.code), /not this account/);
+    await assert.rejects(claimUsername(username, mallory.contact, ''), /empty/);
+    // Sent by hand, with her own inbox's say-so or none, the service refuses it.
+    const key = contactPublicKey(mallory.nameKey);
+    const at = Date.now();
+    const claim = (sent: Record<string, unknown>) => ({
+      name: 'ceo',
+      key,
+      at,
+      work: workFor(username, key, at, 4),
+      code: alice.code,
+      sig: signAs(mallory.nameKey, `minca/name-claim/v1|${username}|${at}|${alice.code}`),
+      ...sent,
+    });
+    assert.deepEqual((await post(names.url, claim({ bind: mallory.bind }))).json, {
+      error: 'That inbox did not choose this name',
+    });
+    assert.equal((await post(names.url, claim({}))).status, 400);
+    await assert.rejects(resolveUsername(username, provider), /doesn't know/);
+  });
+
+  test('a code larger than an inbox code can be is refused', async () => {
+    const username = names.at('big');
+    const big = await someone(username);
+    const key = contactPublicKey(big.nameKey);
+    const at = Date.now();
+    const code = 'A'.repeat(5000);
+    const sent = {
+      name: 'big',
+      key,
+      at,
+      work: workFor(username, key, at, 4),
+      code,
+      bind: big.bind,
+      sig: signAs(big.nameKey, `minca/name-claim/v1|${username}|${at}|${code}`),
+    };
+    assert.deepEqual((await post(names.url, sent)).json, { error: 'Not a claim' });
   });
 
   test('names that pass for whoever runs the service are refused', async () => {
@@ -328,6 +373,7 @@ describe('a name service, against what anyone can send', () => {
         at,
         work: workFor(username, key, at, 4),
         code: eve.code,
+        bind: eve.bind,
         sig: signAs(eve.nameKey, `minca/name-claim/v1|${username}|${at}|${eve.code}`),
       };
       assert.equal((await post(names.url, ahead)).status, 200);
@@ -414,16 +460,30 @@ describe('a name service, kept', () => {
   });
 
   test("a lookup that is redirected is refused: the name's domain must answer itself", async () => {
-    const server = createServer((_req, res) =>
-      res.writeHead(302, { location: 'https://elsewhere.example/' }).end(),
+    const leif = await someone('leif@localhost');
+    const portOf = (server: Server) => {
+      const address = server.address();
+      return typeof address === 'object' && address ? address.port : 0;
+    };
+    const listen = (server: Server) => new Promise<void>((resolve) => server.listen(0, resolve));
+    // Elsewhere answers with a good code, so only refusing the redirect stops it.
+    const elsewhere = createServer((_req, res) =>
+      res.writeHead(200).end(JSON.stringify({ names: { leif: leif.code } })),
     );
-    await new Promise<void>((resolve) => server.listen(0, resolve));
-    const address = server.address();
-    const port = typeof address === 'object' && address ? address.port : 0;
+    await listen(elsewhere);
+    const redirecting = createServer((req, res) =>
+      res.writeHead(302, { location: `http://localhost:${portOf(elsewhere)}${req.url}` }).end(),
+    );
+    await listen(redirecting);
     try {
-      await assert.rejects(resolveUsername(`leif@localhost:${port}`, provider), /doesn't know/);
+      assert.equal((await resolveUsername(`leif@localhost:${portOf(elsewhere)}`, provider)).code, leif.code);
+      await assert.rejects(
+        resolveUsername(`leif@localhost:${portOf(redirecting)}`, provider),
+        /doesn't know/,
+      );
     } finally {
-      server.close();
+      redirecting.close();
+      elsewhere.close();
     }
   });
 });

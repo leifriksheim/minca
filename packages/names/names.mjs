@@ -5,10 +5,11 @@
  * (packages/core/docs/usernames.md).
  *
  *   GET  /.well-known/minca.json?name=leif  → { names: { leif: <code> }, claim, work }
- *   POST /.well-known/minca.json  { name, key, at, work, code?, sig }  → { until } | { error }
+ *   POST /.well-known/minca.json  { name, key, at, work, code?, bind?, sig }  → { until } | { error }
  *
  * A claim is signed by the name key over the name, its time and its code, and
- * carries a little proof of work. The first key to claim a name holds it for a
+ * carries a little proof of work; and the inbox's own signing key signs the
+ * name, so nobody points a name at someone else's inbox. The first key to claim a name holds it for a
  * year, renewed by claiming again; with no code it gives the name up.
  *
  * It is public, so it assumes nobody is polite: a claim is small, each name is
@@ -147,6 +148,11 @@ export function createNames({ domain, claim, dir, limits: given }) {
       return refuse(400, 'Not enough work');
     if (!verifiesP256(key, `minca/name-claim/v1|${username}|${at}|${code ?? ''}`, sig))
       return refuse(400, 'The signature does not check out');
+    if (
+      code !== undefined &&
+      !verifiesP256(inboxSignOf(code), `minca/name-bind/v1|${username}`, message.bind)
+    )
+      return refuse(400, 'That inbox did not choose this name');
 
     const entry = read(name);
     const live = entry !== null && entry.until > now;
@@ -195,6 +201,7 @@ export function createNames({ domain, claim, dir, limits: given }) {
           'access-control-allow-methods': 'GET, POST',
           'access-control-allow-headers': 'content-type',
           'content-type': 'application/json',
+          'cache-control': 'no-store',
         });
         res.end(body === undefined ? undefined : JSON.stringify(body));
       };
@@ -257,10 +264,20 @@ function isClaim(message) {
     Number.isSafeInteger(work) &&
     work >= 0 &&
     (code === undefined ||
-      (typeof code === 'string' && code.length <= MAX_CODE_LENGTH && CODE_PATTERN.test(code))) &&
+      (typeof code === 'string' &&
+        code.length <= MAX_CODE_LENGTH &&
+        CODE_PATTERN.test(code) &&
+        typeof message.bind === 'string' &&
+        message.bind.length <= 200)) &&
     typeof sig === 'string' &&
     sig.length <= 200
   );
+}
+
+/** The inbox signing key a code names, or '' when it names none */
+function inboxSignOf(code) {
+  const sign = parseJson(Buffer.from(code, 'base64url').toString('utf8'))?.body?.sign;
+  return typeof sign === 'string' && KEY_PATTERN.test(sign) ? sign : '';
 }
 
 function parseJson(text) {

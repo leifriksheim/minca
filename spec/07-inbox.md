@@ -391,9 +391,9 @@ where this one's knocks go.
 ```
 username = name "@" domain
 name     = 1–64 of a–z 0–9 . _ -, starting and ending with a letter or digit
-domain   = a hostname with at least one dot, ≤253 characters, labels of a–z 0–9 -
-           not starting or ending with -, the last with a letter (so never an IP
-           address); or localhost[:port], for trying it out
+domain   = a hostname with at least one dot, ≤253 characters, labels of 1–63 of
+           a–z 0–9 - not starting or ending with -, the last with a letter (so
+           never an IP address); or localhost[:port], for trying it out
 ```
 
 A reader MUST compare usernames in lower case, and MAY accept one written with
@@ -411,12 +411,16 @@ MUST refuse a username unless:
 2. the answer is a JSON object whose `names` holds a string under `name`;
 3. that string is an inbox code a reader accepts (§3).
 
-A reader ignores other members, and MAY refuse an answer larger than 1 MiB,
-or one that takes too long. A
-domain that answers for names MUST send `Access-Control-Allow-Origin: *`, so
-that a page anywhere can look a name up, and answers `404` for a name it
-doesn't hold. A file served as it is, listing every name, answers correctly:
+A reader ignores other members, MUST refuse an answer larger than 1 MiB, and
+MAY refuse one that takes too long. A domain that answers for names MUST send
+`Access-Control-Allow-Origin: *`, so that a page anywhere can look a name up.
+For a name it doesn't hold it answers `404`, or an answer without it: a small
+file served as it is, listing a few hundred names, answers correctly, since
 the query is only a hint.
+
+A username leads to an inbox's current code, so anyone who had an old code
+and knows the name finds the new one: replacing a leaked inbox (§1) sheds it
+only for those who don't know the name.
 
 Who may have which name at a domain, and how they claim it, is the domain's
 business, not the protocol's. The name service minca.social runs, which

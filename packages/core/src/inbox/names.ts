@@ -15,7 +15,13 @@
  */
 import { sha256 } from '@noble/hashes/sha2.js';
 import type { CryptoProvider } from '../types.js';
-import { contactPublicKey, deriveNameKeyBytes, signWithScalar } from '../identity/contact-key.js';
+import {
+  contactPublicKey,
+  deriveInboxSignKeyBytes,
+  deriveNameKeyBytes,
+  signWithScalar,
+} from '../identity/contact-key.js';
+import { createP256Provider } from '../identity/crypto-p256.js';
 import { isObject } from '../utils/guards.js';
 import { utf8Encode } from '../utils/encoding.js';
 import { readInbox, type InboxBody } from './inbox.js';
@@ -29,13 +35,13 @@ export interface Username {
 const NAME = /^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/;
 const LABEL = '[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?';
 /** The last label of a hostname has a letter: `10.0.0.1` is an address, not a domain */
-const TOP = '[a-z0-9-]*[a-z][a-z0-9-]*';
+const TOP = `(?=[a-z0-9-]*[a-z])${LABEL}`;
 /** A hostname with at least one dot, or `localhost` with a port, for trying it out */
 const DOMAIN = new RegExp(`^(?:(?:${LABEL}\\.)+${TOP}|localhost(?::\\d{1,5})?)$`);
 const LOCAL = /^localhost(?::\d{1,5})?$/;
 /** Where a domain answers for its names */
 const WELL_KNOWN = '/.well-known/minca.json';
-/** An answer larger than this is not read: a file listing every name at a domain fits well inside it */
+/** An answer larger than this is refused (spec 07 §9): a few hundred inbox codes */
 const MAX_ANSWER_BYTES = 1024 * 1024;
 /** How long a domain has to answer */
 const LOOKUP_TIMEOUT_MS = 10_000;
@@ -137,6 +143,10 @@ function parseJson(text: string): unknown {
 /** The most work a claim will do: 2^24 hashes, several seconds on a phone */
 const MAX_WORK_BITS = 24;
 
+/** What an inbox's signing key signs, so a name leads only to an inbox whose owner chose it */
+export const bindMessage = (username: Username) =>
+  utf8Encode(`minca/name-bind/v1|${formatUsername(username)}`);
+
 /** What a name key signs to claim a username, give it a new code, or (with no code) give it up */
 export const claimMessage = (username: Username, at: number, code: string | null) =>
   utf8Encode(`minca/name-claim/v1|${formatUsername(username)}|${at}|${code ?? ''}`);
@@ -176,8 +186,10 @@ export async function claimUsername(
 ): Promise<number> {
   const username = parseUsername(text);
   if (!username) throw new Error('That is not a username, like leif@minca.social');
+  if (code === '') throw new Error('An empty code is no inbox: give the name up with null');
   const shown = formatUsername(username);
   const nameKey = await deriveNameKeyBytes(contactKey, shown);
+  const bind = code === null ? null : await bindTo(username, contactKey, code);
   const found = await lookUp(username, fetcher, true);
   const service = isObject(found) && typeof found.claim === 'string' ? found.claim : null;
   const bits = isObject(found) ? found.work : null;
@@ -192,10 +204,30 @@ export async function claimUsername(
     method: 'POST',
     redirect: 'error',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ name: username.name, key, at, work, sig, ...(code ? { code } : {}) }),
+    signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS),
+    body: JSON.stringify({
+      name: username.name,
+      key,
+      at,
+      work,
+      sig,
+      ...(code && bind ? { code, bind } : {}),
+    }),
   });
-  const json: unknown = await answer.json().catch(() => null);
+  const reply = await readCapped(answer, MAX_ANSWER_BYTES).catch(() => null);
+  const json = reply === null ? null : parseJson(reply);
   if (answer.ok && isObject(json) && typeof json.until === 'number') return json.until;
   const reason = isObject(json) && typeof json.error === 'string' ? json.error.slice(0, 200) : answer.status;
   throw new Error(`${username.domain} refused ${shown}: ${reason}`);
+}
+
+/**
+ * The inbox's own signature over the username: the code must be this
+ * account's, from the same contact key, so nobody names someone else's inbox.
+ */
+async function bindTo(username: Username, contactKey: Uint8Array, code: string): Promise<string> {
+  const inbox = await readInbox(code, createP256Provider());
+  const signKey = await deriveInboxSignKeyBytes(contactKey, inbox.gen);
+  if (contactPublicKey(signKey) !== inbox.sign) throw new Error('That inbox code is not this account’s');
+  return signWithScalar(signKey, bindMessage(username));
 }

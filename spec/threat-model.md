@@ -94,8 +94,12 @@ reference implementation, or any implementation, honestly.
     address claims 3 new names a day and a service holds 50,000, so many
     addresses can fill one for a year; the address budget is kept in memory
     and starts again when the service restarts
-    (`packages/core/docs/usernames.md`). None of this is protocol: a domain
-    gives out its names as it likes (07 §9).
+    (`packages/core/docs/usernames.md`). Claims through minca.social's proxy
+    come from Netlify's addresses, each with a budget of its own. None of
+    this is protocol: a domain gives out its names as it likes (07 §9). A
+    stranger can't point a name at someone else's inbox: a claim is signed by
+    the inbox's own key over the name (`packages/names/tests/names.test.ts`,
+    "a name leads only to an inbox whose owner chose it").
   - A leaked view-only invite carries the space key, can't be closed, and
     never causes a key change, so whoever holds it reads everything new
     ([#170](https://github.com/leifriksheim/minca/issues/170)).
@@ -918,8 +922,9 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     sign a code for it naming mailboxes of its own, and take over the
     account's usernames on a Minca name service, whose name keys are derived
     from the contact key too. Its hold on a name outlasts revoking it, and
-    replacing the inbox: a name key has no generation to move on to, so the
-    owner can only give the name up. The library refuses
+    replacing the inbox: a name key has no generation to move on to, and a
+    name given up is still that key's to take back, so the owner has no way
+    to win the name back from it. The library refuses
     those calls on such a node; no peer can tell
     ([#313](https://github.com/leifriksheim/minca/issues/313)).
   - An app or site the person opens their pod in reads the vault, and can
@@ -1143,6 +1148,8 @@ does whoever controls that domain's DNS or certificates, or hosts it.
     inbox of the same account, whose knocks are no longer opened. A username
     is as good as its domain. Contacts already made are spaces, and a lookup
     can't touch them (07 §9).
+  - A username ties an inbox to the one that replaces it: whoever had the old
+    code and knows the name looks it up again (07 §9).
   - It learns which address looks up which name, and when. Lookups are open
     to anyone, so anyone can tie together names that lead to the same inbox
     code, and tie that code, wherever it was handed out privately, to the

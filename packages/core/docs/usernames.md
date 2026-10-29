@@ -47,17 +47,19 @@ Then it posts the claim there:
   "at": 1790000000000,
   "work": 731042,
   "code": "<inbox code>",
+  "bind": "<base64url>",
   "sig": "<base64url>"
 }
 ```
 
-| Field  |                                                                                                                       |
-| ------ | --------------------------------------------------------------------------------------------------------------------- |
-| `key`  | The **name key**'s public half, compressed P-256, base64url                                                           |
-| `at`   | When the claim was made, ms. It must be within 10 minutes of the service's clock, and later than the claim it follows |
-| `work` | A counter: SHA-256 of `minca/name-work/v1\|<name>@<domain>\|<key>\|<at>\|<work>` starts with `work` zero bits         |
-| `code` | The inbox code, at most 4,096 characters. None gives the name up                                                      |
-| `sig`  | The name key's ECDSA P-256 signature over `minca/name-claim/v1\|<name>@<domain>\|<at>\|<code, or empty>`              |
+| Field  |                                                                                                                                                  |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `key`  | The **name key**'s public half, compressed P-256, base64url                                                                                      |
+| `at`   | When the claim was made, ms. It must be within 10 minutes of the service's clock, and later than the claim it follows                            |
+| `work` | A counter: SHA-256 of `minca/name-work/v1\|<name>@<domain>\|<key>\|<at>\|<work>` starts with `work` zero bits                                    |
+| `code` | The inbox code, at most 4,096 characters. None gives the name up                                                                                 |
+| `bind` | With a code: the inbox signing key's signature over `minca/name-bind/v1\|<name>@<domain>`, so a name leads only to an inbox whose owner chose it |
+| `sig`  | The name key's ECDSA P-256 signature over `minca/name-claim/v1\|<name>@<domain>\|<at>\|<code, or empty>`                                         |
 
 The answer is `{ "until": <ms> }`, when the name lapses, or
 `{ "error": "…" }` with a 4xx status.
