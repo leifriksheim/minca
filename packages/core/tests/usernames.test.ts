@@ -13,7 +13,14 @@ import { createNames } from '../../names/names.mjs';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { createFolderAccountStore } from '../src/identity/account-store.js';
 import { createMincaAuth, type MincaAuth } from '../src/session/auth.js';
-import { parseUsername, resolveUsername, usernameFree, usernameIdeas } from '../src/inbox/names.js';
+import {
+  adHocUsername,
+  nameFromUsername,
+  parseUsername,
+  resolveUsername,
+  usernameFree,
+  usernameIdeas,
+} from '../src/inbox/names.js';
 import { team } from '../src/space/presets.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { portOf } from './helpers/net.js';
@@ -394,6 +401,16 @@ describe('usernameIdeas and usernameFree', () => {
     for (const idea of usernameIdeas(`Ann ${'x'.repeat(59)} Yu`))
       assert.ok(parseUsername(`${idea}@minca.social`), `${idea} is a name`);
     assert.deepEqual(usernameIdeas('  '), []);
+  });
+
+  test('skipping makes up a valid username and a name to go with it; a typed one names the account until it is renamed', () => {
+    for (let i = 0; i < 50; i++) {
+      const { username, name } = adHocUsername();
+      assert.ok(parseUsername(`${username}@minca.social`), `${username} is a name`);
+      assert.match(name, /^[A-Z][a-z]+ [A-Z][a-z]+$/);
+    }
+    assert.equal(nameFromUsername('leif.r'), 'Leif R');
+    assert.equal(nameFromUsername('anna'), 'Anna');
   });
 
   test('a service that is down is not a free name', async () => {

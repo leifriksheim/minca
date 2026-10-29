@@ -30,6 +30,8 @@ export {
   bindMessage,
   usernameIdeas,
   usernameFree,
+  adHocUsername,
+  nameFromUsername,
 } from './names.js';
 export type { Username, ResolvedUsername } from './names.js';
 export { createMailboxClient } from '../network/relays.js';

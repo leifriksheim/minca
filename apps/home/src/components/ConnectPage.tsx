@@ -45,6 +45,15 @@ export function ConnectPage() {
   // Proof is read off the flow, not its state: a confirm moves this page on by itself.
   const [, setProved] = useState(0);
 
+  // An account made in this window is the one chosen: nobody picks what they just made.
+  useEffect(
+    () =>
+      auth.subscribe(({ setup, session }) => {
+        if (setup === 'new' && session) setChosen(session.account.id);
+      }),
+    [auth],
+  );
+
   useEffect(() => {
     void (
       code

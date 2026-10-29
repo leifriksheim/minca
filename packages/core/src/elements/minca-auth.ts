@@ -29,7 +29,13 @@ import { accountCredentialName, offerToSave, recoveryKit } from '../session/cred
 import { passwordStrength } from '../session/password-strength.js';
 import type { PairingStage } from '../session/pairing.js';
 import type { AccountSummary } from '../identity/account-store.js';
-import { formatUsername, parseUsername, usernameFree, usernameIdeas } from '../inbox/names.js';
+import {
+  adHocUsername,
+  formatUsername,
+  nameFromUsername,
+  parseUsername,
+  usernameFree,
+} from '../inbox/names.js';
 import { adoptStyles, h, svg, type Child } from './dom.js';
 import { AUTH_CSS } from './auth-styles.js';
 
@@ -39,7 +45,7 @@ export interface MincaSessionEventDetail {
 }
 
 /** Where a username on the create screen stands */
-type NameState = 'empty' | 'checking' | 'free' | 'taken' | 'invalid' | 'unknown';
+type NameState = 'empty' | 'checking' | 'free' | 'taken' | 'invalid' | 'unknown' | 'picking';
 
 // Where there is no DOM the module still loads; the element is only ever made where there is one.
 const Base = globalThis.HTMLElement ?? class {};
@@ -263,9 +269,8 @@ export class MincaAuthElement extends Base {
   #mismatch = false;
   #lastSelected: string | null = null;
   #lastStage: string | null = null;
-  /** The username on the create screen: picked from the name until it is typed, and whether it is free */
-  #username: { typed: boolean; checked: string; state: NameState } = {
-    typed: false,
+  /** The username on the create screen, and whether it is free; `picking` while one is made up */
+  #username: { checked: string; state: NameState } = {
     checked: '',
     state: 'empty',
   };
@@ -369,7 +374,7 @@ export class MincaAuthElement extends Base {
   #reset(): void {
     this.#drafts.clear();
     clearTimeout(this.#usernameTimer);
-    this.#username = { typed: false, checked: '', state: 'empty' };
+    this.#username = { checked: '', state: 'empty' };
     this.#filledAs = '';
     this.#copied = false;
     this.#stored = false;
@@ -787,15 +792,15 @@ export class MincaAuthElement extends Base {
   #create(state: AuthState): HTMLElement {
     const auth = this.auth;
     const domain = auth.usernames;
-    const name = this.#input('name', {
-      type: 'text',
-      placeholder: 'Your name',
-      autocomplete: 'off',
-      autofocus: true,
-      disabled: state.busy,
-      'aria-label': 'Your name',
-    });
-    if (!domain)
+    if (!domain) {
+      const name = this.#input('name', {
+        type: 'text',
+        placeholder: 'Your name',
+        autocomplete: 'off',
+        autofocus: true,
+        disabled: state.busy,
+        'aria-label': 'Your name',
+      });
       return card(
         'Create your account',
         subtitle('What should apps call you? You can change it later.'),
@@ -807,16 +812,13 @@ export class MincaAuthElement extends Base {
           name,
           submit(state.busy, 'Continue', 'Creating…'),
         ),
-        h(
-          'p',
-          { class: 'wa-small' },
-          'Next: a recovery code to keep safe, then a passkey or password for signing in.',
-        ),
         errorBox(state.error),
         links(link('I already have an account', () => auth.showExisting(), state.busy)),
         this.#podLine(state),
       );
+    }
 
+    const busy = state.busy || this.#username.state === 'picking';
     const username = this.#input('username', {
       type: 'text',
       placeholder: 'yourname',
@@ -824,7 +826,8 @@ export class MincaAuthElement extends Base {
       autocapitalize: 'none',
       spellcheck: 'false',
       maxlength: '64',
-      disabled: state.busy,
+      autofocus: true,
+      disabled: busy,
       'aria-label': 'Username',
     });
     const status = h('p', { class: 'wa-small wa-under', 'aria-live': 'polite' });
@@ -841,68 +844,63 @@ export class MincaAuthElement extends Base {
             ? 'Letters, numbers, dots, dashes and underscores.'
             : now === 'unknown'
               ? "Couldn't check it just now. It's tried when you continue."
-              : now === 'empty'
-                ? 'No username for now. You can pick one later.'
-                : 'How people find you and add you.';
+              : 'How people find you and add you. You can change it later.';
     };
-    // Looks the name up a moment after typing stops; picked from the name, a taken one gives way to the next idea.
-    const check = (ideas: ReadonlyArray<string>) => {
+    // Looks the name up a moment after typing stops.
+    const check = () => {
       clearTimeout(this.#usernameTimer);
       const typed = username.value.trim().toLowerCase();
       const parsed = typed ? parseUsername(`${typed}@${domain}`) : null;
-      this.#username.checked = typed;
-      this.#username.state = !typed ? 'empty' : parsed ? 'checking' : 'invalid';
+      this.#username = { checked: typed, state: !typed ? 'empty' : parsed ? 'checking' : 'invalid' };
       show();
       if (!parsed) return;
       this.#usernameTimer = setTimeout(() => {
         void usernameFree(formatUsername(parsed)).then((free) => {
-          const found = free === null ? 'unknown' : free ? 'free' : 'taken';
           if (this.#username.checked !== typed) return;
-          const next = ideas[ideas.indexOf(typed) + 1];
-          if (found === 'taken' && !this.#username.typed && next) {
-            username.value = next;
-            this.#drafts.set('username', next);
-            return check(ideas);
-          }
-          this.#username.state = found;
+          this.#username.state = free === null ? 'unknown' : free ? 'free' : 'taken';
           show();
         });
       }, 300);
     };
-    name.addEventListener('input', () => {
-      if (this.#username.typed) return;
-      const ideas = usernameIdeas(name.value);
-      username.value = ideas[0] ?? '';
-      this.#drafts.set('username', username.value);
-      check(ideas);
-    });
-    username.addEventListener('input', () => {
-      this.#username.typed = true;
-      check([]);
-    });
+    username.addEventListener('input', check);
     show();
 
+    const create = (name: string, picked: string) =>
+      void auth.createAccount(name, { username: `${picked}@${domain}` });
+    // Skipping makes one up, a free one where the service can say: changed later, like any.
+    const skip = async () => {
+      this.#username = { checked: '', state: 'picking' };
+      this.#redraw();
+      let made = adHocUsername();
+      for (let tries = 0; tries < 3 && (await usernameFree(`${made.username}@${domain}`)) === false; tries++)
+        made = adHocUsername();
+      create(made.name, made.username);
+    };
+
     return card(
-      'Create your account',
+      'Pick a username',
       subtitle('Free, and yours. No email or phone number needed.'),
       form(
         () => {
           const typed = username.value.trim().toLowerCase();
-          if (!name.value.trim() || this.#username.state === 'taken' || this.#username.state === 'invalid')
-            return;
-          void auth.createAccount(name.value.trim(), typed ? { username: `${typed}@${domain}` } : {});
+          const { state: now } = this.#username;
+          if (!typed || now === 'taken' || now === 'invalid' || now === 'checking') return;
+          create(nameFromUsername(typed), typed);
         },
         {},
-        h('label', { class: 'wa-label' }, 'Your name'),
-        name,
-        h('p', { class: 'wa-small wa-under' }, 'Shown to the people in your spaces.'),
-        h('label', { class: 'wa-label' }, 'Username', h('span', { class: 'wa-optional' }, 'Optional')),
         h('div', { class: 'wa-username' }, username, h('span', null, `@${domain}`), mark),
         status,
-        submit(state.busy, 'Continue', 'Creating…'),
+        submit(busy, 'Continue', 'Creating…'),
       ),
       errorBox(state.error),
-      links(link('I already have an account', () => auth.showExisting(), state.busy)),
+      links(
+        link(
+          this.#username.state === 'picking' ? 'Making one up…' : 'Skip, make one up for me',
+          () => void skip(),
+          busy,
+        ),
+        link('I already have an account', () => auth.showExisting(), busy),
+      ),
       this.#podLine(state),
     );
   }

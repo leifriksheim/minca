@@ -33,14 +33,16 @@ the new code, and reading knocks renews it a month before its year is up.
 knocks by username, and the contact it becomes keeps the username
 (`ContactView.username`). See [node.md](node.md#the-inbox).
 
-**At sign-up.** `createMincaAuth({ usernames: 'minca.social' })` offers a
-username on the create screen of `<minca-auth>`: it follows the name as it is
-typed (`usernameIdeas`: the first name, the whole name, then the first name
-with a number, the first free one), and can be changed or left empty.
-`createAccount(name, { username })` claims it in the background while the
-recovery code and password screens are up; `state.username` says how it
-went (`claiming`, `claimed`, or `failed` with an `error`, when it was taken
-meanwhile or the service was down). The account is made either way.
+**At sign-up.** `createMincaAuth({ usernames: 'minca.social' })` makes the
+create screen of `<minca-auth>` one field: the username, with a tick once the
+service says it is free and a cross once it is taken. The account's name
+starts as the username's (`nameFromUsername`: `leif.r` is Leif R) and is
+changed on the account page. "Skip, make one up for me" picks a free one
+instead (`adHocUsername`: `swift.otter42`, Swift Otter). `createAccount(name,
+{ username })` claims it in the background while the recovery code and
+password screens are up, and those screens say how it went: `state.username`
+is `claiming`, `claimed`, or `failed` with an `error`, when it was taken
+meanwhile or the service was down. The account is made either way.
 
 The claim is made on the home's node, which may be the only one holding the
 inbox: a connect page that closes once it answers keeps the window open
@@ -52,7 +54,7 @@ finish, however long, so neither is cut off halfway; then up to 30 s for the app
 and only for an account that claimed a name there. If the claim failed, the
 app's contacts screen asks for a name again.
 
-_Source: `packages/core/src/session/auth.ts` (`createAccount`, `claimInBackground`), `packages/core/src/elements/minca-auth.ts` (`#create`), `packages/core/src/inbox/names.ts` (`usernameIdeas`), `apps/home/src/components/ConnectPage.tsx` (`handOver`). Tests: `packages/core/tests/usernames.test.ts` ("a username at sign-up")._
+_Source: `packages/core/src/session/auth.ts` (`createAccount`, `claimInBackground`), `packages/core/src/elements/minca-auth.ts` (`#create`), `packages/core/src/inbox/names.ts` (`adHocUsername`, `nameFromUsername`, `usernameFree`), `apps/home/src/components/ConnectPage.tsx` (`handOver`). Tests: `packages/core/tests/usernames.test.ts` ("a username at sign-up")._
 
 Renewing claims the code of the inbox this device knows. A device that
 hasn't yet synced a replacement made on another one points the name back at

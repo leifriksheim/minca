@@ -282,3 +282,60 @@ export function usernameIdeas(name: string): string[] {
     .replace(/[._-]+$/, '');
   return [...new Set([first, whole, `${first}${number}`])];
 }
+
+const ADJECTIVES = [
+  'brave',
+  'bright',
+  'calm',
+  'clever',
+  'cosy',
+  'eager',
+  'gentle',
+  'happy',
+  'kind',
+  'lively',
+  'lucky',
+  'merry',
+  'quiet',
+  'sunny',
+  'swift',
+  'warm',
+];
+const ANIMALS = [
+  'badger',
+  'crane',
+  'dolphin',
+  'falcon',
+  'fox',
+  'hare',
+  'heron',
+  'koala',
+  'lynx',
+  'otter',
+  'owl',
+  'panda',
+  'puffin',
+  'robin',
+  'seal',
+  'wren',
+];
+
+/** A made-up username and the name that goes with it, for someone who skips choosing: `swift.otter42`, Swift Otter */
+export function adHocUsername(): { readonly username: string; readonly name: string } {
+  const [a = 0, b = 0, c = 0] = globalThis.crypto.getRandomValues(new Uint8Array(3));
+  const adjective = ADJECTIVES[a % ADJECTIVES.length]!;
+  const animal = ANIMALS[b % ANIMALS.length]!;
+  return {
+    username: `${adjective}.${animal}${10 + (c % 90)}`,
+    name: nameFromUsername(`${adjective}.${animal}`),
+  };
+}
+
+/** The name an account takes from its username until it is given one: `leif.r` is Leif R */
+export function nameFromUsername(name: string): string {
+  return name
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((word) => word[0]!.toUpperCase() + word.slice(1))
+    .join(' ');
+}

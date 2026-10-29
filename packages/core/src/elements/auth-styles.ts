@@ -89,6 +89,7 @@ minca-auth .wa-mark:empty { display: none; }
 minca-auth .wa-mark[data-name="free"] { background: var(--minca-good); color: #fff !important; }
 minca-auth .wa-mark[data-name="taken"] { background: var(--minca-danger); color: #fff !important; }
 minca-auth .wa-small[data-name="taken"] { color: var(--minca-danger); }
+minca-auth .wa-small[data-name="free"]:not(.wa-under) { color: var(--minca-good); }
 minca-auth input:focus { border-color: var(--minca-muted); box-shadow: 0 0 0 3px rgba(0, 0, 0, .06); }
 minca-auth .wa-offscreen {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
