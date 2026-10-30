@@ -5,7 +5,7 @@ import { shapeColours, type ShapeColour } from '@minca/ui/tokens';
  * Companies start over, groups build on each other. Each tech billionaire
  * keeps your group in a pen of his own and guards the gate, his head a
  * cut-out photo that flaps as he talks, the way South Park draws famous
- * people. On Minca groups pass bricks to each other and build one tower.
+ * people. On Minca people hand each other bricks and build towers together.
  */
 
 const GROUND = 290;
@@ -161,14 +161,14 @@ function Guard({
   );
 }
 
-/** Someone kept in a pen, hopping to see over the fence */
-function Kept({ who, x, i }: { who: string; x: number; i: number }) {
+/** Someone kept in a pen, hopping to see over the fence; builders only bob */
+function Kept({ who, x, i, hop = 16 }: { who: string; x: number; i: number; hop?: number }) {
   return (
     <g>
       <animateTransform
         attributeName="transform"
         type="translate"
-        values="0 0;0 0;0 -16;0 0"
+        values={`0 0;0 0;0 ${-hop};0 0`}
         keyTimes="0;0.6;0.75;1"
         dur="1.8s"
         begin={`${-i * 0.7}s`}
@@ -293,64 +293,88 @@ export function Pens() {
   );
 }
 
-/** The bricks, bottom up, and which side of the tower the group that laid each one stands on */
-const BRICKS: ReadonlyArray<{ adds: string; colour: ShapeColour }> = [
-  { adds: 'RSVP', colour: 'coral' },
-  { adds: 'Waitlist', colour: 'cobalt' },
-  { adds: 'Slots', colour: 'peach' },
-  { adds: 'Talks', colour: 'sage' },
-  { adds: 'Reminders', colour: 'lilac' },
-  { adds: 'Carpool', colour: 'coral' },
-  { adds: 'Photos', colour: 'cobalt' },
-];
-const BRICK = { width: 150, height: 32, gap: 1.1 };
-/** The two groups either side, who they are, and where they throw from */
-const SIDES = [
-  { people: ['maya', 'joe', 'lea', 'ben'], x: 70 },
-  { people: ['anna', 'sam', 'leo', 'ida'], x: 430 },
+/** Who stands between the towers, and where */
+const BUILDERS = [
+  { who: 'maya', x: -5 },
+  { who: 'joe', x: 140 },
+  { who: 'anna', x: 180 },
+  { who: 'sam', x: 320 },
+  { who: 'lea', x: 360 },
+  { who: 'ben', x: 505 },
 ] as const;
-/** How far apart the people in a group stand: close, like a crowd */
-const SPACING = 36;
+const TOWERS = [70, 250, 430] as const;
+/**
+ * The bricks in the order they go up: which tower, who hands it over and who
+ * takes it and lays it (always someone standing beside that tower)
+ */
+const BRICKS: ReadonlyArray<{ adds: string; colour: ShapeColour; tower: number; from: number; to: number }> =
+  [
+    { adds: 'RSVP', colour: 'coral', tower: 0, from: 2, to: 1 },
+    { adds: 'Chat', colour: 'cobalt', tower: 1, from: 4, to: 3 },
+    { adds: 'Rota', colour: 'peach', tower: 2, from: 3, to: 4 },
+    { adds: 'Waitlist', colour: 'sage', tower: 0, from: 1, to: 0 },
+    { adds: 'Polls', colour: 'lilac', tower: 1, from: 1, to: 2 },
+    { adds: 'Swaps', colour: 'coral', tower: 2, from: 4, to: 5 },
+    { adds: 'Talks', colour: 'cobalt', tower: 0, from: 0, to: 1 },
+    { adds: 'Map', colour: 'peach', tower: 1, from: 2, to: 3 },
+    { adds: 'Chores', colour: 'sage', tower: 2, from: 5, to: 4 },
+    { adds: 'Reminders', colour: 'lilac', tower: 0, from: 2, to: 1 },
+    { adds: 'Photos', colour: 'coral', tower: 1, from: 4, to: 3 },
+    { adds: 'Carpool', colour: 'cobalt', tower: 2, from: 3, to: 4 },
+  ];
+const BRICK = { width: 88, height: 28, gap: 0.75 };
+/** Where a brick is held, above the ground */
+const HANDS = 48;
+/** How big a brick is in someone's hands, before it's laid */
+const HELD = 0.5;
 
-/** On Minca: groups either side pass bricks up to one tower, in turn, and it stays up */
+/** On Minca: people between three towers hand each other bricks, and whoever is beside a tower lays them */
 export function Tower() {
   const ref = useRef<SVGSVGElement>(null);
-  usePlayWhenSeen(ref, 0.4 + BRICKS.length * BRICK.gap + 1);
+  usePlayWhenSeen(ref, 0.4 + BRICKS.length * BRICK.gap + 1.2);
   return (
     <svg
       ref={ref}
       viewBox="-30 40 560 320"
       role="img"
-      aria-label="Two groups either side of one tower pass bricks up to it in turn: RSVP, Waitlist, Slots, Talks, Reminders, Carpool and Photos"
+      aria-label="People standing between three towers hand each other bricks, RSVP, Chat, Polls, Carpool and more, and build the towers together"
     >
       <path className="pens-line" d={`M-30 ${GROUND}H530`} />
-      {SIDES.map((side) =>
-        side.people.map((who, j) => (
-          <Kept key={who} who={who} x={side.x + (j - (side.people.length - 1) / 2) * SPACING} i={j} />
-        )),
-      )}
+      {BUILDERS.map((builder, i) => (
+        <Kept key={builder.who} who={builder.who} x={builder.x} i={i} hop={4} />
+      ))}
       {BRICKS.map((brick, i) => {
-        const from = SIDES[i % 2] ?? SIDES[0];
-        const x = 250 + (i % 2 ? 12 : -12);
-        const y = GROUND - BRICK.height * (i + 0.5);
-        const start = { x: from.x, y: GROUND - 70 };
-        const arc = `M${start.x - x} ${start.y - y}Q${(start.x - x) / 2} ${-140} 0 0`;
-        const timing = { begin: `${0.4 + i * BRICK.gap}s`, dur: '0.8s', fill: 'freeze' as const };
+        const level = BRICKS.slice(0, i).filter((below) => below.tower === brick.tower).length;
+        const x = (TOWERS[brick.tower] ?? 0) + (level % 2 ? 4 : -4);
+        const y = GROUND - BRICK.height * (level + 0.5);
+        const from = { x: (BUILDERS[brick.from]?.x ?? 0) - x, y: GROUND - HANDS - y };
+        const to = { x: (BUILDERS[brick.to]?.x ?? 0) - x, y: from.y };
+        const path = `M${from.x} ${from.y}Q${(from.x + to.x) / 2} ${from.y - 30} ${to.x} ${to.y}Q${to.x / 2} ${Math.min(to.y, 0) - 60} 0 0`;
+        const timing = { begin: `${0.4 + i * BRICK.gap}s`, dur: '1.2s', fill: 'freeze' as const };
         return (
           <g key={brick.adds} transform={`translate(${x} ${y})`}>
             <g opacity={0}>
               <animate attributeName="opacity" values="0;1;1" keyTimes="0;0.1;1" {...timing} />
-              <animateMotion path={arc} {...timing} />
-              <rect
-                className="pens-line"
-                x={-BRICK.width / 2}
-                y={-BRICK.height / 2}
-                width={BRICK.width}
-                height={BRICK.height}
-                rx={6}
-                fill={`color-mix(in srgb, ${shapeColours[brick.colour]} 70%, var(--card))`}
-              />
-              <text className="pens-brick">{brick.adds}</text>
+              <animateMotion path={path} {...timing} />
+              <g>
+                <animateTransform
+                  attributeName="transform"
+                  type="scale"
+                  values={`${HELD};${HELD};1`}
+                  keyTimes="0;0.4;1"
+                  {...timing}
+                />
+                <rect
+                  className="pens-line"
+                  x={-BRICK.width / 2}
+                  y={-BRICK.height / 2}
+                  width={BRICK.width}
+                  height={BRICK.height}
+                  rx={6}
+                  fill={`color-mix(in srgb, ${shapeColours[brick.colour]} 70%, var(--card))`}
+                />
+                <text className="pens-brick">{brick.adds}</text>
+              </g>
             </g>
           </g>
         );
