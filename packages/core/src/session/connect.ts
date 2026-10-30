@@ -31,6 +31,7 @@ import { soleFounder } from '../space/constitution.js';
 import { checkProposal, MAX_PROPOSALS, type AutomationProposal } from '../space/own-automations.js';
 import { defaultStorage, guardedStorage, type KeyValueStore } from './stay-signed-in.js';
 import { isObject, unref } from '../utils/guards.js';
+import { popupFeatures } from './popup.js';
 
 /** Messages between an app and the home it opened */
 const HELLO = 'minca:hello';
@@ -473,7 +474,7 @@ function checkCarryGrant(grant: CarryGrant): void {
 }
 
 function openHome(homeUrl: URL): Window {
-  const popup = globalThis.open(homeUrl.href, 'minca-home', 'popup,width=460,height=720');
+  const popup = globalThis.open(homeUrl.href, 'minca-home', popupFeatures(460, 720));
   if (!popup) throw new Error('The browser blocked the window. Allow pop-ups for this site and try again.');
   return popup;
 }

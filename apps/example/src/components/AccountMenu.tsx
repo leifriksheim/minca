@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { useAccount, useAccountPicture, useConnection, useMyName } from '@minca/react';
-import { accountHomeLink } from '@minca/core/session';
+import { accountHomeLink, popupFeatures } from '@minca/core/session';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { usePopover } from './usePopover';
 import { useCopy } from '@minca/app-shared/action';
@@ -157,7 +157,7 @@ export function AccountActions({
  * home may be signed in to another account, so the link says which one this app acts for.
  */
 export function openAccountHome(home: string, did: string) {
-  globalThis.open(accountHomeLink(home, did), 'minca-account', 'popup,width=720,height=820');
+  globalThis.open(accountHomeLink(home, did), 'minca-account', popupFeatures(720, 820));
 }
 
 /** A group of the menu's rows, under a line */

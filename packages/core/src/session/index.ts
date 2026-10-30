@@ -86,6 +86,7 @@ export { createStaySignedIn, STAY_SIGNED_IN_CHOICES, DEFAULT_STAY_SIGNED_IN } fr
 export type { StaySignedIn, StaySignedInStore, KeyValueStore } from './stay-signed-in.js';
 export { offerToPhone, receiveFromDesktop, readPairingTicket, clearPairingTicket } from './pairing.js';
 export { accountHomeLink, readAccountHint, clearAccountHint } from './account-hint.js';
+export { popupFeatures } from './popup.js';
 export type { PairingStage, PairingOffer, Handover } from './pairing.js';
 export {
   answerConnectCode,

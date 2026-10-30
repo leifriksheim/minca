@@ -9,7 +9,7 @@ import {
   type OwnAutomationView,
   type P2PNode,
 } from '@minca/core';
-import { accountHomeLink } from '@minca/core/session';
+import { accountHomeLink, popupFeatures } from '@minca/core/session';
 import { notifyOn, type AppAutomation } from '@minca/core/schemas';
 import { TEMPLATES } from './components/apps/templates';
 import { madeNotify } from './components/apps/entries';
@@ -114,7 +114,7 @@ export function useAsk() {
     const url = did
       ? accountHomeLink(state.home, did, 'notifications')
       : `${new URL('.', state.home).href}#notifications`;
-    globalThis.open(url, 'minca-account', 'popup,width=720,height=820');
+    globalThis.open(url, 'minca-account', popupFeatures(720, 820));
   }, [state.home, state.grant?.did]);
 
   return { permission, error, asking, kept, ask, allow, manage };

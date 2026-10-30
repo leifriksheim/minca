@@ -377,7 +377,12 @@ account the home keeps is named by the name it filed, never one from the
 link; its avatar helps recognise it, but is no proof, since a look-alike
 takes seconds to find.
 
-_Source: `packages/core/src/session/account-hint.ts`, `apps/home/src/components/AccountHint.tsx`, `apps/example/src/components/AccountMenu.tsx`, `apps/example/src/notifications.ts`. Tests: `packages/core/tests/account-hint.test.ts`._
+Open it as a popup with `popupFeatures(width, height)`, the third argument to
+`window.open`: a window that size, centred on the one it opens from, as
+connecting does. Given a size alone, a browser puts it where it likes, often
+the screen's top left.
+
+_Source: `packages/core/src/session/account-hint.ts`, `packages/core/src/session/popup.ts`, `apps/home/src/components/AccountHint.tsx`, `apps/example/src/components/AccountMenu.tsx`, `apps/example/src/notifications.ts`. Tests: `packages/core/tests/account-hint.test.ts`, `packages/core/tests/popup.test.ts`._
 
 ## The account home's side
 

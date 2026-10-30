@@ -17,6 +17,7 @@ import {
 import { useMay } from './may';
 import { useAction } from './action';
 import { styles, palette, hstack, stack } from './styles';
+import { popupFeatures } from '@minca/core/session';
 
 /**
  * A hosted bot's connectors: the services its host offers, each connected
@@ -79,7 +80,7 @@ export function BotConnectors({
 
   const connectTo = (kind: string) => {
     // Opened now, in the click, or the browser blocks it; it goes to the host once the request is written.
-    const opened = globalThis.open('about:blank', 'minca-connect', 'popup,width=760,height=820');
+    const opened = globalThis.open('about:blank', 'minca-connect', popupFeatures(760, 820));
     popup.current = opened;
     void run(async () => {
       try {
