@@ -55,7 +55,7 @@ export function Hosting({ node }: { node: P2PNode }) {
   const again = () => act('again', load);
 
   return (
-    <section id="hosting" style={{ ...styles.settingsSection, gap: 16 }}>
+    <section id="hosting" className="surface" style={{ ...styles.settingsSection, gap: 16 }}>
       {hosts === null && !error ? (
         <Loader label="Asking your host" showLabel />
       ) : hosts?.length ? (

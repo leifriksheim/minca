@@ -14,50 +14,12 @@ import {
 import { nameOf, peopleFrom, type People } from '../derive/people';
 import { PersonAvatar } from './std/PersonAvatar';
 import { RingButton } from './calls/Calls';
-import { createInviteLink } from '../spaces';
-import { AddPeople } from './InvitePeople';
-import { styles, palette, variants, hstack, stack } from '../styles';
+import { styles, palette, variants, hstack, stack, ui } from '../styles';
+import { RowMenu } from './PeopleParts';
 import { Person } from './Person';
 import { Loading } from './Loading';
-import { AddButton, LinkButton, QuietButton } from './Buttons';
+import { AddButton, QuietButton } from './Buttons';
 import { confirmThen } from '../confirm';
-
-/** Your own name, renamed in place on the account, so every space you are in gets it */
-function MyName({ name }: { name: string }) {
-  const node = useNode();
-  const [draft, setDraft] = useState<string | null>(null);
-  const save = async () => {
-    const trimmed = draft?.trim();
-    setDraft(null);
-    if (trimmed && trimmed !== name) await node.account.setName(trimmed).catch(() => {});
-  };
-  if (draft === null) {
-    return (
-      <LinkButton
-        onClick={() => setDraft(name)}
-        title="Rename — everyone in your spaces sees this name"
-        style={{ fontSize: 14, color: palette.ink.strong }}
-      >
-        {name}
-      </LinkButton>
-    );
-  }
-  return (
-    <input
-      value={draft}
-      onChange={(event) => setDraft(event.target.value)}
-      onBlur={() => void save()}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') void save();
-        if (event.key === 'Escape') setDraft(null);
-      }}
-      autoFocus
-      maxLength={64}
-      aria-label="Your name"
-      style={{ ...styles.input, height: 26, minHeight: 26, width: 160, padding: '0 6px', fontSize: 14 }}
-    />
-  );
-}
 
 /** Who holds what in the space, as the node reports it */
 type SpaceAccess = NonNullable<ReturnType<typeof useAccess>>;
@@ -133,7 +95,7 @@ function usePowers(spaceId: string, me: string): Powers {
 }
 
 /** Who may do what in a space: its people and the roles assigned them, and what each role grants */
-export function RolesView({ space }: { space: SpaceSummary }) {
+export function RolesView({ space, onInvite }: { space: SpaceSummary; onInvite: () => void }) {
   const access = useAccess(space.id);
   const account = useAccount();
   const people = peopleFrom(useProfiles(space.id));
@@ -142,7 +104,14 @@ export function RolesView({ space }: { space: SpaceSummary }) {
     return <Loading label="Loading who's who" style={{ fontSize: 13, color: palette.ink.faint }} />;
   return (
     <div style={stack(36)}>
-      <Members space={space} access={access} me={account.did} people={people} powers={powers} />
+      <Members
+        space={space}
+        access={access}
+        me={account.did}
+        people={people}
+        powers={powers}
+        onInvite={onInvite}
+      />
       <Roles space={space} access={access} powers={powers} />
       <WhatYouCanDo access={access} />
     </div>
@@ -411,17 +380,17 @@ function Members({
   me,
   people,
   powers,
+  onInvite,
 }: {
   space: SpaceSummary;
   access: SpaceAccess;
   me: string;
   people: People;
   powers: Powers;
+  onInvite: () => void;
 }) {
   const node = useNode();
   const { run, error } = useAction();
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [adding, setAdding] = useState(false);
   const roleTitle = (name: string) => titleOf(access.roles.find((r) => r.name === name) ?? { name });
   const members = new Set(access.members.map((m) => m.did));
   // People who said who they are here but hold no role: they follow along.
@@ -431,124 +400,120 @@ function Members({
   const confirmed = (title: string, question: string, yes: string, then: () => Promise<unknown>) =>
     confirmThen(question, { title, yes }, () => run(then));
 
+  /** What can be done with someone, behind their row's menu */
+  const actions = (member: { did: string; founder: boolean; roles: ReadonlyArray<string> }) => {
+    const { did } = member;
+    const self = did === me;
+    const name = nameOf(did, people);
+    const takes = powers.unassign.get(did) ?? new Set<string>();
+    return [
+      ...[...(powers.assign.get(did) ?? [])].map((role) => ({
+        label: self ? `Take the ${roleTitle(role)} role` : `Give the ${roleTitle(role)} role`,
+        onClick: () => void run(() => node.spaces.assign(space.id, did, role)),
+      })),
+      ...member.roles
+        .filter((role) => takes.has(role))
+        .map((role) => ({
+          label: self ? `Give up ${roleTitle(role)}` : `Take ${roleTitle(role)} away`,
+          onClick: () =>
+            confirmed(
+              self ? `Give up your ${roleTitle(role)} role?` : `Take ${roleTitle(role)} from ${name}?`,
+              self
+                ? 'You can only have it back if someone gives it to you.'
+                : 'What they already wrote stays.',
+              self ? 'Give it up' : 'Take it',
+              () => node.spaces.unassign(space.id, did, role),
+            ),
+        })),
+      ...(self && member.founder && member.roles.length > 0
+        ? [
+            {
+              label: 'Step down as founder',
+              onClick: () =>
+                confirmed(
+                  'Step down as a founder?',
+                  'You stay, with the roles you hold, and can be removed like anyone else.',
+                  'Step down',
+                  () => node.spaces.stepDown(space.id),
+                ),
+            },
+          ]
+        : []),
+      ...(members.has(did) && powers.remove.has(did)
+        ? [
+            {
+              label: self ? 'Leave the space' : 'Remove from the space',
+              danger: true,
+              onClick: () =>
+                confirmed(
+                  self ? 'Leave this space?' : `Remove ${name} from the space?`,
+                  self
+                    ? 'You give up every role you hold here.'
+                    : 'They lose every role here. What they already wrote stays.',
+                  self ? 'Leave' : 'Remove',
+                  () => node.spaces.removeMember(space.id, did),
+                ),
+            },
+          ]
+        : []),
+    ];
+  };
+
   const row = (member: { did: string; founder: boolean; roles: ReadonlyArray<string> }) => {
     const { did } = member;
     const self = did === me;
     const name = nameOf(did, people);
-    const gives = [...(powers.assign.get(did) ?? [])];
-    const takes = powers.unassign.get(did) ?? new Set<string>();
-    const removes = powers.remove.has(did);
+    const menu = actions(member);
+    const labels = [...(member.founder ? ['Founder'] : []), ...member.roles.map(roleTitle)];
     return (
-      <li key={did} style={{ ...styles.row, padding: '8px 4px', flexWrap: 'wrap' }}>
-        <PersonAvatar spaceId={space.id} did={did} size={28} />
-        {/* Room for a name at least; past that, what can be done with them wraps under it. */}
-        <div style={{ flex: '1 1 160px', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-          <span style={{ color: palette.ink.strong, fontSize: 14 }}>
-            {self ? <MyName name={people.get(did)?.name ?? name} /> : <Person did={did} />}{' '}
-            {self && <span style={{ color: palette.ink.faint, fontWeight: 400 }}>· you</span>}
+      <li key={did} style={memberRow}>
+        <PersonAvatar spaceId={space.id} did={did} size={40} />
+        <div style={{ flex: 1, minWidth: 0, ...stack(3) }}>
+          <span style={{ fontSize: 15, fontWeight: 600, color: palette.ink.strong }}>
+            <Person did={did} />
+            {self && <span style={{ color: palette.ink.faint, fontWeight: 400 }}> · you</span>}
           </span>
-          <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 2 }}>
-            {member.founder && <span style={chip}>Founder</span>}
-            {member.roles.map((role) => (
-              <span key={role} style={chip}>
-                {roleTitle(role)}
-                {takes.has(role) && (
-                  <button
-                    onClick={() =>
-                      confirmed(
-                        self
-                          ? `Give up your ${roleTitle(role)} role?`
-                          : `Take ${roleTitle(role)} from ${name}?`,
-                        self
-                          ? 'You can only have it back if someone gives it to you.'
-                          : 'What they already wrote stays.',
-                        self ? 'Give it up' : 'Take it',
-                        () => node.spaces.unassign(space.id, did, role),
-                      )
-                    }
-                    aria-label={`Take ${role} from ${name}`}
-                    style={{ ...styles.linkButton, padding: '0 0 0 6px', fontSize: 12 }}
-                  >
-                    ×
-                  </button>
-                )}
-              </span>
-            ))}
+          <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {labels.length > 0 ? (
+              labels.map((label) => (
+                <span key={label} style={chip}>
+                  {label}
+                </span>
+              ))
+            ) : (
+              <span style={styles.faint}>No role</span>
+            )}
           </span>
         </div>
         {!self && members.has(did) && <RingButton space={space} did={did} name={name} />}
-        {gives.length > 0 && (
-          <select
-            aria-label={`Give ${name} a role`}
-            value=""
-            onChange={(e) =>
-              e.target.value && void run(() => node.spaces.assign(space.id, did, e.target.value))
-            }
-            style={{ ...styles.input, width: 'auto', height: 32, fontSize: 13 }}
-          >
-            <option value="">Give a role…</option>
-            {gives.map((role) => (
-              <option key={role} value={role}>
-                {roleTitle(role)}
-              </option>
-            ))}
-          </select>
-        )}
-        {self && member.founder && member.roles.length > 0 && (
-          <QuietButton
-            onClick={() =>
-              confirmed(
-                'Step down as a founder?',
-                'You stay, with the roles you hold, and can be removed like anyone else.',
-                'Step down',
-                () => node.spaces.stepDown(space.id),
-              )
-            }
-          >
-            Step down
-          </QuietButton>
-        )}
-        {members.has(did) && removes && (
-          <button
-            onClick={() =>
-              confirmed(
-                self ? 'Leave this space?' : `Remove ${name} from the space?`,
-                self
-                  ? 'You give up every role you hold here.'
-                  : 'They lose every role here. What they already wrote stays.',
-                self ? 'Leave' : 'Remove',
-                () => node.spaces.removeMember(space.id, did),
-              )
-            }
-            data-variant="danger"
-            style={{ ...styles.smallButton, color: palette.accent.danger }}
-          >
-            {self ? 'Leave' : 'Remove'}
-          </button>
-        )}
+        {menu.length > 0 && <RowMenu label={`More for ${name}`} items={menu} />}
       </li>
     );
   };
 
-  const invites = access.invites.filter((i) => i.open);
   return (
     <section style={section} aria-label="Members">
-      <Heading title={`People (${access.members.length})`}>
-        <span style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => setAdding(true)} data-variant="primary" style={styles.darkSmall}>
-            Add people
-          </button>
-          <button onClick={() => setInviteOpen(!inviteOpen)} data-variant="quiet" style={styles.smallButton}>
-            {inviteOpen ? 'Close' : 'Invite link'}
-          </button>
-        </span>
+      <Heading title={`Members · ${access.members.length}`}>
+        <AddButton onClick={onInvite} style={{ height: 36 }}>
+          Invite people
+        </AddButton>
       </Heading>
-      {adding && <AddPeople space={space} members={members} onClose={() => setAdding(false)} />}
-      {inviteOpen && <Invite space={space} access={access} offered={powers.invite} />}
       {error && <p style={styles.error}>{plainError(error)}</p>}
-      <ul style={{ ...list, gap: 0 }}>{access.members.map(row)}</ul>
+      <ul className="rows" style={ui.list}>
+        {access.members.map(row)}
+      </ul>
+
+      {followers.length > 0 && (
+        <>
+          <p style={{ ...styles.fieldLabel, marginTop: 12 }}>Following, with no role</p>
+          <ul className="rows" style={ui.list}>
+            {followers.map((did) => row({ did, founder: false, roles: [] }))}
+          </ul>
+        </>
+      )}
+
       {access.headless && (
-        <p style={{ ...styles.fieldLabel, fontWeight: 400 }}>
+        <p style={{ ...styles.quiet, lineHeight: 1.5 }}>
           No one can change roles here any more. Members keep what their roles allow; to change more, move to
           a successor space.
         </p>
@@ -572,150 +537,17 @@ function Members({
           </ul>
         </div>
       )}
-
-      {followers.length > 0 && (
-        <div>
-          <p style={styles.fieldLabel}>Following, with no role</p>
-          <ul style={{ ...list, gap: 0 }}>
-            {followers.map((did) => row({ did, founder: false, roles: [] }))}
-          </ul>
-        </div>
-      )}
-
-      {invites.length > 0 && (
-        <div>
-          <p style={styles.fieldLabel}>Open invite links</p>
-          <ul style={{ ...list, gap: 0 }}>
-            {invites.map((invite) => {
-              const why = powers.invite.includes(invite.role)
-                ? null
-                : 'Closing it takes a grant of /role/assign for its role';
-              return (
-                <li key={invite.key} style={{ ...styles.row, padding: '8px 4px' }}>
-                  <span style={{ flex: 1, fontSize: 13, color: palette.ink.body }}>
-                    Joins as <strong>{roleTitle(invite.role)}</strong>
-                    <span style={{ color: palette.ink.faint }}> · …{invite.key.slice(-6)}</span>
-                  </span>
-                  <QuietButton
-                    onClick={() =>
-                      confirmed(
-                        'Close this invite link?',
-                        'Nobody new can join with it. People who already joined keep their role.',
-                        'Close it',
-                        () => node.spaces.closeInvite(space.id, invite.key),
-                      )
-                    }
-                    disabled={!!why}
-                    title={why ?? undefined}
-                  >
-                    Close link
-                  </QuietButton>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
     </section>
   );
 }
 
-/** What an invite gives, as the link-maker picks it: a role, or only a view */
-const VIEW_ONLY = '';
-
-/** Making an invite link, joining as a role you may give, `member` first */
-function Invite({
-  space,
-  access,
-  offered,
-}: {
-  space: SpaceSummary;
-  access: SpaceAccess;
-  offered: ReadonlyArray<string>;
-}) {
-  const node = useNode();
-  const [choice, setChoice] = useState(offered[0] ?? VIEW_ONLY);
-  const [link, setLink] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  const { run, error } = useAction();
-  const role = access.roles.find((r) => r.name === choice && offered.includes(r.name)) ?? null;
-  const grants = role ? grantLines(grantsOf(role).grants) : [];
-  const gives = role
-    ? grants.length === 0
-      ? 'They can see everything, and the role grants nothing yet.'
-      : `They can ${grants.slice(0, 3).join('; ')}${grants.length > 3 ? `, and ${grants.length - 3} more` : ''}.`
-    : 'They can see everything, but change nothing.';
-
-  const make = () =>
-    run(async () => {
-      const next = await createInviteLink(node, space.id, role?.name ?? null);
-      setLink(next);
-      setCopied(
-        (await globalThis.navigator.clipboard?.writeText(next).then(
-          () => true,
-          () => false,
-        )) ?? false,
-      );
-    });
-
-  return (
-    <div
-      style={{
-        ...stack(12),
-        padding: 16,
-        borderRadius: palette.radius.md,
-        background: palette.surface.sunken,
-      }}
-    >
-      <label style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 14, color: palette.ink.strong }}>People with the link join as</span>
-        <select
-          value={choice}
-          onChange={(e) => {
-            setChoice(e.target.value);
-            setLink(null); // a link made for the other choice would say the wrong thing
-          }}
-          style={{ ...styles.input, width: 'auto', height: 32, fontSize: 13 }}
-        >
-          {offered.map((name) => {
-            const r = access.roles.find((known) => known.name === name);
-            return (
-              <option key={name} value={name}>
-                {r ? titleOf(r) : name}
-              </option>
-            );
-          })}
-          <option value={VIEW_ONLY}>Viewer — can't change anything</option>
-        </select>
-      </label>
-      <p style={{ fontSize: 13, lineHeight: 1.5, color: palette.ink.muted }}>
-        {gives}
-        {space.visibility === 'private' &&
-          ' The space is encrypted, and the link carries its key, so send it only to the people it is for.'}
-        {role && ' You can close it later.'}
-      </p>
-      {offered.length === 0 && (
-        <p style={styles.faint}>
-          Inviting with a role takes a grant of /role/assign, so you can only share it to view.
-        </p>
-      )}
-      {error && <p style={styles.error}>{plainError(error)}</p>}
-      <AddButton onClick={() => void make()} style={{ height: 34, alignSelf: 'flex-start' }}>
-        {link ? 'Make another link' : 'Create link'}
-      </AddButton>
-      {link && (
-        <div>
-          <p style={{ fontSize: 12, color: palette.ink.muted }}>
-            {copied
-              ? 'Copied. Send it to them however you like.'
-              : 'Copy this and send it to them however you like.'}
-          </p>
-          <code style={styles.token}>{link}</code>
-        </div>
-      )}
-    </div>
-  );
-}
+const memberRow: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 12,
+  padding: '12px 14px',
+  listStyle: 'none',
+};
 
 /** A section's title, and what can be done to it on the right */
 function Heading({ title, children }: { title: string; children: ReactNode }) {

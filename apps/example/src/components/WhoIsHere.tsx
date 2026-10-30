@@ -117,7 +117,15 @@ export function WhoIsHere({
 
 /** The badge, which opens the Network tab when there is one to open */
 function Badge({ onOpen, title, children }: { onOpen?: () => void; title: string; children: ReactNode }) {
-  const style = { ...styles.badge, display: 'inline-flex', alignItems: 'center', gap: 6, maxWidth: '100%' };
+  // The stronger line, so it stands on the sidebar's beige as well as on a card.
+  const style = {
+    ...styles.badge,
+    borderColor: palette.surface.lineStrong,
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    maxWidth: '100%',
+  };
   if (!onOpen)
     return (
       <span style={style} title={title}>

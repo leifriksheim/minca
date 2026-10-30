@@ -7,27 +7,21 @@ import {
   redirect,
   retainSearchParams,
 } from '@tanstack/react-router';
-import { App, GroupsPage, HomeLayout, PeoplePage } from './App';
-import {
-  HOOD,
-  MoreRow,
-  OpenApp,
-  SECTIONS,
-  SideHeading,
-  SpaceLayout,
-  useSpaceScreen,
-  type SpaceScreen,
-} from './components/SpaceView';
+import { App, ChatsLayout, GroupsPage, HomeLayout, PeoplePage } from './App';
+import { ActivityPage } from './components/ActivityPage';
+import { ProfilePage } from './components/ProfilePage';
+import { OpenApp, SpaceLayout, useSpaceScreen, type SpaceScreen } from './components/SpaceView';
 import { AppsView } from './components/apps/AppsView';
 import { NewApp } from './components/apps/NewApp';
 import { RolesView } from './components/RolesView';
+import { InviteView } from './components/InviteView';
 import { HostingView } from './components/HostingView';
 import { AutomationsView } from './components/automations/AutomationsView';
 import { DataView } from './components/DataView';
 import { GraphView } from './components/GraphView';
 import { QueryPlayground } from './components/QueryPlayground';
 import { NetworkView } from './components/NetworkView';
-import { styles, stack } from './styles';
+import { styles } from './styles';
 
 /**
  * Where you are in the app, and the small state that belongs in the address:
@@ -50,8 +44,9 @@ const root = createRootRoute({
 const page = (draw: (screen: SpaceScreen) => ReactNode) => () => draw(useSpaceScreen());
 
 const home = createRoute({ getParentRoute: () => root, id: 'home', component: HomeLayout });
+const chats = createRoute({ getParentRoute: () => home, id: 'chats', component: ChatsLayout });
 const groups = createRoute({
-  getParentRoute: () => home,
+  getParentRoute: () => chats,
   path: '/',
   // An inbox link is someone asking you to knock, which happens among your people.
   beforeLoad: ({ location }) => {
@@ -60,7 +55,9 @@ const groups = createRoute({
   },
   component: GroupsPage,
 });
-const people = createRoute({ getParentRoute: () => home, path: 'people', component: PeoplePage });
+const people = createRoute({ getParentRoute: () => chats, path: 'people', component: PeoplePage });
+const activity = createRoute({ getParentRoute: () => home, path: 'activity', component: ActivityPage });
+const profile = createRoute({ getParentRoute: () => home, path: 'profile', component: ProfilePage });
 // Where People was before: links to add someone, handed out already, still lead there.
 const contacts = createRoute({
   getParentRoute: () => root,
@@ -91,7 +88,7 @@ const spaceApps = createRoute({
 const newApp = createRoute({
   getParentRoute: inSpace,
   path: 'new',
-  component: page((s) => <NewApp {...s} onOpenApp={s.openApp} onOwn={s.startCreating} />),
+  component: page((s) => <NewApp {...s} onOwn={s.startCreating} />),
 });
 const app = createRoute({
   getParentRoute: inSpace,
@@ -106,8 +103,13 @@ const app = createRoute({
 });
 const members = createRoute({
   getParentRoute: inSpace,
-  path: 'people',
-  component: page((s) => <RolesView {...s} />),
+  path: 'members',
+  component: page((s) => <RolesView {...s} onInvite={() => s.go('/spaces/$spaceId/invite')} />),
+});
+const invite = createRoute({
+  getParentRoute: inSpace,
+  path: 'invite',
+  component: page((s) => <InviteView {...s} />),
 });
 const hosting = createRoute({
   getParentRoute: inSpace,
@@ -118,22 +120,6 @@ const automations = createRoute({
   getParentRoute: inSpace,
   path: 'automations',
   component: page((s) => <AutomationsView {...s} />),
-});
-// A phone's list of the sections that have no tab of their own
-const more = createRoute({
-  getParentRoute: inSpace,
-  path: 'more',
-  component: page(({ go }) => (
-    <div style={stack(2)}>
-      {SECTIONS.filter((section) => section.to !== '/spaces/$spaceId/people').map((section) => (
-        <MoreRow key={section.to} icon={section.icon} label={section.label} onClick={() => go(section.to)} />
-      ))}
-      <SideHeading>Under the hood</SideHeading>
-      {HOOD.map((h) => (
-        <MoreRow key={h.id} icon={h.icon} label={h.label} quiet onClick={() => go(h.to)} />
-      ))}
-    </div>
-  )),
 });
 const data = createRoute({
   getParentRoute: inSpace,
@@ -191,16 +177,16 @@ const elsewhere = createRoute({
 // Each route is a constant of its own: one written inline in this list loses
 // the router's types, and every path and param quietly becomes `any`.
 const routeTree = root.addChildren([
-  home.addChildren([groups, people]),
+  home.addChildren([chats.addChildren([groups, people]), activity, profile]),
   contacts,
   space.addChildren([
     spaceApps,
     newApp,
     app,
     members,
+    invite,
     hosting,
     automations,
-    more,
     data,
     explore,
     query,

@@ -126,7 +126,7 @@ export function totalOf(unread: Iterable<Unread>): Unread {
   return { count, forMe };
 }
 
-/** Everything new in a space, across its apps: for the list of spaces and the rail */
+/** Everything new in a space, across its apps: for the list of spaces */
 export function useSpaceUnread(space: SpaceSummary): Unread {
   const collections = useCollections(space.id);
   const { ready } = useSpaceApps(space, collections);

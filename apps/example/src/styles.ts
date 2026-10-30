@@ -8,9 +8,9 @@ const { ink, surface, accent, radius, shadow } = palette;
 /** A navy wash over what is behind it, for overlays and labels on video */
 const navyWash = (percent: number) => `color-mix(in srgb, ${ink.strong} ${percent}%, transparent)`;
 
-/** How wide the column of spaces is, down the left edge while one is open. */
-const RAIL_WIDTH = 68;
-/** How wide a space's own sidebar is, beside the rail */
+/** How tall the bar along a phone's bottom edge is, with room under it */
+const TABBAR_HEIGHT = 68;
+/** How wide a space's own sidebar is */
 const SIDEBAR_WIDTH = 248;
 
 /**
@@ -33,7 +33,8 @@ export function injectBaseStyles(): void {
        tap would otherwise leave the hover look stuck on whatever was tapped. */
     @media (hover: hover) {
       ${hoverCss}
-      .you-button:hover, .you-button[aria-expanded="true"] { background: ${surface.line}; }
+      .you-button:hover, .you-button[aria-expanded="true"],
+      .group-button:hover, .group-button[aria-expanded="true"] { background: ${surface.line} !important; }
     }
 
     /* ── Layout that follows the screen ──────────────────────────────────
@@ -43,15 +44,16 @@ export function injectBaseStyles(): void {
 
     /* .page and .space-layout come from baseCss: the home's screens sit on the same page. */
 
-    /* In a space: the rail, the space's sidebar, and whatever is open, each
+    /* In a space: its sidebar, and whatever is open, each
        the height of the window and scrolling on its own, the way chat apps are. */
 
-    .shell { padding-left: ${RAIL_WIDTH}px; }
     .space-shell { display: grid; grid-template-columns: ${SIDEBAR_WIDTH}px minmax(0, 1fr); height: 100vh; height: 100dvh; }
     .space-sidebar {
       display: flex; flex-direction: column; min-height: 0;
       background: ${surface.sunken}; border-right: 1px solid ${surface.rule};
     }
+    /* In the desktop app's window (apps/desktop), which has no title bar: room for its buttons. */
+    :root[data-desktop] .space-sidebar-scroll { padding-top: 44px; }
     .space-sidebar-scroll { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; padding: 16px 10px 16px; }
     /* You, at the foot of the sidebar; its menus open upward from it. */
     .you-bar {
@@ -65,6 +67,14 @@ export function injectBaseStyles(): void {
     .side-item {
       display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px;
       border: none; border-radius: ${radius.pill}px; background: none; font-size: 14px; text-align: left;
+    }
+    /* An app in the sidebar: room for its shape, its name a little stronger. */
+    .app-item { height: 40px; gap: 12px; padding: 0 8px; font-size: 14.5px; }
+    .app-item > span:first-child { width: 26px !important; }
+    /* The slot the next app goes in: an empty tile, dashed. */
+    .app-slot {
+      display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px;
+      border: 1.5px dashed ${surface.lineStrong}; border-radius: ${radius.md}px; color: ${ink.muted};
     }
     .side-item[aria-current] { background: ${surface.card}; box-shadow: 0 0 0 1px ${surface.rule}; }
     .space-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
@@ -105,50 +115,19 @@ export function injectBaseStyles(): void {
     .peer-fold > summary::-webkit-details-marker { display: none; }
     .peer-fold > summary::after { content: '▸'; color: ${ink.faint}; transition: transform .1s ease; }
     .peer-fold[open] > summary::after { transform: rotate(90deg); }
-    .rail-count, .app-card-count, .tab-count { position: absolute; pointer-events: none; }
-    .rail-count { top: -2px; right: 8px; }
-    .rail-count .count { box-shadow: 0 0 0 2px ${surface.sunken}; }
-    .app-card-count { top: -6px; right: -6px; }
-    .app-card-count .count, .tab-count .count { box-shadow: 0 0 0 2px ${surface.card}; }
-    .tab-count { top: -4px; right: -10px; }
 
-    /* Every space down the left edge; along the bottom on a phone. */
-    .rail {
-      position: fixed;
-      z-index: 10;
-      top: 0;
-      bottom: 0;
-      left: 0;
-      width: ${RAIL_WIDTH}px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
-      padding: 16px 0;
-      background: ${surface.sunken};
-      border-right: 1px solid ${surface.rule};
-    }
-    /* In the desktop app's window (apps/desktop), which has no title bar: room for its buttons. */
-    :root[data-desktop] .rail { padding-top: 44px; }
-    .rail-list { display: flex; flex-direction: column; align-items: center; gap: 8px; overflow-y: auto; flex: 0 1 auto; width: 100%; }
-    .rail-divider { flex-shrink: 0; width: 28px; height: 1px; margin: 4px 0; background: ${surface.line}; }
-    .rail-slot { position: relative; flex-shrink: 0; width: 100%; display: flex; justify-content: center; padding: 2px 0; border: none; background: none; }
 
     /* A row that scrolls sideways instead of wrapping, with no scrollbar in the way. */
     .scroll-x { overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
     .scroll-x::-webkit-scrollbar { display: none; }
     .scroll-x > * { flex-shrink: 0; white-space: nowrap; }
 
-    /* Rows in a list, one surface: a hairline between each, none round the edge (ui.list). */
-    .rows > li + li { border-top: 1px solid ${surface.line}; }
 
     /* A space: its collections down the side, the chosen one beside them. */
     .space-side { display: flex; flex-direction: column; gap: 28px; }
     .collection-nav { display: flex; flex-direction: column; gap: 2px; }
 
-    /* A space's apps, like a phone's home screen: cards on a wide screen,
-       icons on a narrow one. */
-    .app-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+    /* Ready-made apps to add, one under the other. */
     .app-list { display: flex; flex-direction: column; gap: 8px; }
 
     /* Views that sit side by side under one heading, like Under the hood's. */
@@ -160,9 +139,29 @@ export function injectBaseStyles(): void {
     .segmented > button:hover { color: ${ink.strong}; }
     .segmented > button[aria-selected="true"] { background: ${surface.card}; border-color: ${surface.rule}; color: ${ink.strong}; }
 
-    /* A space's sections along the bottom, and the button that makes an
-       app: phones only. */
-    .tabbar, .fab { display: none; }
+    /* Home, Activity and You: a pill along the top of a wide screen, the
+       bottom edge of a phone's (below). */
+    .tabbar {
+      display: flex; gap: 2px; align-self: center; width: fit-content; margin: 0 auto 28px; padding: 4px;
+      border: 1px solid ${surface.rule}; border-radius: ${radius.pill}px; background: ${surface.card};
+    }
+    .tabbar > a {
+      position: relative; display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 16px 0 12px;
+      border-radius: ${radius.pill}px; color: ${ink.muted}; font-size: 14px; font-weight: 500; text-decoration: none;
+    }
+    .tabbar > a:hover { color: ${ink.strong}; }
+    .tabbar > a[aria-current="page"] { background: ${surface.sunken}; color: ${ink.strong}; }
+    .tab-dot {
+      position: absolute; top: 6px; left: 24px; width: 8px; height: 8px;
+      border-radius: ${radius.pill}px; background: ${accent.danger}; box-shadow: 0 0 0 2px ${surface.card};
+    }
+
+    /* A name edited where it is shown (ProfilePage.tsx): a heading until it is pointed at. */
+    .name-input:hover { border-color: ${surface.line} !important; }
+    .name-input:focus { border-color: ${surface.rule} !important; background: ${surface.page} !important; outline: none; }
+
+    /* The button that makes an app: phones only. */
+    .fab { display: none; }
 
     .graph-canvas { height: 600px; }
     .collection-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -177,7 +176,7 @@ export function injectBaseStyles(): void {
     }
     /* The stage is dark so faces stand out: the navy ink, not black. */
     .call-stage {
-      top: 20px; left: ${RAIL_WIDTH + 20}px; width: auto;
+      top: 20px; left: 20px; width: auto;
       background: ${ink.strong}; border-color: ${ink.strong}; color: ${surface.page};
     }
     .call-stage .call-tiles { flex: 1; }
@@ -320,16 +319,17 @@ export function injectBaseStyles(): void {
 
     @media (max-width: 640px) {
       .page {
-        padding: 20px max(16px, env(safe-area-inset-right)) calc(48px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+        padding: 12px max(16px, env(safe-area-inset-right)) calc(48px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
       }
+      /* Room under the last row for the bar along the bottom. */
+      .page:has(> * > .tabbar) { padding-bottom: calc(${TABBAR_HEIGHT + 48}px + env(safe-area-inset-bottom)); }
 
       /* A phone switches spaces from the list of them, one tap away in the
          tab bar, so the space's own sections get the bottom edge, and its
          apps are the grid on the first screen rather than a sidebar. */
-      .rail, .space-sidebar, .hide-on-phone, .bar-label { display: none !important; }
+      .space-sidebar, .hide-on-phone, .bar-label { display: none !important; }
       .phone-only { display: revert !important; }
       .segmented.phone-only { display: flex !important; }
-      .shell { padding-left: 0; }
       .space-shell { display: block; height: auto; min-height: 100dvh; }
       .space-bar {
         position: sticky; top: 0; z-index: 8; height: auto; min-height: 56px; gap: 8px;
@@ -338,10 +338,9 @@ export function injectBaseStyles(): void {
       }
       .space-content {
         overflow: visible;
-        padding: 16px max(16px, env(safe-area-inset-right)) calc(${RAIL_WIDTH + 100}px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+        padding: 16px max(16px, env(safe-area-inset-right)) calc(100px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
       }
       /* An open app is the whole screen, with the way back at its top, as a conversation is on a phone. */
-      .space-shell[data-app-open] .tabbar { display: none; }
       .space-shell[data-app-open] .space-content { overflow-y: auto; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
       .space-shell[data-app-open] .space-main { display: flex; height: 100dvh; }
       .space-shell[data-app-open] .space-bar { position: static; }
@@ -363,38 +362,22 @@ export function injectBaseStyles(): void {
       .chat-room-title { min-height: 48px; padding: 8px 14px !important; }
 
       .tabbar {
-        position: fixed;
-        z-index: 10;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        display: flex;
+        position: fixed; z-index: 10; left: 0; right: 0; bottom: 0; width: auto; margin: 0; gap: 0;
         padding: 6px max(4px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(4px, env(safe-area-inset-left));
-        background: ${surface.page};
-        border-top: 1px solid ${surface.rule};
+        border: none; border-top: 1px solid ${surface.rule}; border-radius: 0; background: ${surface.page};
       }
-      .tabbar > button {
-        flex: 1 1 0;
-        min-width: 0;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 3px;
-        padding: 6px 2px;
-        border: none;
-        background: none;
-        color: ${ink.faint};
-        font-size: 11px;
-        font-weight: 500;
-        white-space: nowrap;
+      .tabbar > a {
+        flex: 1 1 0; min-width: 0; flex-direction: column; gap: 3px; height: auto; padding: 6px 2px;
+        color: ${ink.faint}; font-size: 11px; white-space: nowrap;
       }
-      .tabbar > button[aria-current] { color: ${accent.base}; }
+      .tabbar > a[aria-current="page"] { background: none; color: ${ink.strong}; }
+      .tab-dot { top: 4px; left: calc(50% + 6px); box-shadow: 0 0 0 2px ${surface.page}; }
 
       .fab {
         position: fixed;
         z-index: 9;
         right: max(16px, env(safe-area-inset-right));
-        bottom: calc(${RAIL_WIDTH + 12}px + env(safe-area-inset-bottom));
+        bottom: calc(20px + env(safe-area-inset-bottom));
         display: inline-flex;
         align-items: center;
         gap: 8px;
@@ -409,18 +392,10 @@ export function injectBaseStyles(): void {
         box-shadow: ${shadow.small};
       }
 
-      /* Three icons to a row, named underneath, the way a phone lays out apps. */
-      .app-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 8px; }
-      .app-card { flex-direction: column !important; align-items: center !important; gap: 8px !important; padding: 4px 0 !important; border: none !important; background: none !important; text-align: center !important; box-shadow: none !important; }
-      .app-card .app-card-icon { width: 56px !important; height: 56px !important; }
-      .app-card strong { font-size: 13px !important; font-weight: 500 !important; }
-      .app-card-text { display: none; }
+      /* The phone says enough on its own. */
+      .call-label { display: none; }
 
-      /* The avatar and the phone say enough on their own. */
-      .account-name, .call-label { display: none; }
-      .account-button { padding: 0 3px !important; }
-
-      .call-panel { left: 12px; right: 12px; width: auto; bottom: calc(${RAIL_WIDTH + 12}px + env(safe-area-inset-bottom)); }
+      .call-panel { left: 12px; right: 12px; width: auto; bottom: calc(${TABBAR_HEIGHT + 12}px + env(safe-area-inset-bottom)); }
       .call-stage { top: 12px; left: 12px; }
       .call-stack { left: 12px; right: 12px; width: auto; top: 12px; }
       .graph-canvas { height: min(600px, 65dvh); }
@@ -543,7 +518,6 @@ export const ui = {
   /** Around a table, which scrolls sideways inside it when too wide */
   tableBox: { border: `1px solid ${surface.rule}`, borderRadius: radius.lg, overflowX: 'auto' },
   card: styles.tile,
-  /** A list on the page: one card, its rows ruled by hairlines (give it className="rows") */
-  list: { ...styles.tile, padding: 0, margin: 0, overflow: 'hidden' },
+  list: styles.list,
   ellipsis: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
 } satisfies Record<string, CSSProperties>;

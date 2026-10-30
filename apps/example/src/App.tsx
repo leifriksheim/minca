@@ -3,25 +3,29 @@ import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-route
 import { useHeldSpaces, usePairSpaces } from './contacts';
 import { SpaceInvites } from './components/PeopleParts';
 import type { NewSpace } from '@minca/core';
-import { inviteFromLink, useAccount, useConnection, useNode, useSpaces } from '@minca/react';
+import {
+  inviteFromLink,
+  useAccount,
+  useAccountPicture,
+  useConnection,
+  useNode,
+  useSpaces,
+} from '@minca/react';
 import { CallsProvider } from '@minca/calls/react';
-import { AccountMenu } from './components/AccountMenu';
-import { AgentCard } from './components/AgentCard';
 import { useShowNotifications } from './notifications';
-import { Bell } from './components/Bell';
+import { useAlerts, useTabDot } from './alerts';
+import { Avatar } from '@minca/app-shared/Avatar';
 import { useRunAutomations } from './automations';
 import { ConnectScreen } from './components/ConnectScreen';
 import { useAccountInAddress } from './account-address';
 import { ContactsView } from './components/ContactsView';
 import { RelayDown } from './components/RelayNotice';
-import { DocsNote } from './components/DocsNote';
 import { SpaceDialog, SpaceList } from './components/SpaceList';
 import { CallLayer } from './components/calls/Calls';
 import { NewSheet } from './components/NewSheet';
-import { Icon } from './components/Icon';
 import { AddButton } from './components/Buttons';
+import { Icon } from './components/Icon';
 import { addChat, landingApp } from './components/apps/entries';
-import { Wordmark } from '@minca/app-shared/Wordmark';
 
 import { takeBack } from './contacts';
 import { styles, palette, hstack } from './styles';
@@ -137,68 +141,89 @@ const tab = (on: boolean) =>
     color: on ? palette.ink.strong : palette.ink.faint,
   }) as const;
 
-/** The home screen: your groups or the people you talk to, under one header, and "+" to start either */
+/**
+ * The home screen: Home, Activity and you, in one bar that runs along the top of a wide screen
+ * and the bottom of a phone's (`.tabbar`), with a dot on Activity while some of it is new.
+ */
 export function HomeLayout() {
-  const { spaces, openSpace } = useWorkspace();
+  const account = useAccount();
+  const picture = useAccountPicture();
+  const { unread } = useAlerts(account.did);
+  useTabDot(unread > 0);
+  const path = useRouterState({ select: (state) => state.location.pathname });
+  const onHome = path === '/' || path.startsWith('/people');
+  return (
+    <div className="page">
+      <div style={styles.app}>
+        <nav className="tabbar" aria-label="Minca">
+          <Link to="/" aria-current={onHome ? 'page' : undefined}>
+            <Icon name="home" size={20} />
+            Home
+          </Link>
+          <Link to="/activity">
+            <Icon name="bell" size={20} />
+            {unread > 0 && <span className="tab-dot" aria-label={`${unread} new`} />}
+            Activity
+          </Link>
+          <Link to="/profile">
+            <Avatar did={account.did} size={20} round src={picture} />
+            Profile
+          </Link>
+        </nav>
+        <Notices />
+        <RelayDown />
+        <Outlet />
+      </div>
+    </div>
+  );
+}
+
+/** Home: your groups or the people you talk to, under one header, and "+" to start either */
+export function ChatsLayout() {
   const on = useRouterState({ select: (state) => state.location.pathname }).startsWith('/people')
     ? 'people'
     : 'groups';
   const [starting, setStarting] = useState(false);
   return (
-    <div className="page">
-      <div style={styles.app}>
-        <Notices />
-        <RelayDown />
-        <header style={styles.headerRow}>
-          <Wordmark compact />
-          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Bell spaces={spaces} onOpenSpace={openSpace} />
-            <AccountMenu />
-          </span>
-        </header>
-        <div style={{ ...hstack(20), alignItems: 'center', marginBottom: 20 }}>
-          <nav role="tablist" aria-label="Home" style={{ ...hstack(20), flex: 1 }}>
-            <Link
-              to="/"
-              role="tab"
-              activeOptions={{ exact: true }}
-              activeProps={{ 'aria-selected': true, style: tab(true) }}
-              inactiveProps={{ 'aria-selected': false, style: tab(false) }}
-            >
-              Groups
-            </Link>
-            <Link
-              to="/people"
-              role="tab"
-              activeProps={{ 'aria-selected': true, style: tab(true) }}
-              inactiveProps={{ 'aria-selected': false, style: tab(false) }}
-            >
-              People
-            </Link>
-          </nav>
-          <AddButton
-            onClick={() => setStarting(true)}
-            className="hide-on-phone"
-            style={{ height: 40, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+    <>
+      <header style={{ ...hstack(20), alignItems: 'center', marginBottom: 20 }}>
+        <nav role="tablist" aria-label="Home" style={{ ...hstack(20), flex: 1 }}>
+          <Link
+            to="/"
+            role="tab"
+            activeOptions={{ exact: true }}
+            activeProps={{ 'aria-selected': true, style: tab(true) }}
+            inactiveProps={{ 'aria-selected': false, style: tab(false) }}
           >
-            <Icon name="plus" size={16} /> New
-          </AddButton>
-        </div>
-        <Outlet />
-        {/* Under the thumb on a phone. */}
-        <button
-          onClick={() => setStarting(true)}
-          data-variant="primary"
-          className="fab"
-          style={{ bottom: 'calc(20px + env(safe-area-inset-bottom))' }}
-        >
-          <Icon name="plus" size={16} /> New
-        </button>
-        {starting && <NewSheet on={on} onClose={() => setStarting(false)} />}
-      </div>
-    </div>
+            Groups
+          </Link>
+          <Link
+            to="/people"
+            role="tab"
+            activeProps={{ 'aria-selected': true, style: tab(true) }}
+            inactiveProps={{ 'aria-selected': false, style: tab(false) }}
+          >
+            People
+          </Link>
+        </nav>
+        <AddButton onClick={() => setStarting(true)} aria-label="New" title="New" style={plus}>
+          <Icon name="plus" size={20} />
+        </AddButton>
+      </header>
+      <Outlet />
+      {starting && <NewSheet on={on} onClose={() => setStarting(false)} />}
+    </>
   );
 }
+
+const plus = {
+  width: 40,
+  height: 40,
+  padding: 0,
+  display: 'grid',
+  placeItems: 'center',
+  borderRadius: palette.radius.pill,
+} as const;
 
 /** Your groups, at `/`: every space but your spaces for two */
 export function GroupsPage() {
@@ -225,10 +250,6 @@ export function GroupsPage() {
       {naming && (
         <SpaceDialog initial="new" onClose={() => setNaming(false)} onCreate={create} onJoin={join} />
       )}
-      <AgentCard />
-      <DocsNote path="packages/core/docs/spaces.md" style={{ marginTop: 16 }}>
-        Each group is a space: it keeps its own store and sync, and an invite carries its key in the link.
-      </DocsNote>
     </>
   );
 }

@@ -1,114 +1,70 @@
-import { useRef, useState, type ReactNode } from 'react';
-import { useAccount, useAccountPicture, useConnection, useNode, useObjectUrl } from '@minca/react';
+import { useState, type ReactNode } from 'react';
+import { useAccount, useAccountPicture, useConnection, useMyName } from '@minca/react';
 import { accountHomeLink } from '@minca/core/session';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { usePopover } from './usePopover';
-import { message, useCopy } from '@minca/app-shared/action';
+import { useCopy } from '@minca/app-shared/action';
 import { useNavigate } from '@tanstack/react-router';
 import { ConnectAgent } from './ConnectAgent';
 import { shortAccount } from '../account-address';
-import { shrinkImage } from '../files';
 import { palette, styles, ui, hstack } from '../styles';
 
-type Place = 'header' | 'sidebar';
-
 /**
- * Who this app acts for, and its menu; the account itself lives in the account home. A pill in a
- * header, or the whole of the bar at the foot of a space's sidebar.
+ * Who this app acts for, and its menu, at the foot of a space's sidebar; the account itself lives
+ * in the account home. The home screen has the same as a page of its own (`ProfilePage.tsx`).
  */
-export function AccountMenu({ place = 'header' }: { place?: Place }) {
+export function AccountMenu() {
   const account = useAccount();
-  const { connection, state } = useConnection();
+  const { state } = useConnection();
+  const picture = useAccountPicture();
+  // The name as the account has it now, so one changed in Profile shows here too
+  const { name } = useMyName();
   const navigate = useNavigate();
-  const { copied, copy } = useCopy();
-  const { picture, choose, picker, problem } = usePicture(account.name);
   const { open, setOpen, close, root } = usePopover();
   const [connecting, setConnecting] = useState(false);
 
-  const home = new URL(state.home).host;
-  const others = state.accounts.filter((other) => other.did !== account.did);
-  const shortDid = `${account.did.slice(8, 16)}…${account.did.slice(-6)}`;
-
-  // Switching is moving the address: the tab acts for whichever account it names (`account-address.ts`).
-  const switchTo = (did: string) => {
-    close();
-    void navigate({ to: '/', search: { as: shortAccount(did) } });
-  };
-  // The home may be signed in to another account, so the link says which one this app acts for.
-  const openHome = () => {
-    close();
-    globalThis.open(accountHomeLink(state.home, account.did), 'minca-account', 'popup,width=720,height=820');
-  };
-  const connectAgent = () => {
-    close();
-    setConnecting(true);
-  };
-
   return (
-    // In the sidebar the menu hangs from the whole bar, so it lines up with the bell's panel.
-    <div ref={root} style={place === 'sidebar' ? { flex: 1, minWidth: 0 } : { position: 'relative' }}>
-      <Trigger place={place} open={open} onClick={() => setOpen((was) => !was)} picture={picture} />
+    // The menu hangs from the whole bar, so it lines up with the bell's panel.
+    <div ref={root} style={{ flex: 1, minWidth: 0 }}>
+      <button
+        onClick={() => setOpen((was) => !was)}
+        aria-expanded={open}
+        aria-label="Account"
+        className="you-button"
+      >
+        <Avatar did={account.did} size={32} round src={picture} />
+        <span style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <span style={{ ...ui.ellipsis, fontSize: 13.5, fontWeight: 600, color: palette.ink.strong }}>
+            {name}
+          </span>
+          <span style={{ ...ui.ellipsis, fontSize: 11.5, color: palette.ink.faint }}>
+            {new URL(state.home).host}
+          </span>
+        </span>
+      </button>
 
       {open && (
-        <div role="menu" style={{ ...menu, ...(place === 'sidebar' ? above : below) }}>
-          <div style={{ padding: '14px 14px 12px', ...hstack(10), alignItems: 'center' }}>
-            <Avatar did={account.did} size={36} round src={picture} />
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ ...ui.ellipsis, fontWeight: 600, fontSize: 14, color: palette.ink.strong }}>
-                {account.name}
-              </div>
-              <button
-                onClick={() => copy(account.did)}
-                title={`${account.did} — click to copy`}
-                style={didButton}
-              >
-                {copied ? 'Copied' : shortDid}
-              </button>
-            </div>
-          </div>
-
+        <div role="menu" style={menu}>
+          <MenuHeader picture={picture} />
+          {/* Your picture, name and username are changed in one place: Profile. */}
           <Section>
-            <Item onClick={openHome} hint={home}>
-              Account settings
-            </Item>
-            <Item onClick={choose} hint="Shown in every space">
-              {picture ? 'Change picture' : 'Add a picture'}
-            </Item>
-            {picker}
-            {problem && <Note>{problem}</Note>}
-            <Item onClick={connectAgent} hint="Claude Code, Desktop, Cursor">
-              Connect an agent
-            </Item>
-            <Note faint>
-              An agent in this browser works as you, with nothing to set up. One on your computer connects
-              here, and keeps working with this tab closed.
-            </Note>
-          </Section>
-
-          <Section>
-            {others.map((other) => (
-              <button
-                key={other.did}
-                role="menuitem"
-                onClick={() => switchTo(other.did)}
-                data-menu-item
-                style={{ ...item, justifyContent: 'flex-start', height: 40 }}
-              >
-                <Avatar did={other.did} size={24} round />
-                <span style={{ ...ui.ellipsis, flex: 1, textAlign: 'left' }}>{other.name}</span>
-              </button>
-            ))}
-            <Item onClick={() => void connection.connect()} hint={home}>
-              Add another account
-            </Item>
-            {state.error && <Note>{state.error}</Note>}
-          </Section>
-
-          <Section>
-            <Item onClick={() => void connection.disconnect()} hint="Your account is untouched">
-              Disconnect {others.length > 0 ? account.name : 'this app'}
+            <Item
+              onClick={() => {
+                close();
+                void navigate({ to: '/profile' });
+              }}
+              hint="Picture, name, username"
+            >
+              Edit profile
             </Item>
           </Section>
+          <AccountActions
+            onDone={close}
+            onConnectAgent={() => {
+              close();
+              setConnecting(true);
+            }}
+          />
         </div>
       )}
       {connecting && <ConnectAgent onClose={() => setConnecting(false)} />}
@@ -116,46 +72,100 @@ export function AccountMenu({ place = 'header' }: { place?: Place }) {
   );
 }
 
-/** The button that opens the menu: the bar at the foot of the sidebar, or a pill in a header */
-function Trigger({
-  place,
-  open,
-  onClick,
-  picture,
+/** The sidebar menu's top: who you are, and your key's id to copy */
+function MenuHeader({ picture }: { picture: string | null }) {
+  const account = useAccount();
+  const { name } = useMyName();
+  const { copied, copy } = useCopy();
+  const shortDid = `${account.did.slice(8, 16)}…${account.did.slice(-6)}`;
+  return (
+    <div style={{ padding: '14px 14px 12px', ...hstack(10), alignItems: 'center' }}>
+      <Avatar did={account.did} size={36} round src={picture} />
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ ...ui.ellipsis, fontWeight: 600, fontSize: 14, color: palette.ink.strong }}>{name}</div>
+        <button onClick={() => copy(account.did)} title={`${account.did} — click to copy`} style={didButton}>
+          {copied ? 'Copied' : shortDid}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** What you can do as you: in the sidebar's menu, or under your profile on the home screen */
+export function AccountActions({
+  onDone,
+  onConnectAgent,
 }: {
-  place: Place;
-  open: boolean;
-  onClick: () => void;
-  picture: string | null;
+  /** After something that leaves, like switching account */
+  onDone?: () => void;
+  onConnectAgent: () => void;
 }) {
   const account = useAccount();
-  const { state } = useConnection();
-  if (place === 'sidebar')
-    return (
-      <button onClick={onClick} aria-expanded={open} aria-label="Account" className="you-button">
-        <Avatar did={account.did} size={32} round src={picture} />
-        <span style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <span style={{ ...ui.ellipsis, fontSize: 13.5, fontWeight: 600, color: palette.ink.strong }}>
-            {account.name}
-          </span>
-          <span style={{ ...ui.ellipsis, fontSize: 11.5, color: palette.ink.faint }}>
-            {new URL(state.home).host}
-          </span>
-        </span>
-      </button>
-    );
+  const { connection, state } = useConnection();
+  const navigate = useNavigate();
+
+  const home = new URL(state.home).host;
+  const others = state.accounts.filter((other) => other.did !== account.did);
+
+  // Switching is moving the address: the tab acts for whichever account it names (`account-address.ts`).
+  const switchTo = (did: string) => {
+    onDone?.();
+    void navigate({ to: '/', search: { as: shortAccount(did) } });
+  };
+  const openHome = () => {
+    onDone?.();
+    openAccountHome(state.home, account.did);
+  };
+
   return (
-    <button
-      onClick={onClick}
-      aria-expanded={open}
-      aria-label="Account"
-      className="account-button"
-      style={pill}
-    >
-      <Avatar did={account.did} size={28} round src={picture} />
-      <span className="account-name">{account.name}</span>
-    </button>
+    <>
+      <Section>
+        <Item onClick={openHome} hint="Security, devices, backups ↗">
+          Account settings
+        </Item>
+        <Item onClick={onConnectAgent} hint="Claude Code, Desktop, Cursor">
+          Connect an agent
+        </Item>
+        <Note faint>
+          An agent in this browser works as you, with nothing to set up. One on your computer connects here,
+          and keeps working with this tab closed.
+        </Note>
+      </Section>
+
+      <Section>
+        {others.map((other) => (
+          <button
+            key={other.did}
+            role="menuitem"
+            onClick={() => switchTo(other.did)}
+            data-menu-item
+            style={{ ...item, justifyContent: 'flex-start', height: 40 }}
+          >
+            <Avatar did={other.did} size={24} round />
+            <span style={{ ...ui.ellipsis, flex: 1, textAlign: 'left' }}>{other.name}</span>
+          </button>
+        ))}
+        <Item onClick={() => void connection.connect()} hint={home}>
+          Add another account
+        </Item>
+        {state.error && <Note>{state.error}</Note>}
+      </Section>
+
+      <Section>
+        <Item onClick={() => void connection.disconnect()} hint="Your account stays as it is">
+          Log out{others.length > 0 ? ` of ${account.name}` : ''}
+        </Item>
+      </Section>
+    </>
   );
+}
+
+/**
+ * The account home, in a window of its own: it holds the account's keys, so it is never framed. The
+ * home may be signed in to another account, so the link says which one this app acts for.
+ */
+export function openAccountHome(home: string, did: string) {
+  globalThis.open(accountHomeLink(home, did), 'minca-account', 'popup,width=720,height=820');
 }
 
 /** A group of the menu's rows, under a line */
@@ -183,30 +193,15 @@ function Note({ children, faint = false }: { children: ReactNode; faint?: boolea
   return <p style={{ margin: '4px 10px 6px', fontSize: 12, lineHeight: 1.45, color }}>{children}</p>;
 }
 
-const below = { right: 0, top: 44 };
-const above = { left: 0, bottom: 'calc(100% + 8px)' };
-
 const menu = {
   position: 'absolute' as const,
+  left: 0,
+  bottom: 'calc(100% + 8px)',
   zIndex: 20,
   width: 280,
   ...styles.float,
   animation: 'minca-fade .1s ease',
   overflow: 'hidden',
-};
-
-const pill = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-  height: 36,
-  padding: '0 12px 0 4px',
-  border: `1px solid ${palette.surface.rule}`,
-  borderRadius: palette.radius.pill,
-  background: palette.surface.card,
-  color: palette.ink.strong,
-  fontSize: 13,
-  fontWeight: 500,
 };
 
 const didButton = {
@@ -234,48 +229,3 @@ const item = {
   fontSize: 14,
   textAlign: 'left' as const,
 };
-
-/**
- * The account's picture: shown where the account is, and chosen from a file,
- * made small before it is kept. Kept in the account registry, so every device
- * and every space the account opens has it (`account.setAvatar`).
- */
-function usePicture(name: string) {
-  const node = useNode();
-  const kept = useAccountPicture();
-  // What was just chosen shows at once, before the account says it changed.
-  const [chosen, setChosen] = useState<{ bytes: Uint8Array; mime: string } | null>(null);
-  const chosenUrl = useObjectUrl(chosen);
-  const [problem, setProblem] = useState<string | null>(null);
-  const input = useRef<HTMLInputElement>(null);
-
-  const take = async (file: File) => {
-    setProblem(null);
-    try {
-      const image = await shrinkImage(file, 256);
-      await node.account.setAvatar(image, { name });
-      setChosen(image);
-    } catch (error) {
-      const noKey = /account key|registry/i.test(message(error));
-      setProblem(
-        noKey ? 'This app can’t change your picture. Change it in account settings.' : message(error),
-      );
-    }
-  };
-
-  const picker = (
-    <input
-      ref={input}
-      type="file"
-      accept="image/*"
-      hidden
-      onChange={(event) => {
-        const file = event.target.files?.[0];
-        if (file) void take(file);
-        event.target.value = '';
-      }}
-    />
-  );
-
-  return { picture: chosenUrl ?? kept, problem, choose: () => input.current?.click(), picker };
-}

@@ -6,7 +6,7 @@ import { message, useCopy } from '@minca/app-shared/action';
 import { createInviteLink } from '../spaces';
 import { Shape } from '@minca/app-shared/shapes';
 import { markFor } from '@minca/ui/shapes';
-import { palette, styles } from '../styles';
+import { palette, styles, ui } from '../styles';
 import { invitableRoles, useContacts } from '../contacts';
 import { shortUsername, useUsernameLookup } from '@minca/app-shared/usernames';
 import { AddButton, QuietButton } from './Buttons';
@@ -108,10 +108,8 @@ const letterOnShape = {
 } as const;
 
 /**
- * Adding people to a space the way a group chat does: tick contacts, choose
- * what they join as, and send; each finds the invite in your space for two.
- * Someone found by username who isn't a contact yet is asked to be one first:
- * nobody gets into a space before you have seen who they are.
+ * Adding people to a space the way a group chat does, as a dialog over the chat a new group opens in:
+ * what they join as, your contacts to tick, and a link for anyone else.
  */
 export function AddPeople({
   space,
@@ -124,29 +122,18 @@ export function AddPeople({
   onClose: () => void;
 }) {
   const node = useNode();
-  const contacts = useContacts();
-  const roles = useAsync(() => invitableRoles(node, space.id), [node, space.id]);
-  const offered = roles.status === 'done' ? roles.value : [];
-  // Undefined until chosen: the first role offered; '' for viewing only.
-  const [role, setRole] = useState<string>();
-  const chosenRole = role === undefined ? (offered[0] ?? null) : role || null;
-  const [query, setQuery] = useState('');
-  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
-  const [asking, setAsking] = useState<{ username: string; name?: string } | null>(null);
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<string | null>(null);
-  const lookup = useUsernameLookup(query);
+  const { offered, role, setRole } = useJoinsAs(space);
   const { copied, copy } = useCopy();
   const [making, setMaking] = useState(false);
   const [link, setLink] = useState<string | null>(null);
-  // For anyone who isn't a contact yet: a link that joins as the role chosen below. Shown as well
-  // as copied, since a phone may not let a page copy once it has waited for something.
+  const [error, setError] = useState<string | null>(null);
+  // For anyone who isn't a contact yet: a link that joins as the role chosen. Shown as well as copied,
+  // since a phone may not let a page copy once it has waited for something.
   const copyLink = async () => {
     setMaking(true);
     setError(null);
     try {
-      const made = await createInviteLink(node, space.id, chosenRole);
+      const made = await createInviteLink(node, space.id, role);
       setLink(made);
       copy(made);
     } catch (reason) {
@@ -154,6 +141,103 @@ export function AddPeople({
     }
     setMaking(false);
   };
+
+  return (
+    <Modal title={`Add people to ${space.name}`} onClose={onClose} width={520}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+        <JoinsAs
+          offered={offered}
+          role={role}
+          onChange={(next) => {
+            setRole(next);
+            setLink(null); // a link made for the other role would say the wrong thing
+          }}
+        />
+        <span style={{ flex: 1 }} />
+        <QuietButton onClick={() => void copyLink()} disabled={making} style={{ height: 36 }}>
+          {copied ? 'Link copied' : making ? 'Making a link…' : 'Copy invite link'}
+        </QuietButton>
+      </div>
+      {link && (
+        <input
+          readOnly
+          value={link}
+          onFocus={(event) => event.target.select()}
+          aria-label="Invite link"
+          style={{ ...styles.input, height: 38, fontSize: 13, marginBottom: 12 }}
+        />
+      )}
+      {error && <p style={{ ...styles.bad, marginBottom: 10 }}>{error}</p>}
+      <ContactPicker space={space} members={members} role={role} autoFocus />
+    </Modal>
+  );
+}
+
+/** The roles you may give here, `member` first, and the one picked: the first, until another is; null to view only */
+export function useJoinsAs(space: SpaceSummary) {
+  const node = useNode();
+  const roles = useAsync(() => invitableRoles(node, space.id), [node, space.id]);
+  const offered = roles.status === 'done' ? roles.value : [];
+  // Undefined until chosen; '' for viewing only.
+  const [picked, setPicked] = useState<string>();
+  const role = picked === undefined ? (offered[0] ?? null) : picked || null;
+  return { offered, role, setRole: (next: string | null) => setPicked(next ?? '') };
+}
+
+/** What someone you invite joins as */
+export function JoinsAs({
+  offered,
+  role,
+  onChange,
+}: {
+  offered: ReadonlyArray<string>;
+  role: string | null;
+  onChange: (role: string | null) => void;
+}) {
+  return (
+    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: ink.body }}>
+      Joins as
+      <select
+        value={role ?? ''}
+        onChange={(event) => onChange(event.target.value || null)}
+        style={{ ...styles.input, width: 'auto', height: 36, fontSize: 14 }}
+      >
+        {offered.map((name) => (
+          <option key={name} value={name}>
+            {titled(name)}
+          </option>
+        ))}
+        <option value="">Viewer, who changes nothing</option>
+      </select>
+    </label>
+  );
+}
+
+/**
+ * Your contacts who aren't in the space yet, to tick and invite as `role`; each finds the invite in
+ * your space for two. Someone found by username who isn't a contact yet is asked to be one first:
+ * nobody gets into a space before you have seen who they are.
+ */
+export function ContactPicker({
+  space,
+  members,
+  role,
+  autoFocus,
+}: {
+  space: SpaceSummary;
+  members: ReadonlySet<string>;
+  role: string | null;
+  autoFocus?: boolean;
+}) {
+  const node = useNode();
+  const contacts = useContacts();
+  const [query, setQuery] = useState('');
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
+  const [asking, setAsking] = useState<{ username: string; name?: string } | null>(null);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const lookup = useUsernameLookup(query);
 
   const candidates = (contacts ?? []).filter((c) => !c.blocked && c.space && !members.has(c.did));
   const q = query.trim().toLowerCase().replace(/^@/, '');
@@ -177,7 +261,8 @@ export function AddPeople({
   const send = async () => {
     setSending(true);
     setError(null);
-    const options = chosenRole ? { role: chosenRole } : {};
+    setDone(null);
+    const options = role ? { role } : {};
     const waiting: string[] = [];
     let invited = 0;
     for (const did of picked) {
@@ -191,6 +276,7 @@ export function AddPeople({
       }
     }
     setSending(false);
+    setPicked(new Set());
     if (invited === 0 && waiting.length > 0) {
       setError(`${waiting.join(', ')} haven't accepted your contact request yet, so they can't be invited.`);
       return;
@@ -201,126 +287,88 @@ export function AddPeople({
     );
   };
 
-  if (done)
-    return (
-      <Modal title={`Add people to ${space.name}`} onClose={onClose}>
-        <p style={{ fontSize: 15, color: ink.strong, lineHeight: 1.5 }}>{done}</p>
-        <AddButton onClick={onClose} style={{ marginTop: 16, height: 40 }}>
-          Done
-        </AddButton>
-      </Modal>
-    );
-
-  if (asking)
-    return (
-      <AddDialog
-        username={asking.username}
-        {...(asking.name ? { name: asking.name } : {})}
-        onClose={() => setAsking(null)}
-        onSent={(text) => {
-          setAsking(null);
-          setQuery('');
-          setDone(`${text} Invite them here once they have.`);
-        }}
-      />
-    );
-
   return (
-    <Modal title={`Add people to ${space.name}`} onClose={onClose} width={520}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <input
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         placeholder="Search contacts, or type a username"
         aria-label="Search contacts, or type a username"
-        autoFocus
-        style={{ ...styles.input, height: 42, marginBottom: 10 }}
+        autoFocus={autoFocus}
+        style={{ ...styles.input, height: 42 }}
       />
-      <ul className="rows" style={{ padding: 0, margin: 0, maxHeight: 320, overflowY: 'auto' }}>
-        {found && (
-          <PersonRow
-            face={found.username}
-            name={found.found.inbox.name ?? <Handle username={found.username} />}
-            detail={<>@{shortUsername(found.username)} · not a contact yet</>}
-          >
-            <AddButton
-              onClick={() =>
-                setAsking({
-                  username: found.username,
-                  ...(found.found.inbox.name ? { name: found.found.inbox.name } : {}),
-                })
-              }
-              style={{ height: 32 }}
+      {(found || shown.length > 0) && (
+        <ul className="rows" style={{ ...ui.list, maxHeight: 360, overflowY: 'auto' }}>
+          {found && (
+            <PersonRow
+              face={found.username}
+              name={found.found.inbox.name ?? <Handle username={found.username} />}
+              detail={<>@{shortUsername(found.username)} · not a contact yet</>}
             >
-              Add contact
-            </AddButton>
-          </PersonRow>
-        )}
-        {shown.map((contact) => (
-          <PersonRow
-            key={contact.did}
-            face={contact.did}
-            name={contact.name}
-            detail={contact.username ? <Handle username={contact.username} /> : 'Contact'}
-          >
-            <Tick
-              checked={picked.has(contact.did)}
-              onChange={() => toggle(contact.did)}
-              label={contact.name}
-            />
-          </PersonRow>
-        ))}
-        {contacts !== undefined && shown.length === 0 && !found && (
-          <li style={{ listStyle: 'none', padding: '18px 4px', fontSize: 14, color: ink.muted }}>
-            {q
-              ? lookup.status === 'looking'
-                ? 'Looking…'
-                : 'No contact by that name, and nobody with that username.'
-              : candidates.length === 0
-                ? (contacts ?? []).some((c) => !c.blocked && c.space)
-                  ? 'Everyone in your contacts is here already. Type a username to add someone new.'
-                  : 'Type a username to find someone, or send an invite link.'
-                : ''}
-          </li>
-        )}
-      </ul>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: ink.body }}>
-          Joins as
-          <select
-            value={chosenRole ?? ''}
-            onChange={(event) => {
-              setRole(event.target.value);
-              setLink(null); // a link made for the other role would say the wrong thing
-            }}
-            style={{ ...styles.input, width: 'auto', height: 34, fontSize: 13 }}
-          >
-            {offered.map((name) => (
-              <option key={name} value={name}>
-                {titled(name)}
-              </option>
-            ))}
-            <option value="">Viewer</option>
-          </select>
-        </label>
-        <span style={{ flex: 1 }} />
-        <QuietButton onClick={() => void copyLink()} disabled={making} style={{ height: 40 }}>
-          {copied ? 'Link copied' : making ? 'Making a link…' : 'Copy invite link'}
-        </QuietButton>
-        <AddButton onClick={() => void send()} disabled={picked.size === 0 || sending} style={{ height: 40 }}>
+              <AddButton
+                onClick={() =>
+                  setAsking({
+                    username: found.username,
+                    ...(found.found.inbox.name ? { name: found.found.inbox.name } : {}),
+                  })
+                }
+                style={{ height: 32 }}
+              >
+                Add contact
+              </AddButton>
+            </PersonRow>
+          )}
+          {shown.map((contact) => (
+            <PersonRow
+              key={contact.did}
+              face={contact.did}
+              name={contact.name}
+              detail={contact.username ? <Handle username={contact.username} /> : 'Contact'}
+            >
+              <Tick
+                checked={picked.has(contact.did)}
+                onChange={() => toggle(contact.did)}
+                label={contact.name}
+              />
+            </PersonRow>
+          ))}
+        </ul>
+      )}
+      {contacts !== undefined && shown.length === 0 && !found && (
+        <p style={{ fontSize: 14, lineHeight: 1.5, color: ink.muted }}>
+          {q
+            ? lookup.status === 'looking'
+              ? 'Looking…'
+              : 'No contact by that name, and nobody with that username.'
+            : (contacts ?? []).some((c) => !c.blocked && c.space)
+              ? 'Everyone in your contacts is here already. Type a username to add someone new.'
+              : 'No contacts yet. Type a username to find someone, or send an invite link.'}
+        </p>
+      )}
+      {done && <p style={{ fontSize: 14, lineHeight: 1.5, color: ink.strong }}>{done}</p>}
+      {error && <p style={styles.bad}>{error}</p>}
+      {candidates.length > 0 && (
+        <AddButton
+          onClick={() => void send()}
+          disabled={picked.size === 0 || sending}
+          style={{ height: 40, alignSelf: 'flex-end' }}
+        >
           {sending ? 'Inviting…' : picked.size === 0 ? 'Invite' : `Invite ${picked.size}`}
         </AddButton>
-      </div>
-      {link && (
-        <input
-          readOnly
-          value={link}
-          onFocus={(event) => event.target.select()}
-          aria-label="Invite link"
-          style={{ ...styles.input, height: 38, fontSize: 13, marginTop: 10 }}
+      )}
+      {asking && (
+        <AddDialog
+          username={asking.username}
+          {...(asking.name ? { name: asking.name } : {})}
+          onClose={() => setAsking(null)}
+          onSent={(text) => {
+            setAsking(null);
+            setQuery('');
+            setDone(`${text} Invite them here once they have.`);
+          }}
         />
       )}
-      {error && <p style={{ ...styles.bad, marginTop: 10 }}>{error}</p>}
-    </Modal>
+    </div>
   );
 }
 

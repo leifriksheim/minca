@@ -18,14 +18,12 @@ export function NewApp({
   collections,
   apps,
   mayDefine,
-  onOpenApp,
   onOwn,
 }: {
   space: SpaceSummary;
   collections: ReadonlyArray<NodeCollection>;
   apps: ReturnType<typeof useSpaceApps>;
   mayDefine: boolean;
-  onOpenApp: (id: string) => void;
   onOwn: () => void;
 }) {
   const node = useNode();
@@ -44,16 +42,14 @@ export function NewApp({
 
   const add = (app: Ready) => {
     setAdding(app);
-    void run(async () => {
-      await app.add();
-      onOpenApp(app.id);
-    });
+    // It joins the sidebar, and leaves this list: you stay here to add another.
+    void run(() => app.add());
   };
 
   return (
     <div style={stack(14)}>
       {space.writable && (
-        <button onClick={onOwn} className="app-card" style={ownCard}>
+        <button onClick={onOwn} style={ownCard}>
           <span style={ownIcon}>
             <Icon name="sparkle" size={22} />
           </span>

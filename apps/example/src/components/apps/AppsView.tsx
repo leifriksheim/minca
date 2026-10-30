@@ -76,64 +76,53 @@ export function AppsView({
             )}
             {space.writable && !arranging && (
               <PrimaryButton onClick={onCreate} className="hide-on-phone" style={{ ...inlineButton }}>
-                <Icon name="plus" size={14} /> New app
+                <Icon name="plus" size={14} /> Add apps
               </PrimaryButton>
             )}
           </div>
         </div>
 
-        {/* Arranging is a list on every screen: one app to a row, its moves at the end, where a thumb finds them. */}
-        {arranging ? (
-          <ol aria-label="Arrange apps" style={arrangeList}>
+        {/* One list, arranging or not: arranging only swaps each row's arrow for its moves. */}
+        {apps.ready.length > 0 || space.writable ? (
+          <ol aria-label={arranging ? 'Arrange apps' : 'Apps'} className="rows" style={ui.list}>
             {apps.ready.map((app, at) => (
-              <ArrangeRow
-                key={app.id}
-                app={app}
-                busy={arrange.busy}
-                first={at === 0}
-                last={at === apps.ready.length - 1}
-                onMove={(by) => move(app, by)}
-                onRemove={() => remove(app)}
-                copy={<CopyTo space={space} record={app.record} others={others} />}
-              />
-            ))}
-          </ol>
-        ) : (
-          <div className="app-grid">
-            {apps.ready.map((app) => (
-              <AppCard
+              <AppRow
                 key={app.id}
                 app={app}
                 unread={unreadOf(unread, app.id)}
-                onClick={() => onOpenApp(app.id)}
+                onOpen={() => onOpenApp(app.id)}
+                arrange={
+                  arranging
+                    ? {
+                        busy: arrange.busy,
+                        first: at === 0,
+                        last: at === apps.ready.length - 1,
+                        onMove: (by) => move(app, by),
+                        onRemove: () => remove(app),
+                        copy: <CopyTo space={space} record={app.record} others={others} />,
+                      }
+                    : undefined
+                }
               />
             ))}
-            {space.writable && (
-              <button onClick={onCreate} data-tile-new className="app-card" style={createCard}>
-                <span
-                  className="app-card-icon"
-                  style={{
-                    ...iconBox,
-                    border: `1px dashed ${palette.surface.lineStrong}`,
-                    color: palette.ink.muted,
-                  }}
-                >
-                  <Icon name="plus" size={20} />
-                </span>
-                <span style={{ ...stack(2), minWidth: 0 }}>
-                  <strong style={cardTitle}>New app</strong>
-                  <span className="app-card-text" style={cardText}>
-                    Add a ready-made one, or have an agent build your own
+            {space.writable && !arranging && (
+              <li data-tile style={{ listStyle: 'none' }}>
+                <button onClick={onCreate} style={rowButton}>
+                  <span style={slot} aria-hidden>
+                    <Icon name="plus" size={16} />
                   </span>
-                </span>
-              </button>
+                  <span style={{ ...stack(2), flex: 1, minWidth: 0 }}>
+                    <strong style={{ ...cardTitle, color: palette.ink.body }}>Add apps</strong>
+                    <span style={cardText}>A ready-made one, or one an agent builds for you</span>
+                  </span>
+                </button>
+              </li>
             )}
-          </div>
+          </ol>
+        ) : (
+          <p style={styles.quiet}>No apps here yet.</p>
         )}
         {arrange.error && <p style={styles.error}>{arrange.error}</p>}
-        {apps.ready.length === 0 && (
-          <p style={styles.quiet}>No apps here yet. Add a ready-made one, or have an agent build your own.</p>
-        )}
       </section>
 
       <Proposals
@@ -149,67 +138,65 @@ export function AppsView({
           there are apps; before that the tile in the grid is the way. */}
       {space.writable && apps.ready.length > 0 && !arranging && (
         <button onClick={onCreate} data-variant="primary" className="fab">
-          <Icon name="plus" size={16} /> New app
+          <Icon name="plus" size={16} /> Add apps
         </button>
       )}
     </div>
   );
 }
 
-/** An app on the home screen: its icon, its name, a line on what it's for, and what's new in it */
-function AppCard({ app, unread, onClick }: { app: AppEntry; unread: Unread; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      data-tile
-      className="app-card"
-      data-unread={unread.count > 0 || undefined}
-      style={card}
-    >
-      <span style={{ position: 'relative', display: 'inline-flex' }}>
-        <AppIcon id={app.id} size={44} className="app-card-icon" />
-        <span className="app-card-count">
-          <Count unread={unread} />
-        </span>
-      </span>
-      <span style={{ ...stack(2), minWidth: 0 }}>
-        <strong style={cardTitle}>{app.title}</strong>
-        {app.description && (
-          <span className="app-card-text" style={cardText}>
-            {app.description}
-          </span>
-        )}
-      </span>
-    </button>
-  );
-}
-
-/** An app while the apps are being arranged: moved up or down the list, or taken off */
-function ArrangeRow({
+/**
+ * An app in the list: its shape, its name, a line on what it's for and what's new in it. A tap opens
+ * it; while arranging, its moves take the arrow's place, so the list itself never changes shape.
+ */
+function AppRow({
   app,
-  busy,
-  first,
-  last,
-  onMove,
-  onRemove,
-  copy,
+  unread,
+  onOpen,
+  arrange,
 }: {
   app: AppEntry;
-  busy: boolean;
-  first: boolean;
-  last: boolean;
-  onMove: (by: number) => void;
-  onRemove: () => void;
-  copy: ReactNode;
+  unread: Unread;
+  onOpen: () => void;
+  arrange:
+    | {
+        readonly busy: boolean;
+        readonly first: boolean;
+        readonly last: boolean;
+        readonly onMove: (by: number) => void;
+        readonly onRemove: () => void;
+        readonly copy: ReactNode;
+      }
+    | undefined;
 }) {
+  const about = (
+    <>
+      <AppIcon id={app.id} size={36} />
+      <span style={{ ...stack(2), flex: 1, minWidth: 0 }}>
+        <strong style={{ ...cardTitle, ...ui.ellipsis }}>{app.title}</strong>
+        {app.description && <span style={{ ...cardText, ...ui.ellipsis }}>{app.description}</span>}
+      </span>
+    </>
+  );
+  if (!arrange)
+    return (
+      <li data-tile style={{ listStyle: 'none' }}>
+        <button onClick={onOpen} style={rowButton}>
+          {about}
+          <Count unread={unread} />
+          <span style={{ display: 'inline-flex', color: palette.ink.faint }}>
+            <Icon name="chevron" size={14} />
+          </span>
+        </button>
+      </li>
+    );
   return (
-    <li style={{ ...arrangeRow, borderTop: first ? 'none' : `1px solid ${palette.surface.line}` }}>
-      <AppIcon id={app.id} size={32} />
-      <strong style={{ ...cardTitle, ...ui.ellipsis, flex: 1, minWidth: 0 }}>{app.title}</strong>
+    <li style={{ ...rowButton, listStyle: 'none', padding: '8px 10px 8px 16px' }}>
+      {about}
       <span style={{ ...hstack(6), flexShrink: 0 }}>
         <button
-          onClick={() => onMove(-1)}
-          disabled={busy || first}
+          onClick={() => arrange.onMove(-1)}
+          disabled={arrange.busy || arrange.first}
           aria-label={`Move ${app.title} up`}
           data-variant="quiet"
           style={roundButton}
@@ -219,8 +206,8 @@ function ArrangeRow({
           </span>
         </button>
         <button
-          onClick={() => onMove(1)}
-          disabled={busy || last}
+          onClick={() => arrange.onMove(1)}
+          disabled={arrange.busy || arrange.last}
           aria-label={`Move ${app.title} down`}
           data-variant="quiet"
           style={roundButton}
@@ -229,8 +216,12 @@ function ArrangeRow({
             <Icon name="chevron" size={14} />
           </span>
         </button>
-        {copy}
-        <QuietButton onClick={onRemove} disabled={busy} style={{ height: 40, color: palette.accent.danger }}>
+        {arrange.copy}
+        <QuietButton
+          onClick={arrange.onRemove}
+          disabled={arrange.busy}
+          style={{ height: 36, color: palette.accent.danger }}
+        >
           Remove
         </QuietButton>
       </span>
@@ -279,52 +270,34 @@ function CopyTo({
   );
 }
 
-const iconBox = {
-  width: 44,
-  height: 44,
-  flexShrink: 0,
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  borderRadius: palette.radius.lg,
-} as const;
-
-const card = {
-  ...styles.tile,
+const rowButton = {
+  width: '100%',
   display: 'flex',
-  alignItems: 'flex-start',
-  gap: 12,
-  padding: 14,
+  alignItems: 'center',
+  gap: 14,
+  minHeight: 64,
+  padding: '12px 16px',
+  border: 'none',
+  borderRadius: 'inherit',
+  background: 'none',
   font: 'inherit',
   color: 'inherit',
   textAlign: 'left',
 } as const;
-const createCard = {
-  ...card,
-  borderStyle: 'dashed',
-  borderColor: palette.surface.lineStrong,
-  background: 'none',
-} as const;
-const arrangeList = {
-  listStyle: 'none',
-  padding: 0,
-  display: 'flex',
-  flexDirection: 'column',
-  maxWidth: 560,
-  border: `1px solid ${palette.surface.rule}`,
-  borderRadius: palette.radius.lg,
-  background: palette.surface.card,
-  overflow: 'hidden',
-} as const;
-const arrangeRow = {
-  display: 'flex',
+/** Where the next app goes: an empty tile, dashed */
+const slot = {
+  width: 36,
+  height: 36,
+  flexShrink: 0,
+  display: 'inline-flex',
   alignItems: 'center',
-  gap: 12,
-  minHeight: 56,
-  padding: '8px 10px 8px 14px',
+  justifyContent: 'center',
+  border: `1.5px dashed ${palette.surface.lineStrong}`,
+  borderRadius: palette.radius.md,
+  color: palette.ink.muted,
 } as const;
 // As tall as a finger needs (`pointer: coarse` raises buttons to 40), and as wide, so they stay round.
-const roundButton = { ...styles.smallButton, width: 40, height: 40, padding: 0, flexShrink: 0 } as const;
+const roundButton = { ...styles.smallButton, width: 36, height: 36, padding: 0, flexShrink: 0 } as const;
 const cardTitle = { fontSize: 15, fontWeight: 600, color: palette.ink.strong };
 const cardText = { fontSize: 13, lineHeight: 1.45, color: palette.ink.muted };
 const inlineButton = {

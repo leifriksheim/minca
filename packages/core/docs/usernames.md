@@ -122,14 +122,14 @@ has no generation to move on to
 
 ## What the service keeps to
 
-| Rule                       | On minca.social                                                                    |
-| -------------------------- | ---------------------------------------------------------------------------------- |
-| How long a claim holds     | A year. Claiming again, with the same code or a new one, renews it                 |
-| New names from one address | 3 a day (an IPv4 address, or an IPv6 /48). Changing or renewing a name is free     |
-| Work                       | 18 bits: a fraction of a second on a laptop, about a second on a phone             |
-| Names held                 | 50,000: each is a file of up to 8 KB, so a 1 GB volume holds them, inodes included |
-| Reserved                   | `admin`, `support`, `security`, `minca` and a few more that pass for the service   |
-| Given up                   | Free again after 10 minutes, so no earlier claim can be replayed to take it back   |
+| Rule                       | On minca.social                                                                                                                                               |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| How long a claim holds     | A year. Claiming again, with the same code or a new one, renews it                                                                                            |
+| New names from one address | 3 a day (an IPv4 address, or an IPv6 /48). Changing or renewing a name is free                                                                                |
+| Work                       | 18 bits: a fraction of a second on a laptop, about a second on a phone                                                                                        |
+| Names held                 | 50,000: each is a file of up to 8 KB, so a 1 GB volume holds them, inodes included                                                                            |
+| Reserved                   | `admin`, `support`, `security`, `minca` and a few more that pass for the service. A lookup of one answers `"reserved": true`, so `usernameFree` says it isn't |
+| Given up                   | Free again after 10 minutes, so no earlier claim can be replayed to take it back                                                                              |
 
 The work is a speed bump for bots, not a gate: a server does it ten times
 faster than a phone. The address budget and the year are what keep squatting

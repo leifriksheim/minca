@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { OwnAutomationView, P2PNode, SpaceSummary } from '@minca/core/node';
 import { message, useAction } from '@minca/app-shared/action';
-import { styles, palette, hstack, stack } from '../styles';
+import { Shape } from '@minca/app-shared/shapes';
+import { Toggle } from '@minca/app-shared/Toggle';
+import { shapeFor } from '@minca/ui/shapes';
+import { styles, palette, stack } from '../styles';
 
 /**
  * "Notify me when…": what apps asked to let you know about, and you allowed.
@@ -48,56 +51,63 @@ export function Notifications({ node }: { node: P2PNode }) {
   }, [subscriptions]);
 
   return (
-    <section id="notifications" style={styles.settingsSection}>
+    <section id="notifications" className="surface" style={styles.settingsSection}>
       <div>
         <h2 style={styles.sectionHeading}>Notify me when…</h2>
         <p style={styles.sectionText}>
-          Apps you use can ask to notify you. What you allow shows here, under the app that asked, and that
-          app lets you know.
+          What apps asked to tell you about, and you allowed. Switch one off to pause it.
         </p>
       </div>
 
-      {subscriptions?.length === 0 && <p style={styles.errorHint}>No app notifies you yet.</p>}
+      {subscriptions?.length === 0 && (
+        <p style={styles.errorHint}>Nothing yet. An app asks first, when you turn its notifications on.</p>
+      )}
 
       {groups.map(([app, subs]) => (
-        <div key={app?.origin ?? ''} style={stack(6)}>
-          <p style={{ ...styles.fieldLabel, margin: 0 }}>
-            {app ? `From ${app.name ?? new URL(app.origin).host}` : 'Made here before'}
-          </p>
-          {subs.map((sub) => (
-            <div key={sub.id} style={styles.settingsRow}>
-              <span style={{ opacity: sub.paused ? 0.55 : 1 }}>
-                {sub.name} ·{' '}
-                {(sub.spaces ?? 'all') === 'all'
-                  ? 'every space'
-                  : [...(sub.spaces ?? [])].map(spaceName).join(', ')}
-                {sub.paused ? ' · paused' : ''}
-              </span>
-              <span style={hstack(8)}>
-                <button
-                  onClick={() =>
+        <div key={app?.origin ?? ''} style={stack(8)}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Shape {...shapeFor(app?.origin ?? 'here')} size={24} />
+            <strong style={{ fontSize: 14, color: palette.ink.strong }}>
+              {app ? (app.name ?? new URL(app.origin).host) : 'Made here before'}
+            </strong>
+            {app?.name && <span style={styles.faint}>{new URL(app.origin).host}</span>}
+          </div>
+          <ul className="rows" style={styles.list}>
+            {subs.map((sub) => (
+              <li key={sub.id} style={row}>
+                <span style={{ ...stack(1), flex: 1, minWidth: 0, opacity: sub.paused ? 0.55 : 1 }}>
+                  <span style={{ fontSize: 14, fontWeight: 500, color: palette.ink.strong }}>{sub.name}</span>
+                  <span style={styles.faint}>
+                    {(sub.spaces ?? 'all') === 'all'
+                      ? 'Every space'
+                      : [...(sub.spaces ?? [])].map(spaceName).join(', ')}
+                    {sub.paused ? ' · Paused' : ''}
+                  </span>
+                </span>
+                <Toggle
+                  on={!sub.paused}
+                  label={`${sub.name}: ${sub.paused ? 'off' : 'on'}`}
+                  disabled={busy !== null}
+                  onChange={(on) =>
                     void act(
                       `pause:${sub.id}`,
-                      async () => void (await node.automations.update(sub.id, { paused: !sub.paused })),
+                      async () => void (await node.automations.update(sub.id, { paused: !on })),
                     )
                   }
-                  disabled={busy !== null}
-                  data-variant="quiet"
-                  style={styles.smallButton}
-                >
-                  {sub.paused ? 'Resume' : 'Pause'}
-                </button>
+                />
                 <button
                   onClick={() => void act(`remove:${sub.id}`, () => node.automations.remove(sub.id))}
                   disabled={busy !== null}
-                  data-variant="quiet"
-                  style={styles.smallButton}
+                  aria-label={`Remove ${sub.name}`}
+                  title="Remove"
+                  data-variant="ghost"
+                  style={remove}
                 >
-                  Remove
+                  ×
                 </button>
-              </span>
-            </div>
-          ))}
+              </li>
+            ))}
+          </ul>
         </div>
       ))}
 
@@ -105,3 +115,20 @@ export function Notifications({ node }: { node: P2PNode }) {
     </section>
   );
 }
+
+const row = { display: 'flex', alignItems: 'center', gap: 12, padding: '10px 10px 10px 14px' } as const;
+
+/** Taking one away for good: a quiet × beside its switch */
+const remove = {
+  ...styles.smallButton,
+  border: 'none',
+  background: 'none',
+  width: 30,
+  height: 30,
+  minHeight: 30,
+  padding: 0,
+  display: 'grid',
+  placeItems: 'center',
+  fontSize: 16,
+  color: palette.ink.muted,
+} as const;

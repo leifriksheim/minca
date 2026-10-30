@@ -30,7 +30,7 @@ export function madeNotify(body: LauncherApp): ReadonlyArray<AppAutomation> {
 }
 
 /** An entry about records that name the person — "Mentions me", "A seat on my trip" */
-export const isForMe = (notify: AppAutomation): boolean => namesTheRunner(notify);
+const isForMe = (notify: AppAutomation): boolean => namesTheRunner(notify);
 
 /** Whether a record is one of an app's "…me" entries is about: its `where` holds, with the person as `$me` */
 export function namesMe(

@@ -2,16 +2,15 @@ import { useState, type FormEvent } from 'react';
 import type { SpaceSummary, SpaceVisibility } from '@minca/core';
 import type { NewSpace } from '@minca/core';
 import { rolePresets } from '@minca/core';
-import { Modal, Choice } from '@minca/app-shared/Modal';
+import { Modal } from '@minca/app-shared/Modal';
 import { Info } from '@minca/app-shared/Info';
 import { Shape } from '@minca/app-shared/shapes';
 import { markFor } from '@minca/ui/shapes';
 import type { ShapeColour } from '@minca/ui/tokens';
-import { useMyName } from '@minca/react';
-import { NameField } from './NameField';
 import { styles, palette, stack, ui } from '../styles';
 import { useSpaceUnread } from '../seen';
 import { Loading } from './Loading';
+import { Options, type Option } from './Options';
 import { LinkButton, PrimaryButton } from './Buttons';
 
 /** How a space is described once it exists: who can read it, and what you are in it. */
@@ -24,7 +23,7 @@ const LIGHT: ReadonlySet<ShapeColour> = new Set(['peach', 'lilac']);
 
 /**
  * A space's icon: its shape, picked by its id so it is the same in the grid,
- * the rail and every alert, with the first letter of its name in the middle.
+ * the space's sidebar and every alert, with the first letter of its name in the middle.
  */
 export function SpaceMark({ space, size = 40 }: { space: Pick<SpaceSummary, 'id' | 'name'>; size?: number }) {
   const shape = markFor(space.id);
@@ -61,12 +60,54 @@ export function SpaceMark({ space, size = 40 }: { space: Pick<SpaceSummary, 'id'
   );
 }
 
-/** What choosing who can read it means; who can write is decided later, per person */
-function describe(visibility: SpaceVisibility): string {
-  return visibility === 'private'
-    ? 'End-to-end encrypted. Only people you add get the key, so nobody else can read it — not even the relay that passes it on.'
-    : 'Not encrypted: anyone with the link can read it. Only people you add can change it.';
-}
+/**
+ * The ways a group can be run, in plain words: each founds it with a preset's roles
+ * (`rolePresets` in `packages/core/src/space/presets.ts`).
+ */
+const RUNS: ReadonlyArray<Option<Run> & { readonly preset: keyof typeof rolePresets }> = [
+  {
+    value: 'friends',
+    preset: 'team',
+    shape: 'dots',
+    title: 'Friends',
+    detail: 'Everyone can change anything and add people.',
+  },
+  {
+    value: 'community',
+    preset: 'community',
+    shape: 'shield',
+    title: 'Community',
+    detail: 'Members change their own things. Moderators tidy up.',
+  },
+  {
+    value: 'coop',
+    preset: 'coop',
+    shape: 'group',
+    title: 'Co-op',
+    detail: 'Nobody owns it. Stewards run it together.',
+  },
+];
+type Run = 'friends' | 'community' | 'coop';
+
+/** Who can read it; who can write is decided by the roles */
+const READS: ReadonlyArray<Option<SpaceVisibility>> = [
+  {
+    value: 'private',
+    shape: 'lock',
+    title: 'Encrypted',
+    detail: 'Only people you add can read it. Not even the relay can.',
+  },
+  {
+    value: 'public',
+    shape: 'signal',
+    title: 'Public',
+    detail: 'Anyone with the link can read it. Only people you add can change it.',
+  },
+];
+
+/** The steps of making a group, one question each */
+const STEPS = ['name', 'run', 'read'] as const;
+type Step = (typeof STEPS)[number];
 
 /** Your groups, one to a row the way chat apps list them, each opening into the app it starts with */
 export function SpaceList({
@@ -179,24 +220,27 @@ export function SpaceDialog({
   const [mode, setMode] = useState(initial);
   const [name, setName] = useState('');
   const [visibility, setVisibility] = useState<SpaceVisibility>('private');
+  const [run, setRun] = useState<Run>('community');
+  const [step, setStep] = useState<Step>('name');
   const [invite, setInvite] = useState('');
-  const me = useMyName();
 
-  const create = (event: FormEvent) => {
+  // Each step's button goes on to the next; the last one makes the group.
+  const next = (event: FormEvent) => {
     event.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return;
-    void me.save();
-    // You found it, with an Editor role to start, so inviting someone later
-    // needs no setup first. Roles can be changed or added in People.
-    onCreate({ name: trimmed, visibility, ...rolePresets.team });
+    const after = STEPS[STEPS.indexOf(step) + 1];
+    if (after) return setStep(after);
+    // Founded with the roles its way of running gives, so inviting someone later needs no setup first.
+    const preset = RUNS.find((option) => option.value === run)?.preset ?? 'community';
+    onCreate({ name: trimmed, visibility, ...rolePresets[preset] });
     onClose();
   };
+  const back = () => setStep(STEPS[STEPS.indexOf(step) - 1] ?? 'name');
 
   const join = (event: FormEvent) => {
     event.preventDefault();
     if (!invite.trim()) return;
-    void me.save();
     onJoin(invite.trim());
     onClose();
   };
@@ -222,7 +266,6 @@ export function SpaceDialog({
               whatever is hosting the page.
             </Info>
           </p>
-          <NameField value={me.name} onChange={me.setName} />
           <PrimaryButton type="submit" disabled={!invite.trim()}>
             Join
           </PrimaryButton>
@@ -235,39 +278,67 @@ export function SpaceDialog({
   }
 
   return (
-    <Modal title="New group" onClose={onClose}>
-      <form onSubmit={create} style={styles.form}>
-        <input
-          type="text"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          placeholder="Family, Book club, Trip…"
-          style={styles.input}
-          aria-label="Group name"
-        />
-        <p style={{ ...styles.errorHint, marginTop: 0 }}>It starts with a chat. You add people next.</p>
+    <Modal
+      title={step === 'name' ? 'New group' : step === 'run' ? 'How is it run?' : 'Who can read it?'}
+      onClose={onClose}
+    >
+      <form onSubmit={next} style={styles.form}>
+        {step === 'name' && (
+          <>
+            <input
+              type="text"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Family, Book club, Trip…"
+              style={styles.input}
+              aria-label="Group name"
+              autoFocus
+            />
+            <p style={{ ...styles.errorHint, marginTop: 0 }}>It starts with a chat. You add people after.</p>
+          </>
+        )}
+        {step === 'run' && (
+          <>
+            <Options label="How it's run" options={RUNS} picked={run} onPick={setRun} />
+            <p style={{ ...styles.errorHint, marginTop: 0 }}>Roles can be changed later, in Members.</p>
+          </>
+        )}
+        {step === 'read' && (
+          <>
+            <Options label="Who can read it" options={READS} picked={visibility} onPick={setVisibility} />
+            <p style={{ ...styles.errorHint, marginTop: 0 }}>This one can't be changed later.</p>
+          </>
+        )}
 
-        <Choice
-          label="Who can read it"
-          value={visibility}
-          onChange={setVisibility}
-          options={[
-            { value: 'private', label: 'Encrypted' },
-            { value: 'public', label: 'Public' },
-          ]}
-        />
-
-        <p style={styles.errorHint}>{describe(visibility)} This one can't be changed later.</p>
-
-        <NameField value={me.name} onChange={me.setName} />
-
-        <PrimaryButton type="submit" disabled={!name.trim()}>
-          Create group
-        </PrimaryButton>
-        <LinkButton type="button" onClick={() => setMode('join')} style={{ alignSelf: 'center' }}>
-          Have an invite link? Join instead
-        </LinkButton>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
+          {step === 'name' ? (
+            <LinkButton type="button" onClick={() => setMode('join')}>
+              Have an invite link?
+            </LinkButton>
+          ) : (
+            <LinkButton type="button" onClick={back}>
+              Back
+            </LinkButton>
+          )}
+          <span style={{ flex: 1, display: 'flex', justifyContent: 'center', gap: 6 }} aria-hidden>
+            {STEPS.map((one) => (
+              <span key={one} style={one === step ? progressOn : progress} />
+            ))}
+          </span>
+          <PrimaryButton type="submit" disabled={!name.trim()} style={{ width: 'auto', padding: '0 22px' }}>
+            {step === 'read' ? 'Create group' : 'Next'}
+          </PrimaryButton>
+        </div>
       </form>
     </Modal>
   );
 }
+
+/** Where in the steps you are: a dot for each, the one you're on longer */
+const progress = {
+  width: 6,
+  height: 6,
+  borderRadius: palette.radius.pill,
+  background: palette.surface.lineStrong,
+} as const;
+const progressOn = { ...progress, width: 18, background: palette.accent.base } as const;

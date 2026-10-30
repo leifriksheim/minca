@@ -42,7 +42,24 @@ function statement(s: ReadonlyArray<unknown>): string {
   if (op === '!=' && a === '.role') return `any role but ${String(b)}`;
   if (op === 'not' && Array.isArray(a) && a[0] === 'any' && a[1] === '.roles' && Array.isArray(a[2]))
     return `not to ${String(a[2][2])}s`;
+  // Everywhere but some collections, as a preset keeps staff collections from members.
+  const elsewhere = op === 'not' && Array.isArray(a) ? collectionsIn(a) : null;
+  if (elsewhere) return `not in ${elsewhere.map((name) => name.replace(/^std\./, '')).join(', ')}`;
   return JSON.stringify(s);
+}
+
+/** The collections a statement names, when it is only `.collection == x`, or an `or` of those */
+function collectionsIn(s: ReadonlyArray<unknown>): ReadonlyArray<string> | null {
+  const [op, a, b] = s;
+  if (op === '==' && a === '.collection' && typeof b === 'string') return [b];
+  if (op !== 'or' || !Array.isArray(a)) return null;
+  const names: string[] = [];
+  for (const each of a) {
+    const found = Array.isArray(each) ? collectionsIn(each) : null;
+    if (!found) return null;
+    names.push(...found);
+  }
+  return names;
 }
 
 /** A grant in plain words: "delete records, in app.chess, only their own" */
