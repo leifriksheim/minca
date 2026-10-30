@@ -6,13 +6,10 @@ import { MincaProvider } from '@minca/react';
 import { connection } from './minca';
 import { tellDesktop } from './desktop';
 import { router } from './router';
-import { followVisibleHeight } from './viewport';
 
 // Hover, focus and placeholder states, plus the page background — the things
 // inline styles cannot express.
 injectBaseStyles();
-// An open app fits above a phone's keyboard (`viewport.ts`).
-followVisibleHeight();
 
 // The node's operations as WebMCP tools, from the start — agents and
 // extensions read the list on load. They act for whoever signs in.
