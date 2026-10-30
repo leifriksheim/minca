@@ -42,16 +42,7 @@ import { CallButton } from './calls/Calls';
 import { peopleFrom } from '../derive/people';
 import { useBots } from '../bots';
 import { PersonScopeProvider } from './Person';
-import {
-  seenAt,
-  totalOf,
-  unreadOf,
-  useLookingAt,
-  useSeen,
-  useSpaceUnread,
-  useUnread,
-  type Unread,
-} from '../seen';
+import { seenAt, unreadOf, useLookingAt, useSeen, useSpaceUnread, useUnread, type Unread } from '../seen';
 
 /** Under the hood: the views for the curious, folded in the space's menu */
 const HOOD = [
@@ -279,8 +270,11 @@ function SpaceView({ space }: { space: SpaceSummary }) {
   return (
     <PersonScopeProvider space={space} people={people} roles={roleOf} me={account.did} openSpace={openSpace}>
       <div className="space-shell" data-app-open={open ? '' : undefined}>
-        {/* The space's apps down the left edge, the way Teams lays out its own; a phone has them in the menu. */}
+        {/* The space's apps down the left edge, under the space itself; a phone has them as tabs. */}
         <nav className="app-rail" aria-label={`Apps in ${name}`}>
+          <div className="rail-top">
+            <SpaceMenu space={space} pair={pair} title={title} leaf={leaf} go={go} onHome={goBack} face />
+          </div>
           <div className="rail-apps">
             {apps.ready.map((app) => (
               <RailItem
@@ -292,18 +286,30 @@ function SpaceView({ space }: { space: SpaceSummary }) {
                 onClick={() => openApp(app.id)}
               />
             ))}
+            {space.writable && (
+              <RailItem
+                icon={
+                  <span className="rail-slot">
+                    <Icon name="plus" size={14} />
+                  </span>
+                }
+                label="Add"
+                on={onNew}
+                onClick={() => go('/spaces/$spaceId/new')}
+              />
+            )}
           </div>
           <div className="rail-foot">
-            {/* Every app, laid out, with the ones proposed and the ones to add. */}
+            {/* Every app, laid out, with the ones proposed. */}
             <RailItem
               icon={
                 <span className="rail-glyph">
                   <Icon name="apps" size={18} />
                 </span>
               }
-              label="Apps"
+              label="All apps"
               unread={newProposals}
-              on={onApps || onNew}
+              on={onApps}
               onClick={() => go('/spaces/$spaceId')}
             />
             {/* You, and what's new for you, at its foot. */}
@@ -314,26 +320,16 @@ function SpaceView({ space }: { space: SpaceSummary }) {
 
         <main className="space-main">
           <header className="space-bar">
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <SpaceMenu
-                space={space}
-                pair={pair}
-                title={title}
-                apps={apps.ready}
-                unread={unread}
-                newProposals={newProposals}
-                open={open}
-                leaf={leaf}
-                go={go}
-                openApp={openApp}
-                onHome={goBack}
-              />
+            {/* A phone has no rail: the space is the name at the left of its bar. */}
+            <span className="phone-only" style={{ flex: 1, minWidth: 0 }}>
+              <SpaceMenu space={space} pair={pair} title={title} leaf={leaf} go={go} onHome={goBack} />
             </span>
-            {/* Who is here, and calling them; a phone has them on the space's apps. */}
-            <span
-              className="hide-on-phone"
-              style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}
-            >
+            <span className="hide-on-phone" style={{ display: 'contents' }}>
+              {open && <AppIcon id={open.id} size={28} />}
+              <h1 style={{ ...styles.appTitle, ...ui.ellipsis, flex: 1, minWidth: 0, fontSize: 18 }}>
+                {title}
+              </h1>
+              {/* Who is here, and calling them; a phone has them on the space's apps. */}
               {status && (
                 <WhoIsHere status={status} people={people} onOpen={() => go('/spaces/$spaceId/network')} />
               )}
@@ -341,6 +337,40 @@ function SpaceView({ space }: { space: SpaceSummary }) {
             </span>
             {open && mayDefine && <AppSettingsButton space={space} record={open.record} />}
           </header>
+          {/* A phone's apps: tabs under the bar, swiped along, the way to the next one a thumb away. */}
+          <nav className="app-tabs scroll-x" aria-label={`Apps in ${name}`}>
+            {apps.ready.map((app) => (
+              <button
+                key={app.id}
+                onClick={() => openApp(app.id)}
+                aria-current={open?.id === app.id ? 'page' : undefined}
+                className="app-tab"
+              >
+                <AppIcon id={app.id} size={18} />
+                {app.title}
+                <Count unread={unreadOf(unread, app.id)} />
+              </button>
+            ))}
+            <button
+              onClick={() => go('/spaces/$spaceId')}
+              aria-current={onApps ? 'page' : undefined}
+              className="app-tab"
+            >
+              <Icon name="apps" size={14} />
+              All
+              <Count unread={newProposals} />
+            </button>
+            {space.writable && (
+              <button
+                onClick={() => go('/spaces/$spaceId/new')}
+                aria-current={onNew ? 'page' : undefined}
+                aria-label="Add apps"
+                className="app-tab"
+              >
+                <Icon name="plus" size={14} />
+              </button>
+            )}
+          </nav>
 
           <div className="space-content" data-fill={fill || undefined}>
             <div className="space-inner" data-wide={hood ? true : undefined}>
@@ -516,35 +546,28 @@ function SideHeading({ children }: { children: ReactNode }) {
 }
 
 /**
- * The way around a space, from its name at the top, the way a Discord server's is: home, your other
- * groups, and the space's own sections and what is under its hood. A phone has its apps here too,
- * since it has no rail for them.
+ * The way around a space, from the space itself: its face at the top of the rail, or its name at the
+ * left of a phone's bar. A dropdown that names the space, then goes home, to your other groups, and
+ * to the space's own sections and what is under its hood.
  */
 function SpaceMenu({
   space,
   pair,
   title,
-  apps,
-  unread,
-  newProposals,
-  open,
   leaf,
   go,
-  openApp,
   onHome,
+  face,
 }: {
   space: SpaceSummary;
   pair: PairWith | undefined;
-  /** Where in the space you are */
+  /** Where in the space you are, under its name on a phone */
   title: string;
-  apps: ReadonlyArray<AppEntry>;
-  unread: ReturnType<typeof useUnread>;
-  newProposals: Unread;
-  open: AppEntry | undefined;
   leaf: RouteId | undefined;
   go: (to: SpacePath) => void;
-  openApp: (id: string) => void;
   onHome: () => void;
+  /** Opened from the space's face alone, at the top of the rail, rather than from its name */
+  face?: boolean;
 }) {
   const { spaces, pairs, openSpace, forget } = useWorkspace();
   const { open: shown, setOpen, close, root } = usePopover();
@@ -557,59 +580,48 @@ function SpaceMenu({
     close();
     action();
   };
-  const newHere = totalOf([...unread.values(), newProposals]);
   return (
     <div ref={root} style={{ position: 'relative', display: 'flex' }}>
       <button
         onClick={() => setOpen((was) => !was)}
         aria-expanded={shown}
         aria-haspopup="menu"
+        aria-label={face ? name : undefined}
+        title={face ? name : undefined}
         className="group-button"
-        style={menuButton}
+        style={face ? faceButton : nameButton}
       >
-        <SpaceFace space={space} pair={pair} size={32} />
-        <span style={{ ...stack(1), minWidth: 0 }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-            <span style={{ ...styles.appTitle, ...ui.ellipsis, fontSize: 18 }}>{name}</span>
-            <span style={{ display: 'inline-flex', transform: shown ? 'rotate(-90deg)' : 'rotate(90deg)' }}>
-              <Icon name="chevron" size={14} />
-            </span>
-            {!shown && (
-              <span className="phone-only">
-                <Count unread={newHere} />
+        <SpaceFace space={space} pair={pair} size={face ? 40 : 32} />
+        {!face && (
+          <span style={{ ...stack(1), minWidth: 0 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+              <span style={{ ...styles.appTitle, ...ui.ellipsis, fontSize: 18 }}>{name}</span>
+              <span style={{ display: 'inline-flex', transform: shown ? 'rotate(-90deg)' : 'rotate(90deg)' }}>
+                <Icon name="chevron" size={14} />
               </span>
+            </span>
+            {title === name ? (
+              <Privacy space={space} />
+            ) : (
+              <span style={{ ...ui.ellipsis, fontSize: 12.5, color: palette.ink.muted }}>{title}</span>
             )}
           </span>
-          {title === name ? (
-            <Privacy space={space} />
-          ) : (
-            <span style={{ ...ui.ellipsis, fontSize: 12.5, color: palette.ink.muted }}>{title}</span>
-          )}
-        </span>
+        )}
       </button>
       {shown && (
-        <nav aria-label={name} className="drop" style={menu}>
-          <SideItem icon={<Icon name="home" size={16} />} label="Home" onClick={then(onHome)} />
-          <div className="phone-only">
-            <SideItem
-              icon={<Icon name="apps" size={16} />}
-              label="All apps"
-              unread={newProposals}
-              on={leaf === APPS_ROUTE}
-              onClick={then(() => go('/spaces/$spaceId'))}
-            />
-            <SideHeading>Apps</SideHeading>
-            {apps.map((app) => (
-              <SideItem
-                key={app.id}
-                icon={<AppIcon id={app.id} size={20} />}
-                label={app.title}
-                unread={unreadOf(unread, app.id)}
-                on={open?.id === app.id}
-                onClick={then(() => openApp(app.id))}
-              />
-            ))}
+        <nav
+          aria-label={name}
+          className={face ? undefined : 'drop'}
+          style={face ? { ...menu, ...beside } : menu}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px 10px' }}>
+            <SpaceFace space={space} pair={pair} size={32} />
+            <span style={{ ...stack(1), minWidth: 0 }}>
+              <strong style={{ ...styles.appTitle, ...ui.ellipsis, fontSize: 16 }}>{name}</strong>
+              <Privacy space={space} />
+            </span>
           </div>
+          <SideItem icon={<Icon name="home" size={16} />} label="Home" onClick={then(onHome)} />
           {others.length > 0 && <SideHeading>Switch to</SideHeading>}
           {others.map((other) => (
             <OtherGroup key={other.id} space={other} onClick={then(() => openSpace(other.id))} />
@@ -648,7 +660,7 @@ function SpaceMenu({
             onClick={then(() => forget(space.id))}
             data-nav
             className="side-item"
-            style={{ color: palette.accent.danger }}
+            style={{ width: '100%', color: palette.accent.danger }}
           >
             <span style={{ width: 20, flexShrink: 0 }} />
             {pair ? 'Leave this chat' : 'Leave group'}
@@ -681,7 +693,7 @@ function RailItem({
 }: {
   icon: ReactNode;
   label: string;
-  unread: Unread;
+  unread?: Unread;
   on: boolean;
   onClick: () => void;
 }) {
@@ -689,16 +701,18 @@ function RailItem({
     <button onClick={onClick} aria-current={on ? 'page' : undefined} title={label} className="rail-item">
       <span style={{ position: 'relative', display: 'inline-flex' }}>
         {icon}
-        <span className="rail-count">
-          <Count unread={unread} />
-        </span>
+        {unread && (
+          <span className="rail-count">
+            <Count unread={unread} />
+          </span>
+        )}
       </span>
       <span className="rail-label">{label}</span>
     </button>
   );
 }
 
-const menuButton = {
+const nameButton = {
   display: 'flex',
   alignItems: 'center',
   gap: 10,
@@ -710,8 +724,16 @@ const menuButton = {
   textAlign: 'left' as const,
   color: palette.ink.strong,
 };
+/** The space's face alone, as a rail's first tile */
+const faceButton = {
+  display: 'flex',
+  padding: 6,
+  border: 'none',
+  borderRadius: palette.radius.md,
+  background: 'none',
+};
 
-/** Below the name on a wide screen; a phone pins it under the bar instead (`.drop`) */
+/** Below the name; a phone pins it under the bar instead (`.drop`) */
 const menu = {
   ...styles.float,
   ...stack(1),
@@ -725,6 +747,8 @@ const menu = {
   overflowY: 'auto',
   animation: 'minca-fade .1s ease',
 } as const;
+/** Opened from the rail, the menu sits beside the face */
+const beside = { top: 0, left: 'calc(100% + 8px)' } as const;
 
 /** A row in the sidebar; bold while something in it is new, the way unread channels are */
 function SideItem({
