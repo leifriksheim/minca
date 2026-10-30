@@ -600,7 +600,7 @@ function SpaceMenu({
               <Privacy space={space} />
             </span>
           </div>
-          <SideItem icon={<Icon name="home" size={16} />} label="Home" onClick={then(onHome)} />
+          <SideItem icon={<Icon name="arrowLeft" size={16} />} label="Home" onClick={then(onHome)} />
           {others.length > 0 && <SideHeading>Switch to</SideHeading>}
           {others.map((other) => (
             <OtherGroup key={other.id} space={other} onClick={then(() => openSpace(other.id))} />
