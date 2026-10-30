@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router';
 import { APP, Band, ChromeMark, DownloadMark, EXTERNAL, Marked, Page } from './Site';
 import { Converge } from './converge';
 import { Castle, Middle } from './castle';
-import { Compounds } from './compounds';
+import { PHOTO_CREDITS, Pens, Tower } from './pens';
 import { Hosting, Sealed } from './trust';
 import { HeroSpace } from './HeroSpace';
 import { Loader } from '@minca/app-shared/Loader';
@@ -297,15 +297,44 @@ export function Home() {
       <Band
         id="why"
         tone="sunken"
-        title="Companies start over. Groups build on each other."
+        title="Start with your group, not with an app."
         intro={
           <p>
-            Every company builds the same app from nothing and keeps your group stuck inside it. On Minca,
-            when a group makes a tool better, every group after them starts with the better one.
+            Every company wants your group inside its own app, behind its own fence. On Minca your group comes
+            first. Tools get passed from group to group like a good meme, and when you see one you like, you
+            add it to yours.
           </p>
         }
       >
-        <Compounds />
+        <div className="castle-pair">
+          <figure className="tile c-peach">
+            <Pens />
+            <figcaption>
+              <h3>Every company</h3>
+              <p>
+                Each one builds a pen, puts your group inside and guards the gate. Your friends are stuck in
+                the one next door.
+              </p>
+              <small className="pens-credit">
+                Photos:{' '}
+                {PHOTO_CREDITS.map((credit, i) => (
+                  <span key={credit.who}>
+                    {i ? ', ' : ''}
+                    <a href={credit.href}>{credit.by}</a> ({credit.licence})
+                  </span>
+                ))}
+                , via Wikimedia Commons.
+              </small>
+            </figcaption>
+          </figure>
+          <figure className="tile c-sage">
+            <Tower />
+            <figcaption>
+              <h3>On Minca</h3>
+              <p>Groups pass each other bricks. Whatever one group makes, the next can pick up and use.</p>
+            </figcaption>
+          </figure>
+        </div>
       </Band>
 
       <Band id="questions" title="Fair questions.">

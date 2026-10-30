@@ -2445,148 +2445,6 @@
   max-width: 420px;
 }
 
-/* ─── Front page: companies start over, groups build on (compounds.tsx) ─
-
-.site .frame .proposal {
-  border: var(--hair);
-}
-/* Two rows over the same five steps: copies that stay level, and a tool that grows */
-.site .compound {
-  display: grid;
-  padding: 0;
-}
-.site .compound-row {
-  display: grid;
-  grid-template-columns: 190px minmax(0, 1fr) 150px;
-  align-items: end;
-  gap: 32px;
-  padding: 28px 32px;
-}
-.site .compound-row + .compound-row {
-  border-top: var(--hair);
-}
-.site .compound-label b {
-  display: block;
-  font-family: var(--display);
-  font-size: 19px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  color: var(--ink);
-}
-.site .compound-label small {
-  display: block;
-  margin-top: 4px;
-  font-size: 13.5px;
-  line-height: 1.4;
-  color: var(--muted);
-}
-.site .compound-cols {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  align-items: end;
-  gap: 10px;
-}
-.site .compound-col {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 0;
-}
-.site .compound-col small {
-  margin-top: 6px;
-  font-size: 12px;
-  text-align: center;
-  color: var(--faint);
-  transition: color 0.4s ease;
-}
-.site .compound-col[data-on] small {
-  color: var(--muted);
-}
-.site .compound-block {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  overflow: hidden;
-  height: 30px;
-  padding: 0 6px;
-  border: var(--hair);
-  border-radius: var(--r-sm);
-  background: color-mix(in srgb, var(--c) calc(var(--tint-tile) * 0.5), var(--card));
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-  color: var(--body);
-  transition:
-    opacity 0.35s ease,
-    transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.site .compound-block .shape {
-  flex: none;
-}
-/* The piece a group adds lands last, on its full colour */
-.site .compound-block.is-new {
-  background: color-mix(in srgb, var(--c) var(--tint-tile), var(--paper));
-  color: var(--ink);
-  transition-delay: 0.25s;
-}
-.site .compound-col:not([data-on]) .compound-block {
-  opacity: 0;
-  transform: translateY(-14px);
-  transition-delay: 0s;
-}
-/* A company's copy: built from scratch every time, the same each time */
-.site .compound-block.is-same {
-  position: relative;
-  border: 1px dashed var(--line-strong);
-  background: var(--card);
-  color: var(--muted);
-}
-.site .compound-block.is-same::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: color-mix(in srgb, var(--ink) 6%, transparent);
-  transform-origin: left;
-  transform: scaleX(0);
-}
-.site .compound-col[data-on] .compound-block.is-same::before {
-  animation: compound-build 0.9s ease-out both;
-}
-@keyframes compound-build {
-  0% {
-    transform: scaleX(0);
-    opacity: 1;
-  }
-  80% {
-    transform: scaleX(1);
-    opacity: 1;
-  }
-  100% {
-    transform: scaleX(1);
-    opacity: 0;
-  }
-}
-.site .compound-sum b {
-  display: block;
-  font-family: var(--display);
-  font-size: 44px;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.05em;
-  color: var(--faint);
-}
-.site .compound-sum.is-ours b {
-  color: var(--ink);
-}
-.site .compound-sum small {
-  display: block;
-  margin-top: 6px;
-  font-size: 13px;
-  line-height: 1.35;
-  color: var(--muted);
-}
-
 /* ─── Front page: what groups asked for, a colour tile each ───────── */
 
 .site .asks {
@@ -2743,6 +2601,39 @@
   stroke-width: 2;
   stroke-dasharray: 3 3;
 }
+
+/* ─── Front page: pens the billionaires guard, and a tower groups share (pens.tsx) ─ */
+
+/* Strokes only; a shape that needs a fill sets its own */
+.site .pens-line {
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.site .pens-picket {
+  fill: var(--card);
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+.site .pens-credit {
+  display: block;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.site .pens-credit a {
+  color: inherit;
+}
+.site .pens-brick {
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 600;
+  fill: var(--ink);
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
 @media (max-width: 760px) {
   .site .castle-pair {
     grid-template-columns: minmax(0, 1fr);
@@ -3186,23 +3077,6 @@
 
 /* ─── Phones ──────────────────────────────────────────────────────── */
 
-@media (max-width: 960px) {
-  /* The label goes on top and the sum under the columns */
-  .site .compound-row {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 18px;
-    padding: 24px 20px;
-  }
-  .site .compound-sum {
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-  }
-  .site .compound-sum b {
-    font-size: 32px;
-  }
-}
-
 @media (max-width: 860px) {
   .site .platforms,
   .site .tiles,
@@ -3347,20 +3221,6 @@
   .site .table th,
   .site .table td {
     padding: 12px 14px;
-  }
-  .site .compound-cols {
-    gap: 4px;
-  }
-  /* No room for the shapes; the shape sets its own display, so it goes to nothing */
-  .site .compound-block {
-    gap: 0;
-    height: 26px;
-    padding: 0 2px;
-    font-size: 10px;
-  }
-  .site .compound-block .shape {
-    width: 0;
-    height: 0;
   }
   /* Footer links far enough apart for a thumb */
   .site footer a {
