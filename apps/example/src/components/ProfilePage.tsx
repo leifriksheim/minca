@@ -9,6 +9,7 @@ import {
   useObjectUrl,
 } from '@minca/react';
 import { message } from '@minca/app-shared/action';
+import { forgetPicture } from '@minca/app-shared/rememberedPictures';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { shortUsername } from '@minca/app-shared/usernames';
 import { AccountActions, openAccountHome } from './AccountMenu';
@@ -126,6 +127,7 @@ function PictureButton({ name }: { name: string }) {
  */
 function usePicture(name: string) {
   const node = useNode();
+  const { did } = useAccount();
   const kept = useAccountPicture();
   // What was just chosen, or removed, shows at once, before the account says it changed.
   const [chosen, setChosen] = useState<{ bytes: Uint8Array; mime: string } | 'none' | null>(null);
@@ -138,6 +140,8 @@ function usePicture(name: string) {
     try {
       await node.account.setAvatar(image, { name });
       setChosen(image ?? 'none');
+      // A picture taken away is not shown in a list of accounts either.
+      if (!image) forgetPicture(did);
     } catch (error) {
       const noKey = /account key|registry/i.test(message(error));
       setProblem(

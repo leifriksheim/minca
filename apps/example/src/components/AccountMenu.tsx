@@ -2,6 +2,8 @@ import { useState, type ReactNode } from 'react';
 import { useAccount, useAccountPicture, useConnection, useMyName } from '@minca/react';
 import { accountHomeLink, popupFeatures } from '@minca/core/session';
 import { Avatar } from '@minca/app-shared/Avatar';
+import { ask } from '@minca/app-shared/Ask';
+import { forgetPicture, rememberedPicture } from '@minca/app-shared/rememberedPictures';
 import { usePopover } from './usePopover';
 import { useCopy } from '@minca/app-shared/action';
 import { useNavigate } from '@tanstack/react-router';
@@ -104,6 +106,15 @@ export function AccountActions({
     onDone?.();
     void navigate({ to: '/', search: { as: shortAccount(did) } });
   };
+  const removeAccount = async (other: { readonly did: string; readonly name: string }) => {
+    const sure = await ask(
+      `${other.name} stops using this app here. The account, and its other apps and devices, are not touched; you can add it again.`,
+      { title: `Remove ${other.name} from this app?`, yes: 'Remove' },
+    );
+    if (!sure) return;
+    await connection.disconnect(other.did);
+    forgetPicture(other.did);
+  };
   const openHome = () => {
     onDone?.();
     openAccountHome(state.home, account.did);
@@ -126,16 +137,28 @@ export function AccountActions({
 
       <Section>
         {others.map((other) => (
-          <button
-            key={other.did}
-            role="menuitem"
-            onClick={() => switchTo(other.did)}
-            data-menu-item
-            style={{ ...item, justifyContent: 'flex-start', height: 40 }}
-          >
-            <Avatar did={other.did} size={24} round />
-            <span style={{ ...ui.ellipsis, flex: 1, textAlign: 'left' }}>{other.name}</span>
-          </button>
+          <div key={other.did} style={{ display: 'flex', alignItems: 'center' }}>
+            <button
+              role="menuitem"
+              onClick={() => switchTo(other.did)}
+              data-menu-item
+              style={{ ...item, justifyContent: 'flex-start', height: 40, flex: 1, minWidth: 0 }}
+            >
+              <Avatar did={other.did} size={24} round src={rememberedPicture(other.did)} />
+              <span style={{ ...ui.ellipsis, flex: 1, textAlign: 'left' }}>{other.name}</span>
+            </button>
+            {/* Takes the account off this app only; it and its other apps carry on. */}
+            <button
+              onClick={() => void removeAccount(other)}
+              aria-label={`Remove ${other.name} from this app`}
+              title={`Remove ${other.name} from this app`}
+              data-variant="ghost"
+              data-round
+              style={removeButton}
+            >
+              ×
+            </button>
+          </div>
         ))}
         <Item onClick={() => void connection.connect()} hint={home}>
           Add another account
@@ -195,6 +218,17 @@ const menu = {
   animation: 'minca-fade .1s ease',
   overflow: 'hidden',
 };
+
+/** A quiet × at the end of an account's row */
+const removeButton = {
+  width: 28,
+  height: 28,
+  flexShrink: 0,
+  border: 'none',
+  background: 'none',
+  color: palette.ink.muted,
+  fontSize: 16,
+} as const;
 
 const didButton = {
   border: 'none',

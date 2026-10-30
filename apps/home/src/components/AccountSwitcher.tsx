@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useAccountPicture, useAuth, useSession } from '@minca/react';
 import { Avatar } from '@minca/app-shared/Avatar';
+import { rememberedPicture, useRememberPicture } from '@minca/app-shared/rememberedPictures';
 import { useDismiss } from '@minca/app-shared/useDismiss';
 import { useCopy } from '@minca/app-shared/action';
 import { palette, styles, hstack } from '../styles';
@@ -18,6 +19,8 @@ export function AccountSwitcher() {
   const { auth, state } = useAuth();
   const session = useSession();
   const picture = useAccountPicture();
+  // Kept, so the list of accounts shows this one by its picture once another is signed in.
+  useRememberPicture(session.did, picture);
   const [open, setOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState('');
@@ -136,7 +139,7 @@ export function AccountSwitcher() {
                   style={item}
                   className="menu-item"
                 >
-                  <Avatar did={account.did} size={28} round />
+                  <Avatar did={account.did} size={28} round src={rememberedPicture(account.did)} />
                   <span style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
                     <span style={{ display: 'block', fontWeight: 500, color: ink.strong }}>
                       {account.name}

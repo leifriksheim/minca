@@ -106,11 +106,15 @@ function TurnOn({ setup }: { setup: ReturnType<typeof useAppNotifications> }) {
         </span>
       ) : setup.permission === 'default' ? (
         // Its own step: a browser prompt opened with the home's window easily goes unseen behind it.
-        <AddButton onClick={setup.allow} style={{ marginTop: 6, height: 40 }}>
+        <AddButton onClick={setup.allow} style={{ marginTop: 6, height: 40, alignSelf: 'center' }}>
           Allow notifications
         </AddButton>
       ) : (
-        <AddButton onClick={setup.turnOn} disabled={setup.asking} style={{ marginTop: 6, height: 40 }}>
+        <AddButton
+          onClick={setup.turnOn}
+          disabled={setup.asking}
+          style={{ marginTop: 6, height: 40, alignSelf: 'center' }}
+        >
           {setup.asking ? 'Answer in your account home…' : 'Turn on notifications'}
         </AddButton>
       )}

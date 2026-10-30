@@ -14,6 +14,7 @@ import {
 import { CallsProvider } from '@minca/calls/react';
 import { useShowNotifications } from './notifications';
 import { useAlerts, useTabDot } from './alerts';
+import { useRememberPicture } from '@minca/app-shared/rememberedPictures';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { useRunAutomations } from './automations';
 import { ConnectScreen } from './components/ConnectScreen';
@@ -48,6 +49,9 @@ export function App() {
 
 /** Connected: your spaces for every page, notifications and automations running, and calls drawn over it all */
 function Workspace() {
+  const account = useAccount();
+  // Kept, so the list of accounts shows this one by its picture once another is in use.
+  useRememberPicture(account.did, useAccountPicture());
   const mine = useSpaces();
   const { spaces, loading, error } = mine;
   const navigate = useNavigate();
@@ -82,7 +86,6 @@ function Workspace() {
    * the contact list instead, so the list never names a space you left, and a
    * request still waiting is taken back from the spaces you share.
    */
-  const account = useAccount();
   const forget = async (id: string) => {
     const space = spaces.find((found) => found.id === id);
     if (!space) return;
