@@ -17,7 +17,7 @@ import { onlineAccounts } from '../derive/network';
 import { PersonAvatar } from './std/PersonAvatar';
 import { RingButton } from './calls/Calls';
 import { styles, palette, variants, hstack, stack, ui } from '../styles';
-import { RowMenu } from './PeopleParts';
+import { RowMenu, onlineDot } from './PeopleParts';
 import { Person } from './Person';
 import { Loading } from './Loading';
 import { AddButton, QuietButton } from './Buttons';
@@ -586,17 +586,6 @@ function Members({
     </section>
   );
 }
-
-const onlineDot: CSSProperties = {
-  position: 'absolute',
-  right: -1,
-  bottom: -1,
-  width: 12,
-  height: 12,
-  borderRadius: palette.radius.pill,
-  background: palette.accent.good,
-  boxShadow: `0 0 0 2px ${palette.surface.card}`,
-};
 
 const memberRow: CSSProperties = {
   display: 'flex',

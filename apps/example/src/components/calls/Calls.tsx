@@ -578,11 +578,18 @@ export function RingButton({ space, did, name }: { space: SpaceSummary; did: str
         )
       }
       disabled={ringing || withThem}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-      title={`Call ${name}. It rings wherever they have this space open.`}
+      aria-label={withThem ? `In a call with ${name}` : ringing ? `Ringing ${name}` : `Call ${name}`}
+      title={
+        withThem
+          ? `In a call with ${name}`
+          : ringing
+            ? `Ringing ${name}…`
+            : `Call ${name}. It rings wherever they have this space open.`
+      }
+      data-round
+      style={{ width: 34, height: 34, color: ringing || withThem ? palette.accent.good : undefined }}
     >
-      <Icon name="phone" size={12} />
-      {withThem ? 'In call' : ringing ? 'Ringing…' : 'Call'}
+      <Icon name="phone" size={14} />
     </QuietButton>
   );
 }

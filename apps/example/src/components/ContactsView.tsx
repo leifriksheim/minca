@@ -12,7 +12,7 @@ import type {
 } from '@minca/core';
 import { readInbox } from '@minca/core/inbox';
 import { createP256Provider } from '@minca/core';
-import { useAccount, useAsync, useNode, useWatched } from '@minca/react';
+import { useAccount, useAsync, useNode, useSpaceStatus, useWatched } from '@minca/react';
 import {
   clearInboxFromUrl,
   inboxLink,
@@ -37,6 +37,8 @@ import { confirmThen } from '../confirm';
 import { Icon } from './Icon';
 import { AddDialog, Handle, Notice, PersonRow, RowMenu, SpaceInvites } from './PeopleParts';
 import { SpaceCount } from './SpaceList';
+import { RingButton } from './calls/Calls';
+import { onlineAccounts } from '../derive/network';
 import { InviteToSpace } from './InvitePeople';
 import { shortUsername, useUsernameLookup } from '@minca/app-shared/usernames';
 
@@ -518,12 +520,16 @@ function ContactRow({
   const [inviting, setInviting] = useState(false);
   const standing = useStanding(contact);
   const joined = contact.space && standing !== 'gone';
+  // Whether they are in your space for two now; none yet, and nobody is.
+  const status = useSpaceStatus(contact.space ?? '');
+  const online = !!joined && !!status && onlineAccounts(status, account.did).has(contact.did);
 
   return (
     <>
       <PersonRow
         face={contact.did}
         name={contact.name}
+        online={online}
         {...(joined ? { onOpen: () => onOpen(contact.space!) } : {})}
         detail={
           others.length > 0 ? (
@@ -541,8 +547,11 @@ function ContactRow({
           )
         }
       >
-        {/* What's new in your chat with them, as a group shows it. */}
+        {/* What's new in your chat with them, as a group shows it, and calling them in it. */}
         {joined && space && <SpaceCount space={space} />}
+        {joined && space && standing === 'joined' && (
+          <RingButton space={space} did={contact.did} name={contact.name} />
+        )}
         <RowMenu
           label={`More for ${contact.name}`}
           items={[
