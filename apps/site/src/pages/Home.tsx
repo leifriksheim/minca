@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { APP, Band, ChromeMark, DownloadMark, EXTERNAL, Marked, Page } from './Site';
-import { Pieces } from './pieces';
+import { Converge } from './converge';
 import { Story } from './story';
 import { Compounds } from './compounds';
 import { Hosting, Sealed } from './trust';
@@ -23,8 +23,8 @@ import { downloadLink } from './Install';
  * shared ground instead, and every group that improves a tool improves it
  * for the next.
  *
- * The product comes first and the argument under it: the apps a space has and
- * the shared pieces they are made of (`pieces.tsx`), making and changing tools,
+ * The product comes first and the argument under it: the apps a group juggles
+ * streaming into one (`converge.tsx`), making and changing tools,
  * how it stays private and online (`trust.tsx`), then why it matters. It
  * shows rather than tells: each band is the product doing one thing, drawn
  * as the app draws it (`demos.tsx`).
@@ -206,7 +206,7 @@ export function Home() {
           </p>
         }
       >
-        <Pieces />
+        <Converge />
       </Band>
 
       <section className="band sunken">

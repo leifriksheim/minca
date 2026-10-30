@@ -2962,339 +2962,45 @@
   height: 20px;
 }
 
-/* ─── Front page: apps made of shared pieces (pieces.tsx) ────────── */
+/* ─── Front page: a stream of apps into one prism, Minca's colours out (converge.tsx) ─ */
 
-/* The apps a space starts with, a cell each in one ruled grid */
-.site .basics {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1px;
+/* Edge to edge, while the drawing keeps to the page's column */
+.site .converge {
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  padding: 40px 0;
   overflow: hidden;
-  border: var(--edge);
-  border-radius: var(--r-xl);
 }
-.site .basic {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  box-shadow: 0 0 0 1px var(--rule);
-  background: var(--paper);
-}
-/* The lit app and its pieces take their colour's tile ground, on a layer
-   under the content that fades in and out, so the colour never flickers */
-.site .basic,
-.site .piece {
-  position: relative;
-  isolation: isolate;
-  transition: color 0.4s ease;
-}
-.site .basic::before,
-.site .piece::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  background: color-mix(in srgb, var(--c) var(--tint-tile), var(--paper));
-  opacity: 0;
-  transition: opacity 0.4s ease;
-}
-.site .basic[data-lit]::before,
-.site .piece[data-on]::before {
-  opacity: 1;
-}
-.site .basic.is-big {
-  grid-column: span 2;
-  grid-row: span 2;
-}
-.site .basic.is-wide {
-  grid-column: span 2;
-}
-.site .basic-shot {
-  display: grid;
-  flex: 1;
-  place-items: center;
-  min-height: 210px;
-  padding: 20px 20px 4px;
-}
-.site .basic-shot > * {
+.site .converge svg {
+  display: block;
+  box-sizing: border-box;
   width: 100%;
+  max-width: var(--max);
+  height: auto;
+  margin: 0 auto;
+  padding: 0 24px;
+  overflow: visible;
 }
-.site .basic-shot > .app,
-.site .mini-poll {
-  padding: 14px 16px 6px;
-  /* A card inside a cell: the hairline, so the navy rule is only the grid's */
-  border: var(--hair);
-  border-radius: var(--r-lg);
-  background: var(--card);
+.site .converge-tile {
+  fill: var(--card);
+  stroke: var(--rule);
+  stroke-width: 1.5;
 }
-.site .basic-name {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 20px 18px;
+.site .converge-beam {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-opacity: 0.2;
 }
-.site .basic-name b {
-  display: block;
-  font-family: var(--display);
-  font-size: 17px;
-  letter-spacing: -0.025em;
-  color: var(--ink);
+.site .converge-inside {
+  fill: var(--ink);
+  fill-opacity: 0.08;
 }
-.site .basic-name small {
-  display: block;
-  margin-top: 2px;
-  font-size: 13.5px;
-  line-height: 1.4;
-  color: var(--muted);
-}
-
-/* Under the apps, quietly: the pieces they share, and new apps made of them */
-.site .pieces-key {
-  display: grid;
-  gap: 14px;
-  margin: 28px 0 0;
-}
-.site .pieces-key > div {
-  display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
-  align-items: baseline;
-  gap: 8px 20px;
-}
-.site .pieces-key dt {
-  font-size: 14px;
-  color: var(--muted);
-}
-.site .pieces-key dd {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 0;
-}
-.site .piece {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 5px 12px 5px 9px;
-  border: var(--hair);
-  border-radius: 999px;
-  background-color: var(--paper);
-  font-size: 14px;
-  color: var(--muted);
-}
-.site .piece[data-on] {
-  color: var(--ink);
-}
-.site .piece.is-own,
-.site .piece.is-ask {
-  padding-left: 12px;
-  border-style: dashed;
-}
-.site .piece.is-app {
-  cursor: default;
-}
-
-/* The chat: rooms down the side, a few messages, an event shared into it */
-.site .mini-chat {
-  display: grid;
-  grid-template-columns: 130px minmax(0, 1fr);
-  grid-template-rows: 1fr auto;
-  align-self: stretch;
-  overflow: hidden;
-  border: var(--hair);
-  border-radius: var(--r-lg);
-  background: var(--card);
-  font-size: 13.5px;
-  text-align: left;
-}
-.site .mini-rooms {
-  display: flex;
-  grid-row: span 2;
-  flex-direction: column;
-  gap: 2px;
-  padding: 12px 8px;
-  border-right: var(--hair);
-  background: var(--sunken);
-  font-size: 13px;
-  color: var(--muted);
-}
-.site .mini-rooms span {
-  padding: 4px 8px;
-  border-radius: var(--r-sm);
-  white-space: nowrap;
-}
-.site .mini-rooms .is-on {
-  background: var(--card);
-  font-weight: 500;
-  color: var(--ink);
-}
-.site .mini-thread {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 16px 18px 6px;
-}
-.site .msg {
-  display: flex;
-  gap: 10px;
-}
-.site .msg .app-face {
-  width: 30px;
-  height: 30px;
-}
-.site .msg-who {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-.site .msg-who b {
-  font-weight: 600;
-  color: var(--ink);
-}
-.site .msg-who small {
-  font-size: 11.5px;
-  color: var(--faint);
-}
-.site .msg p {
-  line-height: 1.45;
-  color: var(--body);
-}
-.site .msg-card {
-  max-width: 300px;
-  margin-top: 8px;
-  padding: 10px 12px 0;
-  border: var(--hair);
-  border-radius: var(--r-md);
-  background: var(--paper);
-}
-.site .msg-card .app-event {
-  font-size: 13.5px;
-  color: var(--muted);
-}
-.site .msg-card .app-event b {
-  color: var(--ink);
-}
-.site .msg-reacts {
-  display: flex;
-  gap: 6px;
-  margin-top: 6px;
-}
-.site .msg-reacts span {
-  padding: 1px 8px;
-  border: var(--hair);
-  border-radius: 999px;
-  background: var(--paper);
-  font-size: 12px;
-}
-.site .mini-compose {
-  margin: 6px 16px 14px;
-  padding: 8px 14px;
-  border: var(--hair);
-  border-radius: 999px;
-  font-size: 13px;
-  color: var(--faint);
-}
-
-.site .mini-poll {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-bottom: 14px;
-  font-size: 13.5px;
-  text-align: left;
-}
-.site .mini-poll > b {
-  margin-bottom: 2px;
-  font-size: 14.5px;
-  color: var(--ink);
-}
-.site .mini-poll .tally-row {
-  height: 32px;
-}
-.site .mini-poll small {
-  font-size: 12px;
-  color: var(--faint);
-}
-
-/* The board: a small app of its own, columns of cards with a tag and whoever took them */
-.site .mini-board {
-  padding: 14px;
-  border: var(--hair);
-  border-radius: var(--r-lg);
-  background: var(--card);
-  text-align: left;
-}
-.site .mini-board-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 0 2px 12px;
-}
-.site .mini-board-head b {
-  font-size: 15px;
-  color: var(--ink);
-}
-.site .mini-board-columns {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-.site .mini-board-column {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-  padding: 8px;
-  border-radius: var(--r-md);
-  background: var(--sunken);
-}
-.site .mini-board-column small {
-  display: flex;
-  gap: 6px;
-  padding: 0 2px 2px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
-}
-.site .mini-board-column small span {
-  font-weight: 500;
-  color: var(--faint);
-}
-.site .mini-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 8px 10px;
-  border: var(--hair);
-  border-radius: var(--r-sm);
-  background: var(--card);
-}
-.site .mini-card p {
-  font-size: 13px;
-  line-height: 1.3;
-  color: var(--ink);
-}
-.site .mini-card.is-done p {
-  text-decoration: line-through;
-  color: var(--faint);
-}
-.site .mini-card-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-}
-.site .mini-card-foot .app-face {
-  width: 20px;
-  height: 20px;
-}
-.site .mini-tag {
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--lilac) var(--tint-tile), var(--paper));
-  font-size: 11px;
-  color: var(--body);
+.site .converge-prism {
+  fill: var(--paper);
+  stroke: var(--ink);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
 }
 
 /* ─── Front page: a message locked on the way, and hosting (trust.tsx) ─ */
@@ -3622,12 +3328,6 @@
 }
 
 @media (max-width: 960px) {
-  .site .basics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .site .basic.is-big {
-    grid-row: auto;
-  }
   .site .sealed {
     grid-template-columns: minmax(0, 1fr);
     gap: 28px;
@@ -3635,41 +3335,6 @@
   }
 }
 @media (max-width: 640px) {
-  .site .basics {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .site .pieces-key > div {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .site .basic.is-big,
-  .site .basic.is-wide {
-    grid-column: auto;
-  }
-  /* Narrow columns: the cards keep their title and who took them */
-  .site .mini-board {
-    padding: 12px 10px;
-  }
-  .site .mini-board-columns {
-    gap: 6px;
-  }
-  .site .mini-board-column {
-    padding: 6px;
-  }
-  .site .mini-tag {
-    display: none;
-  }
-  .site .mini-card-foot {
-    justify-content: flex-end;
-  }
-  .site .basic-shot {
-    padding: 14px;
-  }
-  .site .mini-chat {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .site .mini-rooms {
-    display: none;
-  }
   .site .split-even {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -3983,26 +3648,6 @@
 
 /* ─── Phones: the front page, tighter ─────────────────────────────── */
 @media (max-width: 640px) {
-  /* The apps swipe sideways, the next one peeking in */
-  .site .basics {
-    grid-template-columns: none;
-    grid-auto-flow: column;
-    grid-auto-columns: 84%;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scroll-snap-type: x mandatory;
-    scrollbar-width: none;
-  }
-  .site .basics::-webkit-scrollbar {
-    display: none;
-  }
-  .site .basic {
-    scroll-snap-align: start;
-  }
-  .site .basic.is-big {
-    grid-row: auto;
-  }
-
   /* The steps become a row of numbers; the chosen one is told under them */
   .site .story-steps {
     display: grid;
