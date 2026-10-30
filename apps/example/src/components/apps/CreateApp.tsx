@@ -5,21 +5,14 @@ import { ConnectAgent, stepText } from '../ConnectAgent';
 import { useNode } from '@minca/react';
 import { useLauncherRecords } from './entries';
 import { checkLauncherApp, prepareLauncher } from './launcher';
-import { styles, palette, hstack, stack } from '../../styles';
+import { styles, palette, stack } from '../../styles';
 import { LinkButton, PrimaryButton } from '../Buttons';
 
 const TITLE = 'Add your own app';
 
-/** Things a group might ask for, to show how plainly it can be said */
-const IDEAS = [
-  'a potluck sign-up, where everyone says what they bring',
-  'a reading list, with when we meet and a rating from each of us',
-  'a chore rota that takes turns, week by week',
-] as const;
-
 /**
- * Making an app by asking an agent for it, step by step: connect one, or
- * skip that when it is, then ask it in your own words. It proposes the app as
+ * Making an app by asking an agent for it: connect one, then ask it in your
+ * own words. It proposes the app as
  * the guide the launcher writes in the space says, and the proposal shows
  * here when it arrives.
  */
@@ -61,7 +54,7 @@ export function CreateApp({
     />
   );
 
-  return <ConnectAgent title={TITLE} onClose={onClose} then={{ title: 'Ask it for your app', body: ask }} />;
+  return <ConnectAgent title={TITLE} onClose={onClose} then={ask} />;
 }
 
 /** The last step: what to say to the agent, and the app it proposes once it has */
@@ -87,20 +80,12 @@ function AskForApp({
   return (
     <>
       <p style={stepText}>
-        Start a new chat in your agent and say what {space.name} should have, in your own words. For example:
+        In a new chat with your agent, say what {space.name} should have, or what to change in an app it has.
+        For example:
       </p>
-      <ul style={ideas}>
-        {IDEAS.map((idea) => (
-          <li key={idea} style={hstack(8)}>
-            <span aria-hidden style={{ color: palette.ink.faint }}>
-              “
-            </span>
-            <span>
-              In Minca, make {space.name} {idea}.
-            </span>
-          </li>
-        ))}
-      </ul>
+      <p style={example}>
+        “In Minca, add a potluck sign-up to {space.name}, where everyone says what they bring.”
+      </p>
 
       {proposed ? (
         <div style={{ ...styles.note, ...stack(4), padding: '12px 14px' }}>
@@ -142,15 +127,11 @@ function AskForApp({
   );
 }
 
-const ideas = {
-  listStyle: 'none',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 6,
-  padding: '12px 14px',
+const example = {
+  padding: '10px 14px',
   borderRadius: palette.radius.md,
   background: palette.surface.sunken,
-  fontSize: 13.5,
+  fontSize: 14,
   lineHeight: 1.5,
   color: palette.ink.strong,
 } as const;

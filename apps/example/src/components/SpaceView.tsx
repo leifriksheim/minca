@@ -93,6 +93,10 @@ const SECTIONS = [
 /** The sections only a group has: a space for two is the two of you */
 const FOR_GROUPS: ReadonlySet<string> = new Set(['/spaces/$spaceId/members', '/spaces/$spaceId/invite']);
 
+/** A space's own sections, as its menu and its Overview list them: a space for two has nobody to invite */
+export const sectionsOf = (pair: boolean) =>
+  SECTIONS.filter((section) => !pair || !FOR_GROUPS.has(section.to));
+
 /** Every part of a space you can go to with only its id */
 type SpacePath = Exclude<
   Extract<keyof RegisteredRouter['routesByPath'], `/spaces/${string}`>,
@@ -623,7 +627,7 @@ function SpaceMenu({
           ))}
           <SideHeading>{pair ? 'This chat' : 'This group'}</SideHeading>
           {/* A space for two is the two of you, so nobody is invited to it. */}
-          {SECTIONS.filter((section) => !pair || !FOR_GROUPS.has(section.to)).map((section) => (
+          {sectionsOf(!!pair).map((section) => (
             <SideItem
               key={section.to}
               icon={<Icon name={section.icon} size={16} />}
