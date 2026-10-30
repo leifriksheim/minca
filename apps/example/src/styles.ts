@@ -139,6 +139,9 @@ export function injectBaseStyles(): void {
     .scroll-x::-webkit-scrollbar { display: none; }
     .scroll-x > * { flex-shrink: 0; white-space: nowrap; }
 
+    /* Rows in a list, one surface: a hairline between each, none round the edge (ui.list). */
+    .rows > li + li { border-top: 1px solid ${surface.line}; }
+
     /* A space: its collections down the side, the chosen one beside them. */
     .space-side { display: flex; flex-direction: column; gap: 28px; }
     .collection-nav { display: flex; flex-direction: column; gap: 2px; }
@@ -417,7 +420,6 @@ export function injectBaseStyles(): void {
       .account-name, .call-label { display: none; }
       .account-button { padding: 0 3px !important; }
 
-      .space-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
       .call-panel { left: 12px; right: 12px; width: auto; bottom: calc(${RAIL_WIDTH + 12}px + env(safe-area-inset-bottom)); }
       .call-stage { top: 12px; left: 12px; }
       .call-stack { left: 12px; right: 12px; width: auto; top: 12px; }
@@ -541,5 +543,7 @@ export const ui = {
   /** Around a table, which scrolls sideways inside it when too wide */
   tableBox: { border: `1px solid ${surface.rule}`, borderRadius: radius.lg, overflowX: 'auto' },
   card: styles.tile,
+  /** A list on the page: one card, its rows ruled by hairlines (give it className="rows") */
+  list: { ...styles.tile, padding: 0, margin: 0, overflow: 'hidden' },
   ellipsis: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
 } satisfies Record<string, CSSProperties>;

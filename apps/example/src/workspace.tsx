@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react';
 import type { NewSpace, SpaceSummary } from '@minca/core';
+import type { PairWith } from './contacts';
 import { InviteBanner } from './components/InviteBanner';
 import { RelayNotice } from './components/RelayNotice';
 import { styles } from './styles';
@@ -7,9 +8,11 @@ import { styles } from './styles';
 /** Your spaces, and what to do with them, for every page under `App` */
 export interface Workspace {
   readonly spaces: ReadonlyArray<SpaceSummary>;
+  /** Your spaces for two, and who each is with: People, where every other space is a group */
+  readonly pairs: ReadonlyMap<string, PairWith>;
   readonly loading: boolean;
   readonly error: string | null;
-  /** Make a space, and go to it */
+  /** Make a group with Chat in it, and go to it to add people */
   readonly create: (params: NewSpace) => void;
   /** Join with an invite link, and go to the space */
   readonly join: (link: string) => void;
@@ -17,7 +20,7 @@ export interface Workspace {
   readonly joinLink: (link: string) => Promise<SpaceSummary | null>;
   /** Leave a space, after saying what it costs */
   readonly forget: (id: string) => void;
-  /** Go to a space */
+  /** Go to a space, into the app it opens with */
   readonly openSpace: (id: string) => void;
 }
 

@@ -126,7 +126,7 @@ has no generation to move on to
 | -------------------------- | ---------------------------------------------------------------------------------- |
 | How long a claim holds     | A year. Claiming again, with the same code or a new one, renews it                 |
 | New names from one address | 3 a day (an IPv4 address, or an IPv6 /48). Changing or renewing a name is free     |
-| Work                       | 20 bits: a second or two on a laptop, a few on a phone                             |
+| Work                       | 18 bits: a fraction of a second on a laptop, about a second on a phone             |
 | Names held                 | 50,000: each is a file of up to 8 KB, so a 1 GB volume holds them, inodes included |
 | Reserved                   | `admin`, `support`, `security`, `minca` and a few more that pass for the service   |
 | Given up                   | Free again after 10 minutes, so no earlier claim can be replayed to take it back   |

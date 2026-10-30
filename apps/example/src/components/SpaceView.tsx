@@ -32,6 +32,9 @@ import { moveApp } from './apps/launcher';
 import { NEW } from './DataView';
 import { SpaceRail } from './SpaceRail';
 import { SpaceMark } from './SpaceList';
+import { AddPeople } from './InvitePeople';
+import { Avatar } from '@minca/app-shared/Avatar';
+import type { PairWith } from '../contacts';
 import { AccountMenu } from './AccountMenu';
 import { styles, palette, stack, ui } from '../styles';
 import { useAction } from '@minca/app-shared/action';
@@ -132,7 +135,7 @@ export function useSpaceScreen(): SpaceScreen {
 /** `/spaces/<id>`: the space beside the rail of every space, or your spaces when you don't have it */
 export function SpaceLayout() {
   const { spaceId } = useParams({ from: '/spaces/$spaceId' });
-  const { spaces, loading, create, join, openSpace } = useWorkspace();
+  const { spaces, pairs, loading, create, join, openSpace } = useWorkspace();
   const navigate = useNavigate();
   // Always the list's current copy, so a join that finishes, or a role that
   // changes, never leaves a stale one on screen.
@@ -152,7 +155,7 @@ export function SpaceLayout() {
   return (
     <div className="shell">
       <SpaceRail
-        spaces={spaces}
+        spaces={spaces.filter((other) => !pairs.has(other.id))}
         current={space.id}
         onOpen={(other) => openSpace(other.id)}
         onHome={() => void navigate({ to: '/' })}
@@ -166,7 +169,13 @@ export function SpaceLayout() {
 
 /** One space, laid out like a chat app: its apps down a sidebar, the part you're in beside them */
 function SpaceView({ space }: { space: SpaceSummary }) {
-  const { spaces, openSpace } = useWorkspace();
+  const { spaces, pairs, openSpace } = useWorkspace();
+  // A space for two is the person it is with, in its name and its face.
+  const pair = pairs.get(space.id);
+  const name = pair?.name ?? space.name;
+  // A group just made asks who to add, once, over the chat it opened in.
+  const justMade = useRouterState({ select: (state) => state.location.state.addPeople === true });
+  const [adding, setAdding] = useState(justMade);
   const account = useAccount();
   const node = useNode();
   const navigate = useNavigate();
@@ -282,6 +291,10 @@ function SpaceView({ space }: { space: SpaceSummary }) {
   const newInFolded = totalOf(folded.map((app) => unreadOf(unread, app.id)));
 
   const fill = open ? fills(open) : false;
+  // The app the space opens with: on a phone it stands for the whole space.
+  const landing = open !== undefined && open.id === apps.ready[0]?.id;
+  // Back from it goes to the list it was opened from.
+  const leave = () => void navigate({ to: pair ? '/people' : '/' });
   // Dropped on another app: it goes where that one is, for everyone in the space.
   const dropOn = (target: AppEntry) => {
     const key = dragging;
@@ -298,7 +311,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
       { to: '/spaces/$spaceId/new', label: 'New app' },
       { to: '/spaces/$spaceId/more', label: 'More' },
     ].find((part) => part.to === leaf)?.label ??
-    space.name;
+    name;
 
   const screen: SpaceScreen = {
     space,
@@ -322,7 +335,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
         <aside className="space-sidebar" aria-label={space.name}>
           <div className="space-sidebar-scroll">
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 8px 12px' }}>
-              <SpaceMark space={space} size={32} />
+              <SpaceFace space={space} pair={pair} size={32} />
               <div style={{ minWidth: 0 }}>
                 <strong
                   style={{
@@ -335,7 +348,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
                     color: palette.ink.strong,
                   }}
                 >
-                  {space.name}
+                  {name}
                 </strong>
                 <Privacy space={space} />
               </div>
@@ -469,8 +482,8 @@ function SpaceView({ space }: { space: SpaceSummary }) {
           <header className="space-bar">
             {onApp ? (
               <QuietButton
-                onClick={() => go('/spaces/$spaceId')}
-                aria-label="All apps"
+                onClick={landing ? leave : () => go('/spaces/$spaceId')}
+                aria-label={landing ? 'Back' : 'All apps'}
                 className="phone-only"
                 style={{ width: 36, padding: 0 }}
               >
@@ -478,12 +491,48 @@ function SpaceView({ space }: { space: SpaceSummary }) {
               </QuietButton>
             ) : (
               <span className="phone-only" style={{ display: 'contents' }}>
-                <SpaceMark space={space} size={30} />
+                <SpaceFace space={space} pair={pair} size={30} />
               </span>
             )}
-            {open && <AppIcon id={open.id} size={28} />}
+            {landing ? (
+              <>
+                <span className="phone-only" style={{ display: 'contents' }}>
+                  <SpaceFace space={space} pair={pair} size={30} />
+                </span>
+                <span className="hide-on-phone" style={{ display: 'contents' }}>
+                  <AppIcon id={open.id} size={28} />
+                </span>
+              </>
+            ) : (
+              open && <AppIcon id={open.id} size={28} />
+            )}
             <div style={{ flex: 1, minWidth: 0, ...stack(1) }}>
-              <h1 style={{ ...styles.appTitle, ...ui.ellipsis, fontSize: 18 }}>{title}</h1>
+              {landing ? (
+                // On a phone the conversation is the space: it goes by the person's or group's
+                // name, and the name opens the rest of the space, as a group chat's header does.
+                <>
+                  <button
+                    onClick={() => go('/spaces/$spaceId')}
+                    className="phone-only"
+                    style={{
+                      ...styles.appTitle,
+                      ...ui.ellipsis,
+                      fontSize: 18,
+                      padding: 0,
+                      border: 'none',
+                      background: 'none',
+                      textAlign: 'left',
+                    }}
+                  >
+                    {name}
+                  </button>
+                  <h1 className="hide-on-phone" style={{ ...styles.appTitle, ...ui.ellipsis, fontSize: 18 }}>
+                    {title}
+                  </h1>
+                </>
+              ) : (
+                <h1 style={{ ...styles.appTitle, ...ui.ellipsis, fontSize: 18 }}>{title}</h1>
+              )}
               {/* Under the space's name on a phone, as the sidebar has it beside a wide screen. */}
               {onApps && (
                 <span className="phone-only">
@@ -572,7 +621,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
         <nav aria-label="This space" className="tabbar">
           <button onClick={goHome}>
             <Icon name="home" size={20} />
-            Spaces
+            Home
           </button>
           <button
             onClick={() => go('/spaces/$spaceId')}
@@ -622,6 +671,18 @@ function SpaceView({ space }: { space: SpaceSummary }) {
         />
       )}
 
+      {adding && (
+        <AddPeople
+          space={space}
+          members={new Set((access?.members ?? []).map((member) => member.did))}
+          onClose={() => {
+            setAdding(false);
+            // Asked once: going back to this page doesn't ask again.
+            void navigate({ to: '.', state: {}, replace: true });
+          }}
+        />
+      )}
+
       {creating && (
         <CreateApp
           space={space}
@@ -635,6 +696,11 @@ function SpaceView({ space }: { space: SpaceSummary }) {
       )}
     </PersonScopeProvider>
   );
+}
+
+/** A space's face: the person's, for a space for two, else its own mark */
+function SpaceFace({ space, pair, size }: { space: SpaceSummary; pair: PairWith | undefined; size: number }) {
+  return pair ? <Avatar did={pair.face} size={size} round /> : <SpaceMark space={space} size={size} />;
 }
 
 /** An open app: its screen, or its records as lists */

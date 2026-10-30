@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { message, useAction, useCopy } from './action';
-import qrcode from 'qrcode-generator';
 import type { FundOffer, FundPayment, PayAnswer } from '@minca/core';
 import { Glyph } from './Feature';
+import { QrCode } from './QrCode';
 import { styles, palette, hstack, stack } from './styles';
 
 type Request = Extract<PayAnswer, { request: unknown }>['request'];
@@ -412,7 +412,7 @@ function PaymentRequest({ request, onBack }: { request: Request; onBack: () => v
             lineHeight: 0,
           }}
         >
-          <QrCode text={request.uri} />
+          <QrCode text={request.uri} label="QR code for the payment" />
         </div>
         <div style={{ flex: 1, minWidth: 180, ...stack(4) }}>
           <span
@@ -478,31 +478,6 @@ function PaymentRequest({ request, onBack }: { request: Request; onBack: () => v
         Choose another way to pay
       </button>
     </div>
-  );
-}
-
-/** A QR code, drawn as one SVG path, dark on light whatever the theme so every camera reads it */
-function QrCode({ text }: { text: string }) {
-  const qr = qrcode(0, 'M');
-  qr.addData(text);
-  qr.make();
-  const count = qr.getModuleCount();
-  let path = '';
-  for (let row = 0; row < count; row++)
-    for (let col = 0; col < count; col++) if (qr.isDark(row, col)) path += `M${col + 2} ${row + 2}h1v1h-1z`;
-  const side = count + 4;
-  return (
-    <svg
-      viewBox={`0 0 ${side} ${side}`}
-      width={148}
-      height={148}
-      role="img"
-      aria-label="QR code for the payment"
-    >
-      {/* A wallet's camera wants the strongest contrast there is: white and navy. */}
-      <rect width={side} height={side} fill={palette.ink.inverse} />
-      <path d={path} fill={palette.ink.strong} shapeRendering="crispEdges" />
-    </svg>
   );
 }
 

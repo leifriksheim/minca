@@ -1,5 +1,6 @@
-import { Link, Outlet, useNavigate } from '@tanstack/react-router';
-import { useContacts, useHeldSpaces } from './contacts';
+import { useState } from 'react';
+import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
+import { useHeldSpaces, usePairSpaces } from './contacts';
 import { SpaceInvites } from './components/PeopleParts';
 import type { NewSpace } from '@minca/core';
 import { inviteFromLink, useAccount, useConnection, useNode, useSpaces } from '@minca/react';
@@ -14,8 +15,12 @@ import { useAccountInAddress } from './account-address';
 import { ContactsView } from './components/ContactsView';
 import { RelayDown } from './components/RelayNotice';
 import { DocsNote } from './components/DocsNote';
-import { SpaceList } from './components/SpaceList';
+import { SpaceDialog, SpaceList } from './components/SpaceList';
 import { CallLayer } from './components/calls/Calls';
+import { NewSheet } from './components/NewSheet';
+import { Icon } from './components/Icon';
+import { AddButton } from './components/Buttons';
+import { addChat, landingApp } from './components/apps/entries';
 import { Wordmark } from '@minca/app-shared/Wordmark';
 
 import { takeBack } from './contacts';
@@ -42,8 +47,29 @@ function Workspace() {
   const mine = useSpaces();
   const { spaces, loading, error } = mine;
   const navigate = useNavigate();
-  const openSpace = (id: string) => void navigate({ to: '/spaces/$spaceId', params: { spaceId: id } });
+  const node = useNode();
+  const pairs = usePairSpaces();
+  // Into the app the space opens with, the first on its launcher; a space with none opens on its apps.
+  const openSpace = (id: string) =>
+    void landingApp(node, id)
+      .catch(() => undefined)
+      .then((appId) =>
+        appId
+          ? navigate({ to: '/spaces/$spaceId/apps/$appId', params: { spaceId: id, appId } })
+          : navigate({ to: '/spaces/$spaceId', params: { spaceId: id } }),
+      );
   const joinLink = (link: string) => mine.join(inviteFromLink(link));
+  // A new group starts with Chat, and opens in it to add people.
+  const create = async (params: NewSpace) => {
+    const space = await mine.create(params);
+    if (!space) return;
+    await addChat(node, space.id).catch(() => {});
+    void navigate({
+      to: '/spaces/$spaceId/apps/$appId',
+      params: { spaceId: space.id, appId: 'chat' },
+      state: { addPeople: true },
+    });
+  };
   useShowNotifications(openSpace);
   useRunAutomations();
 
@@ -52,7 +78,6 @@ function Workspace() {
    * the contact list instead, so the list never names a space you left, and a
    * request still waiting is taken back from the spaces you share.
    */
-  const node = useNode();
   const account = useAccount();
   const forget = async (id: string) => {
     const space = spaces.find((found) => found.id === id);
@@ -86,9 +111,10 @@ function Workspace() {
 
   const workspace: WorkspaceValue = {
     spaces,
+    pairs,
     loading,
     error,
-    create: (params: NewSpace) => void mine.create(params).then((space) => space && openSpace(space.id)),
+    create: (params: NewSpace) => void create(params),
     join: (link: string) => void joinLink(link).then((space) => space && openSpace(space.id)),
     joinLink,
     forget: (id: string) => void forget(id),
@@ -111,9 +137,13 @@ const tab = (on: boolean) =>
     color: on ? palette.ink.strong : palette.ink.faint,
   }) as const;
 
-/** The home screen: your spaces or your contacts, under one header */
+/** The home screen: your groups or the people you talk to, under one header, and "+" to start either */
 export function HomeLayout() {
   const { spaces, openSpace } = useWorkspace();
+  const on = useRouterState({ select: (state) => state.location.pathname }).startsWith('/people')
+    ? 'people'
+    : 'groups';
+  const [starting, setStarting] = useState(false);
   return (
     <div className="page">
       <div style={styles.app}>
@@ -126,64 +156,85 @@ export function HomeLayout() {
             <AccountMenu />
           </span>
         </header>
-        <nav role="tablist" aria-label="Home" style={{ ...hstack(20), marginBottom: 20 }}>
-          <Link
-            to="/"
-            role="tab"
-            activeOptions={{ exact: true }}
-            activeProps={{ 'aria-selected': true, style: tab(true) }}
-            inactiveProps={{ 'aria-selected': false, style: tab(false) }}
+        <div style={{ ...hstack(20), alignItems: 'center', marginBottom: 20 }}>
+          <nav role="tablist" aria-label="Home" style={{ ...hstack(20), flex: 1 }}>
+            <Link
+              to="/"
+              role="tab"
+              activeOptions={{ exact: true }}
+              activeProps={{ 'aria-selected': true, style: tab(true) }}
+              inactiveProps={{ 'aria-selected': false, style: tab(false) }}
+            >
+              Groups
+            </Link>
+            <Link
+              to="/people"
+              role="tab"
+              activeProps={{ 'aria-selected': true, style: tab(true) }}
+              inactiveProps={{ 'aria-selected': false, style: tab(false) }}
+            >
+              People
+            </Link>
+          </nav>
+          <AddButton
+            onClick={() => setStarting(true)}
+            className="hide-on-phone"
+            style={{ height: 40, display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >
-            Spaces
-          </Link>
-          <Link
-            to="/contacts"
-            role="tab"
-            activeProps={{ 'aria-selected': true, style: tab(true) }}
-            inactiveProps={{ 'aria-selected': false, style: tab(false) }}
-          >
-            Contacts
-          </Link>
-        </nav>
+            <Icon name="plus" size={16} /> New
+          </AddButton>
+        </div>
         <Outlet />
+        {/* Under the thumb on a phone. */}
+        <button
+          onClick={() => setStarting(true)}
+          data-variant="primary"
+          className="fab"
+          style={{ bottom: 'calc(20px + env(safe-area-inset-bottom))' }}
+        >
+          <Icon name="plus" size={16} /> New
+        </button>
+        {starting && <NewSheet on={on} onClose={() => setStarting(false)} />}
       </div>
     </div>
   );
 }
 
-/** Your spaces, at `/` */
-export function SpacesPage() {
-  const { spaces, loading, error, create, join, forget, openSpace } = useWorkspace();
-  const contacts = useContacts();
+/** Your groups, at `/`: every space but your spaces for two */
+export function GroupsPage() {
+  const { spaces, pairs, loading, error, create, join, forget, openSpace } = useWorkspace();
+  const [naming, setNaming] = useState(false);
   // Invites contacts leave wait in your spaces for two, so those keep syncing here.
-  useHeldSpaces(
-    (contacts ?? []).flatMap((contact) => (contact.space && !contact.blocked ? [contact.space] : [])),
-  );
-  const names = new Map((contacts ?? []).map((contact) => [contact.did, contact.name]));
+  useHeldSpaces([...pairs.keys()]);
   return (
     <>
       <div style={{ marginBottom: 20 }}>
-        <SpaceInvites names={names} onJoined={openSpace} />
+        <SpaceInvites
+          names={new Map([...pairs.values()].map((pair) => [pair.face, pair.name]))}
+          onJoined={openSpace}
+        />
       </div>
       <SpaceList
-        spaces={spaces}
+        spaces={spaces.filter((space) => !pairs.has(space.id))}
         loading={loading}
         error={error}
         onOpen={(space) => openSpace(space.id)}
-        onCreate={create}
-        onJoin={join}
+        onNew={() => setNaming(true)}
         onRemove={forget}
       />
+      {naming && (
+        <SpaceDialog initial="new" onClose={() => setNaming(false)} onCreate={create} onJoin={join} />
+      )}
       <AgentCard />
       <DocsNote path="packages/core/docs/spaces.md" style={{ marginTop: 16 }}>
-        Each space keeps its own store and sync, and an invite carries its key in the link.
+        Each group is a space: it keeps its own store and sync, and an invite carries its key in the link.
       </DocsNote>
     </>
   );
 }
 
-/** Your contacts, at `/contacts` */
-export function ContactsPage() {
+/** The people you talk to, at `/people`: your contacts, each a chat for two */
+export function PeoplePage() {
   const { spaces, openSpace } = useWorkspace();
   return <ContactsView spaces={spaces} onOpen={openSpace} />;
 }

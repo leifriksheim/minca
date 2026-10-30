@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { useRouterState } from '@tanstack/react-router';
 import type {
   ContactRequest,
   ContactView,
@@ -22,18 +23,18 @@ import {
   useContacts,
   useStanding,
   useHeldSpaces,
+  withChat,
 } from '../contacts';
 import { nameOf, peopleFrom } from '../derive/people';
 import { ago } from '@minca/ui/time';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { Modal } from '@minca/app-shared/Modal';
-import { styles, palette } from '../styles';
+import { styles, palette, ui } from '../styles';
 import { message, useAction, useCopy } from '@minca/app-shared/action';
 import { Loading } from './Loading';
 import { AddButton, LinkButton, QuietButton } from './Buttons';
 import { confirmThen } from '../confirm';
 import { Icon } from './Icon';
-import { UsernameCard } from './UsernameCard';
 import { AddDialog, Handle, Notice, PersonRow, RowMenu, SpaceInvites } from './PeopleParts';
 import { InviteToSpace } from './InvitePeople';
 import { shortUsername, useUsernameLookup } from '@minca/app-shared/usernames';
@@ -148,13 +149,11 @@ export function ContactsView({
       <KnockFromLink
         onKnock={(code, note) =>
           act(async () => {
-            const made = await node.inbox.knock(code, note ? { note } : {});
+            const made = await withChat(node, node.inbox.knock(code, note ? { note } : {}));
             setNotice(made.carried ? 'Sent. They show up here once they accept.' : NOT_CARRIED);
           })
         }
       />
-
-      <UsernameCard inbox={inbox} onChange={reload} />
 
       <FindPeople
         query={query}
@@ -257,7 +256,7 @@ export function ContactsView({
           ) : listed.length === 0 && sent.length === 0 ? (
             <EmptyContacts hasName={!!inbox?.username} />
           ) : (
-            <ul style={{ padding: 0, margin: 0 }}>
+            <ul className="rows" style={ui.list}>
               {matching.map((contact) => (
                 <ContactRow
                   key={contact.did}
@@ -275,6 +274,7 @@ export function ContactsView({
                     key={knock.space}
                     face={knock.username ?? knock.space}
                     name={knock.name}
+                    onOpen={() => onOpen(knock.space)}
                     detail={
                       <>
                         {knock.username && (
@@ -300,7 +300,7 @@ export function ContactsView({
       {blocked.length > 0 && (
         <details>
           <summary style={{ ...styles.todoMeta, cursor: 'pointer' }}>Blocked ({blocked.length})</summary>
-          <ul style={{ padding: 0, marginTop: 8 }}>
+          <ul className="rows" style={{ ...ui.list, marginTop: 8 }}>
             {blocked.map((contact) => (
               <PersonRow
                 key={contact.did}
@@ -347,6 +347,8 @@ function FindPeople({
   onSent: (notice: string) => void;
 }) {
   const lookup = useUsernameLookup(query);
+  // Arrived from "Message someone": straight into finding them.
+  const finding = useRouterState({ select: (state) => state.location.state.find === true });
   const [adding, setAdding] = useState<{ username: string; name?: string } | null>(null);
   const known = lookup.status === 'found' ? contacts.find((c) => c.username === lookup.username) : undefined;
   const waiting = lookup.status === 'found' && sent.some((knock) => knock.username === lookup.username);
@@ -372,6 +374,7 @@ function FindPeople({
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Find people by name or username"
           aria-label="Find people by name or username"
+          autoFocus={finding}
           autoCapitalize="none"
           autoComplete="off"
           spellCheck={false}
@@ -474,16 +477,16 @@ function EmptyContacts({ hasName }: { hasName: boolean }) {
       <strong style={{ color: ink.strong, fontSize: 15 }}>No contacts yet</strong>
       <span>
         {hasName
-          ? 'Search for someone’s username above, or send them yours.'
-          : 'Pick a username above, then search for your friends’.'}
+          ? 'Search for someone’s username above, or share yours from New.'
+          : 'Search for someone’s username above. To be found by yours, pick one in your account.'}
       </span>
     </div>
   );
 }
 
 /**
- * One contact: open your space for two, invite them into another space, and
- * the rest behind a menu. Warns when someone other than the two of you is in
+ * One contact: a tap opens your chat with them, and the rest (adding them to
+ * a group, renaming, removing) is behind a menu. Warns when someone other than the two of you is in
  * that space — the invite was passed on — so you can decide whether it is
  * still just the two of you.
  */
@@ -516,6 +519,7 @@ function ContactRow({
       <PersonRow
         face={contact.did}
         name={contact.name}
+        {...(joined ? { onOpen: () => onOpen(contact.space!) } : {})}
         detail={
           others.length > 0 ? (
             <span style={{ color: accent.danger }}>
@@ -532,32 +536,21 @@ function ContactRow({
           )
         }
       >
-        {joined && (
-          <QuietButton onClick={() => onOpen(contact.space!)} style={{ height: 34 }}>
-            Open
-          </QuietButton>
-        )}
-        {joined && standing === 'joined' && (
-          <QuietButton
-            onClick={() => setInviting(true)}
-            style={{ height: 34 }}
-            title="Invite them into one of your spaces"
-          >
-            Invite to…
-          </QuietButton>
-        )}
         <RowMenu
           label={`More for ${contact.name}`}
           items={[
+            ...(joined && standing === 'joined'
+              ? [{ label: 'Add to a group…', onClick: () => setInviting(true) }]
+              : []),
             { label: 'Rename', onClick: () => setRenaming(true) },
             {
               label: 'Remove',
               onClick: () =>
                 confirmThen(
                   standing === 'waiting'
-                    ? 'Your request is taken back and you leave the space for two.'
-                    : 'You leave the space for two; they keep their copy.',
-                  { title: `Remove ${contact.name}?`, yes: 'Remove' },
+                    ? 'Your request is taken back, and your chat with them goes.'
+                    : 'Your chat with them goes from all your devices. They keep their copy.',
+                  { title: `Remove ${contact.name} from your contacts?`, yes: 'Remove' },
                   () =>
                     act(() => takeBack(node, standing === 'waiting' ? shared : [], account.did, contact.did)),
                 ),
@@ -567,7 +560,7 @@ function ContactRow({
               danger: true,
               onClick: () =>
                 confirmThen(
-                  'You leave the space for two, and their requests and knocks are hidden from now on.',
+                  'Your chat with them goes, and their requests are hidden from now on.',
                   { title: `Block ${contact.name}?`, yes: 'Block' },
                   () => act(() => node.contacts.block(contact.did)),
                 ),
@@ -707,7 +700,7 @@ function Inbox({
           onKnock={(code, note) => {
             setKnocking(false);
             void act(async () => {
-              const made = await node.inbox.knock(code, note ? { note } : {});
+              const made = await withChat(node, node.inbox.knock(code, note ? { note } : {}));
               onKnocked(made.carried ? 'Sent. They show up in your contacts once they accept.' : NOT_CARRIED);
             });
           }}

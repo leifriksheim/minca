@@ -8,7 +8,7 @@ import { Shape } from '@minca/app-shared/shapes';
 import { shapeFor } from '@minca/ui/shapes';
 import { ago } from '@minca/ui/time';
 import { palette, styles } from '../styles';
-import { NOT_CARRIED } from '../contacts';
+import { NOT_CARRIED, withChat } from '../contacts';
 import { shortUsername } from '@minca/app-shared/usernames';
 import { AddButton, LinkButton } from './Buttons';
 import { Icon } from './Icon';
@@ -27,6 +27,7 @@ export function PersonRow({
   detail,
   children,
   tone,
+  onOpen,
 }: {
   /** Their account, for their avatar; or a username, for someone not met yet */
   face: string;
@@ -35,25 +36,40 @@ export function PersonRow({
   children?: ReactNode;
   /** A card of its own, for someone asking or found, rather than a row in the list */
   tone?: 'card';
+  /** Opens your chat with them, from a tap anywhere on their face or name */
+  onOpen?: () => void;
 }) {
-  return (
-    <li
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        padding: tone === 'card' ? '12px 14px' : '10px 4px',
-        ...(tone === 'card'
-          ? { border: `1px solid ${surface.rule}`, borderRadius: radius.lg, background: surface.card }
-          : { borderBottom: `1px solid ${surface.line}` }),
-        listStyle: 'none',
-      }}
-    >
+  const who = (
+    <>
       <Avatar did={face} size={40} round />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 15, fontWeight: 600, color: ink.strong, ...ellipsis }}>{name}</div>
         {detail && <div style={{ fontSize: 13, color: ink.muted, marginTop: 1, ...ellipsis }}>{detail}</div>}
       </div>
+    </>
+  );
+  return (
+    <li
+      data-tile={onOpen ? '' : undefined}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: tone === 'card' ? '12px 14px' : '11px 14px',
+        // In a list, the list draws the lines between rows (`className="rows"`).
+        ...(tone === 'card'
+          ? { border: `1px solid ${surface.rule}`, borderRadius: radius.lg, background: surface.card }
+          : {}),
+        listStyle: 'none',
+      }}
+    >
+      {onOpen ? (
+        <button onClick={onOpen} style={opens}>
+          {who}
+        </button>
+      ) : (
+        who
+      )}
       {children && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>{children}</div>
       )}
@@ -62,6 +78,17 @@ export function PersonRow({
 }
 
 const ellipsis = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as const;
+const opens = {
+  flex: 1,
+  minWidth: 0,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 12,
+  padding: 0,
+  border: 'none',
+  background: 'none',
+  textAlign: 'left',
+} as const;
 
 /** A username as it reads in a list: just the name when it is at this app's domain */
 export function Handle({ username }: { username: string }) {
@@ -163,7 +190,7 @@ export function AddDialog({
     setSending(true);
     setError(null);
     try {
-      const made = await node.inbox.knock(username, note.trim() ? { note: note.trim() } : {});
+      const made = await withChat(node, node.inbox.knock(username, note.trim() ? { note: note.trim() } : {}));
       onSent(made.carried ? `Sent. ${who} shows up in your contacts once they accept.` : NOT_CARRIED);
     } catch (reason) {
       setError(message(reason));

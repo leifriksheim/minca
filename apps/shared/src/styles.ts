@@ -81,7 +81,6 @@ export const baseCss = `
     [data-editable]:focus { border-color: ${surface.lineStrong} !important; background: ${surface.card} !important; box-shadow: none !important; }
     .inline-field select, .inline-field input { height: 32px !important; border-color: transparent !important; background-color: transparent !important; margin-left: -8px; padding-left: 8px !important; width: calc(100% + 8px) !important; }
     .inline-field select:focus, .inline-field input:focus { border-color: ${surface.lineStrong} !important; background-color: ${surface.card} !important; box-shadow: none !important; }
-    .space-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
     [data-tile] { transition: border-color .15s ease, background-color .15s ease; }
     @keyframes minca-rise { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
     /* A dialog taller than the window scrolls, and what is in it keeps its size rather than squashing. */

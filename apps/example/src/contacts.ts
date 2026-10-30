@@ -2,15 +2,33 @@
 import { useEffect } from 'react';
 import { ROLE_ASSIGN, type ContactView, type P2PNode } from '@minca/core';
 import { useAsync, useLive, useNode, useWatched } from '@minca/react';
+import { addChat } from './components/apps/entries';
 
 /** What a new space for two means when no carrier holds it yet (`spaces.carried`) */
 export const NOT_CARRIED =
   'Sent. Nothing of yours keeps your space for two online yet, so they can join only while this device is.';
 
-/** A link that knocks on an inbox: this app's contacts, with the code after `#inbox=` */
-export function inboxLink(code: string): string {
-  return `${globalThis.location.origin}/contacts#inbox=${code}`;
+/**
+ * A request to become someone's contact, with Chat already in the space for
+ * two it makes: they open it into a conversation, and you can write first.
+ */
+export async function withChat<Made extends { readonly space: string }>(
+  node: P2PNode,
+  asking: Promise<Made>,
+): Promise<Made> {
+  const made = await asking;
+  await addChat(node, made.space).catch(() => {});
+  return made;
 }
+
+/** A link that knocks on an inbox: this app's people, with the code after `#inbox=` */
+export function inboxLink(code: string): string {
+  return `${globalThis.location.origin}/people#inbox=${code}`;
+}
+
+/** A link that opens this app's people with the username looked up, ready to add */
+export const usernameLink = (username: string) =>
+  `${globalThis.location.origin}/people#user=${encodeURIComponent(username)}`;
 
 /** The username in this page's URL, if someone opened a link to add them (`#user=`) */
 export function readUserFromUrl(): string | null {
@@ -53,6 +71,42 @@ export function useContacts(): ReadonlyArray<ContactView> | undefined {
     when: (event) => event.type === 'records' && event.space === spaceId,
   });
 }
+
+/** Who a space for two is with: a contact, or someone you asked who hasn't answered yet */
+export interface PairWith {
+  readonly name: string;
+  /** Their account, or for someone not met yet, the username you asked them by */
+  readonly face: string;
+}
+
+/**
+ * Your spaces for two, by space, and who each is with: they are People, not
+ * Groups. Kept current as the contact list changes, here or on another device.
+ */
+export function usePairSpaces(): ReadonlyMap<string, PairWith> {
+  const node = useNode();
+  const space = useAsync(() => node.contacts.space(), [node]);
+  const spaceId = space.status === 'done' ? space.value : undefined;
+  const found = useWatched(
+    async (node) => {
+      const [contacts, sent] = await Promise.all([
+        node.contacts.list().catch(() => []),
+        node.inbox.sent().catch(() => []),
+      ]);
+      const pairs = new Map<string, PairWith>();
+      for (const knock of sent)
+        pairs.set(knock.space, { name: knock.name, face: knock.username ?? knock.space });
+      for (const contact of contacts)
+        if (contact.space) pairs.set(contact.space, { name: contact.name, face: contact.did });
+      return pairs;
+    },
+    [spaceId],
+    { when: (event) => event.type === 'records' && event.space === spaceId },
+  );
+  return found ?? NO_PAIRS;
+}
+
+const NO_PAIRS: ReadonlyMap<string, PairWith> = new Map();
 
 /** Where a contact stands with your space for two (`gone`: you left it); undefined while loading */
 export type Standing = 'joined' | 'waiting' | 'gone' | 'none';
