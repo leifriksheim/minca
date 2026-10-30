@@ -88,7 +88,7 @@ const spaceApps = createRoute({
 const newApp = createRoute({
   getParentRoute: inSpace,
   path: 'new',
-  component: page((s) => <NewApp {...s} onOwn={s.startCreating} />),
+  component: page((s) => <NewApp {...s} onOpenApp={s.openApp} onOwn={s.startCreating} />),
 });
 const app = createRoute({
   getParentRoute: inSpace,

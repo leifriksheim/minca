@@ -1,15 +1,17 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { message, useAction } from '@minca/app-shared/action';
-import type { NodeCollection, NodeRecord, SpaceSummary } from '@minca/core';
-import { useNode, useSpaces } from '@minca/react';
+import type { NodeCollection, SpaceSummary } from '@minca/core';
+import { useNode } from '@minca/react';
+import { useWorkspace } from '../../workspace';
+import { RowMenu } from '../PeopleParts';
 import type { AppEntry, useSpaceApps } from './entries';
 import { AppIcon, Count } from './AppIcon';
 import { Proposals } from './MadeApps';
-import { copyApp, moveApp, removeApp, type LauncherApp } from './launcher';
+import { copyApp, moveApp, removeApp } from './launcher';
 import { Icon } from '../Icon';
 import { unreadOf, type Unread } from '../../seen';
 import { styles, palette, variants, hstack, stack, ui } from '../../styles';
-import { PrimaryButton, QuietButton } from '../Buttons';
+import { PrimaryButton } from '../Buttons';
 import { confirmThen } from '../../confirm';
 
 /**
@@ -38,7 +40,17 @@ export function AppsView({
   const node = useNode();
   const [arranging, setArranging] = useState(false);
   const arrange = useAction();
-  const others = useSpaces().spaces.filter((other) => other.id !== space.id && other.writable);
+  const { spaces, pairs } = useWorkspace();
+  // Groups of yours to propose an app in: not this one, nor a space for two.
+  const others = spaces.filter((other) => other.id !== space.id && other.writable && !pairs.has(other.id));
+  const [copied, setCopied] = useState<string | null>(null);
+  const copy = (app: AppEntry, to: SpaceSummary) => {
+    setCopied(null);
+    copyApp(node, space.id, app.record, to.id).then(
+      () => setCopied(`${app.title} is proposed in ${to.name}. People there add it if they want it.`),
+      (e: unknown) => setCopied(message(e)),
+    );
+  };
 
   const move = (app: AppEntry, by: number) => {
     const at = apps.placed.findIndex((record) => record.key === app.record.key);
@@ -98,8 +110,13 @@ export function AppsView({
                         first: at === 0,
                         last: at === apps.ready.length - 1,
                         onMove: (by) => move(app, by),
-                        onRemove: () => remove(app),
-                        copy: <CopyTo space={space} record={app.record} others={others} />,
+                        menu: [
+                          ...others.map((other) => ({
+                            label: `Copy to ${other.name}`,
+                            onClick: () => copy(app, other),
+                          })),
+                          { label: 'Remove', danger: true, onClick: () => remove(app) },
+                        ],
                       }
                     : undefined
                 }
@@ -123,6 +140,7 @@ export function AppsView({
           <p style={styles.quiet}>No apps here yet.</p>
         )}
         {arrange.error && <p style={styles.error}>{arrange.error}</p>}
+        {copied && arranging && <p style={styles.quiet}>{copied}</p>}
       </section>
 
       <Proposals
@@ -156,8 +174,8 @@ function AppRow({
         readonly first: boolean;
         readonly last: boolean;
         readonly onMove: (by: number) => void;
-        readonly onRemove: () => void;
-        readonly copy: ReactNode;
+        /** What else can be done to it: copying it to another group, and taking it off */
+        readonly menu: ReadonlyArray<{ label: string; onClick: () => void; danger?: boolean }>;
       }
     | undefined;
 }) {
@@ -182,98 +200,37 @@ function AppRow({
         </button>
       </li>
     );
+  // One line on every screen: the app, its moves, and the rest behind a menu.
   return (
-    // On a narrow screen its moves go under it, so its name keeps its room.
-    <li
-      style={{ ...rowButton, listStyle: 'none', padding: '8px 10px 8px 16px', flexWrap: 'wrap', rowGap: 8 }}
-    >
-      <span style={{ display: 'flex', alignItems: 'center', gap: 14, flex: '1 1 200px', minWidth: 0 }}>
-        {about}
-      </span>
-      <span
-        style={{
-          ...hstack(6),
-          flexWrap: 'wrap',
-          justifyContent: 'flex-end',
-          marginLeft: 'auto',
-          minWidth: 0,
-        }}
+    <li style={{ ...rowButton, listStyle: 'none', padding: '8px 10px 8px 16px' }}>
+      <AppIcon id={app.id} size={32} />
+      <strong style={{ ...cardTitle, ...ui.ellipsis, flex: 1, minWidth: 0 }}>{app.title}</strong>
+      <button
+        onClick={() => arrange.onMove(-1)}
+        disabled={arrange.busy || arrange.first}
+        aria-label={`Move ${app.title} up`}
+        data-variant="quiet"
+        data-round
+        style={roundButton}
       >
-        <button
-          onClick={() => arrange.onMove(-1)}
-          disabled={arrange.busy || arrange.first}
-          aria-label={`Move ${app.title} up`}
-          data-variant="quiet"
-          data-round
-          style={roundButton}
-        >
-          <span style={{ display: 'inline-flex', transform: 'rotate(-90deg)' }}>
-            <Icon name="chevron" size={14} />
-          </span>
-        </button>
-        <button
-          onClick={() => arrange.onMove(1)}
-          disabled={arrange.busy || arrange.last}
-          aria-label={`Move ${app.title} down`}
-          data-variant="quiet"
-          data-round
-          style={roundButton}
-        >
-          <span style={{ display: 'inline-flex', transform: 'rotate(90deg)' }}>
-            <Icon name="chevron" size={14} />
-          </span>
-        </button>
-        {arrange.copy}
-        <QuietButton
-          onClick={arrange.onRemove}
-          disabled={arrange.busy}
-          style={{ height: 36, color: palette.accent.danger }}
-        >
-          Remove
-        </QuietButton>
-      </span>
+        <span style={{ display: 'inline-flex', transform: 'rotate(-90deg)' }}>
+          <Icon name="chevron" size={14} />
+        </span>
+      </button>
+      <button
+        onClick={() => arrange.onMove(1)}
+        disabled={arrange.busy || arrange.last}
+        aria-label={`Move ${app.title} down`}
+        data-variant="quiet"
+        data-round
+        style={roundButton}
+      >
+        <span style={{ display: 'inline-flex', transform: 'rotate(90deg)' }}>
+          <Icon name="chevron" size={14} />
+        </span>
+      </button>
+      <RowMenu label={`More for ${app.title}`} items={arrange.menu} />
     </li>
-  );
-}
-
-/** Proposes the same app in another of your spaces — people there decide for themselves */
-function CopyTo({
-  space,
-  record,
-  others,
-}: {
-  space: SpaceSummary;
-  record: NodeRecord<LauncherApp>;
-  others: ReadonlyArray<SpaceSummary>;
-}) {
-  const node = useNode();
-  const [said, setSaid] = useState<string | null>(null);
-  if (others.length === 0) return null;
-  return (
-    <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-      {said && <span style={{ color: palette.ink.muted }}>{said}</span>}
-      <select
-        value=""
-        aria-label="Copy to another space"
-        onChange={(event) => {
-          const target = others.find((other) => other.id === event.target.value);
-          if (!target) return;
-          setSaid(null);
-          copyApp(node, space.id, record, target.id).then(
-            () => setSaid(`Proposed in ${target.name}`),
-            (e: unknown) => setSaid(message(e)),
-          );
-        }}
-        style={{ ...styles.smallButton, height: 36, width: 'auto', maxWidth: 140 }}
-      >
-        <option value="">Copy to…</option>
-        {others.map((other) => (
-          <option key={other.id} value={other.id}>
-            {other.name}
-          </option>
-        ))}
-      </select>
-    </span>
   );
 }
 

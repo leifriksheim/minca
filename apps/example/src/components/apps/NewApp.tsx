@@ -18,12 +18,14 @@ export function NewApp({
   collections,
   apps,
   mayDefine,
+  onOpenApp,
   onOwn,
 }: {
   space: SpaceSummary;
   collections: ReadonlyArray<NodeCollection>;
   apps: ReturnType<typeof useSpaceApps>;
   mayDefine: boolean;
+  onOpenApp: (id: string) => void;
   onOwn: () => void;
 }) {
   const node = useNode();
@@ -42,8 +44,11 @@ export function NewApp({
 
   const add = (app: Ready) => {
     setAdding(app);
-    // It joins the sidebar, and leaves this list: you stay here to add another.
-    void run(() => app.add());
+    // Added, it opens: what you added it for is the next thing to do.
+    void run(async () => {
+      await app.add();
+      onOpenApp(app.id);
+    });
   };
 
   return (
