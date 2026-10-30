@@ -4,7 +4,7 @@
  * how one is claimed here is this service's own
  * (packages/core/docs/usernames.md).
  *
- *   GET  /.well-known/minca.json?name=leif  → { names: { leif: <code> }, claim, work }
+ *   GET  /.well-known/minca.json?name=leif  → { names: { leif: <code> }, reserved?, claim, work }
  *   POST /.well-known/minca.json  { name, key, at, work, code?, bind?, sig }  → { until } | { error }
  *
  * A claim is signed by the name key over the name, its time and its code, and
@@ -215,7 +215,14 @@ export function createNames({ domain, claim, dir, limits: given }) {
         else if (req.method === 'GET') {
           const name = new URLSearchParams(query).get('name') ?? '';
           const code = codeOf(name, Date.now());
-          send(code ? 200 : 404, { names: code ? { [name]: code } : {}, claim, work: limits.workBits });
+          // A reserved name leads nowhere, and says so, so nobody is told it is free and then refused it.
+          const reserved = !code && RESERVED_NAMES.has(name) ? { reserved: true } : {};
+          send(code ? 200 : 404, {
+            names: code ? { [name]: code } : {},
+            ...reserved,
+            claim,
+            work: limits.workBits,
+          });
         } else if (req.method === 'POST')
           readBody(req)
             .then((text) => {

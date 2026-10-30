@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import type { SpaceSummary } from '@minca/core';
-import { useAccount, useCollections } from '@minca/react';
+import { useAccount, useCollections, useHoldSpace } from '@minca/react';
 import { usePopover } from './usePopover';
 import { markRead, useAlerts, useTabDot } from '../alerts';
 import { useAppNotifications, useOwnAutomations } from '../notifications';
@@ -20,14 +20,11 @@ export function Bell({
   spaces,
   here,
   onOpenSpace,
-  place = 'below',
 }: {
   spaces: ReadonlyArray<SpaceSummary>;
   /** The space on screen, where something more specific can be picked */
   here?: SpaceSummary | undefined;
   onOpenSpace: (id: string) => void;
-  /** Below the button, in a header; or above the bar it sits in, at the foot of a space's sidebar */
-  place?: 'below' | 'above';
 }) {
   const { did } = useAccount();
   const { items, unread } = useAlerts(did);
@@ -41,8 +38,8 @@ export function Bell({
   const off = setup.on === 0;
 
   return (
-    // Above, the panel hangs from the whole bar rather than the button, as the account's menu does.
-    <div ref={root} style={{ position: place === 'below' ? 'relative' : 'static' }}>
+    // At the foot of a space's rail, the panel opens beside the button, from its bottom edge.
+    <div ref={root} style={{ position: 'relative' }}>
       <button
         onClick={() => {
           if (!open) setTab(off && items.length === 0 ? 'settings' : 'activity');
@@ -63,12 +60,7 @@ export function Bell({
       </button>
 
       {open && (
-        <div
-          role="dialog"
-          aria-label="Notifications"
-          className={place === 'below' ? 'drop' : undefined}
-          style={{ ...panel, ...(place === 'below' ? below : above) }}
-        >
+        <div role="dialog" aria-label="Notifications" className="drop" style={panel}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '10px 10px 6px 14px' }}>
             <p style={{ flex: 1, fontWeight: 600, fontSize: 14, color: palette.ink.strong }}>Notifications</p>
             <div role="tablist" aria-label="Notifications" style={hstack(2)}>
@@ -110,7 +102,7 @@ export function Bell({
 }
 
 /** What notifications matched lately, newest first */
-function Activity({
+export function Activity({
   items,
   spaces,
   off,
@@ -120,14 +112,15 @@ function Activity({
   items: ReturnType<typeof useAlerts>['items'];
   spaces: ReadonlyArray<SpaceSummary>;
   off: boolean;
-  onSettings: () => void;
+  /** Where to turn them on, when that is somewhere else */
+  onSettings?: () => void;
   onOpenSpace: (id: string) => void;
 }) {
   if (items.length === 0)
     return (
       <div style={{ padding: '4px 14px 14px', fontSize: 13, lineHeight: 1.5, color: palette.ink.muted }}>
         <p>Nothing yet. What your notifications match shows up here, while this app is open.</p>
-        {off && (
+        {off && onSettings && (
           <button onClick={onSettings} style={{ ...link, marginTop: 8 }}>
             Turn notifications on →
           </button>
@@ -135,7 +128,7 @@ function Activity({
       </div>
     );
   return (
-    <ul style={{ listStyle: 'none', maxHeight: 360, overflowY: 'auto', padding: '0 6px 6px' }}>
+    <ul style={{ listStyle: 'none', padding: '0 6px 6px' }}>
       {items.map((item) => {
         const space = spaces.find((s) => s.id === item.space);
         return (
@@ -158,16 +151,16 @@ function Activity({
 }
 
 /** Whether this browser may show them, and what you asked to hear about, in every space */
-function Settings({
+export function Settings({
   spaces,
   here,
   setup,
   onBuild,
 }: {
   spaces: ReadonlyArray<SpaceSummary>;
-  here: SpaceSummary | undefined;
+  here?: SpaceSummary | undefined;
   setup: ReturnType<typeof useAppNotifications>;
-  onBuild: () => void;
+  onBuild?: () => void;
 }) {
   const watches = useOwnAutomations();
   const where = (spaceIds: 'all' | ReadonlyArray<string>) =>
@@ -233,18 +226,21 @@ function Settings({
       )}
 
       <div style={{ height: 1, background: palette.surface.line, margin: '6px 4px' }} />
-      {here ? (
-        <Action onClick={onBuild} title="Something specific…" hint={`Pick what, and when, in ${here.name}`} />
-      ) : (
-        <p style={note}>To pick something specific, open a space; an app's own bell offers its choices.</p>
+      {onBuild && (
+        <Action
+          onClick={onBuild}
+          title="Something specific…"
+          hint={here ? `Pick what, and when, in ${here.name}` : 'Pick a space, then what, and when'}
+        />
       )}
       <Action onClick={setup.manage} title="Pause or remove, in your account ↗" quiet />
     </div>
   );
 }
 
-/** The builder needs the space's collections, which only a space on screen has synced */
-function Builder({ space, onClose }: { space: SpaceSummary; onClose: () => void }) {
+/** The builder needs the space's collections, so the space syncs while it is open */
+export function Builder({ space, onClose }: { space: SpaceSummary; onClose: () => void }) {
+  useHoldSpace(space.id);
   const collections = useCollections(space.id);
   return <WatchBuilder space={space} collections={collections} onClose={onClose} />;
 }
@@ -326,15 +322,16 @@ const badge = {
 };
 const panel = {
   position: 'absolute' as const,
+  left: 'calc(100% + 10px)',
+  bottom: 0,
   zIndex: 20,
   width: 340,
   maxWidth: 'calc(100vw - 24px)',
+  maxHeight: 'min(480px, calc(100dvh - 120px))',
   ...styles.float,
   animation: 'minca-fade .1s ease',
-  overflow: 'hidden',
+  overflowY: 'auto' as const,
 };
-const below = { right: 0, top: 44 };
-const above = { left: 0, bottom: 'calc(100% + 8px)' };
 const row = {
   width: '100%',
   display: 'flex',

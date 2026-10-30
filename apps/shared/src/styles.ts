@@ -82,6 +82,19 @@ export const baseCss = `
     .inline-field select, .inline-field input { height: 32px !important; border-color: transparent !important; background-color: transparent !important; margin-left: -8px; padding-left: 8px !important; width: calc(100% + 8px) !important; }
     .inline-field select:focus, .inline-field input:focus { border-color: ${surface.lineStrong} !important; background-color: ${surface.card} !important; box-shadow: none !important; }
     [data-tile] { transition: border-color .15s ease, background-color .15s ease; }
+    /* A round button that holds only an icon: a circle, whatever its padding or the size a touchscreen asks, its icon in the middle. */
+    [data-round] { display: inline-grid !important; place-items: center; padding: 0 !important; aspect-ratio: 1; flex-shrink: 0; }
+    /* Rows in a list, one surface (\`list\`): a hairline between each, none round the edge.
+       The ends take the card's corners rather than the card clipping them, so a row's menu can hang out of it. */
+    .rows > li + li { border-top: 1px solid ${surface.line}; }
+    .rows > li:first-child { border-top-left-radius: inherit; border-top-right-radius: inherit; }
+    .rows > li:last-child { border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; }
+    /* Inside a surface (a dialog, or a card marked .surface) a list is no box of its own: never a box in a box,
+       only hairlines above, between and below its rows. */
+    :is(.modal, .surface) .rows {
+      border: none !important; border-radius: 0 !important; background: none !important;
+      border-top: 1px solid ${surface.line} !important; border-bottom: 1px solid ${surface.line} !important;
+    }
     @keyframes minca-rise { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
     /* A dialog taller than the window scrolls, and what is in it keeps its size rather than squashing. */
     .modal { max-height: calc(100dvh - 40px); overflow-y: auto; }
@@ -135,8 +148,6 @@ export const hoverCss = `
     [data-tile]:hover { background-color: ${surface.sunken} !important; }
     [data-tile]:hover [data-row-action] { opacity: 1; }
     [data-tile-new]:hover { border-color: ${ink.muted} !important; color: ${ink.strong} !important; background: ${surface.sunken} !important; }
-    [data-rail-item]:not([aria-current]):hover [data-rail-pill] { height: 10px !important; opacity: 1 !important; }
-    [data-rail-add]:hover > span { border-color: ${ink.muted} !important; color: ${ink.strong} !important; background: ${surface.card}; }
 `;
 
 const button: CSSProperties = {
@@ -517,6 +528,15 @@ export const styles = {
     border: `1px solid ${surface.rule}`,
     borderRadius: radius.lg,
     backgroundColor: surface.card,
+  },
+  /** A list on the page: one card, its rows ruled by hairlines (give it className="rows") */
+  list: {
+    border: `1px solid ${surface.rule}`,
+    borderRadius: radius.lg,
+    backgroundColor: surface.card,
+    padding: 0,
+    margin: 0,
+    listStyle: 'none',
   },
   /** A tag or a filter: a small sunken pill with a hairline, as the site's chips are */
   chip,

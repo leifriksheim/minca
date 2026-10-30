@@ -6,6 +6,7 @@ import { Modal } from '@minca/app-shared/Modal';
 import { saveSettings, type LauncherApp } from './launcher';
 import { styles } from '../../styles';
 import { PrimaryButton, QuietButton } from '../Buttons';
+import { Icon } from '../Icon';
 
 /**
  * Settings on an open app, for someone who may add apps: what the app asks
@@ -23,7 +24,15 @@ export function AppSettingsButton({
   if (!record.body?.settings?.length) return null;
   return (
     <>
-      <QuietButton onClick={() => setOpen(true)}>Settings</QuietButton>
+      <QuietButton
+        onClick={() => setOpen(true)}
+        aria-label="Settings"
+        title="Settings"
+        data-round
+        style={{ width: 36, height: 36 }}
+      >
+        <Icon name="settings" size={16} />
+      </QuietButton>
       {open && <AppSettings space={space} record={record} onClose={() => setOpen(false)} />}
     </>
   );

@@ -21,6 +21,7 @@ import {
   encodeInbox,
   parseUsername,
   resolveUsername,
+  usernameFree,
   usernameUrl,
   type Username,
 } from '@minca/core/inbox';
@@ -307,7 +308,9 @@ describe('a name service', () => {
     assert.deepEqual((await post(names.url, sent)).json, { error: 'Not a claim' });
   });
 
-  test('names that pass for whoever runs the service are refused', async () => {
+  test('names that pass for whoever runs the service are refused, and never said to be free', async () => {
+    assert.equal(await usernameFree(`support@${names.domain}`), false);
+    assert.equal(await usernameFree(`supporter@${names.domain}`), true);
     const them = await someone(names.at('support'));
     await assert.rejects(claimUsername(names.at('support'), them.contact, them.code), /taken/);
   });

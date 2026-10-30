@@ -5,7 +5,6 @@
  */
 import {
   ballot,
-  call,
   column,
   comment,
   decision,
@@ -29,7 +28,6 @@ import {
   vote,
 } from '@minca/core/schemas';
 import type { Template } from '../launcher';
-import calls from './calls.html?raw';
 import bills from './bills.html?raw';
 import chat from './chat.html?raw';
 import decisions from './decisions.html?raw';
@@ -194,15 +192,5 @@ export const TEMPLATES: ReadonlyArray<Template> = [
       screen: marketplace,
     },
     needs: [listing, order, orderUpdate, comment],
-  },
-  {
-    app: {
-      template: 'calls',
-      title: 'Calls',
-      description: 'Keeps a log of the calls in this space: who was in each, and calls nobody answered.',
-      collections: [call.name],
-      screen: calls,
-    },
-    needs: [call],
   },
 ];

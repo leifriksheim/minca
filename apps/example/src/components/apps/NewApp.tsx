@@ -44,6 +44,7 @@ export function NewApp({
 
   const add = (app: Ready) => {
     setAdding(app);
+    // Added, it opens: what you added it for is the next thing to do.
     void run(async () => {
       await app.add();
       onOpenApp(app.id);
@@ -53,7 +54,7 @@ export function NewApp({
   return (
     <div style={stack(14)}>
       {space.writable && (
-        <button onClick={onOwn} className="app-card" style={ownCard}>
+        <button onClick={onOwn} style={ownCard}>
           <span style={ownIcon}>
             <Icon name="sparkle" size={22} />
           </span>

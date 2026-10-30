@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useAccount, useAsync, useConnection, useNode } from '@minca/react';
-import { accountHomeLink } from '@minca/core/session';
 import { Modal } from '@minca/app-shared/Modal';
 import { QrCode } from '@minca/app-shared/QrCode';
 import { useCopy } from '@minca/app-shared/action';
@@ -10,10 +9,12 @@ import { inboxLink, usernameLink } from '../contacts';
 import { useWorkspace } from '../workspace';
 import { palette, styles } from '../styles';
 import { AddButton, QuietButton } from './Buttons';
-import { Icon, type IconName } from './Icon';
+import type { ShapeKind } from '@minca/ui/shapes';
+import { Options } from './Options';
 import { SpaceDialog } from './SpaceList';
+import { openAccountHome } from './AccountMenu';
 
-const { ink, surface, accent, radius } = palette;
+const { ink, surface, radius } = palette;
 
 /** Shares a username the way a phone shares anything; elsewhere its link is copied */
 async function shareUsername(username: string, copy: (text: string) => void): Promise<void> {
@@ -26,11 +27,11 @@ async function shareUsername(username: string, copy: (text: string) => void): Pr
 /** What the "+" on the home screen starts */
 type Start = 'message' | 'group' | 'share' | 'join';
 
-const STARTS: Record<Start, { icon: IconName; title: string; detail: string }> = {
-  message: { icon: 'chat', title: 'Message someone', detail: 'A contact, or anyone by their username' },
-  group: { icon: 'people', title: 'New group', detail: 'Name it, then add people' },
-  share: { icon: 'globe', title: 'Share your link', detail: 'So people can add you' },
-  join: { icon: 'compass', title: 'Join with a link', detail: 'Someone sent you an invite' },
+const STARTS: Record<Start, { shape: ShapeKind; title: string; detail: string }> = {
+  message: { shape: 'scallop', title: 'Message someone', detail: 'A contact, or anyone by their username' },
+  group: { shape: 'group', title: 'New group', detail: 'Name it, then add people' },
+  share: { shape: 'signal', title: 'Share your link', detail: 'So people can add you' },
+  join: { shape: 'pass', title: 'Join with a link', detail: 'Someone sent you an invite' },
 };
 
 /**
@@ -58,23 +59,11 @@ export function NewSheet({ on, onClose }: { on: 'people' | 'groups'; onClose: ()
   if (step === 'share') return <ShareMe onClose={onClose} />;
   return (
     <Modal title="Start something" onClose={onClose}>
-      <ul style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: 0, margin: 0 }}>
-        {order.map((what) => (
-          <li key={what} style={{ listStyle: 'none' }}>
-            <button onClick={() => start(what)} data-menu-item style={row}>
-              <span style={badge}>
-                <Icon name={STARTS[what].icon} size={18} />
-              </span>
-              <span style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
-                <strong style={{ fontSize: 15, fontWeight: 600, color: ink.strong }}>
-                  {STARTS[what].title}
-                </strong>
-                <span style={{ fontSize: 13, color: ink.muted }}>{STARTS[what].detail}</span>
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
+      <Options
+        label="Start something"
+        options={order.map((what) => ({ value: what, ...STARTS[what] }))}
+        onPick={start}
+      />
     </Modal>
   );
 }
@@ -124,12 +113,7 @@ function ShareMe({ onClose }: { onClose: () => void }) {
           <QuietButton
             onClick={() => {
               onClose();
-              // The home may be signed in to another account, so the link says which one.
-              globalThis.open(
-                accountHomeLink(state.home, account.did),
-                'minca-account',
-                'popup,width=720,height=820',
-              );
+              openAccountHome(state.home, account.did);
             }}
             style={{ alignSelf: 'flex-start' }}
           >
@@ -140,27 +124,3 @@ function ShareMe({ onClose }: { onClose: () => void }) {
     </Modal>
   );
 }
-
-const row = {
-  width: '100%',
-  display: 'flex',
-  alignItems: 'center',
-  gap: 14,
-  padding: '10px 8px',
-  border: 'none',
-  borderRadius: radius.md,
-  background: 'none',
-  textAlign: 'left',
-} as const;
-
-const badge = {
-  width: 40,
-  height: 40,
-  flexShrink: 0,
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  borderRadius: radius.pill,
-  background: accent.soft,
-  color: accent.base,
-} as const;

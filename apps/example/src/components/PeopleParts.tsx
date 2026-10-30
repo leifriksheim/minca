@@ -27,6 +27,7 @@ export function PersonRow({
   detail,
   children,
   tone,
+  online,
   onOpen,
 }: {
   /** Their account, for their avatar; or a username, for someone not met yet */
@@ -36,12 +37,17 @@ export function PersonRow({
   children?: ReactNode;
   /** A card of its own, for someone asking or found, rather than a row in the list */
   tone?: 'card';
+  /** Online now: a dot on their face, as Members shows it */
+  online?: boolean;
   /** Opens your chat with them, from a tap anywhere on their face or name */
   onOpen?: () => void;
 }) {
   const who = (
     <>
-      <Avatar did={face} size={40} round />
+      <span style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
+        <Avatar did={face} size={40} round />
+        {online && <span title="Online now" style={onlineDot} />}
+      </span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 15, fontWeight: 600, color: ink.strong, ...ellipsis }}>{name}</div>
         {detail && <div style={{ fontSize: 13, color: ink.muted, marginTop: 1, ...ellipsis }}>{detail}</div>}
@@ -116,7 +122,8 @@ export function RowMenu({
         aria-expanded={open}
         onClick={() => setOpen((was) => !was)}
         data-variant="quiet"
-        style={{ ...styles.smallButton, width: 34, padding: 0, display: 'grid', placeItems: 'center' }}
+        data-round
+        style={{ ...styles.smallButton, width: 34, height: 34 }}
       >
         <Icon name="menu" size={14} />
       </button>
@@ -337,3 +344,15 @@ export function Notice({ text, onDismiss }: { text: string; onDismiss: () => voi
     </div>
   );
 }
+
+/** Online now, on the corner of a face */
+export const onlineDot = {
+  position: 'absolute',
+  right: -1,
+  bottom: -1,
+  width: 12,
+  height: 12,
+  borderRadius: palette.radius.pill,
+  background: palette.accent.good,
+  boxShadow: `0 0 0 2px ${palette.surface.card}`,
+} as const;

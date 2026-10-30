@@ -3,7 +3,7 @@ import { checkRelays, MAX_RELAYS, SPACE_RELAYS } from '@minca/core';
 import { useMay } from '@minca/app-shared/may';
 import type { CarrierSummary, MeshStatus, RelayStatus, SpaceStatus, SpaceSummary } from '@minca/core';
 import { useAccess, useAccount, useNetwork, useNode } from '@minca/react';
-import { Avatar } from '@minca/app-shared/Avatar';
+import { PersonAvatar } from './std/PersonAvatar';
 import {
   duration,
   groupPeers,
@@ -14,7 +14,7 @@ import {
   type Health,
   type PeerKind,
 } from '../derive/network';
-import { styles, palette, variants, hstack, stack } from '../styles';
+import { styles, palette, hstack, stack, ui } from '../styles';
 import { Person } from './Person';
 import { DocsNote } from './DocsNote';
 import { useAction } from '@minca/app-shared/action';
@@ -95,16 +95,14 @@ export function NetworkView({ space, status }: { space: SpaceSummary; status: Sp
         onRetry={() => node.network.reconnect()}
       />
       {status && <Peers status={status} />}
-      <Relays network={network} now={now} onRetry={() => node.network.reconnect()} />
-      {access && (
-        <SpaceRelays
-          space={space}
-          named={access.relays}
-          manages={mayNameRelays}
-          network={network}
-          now={now}
-        />
-      )}
+      <Relays
+        space={space}
+        named={access?.relays ?? []}
+        manages={!!access && mayNameRelays}
+        network={network}
+        now={now}
+        onRetry={() => node.network.reconnect()}
+      />
       <Connections network={network} status={status} now={now} />
       {status && <SyncFacts status={status} />}
       <DocsNote path="spec/04-network.md">
@@ -203,7 +201,7 @@ function Peers({ status }: { status: SpaceStatus }) {
       {groups.length === 0 ? (
         <p style={empty}>Nobody else right now.</p>
       ) : (
-        <ul style={list}>
+        <ul className="rows" style={ui.list}>
           {groups.map((group) => {
             const name =
               group.kind === 'mine' ? (
@@ -220,6 +218,7 @@ function Peers({ status }: { status: SpaceStatus }) {
               return (
                 <li key={group.did} style={row}>
                   <PeerLine
+                    spaceId={status.space}
                     did={group.did}
                     name={name}
                     meta={
@@ -232,10 +231,11 @@ function Peers({ status }: { status: SpaceStatus }) {
               );
             // An account on more than one device: one row for the account, its devices folded under it.
             return (
-              <li key={group.did} style={{ borderBottom: `1px solid ${palette.surface.line}` }}>
+              <li key={group.did}>
                 <details className="peer-fold">
-                  <summary style={{ ...row, borderBottom: 'none', cursor: 'pointer' }}>
+                  <summary style={{ ...row, cursor: 'pointer' }}>
                     <PeerLine
+                      spaceId={status.space}
                       did={group.did}
                       name={group.kind === 'mine' ? 'You, on other devices' : name}
                       meta={`${group.peers.length} devices online`}
@@ -265,10 +265,20 @@ function Peers({ status }: { status: SpaceStatus }) {
 }
 
 /** Whose a peer is, in one row: the account's avatar, a name, and what it is */
-function PeerLine({ did, name, meta: line }: { did: string; name: ReactNode; meta: ReactNode }) {
+function PeerLine({
+  spaceId,
+  did,
+  name,
+  meta: line,
+}: {
+  spaceId: string;
+  did: string;
+  name: ReactNode;
+  meta: ReactNode;
+}) {
   return (
     <>
-      <Avatar did={did} size={24} />
+      <PersonAvatar spaceId={spaceId} did={did} size={24} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 14, color: palette.ink.strong }}>{name}</div>
         <div style={meta}>{line}</div>
@@ -280,66 +290,24 @@ function PeerLine({ did, name, meta: line }: { did: string; name: ReactNode; met
 
 // ─── Relays ────────────────────────────────────────────────────────
 
-function Relays({ network, now, onRetry }: { network: MeshStatus; now: number; onRetry: () => void }) {
-  const waiting = network.relays.some((relay) => relay.state === 'waiting');
-  return (
-    <Section
-      title="Relays"
-      hint="A relay introduces devices to each other. It never sees your data, and once two devices are connected they talk directly."
-      action={
-        waiting ? (
-          <button type="button" onClick={onRetry} style={styles.smallButton}>
-            Reconnect now
-          </button>
-        ) : null
-      }
-    >
-      {network.relays.length === 0 ? (
-        <p style={empty}>No relay configured. This device can only reach nodes it is given directly.</p>
-      ) : (
-        <ul style={list}>
-          {network.relays.map((relay) => (
-            <li key={relay.url} style={{ ...row, alignItems: 'flex-start' }}>
-              <span style={{ paddingTop: 6 }}>
-                <Dot color={RELAY_COLOR[relay.state]} />
-              </span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14, color: palette.ink.strong }}>
-                  <Mono>{relayName(relay.url)}</Mono>
-                </div>
-                <div style={meta}>{relayLine(relay, now)}</div>
-                {relay.problem && relay.state !== 'open' && (
-                  <div style={{ ...meta, color: palette.accent.danger }}>{relay.problem}</div>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-      <p style={{ ...meta, marginTop: 10 }}>
-        {network.turn
-          ? 'A relay offered TURN, so devices on strict networks can still connect through it.'
-          : 'No TURN offered: two devices behind strict firewalls may not be able to connect.'}
-      </p>
-    </Section>
-  );
-}
-
-// ─── Where the space meets ─────────────────────────────────────────
-
-/** The relays the space names for its members; someone who manages it can change them */
-function SpaceRelays({
+/**
+ * Every relay in play here, in one list: the ones this space names for its members, which someone
+ * who runs it can change, and the ones this app meets on for all your spaces.
+ */
+function Relays({
   space,
   named,
   manages,
   network,
   now,
+  onRetry,
 }: {
   space: SpaceSummary;
   named: ReadonlyArray<string>;
   manages: boolean;
   network: MeshStatus;
   now: number;
+  onRetry: () => void;
 }) {
   const node = useNode();
   const [draft, setDraft] = useState('');
@@ -348,15 +316,16 @@ function SpaceRelays({
   const candidate = relayUrl(draft);
   const problem = candidate ? checkRelays([...named, candidate]) : null;
   const full = named.length >= MAX_RELAYS;
+  const waiting = network.relays.some((relay) => relay.state === 'waiting');
+  // The space's own first, then the app's.
+  const urls = [...new Set([...named, ...network.relays.map((relay) => relay.url)])];
 
   const save = (relays: ReadonlyArray<string>) => run(() => node.spaces.setRelays(space.id, relays));
-
   const add = async (event: FormEvent) => {
     event.preventDefault();
     if (!candidate || problem) return;
     if (await save([...named, candidate])) setDraft('');
   };
-
   const remove = (url: string) =>
     confirmThen(
       'Members still on only that relay lose touch until their apps pick up the change from someone else.',
@@ -366,42 +335,57 @@ function SpaceRelays({
 
   return (
     <Section
-      title="Where this space meets"
-      hint={`Every member joins the space on these relays as well as their own app's, so they find each other whichever relays their apps use. Naming more than one keeps the space reachable when one goes down. ${manages ? 'Only people who run the space can change them.' : 'Someone who runs the space can change them.'}`}
+      title="Relays"
+      hint="A relay introduces devices to each other, then steps aside: they talk directly, and it never sees what is in the space. The ones this space names let every member find the others, whatever app they use."
+      action={
+        waiting ? (
+          <button type="button" onClick={onRetry} style={styles.smallButton}>
+            Reconnect now
+          </button>
+        ) : null
+      }
     >
-      {named.length === 0 ? (
-        <p style={empty}>This space names no relays yet, so members meet on their apps' own.</p>
+      {urls.length === 0 ? (
+        <p style={empty}>No relay, so this device only reaches the nodes it is given directly.</p>
       ) : (
-        <ul style={list}>
-          {named.map((url) => {
+        <ul className="rows" style={ui.list}>
+          {urls.map((url) => {
             const relay = network.relays.find((r) => r.url === url);
+            const ours = named.includes(url);
             return (
               <li key={url} style={{ ...row, alignItems: 'flex-start' }}>
                 <span style={{ paddingTop: 6 }}>
                   <Dot color={relay ? RELAY_COLOR[relay.state] : palette.ink.faint} />
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, color: palette.ink.strong, overflowWrap: 'anywhere' }}>
-                    <Mono>{url}</Mono>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 14, color: palette.ink.strong, overflowWrap: 'anywhere' }}>
+                      <Mono>{relayName(url)}</Mono>
+                    </span>
+                    <span
+                      style={tag}
+                      title={
+                        ours
+                          ? 'Named by this space, for every member'
+                          : 'Where this app meets, for all your spaces'
+                      }
+                    >
+                      {ours ? 'This space' : 'Your app'}
+                    </span>
                   </div>
-                  <div style={meta}>
-                    {relay ? relayLine(relay, now) : 'This device is not connected to it'}
-                  </div>
+                  <div style={meta}>{relay ? relayLine(relay, now) : 'Not connected from this device'}</div>
+                  {relay?.problem && relay.state !== 'open' && (
+                    <div style={{ ...meta, color: palette.accent.danger }}>{relay.problem}</div>
+                  )}
                 </div>
-                {manages && (
+                {manages && ours && (
                   <button
                     type="button"
                     onClick={() => remove(url)}
                     disabled={busy || named.length === 1}
                     title={named.length === 1 ? 'Add another relay before removing the last one' : undefined}
-                    style={{
-                      ...variants.danger,
-                      ...styles.smallButton,
-                      // The danger variant is a full-width button's; this one sits at the end of a row.
-                      width: 'auto',
-                      flexShrink: 0,
-                      color: palette.accent.danger,
-                    }}
+                    data-variant="danger"
+                    style={{ ...styles.smallButton, flexShrink: 0, color: palette.accent.danger }}
                   >
                     Remove
                   </button>
@@ -414,13 +398,13 @@ function SpaceRelays({
       {manages && (
         <form onSubmit={(event) => void add(event)} style={{ ...hstack(8), flexWrap: 'wrap' }}>
           <label htmlFor="space-relay" style={visuallyHidden}>
-            Relay address
+            Relay for this space
           </label>
           <input
             id="space-relay"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder="wss://relay.example.com"
+            placeholder="Add one for this space: relay.example.com"
             disabled={busy || full}
             autoComplete="off"
             spellCheck={false}
@@ -429,6 +413,7 @@ function SpaceRelays({
           <button
             type="submit"
             disabled={busy || full || !candidate || problem !== null}
+            data-variant="quiet"
             style={styles.smallButton}
           >
             Add relay
@@ -443,6 +428,11 @@ function SpaceRelays({
           {error ?? problem ?? `A space names at most ${MAX_RELAYS} relays.`}
         </p>
       )}
+      <p style={meta}>
+        {network.turn
+          ? 'A relay offers to pass traffic on too, so devices on strict networks can still connect.'
+          : 'No relay offers to pass traffic on: two devices behind strict firewalls may not connect.'}
+      </p>
     </Section>
   );
 }
@@ -473,7 +463,7 @@ function Connections({
       title="On this device"
       hint="Connections this device holds for all your spaces, and the ones it is still trying to make. A connection that doesn't open within a while is given up and tried again."
     >
-      <ul style={list}>
+      <ul className="rows" style={ui.list}>
         {network.connecting.map((attempt) => (
           <li key={attempt.peer} style={row}>
             <Dot color={RELAY_COLOR.connecting} />
@@ -510,56 +500,61 @@ function Connections({
 
 // ─── Sync ──────────────────────────────────────────────────────────
 
+/** This device's copy of the space, in plain words: whether what you changed went out, and what came in broken */
 function SyncFacts({ status }: { status: SpaceStatus }) {
-  const facts: Array<[string, ReactNode, string?]> = [
-    [
-      'Fingerprint',
-      <Mono key="f">{status.fingerprint.slice(0, 12)}</Mono>,
-      'A summary of every record here. Two devices with the same fingerprint hold the same space.',
-    ],
-    ['Waiting to send', String(status.pending), 'Changes made here that no peer has taken yet'],
-    [
-      'Rejected',
-      <span key="r" style={status.rejected > 0 ? { color: palette.accent.danger } : undefined}>
-        {status.rejected}
-      </span>,
-      'Records peers sent that failed validation, and were not kept',
-    ],
-    [
-      'Holds',
-      status.holds === 'all'
-        ? 'Everything'
-        : status.holds.length === 1
-          ? '1 collection'
-          : `${status.holds.length} collections`,
-      'What this device keeps a copy of',
-    ],
+  const facts: ReadonlyArray<{ label: string; value: ReactNode; about: string; bad?: boolean }> = [
+    status.pending === 0
+      ? { label: 'Sent', value: 'All of it', about: 'Every change you made here has reached another device.' }
+      : {
+          label: 'Not sent yet',
+          value: `${status.pending} ${status.pending === 1 ? 'change' : 'changes'}`,
+          about: 'Saved here, and sent as soon as another device in the space is online.',
+        },
+    {
+      label: 'Turned away',
+      value: status.rejected === 0 ? 'Nothing' : String(status.rejected),
+      about:
+        status.rejected === 0
+          ? 'Everything others sent checked out.'
+          : 'Things others sent that broke the space’s rules, so this device didn’t keep them.',
+      bad: status.rejected > 0,
+    },
+    {
+      label: 'Keeps',
+      value:
+        status.holds === 'all'
+          ? 'Everything'
+          : `${status.holds.length} ${status.holds.length === 1 ? 'collection' : 'collections'}`,
+      about: 'What this device keeps a copy of.',
+    },
+    {
+      label: 'Version',
+      value: <Mono>{status.fingerprint.slice(0, 12)}</Mono>,
+      about: 'Two devices showing the same code hold exactly the same space.',
+    },
   ];
   return (
-    <Section title="Sync">
-      <dl
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-          gap: 12,
-          margin: 0,
-        }}
-      >
-        {facts.map(([label, value, why]) => (
-          <div
-            key={label}
-            title={why}
-            style={{
-              padding: 12,
-              borderRadius: palette.radius.md,
-              border: `1px solid ${palette.surface.line}`,
-            }}
-          >
-            <dt style={styles.factLabel}>{label}</dt>
-            <dd style={{ ...styles.factValue, margin: '4px 0 0', fontSize: 15 }}>{value}</dd>
-          </div>
+    <Section title="This device’s copy">
+      <ul className="rows" style={ui.list}>
+        {facts.map((fact) => (
+          <li key={fact.label} style={{ ...row, alignItems: 'flex-start' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, color: palette.ink.strong }}>{fact.label}</div>
+              <div style={meta}>{fact.about}</div>
+            </div>
+            <span
+              style={{
+                fontSize: 14,
+                fontWeight: 600,
+                color: fact.bad ? palette.accent.danger : palette.ink.strong,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {fact.value}
+            </span>
+          </li>
         ))}
-      </dl>
+      </ul>
     </Section>
   );
 }
@@ -596,23 +591,9 @@ function Mono({ children }: { children: ReactNode }) {
 /** The end of an identifier: enough to tell two apart */
 const short = (did: string) => `…${did.slice(-8)}`;
 
-// Each row draws the line under it, so the list draws no bottom edge of its own.
-const list: CSSProperties = {
-  listStyle: 'none',
-  margin: 0,
-  padding: 0,
-  border: `1px solid ${palette.surface.line}`,
-  borderBottom: 'none',
-  borderRadius: palette.radius.md,
-  overflow: 'hidden',
-};
-const row: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 12,
-  padding: '10px 14px',
-  borderBottom: `1px solid ${palette.surface.line}`,
-};
+const row: CSSProperties = { display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px' };
+/** A small label beside a relay's name: whose it is */
+const tag: CSSProperties = { ...styles.badge, color: palette.ink.body, background: palette.surface.sunken };
 const meta: CSSProperties = { fontSize: 12, color: palette.ink.muted, marginTop: 2 };
 const empty: CSSProperties = { fontSize: 13, color: palette.ink.faint, margin: 0 };
 const visuallyHidden: CSSProperties = {

@@ -26,6 +26,10 @@ function loadJson(key: string): unknown {
   }
 }
 
+/** A value kept under `key` on this device as JSON, read when asked; null until one is */
+export const readKept = (key: string): unknown => loadJson(key);
+export const writeKept = (key: string, value: unknown): void => keep(key, JSON.stringify(value));
+
 /** A word remembered under `key` on this device, like how a list was last laid out; null until one is */
 export function useRemembered(key: string): readonly [string | null, (value: string) => void] {
   const [value, setValue] = useState(() => load(key));

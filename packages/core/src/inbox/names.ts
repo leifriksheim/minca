@@ -91,9 +91,10 @@ export async function resolveUsername(
 }
 
 /**
- * Whether nobody holds a username yet, as its domain answers: null when it
- * couldn't say (down, slow, or not a name service), so a caller never takes
- * an outage for a free name.
+ * Whether a username can be claimed, as its domain answers: nobody holds it,
+ * and the service doesn't keep it back (`reserved`). Null when it couldn't say
+ * (down, slow, or not a name service), so a caller never takes an outage for a
+ * free name.
  */
 export async function usernameFree(
   text: string,
@@ -104,7 +105,8 @@ export async function usernameFree(
   // A name nobody has is answered 404, with the service's answer all the same.
   const json = await lookUp(username, fetcher, true);
   if (!isObject(json) || !isObject(json.names)) return null;
-  return typeof json.names[username.name] !== 'string';
+  // A name nobody holds may still be one the service keeps back.
+  return typeof json.names[username.name] !== 'string' && json.reserved !== true;
 }
 
 /**

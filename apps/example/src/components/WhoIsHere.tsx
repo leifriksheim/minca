@@ -4,8 +4,8 @@ import { useAccount, useNetwork } from '@minca/react';
 import { healthOf, type Health } from '../derive/network';
 import { Dot, HEALTH_COLOR, useCarriers } from './NetworkView';
 import { nameOf, type People } from '../derive/people';
-import { Avatar } from '@minca/app-shared/Avatar';
-import { styles, palette, ui } from '../styles';
+import { PersonAvatar } from './std/PersonAvatar';
+import { styles, palette } from '../styles';
 
 const count = (n: number, one: string, many: string) => (n === 1 ? one : `${n} ${many}`);
 
@@ -17,7 +17,7 @@ export function WhoIsHere({
 }: {
   status: SpaceStatus;
   people: People;
-  /** Opens the details: the Network tab */
+  /** Opens who is here: Members */
   onOpen?: () => void;
 }) {
   const network = useNetwork();
@@ -88,36 +88,56 @@ export function WhoIsHere({
           : []),
         `• ${status.carriers.length} ${status.carriers.length === 1 ? 'carrier' : 'carriers'}, keeping your spaces online without reading them${helpers.length ? ` (${helpers.join(', ')})` : ''}`,
         '',
-        'Open Network for details',
+        'Open Members to see who is here',
       ].join('\n')}
     >
-      {here.length > 0 ? (
-        <span style={{ display: 'inline-flex' }} aria-hidden>
-          {here.slice(0, 3).map((did, i) => (
-            <span
-              key={did}
-              style={{
-                marginLeft: i === 0 ? 0 : -5,
-                borderRadius: palette.radius.sm,
-                boxShadow: `0 0 0 1.5px ${palette.surface.card}`,
-                display: 'inline-flex',
-              }}
-            >
-              <Avatar did={did} size={14} />
-            </span>
-          ))}
-        </span>
-      ) : (
-        <Dot color={HEALTH_COLOR.syncing} />
-      )}
-      <span style={{ ...ui.ellipsis, minWidth: 0 }}>online · {short}</span>
+      {/* Faces only: who is here, or you on your other devices. Who and what is in the tooltip. */}
+      <Dot color={HEALTH_COLOR.syncing} />
+      <span style={{ display: 'inline-flex' }} aria-hidden>
+        {(here.length > 0 ? here : [me]).slice(0, 3).map((did, i) => (
+          <span
+            key={did}
+            style={{
+              marginLeft: i === 0 ? 0 : -5,
+              borderRadius: palette.radius.pill,
+              boxShadow: `0 0 0 1.5px ${palette.surface.card}`,
+              display: 'inline-flex',
+            }}
+          >
+            <PersonAvatar spaceId={status.space} did={did} size={16} round />
+          </span>
+        ))}
+      </span>
+      {here.length > 3 && <span>+{here.length - 3}</span>}
+      <span style={visuallyHidden}>online · {short}</span>
     </Badge>
   );
 }
 
-/** The badge, which opens the Network tab when there is one to open */
+/** Read out, not shown: what the faces say */
+const visuallyHidden = {
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  overflow: 'hidden',
+  clip: 'rect(0 0 0 0)',
+  whiteSpace: 'nowrap',
+} as const;
+
+/** The badge, which opens Members when there is a space to open */
 function Badge({ onOpen, title, children }: { onOpen?: () => void; title: string; children: ReactNode }) {
-  const style = { ...styles.badge, display: 'inline-flex', alignItems: 'center', gap: 6, maxWidth: '100%' };
+  // The stronger line, so it stands on the sidebar's beige as well as on a card.
+  const style = {
+    ...styles.badge,
+    borderColor: palette.surface.lineStrong,
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    // It narrows to what is left beside it, its words cut short with "…", rather than widening the row.
+    minWidth: 0,
+    maxWidth: '100%',
+    overflow: 'hidden',
+  };
   if (!onOpen)
     return (
       <span style={style} title={title}>

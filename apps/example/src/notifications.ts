@@ -12,7 +12,7 @@ import {
 import { accountHomeLink } from '@minca/core/session';
 import { notifyOn, type AppAutomation } from '@minca/core/schemas';
 import { TEMPLATES } from './components/apps/templates';
-import { isForMe, madeNotify } from './components/apps/entries';
+import { madeNotify } from './components/apps/entries';
 import { launcherApp, sortLauncher, type LauncherApp } from './components/apps/launcher';
 import { message } from '@minca/app-shared/action';
 import { addAlert } from './alerts';
@@ -167,26 +167,6 @@ export function useAppNotifications() {
     [ask, everything, kept, mine],
   );
   return { ...prompt, on: mine.filter((own) => !own.paused).length, turnOn };
-}
-
-/** One app's notifications in one space (all, or only what names you): whether each is on, and turning one on */
-export function useNotifyFor(spaceId: string, offers: ReadonlyArray<AppAutomation>) {
-  const mine = useOwnAutomations();
-  const { kept, ask, ...prompt } = useAsk();
-  const covers = (offer: AppAutomation) =>
-    kept.has(proposalKey({ ...offer, spaces: [spaceId] })) ||
-    mine.some((own) => {
-      const spaces = own.spaces ?? 'all';
-      return (
-        !own.paused && (spaces === 'all' || spaces.includes(spaceId)) && keptFor(own) === lookingFor(offer)
-      );
-    });
-  const everything = offers.filter((offer) => !isForMe(offer));
-  const forMe = offers.filter(isForMe);
-  const turnOn = (which: ReadonlyArray<AppAutomation>) =>
-    void ask(which.filter((offer) => !covers(offer)).map((offer) => ({ ...offer, spaces: [spaceId] })));
-  const allOn = (offers: ReadonlyArray<AppAutomation>) => offers.length > 0 && offers.every(covers);
-  return { ...prompt, everything, forMe, on: { everything: allOn(everything), forMe: allOn(forMe) }, turnOn };
 }
 
 /** How long to wait for every automation a record matches, before showing one notification for it */

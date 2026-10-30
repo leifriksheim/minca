@@ -475,13 +475,7 @@ const whoCanJoin = (space: SpaceSummary) =>
     : 'Only people in this space can join';
 
 /** "Start a call", or "Join call · 3" when one is going on: in the space's sidebar, beside who is here on a phone, or on its own */
-export function CallButton({
-  space,
-  place = 'button',
-}: {
-  space: SpaceSummary;
-  place?: 'button' | 'sidebar' | 'chip';
-}) {
+export function CallButton({ space, place = 'button' }: { space: SpaceSummary; place?: 'button' | 'chip' }) {
   const { state, calls } = useCalls();
   const [busy, setBusy] = useState(false);
   if (!calls || !space.writable) return null;
@@ -494,27 +488,6 @@ export function CallButton({
   };
   const label = here ? 'In the call' : going ? `Join call · ${going.people.length}` : 'Start a call';
   const live = here || going !== undefined;
-  if (place === 'sidebar')
-    return (
-      <button
-        onClick={() => void startHere()}
-        disabled={busy || here}
-        data-nav
-        className="side-item"
-        title={whoCanJoin(space)}
-        style={{
-          width: '100%',
-          color: live ? palette.accent.good : palette.ink.body,
-          fontWeight: going && !here ? 600 : 400,
-          cursor: here ? 'default' : undefined,
-        }}
-      >
-        <span style={{ width: 20, display: 'inline-flex', justifyContent: 'center', flexShrink: 0 }}>
-          <Icon name="phone" size={15} />
-        </span>
-        <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>{label}</span>
-      </button>
-    );
   if (place === 'chip')
     return (
       <button
@@ -524,6 +497,8 @@ export function CallButton({
         title={whoCanJoin(space)}
         style={{
           ...styles.badge,
+          borderColor: palette.surface.lineStrong,
+          flexShrink: 0,
           display: 'inline-flex',
           alignItems: 'center',
           gap: 6,
@@ -603,19 +578,20 @@ export function RingButton({ space, did, name }: { space: SpaceSummary; did: str
         )
       }
       disabled={ringing || withThem}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-      title={`Call ${name}. It rings wherever they have this space open.`}
+      aria-label={withThem ? `In a call with ${name}` : ringing ? `Ringing ${name}` : `Call ${name}`}
+      title={
+        withThem
+          ? `In a call with ${name}`
+          : ringing
+            ? `Ringing ${name}…`
+            : `Call ${name}. It rings wherever they have this space open.`
+      }
+      data-round
+      style={{ width: 34, height: 34, color: ringing || withThem ? palette.accent.good : undefined }}
     >
-      <Icon name="phone" size={12} />
-      {withThem ? 'In call' : ringing ? 'Ringing…' : 'Call'}
+      <Icon name="phone" size={14} />
     </QuietButton>
   );
-}
-
-/** The spaces with a call going on, for the rail: whether you're in it, or others are */
-export function useCallSpaces(): { readonly mine: string | null; readonly others: ReadonlySet<string> } {
-  const { state } = useCalls();
-  return { mine: state.current?.space ?? null, others: new Set(state.around.map((c) => c.space)) };
 }
 
 // ─── Pieces ──────────────────────────────────────────────────────────

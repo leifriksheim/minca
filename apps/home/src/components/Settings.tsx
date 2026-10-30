@@ -283,31 +283,43 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
           <PageHead title="Apps" line="What you let use your account, and what they may tell you." />
           <Section
             title="Connected apps"
-            description="Apps that you let use your account. Each got a note, signed by your account, saying what it may use and until when. None of them has your password."
+            description="Each one got a note, signed by your account, saying what it may use and until when. None of them has your password."
           >
-            {connections.length === 0 && elsewhere.length === 0 && <Row label="No apps yet.">{null}</Row>}
-            {connections.map((app) => (
-              <Row
-                key={connectionKey(app)}
-                shape={connectionKey(app)}
-                label={
-                  app.access === 'carry'
-                    ? `${describeConnection(app)} · ${presence(app.carrySpace)}`
-                    : describeConnection(app)
-                }
-              >
-                {disconnectButton(connectionKey(app), () => disconnect(app))}
-              </Row>
-            ))}
-            {elsewhere.map((carrier) => (
-              <Row
-                key={carrier.space}
-                shape={carrier.space}
-                label={`${carrier.name} · keeps your spaces online · connected on another device · ${presence(carrier.space)}`}
-              >
-                {disconnectButton(carrier.space, () => removeCarrier(carrier.space))}
-              </Row>
-            ))}
+            {connections.length === 0 && elsewhere.length === 0 && (
+              <p style={styles.errorHint}>No apps yet.</p>
+            )}
+            {(connections.length > 0 || elsewhere.length > 0) && (
+              <ul className="rows" style={styles.list}>
+                {connections.map((app) => (
+                  <AppRow
+                    key={connectionKey(app)}
+                    mark={connectionKey(app)}
+                    title={appTitle(app)}
+                    detail={[
+                      ...appDetail(app),
+                      ...(app.access === 'carry' ? [presence(app.carrySpace)] : []),
+                    ]}
+                    open={openable(app)}
+                  >
+                    {disconnectButton(connectionKey(app), () => disconnect(app))}
+                  </AppRow>
+                ))}
+                {elsewhere.map((carrier) => (
+                  <AppRow
+                    key={carrier.space}
+                    mark={carrier.space}
+                    title={carrier.name}
+                    detail={[
+                      'Keeps your spaces online',
+                      'Connected on another device',
+                      presence(carrier.space),
+                    ]}
+                  >
+                    {disconnectButton(carrier.space, () => removeCarrier(carrier.space))}
+                  </AppRow>
+                ))}
+              </ul>
+            )}
             {disconnectError && <p style={styles.error}>{disconnectError}</p>}
             {notYet && <p style={styles.errorHint}>{notYet}</p>}
             {anyAway && (
@@ -318,9 +330,8 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
             )}
             {connections.length > 0 && (
               <p style={styles.errorHint}>
-                Disconnecting stops the app for good the next time it comes online: it signs itself out, and
-                nothing it changes after that counts, nor anything it wrote that hasn't reached this page yet.
-                It keeps what it could already read. Nothing is disconnected unless you do it here.
+                Disconnecting signs the app out the next time it comes online. It keeps what it could already
+                read.
               </p>
             )}
             {connections.filter((app) => app.access !== 'carry').length > 1 && (
@@ -328,7 +339,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
                 onClick={disconnectAll}
                 disabled={disconnecting !== null}
                 data-variant="quiet"
-                style={{ ...styles.smallButton, marginTop: 8 }}
+                style={{ ...styles.smallButton, alignSelf: 'flex-start' }}
               >
                 {disconnecting === 'all' ? 'Disconnecting…' : 'Something wrong? Disconnect every app'}
               </button>
@@ -789,31 +800,86 @@ function RecoveryCode({ reveal, name, did }: { reveal: () => string | null; name
 /** How long disconnecting waits for one of the account's devices or apps to take the revoke in */
 const HEARD_WITHIN_MS = 5000;
 
-/** "Todo (todo.example) · read and change Groceries · until 3 October" */
-function describeConnection(app: Connection): string {
+/** What an app goes by: what it called itself, else where it lives */
+function appTitle(app: Connection): string {
+  if (app.access === 'carry') return app.name ?? 'Browser extension';
+  if (app.via === 'code') return app.name ?? 'A program';
+  return app.name ?? new URL(app.origin).host;
+}
+
+/** Where it lives, what it may use, and until when: "todo.example · Reads and changes Groceries · Until 3 October" */
+function appDetail(app: Connection): ReadonlyArray<string> {
   const url = new URL(app.origin);
   const extension = url.protocol === 'chrome-extension:' || url.protocol === 'moz-extension:';
-  if (app.access === 'carry')
-    return `${app.name ?? 'Browser extension'} · keeps your spaces online · can't read them`;
-  const host = extension ? 'browser extension' : url.host;
-  const who =
-    app.via === 'code'
-      ? `${app.name ?? 'A program'} (by code, via ${host}${app.recordsOnly ? ', records only' : ''})`
-      : app.name
-        ? `${app.name} (${host})`
-        : host;
+  const host = extension ? 'Browser extension' : url.host;
+  if (app.access === 'carry') return ['Keeps your spaces online', "Can't read them"];
   const what =
     app.scope === 'account'
       ? 'your whole account'
       : app.spaces.length
         ? app.spaces.map((space) => space.name).join(', ')
         : 'no spaces';
+  const expired = app.expiresAt * 1000 < Date.now();
   const until = new Date(app.expiresAt * 1000).toLocaleDateString(undefined, {
     day: 'numeric',
     month: 'long',
   });
-  const expired = app.expiresAt * 1000 < Date.now();
-  return `${who} · ${app.access === 'write' ? 'read and change' : 'read'} ${what} · ${expired ? (app.access === 'write' ? 'stopped syncing, can still change things until disconnected' : 'ran out') : `in sync until ${until}`}`;
+  return [
+    app.via === 'code' ? `By code, via ${host}${app.recordsOnly ? ', records only' : ''}` : host,
+    `${app.access === 'write' ? 'Reads and changes' : 'Reads'} ${what}`,
+    expired
+      ? app.access === 'write'
+        ? 'Stopped syncing; can still change things until disconnected'
+        : 'Ran out'
+      : `Until ${until}`,
+  ];
+}
+
+/** Where to go back to an app, when it is a website: not an extension, a program or a carrier */
+function openable(app: Connection): string | undefined {
+  if (app.access === 'carry' || app.via === 'code') return undefined;
+  return /^https?:$/.test(new URL(app.origin).protocol) ? app.origin : undefined;
+}
+
+const openLink = {
+  ...styles.darkSmall,
+  display: 'inline-flex',
+  alignItems: 'center',
+  textDecoration: 'none',
+} as const;
+
+/** One app in the list: its shape, its name, a quiet line about it, the way back to it, and what to do */
+function AppRow({
+  mark,
+  title,
+  detail,
+  open,
+  children,
+}: {
+  /** What picks its shape: where it lives, or its key */
+  mark: string;
+  title: string;
+  detail: ReadonlyArray<string>;
+  open?: string | undefined;
+  children: ReactNode;
+}) {
+  return (
+    <li style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', flexWrap: 'wrap' }}>
+      <Shape {...shapeFor(mark)} size={32} />
+      <span style={{ ...stack(2), flex: '1 1 200px', minWidth: 0 }}>
+        <strong style={{ fontSize: 15, fontWeight: 600, color: palette.ink.strong }}>{title}</strong>
+        <span style={{ fontSize: 13, lineHeight: 1.45, color: palette.ink.muted }}>{detail.join(' · ')}</span>
+      </span>
+      <span style={hstack(8)}>
+        {open && (
+          <a href={open} target="_blank" rel="noopener" data-variant="primary" style={openLink}>
+            Open
+          </a>
+        )}
+        {children}
+      </span>
+    </li>
+  );
 }
 
 function Section({
@@ -826,7 +892,7 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section style={styles.settingsSection}>
+    <section className="surface" style={styles.settingsSection}>
       <div>
         <h2 style={styles.sectionHeading}>{title}</h2>
         <p style={styles.sectionText}>{description}</p>

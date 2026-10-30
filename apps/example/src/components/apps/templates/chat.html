@@ -120,14 +120,16 @@
     font-size: 14px;
   }
   .composer-bar {
-    padding: 8px 16px 16px;
+    margin: 0;
+    padding: 4px 16px 12px;
   }
   .composer-bar .row > button[type='submit'] {
     flex-shrink: 0;
   }
+  /* Above the box, as chat apps say it, so nothing but a margin sits under the box. */
   .typing {
     min-height: 18px;
-    padding: 0 4px 4px;
+    padding: 0 4px 2px;
     font-size: 12px;
     color: var(--minca-muted);
   }
@@ -188,7 +190,7 @@
     background: rgb(0 0 0 / 0.6);
   }
   /* Room for the GIF button beside the emoji one, so typing never runs under it */
-  .composer[data-gifs] input {
+  .composer[data-gifs] :is(input, textarea) {
     padding-right: 76px;
   }
   .gif-button {
@@ -394,7 +396,7 @@
     const [draft, setDraft] = useState(text);
     const box = useRef(null);
     useEffect(() => {
-      if (editing) box.current?.querySelector('input')?.focus();
+      if (editing) box.current?.querySelector('input, textarea')?.focus();
     }, [editing]);
     const edited = Date.parse(message.updatedAt) - Date.parse(message.createdAt) > 1000;
     const save = async () => {
@@ -568,6 +570,11 @@
     const [error, setError] = useState(null);
     const [pickingGif, setPickingGif] = useState(false);
     const quiet = useRef(null);
+    // Replying puts you in the box, ready to type.
+    const bar = useRef(null);
+    useEffect(() => {
+      if (replying) bar.current?.querySelector('textarea, input[aria-label="Message"]')?.focus();
+    }, [replying]);
     const add = (list) => list?.length && setFiles((was) => [...was, ...list]);
     const type = (next) => {
       setDraft(next);
@@ -657,6 +664,7 @@
 
     const ready = draft.trim() || files.length || share.sharing;
     return html`<form
+      ref=${bar}
       class="composer-bar"
       onSubmit=${(event) => {
         event.preventDefault();
@@ -699,6 +707,12 @@
           )}
         </div>`
       }
+      <div class="typing" aria-live="polite">
+        ${
+          typists.length > 0 &&
+          `${typists.map((did) => nameIn(people, did)).join(', ')} ${typists.length === 1 ? 'is' : 'are'} typing…`
+        }
+      </div>
       <div class="row">
         <div
           class="composer"
@@ -732,12 +746,6 @@
         <button type="submit" data-variant="primary" disabled=${busy || !ready}>
           ${busy ? 'Sending…' : 'Send'}
         </button>
-      </div>
-      <div class="typing" aria-live="polite">
-        ${
-          typists.length > 0 &&
-          `${typists.map((did) => nameIn(people, did)).join(', ')} ${typists.length === 1 ? 'is' : 'are'} typing…`
-        }
       </div>
       ${(error || share.error) && html`<p class="error">${error || share.error}</p>`}
     </form>`;
