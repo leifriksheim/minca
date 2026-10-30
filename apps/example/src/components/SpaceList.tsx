@@ -117,7 +117,6 @@ export function SpaceList({
   error,
   onOpen,
   onNew,
-  onRemove,
 }: {
   spaces: ReadonlyArray<SpaceSummary>;
   loading: boolean;
@@ -125,7 +124,6 @@ export function SpaceList({
   onOpen: (space: SpaceSummary) => void;
   /** Make a group, from the empty list */
   onNew: () => void;
-  onRemove: (spaceId: string) => void;
 }) {
   return (
     <>
@@ -153,16 +151,6 @@ export function SpaceList({
                 </span>
                 <SpaceCount space={space} />
               </button>
-              <button
-                onClick={() => onRemove(space.id)}
-                data-row-action
-                data-variant="danger"
-                style={{ ...styles.rowAction, position: 'absolute', top: 'calc(50% - 14px)', right: 12 }}
-                title={`Leave ${space.name}`}
-                aria-label={`Leave ${space.name}`}
-              >
-                ✕
-              </button>
             </li>
           ))}
         </ul>
@@ -186,7 +174,7 @@ const row = {
   display: 'flex',
   alignItems: 'center',
   gap: 14,
-  padding: '14px 52px 14px 16px',
+  padding: '14px 16px',
   border: 'none',
   background: 'none',
   textAlign: 'left' as const,

@@ -230,7 +230,7 @@ const plus = {
 
 /** Your groups, at `/`: every space but your spaces for two */
 export function GroupsPage() {
-  const { spaces, pairs, loading, error, create, join, forget, openSpace } = useWorkspace();
+  const { spaces, pairs, loading, error, create, join, openSpace } = useWorkspace();
   const [naming, setNaming] = useState(false);
   // Invites contacts leave wait in your spaces for two, so those keep syncing here.
   useHeldSpaces([...pairs.keys()]);
@@ -248,7 +248,6 @@ export function GroupsPage() {
         error={error}
         onOpen={(space) => openSpace(space.id)}
         onNew={() => setNaming(true)}
-        onRemove={forget}
       />
       {naming && (
         <SpaceDialog initial="new" onClose={() => setNaming(false)} onCreate={create} onJoin={join} />
