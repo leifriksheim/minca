@@ -3,7 +3,7 @@ import { checkRelays, MAX_RELAYS, SPACE_RELAYS } from '@minca/core';
 import { useMay } from '@minca/app-shared/may';
 import type { CarrierSummary, MeshStatus, RelayStatus, SpaceStatus, SpaceSummary } from '@minca/core';
 import { useAccess, useAccount, useNetwork, useNode } from '@minca/react';
-import { Avatar } from '@minca/app-shared/Avatar';
+import { PersonAvatar } from './std/PersonAvatar';
 import {
   duration,
   groupPeers,
@@ -218,6 +218,7 @@ function Peers({ status }: { status: SpaceStatus }) {
               return (
                 <li key={group.did} style={row}>
                   <PeerLine
+                    spaceId={status.space}
                     did={group.did}
                     name={name}
                     meta={
@@ -234,6 +235,7 @@ function Peers({ status }: { status: SpaceStatus }) {
                 <details className="peer-fold">
                   <summary style={{ ...row, cursor: 'pointer' }}>
                     <PeerLine
+                      spaceId={status.space}
                       did={group.did}
                       name={group.kind === 'mine' ? 'You, on other devices' : name}
                       meta={`${group.peers.length} devices online`}
@@ -263,10 +265,20 @@ function Peers({ status }: { status: SpaceStatus }) {
 }
 
 /** Whose a peer is, in one row: the account's avatar, a name, and what it is */
-function PeerLine({ did, name, meta: line }: { did: string; name: ReactNode; meta: ReactNode }) {
+function PeerLine({
+  spaceId,
+  did,
+  name,
+  meta: line,
+}: {
+  spaceId: string;
+  did: string;
+  name: ReactNode;
+  meta: ReactNode;
+}) {
   return (
     <>
-      <Avatar did={did} size={24} />
+      <PersonAvatar spaceId={spaceId} did={did} size={24} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 14, color: palette.ink.strong }}>{name}</div>
         <div style={meta}>{line}</div>

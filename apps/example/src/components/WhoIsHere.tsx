@@ -4,7 +4,7 @@ import { useAccount, useNetwork } from '@minca/react';
 import { healthOf, type Health } from '../derive/network';
 import { Dot, HEALTH_COLOR, useCarriers } from './NetworkView';
 import { nameOf, type People } from '../derive/people';
-import { Avatar } from '@minca/app-shared/Avatar';
+import { PersonAvatar } from './std/PersonAvatar';
 import { styles, palette } from '../styles';
 
 const count = (n: number, one: string, many: string) => (n === 1 ? one : `${n} ${many}`);
@@ -104,7 +104,7 @@ export function WhoIsHere({
               display: 'inline-flex',
             }}
           >
-            <Avatar did={did} size={16} round />
+            <PersonAvatar spaceId={status.space} did={did} size={16} round />
           </span>
         ))}
       </span>
