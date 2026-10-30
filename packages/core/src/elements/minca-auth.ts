@@ -271,6 +271,8 @@ export class MincaAuthElement extends Base {
   #choosingPassword = false;
   #showPairHelp = false;
   #mismatch = false;
+  /** With a passkey too, whether the password was asked for rather than the passkey */
+  #withPassword = false;
   #lastSelected: string | null = null;
   #lastStage: string | null = null;
   /** The username on the create screen, and whether it is free */
@@ -385,6 +387,7 @@ export class MincaAuthElement extends Base {
     this.#choosingPassword = false;
     this.#showPairHelp = false;
     this.#mismatch = false;
+    this.#withPassword = false;
   }
 
   #redraw(): void {
@@ -619,7 +622,7 @@ export class MincaAuthElement extends Base {
   }
 
   /** The everyday password, filed under the account's name so a manager fills the right one. */
-  #passwordForm(state: AuthState, account: AccountSummary, secondary = false): HTMLElement {
+  #passwordForm(state: AuthState, account: AccountSummary): HTMLElement {
     const password = this.#input('password', {
       type: 'password',
       name: 'password',
@@ -635,13 +638,7 @@ export class MincaAuthElement extends Base {
       {},
       offscreenUsername(accountCredentialName(account.name), true),
       password,
-      secondary
-        ? h(
-            'button',
-            { type: 'submit', class: 'wa-secondary wa-wide', disabled: state.busy },
-            'Sign in with password',
-          )
-        : submit(state.busy, 'Sign in', 'Signing in…'),
+      submit(state.busy, 'Sign in', 'Signing in…'),
     );
   }
 
@@ -671,22 +668,41 @@ export class MincaAuthElement extends Base {
           ),
           ...this.#codeForm(state, selected),
         ];
+      // One way in at a time: the passkey, with the password a tap away when there is one too.
+      const byPassword = open.hasPassword && (!hasPasskey || this.#withPassword);
+      const toggle = (to: boolean) => () => {
+        this.#withPassword = to;
+        this.#redraw();
+      };
       return [
-        hasPasskey
-          ? button(
+        byPassword
+          ? this.#passwordForm(state, account)
+          : button(
               state.busy ? 'Waiting…' : 'Sign in with passkey',
               () => void auth.signInWithPasskey(),
               state.busy,
               'passkey',
+            ),
+        hasPasskey && open.hasPassword
+          ? h(
+              'p',
+              { class: 'wa-small', style: 'margin-top:12px' },
+              link(
+                byPassword ? 'Use your passkey instead' : 'Use your password instead',
+                toggle(!byPassword),
+                state.busy,
+              ),
             )
           : null,
-        hasPasskey && open.hasPassword ? h('div', { class: 'wa-or' }, 'or') : null,
-        open.hasPassword ? this.#passwordForm(state, account, hasPasskey) : null,
         h(
           'p',
-          { class: 'wa-small', style: 'margin-top:12px' },
-          'Forgot it? ',
-          link('Use your recovery code', () => auth.showRestore(), state.busy),
+          { class: 'wa-small', style: hasPasskey && open.hasPassword ? 'margin-top:4px' : 'margin-top:12px' },
+          open.hasPassword ? 'Forgot it? ' : null,
+          link(
+            open.hasPassword ? 'Use your recovery code' : 'Use your recovery code instead',
+            () => auth.showRestore(),
+            state.busy,
+          ),
         ),
       ];
     };
@@ -704,7 +720,7 @@ export class MincaAuthElement extends Base {
           h(
             'div',
             { class: 'wa-account-head' },
-            this.#drawAvatar(account.did, 48),
+            this.#drawAvatar(account.did, 48, true),
             h('span', { class: 'wa-account-name' }, account.name),
           ),
           ...waysIn(account, entry),
@@ -726,9 +742,10 @@ export class MincaAuthElement extends Base {
     const one = accounts.length === 1 ? accounts[0] : undefined;
     return card(
       'Welcome back',
+      // With one account its name is under its face already, so the line above it doesn't say it again.
       subtitle(
         one
-          ? `Sign in as ${one.name}.`
+          ? 'Sign in to continue.'
           : accounts.length > 0
             ? 'Choose your account.'
             : 'There are no accounts here yet.',
