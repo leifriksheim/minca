@@ -10,8 +10,8 @@ const navyWash = (percent: number) => `color-mix(in srgb, ${ink.strong} ${percen
 
 /** How tall the bar along a phone's bottom edge is, with room under it */
 const TABBAR_HEIGHT = 68;
-/** How wide a space's own sidebar is */
-const SIDEBAR_WIDTH = 248;
+/** How wide a space's rail of apps is */
+const RAIL_WIDTH = 84;
 
 /**
  * The rules inline styles cannot carry.
@@ -44,37 +44,50 @@ export function injectBaseStyles(): void {
 
     /* .page and .space-layout come from baseCss: the home's screens sit on the same page. */
 
-    /* In a space: its sidebar, and whatever is open, each
+    /* In a space: its apps down a rail, and whatever is open beside it, each
        the height of the window and scrolling on its own, the way chat apps are. */
 
-    .space-shell { display: grid; grid-template-columns: ${SIDEBAR_WIDTH}px minmax(0, 1fr); height: 100vh; height: 100dvh; }
-    .space-sidebar {
-      display: flex; flex-direction: column; min-height: 0;
+    .space-shell { display: grid; grid-template-columns: ${RAIL_WIDTH}px minmax(0, 1fr); height: 100vh; height: 100dvh; }
+    .app-rail {
+      position: relative; z-index: 15; display: flex; flex-direction: column; min-height: 0; padding: 10px 6px;
       background: ${surface.sunken}; border-right: 1px solid ${surface.rule};
     }
-    /* In the desktop app's window (apps/desktop), which has no title bar: room for its buttons. */
-    :root[data-desktop] .space-sidebar-scroll { padding-top: 44px; }
-    .space-sidebar-scroll { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; padding: 16px 10px 16px; }
-    /* You, at the foot of the sidebar; its menus open upward from it. */
-    .you-bar {
-      position: relative; z-index: 15; flex-shrink: 0; display: flex; align-items: center; gap: 6px;
-      padding: 8px 10px; border-top: 1px solid ${surface.line}; background: ${surface.sunken};
+    /* Only the apps scroll, so the menus at the foot can open out past the rail's edge. */
+    .rail-apps {
+      flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 2px;
+      overflow-y: auto; scrollbar-width: none; margin: -4px -6px 0; padding: 4px 6px 0;
     }
+    /* In the desktop app's window (apps/desktop), which has no title bar: room for its buttons. */
+    :root[data-desktop] .app-rail { padding-top: 44px; }
+    /* An app on the rail: its shape, its name under it, and while it is open a bar of the action colour beside it. */
+    .rail-item {
+      position: relative; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 5px;
+      padding: 9px 2px 8px; border: none; border-radius: ${radius.md}px; background: none;
+      color: ${ink.muted}; font-size: 11.5px; font-weight: 500;
+    }
+    .rail-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rail-item[aria-current] { color: ${ink.strong}; font-weight: 600; background: ${surface.card}; box-shadow: 0 0 0 1px ${surface.rule}; }
+    .rail-item[aria-current]::before {
+      content: ""; position: absolute; left: -6px; top: 12px; bottom: 12px; width: 3px;
+      border-radius: 0 ${radius.pill}px ${radius.pill}px 0; background: ${accent.base};
+    }
+    .rail-count { position: absolute; top: -6px; right: -10px; pointer-events: none; }
+    .rail-count .count { box-shadow: 0 0 0 2px ${surface.sunken}; }
+    /* What isn't an app has a glyph on the same tile an app's shape takes. */
+    .rail-glyph { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; color: ${ink.body}; }
+    /* All apps, you and what's new for you, at the foot; their menus open upward from it. */
+    .rail-foot {
+      position: relative; flex-shrink: 0; padding-top: 8px; display: flex; flex-direction: column; align-items: center; gap: 8px;
+      border-top: 1px solid ${surface.line};
+    }
+    .rail-foot > .rail-item { align-self: stretch; }
     .you-button {
-      width: 100%; display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 6px;
-      border: none; border-radius: ${radius.pill}px; background: none; text-align: left;
+      display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0;
+      border: none; border-radius: ${radius.pill}px; background: none;
     }
     .side-item {
       display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px;
       border: none; border-radius: ${radius.pill}px; background: none; font-size: 14px; text-align: left;
-    }
-    /* An app in the sidebar: room for its shape, its name a little stronger. */
-    .app-item { height: 40px; gap: 12px; padding: 0 8px; font-size: 14.5px; }
-    .app-item > span:first-child { width: 26px !important; }
-    /* The slot the next app goes in: an empty tile, dashed. */
-    .app-slot {
-      display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px;
-      border: 1.5px dashed ${surface.lineStrong}; border-radius: ${radius.md}px; color: ${ink.muted};
     }
     .side-item[aria-current] { background: ${surface.card}; box-shadow: 0 0 0 1px ${surface.rule}; }
     .space-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
@@ -327,7 +340,7 @@ export function injectBaseStyles(): void {
       /* A phone switches spaces from the list of them, one tap away in the
          tab bar, so the space's own sections get the bottom edge, and its
          apps are the grid on the first screen rather than a sidebar. */
-      .space-sidebar, .hide-on-phone, .bar-label { display: none !important; }
+      .app-rail, .hide-on-phone, .bar-label { display: none !important; }
       .phone-only { display: revert !important; }
       .segmented.phone-only { display: flex !important; }
       .space-shell { display: block; height: auto; min-height: 100dvh; }

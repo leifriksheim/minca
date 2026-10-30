@@ -10,12 +10,11 @@ import { shortAccount } from '../account-address';
 import { palette, styles, ui, hstack } from '../styles';
 
 /**
- * Who this app acts for, and its menu, at the foot of a space's sidebar; the account itself lives
+ * Who this app acts for, and its menu, at the foot of a space's rail; the account itself lives
  * in the account home. The home screen has the same as a page of its own (`ProfilePage.tsx`).
  */
 export function AccountMenu() {
   const account = useAccount();
-  const { state } = useConnection();
   const picture = useAccountPicture();
   // The name as the account has it now, so one changed in Profile shows here too
   const { name } = useMyName();
@@ -24,23 +23,16 @@ export function AccountMenu() {
   const [connecting, setConnecting] = useState(false);
 
   return (
-    // The menu hangs from the whole bar, so it lines up with the bell's panel.
-    <div ref={root} style={{ flex: 1, minWidth: 0 }}>
+    // The menu hangs from the foot of the rail it sits in, as the bell's panel does.
+    <div ref={root}>
       <button
         onClick={() => setOpen((was) => !was)}
         aria-expanded={open}
         aria-label="Account"
+        title={name}
         className="you-button"
       >
         <Avatar did={account.did} size={32} round src={picture} />
-        <span style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <span style={{ ...ui.ellipsis, fontSize: 13.5, fontWeight: 600, color: palette.ink.strong }}>
-            {name}
-          </span>
-          <span style={{ ...ui.ellipsis, fontSize: 11.5, color: palette.ink.faint }}>
-            {new URL(state.home).host}
-          </span>
-        </span>
       </button>
 
       {open && (
