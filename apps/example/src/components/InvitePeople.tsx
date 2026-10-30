@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { ContactView, SpaceSummary } from '@minca/core';
 import { useAsync, useNode } from '@minca/react';
 import { Modal } from '@minca/app-shared/Modal';
@@ -9,7 +9,8 @@ import { markFor } from '@minca/ui/shapes';
 import { palette, styles, ui } from '../styles';
 import { invitableRoles, useContacts } from '../contacts';
 import { shortUsername, useUsernameLookup } from '@minca/app-shared/usernames';
-import { AddButton, QuietButton } from './Buttons';
+import { AddButton } from './Buttons';
+import { Icon } from './Icon';
 import { AddDialog, Handle, PersonRow } from './PeopleParts';
 
 const { ink, surface, radius } = palette;
@@ -144,34 +145,73 @@ export function AddPeople({
 
   return (
     <Modal title={`Add people to ${space.name}`} onClose={onClose} width={520}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
-        <JoinsAs
-          offered={offered}
-          role={role}
-          onChange={(next) => {
-            setRole(next);
-            setLink(null); // a link made for the other role would say the wrong thing
-          }}
-        />
-        <span style={{ flex: 1 }} />
-        <QuietButton onClick={() => void copyLink()} disabled={making} style={{ height: 36 }}>
-          {copied ? 'Link copied' : making ? 'Making a link…' : 'Copy invite link'}
-        </QuietButton>
-      </div>
+      <ContactPicker
+        space={space}
+        members={members}
+        role={role}
+        autoFocus
+        beside={
+          <JoinsAs
+            offered={offered}
+            role={role}
+            onChange={(next) => {
+              setRole(next);
+              setLink(null); // a link made for the other role would say the wrong thing
+            }}
+          />
+        }
+      />
+      <div style={{ height: 1, background: palette.surface.line, margin: '16px 0 4px' }} />
+      {/* Anyone who isn't a contact gets a link, as the role chosen above. */}
+      <button onClick={() => void copyLink()} disabled={making} data-menu-item style={linkRow}>
+        <span style={linkBadge} aria-hidden>
+          <Icon name="link" size={16} />
+        </span>
+        <span style={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1, minWidth: 0 }}>
+          <strong style={{ fontSize: 15, fontWeight: 600, color: ink.strong }}>Invite with a link</strong>
+          <span style={{ fontSize: 13, color: ink.muted }}>
+            {copied ? 'Copied. Send it to the people it is for.' : 'For anyone who isn’t a contact'}
+          </span>
+        </span>
+        <span style={{ fontSize: 14, fontWeight: 600, color: palette.accent.base, flexShrink: 0 }}>
+          {making ? 'Making…' : copied ? 'Copied' : 'Copy'}
+        </span>
+      </button>
       {link && (
         <input
           readOnly
           value={link}
           onFocus={(event) => event.target.select()}
           aria-label="Invite link"
-          style={{ ...styles.input, height: 38, fontSize: 13, marginBottom: 12 }}
+          style={{ ...styles.input, height: 38, fontSize: 13, marginTop: 8 }}
         />
       )}
-      {error && <p style={{ ...styles.bad, marginBottom: 10 }}>{error}</p>}
-      <ContactPicker space={space} members={members} role={role} autoFocus />
+      {error && <p style={{ ...styles.bad, marginTop: 10 }}>{error}</p>}
     </Modal>
   );
 }
+
+const linkRow = {
+  width: '100%',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 12,
+  padding: '10px 8px',
+  border: 'none',
+  borderRadius: radius.md,
+  background: 'none',
+  textAlign: 'left',
+} as const;
+const linkBadge = {
+  width: 40,
+  height: 40,
+  flexShrink: 0,
+  display: 'grid',
+  placeItems: 'center',
+  borderRadius: radius.pill,
+  background: surface.sunken,
+  color: ink.strong,
+} as const;
 
 /** The roles you may give here, `member` first, and the one picked: the first, until another is; null to view only */
 export function useJoinsAs(space: SpaceSummary) {
@@ -195,19 +235,29 @@ export function JoinsAs({
   onChange: (role: string | null) => void;
 }) {
   return (
-    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: ink.body }}>
+    <label
+      style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: ink.muted, minWidth: 0 }}
+    >
       Joins as
       <select
         value={role ?? ''}
         onChange={(event) => onChange(event.target.value || null)}
-        style={{ ...styles.input, width: 'auto', height: 36, fontSize: 14 }}
+        style={{
+          ...styles.input,
+          width: 'auto',
+          flex: 'none',
+          height: 36,
+          minHeight: 36,
+          padding: '0 32px 0 14px',
+          fontSize: 14,
+        }}
       >
         {offered.map((name) => (
           <option key={name} value={name}>
             {titled(name)}
           </option>
         ))}
-        <option value="">Viewer, who changes nothing</option>
+        <option value="">Viewer</option>
       </select>
     </label>
   );
@@ -223,11 +273,14 @@ export function ContactPicker({
   members,
   role,
   autoFocus,
+  beside,
 }: {
   space: SpaceSummary;
   members: ReadonlySet<string>;
   role: string | null;
   autoFocus?: boolean;
+  /** Beside the Invite button: what they join as, when it is chosen here */
+  beside?: ReactNode;
 }) {
   const node = useNode();
   const contacts = useContacts();
@@ -347,14 +400,20 @@ export function ContactPicker({
       )}
       {done && <p style={{ fontSize: 14, lineHeight: 1.5, color: ink.strong }}>{done}</p>}
       {error && <p style={styles.bad}>{error}</p>}
-      {candidates.length > 0 && (
-        <AddButton
-          onClick={() => void send()}
-          disabled={picked.size === 0 || sending}
-          style={{ height: 40, alignSelf: 'flex-end' }}
-        >
-          {sending ? 'Inviting…' : picked.size === 0 ? 'Invite' : `Invite ${picked.size}`}
-        </AddButton>
+      {(candidates.length > 0 || beside) && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {beside}
+          <span style={{ flex: 1 }} />
+          {candidates.length > 0 && (
+            <AddButton
+              onClick={() => void send()}
+              disabled={picked.size === 0 || sending}
+              style={{ height: 40 }}
+            >
+              {sending ? 'Inviting…' : picked.size === 0 ? 'Invite' : `Invite ${picked.size}`}
+            </AddButton>
+          )}
+        </div>
       )}
       {asking && (
         <AddDialog
