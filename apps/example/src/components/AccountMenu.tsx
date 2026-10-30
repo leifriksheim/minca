@@ -23,8 +23,8 @@ export function AccountMenu() {
   const [connecting, setConnecting] = useState(false);
 
   return (
-    // The menu hangs from the foot of the rail it sits in, as the bell's panel does.
-    <div ref={root}>
+    // The menu opens beside the button, from its bottom edge, as the bell's panel does.
+    <div ref={root} style={{ position: 'relative' }}>
       <button
         onClick={() => setOpen((was) => !was)}
         aria-expanded={open}
@@ -187,8 +187,8 @@ function Note({ children, faint = false }: { children: ReactNode; faint?: boolea
 
 const menu = {
   position: 'absolute' as const,
-  left: 0,
-  bottom: 'calc(100% + 8px)',
+  left: 'calc(100% + 10px)',
+  bottom: 0,
   zIndex: 20,
   width: 280,
   ...styles.float,

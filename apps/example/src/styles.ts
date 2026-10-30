@@ -11,7 +11,7 @@ const navyWash = (percent: number) => `color-mix(in srgb, ${ink.strong} ${percen
 /** How tall the bar along a phone's bottom edge is, with room under it */
 const TABBAR_HEIGHT = 68;
 /** How wide a space's rail of apps is */
-const RAIL_WIDTH = 84;
+const RAIL_WIDTH = 72;
 
 /**
  * The rules inline styles cannot carry.
@@ -61,9 +61,9 @@ export function injectBaseStyles(): void {
     :root[data-desktop] .app-rail { padding-top: 44px; }
     /* An app on the rail: its shape, its name under it, and a tile of its own while it is open. */
     .rail-item {
-      position: relative; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 5px;
-      padding: 9px 2px 8px; border: none; border-radius: ${radius.md}px; background: none;
-      color: ${ink.muted}; font-size: 11.5px; font-weight: 500;
+      position: relative; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 4px;
+      padding: 7px 2px 6px; border: none; border-radius: ${radius.md}px; background: none;
+      color: ${ink.muted}; font-size: 10.5px; font-weight: 500;
     }
     .rail-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .rail-item[aria-current] { color: ${ink.strong}; font-weight: 600; background: ${surface.card}; box-shadow: 0 0 0 1px ${surface.rule}; }
@@ -73,19 +73,18 @@ export function injectBaseStyles(): void {
     .rail-top { flex-shrink: 0; display: flex; justify-content: center; padding-bottom: 8px; margin-bottom: 6px; border-bottom: 1px solid ${surface.line}; }
     /* Where the next app goes: an empty tile, dashed. */
     .rail-slot {
-      display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;
-      border: 1.5px dashed ${surface.lineStrong}; border-radius: ${radius.md}px; color: ${ink.muted};
+      display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
+      border: 1.5px dashed ${surface.lineStrong}; border-radius: ${radius.sm}px; color: ${ink.muted};
     }
     /* What isn't an app has a glyph on the same tile an app's shape takes. */
-    .rail-glyph { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; color: ${ink.body}; }
-    /* All apps, you and what's new for you, at the foot; their menus open upward from it. */
+    .rail-glyph { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; color: ${ink.body}; }
+    /* You and what's new for you, at the foot; their menus open beside them. */
     .rail-foot {
       position: relative; flex-shrink: 0; padding-top: 8px; display: flex; flex-direction: column; align-items: center; gap: 8px;
       border-top: 1px solid ${surface.line};
     }
-    .rail-foot > .rail-item { align-self: stretch; }
     .you-button {
-      display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0;
+      display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0;
       border: none; border-radius: ${radius.pill}px; background: none;
     }
     .side-item {

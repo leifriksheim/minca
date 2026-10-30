@@ -38,8 +38,8 @@ export function Bell({
   const off = setup.on === 0;
 
   return (
-    // At the foot of a space's sidebar, the panel hangs from the whole bar rather than the button, as the account's menu does.
-    <div ref={root}>
+    // At the foot of a space's rail, the panel opens beside the button, from its bottom edge.
+    <div ref={root} style={{ position: 'relative' }}>
       <button
         onClick={() => {
           if (!open) setTab(off && items.length === 0 ? 'settings' : 'activity');
@@ -322,8 +322,8 @@ const badge = {
 };
 const panel = {
   position: 'absolute' as const,
-  left: 0,
-  bottom: 'calc(100% + 8px)',
+  left: 'calc(100% + 10px)',
+  bottom: 0,
   zIndex: 20,
   width: 340,
   maxWidth: 'calc(100vw - 24px)',

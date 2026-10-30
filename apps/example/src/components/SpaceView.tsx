@@ -276,10 +276,22 @@ function SpaceView({ space }: { space: SpaceSummary }) {
             <SpaceMenu space={space} pair={pair} title={title} leaf={leaf} go={go} onHome={goBack} face />
           </div>
           <div className="rail-apps">
+            {/* Every app, laid out, with the ones proposed. */}
+            <RailItem
+              icon={
+                <span className="rail-glyph">
+                  <Icon name="apps" size={16} />
+                </span>
+              }
+              label="All apps"
+              unread={newProposals}
+              on={onApps}
+              onClick={() => go('/spaces/$spaceId')}
+            />
             {apps.ready.map((app) => (
               <RailItem
                 key={app.id}
-                icon={<AppIcon id={app.id} size={28} />}
+                icon={<AppIcon id={app.id} size={22} />}
                 label={app.title}
                 unread={unreadOf(unread, app.id)}
                 on={open?.id === app.id}
@@ -290,7 +302,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
               <RailItem
                 icon={
                   <span className="rail-slot">
-                    <Icon name="plus" size={14} />
+                    <Icon name="plus" size={12} />
                   </span>
                 }
                 label="Add"
@@ -300,18 +312,6 @@ function SpaceView({ space }: { space: SpaceSummary }) {
             )}
           </div>
           <div className="rail-foot">
-            {/* Every app, laid out, with the ones proposed. */}
-            <RailItem
-              icon={
-                <span className="rail-glyph">
-                  <Icon name="apps" size={18} />
-                </span>
-              }
-              label="All apps"
-              unread={newProposals}
-              on={onApps}
-              onClick={() => go('/spaces/$spaceId')}
-            />
             {/* You, and what's new for you, at its foot. */}
             <Bell spaces={spaces} here={space} onOpenSpace={openSpace} />
             <AccountMenu />
@@ -591,7 +591,7 @@ function SpaceMenu({
         className="group-button"
         style={face ? faceButton : nameButton}
       >
-        <SpaceFace space={space} pair={pair} size={face ? 40 : 32} />
+        <SpaceFace space={space} pair={pair} size={face ? 36 : 32} />
         {!face && (
           <span style={{ ...stack(1), minWidth: 0 }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
