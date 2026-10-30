@@ -4,7 +4,7 @@ import { useAccount } from '@minca/react';
 import { Modal } from '@minca/app-shared/Modal';
 import { markRead, useAlerts } from '../alerts';
 import { useAppNotifications } from '../notifications';
-import { useWorkspace } from '../workspace';
+import { useSpaceName, useWorkspace } from '../workspace';
 import { Activity, Builder, Settings } from './Bell';
 import { SpaceMark } from './SpaceList';
 import { AddButton, QuietButton } from './Buttons';
@@ -17,7 +17,8 @@ import { palette, stack, styles, ui } from '../styles';
  * never pushes the activity down.
  */
 export function ActivityPage() {
-  const { spaces, pairs, openSpace } = useWorkspace();
+  const { spaces, openSpace } = useWorkspace();
+  const nameOf = useSpaceName();
   const { did } = useAccount();
   const { items, unread } = useAlerts(did);
   const setup = useAppNotifications();
@@ -55,7 +56,6 @@ export function ActivityPage() {
       {managing && (
         <Modal title="Notifications" onClose={() => setManaging(false)}>
           <Settings
-            spaces={spaces}
             setup={setup}
             onBuild={() => {
               setManaging(false);
@@ -79,7 +79,7 @@ export function ActivityPage() {
                 }}
               >
                 <SpaceMark space={space} size={28} />
-                <span style={ui.ellipsis}>{pairs.get(space.id)?.name ?? space.name}</span>
+                <span style={ui.ellipsis}>{nameOf(space.id) ?? space.name}</span>
               </button>
             ))}
           </div>

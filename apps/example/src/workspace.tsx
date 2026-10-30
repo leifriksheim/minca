@@ -32,6 +32,19 @@ export function useWorkspace(): Workspace {
   return workspace;
 }
 
+/**
+ * A space by the name people know it by: a group by its own, a space for two as the chat with whom it
+ * is with, so a list of both says which is which. Null for a space this device doesn't have.
+ */
+export function useSpaceName(): (id: string) => string | null {
+  const { spaces, pairs } = useWorkspace();
+  return (id) => {
+    const pair = pairs.get(id);
+    if (pair) return `Chat with ${pair.name}`;
+    return spaces.find((space) => space.id === id)?.name ?? null;
+  };
+}
+
 /** Banners about the connection and invites, above whatever is open */
 export function Notices({ inSpace = false }: { inSpace?: boolean }) {
   const { error, joinLink, openSpace } = useWorkspace();

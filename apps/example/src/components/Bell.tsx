@@ -9,6 +9,7 @@ import { SpaceMark } from './SpaceList';
 import { Icon } from './Icon';
 import { WatchBuilder } from './automations/WatchBuilder';
 import { palette, styles, hstack, stack } from '../styles';
+import { useSpaceName } from '../workspace';
 
 type Tab = 'activity' | 'settings';
 
@@ -85,7 +86,6 @@ export function Bell({
             />
           ) : (
             <Settings
-              spaces={spaces}
               here={here}
               setup={setup}
               onBuild={() => {
@@ -116,6 +116,7 @@ export function Activity({
   onSettings?: () => void;
   onOpenSpace: (id: string) => void;
 }) {
+  const nameOf = useSpaceName();
   if (items.length === 0)
     return (
       <div style={{ padding: '4px 14px 14px', fontSize: 13, lineHeight: 1.5, color: palette.ink.muted }}>
@@ -138,7 +139,7 @@ export function Activity({
               <span style={{ minWidth: 0, flex: 1, ...stack(2) }}>
                 <span style={{ fontSize: 13, fontWeight: 500, color: palette.ink.strong }}>{item.label}</span>
                 <span style={styles.faint}>
-                  {space ? `${space.name} · ` : ''}
+                  {space ? `${nameOf(space.id) ?? space.name} · ` : ''}
                   {ago(item.at)}
                 </span>
               </span>
@@ -152,21 +153,20 @@ export function Activity({
 
 /** Whether this browser may show them, and what you asked to hear about, in every space */
 export function Settings({
-  spaces,
   here,
   setup,
   onBuild,
 }: {
-  spaces: ReadonlyArray<SpaceSummary>;
   here?: SpaceSummary | undefined;
   setup: ReturnType<typeof useAppNotifications>;
   onBuild?: () => void;
 }) {
   const watches = useOwnAutomations();
+  const nameOf = useSpaceName();
   const where = (spaceIds: 'all' | ReadonlyArray<string>) =>
     spaceIds === 'all'
       ? 'All your spaces'
-      : spaceIds.map((id) => spaces.find((s) => s.id === id)?.name ?? 'A space you left').join(', ');
+      : spaceIds.map((id) => nameOf(id) ?? 'A space you left').join(', ');
 
   return (
     <div style={{ padding: '0 6px 6px' }}>
