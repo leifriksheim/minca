@@ -16,7 +16,9 @@ export async function createInviteLink(node: P2PNode, spaceId: string, role: str
   );
   const link = inviteLink(invite, `${globalThis.location.origin}/`);
   // The space keeps only the invite's key, never its link, so this device remembers the link to hand
-  // it out again. Its key is the one invite that wasn't there before; a view-only link has none.
+  // it out again. Its key is the one invite that wasn't there before. A view-only link writes no
+  // invite at all, so a new key then is someone else's, made meanwhile: it is never kept for this link.
+  if (!role) return link;
   const [made, ...more] = (await node.spaces.access(spaceId)).invites.filter((one) => !before.has(one.key));
   if (made && more.length === 0) writeKept(linksOf(spaceId), { ...madeLinks(spaceId), [made.key]: link });
   return link;

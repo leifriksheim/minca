@@ -498,6 +498,7 @@ export function CallButton({ space, place = 'button' }: { space: SpaceSummary; p
         style={{
           ...styles.badge,
           borderColor: palette.surface.lineStrong,
+          flexShrink: 0,
           display: 'inline-flex',
           alignItems: 'center',
           gap: 6,

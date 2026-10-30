@@ -124,7 +124,10 @@ function Badge({ onOpen, title, children }: { onOpen?: () => void; title: string
     display: 'inline-flex',
     alignItems: 'center',
     gap: 6,
+    // It narrows to what is left beside it, its words cut short with "…", rather than widening the row.
+    minWidth: 0,
     maxWidth: '100%',
+    overflow: 'hidden',
   };
   if (!onOpen)
     return (
