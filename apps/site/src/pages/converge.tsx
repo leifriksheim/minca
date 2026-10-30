@@ -70,13 +70,21 @@ function rounded(corners: readonly Point[]) {
 }
 
 /** A logo on its card, centred on the origin */
-function Card({ logo }: { logo: Logo }) {
+export function Card({ logo, size = TILE }: { logo: Logo; size?: number }) {
+  const glyph = (size * GLYPH) / TILE;
   return (
     <>
       <title>{logo.name}</title>
-      <rect className="converge-tile" x={-TILE / 2} y={-TILE / 2} width={TILE} height={TILE} rx={20} />
+      <rect
+        className="converge-tile"
+        x={-size / 2}
+        y={-size / 2}
+        width={size}
+        height={size}
+        rx={(size * 20) / TILE}
+      />
       <path
-        transform={`translate(${-GLYPH / 2} ${-GLYPH / 2}) scale(${GLYPH / 24})`}
+        transform={`translate(${-glyph / 2} ${-glyph / 2}) scale(${glyph / 24})`}
         d={logo.d}
         fill={logo.fill}
       />

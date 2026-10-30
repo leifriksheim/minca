@@ -1,5 +1,3 @@
-import type { ReactNode } from 'react';
-
 /**
  * The tiny working apps the front page shows: tools a group made for itself,
  * drawn as the app would draw them. Each takes what has happened so far, so a
@@ -39,18 +37,6 @@ export function Face({ who, target }: { who: Person; target?: string }) {
   );
 }
 
-/** Spots in a row: a face where someone took one, an empty ring where one is open */
-function Spots({ taken, of }: { taken: readonly Person[]; of: number }) {
-  return (
-    <span className="app-spots">
-      {Array.from({ length: of }, (_, i) => {
-        const who = taken[i];
-        return who ? <Face key={i} who={who} /> : <span key={i} className="app-spot" />;
-      })}
-    </span>
-  );
-}
-
 /** An event's head: its date on a little calendar leaf, its name, when and where */
 export function EventHead({
   day,
@@ -73,80 +59,6 @@ export function EventHead({
         <b>{title}</b>
         <small>{meta}</small>
       </span>
-    </div>
-  );
-}
-
-/** A row the latest change added, marked so the eye finds it */
-function Fresh({ children }: { children: ReactNode }) {
-  return <div className="app-row is-new">{children}</div>;
-}
-
-/** What a group asked to change about its meetup, in the "change anything" demo and the remixes */
-export type MeetupChange = 'waitlist' | 'talks' | 'reminder';
-
-export function Meetup({
-  change,
-  title = 'Hack night',
-  day = 'Thu',
-  date = '14',
-  where = '7pm · The Loft',
-}: {
-  change?: MeetupChange;
-  title?: string;
-  day?: string;
-  date?: string;
-  where?: string;
-}) {
-  const full = change === 'waitlist';
-  const going: readonly Person[] = full ? ['maya', 'leo', 'kai', 'ben'] : ['maya', 'leo', 'kai'];
-  return (
-    <div className="app">
-      <EventHead day={day} date={date} title={title} meta={where} />
-      {change === 'reminder' ? (
-        <Fresh>
-          <span>
-            <b>Reminder</b>
-            <small>Everyone gets a nudge the day before</small>
-          </span>
-          <span className="app-pill">On</span>
-        </Fresh>
-      ) : null}
-      <div className="app-row">
-        <span>
-          Hosted by <b>Joe</b>
-        </span>
-        <Face who="joe" />
-      </div>
-      <div className="app-row">
-        <span>
-          <b>Going</b>
-          <small>{full ? 'Full' : `${going.length} of 4 spots`}</small>
-        </span>
-        <Spots taken={going} of={4} />
-      </div>
-      {change === 'talks' ? (
-        <Fresh>
-          <span>
-            <b>Lightning talks</b>
-            <small>Anna on Rust · Sam on synths</small>
-          </span>
-          <span className="app-pill free">Give one</span>
-        </Fresh>
-      ) : null}
-      {full ? (
-        <Fresh>
-          <span>
-            <b>Waitlist</b>
-            <small>First in line gets a spot that opens</small>
-          </span>
-          <span className="app-spots">
-            <Face who="lea" />
-            <Face who="ida" />
-            <span className="app-pill free">Join</span>
-          </span>
-        </Fresh>
-      ) : null}
     </div>
   );
 }

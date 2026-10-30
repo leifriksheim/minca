@@ -177,7 +177,7 @@ const STEPS: readonly Step[] = [
 const LAST = STEPS.length - 1;
 
 /** The ask, typed out letter by letter; remounted each time, so it starts from nothing */
-export function Typed({ text }: { text: string }) {
+function Typed({ text }: { text: string }) {
   const [count, setCount] = useState(0);
   useEffect(() => {
     const timer = setInterval(() => setCount((n) => Math.min(n + 1, text.length)), 45);
@@ -427,7 +427,7 @@ export function HeroSpace() {
  * under it the space it goes to, the agent picker and the send button. The
  * cursors find it and its button by `data-target`.
  */
-export function PromptBox({
+function PromptBox({
   sending,
   space,
   className,
@@ -472,7 +472,7 @@ export function PromptBox({
 }
 
 /** What the agent says it is doing, beside the hopping shapes */
-export function Building({ children }: { children: string }) {
+function Building({ children }: { children: string }) {
   return (
     <span className="prompt-building">
       <Loader size={12} label={children} />
@@ -497,7 +497,7 @@ function Chevron() {
 }
 
 /** A space down the rail, or at the head of its sidebar: its shape with its first letter on it */
-export function SpaceBadge({
+function SpaceBadge({
   letter,
   kind,
   colour,

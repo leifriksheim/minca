@@ -1,13 +1,13 @@
 import { Link } from '@tanstack/react-router';
 import { APP, Band, ChromeMark, DownloadMark, EXTERNAL, Marked, Page } from './Site';
 import { Converge } from './converge';
-import { Story } from './story';
+import { Castle, Middle } from './castle';
 import { Compounds } from './compounds';
 import { Hosting, Sealed } from './trust';
 import { HeroSpace } from './HeroSpace';
 import { Loader } from '@minca/app-shared/Loader';
 import { MARK_BANDS } from '@minca/app-shared/mark';
-import { Morph, Shape } from '@minca/app-shared/shapes';
+import { Shape } from '@minca/app-shared/shapes';
 import { type ShapeKind } from '@minca/ui/shapes';
 import type { ShapeColour } from '@minca/ui/tokens';
 import { usePlatform } from './downloads';
@@ -54,38 +54,43 @@ const YOURS: ReadonlyArray<{ title: string; body: string; shape: ShapeKind }> = 
 
 /** What groups asked for, in their own words, and the tool each became */
 const ASKS: ReadonlyArray<{ ask: string; tool: string; kind: ShapeKind; colour: ShapeColour }> = [
-  { ask: 'Who’s coming to hack night on Thursday?', tool: 'RSVP', kind: 'clover', colour: 'coral' },
   {
-    ask: 'Could we share tools instead of all buying drills?',
-    tool: 'Tool library',
-    kind: 'squircle',
-    colour: 'sage',
-  },
-  {
-    ask: 'One list of everything the landlord hasn’t fixed.',
+    ask: 'A list of everything the landlord said he’d fix next week.',
     tool: 'Repairs',
     kind: 'star',
     colour: 'peach',
   },
-  { ask: 'Who needs groceries this week?', tool: 'Mutual aid', kind: 'burst', colour: 'lilac' },
   {
     ask: 'A sign-up sheet for the potluck. Joe says he’s bringing the rich.',
     tool: 'Potluck',
     kind: 'flower',
     colour: 'cobalt',
   },
+  {
+    ask: 'A chore rota, so the dishes stop being a political issue.',
+    tool: 'Chore rota',
+    kind: 'squircle',
+    colour: 'sage',
+  },
+  {
+    ask: 'A vote on the protest signs. Max two puns per person.',
+    tool: 'Sign vote',
+    kind: 'clover',
+    colour: 'coral',
+  },
+  {
+    ask: 'Who needs groceries this week, and whose car actually starts?',
+    tool: 'Mutual aid',
+    kind: 'burst',
+    colour: 'lilac',
+  },
+  {
+    ask: 'Somewhere to swap kids’ clothes before they outgrow them again.',
+    tool: 'Clothes swap',
+    kind: 'sparkle',
+    colour: 'peach',
+  },
 ];
-
-/** The big shape in the panel, melting from one to the next */
-const ANYTHING = [
-  { kind: 'flower', colour: 'peach' },
-  { kind: 'squircle', colour: 'coral' },
-  { kind: 'burst', colour: 'lilac' },
-  { kind: 'clover', colour: 'cobalt' },
-  { kind: 'star', colour: 'peach' },
-  { kind: 'scallop', colour: 'coral' },
-  { kind: 'sparkle', colour: 'lilac' },
-] as const;
 
 /** The mark's canvas, cropped to the bands so they stand on the panel's bottom edge */
 const RAINBOW_VIEWBOX = '0.5 1 23 11.5';
@@ -209,39 +214,54 @@ export function Home() {
         <Converge />
       </Band>
 
-      <section className="band sunken">
-        <div className="wrap">
-          <div className="tile tile-panel panel c-cobalt">
-            <Morph steps={ANYTHING} className="panel-morph" />
-            <div className="section-head">
-              <h2>If you can say it, you can have it.</h2>
-              <p>Tell Claude, ChatGPT or any AI what your group needs, and it’s there by tonight.</p>
-            </div>
-            <ul className="asks">
-              {ASKS.map((item) => (
-                <li key={item.tool}>
-                  <q>{item.ask}</q>
-                  <span className="asks-tool">
-                    <Shape kind={item.kind} colour={item.colour} />
-                    {item.tool}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </section>
+      <Band
+        id="asks"
+        tone="sunken"
+        title="If you can say it, you can have it."
+        intro={<p>Tell Claude, ChatGPT or any AI what your group needs, and it’s there by tonight.</p>}
+      >
+        <ul className="asks">
+          {ASKS.map((item) => (
+            <li key={item.tool} className={`tile c-${item.colour}`}>
+              <q>{item.ask}</q>
+              <span className="asks-tool">
+                <Shape kind={item.kind} colour={item.colour} />
+                {item.tool}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </Band>
 
       <Band
-        id="story"
-        title="Your group decides what gets built."
+        id="outside"
+        title="AI builds the tools. It doesn’t get the keys."
         intro={
           <p>
-            Anyone can ask for a new tool, or a change to one. Here’s Maya adding a waitlist to hack night.
+            Elsewhere, AI sits between you and every app you use, and reads it all on the way. On Minca it
+            builds outside the walls, and your group decides what comes in.
           </p>
         }
       >
-        <Story />
+        <div className="castle-pair">
+          <figure className="tile c-coral">
+            <Middle />
+            <figcaption>
+              <h3>Everywhere else</h3>
+              <p>
+                The AI sits in the middle. Your notes, files and plans all pass through it, and can end up
+                training the next model.
+              </p>
+            </figcaption>
+          </figure>
+          <figure className="tile c-sage">
+            <Castle />
+            <figcaption>
+              <h3>On Minca</h3>
+              <p>The AI leaves what it built by the bridge. Only your group lets it in.</p>
+            </figcaption>
+          </figure>
+        </div>
       </Band>
 
       <Band
