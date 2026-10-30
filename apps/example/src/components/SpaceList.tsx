@@ -64,42 +64,50 @@ export function SpaceMark({ space, size = 40 }: { space: Pick<SpaceSummary, 'id'
 /** What choosing who can read it means; who can write is decided later, per person */
 function describe(visibility: SpaceVisibility): string {
   return visibility === 'private'
-    ? 'End-to-end encrypted. Only people you invite get the key, so nobody else can read it — not even the relay that passes it on.'
-    : 'Not encrypted: anyone with the link can read it. Only people you invite can change it.';
+    ? 'End-to-end encrypted. Only people you add get the key, so nobody else can read it — not even the relay that passes it on.'
+    : 'Not encrypted: anyone with the link can read it. Only people you add can change it.';
 }
 
+/** Your groups, one to a row the way chat apps list them, each opening into the app it starts with */
 export function SpaceList({
   spaces,
   loading,
   error,
   onOpen,
-  onCreate,
-  onJoin,
+  onNew,
   onRemove,
 }: {
   spaces: ReadonlyArray<SpaceSummary>;
   loading: boolean;
   error: string | null;
   onOpen: (space: SpaceSummary) => void;
-  onCreate: (params: NewSpace) => void;
-  onJoin: (invite: string) => void;
+  /** Make a group, from the empty list */
+  onNew: () => void;
   onRemove: (spaceId: string) => void;
 }) {
-  const [dialog, setDialog] = useState<'new' | 'join' | null>(null);
-
   return (
     <>
-      {loading && spaces.length === 0 && <Loading label="Opening your spaces" style={styles.emptyState} />}
-
-      {!(loading && spaces.length === 0) && (
-        <div className="space-grid">
+      {loading && spaces.length === 0 ? (
+        <Loading label="Opening your groups" style={styles.emptyState} />
+      ) : spaces.length === 0 ? (
+        <div style={{ ...styles.emptyState, ...stack(10), alignItems: 'center' }}>
+          <strong style={{ color: palette.ink.strong, fontSize: 15 }}>No groups yet</strong>
+          <span>A group starts as a chat. Add people, then any app it needs: a board, a poll, a list.</span>
+          <PrimaryButton onClick={onNew} style={{ marginTop: 6 }}>
+            New group
+          </PrimaryButton>
+        </div>
+      ) : (
+        <ul style={{ padding: 0, margin: 0 }}>
           {spaces.map((space) => (
-            <div key={space.id} data-tile style={tile}>
-              <button onClick={() => onOpen(space)} style={tileButton}>
-                <SpaceMark space={space} />
-                <span style={{ ...stack(2), minWidth: 0 }}>
-                  <span style={{ ...styles.todoText, ...ui.ellipsis }}>{space.name}</span>
-                  <span style={{ ...styles.todoMeta, marginTop: 0 }}>
+            <li key={space.id} data-tile style={{ position: 'relative', listStyle: 'none' }}>
+              <button onClick={() => onOpen(space)} style={row}>
+                <SpaceMark space={space} size={44} />
+                <span style={{ ...stack(2), minWidth: 0, flex: 1 }}>
+                  <span style={{ ...ui.ellipsis, fontSize: 16, fontWeight: 600, color: palette.ink.strong }}>
+                    {space.name}
+                  </span>
+                  <span style={{ ...ui.ellipsis, fontSize: 13, color: palette.ink.muted }}>
                     {spaceBadges(space)}
                     <NewIn space={space} />
                   </span>
@@ -109,33 +117,18 @@ export function SpaceList({
                 onClick={() => onRemove(space.id)}
                 data-row-action
                 data-variant="danger"
-                style={{ ...styles.rowAction, position: 'absolute', top: 10, right: 10 }}
-                title={`Forget ${space.name}`}
-                aria-label={`Forget ${space.name}`}
+                style={{ ...styles.rowAction, position: 'absolute', top: 'calc(50% - 14px)', right: 8 }}
+                title={`Leave ${space.name}`}
+                aria-label={`Leave ${space.name}`}
               >
                 ✕
               </button>
-            </div>
+            </li>
           ))}
-
-          <button onClick={() => setDialog('new')} data-tile-new style={newTile}>
-            <span style={{ fontSize: 22, lineHeight: 1, fontWeight: 400 }}>+</span>
-            <span>New space</span>
-          </button>
-        </div>
+        </ul>
       )}
-
-      <div style={{ ...styles.linkRow, marginTop: 12 }}>
-        <LinkButton onClick={() => setDialog('join')} style={{ paddingLeft: 0 }}>
-          Have an invite? Join with a link
-        </LinkButton>
-      </div>
 
       {error && <p style={{ ...styles.error, marginTop: 10 }}>{error}</p>}
-
-      {dialog && (
-        <SpaceDialog initial={dialog} onClose={() => setDialog(null)} onCreate={onCreate} onJoin={onJoin} />
-      )}
     </>
   );
 }
@@ -153,37 +146,19 @@ function NewIn({ space }: { space: SpaceSummary }) {
   );
 }
 
-const tile = { position: 'relative' as const, ...styles.tile };
-const tileButton = {
+const row = {
   width: '100%',
-  minHeight: 132,
   display: 'flex',
-  flexDirection: 'column' as const,
-  justifyContent: 'space-between',
-  alignItems: 'flex-start',
-  gap: 16,
-  padding: 16,
+  alignItems: 'center',
+  gap: 14,
+  padding: '12px 44px 12px 4px',
   border: 'none',
-  borderRadius: palette.radius.lg,
+  borderBottom: `1px solid ${palette.surface.line}`,
   background: 'none',
   textAlign: 'left' as const,
 };
-const newTile = {
-  minHeight: 134,
-  display: 'flex',
-  flexDirection: 'column' as const,
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: 8,
-  borderRadius: palette.radius.lg,
-  border: `1px dashed ${palette.surface.lineStrong}`,
-  background: 'none',
-  color: palette.ink.muted,
-  fontSize: 14,
-  fontWeight: 500,
-};
 
-/** Making a space, or joining one from a link, in one dialog */
+/** Making a group, or joining one from a link, in one dialog */
 export function SpaceDialog({
   initial,
   onClose,
@@ -222,7 +197,7 @@ export function SpaceDialog({
 
   if (mode === 'join') {
     return (
-      <Modal title="Join a space" onClose={onClose}>
+      <Modal title="Join a group" onClose={onClose}>
         <form onSubmit={join} style={styles.form}>
           <input
             type="text"
@@ -246,7 +221,7 @@ export function SpaceDialog({
             Join
           </PrimaryButton>
           <LinkButton type="button" onClick={() => setMode('new')} style={{ alignSelf: 'center' }}>
-            Make a new space instead
+            Make a new group instead
           </LinkButton>
         </form>
       </Modal>
@@ -254,17 +229,17 @@ export function SpaceDialog({
   }
 
   return (
-    <Modal title="New space" onClose={onClose}>
+    <Modal title="New group" onClose={onClose}>
       <form onSubmit={create} style={styles.form}>
         <input
           type="text"
           value={name}
           onChange={(event) => setName(event.target.value)}
-          placeholder="Notes, Family, Trip…"
+          placeholder="Family, Book club, Trip…"
           style={styles.input}
-          aria-label="Space name"
+          aria-label="Group name"
         />
-        <p style={{ ...styles.errorHint, marginTop: 0 }}>Just for you, until you invite someone.</p>
+        <p style={{ ...styles.errorHint, marginTop: 0 }}>It starts with a chat. You add people next.</p>
 
         <Choice
           label="Who can read it"
@@ -281,7 +256,7 @@ export function SpaceDialog({
         <NameField value={me.name} onChange={me.setName} />
 
         <PrimaryButton type="submit" disabled={!name.trim()}>
-          Create space
+          Create group
         </PrimaryButton>
         <LinkButton type="button" onClick={() => setMode('join')} style={{ alignSelf: 'center' }}>
           Have an invite link? Join instead

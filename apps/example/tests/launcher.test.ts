@@ -26,6 +26,7 @@ import {
   checkLauncherApp,
   copyApp,
   EXAMPLE_APP,
+  firstApp,
   launcherApp,
   moveApp,
   prepareLauncher,
@@ -273,6 +274,27 @@ describe('the launcher', () => {
     const positions = launcher.placed.map((r) => r.body?.position ?? '');
     assert.deepEqual([...positions].sort(), positions, 'every position sorts in the order shown');
     assert.equal(new Set(positions).size, positions.length, 'no two the same');
+  });
+
+  test('a space opens with the first app on its launcher, the same for everyone in it, and moving one changes it', async () => {
+    const { alice, bob, space } = await setup();
+    assert.equal(await firstApp(alice.node, space), undefined, 'with no apps, it opens on its apps');
+    await addTemplate(alice.node, space, CHAT, []);
+    assert.equal((await firstApp(alice.node, space))?.body?.template, 'chat');
+    await alice.node.collections.define(space, trip);
+    await alice.node.records.put(space, launcherApp, { title: 'Carpool', collections: ['carpool.trip'] });
+    assert.equal(
+      (await firstApp(alice.node, space))?.body?.template,
+      'chat',
+      'an app added later goes after it',
+    );
+    const carpool = (await launcherOf(alice.node, space)).placed.find((r) => r.body?.title === 'Carpool')!;
+    await moveApp(alice.node, space, (await launcherOf(alice.node, space)).placed, carpool.key, 0);
+    assert.equal((await firstApp(alice.node, space))?.key, carpool.key);
+    await waitFor(
+      async () => (await firstApp(bob.node, space))?.key === carpool.key,
+      'Bob opens it into Carpool too',
+    );
   });
 
   test('someone without define only proposes', async () => {

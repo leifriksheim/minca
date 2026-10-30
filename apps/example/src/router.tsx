@@ -7,7 +7,7 @@ import {
   redirect,
   retainSearchParams,
 } from '@tanstack/react-router';
-import { App, ContactsPage, HomeLayout, SpacesPage } from './App';
+import { App, GroupsPage, HomeLayout, PeoplePage } from './App';
 import {
   HOOD,
   MoreRow,
@@ -50,17 +50,25 @@ const root = createRootRoute({
 const page = (draw: (screen: SpaceScreen) => ReactNode) => () => draw(useSpaceScreen());
 
 const home = createRoute({ getParentRoute: () => root, id: 'home', component: HomeLayout });
-const spaces = createRoute({
+const groups = createRoute({
   getParentRoute: () => home,
   path: '/',
-  // An inbox link is someone asking you to knock, which happens among your contacts.
+  // An inbox link is someone asking you to knock, which happens among your people.
   beforeLoad: ({ location }) => {
     if (/(^|&)inbox=/.test(location.hash))
-      redirect({ to: '/contacts', hash: location.hash, replace: true, throw: true });
+      redirect({ to: '/people', hash: location.hash, replace: true, throw: true });
   },
-  component: SpacesPage,
+  component: GroupsPage,
 });
-const contacts = createRoute({ getParentRoute: () => home, path: 'contacts', component: ContactsPage });
+const people = createRoute({ getParentRoute: () => home, path: 'people', component: PeoplePage });
+// Where People was before: links to add someone, handed out already, still lead there.
+const contacts = createRoute({
+  getParentRoute: () => root,
+  path: 'contacts',
+  beforeLoad: ({ location }) => {
+    redirect({ to: '/people', hash: location.hash, replace: true, throw: true });
+  },
+});
 
 const space = createRoute({
   getParentRoute: () => root,
@@ -96,7 +104,7 @@ const app = createRoute({
     ),
   ),
 });
-const people = createRoute({
+const members = createRoute({
   getParentRoute: inSpace,
   path: 'people',
   component: page((s) => <RolesView {...s} />),
@@ -183,12 +191,13 @@ const elsewhere = createRoute({
 // Each route is a constant of its own: one written inline in this list loses
 // the router's types, and every path and param quietly becomes `any`.
 const routeTree = root.addChildren([
-  home.addChildren([spaces, contacts]),
+  home.addChildren([groups, people]),
+  contacts,
   space.addChildren([
     spaceApps,
     newApp,
     app,
-    people,
+    members,
     hosting,
     automations,
     more,
@@ -205,6 +214,12 @@ export const router = createRouter({ routeTree });
 declare module '@tanstack/react-router' {
   interface Register {
     router: typeof router;
+  }
+  // What a move carries without putting it in the address: a new group asks for people once, and
+  // "Message someone" lands in the search for them.
+  interface HistoryState {
+    addPeople?: boolean;
+    find?: boolean;
   }
 }
 

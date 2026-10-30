@@ -264,8 +264,8 @@ Elsewhere:
   been released since 2015 and is used very widely; it and htm (its authors'
   tagged templates, so no build step) have no dependencies and come to about
   13 KB. Pinned to 10, since 11 is weeks old. Never `packages/core`.
-- `qrcode-generator` in `apps/shared` (`apps/shared/src/Payment.tsx`): a QR code
-  for a wallet to scan when paying a host. QR encoding (ISO 18004) is a spec
+- `qrcode-generator` in `apps/shared` (`apps/shared/src/QrCode.tsx`): a QR code
+  for a wallet to scan when paying a host, or a friend to scan to add you. QR encoding (ISO 18004) is a spec
   with a long tail; this one has no dependencies, has been released since
   2014, and is used very widely. Apps only, never `packages/core`.
 - `electrobun` 1.18, a dev dependency of `apps/desktop`, which it builds and

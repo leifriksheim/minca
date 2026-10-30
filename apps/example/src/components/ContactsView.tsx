@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { useRouterState } from '@tanstack/react-router';
 import type {
   ContactRequest,
   ContactView,
@@ -22,6 +23,7 @@ import {
   useContacts,
   useStanding,
   useHeldSpaces,
+  withChat,
 } from '../contacts';
 import { nameOf, peopleFrom } from '../derive/people';
 import { ago } from '@minca/ui/time';
@@ -148,13 +150,14 @@ export function ContactsView({
       <KnockFromLink
         onKnock={(code, note) =>
           act(async () => {
-            const made = await node.inbox.knock(code, note ? { note } : {});
+            const made = await withChat(node, node.inbox.knock(code, note ? { note } : {}));
             setNotice(made.carried ? 'Sent. They show up here once they accept.' : NOT_CARRIED);
           })
         }
       />
 
-      <UsernameCard inbox={inbox} onChange={reload} />
+      {/* Picking a username comes first; once you have one, the people you talk to do. */}
+      {mailbox && !inbox?.username && <UsernameCard inbox={inbox} onChange={reload} />}
 
       <FindPeople
         query={query}
@@ -275,6 +278,7 @@ export function ContactsView({
                     key={knock.space}
                     face={knock.username ?? knock.space}
                     name={knock.name}
+                    onOpen={() => onOpen(knock.space)}
                     detail={
                       <>
                         {knock.username && (
@@ -291,6 +295,8 @@ export function ContactsView({
           )}
         </section>
       )}
+
+      {inbox?.username && <UsernameCard inbox={inbox} onChange={reload} />}
 
       <details style={{ borderTop: `1px solid ${surface.line}`, paddingTop: 16 }}>
         <summary style={{ fontSize: 14, fontWeight: 600, color: ink.body }}>Other ways to connect</summary>
@@ -347,6 +353,8 @@ function FindPeople({
   onSent: (notice: string) => void;
 }) {
   const lookup = useUsernameLookup(query);
+  // Arrived from "Message someone": straight into finding them.
+  const finding = useRouterState({ select: (state) => state.location.state.find === true });
   const [adding, setAdding] = useState<{ username: string; name?: string } | null>(null);
   const known = lookup.status === 'found' ? contacts.find((c) => c.username === lookup.username) : undefined;
   const waiting = lookup.status === 'found' && sent.some((knock) => knock.username === lookup.username);
@@ -372,6 +380,7 @@ function FindPeople({
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Find people by name or username"
           aria-label="Find people by name or username"
+          autoFocus={finding}
           autoCapitalize="none"
           autoComplete="off"
           spellCheck={false}
@@ -482,8 +491,8 @@ function EmptyContacts({ hasName }: { hasName: boolean }) {
 }
 
 /**
- * One contact: open your space for two, invite them into another space, and
- * the rest behind a menu. Warns when someone other than the two of you is in
+ * One contact: a tap opens your chat with them, and the rest (adding them to
+ * a group, renaming, removing) is behind a menu. Warns when someone other than the two of you is in
  * that space — the invite was passed on — so you can decide whether it is
  * still just the two of you.
  */
@@ -516,6 +525,7 @@ function ContactRow({
       <PersonRow
         face={contact.did}
         name={contact.name}
+        {...(joined ? { onOpen: () => onOpen(contact.space!) } : {})}
         detail={
           others.length > 0 ? (
             <span style={{ color: accent.danger }}>
@@ -532,32 +542,21 @@ function ContactRow({
           )
         }
       >
-        {joined && (
-          <QuietButton onClick={() => onOpen(contact.space!)} style={{ height: 34 }}>
-            Open
-          </QuietButton>
-        )}
-        {joined && standing === 'joined' && (
-          <QuietButton
-            onClick={() => setInviting(true)}
-            style={{ height: 34 }}
-            title="Invite them into one of your spaces"
-          >
-            Invite to…
-          </QuietButton>
-        )}
         <RowMenu
           label={`More for ${contact.name}`}
           items={[
+            ...(joined && standing === 'joined'
+              ? [{ label: 'Add to a group…', onClick: () => setInviting(true) }]
+              : []),
             { label: 'Rename', onClick: () => setRenaming(true) },
             {
               label: 'Remove',
               onClick: () =>
                 confirmThen(
                   standing === 'waiting'
-                    ? 'Your request is taken back and you leave the space for two.'
-                    : 'You leave the space for two; they keep their copy.',
-                  { title: `Remove ${contact.name}?`, yes: 'Remove' },
+                    ? 'Your request is taken back, and your chat with them goes.'
+                    : 'Your chat with them goes from all your devices. They keep their copy.',
+                  { title: `Remove ${contact.name} from your contacts?`, yes: 'Remove' },
                   () =>
                     act(() => takeBack(node, standing === 'waiting' ? shared : [], account.did, contact.did)),
                 ),
@@ -567,7 +566,7 @@ function ContactRow({
               danger: true,
               onClick: () =>
                 confirmThen(
-                  'You leave the space for two, and their requests and knocks are hidden from now on.',
+                  'Your chat with them goes, and their requests are hidden from now on.',
                   { title: `Block ${contact.name}?`, yes: 'Block' },
                   () => act(() => node.contacts.block(contact.did)),
                 ),
@@ -707,7 +706,7 @@ function Inbox({
           onKnock={(code, note) => {
             setKnocking(false);
             void act(async () => {
-              const made = await node.inbox.knock(code, note ? { note } : {});
+              const made = await withChat(node, node.inbox.knock(code, note ? { note } : {}));
               onKnocked(made.carried ? 'Sent. They show up in your contacts once they accept.' : NOT_CARRIED);
             });
           }}

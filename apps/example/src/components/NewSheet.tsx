@@ -1,0 +1,151 @@
+import { useState } from 'react';
+import { useNavigate } from '@tanstack/react-router';
+import { useAsync, useNode } from '@minca/react';
+import { Modal } from '@minca/app-shared/Modal';
+import { QrCode } from '@minca/app-shared/QrCode';
+import { useCopy } from '@minca/app-shared/action';
+import { shortUsername } from '@minca/app-shared/usernames';
+import { inboxLink, usernameLink } from '../contacts';
+import { useWorkspace } from '../workspace';
+import { palette, styles } from '../styles';
+import { AddButton, QuietButton } from './Buttons';
+import { Icon, type IconName } from './Icon';
+import { SpaceDialog } from './SpaceList';
+import { shareUsername } from './UsernameCard';
+
+const { ink, surface, accent, radius } = palette;
+
+/** What the "+" on the home screen starts */
+type Start = 'message' | 'group' | 'share' | 'join';
+
+const STARTS: Record<Start, { icon: IconName; title: string; detail: string }> = {
+  message: { icon: 'chat', title: 'Message someone', detail: 'A contact, or anyone by their username' },
+  group: { icon: 'people', title: 'New group', detail: 'Name it, then add people' },
+  share: { icon: 'globe', title: 'Share your link', detail: 'So people can add you' },
+  join: { icon: 'compass', title: 'Join with a link', detail: 'Someone sent you an invite' },
+};
+
+/**
+ * The "+" on the home screen: one place to start anything, with what the tab
+ * you're on is for first. A chat with someone starts from finding them in
+ * People; a group from naming it, then adding people.
+ */
+export function NewSheet({ on, onClose }: { on: 'people' | 'groups'; onClose: () => void }) {
+  const navigate = useNavigate();
+  const { create, join } = useWorkspace();
+  const [step, setStep] = useState<'menu' | 'share'>('menu');
+  const [dialog, setDialog] = useState<'new' | 'join' | null>(null);
+  const order: ReadonlyArray<Start> =
+    on === 'people' ? ['message', 'share', 'group', 'join'] : ['group', 'join', 'message', 'share'];
+
+  const start = (what: Start) => {
+    if (what === 'message') {
+      onClose();
+      void navigate({ to: '/people', state: { find: true } });
+    } else if (what === 'share') setStep('share');
+    else setDialog(what === 'group' ? 'new' : 'join');
+  };
+
+  if (dialog) return <SpaceDialog initial={dialog} onClose={onClose} onCreate={create} onJoin={join} />;
+  if (step === 'share') return <ShareMe onClose={onClose} />;
+  return (
+    <Modal title="Start something" onClose={onClose}>
+      <ul style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: 0, margin: 0 }}>
+        {order.map((what) => (
+          <li key={what} style={{ listStyle: 'none' }}>
+            <button onClick={() => start(what)} data-menu-item style={row}>
+              <span style={badge}>
+                <Icon name={STARTS[what].icon} size={18} />
+              </span>
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+                <strong style={{ fontSize: 15, fontWeight: 600, color: ink.strong }}>
+                  {STARTS[what].title}
+                </strong>
+                <span style={{ fontSize: 13, color: ink.muted }}>{STARTS[what].detail}</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </Modal>
+  );
+}
+
+/** Your link to hand out, and its QR code to scan: your username's when you have one, else your inbox's */
+function ShareMe({ onClose }: { onClose: () => void }) {
+  const node = useNode();
+  const navigate = useNavigate();
+  const found = useAsync(() => node.inbox.get(), [node]);
+  const inbox = found.status === 'done' ? found.value : null;
+  const { copied, copy } = useCopy();
+  const username = inbox?.username;
+  const link = username ? usernameLink(username) : inbox ? inboxLink(inbox.code) : null;
+
+  return (
+    <Modal title="Share your link" onClose={onClose}>
+      {found.status === 'loading' ? null : link ? (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+          <div style={{ padding: 12, borderRadius: radius.lg, border: `1px solid ${surface.rule}` }}>
+            <QrCode text={link} label="QR code to add you" size={184} />
+          </div>
+          {username && (
+            <strong style={{ ...styles.appTitle, fontSize: 22 }}>{shortUsername(username)}</strong>
+          )}
+          <p style={{ fontSize: 14, color: ink.muted, textAlign: 'center', lineHeight: 1.5 }}>
+            Anyone who scans it or opens the link can ask to be your contact. You choose who gets in.
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {username ? (
+              <AddButton onClick={() => void shareUsername(username, copy)} style={{ height: 40 }}>
+                {copied ? 'Link copied' : 'Share link'}
+              </AddButton>
+            ) : (
+              <AddButton onClick={() => copy(link)} style={{ height: 40 }}>
+                {copied ? 'Copied' : 'Copy link'}
+              </AddButton>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <p style={{ fontSize: 14, color: ink.muted, lineHeight: 1.5 }}>
+            Pick a username first: it’s what your link leads to, and what people type to find you.
+          </p>
+          <QuietButton
+            onClick={() => {
+              onClose();
+              void navigate({ to: '/people' });
+            }}
+            style={{ alignSelf: 'flex-start' }}
+          >
+            Pick a username
+          </QuietButton>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+const row = {
+  width: '100%',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 14,
+  padding: '10px 8px',
+  border: 'none',
+  borderRadius: radius.md,
+  background: 'none',
+  textAlign: 'left',
+} as const;
+
+const badge = {
+  width: 40,
+  height: 40,
+  flexShrink: 0,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  borderRadius: radius.pill,
+  background: accent.soft,
+  color: accent.base,
+} as const;

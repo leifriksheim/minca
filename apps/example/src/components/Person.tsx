@@ -3,7 +3,7 @@ import type { ContactView, SpaceSummary } from '@minca/core';
 import { useNode } from '@minca/react';
 import { styles, palette } from '../styles';
 import { isBot, nameOf, type People } from '../derive/people';
-import { NOT_CARRIED, takeBack, useContacts, useStanding } from '../contacts';
+import { NOT_CARRIED, takeBack, useContacts, useStanding, withChat } from '../contacts';
 import { PersonAvatar } from './std/PersonAvatar';
 import { Modal } from '@minca/app-shared/Modal';
 import { useAction, useCopy } from '@minca/app-shared/action';
@@ -256,7 +256,9 @@ function AskContact({
   const { run, busy: asking, error } = useAction();
   const ask = () =>
     run(async () => {
-      onAsked(await node.contacts.ask(space.id, did, note.trim() ? { note: note.trim() } : {}));
+      onAsked(
+        await withChat(node, node.contacts.ask(space.id, did, note.trim() ? { note: note.trim() } : {})),
+      );
     });
   return (
     <form

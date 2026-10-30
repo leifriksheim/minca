@@ -202,6 +202,20 @@ export function sortLauncher(
   return { placed, proposed };
 }
 
+/**
+ * The app a space opens with: the first on its launcher. Its members put the
+ * launcher in order, so a group chooses where it opens by moving an app to
+ * the top. Undefined when it has none.
+ */
+export async function firstApp(node: P2PNode, spaceId: string): Promise<NodeRecord<LauncherApp> | undefined> {
+  const [records, collections, access] = await Promise.all([
+    node.records.list<LauncherApp>(spaceId, { collection: launcherApp.name }),
+    node.collections.list(spaceId),
+    node.spaces.access(spaceId),
+  ]);
+  return sortLauncher(records, collections, access).placed[0];
+}
+
 /** A position after every app on the launcher */
 function atEnd(placed: ReadonlyArray<NodeRecord<LauncherApp>>): string {
   const last = placed.map((record) => record.body?.position ?? '').reduce((a, b) => (b > a ? b : a), '');

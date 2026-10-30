@@ -2,13 +2,14 @@ import { useState } from 'react';
 import type { ContactView, SpaceSummary } from '@minca/core';
 import { useAsync, useNode } from '@minca/react';
 import { Modal } from '@minca/app-shared/Modal';
-import { message } from '@minca/app-shared/action';
+import { message, useCopy } from '@minca/app-shared/action';
+import { createInviteLink } from '../spaces';
 import { Shape } from '@minca/app-shared/shapes';
 import { markFor } from '@minca/ui/shapes';
 import { palette, styles } from '../styles';
 import { invitableRoles, useContacts } from '../contacts';
 import { shortUsername, useUsernameLookup } from '@minca/app-shared/usernames';
-import { AddButton } from './Buttons';
+import { AddButton, QuietButton } from './Buttons';
 import { AddDialog, Handle, PersonRow } from './PeopleParts';
 
 const { ink, surface, radius } = palette;
@@ -136,6 +137,23 @@ export function AddPeople({
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const lookup = useUsernameLookup(query);
+  const { copied, copy } = useCopy();
+  const [making, setMaking] = useState(false);
+  const [link, setLink] = useState<string | null>(null);
+  // For anyone who isn't a contact yet: a link that joins as the role chosen below. Shown as well
+  // as copied, since a phone may not let a page copy once it has waited for something.
+  const copyLink = async () => {
+    setMaking(true);
+    setError(null);
+    try {
+      const made = await createInviteLink(node, space.id, chosenRole);
+      setLink(made);
+      copy(made);
+    } catch (reason) {
+      setError(message(reason));
+    }
+    setMaking(false);
+  };
 
   const candidates = (contacts ?? []).filter((c) => !c.blocked && c.space && !members.has(c.did));
   const q = query.trim().toLowerCase().replace(/^@/, '');
@@ -258,7 +276,9 @@ export function AddPeople({
                 ? 'Looking…'
                 : 'No contact by that name, and nobody with that username.'
               : candidates.length === 0
-                ? 'Everyone in your contacts is here already. Type a username to add someone new.'
+                ? (contacts ?? []).some((c) => !c.blocked && c.space)
+                  ? 'Everyone in your contacts is here already. Type a username to add someone new.'
+                  : 'Type a username to find someone, or send an invite link.'
                 : ''}
           </li>
         )}
@@ -268,7 +288,10 @@ export function AddPeople({
           Joins as
           <select
             value={chosenRole ?? ''}
-            onChange={(event) => setRole(event.target.value)}
+            onChange={(event) => {
+              setRole(event.target.value);
+              setLink(null); // a link made for the other role would say the wrong thing
+            }}
             style={{ ...styles.input, width: 'auto', height: 34, fontSize: 13 }}
           >
             {offered.map((name) => (
@@ -280,10 +303,22 @@ export function AddPeople({
           </select>
         </label>
         <span style={{ flex: 1 }} />
+        <QuietButton onClick={() => void copyLink()} disabled={making} style={{ height: 40 }}>
+          {copied ? 'Link copied' : making ? 'Making a link…' : 'Copy invite link'}
+        </QuietButton>
         <AddButton onClick={() => void send()} disabled={picked.size === 0 || sending} style={{ height: 40 }}>
           {sending ? 'Inviting…' : picked.size === 0 ? 'Invite' : `Invite ${picked.size}`}
         </AddButton>
       </div>
+      {link && (
+        <input
+          readOnly
+          value={link}
+          onFocus={(event) => event.target.select()}
+          aria-label="Invite link"
+          style={{ ...styles.input, height: 38, fontSize: 13, marginTop: 10 }}
+        />
+      )}
       {error && <p style={{ ...styles.bad, marginTop: 10 }}>{error}</p>}
     </Modal>
   );

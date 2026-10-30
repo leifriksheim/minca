@@ -1,7 +1,7 @@
-import { matches, type NodeCollection, type NodeRecord, type SpaceSummary } from '@minca/core';
+import { matches, type NodeCollection, type NodeRecord, type P2PNode, type SpaceSummary } from '@minca/core';
 import { useAccess, useLive } from '@minca/react';
 import { asRunner, namesTheRunner, notifyOn, type AppAutomation } from '@minca/core/schemas';
-import { launcherApp, sortLauncher, type LauncherApp } from './launcher';
+import { addTemplate, firstApp, launcherApp, sortLauncher, type LauncherApp } from './launcher';
 import { TEMPLATES } from './templates';
 
 /**
@@ -79,6 +79,17 @@ function entriesOf(placed: ReadonlyArray<NodeRecord<LauncherApp>>): ReadonlyArra
     return entryOf(record);
   });
 }
+
+/** The id of the app a space opens with (`firstApp`), or undefined when it has none */
+export async function landingApp(node: P2PNode, spaceId: string): Promise<string | undefined> {
+  const first = await firstApp(node, spaceId);
+  return first && entriesOf([first])[0]?.id;
+}
+
+const CHAT = TEMPLATES.find(({ app }) => app.template === 'chat')!;
+
+/** Puts Chat on a new space's launcher, so it opens into a conversation */
+export const addChat = (node: P2PNode, spaceId: string) => addTemplate(node, spaceId, CHAT, []);
 
 /**
  * A space's apps: those on its launcher, in order, the ready-made ones it
