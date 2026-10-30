@@ -235,7 +235,7 @@ export function AddPeople({
         autoFocus
         style={{ ...styles.input, height: 42, marginBottom: 10 }}
       />
-      <ul style={{ padding: 0, margin: 0, maxHeight: 320, overflowY: 'auto' }}>
+      <ul className="rows" style={{ padding: 0, margin: 0, maxHeight: 320, overflowY: 'auto' }}>
         {found && (
           <PersonRow
             face={found.username}

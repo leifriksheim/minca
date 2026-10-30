@@ -29,13 +29,12 @@ import { nameOf, peopleFrom } from '../derive/people';
 import { ago } from '@minca/ui/time';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { Modal } from '@minca/app-shared/Modal';
-import { styles, palette } from '../styles';
+import { styles, palette, ui } from '../styles';
 import { message, useAction, useCopy } from '@minca/app-shared/action';
 import { Loading } from './Loading';
 import { AddButton, LinkButton, QuietButton } from './Buttons';
 import { confirmThen } from '../confirm';
 import { Icon } from './Icon';
-import { UsernameCard } from './UsernameCard';
 import { AddDialog, Handle, Notice, PersonRow, RowMenu, SpaceInvites } from './PeopleParts';
 import { InviteToSpace } from './InvitePeople';
 import { shortUsername, useUsernameLookup } from '@minca/app-shared/usernames';
@@ -156,9 +155,6 @@ export function ContactsView({
         }
       />
 
-      {/* Picking a username comes first; once you have one, the people you talk to do. */}
-      {mailbox && !inbox?.username && <UsernameCard inbox={inbox} onChange={reload} />}
-
       <FindPeople
         query={query}
         setQuery={setQuery}
@@ -260,7 +256,7 @@ export function ContactsView({
           ) : listed.length === 0 && sent.length === 0 ? (
             <EmptyContacts hasName={!!inbox?.username} />
           ) : (
-            <ul style={{ padding: 0, margin: 0 }}>
+            <ul className="rows" style={ui.list}>
               {matching.map((contact) => (
                 <ContactRow
                   key={contact.did}
@@ -296,8 +292,6 @@ export function ContactsView({
         </section>
       )}
 
-      {inbox?.username && <UsernameCard inbox={inbox} onChange={reload} />}
-
       <details style={{ borderTop: `1px solid ${surface.line}`, paddingTop: 16 }}>
         <summary style={{ fontSize: 14, fontWeight: 600, color: ink.body }}>Other ways to connect</summary>
         <Inbox inbox={inbox} act={act} onKnocked={setNotice} />
@@ -306,7 +300,7 @@ export function ContactsView({
       {blocked.length > 0 && (
         <details>
           <summary style={{ ...styles.todoMeta, cursor: 'pointer' }}>Blocked ({blocked.length})</summary>
-          <ul style={{ padding: 0, marginTop: 8 }}>
+          <ul className="rows" style={{ ...ui.list, marginTop: 8 }}>
             {blocked.map((contact) => (
               <PersonRow
                 key={contact.did}
@@ -483,8 +477,8 @@ function EmptyContacts({ hasName }: { hasName: boolean }) {
       <strong style={{ color: ink.strong, fontSize: 15 }}>No contacts yet</strong>
       <span>
         {hasName
-          ? 'Search for someone’s username above, or send them yours.'
-          : 'Pick a username above, then search for your friends’.'}
+          ? 'Search for someone’s username above, or share yours from New.'
+          : 'Search for someone’s username above. To be found by yours, pick one in your account.'}
       </span>
     </div>
   );

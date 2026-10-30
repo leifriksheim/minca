@@ -50,14 +50,16 @@ export function PersonRow({
   );
   return (
     <li
+      data-tile={onOpen ? '' : undefined}
       style={{
         display: 'flex',
         alignItems: 'center',
         gap: 12,
-        padding: tone === 'card' ? '12px 14px' : '10px 4px',
+        padding: tone === 'card' ? '12px 14px' : '11px 14px',
+        // In a list, the list draws the lines between rows (`className="rows"`).
         ...(tone === 'card'
           ? { border: `1px solid ${surface.rule}`, borderRadius: radius.lg, background: surface.card }
-          : { borderBottom: `1px solid ${surface.line}` }),
+          : {}),
         listStyle: 'none',
       }}
     >

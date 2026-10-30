@@ -98,15 +98,13 @@ export function SpaceList({
           </PrimaryButton>
         </div>
       ) : (
-        <ul style={{ padding: 0, margin: 0 }}>
+        <ul className="rows" style={ui.list}>
           {spaces.map((space) => (
             <li key={space.id} data-tile style={{ position: 'relative', listStyle: 'none' }}>
               <button onClick={() => onOpen(space)} style={row}>
                 <SpaceMark space={space} size={44} />
                 <span style={{ ...stack(2), minWidth: 0, flex: 1 }}>
-                  <span style={{ ...ui.ellipsis, fontSize: 16, fontWeight: 600, color: palette.ink.strong }}>
-                    {space.name}
-                  </span>
+                  <span style={groupName}>{space.name}</span>
                   <span style={{ ...ui.ellipsis, fontSize: 13, color: palette.ink.muted }}>
                     {spaceBadges(space)}
                     <NewIn space={space} />
@@ -117,7 +115,7 @@ export function SpaceList({
                 onClick={() => onRemove(space.id)}
                 data-row-action
                 data-variant="danger"
-                style={{ ...styles.rowAction, position: 'absolute', top: 'calc(50% - 14px)', right: 8 }}
+                style={{ ...styles.rowAction, position: 'absolute', top: 'calc(50% - 14px)', right: 12 }}
                 title={`Leave ${space.name}`}
                 aria-label={`Leave ${space.name}`}
               >
@@ -151,11 +149,19 @@ const row = {
   display: 'flex',
   alignItems: 'center',
   gap: 14,
-  padding: '12px 44px 12px 4px',
+  padding: '14px 52px 14px 16px',
   border: 'none',
-  borderBottom: `1px solid ${palette.surface.line}`,
   background: 'none',
   textAlign: 'left' as const,
+};
+/** A group goes by its name in the display face, as its sidebar has it */
+const groupName = {
+  ...ui.ellipsis,
+  fontFamily: palette.display,
+  fontSize: 17,
+  fontWeight: 700,
+  letterSpacing: '-0.03em',
+  color: palette.ink.strong,
 };
 
 /** Making a group, or joining one from a link, in one dialog */

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { useAsync, useNode } from '@minca/react';
+import { useAccount, useAsync, useConnection, useNode } from '@minca/react';
+import { accountHomeLink } from '@minca/core/session';
 import { Modal } from '@minca/app-shared/Modal';
 import { QrCode } from '@minca/app-shared/QrCode';
 import { useCopy } from '@minca/app-shared/action';
@@ -11,9 +12,16 @@ import { palette, styles } from '../styles';
 import { AddButton, QuietButton } from './Buttons';
 import { Icon, type IconName } from './Icon';
 import { SpaceDialog } from './SpaceList';
-import { shareUsername } from './UsernameCard';
 
 const { ink, surface, accent, radius } = palette;
+
+/** Shares a username the way a phone shares anything; elsewhere its link is copied */
+async function shareUsername(username: string, copy: (text: string) => void): Promise<void> {
+  const url = usernameLink(username);
+  if (globalThis.navigator.share)
+    await globalThis.navigator.share({ title: 'Add me on Minca', text: username, url }).catch(() => {});
+  else copy(url);
+}
 
 /** What the "+" on the home screen starts */
 type Start = 'message' | 'group' | 'share' | 'join';
@@ -74,7 +82,8 @@ export function NewSheet({ on, onClose }: { on: 'people' | 'groups'; onClose: ()
 /** Your link to hand out, and its QR code to scan: your username's when you have one, else your inbox's */
 function ShareMe({ onClose }: { onClose: () => void }) {
   const node = useNode();
-  const navigate = useNavigate();
+  const account = useAccount();
+  const { state } = useConnection();
   const found = useAsync(() => node.inbox.get(), [node]);
   const inbox = found.status === 'done' ? found.value : null;
   const { copied, copy } = useCopy();
@@ -109,12 +118,18 @@ function ShareMe({ onClose }: { onClose: () => void }) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <p style={{ fontSize: 14, color: ink.muted, lineHeight: 1.5 }}>
-            Pick a username first: it’s what your link leads to, and what people type to find you.
+            Pick a username first: it’s what your link leads to, and what people type to find you. It’s kept
+            with your account, so every app finds you by it.
           </p>
           <QuietButton
             onClick={() => {
               onClose();
-              void navigate({ to: '/people' });
+              // The home may be signed in to another account, so the link says which one.
+              globalThis.open(
+                accountHomeLink(state.home, account.did),
+                'minca-account',
+                'popup,width=720,height=820',
+              );
             }}
             style={{ alignSelf: 'flex-start' }}
           >
