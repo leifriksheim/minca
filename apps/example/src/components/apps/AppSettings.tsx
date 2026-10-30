@@ -28,7 +28,8 @@ export function AppSettingsButton({
         onClick={() => setOpen(true)}
         aria-label="Settings"
         title="Settings"
-        style={{ width: 36, padding: 0, display: 'grid', placeItems: 'center' }}
+        data-round
+        style={{ width: 36, height: 36 }}
       >
         <Icon name="settings" size={16} />
       </QuietButton>

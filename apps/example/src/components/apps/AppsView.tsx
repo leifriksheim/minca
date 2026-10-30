@@ -58,7 +58,7 @@ export function AppsView({
       <section aria-label="Apps in this space" style={stack(14)}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
           <div>
-            <h2 style={{ ...styles.appTitle, fontSize: 20 }}>Apps</h2>
+            <h2 style={{ ...styles.appTitle, fontSize: 20 }}>Overview</h2>
             <p style={{ ...styles.quiet, marginTop: 2 }}>
               What you use together here. Everything they save stays in the space.
             </p>
@@ -133,14 +133,6 @@ export function AppsView({
         mayDefine={mayDefine}
         onAdded={(key) => onOpenApp(`made:${key}`)}
       />
-
-      {/* On a phone the button in the heading gives way to one under the thumb, once
-          there are apps; before that the tile in the grid is the way. */}
-      {space.writable && apps.ready.length > 0 && !arranging && (
-        <button onClick={onCreate} data-variant="primary" className="fab">
-          <Icon name="plus" size={16} /> Add apps
-        </button>
-      )}
     </div>
   );
 }
@@ -191,14 +183,28 @@ function AppRow({
       </li>
     );
   return (
-    <li style={{ ...rowButton, listStyle: 'none', padding: '8px 10px 8px 16px' }}>
-      {about}
-      <span style={{ ...hstack(6), flexShrink: 0 }}>
+    // On a narrow screen its moves go under it, so its name keeps its room.
+    <li
+      style={{ ...rowButton, listStyle: 'none', padding: '8px 10px 8px 16px', flexWrap: 'wrap', rowGap: 8 }}
+    >
+      <span style={{ display: 'flex', alignItems: 'center', gap: 14, flex: '1 1 200px', minWidth: 0 }}>
+        {about}
+      </span>
+      <span
+        style={{
+          ...hstack(6),
+          flexWrap: 'wrap',
+          justifyContent: 'flex-end',
+          marginLeft: 'auto',
+          minWidth: 0,
+        }}
+      >
         <button
           onClick={() => arrange.onMove(-1)}
           disabled={arrange.busy || arrange.first}
           aria-label={`Move ${app.title} up`}
           data-variant="quiet"
+          data-round
           style={roundButton}
         >
           <span style={{ display: 'inline-flex', transform: 'rotate(-90deg)' }}>
@@ -210,6 +216,7 @@ function AppRow({
           disabled={arrange.busy || arrange.last}
           aria-label={`Move ${app.title} down`}
           data-variant="quiet"
+          data-round
           style={roundButton}
         >
           <span style={{ display: 'inline-flex', transform: 'rotate(90deg)' }}>
@@ -257,7 +264,7 @@ function CopyTo({
             (e: unknown) => setSaid(message(e)),
           );
         }}
-        style={{ ...styles.smallButton, height: 40 }}
+        style={{ ...styles.smallButton, height: 36, width: 'auto', maxWidth: 140 }}
       >
         <option value="">Copy to…</option>
         {others.map((other) => (
@@ -297,7 +304,7 @@ const slot = {
   color: palette.ink.muted,
 } as const;
 // As tall as a finger needs (`pointer: coarse` raises buttons to 40), and as wide, so they stay round.
-const roundButton = { ...styles.smallButton, width: 36, height: 36, padding: 0, flexShrink: 0 } as const;
+const roundButton = { ...styles.smallButton, width: 36, height: 36 } as const;
 const cardTitle = { fontSize: 15, fontWeight: 600, color: palette.ink.strong };
 const cardText = { fontSize: 13, lineHeight: 1.45, color: palette.ink.muted };
 const inlineButton = {

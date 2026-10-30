@@ -79,7 +79,7 @@ const HOOD = [
   about?: string;
 }>;
 
-/** Where the seen store keeps when All apps, and the proposals on it, were last looked at; no app has this id */
+/** Where the seen store keeps when the Overview, and the proposals on it, were last looked at; no app has this id */
 const PROPOSALS = ':proposals';
 
 /** What belongs to the space rather than to one app, in sidebar order */
@@ -256,8 +256,12 @@ function SpaceView({ space }: { space: SpaceSummary }) {
   const fill = open ? fills(open) : false;
   const title =
     open?.title ??
-    [...SECTIONS, ...HOOD, { to: '/spaces/$spaceId/new', label: 'Add apps' }].find((part) => part.to === leaf)
-      ?.label ??
+    [
+      ...SECTIONS,
+      ...HOOD,
+      { to: APPS_ROUTE, label: 'Overview' },
+      { to: '/spaces/$spaceId/new', label: 'Add apps' },
+    ].find((part) => part.to === leaf)?.label ??
     name;
 
   const screen: SpaceScreen = {
@@ -292,7 +296,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
                   <Icon name="apps" size={16} />
                 </span>
               }
-              label="All apps"
+              label="Overview"
               unread={newProposals}
               on={onApps}
               onClick={() => go('/spaces/$spaceId')}
@@ -333,19 +337,12 @@ function SpaceView({ space }: { space: SpaceSummary }) {
             <span className="phone-only" style={{ flex: '1 1 auto', minWidth: 0 }}>
               <SpaceMenu space={space} pair={pair} leaf={leaf} go={go} onHome={goBack} />
             </span>
-            {/* And the app you are in, at the right, opens every app. */}
-            <span className="phone-only" style={{ flex: '0 1 auto', minWidth: 0 }}>
-              <AppSwitcher
-                space={space}
-                apps={apps.ready}
-                unread={unread}
-                newProposals={newProposals}
-                open={open}
-                title={title}
-                onNew={onNew}
-                go={go}
-                openApp={openApp}
-              />
+            {/* You, and what's new for you, at its right, as the rail's foot has them on a wide screen. */}
+            <span className="phone-only" style={{ flexShrink: 0 }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Bell spaces={spaces} here={space} onOpenSpace={openSpace} />
+                <AccountMenu />
+              </span>
             </span>
             <span className="hide-on-phone" style={{ display: 'contents' }}>
               {open && <AppIcon id={open.id} size={28} />}
@@ -358,7 +355,11 @@ function SpaceView({ space }: { space: SpaceSummary }) {
               )}
               <CallButton space={space} place="chip" />
             </span>
-            {open && mayDefine && <AppSettingsButton space={space} record={open.record} />}
+            {open && mayDefine && (
+              <span className="hide-on-phone">
+                <AppSettingsButton space={space} record={open.record} />
+              </span>
+            )}
           </header>
 
           <div className="space-content" data-fill={fill || undefined}>
@@ -423,6 +424,21 @@ function SpaceView({ space }: { space: SpaceSummary }) {
               </SpaceScreenContext>
             </div>
           </div>
+          {/* A phone's way between apps, under the thumb: the one you're in opens every app, and its settings sit at the other end. */}
+          <footer className="space-foot">
+            <AppSwitcher
+              space={space}
+              apps={apps.ready}
+              unread={unread}
+              newProposals={newProposals}
+              open={open}
+              title={title}
+              onNew={onNew}
+              go={go}
+              openApp={openApp}
+            />
+            {open && mayDefine && <AppSettingsButton space={space} record={open.record} />}
+          </footer>
         </main>
       </div>
 
@@ -651,7 +667,7 @@ function SpaceMenu({
 }
 
 /**
- * A phone's way between apps: the one open, named in its bar, opens every app as a grid of their
+ * A phone's way between apps: the one open, named in the bar at its foot, opens every app as a grid of their
  * shapes, with what is new in each, a slot to add one, and the way to all of them laid out.
  */
 function AppSwitcher({
@@ -709,7 +725,7 @@ function AppSwitcher({
         {!shown && <Count unread={elsewhere} />}
       </button>
       {shown && (
-        <nav aria-label="Apps" className="drop" style={{ ...menu, right: 0, left: 'auto', padding: 12 }}>
+        <nav aria-label="Apps" className="rise" style={{ ...menu, padding: 12 }}>
           <div className="app-switch">
             {apps.map((app) => (
               <button
@@ -718,7 +734,7 @@ function AppSwitcher({
                 aria-current={open?.id === app.id ? 'page' : undefined}
                 className="rail-item"
               >
-                <span style={{ position: 'relative', display: 'inline-flex' }}>
+                <span className="rail-icon">
                   <AppIcon id={app.id} size={36} />
                   <span className="rail-count">
                     <Count unread={unreadOf(unread, app.id)} />
@@ -743,7 +759,7 @@ function AppSwitcher({
           <div style={{ height: 1, background: palette.surface.line, margin: '10px 0 6px' }} />
           <SideItem
             icon={<Icon name="apps" size={16} />}
-            label="All apps"
+            label="Overview"
             unread={newProposals}
             onClick={then(() => go('/spaces/$spaceId'))}
           />
@@ -781,7 +797,7 @@ function RailItem({
 }) {
   return (
     <button onClick={onClick} aria-current={on ? 'page' : undefined} title={label} className="rail-item">
-      <span style={{ position: 'relative', display: 'inline-flex' }}>
+      <span className="rail-icon">
         {icon}
         {unread && (
           <span className="rail-count">

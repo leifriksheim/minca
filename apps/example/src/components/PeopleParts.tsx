@@ -116,7 +116,8 @@ export function RowMenu({
         aria-expanded={open}
         onClick={() => setOpen((was) => !was)}
         data-variant="quiet"
-        style={{ ...styles.smallButton, width: 34, padding: 0, display: 'grid', placeItems: 'center' }}
+        data-round
+        style={{ ...styles.smallButton, width: 34, height: 34 }}
       >
         <Icon name="menu" size={14} />
       </button>

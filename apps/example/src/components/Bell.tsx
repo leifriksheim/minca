@@ -60,7 +60,7 @@ export function Bell({
       </button>
 
       {open && (
-        <div role="dialog" aria-label="Notifications" style={panel}>
+        <div role="dialog" aria-label="Notifications" className="drop" style={panel}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '10px 10px 6px 14px' }}>
             <p style={{ flex: 1, fontWeight: 600, fontSize: 14, color: palette.ink.strong }}>Notifications</p>
             <div role="tablist" aria-label="Notifications" style={hstack(2)}>

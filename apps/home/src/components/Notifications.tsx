@@ -101,6 +101,7 @@ export function Notifications({ node }: { node: P2PNode }) {
                   aria-label={`Remove ${sub.name}`}
                   title="Remove"
                   data-variant="ghost"
+                  data-round
                   style={remove}
                 >
                   ×
@@ -126,9 +127,6 @@ const remove = {
   width: 30,
   height: 30,
   minHeight: 30,
-  padding: 0,
-  display: 'grid',
-  placeItems: 'center',
   fontSize: 16,
   color: palette.ink.muted,
 } as const;

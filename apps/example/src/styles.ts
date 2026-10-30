@@ -33,6 +33,7 @@ export function injectBaseStyles(): void {
        tap would otherwise leave the hover look stuck on whatever was tapped. */
     @media (hover: hover) {
       ${hoverCss}
+      .rail-item:not([aria-current]):hover .rail-icon { background: ${surface.line}; }
       .you-button:hover, .you-button[aria-expanded="true"],
       .group-button:hover, .group-button[aria-expanded="true"] { background: ${surface.line} !important; }
     }
@@ -66,8 +67,16 @@ export function injectBaseStyles(): void {
       color: ${ink.muted}; font-size: 11.5px; font-weight: 500;
     }
     .rail-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .rail-item[aria-current] { color: ${ink.strong}; font-weight: 600; background: ${surface.card}; box-shadow: 0 0 0 1px ${surface.rule}; }
-    .rail-count { position: absolute; top: -6px; right: -10px; pointer-events: none; }
+    /* The open app: a soft square behind its shape alone, a shade darker than what it sits on, and its name in bold. */
+    .rail-icon {
+      position: relative; display: inline-flex; align-items: center; justify-content: center;
+      width: 38px; height: 38px; border-radius: ${radius.md}px; transition: background-color .15s ease;
+    }
+    .rail-item[aria-current] { color: ${ink.strong}; font-weight: 600; }
+    .rail-item[aria-current] .rail-icon { background: ${surface.line}; }
+    .app-switch .rail-icon { width: 54px; height: 54px; }
+    .app-switch .rail-item[aria-current] .rail-icon { background: ${surface.sunken}; }
+    .rail-count { position: absolute; top: -2px; right: -4px; pointer-events: none; }
     .rail-count .count { box-shadow: 0 0 0 2px ${surface.sunken}; }
     /* The space itself, first: its face opens its menu. */
     .rail-top { flex-shrink: 0; display: flex; justify-content: center; padding-bottom: 8px; margin-bottom: 6px; border-bottom: 1px solid ${surface.line}; }
@@ -96,6 +105,8 @@ export function injectBaseStyles(): void {
     }
     .side-item[aria-current] { background: ${surface.card}; box-shadow: 0 0 0 1px ${surface.rule}; }
     .space-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+    /* A phone's bar along the foot of a space (below); a wide screen has the rail. */
+    .space-foot { display: none; }
     .space-bar {
       flex-shrink: 0; display: flex; align-items: center; gap: 10px; height: 60px; padding: 0 24px;
       border-bottom: 1px solid ${surface.rule}; background: ${surface.page};
@@ -177,9 +188,6 @@ export function injectBaseStyles(): void {
     /* A name edited where it is shown (ProfilePage.tsx): a heading until it is pointed at. */
     .name-input:hover { border-color: ${surface.line} !important; }
     .name-input:focus { border-color: ${surface.rule} !important; background: ${surface.page} !important; outline: none; }
-
-    /* The button that makes an app: phones only. */
-    .fab { display: none; }
 
     .graph-canvas { height: 600px; }
     .collection-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -346,9 +354,29 @@ export function injectBaseStyles(): void {
          tab bar, so the space's own sections get the bottom edge, and its
          apps are the grid on the first screen rather than a sidebar. */
       .app-rail, .hide-on-phone, .bar-label { display: none !important; }
+      .space-foot {
+        position: sticky; bottom: 0; z-index: 8; flex-shrink: 0; display: flex; align-items: center; gap: 8px;
+        min-height: 56px; padding: 0 max(12px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(12px, env(safe-area-inset-left));
+        border-top: 1px solid ${surface.rule}; background: ${surface.page};
+      }
+      .space-foot > :first-child { flex: 1; min-width: 0; }
+      /* A panel that rises from the bar at the foot spans the screen above it, as one from the top bar drops under it. */
+      .rise {
+        position: fixed !important;
+        top: auto !important;
+        bottom: calc(64px + env(safe-area-inset-bottom)) !important;
+        left: max(12px, env(safe-area-inset-left)) !important;
+        right: max(12px, env(safe-area-inset-right)) !important;
+        width: auto !important;
+        max-height: calc(100dvh - 160px);
+        overflow-y: auto !important;
+      }
       .phone-only { display: revert !important; }
       .segmented.phone-only { display: flex !important; }
       .space-shell { display: block; height: auto; min-height: 100dvh; }
+      /* At least the screen's height, the content taking what is spare, so the bar at the foot sits at the bottom of a short page too. */
+      .space-main { min-height: 100dvh; }
+      .space-content { flex: 1 0 auto; }
       .space-bar {
         position: sticky; top: 0; z-index: 8; height: auto; min-height: 56px; gap: 8px;
         padding: env(safe-area-inset-top) max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left));
@@ -393,24 +421,6 @@ export function injectBaseStyles(): void {
       .tabbar > a[aria-current="page"] { background: none; color: ${ink.strong}; }
       .tab-dot { top: 4px; left: calc(50% + 6px); box-shadow: 0 0 0 2px ${surface.page}; }
 
-      .fab {
-        position: fixed;
-        z-index: 9;
-        right: max(16px, env(safe-area-inset-right));
-        bottom: calc(20px + env(safe-area-inset-bottom));
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        height: 48px;
-        padding: 0 18px;
-        border: 1px solid ${surface.rule};
-        border-radius: ${radius.pill}px;
-        background: ${accent.base};
-        color: ${surface.card};
-        font-size: 15px;
-        font-weight: 600;
-        box-shadow: ${shadow.small};
-      }
 
       /* The phone says enough on its own. */
       .call-label { display: none; }
@@ -449,6 +459,7 @@ export function injectBaseStyles(): void {
       .drop {
         position: fixed !important;
         top: calc(64px + env(safe-area-inset-top)) !important;
+        bottom: auto !important;
         left: max(12px, env(safe-area-inset-left)) !important;
         right: max(12px, env(safe-area-inset-right)) !important;
         width: auto !important;
@@ -476,6 +487,8 @@ export function injectBaseStyles(): void {
       input:not([type="checkbox"]):not([type="radio"]), select { min-height: 40px; }
       button[data-variant], [role="tab"], [data-nav], [data-menu-item] { min-height: 40px; }
       [data-row-action] { min-width: 36px; min-height: 36px; }
+      /* Grown to a finger's size in both directions, so it stays round. */
+      [data-round] { width: 40px !important; height: 40px !important; }
       /* The query editor and a box you can mention in are see-through fields over a highlighted copy; both change size together or the caret drifts off the text. */
       .code-layer, .mention-layer { font-size: 16px !important; }
     }

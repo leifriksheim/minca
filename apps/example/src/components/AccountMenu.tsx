@@ -36,7 +36,7 @@ export function AccountMenu() {
       </button>
 
       {open && (
-        <div role="menu" style={menu}>
+        <div role="menu" className="drop" style={menu}>
           <MenuHeader picture={picture} />
           {/* Your picture, name and username are changed in one place: Profile. */}
           <Section>

@@ -82,6 +82,8 @@ export const baseCss = `
     .inline-field select, .inline-field input { height: 32px !important; border-color: transparent !important; background-color: transparent !important; margin-left: -8px; padding-left: 8px !important; width: calc(100% + 8px) !important; }
     .inline-field select:focus, .inline-field input:focus { border-color: ${surface.lineStrong} !important; background-color: ${surface.card} !important; box-shadow: none !important; }
     [data-tile] { transition: border-color .15s ease, background-color .15s ease; }
+    /* A round button that holds only an icon: a circle, whatever its padding or the size a touchscreen asks, its icon in the middle. */
+    [data-round] { display: inline-grid !important; place-items: center; padding: 0 !important; aspect-ratio: 1; flex-shrink: 0; }
     /* Rows in a list, one surface (\`list\`): a hairline between each, none round the edge.
        The ends take the card's corners rather than the card clipping them, so a row's menu can hang out of it. */
     .rows > li + li { border-top: 1px solid ${surface.line}; }
