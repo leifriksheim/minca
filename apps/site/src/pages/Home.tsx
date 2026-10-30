@@ -23,9 +23,9 @@ import { downloadLink } from './Install';
  * shared ground instead, and every group that improves a tool improves it
  * for the next.
  *
- * The product comes first and the argument under it: the apps a group juggles
- * streaming into one (`converge.tsx`), making and changing tools,
- * how it stays private and online (`trust.tsx`), then why it matters. It
+ * Why it matters comes first: groups before apps (`pens.tsx`). Then the
+ * product: making tools together, the apps a group juggles streaming into one
+ * (`converge.tsx`), and how it stays private and online (`trust.tsx`). It
  * shows rather than tells: each band is the product doing one thing, drawn
  * as the app draws it (`demos.tsx`).
  * The brand draws a space as a ruled grid and every tool as a shape in it
@@ -201,25 +201,49 @@ export function Home() {
       </section>
 
       <Band
-        id="pieces"
-        title="Let’s stop building the same thing."
+        id="why"
+        tone="sunken"
+        title="Start with your group, not with an app."
         intro={
           <p>
-            Nearly every app you use is the same few pieces with a different logo on top, and each one keeps
-            your group to itself. On Minca the pieces are shared, so your group builds what it needs and no
-            tech oligarch gets a cut.
+            Every company wants your group inside its own app, behind its own fence. On Minca your group comes
+            first. Tools get passed from group to group like a good meme, and when you see one you like, you
+            add it to yours.
           </p>
         }
       >
-        <Converge />
+        <div className="castle-pair">
+          <figure className="tile c-peach">
+            <Pens />
+            <figcaption>
+              <h3>Every company</h3>
+              <p>
+                Each one builds a pen, puts your group inside and guards the gate. Your friends are stuck in
+                the one next door.
+              </p>
+              <small className="pens-credit">
+                Photos:{' '}
+                {PHOTO_CREDITS.map((credit, i) => (
+                  <span key={credit.who}>
+                    {i ? ', ' : ''}
+                    <a href={credit.href}>{credit.by}</a> ({credit.licence})
+                  </span>
+                ))}
+                , via Wikimedia Commons.
+              </small>
+            </figcaption>
+          </figure>
+          <figure className="tile c-sage">
+            <Tower />
+            <figcaption>
+              <h3>On Minca</h3>
+              <p>Groups pass each other bricks. Whatever one group makes, the next can pick up and use.</p>
+            </figcaption>
+          </figure>
+        </div>
       </Band>
 
-      <Band
-        id="asks"
-        tone="sunken"
-        title="If you can say it, you can have it."
-        intro={<p>Tell Claude, ChatGPT or any AI what your group needs, and it’s there by tonight.</p>}
-      >
+      <Band id="asks" title="Collaborate on the tools you need">
         <ul className="asks">
           {ASKS.map((item) => (
             <li key={item.tool} className={`tile c-${item.colour}`}>
@@ -231,6 +255,21 @@ export function Home() {
             </li>
           ))}
         </ul>
+      </Band>
+
+      <Band
+        id="pieces"
+        tone="sunken"
+        title="Let’s stop building the same thing."
+        intro={
+          <p>
+            Nearly every app you use is the same few pieces with a different logo on top, and each one keeps
+            your group to itself. On Minca the pieces are shared, so your group builds what it needs and no
+            tech oligarch gets a cut.
+          </p>
+        }
+      >
+        <Converge />
       </Band>
 
       <Band
@@ -292,49 +331,6 @@ export function Home() {
         }
       >
         <Hosting />
-      </Band>
-
-      <Band
-        id="why"
-        tone="sunken"
-        title="Start with your group, not with an app."
-        intro={
-          <p>
-            Every company wants your group inside its own app, behind its own fence. On Minca your group comes
-            first. Tools get passed from group to group like a good meme, and when you see one you like, you
-            add it to yours.
-          </p>
-        }
-      >
-        <div className="castle-pair">
-          <figure className="tile c-peach">
-            <Pens />
-            <figcaption>
-              <h3>Every company</h3>
-              <p>
-                Each one builds a pen, puts your group inside and guards the gate. Your friends are stuck in
-                the one next door.
-              </p>
-              <small className="pens-credit">
-                Photos:{' '}
-                {PHOTO_CREDITS.map((credit, i) => (
-                  <span key={credit.who}>
-                    {i ? ', ' : ''}
-                    <a href={credit.href}>{credit.by}</a> ({credit.licence})
-                  </span>
-                ))}
-                , via Wikimedia Commons.
-              </small>
-            </figcaption>
-          </figure>
-          <figure className="tile c-sage">
-            <Tower />
-            <figcaption>
-              <h3>On Minca</h3>
-              <p>Groups pass each other bricks. Whatever one group makes, the next can pick up and use.</p>
-            </figcaption>
-          </figure>
-        </div>
       </Band>
 
       <Band id="questions" title="Fair questions.">
