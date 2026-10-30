@@ -10,6 +10,7 @@ import type { ShapeColour } from '@minca/ui/tokens';
 import { styles, palette, stack, ui } from '../styles';
 import { useSpaceUnread } from '../seen';
 import { Loading } from './Loading';
+import { Count } from './apps/AppIcon';
 import { Options, type Option } from './Options';
 import { LinkButton, PrimaryButton } from './Buttons';
 
@@ -148,9 +149,9 @@ export function SpaceList({
                   <span style={groupName}>{space.name}</span>
                   <span style={{ ...ui.ellipsis, fontSize: 13, color: palette.ink.muted }}>
                     {spaceBadges(space)}
-                    <NewIn space={space} />
                   </span>
                 </span>
+                <SpaceCount space={space} />
               </button>
               <button
                 onClick={() => onRemove(space.id)}
@@ -172,17 +173,12 @@ export function SpaceList({
   );
 }
 
-/** What arrived in a space since you last looked, after the rest of its line */
-function NewIn({ space }: { space: SpaceSummary }) {
-  const { count, forMe } = useSpaceUnread(space);
-  if (count === 0) return null;
-  const upTo99 = (n: number) => (n > 99 ? '99+' : n);
-  return (
-    <strong style={{ color: forMe > 0 ? palette.accent.danger : palette.ink.strong, fontWeight: 600 }}>
-      {' '}
-      · {upTo99(count)} new{forMe > 0 ? `, ${upTo99(forMe)} for you` : ''}
-    </strong>
-  );
+/**
+ * What arrived in a space since you last looked, across its apps, as an app shows it: red with an @
+ * when some of it names you (a mention, a reply), grey when it is only new
+ */
+export function SpaceCount({ space }: { space: SpaceSummary }) {
+  return <Count unread={useSpaceUnread(space)} />;
 }
 
 const row = {

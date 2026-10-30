@@ -12,6 +12,7 @@ import { shortUsername, useUsernameLookup } from '@minca/app-shared/usernames';
 import { AddButton } from './Buttons';
 import { Icon } from './Icon';
 import { AddDialog, Handle, PersonRow } from './PeopleParts';
+import { usePopover } from './usePopover';
 
 const { ink, surface, radius } = palette;
 
@@ -124,6 +125,8 @@ export function AddPeople({
 }) {
   const node = useNode();
   const { offered, role, setRole } = useJoinsAs(space);
+  // The link's own, so changing it never changes what the contacts above join as.
+  const { role: linkRole, setRole: setLinkRole } = useJoinsAs(space);
   const { copied, copy } = useCopy();
   const [making, setMaking] = useState(false);
   const [link, setLink] = useState<string | null>(null);
@@ -134,7 +137,7 @@ export function AddPeople({
     setMaking(true);
     setError(null);
     try {
-      const made = await createInviteLink(node, space.id, role);
+      const made = await createInviteLink(node, space.id, linkRole);
       setLink(made);
       copy(made);
     } catch (reason) {
@@ -150,33 +153,39 @@ export function AddPeople({
         members={members}
         role={role}
         autoFocus
-        beside={
-          <JoinsAs
-            offered={offered}
-            role={role}
-            onChange={(next) => {
-              setRole(next);
-              setLink(null); // a link made for the other role would say the wrong thing
-            }}
-          />
-        }
+        beside={<JoinsAs offered={offered} role={role} onChange={setRole} />}
       />
       <div style={{ height: 1, background: palette.surface.line, margin: '16px 0 4px' }} />
-      {/* Anyone who isn't a contact gets a link, as the role chosen above. */}
-      <button onClick={() => void copyLink()} disabled={making} data-menu-item style={linkRow}>
+      {/* Anyone who isn't a contact gets a link, made for one role, which it says. */}
+      <div style={linkRow}>
         <span style={linkBadge} aria-hidden>
           <Icon name="link" size={16} />
         </span>
         <span style={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1, minWidth: 0 }}>
           <strong style={{ fontSize: 15, fontWeight: 600, color: ink.strong }}>Invite with a link</strong>
           <span style={{ fontSize: 13, color: ink.muted }}>
-            {copied ? 'Copied. Send it to the people it is for.' : 'For anyone who isn’t a contact'}
+            {copied ? (
+              'Copied. Send it to the people it is for.'
+            ) : (
+              <>
+                Joins as <strong style={{ color: ink.body }}>{linkRole ? titled(linkRole) : 'Viewer'}</strong>{' '}
+                ·{' '}
+                <ChangeRole
+                  offered={offered}
+                  role={linkRole}
+                  onChange={(next) => {
+                    setLinkRole(next);
+                    setLink(null); // a link made for the other role would say the wrong thing
+                  }}
+                />
+              </>
+            )}
           </span>
         </span>
-        <span style={{ fontSize: 14, fontWeight: 600, color: palette.accent.base, flexShrink: 0 }}>
+        <button onClick={() => void copyLink()} disabled={making} data-variant="ghost" style={copyButton}>
           {making ? 'Making…' : copied ? 'Copied' : 'Copy'}
-        </span>
-      </button>
+        </button>
+      </div>
       {link && (
         <input
           readOnly
@@ -191,15 +200,86 @@ export function AddPeople({
   );
 }
 
-const linkRow = {
-  width: '100%',
+const linkRow = { display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0' } as const;
+const copyButton = {
+  flexShrink: 0,
+  padding: '6px 4px',
+  border: 'none',
+  background: 'none',
+  fontSize: 14,
+  fontWeight: 600,
+  color: palette.accent.base,
+} as const;
+
+/** A quiet "change" beside the role a link gives, which lists the roles to pick from */
+function ChangeRole({
+  offered,
+  role,
+  onChange,
+}: {
+  offered: ReadonlyArray<string>;
+  role: string | null;
+  onChange: (role: string | null) => void;
+}) {
+  const { open, setOpen, close, root } = usePopover();
+  const choices: ReadonlyArray<string | null> = [...offered, null];
+  return (
+    <span ref={root} style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen((was) => !was)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        className="quiet-link"
+      >
+        Change
+      </button>
+      {open && (
+        <span role="menu" style={roleMenu}>
+          {choices.map((choice) => (
+            <button
+              key={choice ?? ''}
+              role="menuitemradio"
+              aria-checked={choice === role}
+              data-menu-item
+              onClick={() => {
+                close();
+                onChange(choice);
+              }}
+              style={roleItem}
+            >
+              {choice ? titled(choice) : 'Viewer'}
+              {choice === role && <Icon name="check" size={14} />}
+            </button>
+          ))}
+        </span>
+      )}
+    </span>
+  );
+}
+
+const roleMenu = {
+  ...styles.float,
+  position: 'absolute',
+  left: 0,
+  // Upward: the row is the last thing in its dialog.
+  bottom: 'calc(100% + 6px)',
+  zIndex: 30,
+  width: 180,
+  padding: 6,
+  display: 'flex',
+  flexDirection: 'column',
+} as const;
+const roleItem = {
   display: 'flex',
   alignItems: 'center',
-  gap: 12,
-  padding: '10px 8px',
+  justifyContent: 'space-between',
+  height: 36,
+  padding: '0 10px',
   border: 'none',
   borderRadius: radius.md,
   background: 'none',
+  fontSize: 14,
+  color: ink.body,
   textAlign: 'left',
 } as const;
 const linkBadge = {

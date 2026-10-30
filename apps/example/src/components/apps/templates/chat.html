@@ -120,14 +120,16 @@
     font-size: 14px;
   }
   .composer-bar {
-    padding: 8px 16px 16px;
+    margin: 0;
+    padding: 4px 16px 12px;
   }
   .composer-bar .row > button[type='submit'] {
     flex-shrink: 0;
   }
+  /* Above the box, as chat apps say it, so nothing but a margin sits under the box. */
   .typing {
     min-height: 18px;
-    padding: 0 4px 4px;
+    padding: 0 4px 2px;
     font-size: 12px;
     color: var(--minca-muted);
   }
@@ -699,6 +701,12 @@
           )}
         </div>`
       }
+      <div class="typing" aria-live="polite">
+        ${
+          typists.length > 0 &&
+          `${typists.map((did) => nameIn(people, did)).join(', ')} ${typists.length === 1 ? 'is' : 'are'} typing…`
+        }
+      </div>
       <div class="row">
         <div
           class="composer"
@@ -732,12 +740,6 @@
         <button type="submit" data-variant="primary" disabled=${busy || !ready}>
           ${busy ? 'Sending…' : 'Send'}
         </button>
-      </div>
-      <div class="typing" aria-live="polite">
-        ${
-          typists.length > 0 &&
-          `${typists.map((did) => nameIn(people, did)).join(', ')} ${typists.length === 1 ? 'is' : 'are'} typing…`
-        }
       </div>
       ${(error || share.error) && html`<p class="error">${error || share.error}</p>`}
     </form>`;

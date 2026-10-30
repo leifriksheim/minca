@@ -185,6 +185,9 @@ export function injectBaseStyles(): void {
       border-radius: ${radius.pill}px; background: ${accent.danger}; box-shadow: 0 0 0 2px ${surface.card};
     }
 
+    /* A small change offered inside a sentence: its words, underlined once pointed at. */
+    .quiet-link { padding: 0; border: none; background: none; font: inherit; color: ${ink.body}; text-decoration: none; text-underline-offset: 3px; }
+    .quiet-link:hover, .quiet-link[aria-expanded="true"] { text-decoration: underline; color: ${ink.strong}; }
     /* A name edited where it is shown (ProfilePage.tsx): a heading until it is pointed at. */
     .name-input:hover { border-color: ${surface.line} !important; }
     .name-input:focus { border-color: ${surface.rule} !important; background: ${surface.page} !important; outline: none; }
@@ -384,15 +387,16 @@ export function injectBaseStyles(): void {
       }
       .space-content {
         overflow: visible;
-        padding: 16px max(16px, env(safe-area-inset-right)) calc(100px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+        padding: 16px max(16px, env(safe-area-inset-right)) 24px max(16px, env(safe-area-inset-left));
       }
       /* An open app is the whole screen, with the way back at its top, as a conversation is on a phone. */
-      .space-shell[data-app-open] .space-content { overflow-y: auto; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+      .space-shell[data-app-open] .space-content { overflow-y: auto; padding-bottom: 24px; }
       /* As tall as what shows above the keyboard, once one is up (viewport.ts), so a chat's box stays in view. */
       .space-shell[data-app-open] { min-height: 0; height: var(--visible-height, 100dvh); overflow: hidden; }
       .space-shell[data-app-open] .space-main { display: flex; height: var(--visible-height, 100dvh); }
       .space-shell[data-app-open] .space-bar { position: static; }
-      .space-content[data-fill], .space-shell[data-app-open] .space-content[data-fill] { padding: 0 0 env(safe-area-inset-bottom); }
+      /* The bar at the foot keeps clear of the phone's own edge, so what fills the space runs right down to it. */
+      .space-content[data-fill], .space-shell[data-app-open] .space-content[data-fill] { padding: 0; }
 
       /* Chat, the way a phone's messaging apps are: the list of conversations
          is a screen, and one opens over it with the way back at its top. */

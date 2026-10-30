@@ -36,6 +36,7 @@ import { AddButton, LinkButton, QuietButton } from './Buttons';
 import { confirmThen } from '../confirm';
 import { Icon } from './Icon';
 import { AddDialog, Handle, Notice, PersonRow, RowMenu, SpaceInvites } from './PeopleParts';
+import { SpaceCount } from './SpaceList';
 import { InviteToSpace } from './InvitePeople';
 import { shortUsername, useUsernameLookup } from '@minca/app-shared/usernames';
 
@@ -261,6 +262,7 @@ export function ContactsView({
                 <ContactRow
                   key={contact.did}
                   contact={contact}
+                  space={spaces.find((one) => one.id === contact.space)}
                   shared={writable}
                   invitable={invitable}
                   onOpen={onOpen}
@@ -492,6 +494,7 @@ function EmptyContacts({ hasName }: { hasName: boolean }) {
  */
 function ContactRow({
   contact,
+  space,
   shared,
   invitable,
   onOpen,
@@ -499,6 +502,8 @@ function ContactRow({
   act,
 }: {
   contact: ContactView;
+  /** Your space for two with them, once it is on this device */
+  space: SpaceSummary | undefined;
   shared: ReadonlyArray<string>;
   invitable: ReadonlyArray<SpaceSummary>;
   onOpen: (spaceId: string) => void;
@@ -536,6 +541,8 @@ function ContactRow({
           )
         }
       >
+        {/* What's new in your chat with them, as a group shows it. */}
+        {joined && space && <SpaceCount space={space} />}
         <RowMenu
           label={`More for ${contact.name}`}
           items={[

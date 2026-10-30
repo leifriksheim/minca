@@ -46,6 +46,18 @@ export interface PeerGroup {
 
 const GROUP_ORDER: ReadonlyArray<PeerKind> = ['mine', 'person', 'carrier', 'server'];
 
+/**
+ * The accounts online in a space now: everyone whose device is syncing it with this one, and you
+ * yourself, since you are here. Carriers and servers that said no account are not people.
+ */
+export function onlineAccounts(status: SpaceStatus, me: string): ReadonlySet<string> {
+  const accounts = status.peers
+    .filter((peer) => !status.carriers.includes(peer))
+    .map((peer) => status.accounts[peer])
+    .filter((account): account is string => !!account);
+  return new Set([me, ...accounts]);
+}
+
 /** Your devices first, then each member's, then carriers, then servers that didn't say whose they are. */
 export function groupPeers(status: SpaceStatus, me: string): PeerGroup[] {
   const groups = new Map<string, { kind: PeerKind; did: string; peers: string[] }>();

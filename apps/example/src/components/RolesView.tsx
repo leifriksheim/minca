@@ -2,7 +2,7 @@ import { useState, type CSSProperties, type ReactNode } from 'react';
 import { useAction } from '@minca/app-shared/action';
 import { MEMBER_REMOVE, ROLE_ASSIGN, ROLE_DEFINE, ROLE_UNASSIGN } from '@minca/core';
 import type { SpaceGrant as Grant, SpaceSummary } from '@minca/core';
-import { useAccess, useAccount, useLive, useNode, useProfiles } from '@minca/react';
+import { useAccess, useAccount, useLive, useNode, useProfiles, useSpaceStatus } from '@minca/react';
 import {
   abilitiesOf,
   choicesIn,
@@ -12,6 +12,7 @@ import {
   type RoleView,
 } from '../derive/abilities';
 import { nameOf, peopleFrom, type People } from '../derive/people';
+import { onlineAccounts } from '../derive/network';
 import { PersonAvatar } from './std/PersonAvatar';
 import { RingButton } from './calls/Calls';
 import { styles, palette, variants, hstack, stack, ui } from '../styles';
@@ -100,6 +101,8 @@ export function RolesView({ space, onInvite }: { space: SpaceSummary; onInvite: 
   const account = useAccount();
   const people = peopleFrom(useProfiles(space.id));
   const powers = usePowers(space.id, account.did);
+  const status = useSpaceStatus(space.id);
+  const online = status ? onlineAccounts(status, account.did) : new Set([account.did]);
   if (!access)
     return <Loading label="Loading who's who" style={{ fontSize: 13, color: palette.ink.faint }} />;
   return (
@@ -110,6 +113,7 @@ export function RolesView({ space, onInvite }: { space: SpaceSummary; onInvite: 
         me={account.did}
         people={people}
         powers={powers}
+        online={online}
         onInvite={onInvite}
       />
       <Roles space={space} access={access} powers={powers} />
@@ -380,6 +384,7 @@ function Members({
   me,
   people,
   powers,
+  online,
   onInvite,
 }: {
   space: SpaceSummary;
@@ -387,6 +392,8 @@ function Members({
   me: string;
   people: People;
   powers: Powers;
+  /** Who is online here now, by account */
+  online: ReadonlySet<string>;
   onInvite: () => void;
 }) {
   const node = useNode();
@@ -467,7 +474,11 @@ function Members({
     const labels = [...(member.founder ? ['Founder'] : []), ...member.roles.map(roleTitle)];
     return (
       <li key={did} style={memberRow}>
-        <PersonAvatar spaceId={space.id} did={did} size={40} />
+        {/* Online now: a dot on their face, as chat apps mark it. */}
+        <span style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
+          <PersonAvatar spaceId={space.id} did={did} size={40} />
+          {online.has(did) && <span title="Online now" style={onlineDot} />}
+        </span>
         <div style={{ flex: 1, minWidth: 0, ...stack(3) }}>
           <span style={{ fontSize: 15, fontWeight: 600, color: palette.ink.strong }}>
             <Person did={did} />
@@ -540,6 +551,17 @@ function Members({
     </section>
   );
 }
+
+const onlineDot: CSSProperties = {
+  position: 'absolute',
+  right: -1,
+  bottom: -1,
+  width: 12,
+  height: 12,
+  borderRadius: palette.radius.pill,
+  background: palette.accent.good,
+  boxShadow: `0 0 0 2px ${palette.surface.card}`,
+};
 
 const memberRow: CSSProperties = {
   display: 'flex',
