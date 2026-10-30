@@ -21,6 +21,7 @@
     "./action": "./src/action.ts",
     "./places": "./src/places.ts",
     "./Payment": "./src/Payment.tsx",
+    "./QrCode": "./src/QrCode.tsx",
     "./CommunitySetup": "./src/CommunitySetup.tsx",
     "./Feature": "./src/Feature.tsx",
     "./may": "./src/may.ts",

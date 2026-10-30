@@ -163,6 +163,12 @@ define collections wrote it under a note that isn't records-only
 (`NodeRecord.recordsOnly`). It writes a guide on `launcher.app` saying how to
 propose one.
 
+**Where a space opens.** The launcher is in one order for everyone in the
+space (each record's `position`). The example app opens a space into the
+first app on it, so a group chooses where it opens by moving an app to the
+top. A new group starts with Chat, and so does a new space for two, which
+the one asking makes, so both people open it into a conversation.
+
 A screen reaches the page around it only through `window.minca`, and only for
 its app's collections and the people in its space: it lists and writes
 records as the person looking, asks what they may do (`can`), gets someone's
@@ -251,7 +257,7 @@ defines its collections and writes a copy of it, naming where it came from
 (`template: "kanban"`), and from then on the space changes its copy like any
 other app.
 
-_Source: `apps/example/src/components/apps/launcher.ts` (`addTemplate`), `apps/example/src/components/apps/screens.ts`, `apps/example/src/components/apps/ScreenFrame.tsx`, `apps/example/src/components/apps/templates/`, `apps/example/public/screen.html`, `packages/ui/src/frame/`, `packages/ui/src/guide.ts`. Tests: `apps/example/tests/launcher.test.ts` ("adding a ready-made app copies it into the space once, with its collections and first records"), `apps/example/tests/screens.test.ts` ("a screen checks, shows faces and opens things only within its app and its space", "what the page does for a screen, it does only as asked properly", "a screen can’t point a link out of its app, so it can’t probe for keys or reach what no one shared", "a record someone shared is read through the link to it, and only through that", "a screen links out only to what the person picked for it, and is handed what they picked", "the space’s own records are never picked for a screen", "a screen hears the same app's screens on other devices, as who sent it, and no other app's")._
+_Source: `apps/example/src/components/apps/launcher.ts` (`addTemplate`, `firstApp`), `apps/example/src/components/apps/entries.ts` (`landingApp`, `addChat`), `apps/example/src/contacts.ts` (`withChat`), `apps/example/src/components/apps/screens.ts`, `apps/example/src/components/apps/ScreenFrame.tsx`, `apps/example/src/components/apps/templates/`, `apps/example/public/screen.html`, `packages/ui/src/frame/`, `packages/ui/src/guide.ts`. Tests: `apps/example/tests/launcher.test.ts` ("a space opens with the first app on its launcher, the same for everyone in it, and moving one changes it", "adding a ready-made app copies it into the space once, with its collections and first records"), `apps/example/tests/screens.test.ts` ("a screen checks, shows faces and opens things only within its app and its space", "what the page does for a screen, it does only as asked properly", "a screen can’t point a link out of its app, so it can’t probe for keys or reach what no one shared", "a record someone shared is read through the link to it, and only through that", "a screen links out only to what the person picked for it, and is handed what they picked", "the space’s own records are never picked for a screen", "a screen hears the same app's screens on other devices, as who sent it, and no other app's")._
 
 ## Describing a collection
 

@@ -37,11 +37,15 @@ export function useCopy(ms = 1500): { copied: boolean; copy: (text: string) => v
   useEffect(() => () => clearTimeout(timer.current), []);
   const copy = useCallback(
     (text: string) => {
-      void globalThis.navigator.clipboard.writeText(text).then(() => {
-        setCopied(true);
-        clearTimeout(timer.current);
-        timer.current = setTimeout(() => setCopied(false), ms);
-      });
+      // Refused (a phone, after the page waited for something): nothing copied, nothing said.
+      void globalThis.navigator.clipboard.writeText(text).then(
+        () => {
+          setCopied(true);
+          clearTimeout(timer.current);
+          timer.current = setTimeout(() => setCopied(false), ms);
+        },
+        () => {},
+      );
     },
     [ms],
   );

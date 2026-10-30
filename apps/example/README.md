@@ -19,7 +19,7 @@ the routes, in `App.tsx`.
 
 | Route                                                         | What                                   |
 | ------------------------------------------------------------- | -------------------------------------- |
-| `/`, `/contacts`                                              | Your spaces, your contacts             |
+| `/`, `/people`                                                | Your groups, the people you talk to    |
 | `/spaces/<id>`                                                | A space's apps                         |
 | `/spaces/<id>/apps/<app>`                                     | One app, open                          |
 | `/spaces/<id>/new`                                            | Adding an app                          |
@@ -36,8 +36,13 @@ becomes `any`.
 
 Links from when the app lived at `minca.social/app` still open it: `/app` and
 any other path it doesn't know go to `/`, keeping the fragment that carries an
-invite or an inbox; an inbox goes on to `/contacts`. A space this device doesn't
-have says so, with a link to your spaces, and shows itself if it turns up.
+invite or an inbox; an inbox goes on to `/people`, and so does `/contacts`, where
+People was before. A space this device doesn't have says so, with a link to your
+spaces, and shows itself if it turns up.
+
+A group is any space that isn't a space for two with one of your contacts; those
+are People. Opening either goes into the first app on its launcher (Chat, for a
+new group), so a group chooses where it opens by moving an app to the top.
 
 ```bash
 npm run dev         # at the repository root: this app on :5173, the account home on :5174, a node and relay on :8787

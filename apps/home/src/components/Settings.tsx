@@ -12,6 +12,10 @@ import {
   type StaySignedIn,
 } from '@minca/core/session';
 import { useAsync, useAuth, useSession } from '@minca/react';
+import { usernameIdeas } from '@minca/core/inbox';
+import { UsernamePicker } from '@minca/app-shared/UsernamePicker';
+import { shortUsername, useFreeUsername } from '@minca/app-shared/usernames';
+import { ask } from '@minca/app-shared/Ask';
 import { Shape } from '@minca/app-shared/shapes';
 import { shapeFor, type ShapeKind } from '@minca/ui/shapes';
 import type { ShapeColour } from '@minca/ui/tokens';
@@ -160,6 +164,9 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
             keepers={carriers?.length ?? 0}
             openTab={openTab}
           />
+          <div style={{ marginTop: 16 }}>
+            <Username />
+          </div>
         </>
       )}
       {tab === 'security' && (
@@ -828,6 +835,91 @@ function Section({
     </section>
   );
 }
+
+/**
+ * Your username, which every Minca app finds you by: pick one, or copy,
+ * change or give up the one you have. Kept here, with the account, rather
+ * than in each app.
+ */
+function Username() {
+  const { node, account } = useSession();
+  const [loaded, setLoaded] = useState(0);
+  const found = useAsync(() => node.inbox.get(), [node, loaded]);
+  const username = found.status === 'done' ? (found.value?.username ?? null) : null;
+  const [changing, setChanging] = useState(false);
+  const suggestion = useFreeUsername(username ? [] : usernameIdeas(account.name));
+  const { copied, copy } = useCopy();
+  const { run, error } = useAction();
+  const done = () => {
+    setChanging(false);
+    setLoaded((n) => n + 1);
+  };
+
+  return (
+    <Section
+      title="Your username"
+      description="How people find you and add you, in every Minca app. Anyone with it can ask to be your contact, and you choose who gets in."
+    >
+      {found.status === 'loading' ? null : username && !changing ? (
+        <div style={stack(10)}>
+          <strong style={usernameStyle}>{shortUsername(username)}</strong>
+          <span style={{ ...hstack(6), flexWrap: 'wrap' }}>
+            <button
+              onClick={() => copy(shortUsername(username))}
+              data-variant="quiet"
+              style={styles.smallButton}
+            >
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+            <button onClick={() => setChanging(true)} data-variant="quiet" style={styles.smallButton}>
+              Change
+            </button>
+            <button
+              onClick={() =>
+                void run(async () => {
+                  const sure = await ask(
+                    `${shortUsername(username)} stops leading to you, and anyone may take it. Your contacts stay.`,
+                    { title: 'Give up your username?', yes: 'Give it up', danger: true },
+                  );
+                  if (!sure) return;
+                  await node.inbox.release();
+                  done();
+                })
+              }
+              data-variant="danger"
+              style={{ ...styles.smallButton, color: palette.accent.danger }}
+            >
+              Give it up
+            </button>
+          </span>
+        </div>
+      ) : (
+        <UsernamePicker current={username} suggestion={suggestion} onClaimed={done}>
+          {username && (
+            <button
+              type="button"
+              onClick={() => setChanging(false)}
+              data-variant="ghost"
+              style={styles.linkButton}
+            >
+              Cancel
+            </button>
+          )}
+        </UsernamePicker>
+      )}
+      {error && <p style={styles.error}>{error}</p>}
+    </Section>
+  );
+}
+
+const usernameStyle = {
+  fontFamily: palette.display,
+  fontSize: 24,
+  fontWeight: 700,
+  letterSpacing: '-0.04em',
+  color: palette.ink.strong,
+  overflowWrap: 'anywhere',
+} as const;
 
 /** A line in a section; `shape` marks what it is about, an app by its address */
 function Row({ label, shape, children }: { label: string; shape?: string; children: ReactNode }) {
