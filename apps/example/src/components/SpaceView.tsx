@@ -351,7 +351,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
               </h1>
               {/* Who is here, and calling them; a phone has them on the space's apps. */}
               {status && (
-                <WhoIsHere status={status} people={people} onOpen={() => go('/spaces/$spaceId/network')} />
+                <WhoIsHere status={status} people={people} onOpen={() => go('/spaces/$spaceId/members')} />
               )}
               <CallButton space={space} place="chip" />
             </span>
@@ -375,7 +375,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
                       <WhoIsHere
                         status={status}
                         people={people}
-                        onOpen={() => go('/spaces/$spaceId/network')}
+                        onOpen={() => go('/spaces/$spaceId/members')}
                       />
                     )}
                     <CallButton space={space} place="chip" />

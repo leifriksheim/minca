@@ -104,7 +104,11 @@ const app = createRoute({
 const members = createRoute({
   getParentRoute: inSpace,
   path: 'members',
-  component: page((s) => <RolesView {...s} onInvite={() => s.go('/spaces/$spaceId/invite')} />),
+  // tab: Roles, beside the members; without it, the members themselves.
+  validateSearch: (search: Record<string, unknown>): { tab?: 'roles' } => ({
+    tab: search.tab === 'roles' ? 'roles' : undefined,
+  }),
+  component: MembersPage,
 });
 const invite = createRoute({
   getParentRoute: inSpace,
@@ -144,6 +148,13 @@ const network = createRoute({
   path: 'network',
   component: page((s) => <NetworkView {...s} />),
 });
+
+/** Who is in a space, or the roles they hold; which of the two is in the address */
+function MembersPage(): ReactNode {
+  const s = useSpaceScreen();
+  const { tab } = members.useSearch();
+  return <RolesView {...s} tab={tab ?? 'members'} onInvite={() => s.go('/spaces/$spaceId/invite')} />;
+}
 
 /** Every record, collection by collection; which collection, and which record, are in the address */
 function DataPage(): ReactNode {

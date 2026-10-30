@@ -1,4 +1,5 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
+import { Link } from '@tanstack/react-router';
 import { useAction } from '@minca/app-shared/action';
 import { MEMBER_REMOVE, ROLE_ASSIGN, ROLE_DEFINE, ROLE_UNASSIGN } from '@minca/core';
 import type { SpaceGrant as Grant, SpaceSummary } from '@minca/core';
@@ -96,7 +97,16 @@ function usePowers(spaceId: string, me: string): Powers {
 }
 
 /** Who may do what in a space: its people and the roles assigned them, and what each role grants */
-export function RolesView({ space, onInvite }: { space: SpaceSummary; onInvite: () => void }) {
+export function RolesView({
+  space,
+  tab,
+  onInvite,
+}: {
+  space: SpaceSummary;
+  /** Which of the two shows: the members, or the roles they hold */
+  tab: 'members' | 'roles';
+  onInvite: () => void;
+}) {
   const access = useAccess(space.id);
   const account = useAccount();
   const people = peopleFrom(useProfiles(space.id));
@@ -105,19 +115,44 @@ export function RolesView({ space, onInvite }: { space: SpaceSummary; onInvite: 
   const online = status ? onlineAccounts(status, account.did) : new Set([account.did]);
   if (!access)
     return <Loading label="Loading who's who" style={{ fontSize: 13, color: palette.ink.faint }} />;
+  // Roles are for whoever may make or change one; everyone else sees who is here, and what they may do.
+  const mayRoles = powers.defineNew || powers.define.size > 0;
+  const on = mayRoles ? tab : 'members';
   return (
-    <div style={stack(36)}>
-      <Members
-        space={space}
-        access={access}
-        me={account.did}
-        people={people}
-        powers={powers}
-        online={online}
-        onInvite={onInvite}
-      />
-      <Roles space={space} access={access} powers={powers} />
-      <WhatYouCanDo access={access} />
+    <div style={stack(28)}>
+      {mayRoles && (
+        <nav role="tablist" aria-label="Members and roles" className="segmented">
+          {(['members', 'roles'] as const).map((one) => (
+            <Link
+              key={one}
+              to="/spaces/$spaceId/members"
+              params={{ spaceId: space.id }}
+              search={one === 'roles' ? { tab: 'roles' } : {}}
+              role="tab"
+              aria-selected={on === one}
+              className="segment-link"
+            >
+              {one === 'members' ? 'Members' : 'Roles'}
+            </Link>
+          ))}
+        </nav>
+      )}
+      {on === 'members' ? (
+        <>
+          <Members
+            space={space}
+            access={access}
+            me={account.did}
+            people={people}
+            powers={powers}
+            online={online}
+            onInvite={onInvite}
+          />
+          <WhatYouCanDo access={access} />
+        </>
+      ) : (
+        <Roles space={space} access={access} powers={powers} />
+      )}
     </div>
   );
 }

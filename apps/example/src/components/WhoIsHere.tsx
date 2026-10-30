@@ -17,7 +17,7 @@ export function WhoIsHere({
 }: {
   status: SpaceStatus;
   people: People;
-  /** Opens the details: the Network tab */
+  /** Opens who is here: Members */
   onOpen?: () => void;
 }) {
   const network = useNetwork();
@@ -88,7 +88,7 @@ export function WhoIsHere({
           : []),
         `• ${status.carriers.length} ${status.carriers.length === 1 ? 'carrier' : 'carriers'}, keeping your spaces online without reading them${helpers.length ? ` (${helpers.join(', ')})` : ''}`,
         '',
-        'Open Network for details',
+        'Open Members to see who is here',
       ].join('\n')}
     >
       {/* Faces only: who is here, or you on your other devices. Who and what is in the tooltip. */}
@@ -124,7 +124,7 @@ const visuallyHidden = {
   whiteSpace: 'nowrap',
 } as const;
 
-/** The badge, which opens the Network tab when there is one to open */
+/** The badge, which opens Members when there is a space to open */
 function Badge({ onOpen, title, children }: { onOpen?: () => void; title: string; children: ReactNode }) {
   // The stronger line, so it stands on the sidebar's beige as well as on a card.
   const style = {

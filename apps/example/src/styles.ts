@@ -167,6 +167,13 @@ export function injectBaseStyles(): void {
     }
     .segmented > button:hover { color: ${ink.strong}; }
     .segmented > button[aria-selected="true"] { background: ${surface.card}; border-color: ${surface.rule}; color: ${ink.strong}; }
+    /* The same, as links, where the choice is part of the address. */
+    .segmented > .segment-link {
+      display: inline-flex; align-items: center; height: 30px; padding: 0 14px; border: 1px solid transparent;
+      border-radius: ${radius.pill}px; color: ${ink.muted}; font-size: 13px; font-weight: 500; text-decoration: none;
+    }
+    .segmented > .segment-link:hover { color: ${ink.strong}; }
+    .segmented > .segment-link[aria-selected="true"] { background: ${surface.card}; border-color: ${surface.rule}; color: ${ink.strong}; }
 
     /* Home, Activity and You: a pill along the top of a wide screen, the
        bottom edge of a phone's (below). */
