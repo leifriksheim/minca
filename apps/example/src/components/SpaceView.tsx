@@ -42,16 +42,7 @@ import { CallButton } from './calls/Calls';
 import { peopleFrom } from '../derive/people';
 import { useBots } from '../bots';
 import { PersonScopeProvider } from './Person';
-import {
-  seenAt,
-  totalOf,
-  unreadOf,
-  useLookingAt,
-  useSeen,
-  useSpaceUnread,
-  useUnread,
-  type Unread,
-} from '../seen';
+import { seenAt, totalOf, unreadOf, useLookingAt, useSeen, useUnread, type Unread } from '../seen';
 
 /** Under the hood: the views for the curious, folded in the space's menu */
 const HOOD = [
@@ -556,8 +547,8 @@ function SideHeading({ children }: { children: ReactNode }) {
 
 /**
  * The way around a space, from the space itself: its face at the top of the rail, or its name at the
- * left of a phone's bar. A dropdown that names the space, then goes home, to your other groups, and
- * to the space's own sections and what is under its hood.
+ * left of a phone's bar. A dropdown that names the space, then goes home, and to the space's own
+ * sections and what is under its hood.
  */
 function SpaceMenu({
   space,
@@ -575,10 +566,9 @@ function SpaceMenu({
   /** Opened from the space's face alone, at the top of the rail, rather than from its name */
   face?: boolean;
 }) {
-  const { spaces, pairs, openSpace, forget } = useWorkspace();
+  const { forget } = useWorkspace();
   const { open: shown, setOpen, close, root } = usePopover();
   const name = pair?.name ?? space.name;
-  const others = spaces.filter((other) => other.id !== space.id && !pairs.has(other.id));
   // Folded away, unless one of its views is open.
   const [hoodOpen, setHoodOpen] = useState(HOOD.some((h) => h.to === leaf));
   // Each row closes the menu on its way.
@@ -621,10 +611,6 @@ function SpaceMenu({
             </span>
           </div>
           <SideItem icon={<Icon name="arrowLeft" size={16} />} label="Home" onClick={then(onHome)} />
-          {others.length > 0 && <SideHeading>Switch to</SideHeading>}
-          {others.map((other) => (
-            <OtherGroup key={other.id} space={other} onClick={then(() => openSpace(other.id))} />
-          ))}
           <SideHeading>{pair ? 'This chat' : 'This group'}</SideHeading>
           {/* A space for two is the two of you, so nobody is invited to it. */}
           {sectionsOf(!!pair).map((section) => (
@@ -770,18 +756,6 @@ function AppSwitcher({
         </nav>
       )}
     </div>
-  );
-}
-
-/** Another group to switch to, with what is new in it */
-function OtherGroup({ space, onClick }: { space: SpaceSummary; onClick: () => void }) {
-  return (
-    <SideItem
-      icon={<SpaceMark space={space} size={20} />}
-      label={space.name}
-      unread={useSpaceUnread(space)}
-      onClick={onClick}
-    />
   );
 }
 
