@@ -190,7 +190,7 @@
     background: rgb(0 0 0 / 0.6);
   }
   /* Room for the GIF button beside the emoji one, so typing never runs under it */
-  .composer[data-gifs] input {
+  .composer[data-gifs] :is(input, textarea) {
     padding-right: 76px;
   }
   .gif-button {
@@ -396,7 +396,7 @@
     const [draft, setDraft] = useState(text);
     const box = useRef(null);
     useEffect(() => {
-      if (editing) box.current?.querySelector('input')?.focus();
+      if (editing) box.current?.querySelector('input, textarea')?.focus();
     }, [editing]);
     const edited = Date.parse(message.updatedAt) - Date.parse(message.createdAt) > 1000;
     const save = async () => {
@@ -570,6 +570,11 @@
     const [error, setError] = useState(null);
     const [pickingGif, setPickingGif] = useState(false);
     const quiet = useRef(null);
+    // Replying puts you in the box, ready to type.
+    const bar = useRef(null);
+    useEffect(() => {
+      if (replying) bar.current?.querySelector('textarea, input[aria-label="Message"]')?.focus();
+    }, [replying]);
     const add = (list) => list?.length && setFiles((was) => [...was, ...list]);
     const type = (next) => {
       setDraft(next);
@@ -659,6 +664,7 @@
 
     const ready = draft.trim() || files.length || share.sharing;
     return html`<form
+      ref=${bar}
       class="composer-bar"
       onSubmit=${(event) => {
         event.preventDefault();

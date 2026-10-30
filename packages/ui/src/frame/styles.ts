@@ -93,7 +93,11 @@ dialog::backdrop { background: none; }
 .comment-text { white-space: pre-wrap; word-break: break-word; }
 /* A box with "+" inside it at the left and 🙂 at the right, as chat apps have */
 .composer { position: relative; flex: 1; min-width: 0; }
-.composer input { padding-left: 40px; padding-right: 40px; }
+.composer :is(input, textarea) { padding-left: 40px; padding-right: 40px; }
+/* A box that grows with its lines (MentionInput): one line to start, never dragged to a size */
+.mention-input textarea { display: block; resize: none; line-height: 1.5; overflow-y: auto; }
+/* Room for a GIF button beside the emoji one, as Chat has, so typing never runs under it */
+.composer[data-gifs] textarea { padding-right: 76px; }
 .composer > .menu-anchor, .composer-end { position: absolute; z-index: 6; top: 50%; transform: translateY(-50%); }
 .composer > .menu-anchor { left: 4px; }
 .composer-end { right: 4px; display: flex; }

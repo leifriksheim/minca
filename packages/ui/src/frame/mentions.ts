@@ -4,7 +4,7 @@
  * be told), and a shown text marks them.
  */
 import type { JSX } from 'preact';
-import { useRef, useState } from 'preact/hooks';
+import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import type { Someone } from './minca';
 import { usePeople } from './hooks';
 import { html } from './html';
@@ -37,6 +37,9 @@ function splitMentions(text: string, named: ReadonlyArray<Someone>): Segment[] {
   return segments;
 }
 
+/** How tall a box grows with its lines before it scrolls, in pixels: about six lines */
+const MAX_HEIGHT = 140;
+
 /** Whom a text mentions, each once, never the person writing: what goes in a body's `mentions` */
 export function mentionsIn(text: string, people: ReadonlyArray<Someone>): string[] {
   const others = people.filter((one) => one.did !== minca.me.did);
@@ -52,9 +55,10 @@ export function MentionText({ text }: { text: string }) {
 }
 
 /**
- * A one-line box where "@" suggests the space's people, above it as you
- * type; arrows move through them, Enter or Tab picks one. Anything else an
- * input takes (a paste handler, say) is passed on to the input.
+ * A box where "@" suggests the space's people, above it as you type; arrows
+ * move through them, Enter or Tab picks one. Otherwise Enter sends its form and
+ * Shift+Enter starts a new line, the box growing with its lines up to a few.
+ * Anything else a text box takes (a paste handler, say) is passed on to it.
  */
 export function MentionInput({
   value,
@@ -63,11 +67,18 @@ export function MentionInput({
 }: {
   value: string;
   onChange: (value: string) => void;
-} & Omit<JSX.HTMLAttributes<HTMLInputElement>, 'value' | 'onChange'>) {
+} & Omit<JSX.HTMLAttributes<HTMLTextAreaElement>, 'value' | 'onChange'>) {
   const others = usePeople().filter((one) => one.did !== minca.me.did);
   const [caret, setCaret] = useState(0);
   const [choice, setChoice] = useState(0);
-  const input = useRef<HTMLInputElement>(null);
+  const input = useRef<HTMLTextAreaElement>(null);
+  // As tall as its lines, a few at most, and back to one once it is sent and empty.
+  useLayoutEffect(() => {
+    const box = input.current;
+    if (!box) return;
+    box.style.height = 'auto';
+    box.style.height = `${Math.min(box.scrollHeight + 2, MAX_HEIGHT)}px`;
+  }, [value]);
   const typed = /(?:^|\s)@([^\s@]*)$/.exec(value.slice(0, caret));
   const query = typed ? (typed[1] ?? '').toLowerCase() : null;
   const suggestions =
@@ -83,7 +94,7 @@ export function MentionInput({
     });
   };
   const caretOf = (event: Event) =>
-    event.currentTarget instanceof HTMLInputElement ? (event.currentTarget.selectionStart ?? 0) : 0;
+    event.currentTarget instanceof HTMLTextAreaElement ? (event.currentTarget.selectionStart ?? 0) : 0;
 
   return html`<div class="mention-input">
     ${
@@ -102,19 +113,26 @@ export function MentionInput({
         )}
       </ul>`
     }
-    <input
+    <textarea
       ...${rest}
       ref=${input}
+      rows=${1}
       value=${value}
       onInput=${(event: Event) => {
-        if (!(event.currentTarget instanceof HTMLInputElement)) return;
+        if (!(event.currentTarget instanceof HTMLTextAreaElement)) return;
         onChange(event.currentTarget.value);
         setCaret(caretOf(event));
         setChoice(0);
       }}
       onKeyUp=${(event: Event) => setCaret(caretOf(event))}
       onKeyDown=${(event: KeyboardEvent) => {
-        if (!suggestions.length) return;
+        if (!suggestions.length) {
+          // Enter sends, as a one-line box would; Shift+Enter, or Enter mid-word in an input method, is a new line.
+          if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+          event.preventDefault();
+          if (event.currentTarget instanceof HTMLTextAreaElement) event.currentTarget.form?.requestSubmit();
+          return;
+        }
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
           event.preventDefault();
           const step = event.key === 'ArrowDown' ? 1 : -1;
@@ -125,6 +143,6 @@ export function MentionInput({
           if (someone) pick(someone);
         } else if (event.key === 'Escape') setCaret(0);
       }}
-    />
+    ></textarea>
   </div>`;
 }
