@@ -739,8 +739,11 @@ function AppSwitcher({
                 aria-current={onNew ? 'page' : undefined}
                 className="rail-item"
               >
-                <span className="rail-slot" style={{ width: 36, height: 36 }}>
-                  <Icon name="plus" size={16} />
+                {/* On the same tile an app's shape takes, so its name lines up with theirs. */}
+                <span className="rail-icon">
+                  <span className="rail-slot" style={{ width: 36, height: 36 }}>
+                    <Icon name="plus" size={16} />
+                  </span>
                 </span>
                 <span className="rail-label">Add</span>
               </button>
