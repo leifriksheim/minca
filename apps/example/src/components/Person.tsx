@@ -86,7 +86,7 @@ export function Person({
   );
 }
 
-/** Someone's card in the space on screen, opened from somewhere other than their name: a click in an app's screen */
+/** Someone's card in the space on screen, opened from somewhere other than their name: a click in a tool's screen */
 export function PersonCardHere({ did, onClose }: { did: string; onClose: () => void }) {
   const scope = useContext(Scope);
   return scope ? <PersonCard did={did} scope={scope} onClose={onClose} /> : null;

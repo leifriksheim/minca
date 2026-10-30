@@ -1,8 +1,8 @@
 /**
- * Any record, drawn the same way in every app: a line that says what it is,
+ * Any record, drawn the same way in every tool: a line that says what it is,
  * from what the standard collection holds, and opens it where it belongs
  * when clicked (`minca.open`). For a screen showing records of a collection
- * another app owns, like a message's shared poll or the files of a task.
+ * another tool owns, like a message's shared poll or the files of a task.
  */
 import type { ComponentChildren } from 'preact';
 import { sizeOf } from '../size';
@@ -91,7 +91,7 @@ export const recordTitle = (record: ScreenRecord): string =>
 
 /**
  * One record as a line: its face, what it is, and a click that opens it in
- * the app it belongs to. A record shared from elsewhere opens through the
+ * the tool it belongs to. A record shared from elsewhere opens through the
  * record that links to it, so `onOpen` says how.
  */
 export function Record({ record, onOpen }: { record: ScreenRecord; onOpen?: () => void }) {

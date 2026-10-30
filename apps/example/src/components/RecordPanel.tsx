@@ -63,7 +63,7 @@ export function RecordPanel({
   onWriter?: (did: string) => void;
   /** Dims what is behind; off where that should stay usable, like Explore's map */
   scrim?: boolean;
-  /** Asks which app to open it in, where more than one can; undefined where not */
+  /** Asks which tool to open it in, where more than one can; undefined where not */
   onOpenWith?: (record: NodeRecord) => (() => void) | undefined;
 }) {
   const node = useNode();

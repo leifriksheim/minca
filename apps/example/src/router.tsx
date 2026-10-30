@@ -10,9 +10,9 @@ import {
 import { App, ChatsLayout, GroupsPage, HomeLayout, PeoplePage } from './App';
 import { ActivityPage } from './components/ActivityPage';
 import { ProfilePage } from './components/ProfilePage';
-import { OpenApp, SpaceLayout, useSpaceScreen, type SpaceScreen } from './components/SpaceView';
-import { AppsView } from './components/apps/AppsView';
-import { NewApp } from './components/apps/NewApp';
+import { OpenTool, SpaceLayout, useSpaceScreen, type SpaceScreen } from './components/SpaceView';
+import { ToolsView } from './components/tools/ToolsView';
+import { NewTool } from './components/tools/NewTool';
 import { RolesView } from './components/RolesView';
 import { InviteView } from './components/InviteView';
 import { HostingView } from './components/HostingView';
@@ -70,7 +70,7 @@ const contacts = createRoute({
 const space = createRoute({
   getParentRoute: () => root,
   path: 'spaces/$spaceId',
-  // record: open in the panel beside; at: the record the open app was asked to show.
+  // record: open in the panel beside; at: the record the open tool was asked to show.
   validateSearch: (search: Record<string, unknown>): { record?: string; at?: string } => ({
     record: text(search.record),
     at: text(search.at),
@@ -78,26 +78,26 @@ const space = createRoute({
   component: SpaceLayout,
 });
 const inSpace = () => space;
-const spaceApps = createRoute({
+const spaceTools = createRoute({
   getParentRoute: inSpace,
   path: '/',
   component: page((s) => (
-    <AppsView {...s} onOpenApp={s.openApp} onCreate={() => s.go('/spaces/$spaceId/new')} />
+    <ToolsView {...s} onOpenTool={s.openTool} onCreate={() => s.go('/spaces/$spaceId/new')} />
   )),
 });
-const newApp = createRoute({
+const newTool = createRoute({
   getParentRoute: inSpace,
   path: 'new',
-  component: page((s) => <NewApp {...s} onOpenApp={s.openApp} onOwn={s.startCreating} />),
+  component: page((s) => <NewTool {...s} onOpenTool={s.openTool} onOwn={s.startCreating} />),
 });
-const app = createRoute({
+const tool = createRoute({
   getParentRoute: inSpace,
-  path: 'apps/$appId',
-  component: page(({ open, apps }) =>
+  path: 'tools/$toolId',
+  component: page(({ open, tools }) =>
     open ? (
-      <OpenApp key={open.id} app={open} />
+      <OpenTool key={open.id} tool={open} />
     ) : (
-      !apps.loading && <p style={styles.emptyState}>This app isn't in the space any more.</p>
+      !tools.loading && <p style={styles.emptyState}>This tool isn't in the space any more.</p>
     ),
   ),
 });
@@ -191,9 +191,9 @@ const routeTree = root.addChildren([
   home.addChildren([chats.addChildren([groups, people]), activity, profile]),
   contacts,
   space.addChildren([
-    spaceApps,
-    newApp,
-    app,
+    spaceTools,
+    newTool,
+    tool,
     members,
     invite,
     hosting,

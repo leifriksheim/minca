@@ -2,7 +2,7 @@
  * Files on a record: each kept in the space (`minca.addFile`) with a
  * `std.file` record about the record. Pictures show, and open
  * larger when clicked; videos and sound play where they are; other files are
- * saved to the person's device. A screen whose app names `std.file`
+ * saved to the person's device. A screen whose tool names `std.file`
  * among its collections can use it.
  */
 import { fitImage } from '../image';

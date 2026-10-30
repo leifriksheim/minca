@@ -13,13 +13,13 @@ import { styles, palette } from '../../styles';
 import { QuietButton } from '../Buttons';
 
 /**
- * An app's own screen, run sealed: a sandboxed frame with no network, talking to this app's collections
- * over one message port. It reaches only the origins it names (`network`), which whoever added the app
+ * A tool's own screen, run sealed: a sandboxed frame with no network, talking to this tool's collections
+ * over one message port. It reaches only the origins it names (`network`), which whoever added the tool
  * agreed to for everyone, as a workspace's admin adds an integration.
  */
 export function ScreenFrame({
   spaceId,
-  appKey,
+  toolKey,
   collections,
   screen,
   network,
@@ -31,8 +31,8 @@ export function ScreenFrame({
   onShown,
 }: {
   spaceId: string;
-  /** The app's launcher record, which carries the screen */
-  appKey: string;
+  /** The tool's launcher record, which carries the screen */
+  toolKey: string;
   collections: ReadonlyArray<string>;
   screen: string;
   network: ReadonlyArray<string>;
@@ -43,7 +43,7 @@ export function ScreenFrame({
   onOpen: (record: NodeRecord) => void;
   /** The collections whose records it is the place to open (`launcher.app`'s `shows`) */
   shows?: ReadonlyArray<string> | undefined;
-  /** A record of a collection this app shows that it was asked to show (`minca.onShow`) */
+  /** A record of a collection this tool shows that it was asked to show (`minca.onShow`) */
   shown?: string | undefined;
   /** Called once `shown` is handed to the screen */
   onShown?: (() => void) | undefined;
@@ -89,7 +89,7 @@ export function ScreenFrame({
       current = false;
     };
   }, [node, spaceId, shown, showing]);
-  // A new screen, or a new app, starts a new frame.
+  // A new screen, or a new tool, starts a new frame.
   const [generation, setGeneration] = useState(0);
   // Compared by value, so a new array with the same names changes nothing.
   const names = collections.join('|');
@@ -127,9 +127,9 @@ export function ScreenFrame({
         node,
         spaceId,
         collections: list,
-        app: appKey,
+        tool: toolKey,
         port: channel.port1,
-        host: screenHost(`minca.screen:${node.did}:${spaceId}:${appKey}:`, {
+        host: screenHost(`minca.screen:${node.did}:${spaceId}:${toolKey}:`, {
           open: (open) => ('record' in open ? opens.current(open.record) : setPerson(open.person)),
           // One choice at a time, asked of the person in this page, never the screen's to make.
           pick: (text) => {
@@ -177,7 +177,7 @@ export function ScreenFrame({
       bridge?.close();
       live.current = null;
     };
-  }, [node, spaceId, appKey, screen, names, account.name, generation, allowed, given, run]);
+  }, [node, spaceId, toolKey, screen, names, account.name, generation, allowed, given, run]);
 
   if (stopped) {
     return (
@@ -199,7 +199,7 @@ export function ScreenFrame({
     );
   }
 
-  // It takes whatever height it is given: the app is the whole window (`.space-content[data-fill]`).
+  // It takes whatever height it is given: the tool is the whole window (`.space-content[data-fill]`).
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       <iframe
@@ -221,7 +221,7 @@ export function ScreenFrame({
         }}
       />
       {person && <PersonCardHere did={person} onClose={() => setPerson(null)} />}
-      {picking && <SharePicker spaceId={spaceId} app={title} text={picking.text} onDone={picking.done} />}
+      {picking && <SharePicker spaceId={spaceId} tool={title} text={picking.text} onDone={picking.done} />}
     </div>
   );
 }
@@ -232,19 +232,19 @@ export function ScreenFrame({
  */
 function SharePicker({
   spaceId,
-  app,
+  tool,
   text,
   onDone,
 }: {
   spaceId: string;
-  app: string;
+  tool: string;
   text: string;
   onDone: (record: NodeRecord | null) => void;
 }) {
   const collections = useLive(spaceId, (n) => n.collections.list(spaceId), [spaceId]) ?? [];
   return (
-    <Modal title={`Share with ${app}`} onClose={() => onDone(null)}>
-      <p style={{ ...styles.quiet, lineHeight: 1.5 }}>{app} gets only the one you choose.</p>
+    <Modal title={`Share with ${tool}`} onClose={() => onDone(null)}>
+      <p style={{ ...styles.quiet, lineHeight: 1.5 }}>{tool} gets only the one you choose.</p>
       <RecordFinder
         spaceId={spaceId}
         collections={collections}
@@ -259,8 +259,8 @@ function SharePicker({
 /**
  * What this page does for a screen when it asks (`ScreenHost`): finds places
  * and where the person is the way the rest of the app does, opens pages and
- * saves files, asks the person to choose a record, and keeps the app's own
- * small things under `kept`, a prefix for this person, space and app.
+ * saves files, asks the person to choose a record, and keeps the tool's own
+ * small things under `kept`, a prefix for this person, space and tool.
  */
 function screenHost(kept: string, { open, pick }: Pick<ScreenHost, 'open' | 'pick'>): ScreenHost {
   return {

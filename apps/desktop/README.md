@@ -132,7 +132,7 @@ Why it can be trusted with the exchange:
 
 - **Every window is `sandbox: true`.** Electrobun gives a page that isn't
   sandboxed, and every frame in it, a bridge that runs scripts in any other
-  window by id (`webviewTagExecuteJavascript`). A mini app's screen frame could
+  window by id (`webviewTagExecuteJavascript`). A tool's screen frame could
   then reach into the home's window.
 - **A message counts only by its secret.** Electrobun routes a page's events by
   a webview id the page itself supplies, so that id says nothing. Each window's

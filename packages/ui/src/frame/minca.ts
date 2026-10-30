@@ -40,13 +40,13 @@ export interface FoundPlace {
 
 export interface Minca {
   readonly me: { readonly did: string; readonly name: string };
-  /** The collections this screen may use: its app's */
+  /** The collections this screen may use: its tool's */
   readonly collections: ReadonlyArray<string>;
   list<T = Record<string, unknown>>(
     collection: string,
     options?: { where?: unknown },
   ): Promise<ScreenRecord<T>[]>;
-  /** One of the app's records, or with `link`, the record it links to with that role (a message's shared poll) */
+  /** One of the tool's records, or with `link`, the record it links to with that role (a message's shared poll) */
   get<T = Record<string, unknown>>(key: string, options?: { link?: string }): Promise<ScreenRecord<T> | null>;
   /** Asks the person to choose a record anywhere in the space; null if they don't */
   pick<T = Record<string, unknown>>(options?: { text?: string }): Promise<ScreenRecord<T> | null>;
@@ -83,7 +83,7 @@ export interface Minca {
   };
 }
 
-/** A live message from another device with this app open */
+/** A live message from another device with this tool open */
 export interface Heard {
   /** Who sent it */
   readonly from: string;

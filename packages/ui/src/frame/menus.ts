@@ -81,7 +81,7 @@ function useOpen() {
 }
 
 /**
- * "+": a menu to attach files, when `onFiles` is given (the app keeps
+ * "+": a menu to attach files, when `onFiles` is given (the tool keeps
  * std.file), and to share something from the space.
  */
 export function AddMenu({
@@ -202,7 +202,7 @@ interface ReactionBody {
 /**
  * The emoji reactions on a record, std.reaction about it: one pill per emoji
  * with how many, yours pressed, a click adding or taking back yours. Needs
- * "std.reaction" in the app's collections.
+ * "std.reaction" in the tool's collections.
  */
 export function Reactions({
   about,

@@ -36,8 +36,8 @@ async function attachFiles(
 
 /**
  * `std.file`s on a record: pictures shown, other files to save, and a
- * button to attach more. Any mini app showing a record can use it: the files
- * belong to the record, not to the app.
+ * button to attach more. Any tool showing a record can use it: the files
+ * belong to the record, not to the tool.
  */
 export function Attachments({
   space,

@@ -2,12 +2,12 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Loader } from '@minca/app-shared/Loader';
 import { Mark } from '@minca/app-shared/Wordmark';
 import { Shape } from '@minca/app-shared/shapes';
-import { APP_SHAPES, type ShapeKind } from '@minca/ui/shapes';
+import { TOOL_SHAPES, type ShapeKind } from '@minca/ui/shapes';
 import { shapeColours, type ShapeColour } from '@minca/ui/tokens';
 import { EventHead, Face } from './demos';
 
 /**
- * The front page's hero: many hands making one small app, inside Minca as it
+ * The front page's hero: many hands making one small tool, inside Minca as it
  * looks on a laptop. A handful of people, each a face, share a space; one
  * asks their agent, in a prompt box above the window, for an RSVP
  * for hack night, and it appears in the space, in its sidebar too. The others
@@ -22,7 +22,7 @@ type Who = 'maya' | 'joe' | 'anna' | 'sam' | 'lea';
 
 type Spot = readonly [number, number];
 
-/** Where each cursor rests, as fractions of the canvas: either side of the app, or below it on a narrow one */
+/** Where each cursor rests, as fractions of the canvas: either side of the tool, or below it on a narrow one */
 const PEOPLE: Readonly<
   Record<Who, { name: string; colour: ShapeColour; inkLabel?: boolean; home: Spot; narrowHome: Spot }>
 > = {
@@ -44,7 +44,7 @@ const PEOPLE: Readonly<
     narrowHome: [0.42, 0.64],
   },
 };
-/** Below this width the window drops its sidebar (site.css), the app spans it, and cursors rest under it */
+/** Below this width the window drops its sidebar (site.css), the tool spans it, and cursors rest under it */
 const NARROW = 760;
 const WHO: readonly Who[] = ['maya', 'joe', 'anna', 'sam', 'lea'];
 
@@ -55,7 +55,7 @@ interface Step {
   /** What the ask box holds, and whether it is being typed right now */
   readonly prompt: string;
   readonly typing?: boolean;
-  readonly app: 'none' | 'empty' | 'event';
+  readonly tool: 'none' | 'empty' | 'event';
   /** What the agent says it is doing, under the prompt, once it has been sent */
   readonly building?: string;
   readonly spots: Spots;
@@ -72,12 +72,12 @@ const ASK = 'An RSVP for our hack night';
 const CHANGE = 'Add a waitlist';
 
 const STEPS: readonly Step[] = [
-  { ms: 900, prompt: '', app: 'none', spots: NONE, waitlist: 'none', at: { maya: 'prompt' } },
+  { ms: 900, prompt: '', tool: 'none', spots: NONE, waitlist: 'none', at: { maya: 'prompt' } },
   {
     ms: 1900,
     prompt: ASK,
     typing: true,
-    app: 'none',
+    tool: 'none',
     spots: NONE,
     waitlist: 'none',
     at: { maya: 'prompt' },
@@ -85,7 +85,7 @@ const STEPS: readonly Step[] = [
   {
     ms: 800,
     prompt: ASK,
-    app: 'none',
+    tool: 'none',
     spots: NONE,
     waitlist: 'none',
     at: { maya: 'send' },
@@ -95,7 +95,7 @@ const STEPS: readonly Step[] = [
     ms: 1500,
     prompt: '',
     building: 'Adding Hack night to Riverside Makers',
-    app: 'empty',
+    tool: 'empty',
     spots: NONE,
     waitlist: 'none',
     at: { joe: 'offer' },
@@ -103,7 +103,7 @@ const STEPS: readonly Step[] = [
   {
     ms: 1300,
     prompt: '',
-    app: 'event',
+    tool: 'event',
     spots: NONE,
     waitlist: 'none',
     at: { joe: 'offer' },
@@ -112,7 +112,7 @@ const STEPS: readonly Step[] = [
   {
     ms: 1100,
     prompt: '',
-    app: 'event',
+    tool: 'event',
     spots: NONE,
     waitlist: 'none',
     at: { anna: 'spot-0', sam: 'spot-1' },
@@ -120,28 +120,28 @@ const STEPS: readonly Step[] = [
   {
     ms: 1100,
     prompt: '',
-    app: 'event',
+    tool: 'event',
     spots: TWO,
     waitlist: 'none',
     at: { anna: 'spot-0', sam: 'spot-1' },
     click: ['anna', 'sam'],
   },
-  { ms: 900, prompt: '', app: 'event', spots: TWO, waitlist: 'none', at: { maya: 'spot-2' } },
+  { ms: 900, prompt: '', tool: 'event', spots: TWO, waitlist: 'none', at: { maya: 'spot-2' } },
   {
     ms: 1300,
     prompt: '',
-    app: 'event',
+    tool: 'event',
     spots: FULL,
     waitlist: 'none',
     at: { maya: 'spot-2' },
     click: ['maya'],
   },
-  { ms: 900, prompt: '', app: 'event', spots: FULL, waitlist: 'none', at: { lea: 'prompt' } },
+  { ms: 900, prompt: '', tool: 'event', spots: FULL, waitlist: 'none', at: { lea: 'prompt' } },
   {
     ms: 1500,
     prompt: CHANGE,
     typing: true,
-    app: 'event',
+    tool: 'event',
     spots: FULL,
     waitlist: 'none',
     at: { lea: 'prompt' },
@@ -149,7 +149,7 @@ const STEPS: readonly Step[] = [
   {
     ms: 800,
     prompt: CHANGE,
-    app: 'event',
+    tool: 'event',
     spots: FULL,
     waitlist: 'none',
     at: { lea: 'send' },
@@ -159,7 +159,7 @@ const STEPS: readonly Step[] = [
     ms: 1100,
     prompt: '',
     building: 'Adding a waitlist to Hack night',
-    app: 'event',
+    tool: 'event',
     spots: FULL,
     waitlist: 'open',
     at: { lea: 'join' },
@@ -167,7 +167,7 @@ const STEPS: readonly Step[] = [
   {
     ms: 3200,
     prompt: '',
-    app: 'event',
+    tool: 'event',
     spots: FULL,
     waitlist: 'joined',
     at: { lea: 'join' },
@@ -280,7 +280,7 @@ export function HeroSpace() {
   const full = step.spots.every(Boolean);
   const sending = Boolean(step.click?.length && step.prompt);
 
-  const made = step.app !== 'none';
+  const made = step.tool !== 'none';
 
   return (
     <div className="canvas-wrap" aria-hidden ref={root}>
@@ -323,19 +323,24 @@ export function HeroSpace() {
                 </small>
               </span>
             </div>
-            <span className="w-heading">Apps</span>
-            <SideApp kind={APP_SHAPES.chat?.kind} colour={APP_SHAPES.chat?.colour} label="Chat" count={3} />
-            <SideApp kind={APP_SHAPES.events?.kind} colour={APP_SHAPES.events?.colour} label="Events" />
-            <SideApp kind={APP_SHAPES.polls?.kind} colour={APP_SHAPES.polls?.colour} label="Polls" />
+            <span className="w-heading">Tools</span>
+            <SideTool
+              kind={TOOL_SHAPES.chat?.kind}
+              colour={TOOL_SHAPES.chat?.colour}
+              label="Chat"
+              count={3}
+            />
+            <SideTool kind={TOOL_SHAPES.events?.kind} colour={TOOL_SHAPES.events?.colour} label="Events" />
+            <SideTool kind={TOOL_SHAPES.polls?.kind} colour={TOOL_SHAPES.polls?.colour} label="Polls" />
             {made ? (
-              <SideApp key={`made-${at.round}`} kind="clover" colour="coral" label="Hack night" on fresh />
+              <SideTool key={`made-${at.round}`} kind="clover" colour="coral" label="Hack night" on fresh />
             ) : null}
-            <SideApp label="New app" on={!made} quiet />
+            <SideTool label="New tool" on={!made} quiet />
             <span className="w-heading">Space</span>
-            <SideApp label="People" quiet />
-            <SideApp label="Hosting" quiet>
+            <SideTool label="People" quiet />
+            <SideTool label="Hosting" quiet>
               <span className="w-online" title="Online" />
-            </SideApp>
+            </SideTool>
           </aside>
 
           <main className="w-main">
@@ -346,20 +351,20 @@ export function HeroSpace() {
                   <b>Hack night</b>
                 </>
               ) : (
-                <b>New app</b>
+                <b>New tool</b>
               )}
             </header>
             <div className="canvas-stack">
-              {step.app === 'none' ? null : (
-                <div className="canvas-app" key={`app-${at.round}`}>
+              {step.tool === 'none' ? null : (
+                <div className="canvas-app" key={`tool-${at.round}`}>
                   <div className="app">
                     <EventHead
                       day="Thu"
                       date="14"
                       title="Hack night"
-                      meta={step.app === 'empty' ? '7pm · no host yet' : '7pm · The Loft · Joe hosts'}
+                      meta={step.tool === 'empty' ? '7pm · no host yet' : '7pm · The Loft · Joe hosts'}
                     />
-                    {step.app === 'event' ? (
+                    {step.tool === 'event' ? (
                       <div className="app-row">
                         <span>
                           <b>Going</b>
@@ -516,8 +521,8 @@ function SpaceBadge({
   );
 }
 
-/** A line in the space's sidebar: an app's shape, or a plain dot for the space's own pages */
-function SideApp({
+/** A line in the space's sidebar: a tool's shape, or a plain dot for the space's own pages */
+function SideTool({
   kind,
   colour,
   label,

@@ -63,7 +63,7 @@ export function Sharing({ share }: { share: Share }) {
   </button>`;
 }
 
-/** What `from` shares, read through its link, as a card that opens it in the app that shows it */
+/** What `from` shares, read through its link, as a card that opens it in the tool that shows it */
 export function Shared({ from }: { from: ScreenRecord }) {
   const shares = from.links.some((link) => link.rel === 'shares');
   const [record, setRecord] = useState<ScreenRecord | null | undefined>(undefined);

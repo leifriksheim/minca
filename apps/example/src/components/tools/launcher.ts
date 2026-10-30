@@ -1,9 +1,9 @@
 /**
- * The launcher: which apps a space has, in what order, kept in the space as
- * `launcher.app` records, one per app. Everyone in the space sees the same
- * apps in the same order.
+ * The launcher: which tools a space has, in what order, kept in the space as
+ * `launcher.app` records, one per tool. Everyone in the space sees the same
+ * tools in the same order.
  *
- * An app's record is the app: its title, the collections it uses, what it
+ * A tool's record is the tool: its title, the collections it uses, what it
  * notifies about, and maybe a screen of its own, with a link to the blueprint
  * that proposed its collections. The ready-made ones (`templates/`) are copied
  * in the same way. Anyone may write one, an agent too; it counts as
@@ -12,7 +12,7 @@
  * there. Until then it is a proposal. That is what lets a screen run: someone
  * who may define collections put it there.
  *
- * Removing an app deletes its record and nothing else: its collections and
+ * Removing a tool deletes its record and nothing else: its collections and
  * their records stay, and adding it again picks them up.
  *
  * This is the example app's own convention, not the library's. Agents learn it
@@ -43,7 +43,7 @@ import {
 } from '@minca/core/schemas';
 import { checkScreenNetwork, MAX_SCREEN_BYTES, SCREEN_GUIDE, offLimits } from './screens';
 
-export interface LauncherApp {
+export interface LauncherTool {
   readonly title?: string;
   /** What it is for, in its proposer's words */
   readonly description?: string;
@@ -51,7 +51,7 @@ export interface LauncherApp {
   readonly collections?: ReadonlyArray<string>;
   /**
    * Of those, the ones whose records it is where to open: a message anywhere
-   * opens in the app that shows `std.message`, at that message.
+   * opens in the tool that shows `std.message`, at that message.
    */
   readonly shows?: ReadonlyArray<string>;
   /** What in it is worth hearing about */
@@ -62,16 +62,16 @@ export interface LauncherApp {
   readonly network?: ReadonlyArray<string>;
   /** Sorts where it goes on the launcher (`positionBetween`) */
   readonly position?: string;
-  /** For a proposed change: the key of the app it is a new version of */
+  /** For a proposed change: the key of the tool it is a new version of */
   readonly updates?: string;
-  /** The ready-made app it began as, by id: `kanban`. The space's copy is its own to change. */
+  /** The ready-made tool it began as, by id: `kanban`. The space's copy is its own to change. */
   readonly template?: string;
   /** What whoever adds it fills in once for everyone, like an API key; its screen reads them as `minca.settings` */
-  readonly settings?: ReadonlyArray<AppSetting>;
+  readonly settings?: ReadonlyArray<ToolSetting>;
 }
 
-/** A setting an app asks for, and its value once someone who may add apps has given one */
-export interface AppSetting {
+/** A setting a tool asks for, and its value once someone who may add tools has given one */
+export interface ToolSetting {
   /** How its screen reads it: `minca.settings.giphy` */
   readonly key: string;
   readonly title: string;
@@ -80,11 +80,11 @@ export interface AppSetting {
   readonly value?: string;
 }
 
-/** An app on the space's launcher, or one proposed for it. */
-export const launcherApp = fragments.typed<LauncherApp>()({
+/** A tool on the space's launcher, or one proposed for it. */
+export const launcherTool = fragments.typed<LauncherTool>()({
   name: 'launcher.app',
-  title: 'App',
-  description: 'An app on the space’s launcher, or one proposed for it.',
+  title: 'Tool',
+  description: 'A tool on the space’s launcher, or one proposed for it.',
   schema: {
     type: 'object',
     properties: {
@@ -132,13 +132,13 @@ export const launcherApp = fragments.typed<LauncherApp>()({
 });
 
 /** Why this can't be a launcher record, or null */
-export function checkLauncherApp(body: LauncherApp): string | null {
-  if (!body.title?.trim()) return 'An app needs a title';
+export function checkLauncherTool(body: LauncherTool): string | null {
+  if (!body.title?.trim()) return 'A tool needs a title';
   const names = new Set(body.collections ?? []);
-  if (names.size === 0) return 'An app needs the collections it shows';
-  // Its screen writes these as whoever looks: the launcher's own would let it add apps.
+  if (names.size === 0) return 'A tool needs the collections it shows';
+  // Its screen writes these as whoever looks: the launcher's own would let it add tools.
   const kept = [...names].find(offLimits);
-  if (kept) return `${kept} is the space's own, not an app's to show`;
+  if (kept) return `${kept} is the space's own, not a tool's to show`;
   const stray = body.shows?.find((name) => !names.has(name));
   if (stray) return `shows: ${stray} is not one of its collections`;
   if (body.screen !== undefined) {
@@ -186,43 +186,43 @@ function mayDefine(access: SpaceAccess | null | undefined, did: string | null): 
  * by someone whose role may define collections, with a key whose note let
  * them. A records-only write (an agent's), or an edit by anyone else, makes it a proposal again.
  */
-const vouchedFor = (record: NodeRecord<LauncherApp>, access: SpaceAccess | null | undefined) =>
+const vouchedFor = (record: NodeRecord<LauncherTool>, access: SpaceAccess | null | undefined) =>
   !record.recordsOnly && mayDefine(access, record.root);
 
 const defined = (collections: ReadonlyArray<NodeCollection>) =>
   new Set(collections.filter((c) => c.version !== null).map((c) => c.name));
 
-const byPosition = (a: NodeRecord<LauncherApp>, b: NodeRecord<LauncherApp>) => {
+const byPosition = (a: NodeRecord<LauncherTool>, b: NodeRecord<LauncherTool>) => {
   const pa = a.body?.position ?? '~';
   const pb = b.body?.position ?? '~';
   return pa < pb ? -1 : pa > pb ? 1 : a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
 };
 
 export interface Launcher {
-  /** On the launcher, in order: the apps that stand */
-  readonly placed: ReadonlyArray<NodeRecord<LauncherApp>>;
-  /** Apps waiting for someone who may define collections to add them */
-  readonly proposed: ReadonlyArray<NodeRecord<LauncherApp>>;
+  /** On the launcher, in order: the tools that stand */
+  readonly placed: ReadonlyArray<NodeRecord<LauncherTool>>;
+  /** Tools waiting for someone who may define collections to add them */
+  readonly proposed: ReadonlyArray<NodeRecord<LauncherTool>>;
 }
 
 /**
  * Sorts a space's launcher records into what is on it, in order, and what is
- * proposed. An app counts only when someone who may define collections put it
+ * proposed. A tool counts only when someone who may define collections put it
  * there and its collections are here.
  */
 export function sortLauncher(
-  records: ReadonlyArray<NodeRecord<LauncherApp>>,
+  records: ReadonlyArray<NodeRecord<LauncherTool>>,
   collections: ReadonlyArray<NodeCollection>,
   access: SpaceAccess | null | undefined,
 ): Launcher {
   const here = defined(collections);
-  const placed: NodeRecord<LauncherApp>[] = [];
-  const proposed: NodeRecord<LauncherApp>[] = [];
+  const placed: NodeRecord<LauncherTool>[] = [];
+  const proposed: NodeRecord<LauncherTool>[] = [];
   for (const record of [...records].sort(byPosition)) {
     const body = record.body;
     if (!body || record.deleted) continue;
-    const broken = checkLauncherApp(body) !== null;
-    // An app the launcher can't take stays a proposal, so whoever reviews it sees why.
+    const broken = checkLauncherTool(body) !== null;
+    // A tool the launcher can't take stays a proposal, so whoever reviews it sees why.
     const stands =
       !broken &&
       body.updates === undefined &&
@@ -234,40 +234,43 @@ export function sortLauncher(
 }
 
 /**
- * The app a space opens with: the first on its launcher. Its members put the
- * launcher in order, so a group chooses where it opens by moving an app to
+ * The tool a space opens with: the first on its launcher. Its members put the
+ * launcher in order, so a group chooses where it opens by moving a tool to
  * the top. Undefined when it has none.
  */
-export async function firstApp(node: P2PNode, spaceId: string): Promise<NodeRecord<LauncherApp> | undefined> {
+export async function firstTool(
+  node: P2PNode,
+  spaceId: string,
+): Promise<NodeRecord<LauncherTool> | undefined> {
   const [records, collections, access] = await Promise.all([
-    node.records.list<LauncherApp>(spaceId, { collection: launcherApp.name }),
+    node.records.list<LauncherTool>(spaceId, { collection: launcherTool.name }),
     node.collections.list(spaceId),
     node.spaces.access(spaceId),
   ]);
   return sortLauncher(records, collections, access).placed[0];
 }
 
-/** A position after every app on the launcher */
-function atEnd(placed: ReadonlyArray<NodeRecord<LauncherApp>>): string {
+/** A position after every tool on the launcher */
+function atEnd(placed: ReadonlyArray<NodeRecord<LauncherTool>>): string {
   const last = placed.map((record) => record.body?.position ?? '').reduce((a, b) => (b > a ? b : a), '');
   return positionBetween(last || null);
 }
 
-/** The app on the launcher a proposal updates, if it still is one */
+/** The tool on the launcher a proposal updates, if it still is one */
 export const updated = (
-  proposal: NodeRecord<LauncherApp>,
-  placed: ReadonlyArray<NodeRecord<LauncherApp>>,
-): NodeRecord<LauncherApp> | undefined =>
+  proposal: NodeRecord<LauncherTool>,
+  placed: ReadonlyArray<NodeRecord<LauncherTool>>,
+): NodeRecord<LauncherTool> | undefined =>
   proposal.body?.updates === undefined
     ? undefined
     : placed.find((record) => record.key === proposal.body?.updates);
 
 /**
- * The app the guide shows agents, kept as a value rather than written out:
- * the guide prints it, its type holds it to `LauncherApp`, and a test runs it
- * through `checkLauncherApp`, so the example can't drift from what is accepted.
+ * The tool the guide shows agents, kept as a value rather than written out:
+ * the guide prints it, its type holds it to `LauncherTool`, and a test runs it
+ * through `checkLauncherTool`, so the example can't drift from what is accepted.
  */
-export const EXAMPLE_APP = {
+export const EXAMPLE_TOOL = {
   title: 'Carpool',
   description: 'Who drives to the match, and who rides with them',
   collections: ['carpool.trip', 'carpool.seat'],
@@ -276,24 +279,24 @@ export const EXAMPLE_APP = {
     notifyOn('New trip', 'carpool.trip'),
     notifyOn('A seat on my trip', 'carpool.seat', { driver: '$me' }),
   ],
-} satisfies LauncherApp;
+} satisfies LauncherTool;
 
 /** A value as the guide prints it: JSON, indented to sit inside a numbered step */
 const shown = (value: unknown) => JSON.stringify(value, null, 2).replaceAll('\n', '\n   ');
 
 /**
- * What agents read to propose an app here, written in the space as a guide
+ * What agents read to propose a tool here, written in the space as a guide
  * on `launcher.app`, so one finds it with `collections_list`.
  */
-const LAUNCHER_GUIDE = `To make an app for this space that people open from its launcher:
+const LAUNCHER_GUIDE = `To make a tool for this space (a launcher.app record) that people open from its launcher:
 
 1. Propose the collections it needs with collections_propose (one std.blueprint). Use standard ones by name where they fit
-   (std.event, std.task, std.poll, …): their records then open in, and are shared with, the other apps here. Note its key.
+   (std.event, std.task, std.poll, …): their records then open in, and are shared with, the other tools here. Note its key.
 2. Write one launcher.app record with records_put, like this one:
-   ${shown(EXAMPLE_APP)}
+   ${shown(EXAMPLE_TOOL)}
    with links [{ "rel": "blueprint", "to": "<the blueprint's key>" }].
    "collections" names every collection it shows. "shows" is optional: of those, the ones whose records it is the
-   place to open, like ["std.message"] for a chat; a record of one opened anywhere opens in this app, which its
+   place to open, like ["std.message"] for a chat; a record of one opened anywhere opens in this tool, which its
    screen hears through minca.onShow. "notify" is optional: what is worth hearing about, each a name and
    the query whose new records it tells of, in one of its collections. A "where" naming "$me" keeps it to records that
    name the person it would tell, as the second one does.
@@ -301,24 +304,24 @@ const LAUNCHER_GUIDE = `To make an app for this space that people open from its 
    document, and, only if it must reach the network, "network": the exact origins. The screen is described below.
 4. If it needs something only the space can give, like an API key, add "settings": what to fill in, like
    [{ "key": "giphy", "title": "GIPHY API key", "description": "Free at developers.giphy.com" }]. Leave out the values:
-   whoever adds the app fills them in once for everyone, and its screen reads them as minca.settings.
+   whoever adds the tool fills them in once for everyone, and its screen reads them as minca.settings.
 
 Your screen is not the only way in: anyone in the space can write any record directly, through an agent or another
-app. Ask what a member could do that way. Where the app means nothing unless records keep a rule their shape and
+app. Ask what a member could do that way. Where the tool means nothing unless records keep a rule their shape and
 rules can't say (whose turn it is, a legal move, a vote counted once), give the collection a "contract", as
 collections_propose describes, and try it there with "examples": fair moves that must count and cheats that must not.
 A screen only shows what the contract allows; it is not what stops a cheat.
 
 Records don't change when their collection does. Change a collection that has records only by adding optional
-fields; for anything else, give the new shape a name of its own, and let the old app finish what it holds.
+fields; for anything else, give the new shape a name of its own, and let the old tool finish what it holds.
 
-Nothing changes until someone who may define collections adds it from the Apps page: that applies the blueprint and
+Nothing changes until someone who may define collections adds it from the Tools page: that applies the blueprint and
 writes the record again as theirs. A launcher.app record that person did not write is only a proposal, and its screen
-never runs. To change an app that is already added, write a new launcher.app record with "updates": the key of the one
+never runs. To change a tool that is already added, write a new launcher.app record with "updates": the key of the one
 it replaces, and, if its collections change, a new blueprint whose "updates" names the old blueprint. Settings it
-names keep the values the app has.
+names keep the values the tool has.
 
-Removing an app deletes its launcher.app record; its records stay. A made app may not show launcher.app,
+Removing a tool deletes its launcher.app record; its records stay. A made tool may not show launcher.app,
 std.blueprint, std.guide or sys.* collections.
 
 How a screen works:
@@ -326,25 +329,25 @@ How a screen works:
 ${SCREEN_GUIDE}`;
 
 /**
- * Makes the space ready for apps: defines `launcher.app` and `std.blueprint`
+ * Makes the space ready for tools: defines `launcher.app` and `std.blueprint`
  * when it lacks them, and writes the guide agents read. Only for someone who
  * may define collections; for anyone else it does nothing.
  */
 export async function prepareLauncher(node: P2PNode, spaceId: string): Promise<void> {
   if (!mayDefine(await node.spaces.access(spaceId), node.did)) return;
   const here = defined(await node.collections.list(spaceId));
-  for (const definition of [launcherApp, blueprint])
+  for (const definition of [launcherTool, blueprint])
     if (!here.has(definition.name)) await node.collections.define(spaceId, definition);
   await writeGuide(node, spaceId, {
     name: 'launcher.apps',
-    title: 'Making an app for this space',
+    title: 'Making a tool for this space',
     text: LAUNCHER_GUIDE,
-    collections: [launcherApp.name, blueprint.name],
+    collections: [launcherTool.name, blueprint.name],
   });
 }
 
-/** An app as it stands once added: its place is the launcher's, and it updates nothing */
-function settled(body: LauncherApp): LauncherApp {
+/** A tool as it stands once added: its place is the launcher's, and it updates nothing */
+function settled(body: LauncherTool): LauncherTool {
   const { title, description, collections, shows, notify, screen, network, template, settings } = body;
   return {
     ...(title !== undefined ? { title } : {}),
@@ -359,93 +362,98 @@ function settled(body: LauncherApp): LauncherApp {
   };
 }
 
-/** The values an app's settings hold, by key: what its screen gets as `minca.settings` */
-export const settingsOf = (body: LauncherApp): Readonly<Record<string, string>> =>
+/** The values a tool's settings hold, by key: what its screen gets as `minca.settings` */
+export const settingsOf = (body: LauncherTool): Readonly<Record<string, string>> =>
   Object.fromEntries((body.settings ?? []).flatMap((s) => (s.value ? [[s.key, s.value]] : [])));
 
 /**
- * The settings a change asks for, holding the values the app has now where it
+ * The settings a change asks for, holding the values the tool has now where it
  * gives none: a new screen from an agent doesn't know the space's key, and
  * adding it shouldn't lose it.
  */
 const keepValues = (
-  next: ReadonlyArray<AppSetting> | undefined,
-  now: ReadonlyArray<AppSetting> | undefined,
-): ReadonlyArray<AppSetting> | undefined =>
+  next: ReadonlyArray<ToolSetting> | undefined,
+  now: ReadonlyArray<ToolSetting> | undefined,
+): ReadonlyArray<ToolSetting> | undefined =>
   next?.map((setting) => {
     const value = setting.value ?? now?.find((held) => held.key === setting.key)?.value;
     return value === undefined ? setting : { ...setting, value };
   });
 
-/** Fills in an app's settings for everyone: only someone who may add apps writes a version that stands */
+/** Fills in a tool's settings for everyone: only someone who may add tools writes a version that stands */
 export async function saveSettings(
   node: P2PNode,
   spaceId: string,
-  record: NodeRecord<LauncherApp>,
+  record: NodeRecord<LauncherTool>,
   values: Readonly<Record<string, string>>,
 ): Promise<void> {
   const body = record.body;
-  if (!body) throw new Error('This app could not be read');
+  if (!body) throw new Error('This tool could not be read');
   const settings = (body.settings ?? []).map(({ value: _, ...setting }) => {
     const value = values[setting.key]?.trim();
     return value ? { ...setting, value } : setting;
   });
-  await node.records.update<LauncherApp>(spaceId, record.key, { ...body, settings }, { links: record.links });
+  await node.records.update<LauncherTool>(
+    spaceId,
+    record.key,
+    { ...body, settings },
+    { links: record.links },
+  );
 }
 
 /**
- * A ready-made app: an ordinary app, kept here rather than in a space, with
+ * A ready-made tool: an ordinary tool, kept here rather than in a space, with
  * the collections it needs. Adding one copies it into the space, which then
- * changes its copy the way it changes any app.
+ * changes its copy the way it changes any tool.
  */
 export interface Template {
-  readonly app: LauncherApp & {
+  readonly tool: LauncherTool & {
     readonly template: string;
     readonly title: string;
     readonly description: string;
   };
   readonly needs: ReadonlyArray<DefineCollection>;
-  /** Defined too, so whatever the app shows a record with (comments, attachments) has them */
+  /** Defined too, so whatever the tool shows a record with (comments, attachments) has them */
   readonly uses?: ReadonlyArray<DefineCollection>;
   /** Runs once, right after it is added: a board's first columns */
   readonly setup?: (node: P2PNode, spaceId: string) => Promise<void>;
 }
 
 /**
- * Adds a ready-made app: defines every collection it can use, runs its
+ * Adds a ready-made tool: defines every collection it can use, runs its
  * setup, and writes its copy at the end of the launcher, as this account's.
- * Returns the key of the app on the launcher.
+ * Returns the key of the tool on the launcher.
  */
 export async function addTemplate(
   node: P2PNode,
   spaceId: string,
   template: Template,
-  placed: ReadonlyArray<NodeRecord<LauncherApp>>,
+  placed: ReadonlyArray<NodeRecord<LauncherTool>>,
 ): Promise<string> {
-  const there = placed.find((record) => record.body?.template === template.app.template);
+  const there = placed.find((record) => record.body?.template === template.tool.template);
   if (there) return there.key;
   await addSchemas(node, spaceId, [...template.needs, ...(template.uses ?? [])]);
   await template.setup?.(node, spaceId);
   await prepareLauncher(node, spaceId);
-  const record = await node.records.put(spaceId, launcherApp, { ...template.app, position: atEnd(placed) });
+  const record = await node.records.put(spaceId, launcherTool, { ...template.tool, position: atEnd(placed) });
   return record.key;
 }
 
 /**
- * Adds a proposed app: applies the blueprint it points at, if any, then writes
- * the app again as this account's, at the end of the launcher. A proposed
- * change goes into the app it `updates`, which keeps its place, and the
- * proposal goes. Returns the key of the app now on the launcher.
+ * Adds a proposed tool: applies the blueprint it points at, if any, then writes
+ * the tool again as this account's, at the end of the launcher. A proposed
+ * change goes into the tool it `updates`, which keeps its place, and the
+ * proposal goes. Returns the key of the tool now on the launcher.
  */
 export async function addMade(
   node: P2PNode,
   spaceId: string,
-  proposal: NodeRecord<LauncherApp>,
-  placed: ReadonlyArray<NodeRecord<LauncherApp>>,
+  proposal: NodeRecord<LauncherTool>,
+  placed: ReadonlyArray<NodeRecord<LauncherTool>>,
 ): Promise<string> {
   const body = proposal.body;
-  if (!body) throw new Error('This app could not be read');
-  const problem = checkLauncherApp(body);
+  if (!body) throw new Error('This tool could not be read');
+  const problem = checkLauncherTool(body);
   if (problem) throw new Error(problem);
   await prepareLauncher(node, spaceId);
   const plan = proposal.links.find((link) => link.rel === 'blueprint')?.to;
@@ -453,13 +461,13 @@ export async function addMade(
   const here = defined(await node.collections.list(spaceId));
   const missing = (body.collections ?? []).filter((name) => !here.has(name));
   if (missing.length)
-    throw new Error(`The space has no ${missing.join(' or ')}, and this app proposes no collections to add`);
+    throw new Error(`The space has no ${missing.join(' or ')}, and this tool proposes no collections to add`);
   const rest = settled(body);
-  // A change to an app no longer on the launcher, or to a built-in one, is added as an app of its own.
+  // A change to a tool no longer on the launcher, or to a built-in one, is added as a tool of its own.
   const target = updated(proposal, placed);
   if (target) {
     const settings = keepValues(rest.settings, target.body?.settings);
-    await node.records.update<LauncherApp>(
+    await node.records.update<LauncherTool>(
       spaceId,
       target.key,
       {
@@ -472,20 +480,20 @@ export async function addMade(
     await node.records.delete(spaceId, proposal.key);
     return target.key;
   }
-  await node.records.update<LauncherApp>(spaceId, proposal.key, { ...rest, position: atEnd(placed) });
+  await node.records.update<LauncherTool>(spaceId, proposal.key, { ...rest, position: atEnd(placed) });
   return proposal.key;
 }
 
 /**
- * Takes an app off the launcher. Its collections and records stay. For a
- * ready-made app, every copy of it goes, so one two people added at once
+ * Takes a tool off the launcher. Its collections and records stay. For a
+ * ready-made tool, every copy of it goes, so one two people added at once
  * doesn't come back.
  */
-export async function removeApp(
+export async function removeTool(
   node: P2PNode,
   spaceId: string,
-  record: NodeRecord<LauncherApp>,
-  records: ReadonlyArray<NodeRecord<LauncherApp>>,
+  record: NodeRecord<LauncherTool>,
+  records: ReadonlyArray<NodeRecord<LauncherTool>>,
 ): Promise<void> {
   const template = record.body?.template;
   const all =
@@ -496,14 +504,14 @@ export async function removeApp(
 }
 
 /**
- * Moves an app on the launcher to sit at `to` among the others. Usually only
+ * Moves a tool on the launcher to sit at `to` among the others. Usually only
  * it is written. Records with no position, or two with the same one, get new
  * positions too, so the order shown is the order kept.
  */
-export async function moveApp(
+export async function moveTool(
   node: P2PNode,
   spaceId: string,
-  placed: ReadonlyArray<NodeRecord<LauncherApp>>,
+  placed: ReadonlyArray<NodeRecord<LauncherTool>>,
   key: string,
   to: number,
 ): Promise<void> {
@@ -524,7 +532,7 @@ export async function moveApp(
     const after = nextOwn !== undefined && (before === null || nextOwn > before) ? nextOwn : null;
     const position = positionBetween(before, after);
     if (record.body)
-      await node.records.update<LauncherApp>(spaceId, record.key, { ...record.body, position });
+      await node.records.update<LauncherTool>(spaceId, record.key, { ...record.body, position });
     before = position;
   }
 }
@@ -546,18 +554,18 @@ const toDraft = (held: NodeCollection): DraftCollection | null =>
       };
 
 /**
- * Proposes an app in another space: its collections as this space holds them,
- * as a blueprint there, and the app pointing at it. People there decide for
+ * Proposes a tool in another space: its collections as this space holds them,
+ * as a blueprint there, and the tool pointing at it. People there decide for
  * themselves.
  */
-export async function copyApp(
+export async function copyTool(
   node: P2PNode,
   fromSpace: string,
-  record: NodeRecord<LauncherApp>,
+  record: NodeRecord<LauncherTool>,
   toSpace: string,
 ): Promise<void> {
   const body = record.body;
-  if (!body) throw new Error('This app could not be read');
+  if (!body) throw new Error('This tool could not be read');
   const held = await node.collections.list(fromSpace);
   const drafts = (body.collections ?? []).flatMap((name) => {
     const found = held.find((c) => c.name === name);
@@ -565,7 +573,7 @@ export async function copyApp(
     return draft ? [draft] : [];
   });
   const plan = await proposeCollections(node, toSpace, {
-    title: body.title ?? 'An app',
+    title: body.title ?? 'A tool',
     ...(body.description !== undefined ? { description: body.description } : {}),
     collections: drafts,
     from: `${fromSpace}/${record.key}`,
@@ -574,7 +582,7 @@ export async function copyApp(
   const { settings, ...rest } = settled(body);
   await node.records.put(
     toSpace,
-    launcherApp,
+    launcherTool,
     { ...rest, ...(settings ? { settings: settings.map(({ value: _, ...setting }) => setting) } : {}) },
     { links: [{ rel: 'blueprint', to: plan.key }] },
   );

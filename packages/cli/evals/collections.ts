@@ -1,6 +1,6 @@
 /**
  * Does an agent reach for the standard collections? Each case asks a model
- * for an app, with the real `collections_standard` and `collections_propose`
+ * for a tool, with the real `collections_standard` and `collections_propose`
  * actions against a node of its own, so it reads the same map and gets the
  * same warnings an agent connected to Minca does, and may propose again. A
  * case passes when its last proposal uses the standard collections it should
@@ -38,7 +38,7 @@ const CASES: ReadonlyArray<Case> = [
   },
   {
     id: 'photo',
-    ask: 'A photo album app for our trip to Lisbon, with albums per day.',
+    ask: 'A photo album tool for our trip to Lisbon, with albums per day.',
     uses: ['std.file', 'std.list'],
   },
   { id: 'recipes', ask: 'Our family recipes, each with a photo and its ingredients.', uses: ['std.file'] },
@@ -70,8 +70,8 @@ const TOOLS = ['collections_standard', 'collections_propose'];
 const TURNS = 8;
 
 const SYSTEM =
-  'You make apps for a Minca space: shared records in collections, read by every app in the space. ' +
-  'Propose the collections the app needs with collections_propose. Reply with a short sentence once it is proposed.';
+  'You make tools for a Minca space, the things its group opens there: shared records in collections, read by everything in the space. ' +
+  'Propose the collections the tool needs with collections_propose. Reply with a short sentence once it is proposed.';
 
 async function aNode() {
   const manager = createIdentityManager();

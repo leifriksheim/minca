@@ -9,8 +9,8 @@ produced by an agent. It runs against the records one node holds of one space.
 > [#28](https://github.com/leifriksheim/minca/issues/28): the interface another query language plugs into, which reports the collections
 > it read so a cache ([holding part of a space](node.md#holding-part-of-a-space)) keeps them.
 > An [automation](automations.md) keeps a query in a record, and a
-> [screen](blueprints-and-guides.md#apps-with-a-screen-of-their-own) passes a `where` to `minca.list`
-> (`apps/example/src/components/apps/screens.ts`), so everything that runs
+> [screen](blueprints-and-guides.md#tools-with-a-screen-of-their-own) passes a `where` to `minca.list`
+> (`apps/example/src/components/tools/screens.ts`), so everything that runs
 > automations or screens has to read this format the same way; peers that
 > only sync and judge the record still never read it.
 

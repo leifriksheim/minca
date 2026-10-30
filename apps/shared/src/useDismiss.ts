@@ -2,7 +2,7 @@ import { useEffect, type RefObject } from 'react';
 
 /**
  * Closes something that floats over the page on a click or tap outside it,
- * one in an app's frame included, or on Escape. A panel that stays open after you have clicked past it feels stuck.
+ * one in a tool's frame included, or on Escape. A panel that stays open after you have clicked past it feels stuck.
  */
 export function useDismiss(open: boolean, root: RefObject<Element | null>, close: () => void): void {
   useEffect(() => {
@@ -14,7 +14,7 @@ export function useDismiss(open: boolean, root: RefObject<Element | null>, close
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') close();
     };
-    // A click in an app's screen, which is a frame of its own, never reaches this page; it only takes
+    // A click in a tool's screen, which is a frame of its own, never reaches this page; it only takes
     // the focus away into the frame.
     const intoFrame = () => {
       if (globalThis.document.activeElement instanceof HTMLIFrameElement) close();

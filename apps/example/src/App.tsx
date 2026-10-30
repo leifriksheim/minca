@@ -26,7 +26,7 @@ import { CallLayer } from './components/calls/Calls';
 import { NewSheet } from './components/NewSheet';
 import { AddButton } from './components/Buttons';
 import { Icon } from './components/Icon';
-import { addChat, landingApp } from './components/apps/entries';
+import { addChat, landingTool } from './components/tools/entries';
 
 import { takeBack } from './contacts';
 import { styles, palette, hstack } from './styles';
@@ -57,13 +57,13 @@ function Workspace() {
   const navigate = useNavigate();
   const node = useNode();
   const pairs = usePairSpaces();
-  // Into the app the space opens with, the first on its launcher; a space with none opens on its apps.
+  // Into the tool the space opens with, the first on its launcher; a space with none opens on its tools.
   const openSpace = (id: string) =>
-    void landingApp(node, id)
+    void landingTool(node, id)
       .catch(() => undefined)
-      .then((appId) =>
-        appId
-          ? navigate({ to: '/spaces/$spaceId/apps/$appId', params: { spaceId: id, appId } })
+      .then((toolId) =>
+        toolId
+          ? navigate({ to: '/spaces/$spaceId/tools/$toolId', params: { spaceId: id, toolId } })
           : navigate({ to: '/spaces/$spaceId', params: { spaceId: id } }),
       );
   const joinLink = (link: string) => mine.join(inviteFromLink(link));
@@ -73,8 +73,8 @@ function Workspace() {
     if (!space) return;
     await addChat(node, space.id).catch(() => {});
     void navigate({
-      to: '/spaces/$spaceId/apps/$appId',
-      params: { spaceId: space.id, appId: 'chat' },
+      to: '/spaces/$spaceId/tools/$toolId',
+      params: { spaceId: space.id, toolId: 'chat' },
       state: { addPeople: true },
     });
   };

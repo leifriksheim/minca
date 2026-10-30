@@ -17,7 +17,7 @@ export const ICONS = {
   shrink: 'M14.5 6.5h-5v-5M1.5 9.5h5v5M9.5 6.5l5-5M6.5 9.5l-5 5',
   pip: 'M1.5 2.5h13v11h-13zM8.5 8.5h4v3h-4z',
   // The space's sections, and the views under the hood
-  apps: 'M2 2h5v5H2zM9 2h5v5H9zM2 9h5v5H2zM9 9h5v5H9z',
+  tools: 'M2 2h5v5H2zM9 2h5v5H9zM2 9h5v5H2zM9 9h5v5H9z',
   people:
     'M6 7.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5ZM1.5 14c0-2.5 2-4.5 4.5-4.5s4.5 2 4.5 4.5M10.5 2.7a2.5 2.5 0 0 1 0 4.6M12 9.8c1.5.6 2.5 2.2 2.5 4.2',
   layers: 'M8 1.5 14.5 5 8 8.5 1.5 5ZM1.5 8 8 11.5 14.5 8M1.5 11 8 14.5 14.5 11',
@@ -26,7 +26,7 @@ export const ICONS = {
   compass: 'M8 1.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13ZM10.5 5.5 9 9l-3.5 1.5L7 7z',
   search: 'M7 2.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9ZM10.3 10.3l4 4',
   network: 'M8 1.5v3M8 11.5v3M1.5 8h3M11.5 8h3M8 5a3 3 0 1 1 0 6 3 3 0 0 1 0-6Z',
-  // Apps
+  // Tools
   chat: 'M2.5 2.5h11V11H7l-3.5 3v-3h-1z',
   board: 'M2 2.5h3.5v11H2zM6.25 2.5h3.5v7h-3.5zM10.5 2.5H14v9h-3.5z',
   poll: 'M3 13.5V8M8 13.5V2.5M13 13.5V5.5',
@@ -54,7 +54,7 @@ export const ICONS = {
 
 export type IconName = keyof typeof ICONS;
 
-/** One of ours by name, or a path of its own on the same grid: what a mini app brings (`fromMiniApp`) */
+/** One of ours by name, or a path of its own on the same grid */
 export type Glyph = IconName | { readonly path: string };
 
 export function Icon({ name, size = 16 }: { name: Glyph; size?: number }) {

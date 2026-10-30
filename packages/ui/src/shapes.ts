@@ -152,8 +152,8 @@ export type { RoundKind };
 
 export type ShapeKind = keyof typeof PATHS;
 
-/** Each built-in app's shape and colour, the same on the site as in the app */
-export const APP_SHAPES: Readonly<Record<string, { kind: ShapeKind; colour: ShapeColour }>> = {
+/** Each built-in tool's shape and colour, the same on the site as in the app */
+export const TOOL_SHAPES: Readonly<Record<string, { kind: ShapeKind; colour: ShapeColour }>> = {
   chat: { kind: 'scallop', colour: 'cobalt' },
   polls: { kind: 'wave', colour: 'coral' },
   decisions: { kind: 'burst', colour: 'peach' },
@@ -168,12 +168,12 @@ export const APP_SHAPES: Readonly<Record<string, { kind: ShapeKind; colour: Shap
 const CYCLE: readonly ShapeColour[] = ['cobalt', 'coral', 'peach', 'sage', 'lilac'];
 
 /**
- * The shape for anything with an id: a built-in app's own, or, for an app a
+ * The shape for anything with an id: a built-in tool's own, or, for a tool a
  * group made or a space, one of the round shapes picked by the id, so the same
  * thing always gets the same shape.
  */
 export function shapeFor(id: string): { kind: ShapeKind; colour: ShapeColour } {
-  return APP_SHAPES[id] ?? pick(id, ROUND_KINDS);
+  return TOOL_SHAPES[id] ?? pick(id, ROUND_KINDS);
 }
 
 /** Round shapes solid at the middle, where a letter can sit */

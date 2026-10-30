@@ -2,7 +2,7 @@
   "name": "@minca/app-shared",
   "private": true,
   "type": "module",
-  "description": "What the example app, the account home and the mini apps share: styles and shapes built on the design system (@minca/ui), the relay configuration, a few components, and the mini app contract. Source only; each app's Vite build compiles it.",
+  "description": "What the example app, the account home and the tools share: styles and shapes built on the design system (@minca/ui), the relay configuration, a few components, and the tool contract. Source only; each app's Vite build compiles it.",
   "exports": {
     "./styles": "./src/styles.ts",
     "./shapes": "./src/shapes.tsx",

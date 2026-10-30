@@ -2,8 +2,8 @@
  * `std.comment` on a record, the way the app shows it: a thread, oldest
  * first, and a box to add to it, where "@" mentions someone so they can be
  * told, "+" (or typing "/") shares something from the space or, when the
- * app has `std.file`, attaches files, kept about the comment, and 🙂 adds an emoji. A screen whose
- * app names `std.comment` among its collections can use it.
+ * tool has `std.file`, attaches files, kept about the comment, and 🙂 adds an emoji. A screen whose
+ * tool names `std.comment` among its collections can use it.
  */
 import { useState } from 'preact/hooks';
 import { ago } from '../time';

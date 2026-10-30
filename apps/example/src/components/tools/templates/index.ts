@@ -1,5 +1,5 @@
 /**
- * The ready-made apps: each an ordinary app with a screen (`screens.ts`),
+ * The ready-made tools: each an ordinary tool with a screen (`screens.ts`),
  * written the way an agent would write one, and copied into a space when
  * someone adds it (`addTemplate` in `launcher.ts`).
  */
@@ -40,7 +40,7 @@ import polls from './polls.html?raw';
 
 export const TEMPLATES: ReadonlyArray<Template> = [
   {
-    app: {
+    tool: {
       template: 'chat',
       title: 'Chat',
       description:
@@ -66,7 +66,7 @@ export const TEMPLATES: ReadonlyArray<Template> = [
     needs: [message, file, reaction],
   },
   {
-    app: {
+    tool: {
       template: 'files',
       title: 'Files',
       description:
@@ -78,7 +78,7 @@ export const TEMPLATES: ReadonlyArray<Template> = [
     needs: [file, list, listItem],
   },
   {
-    app: {
+    tool: {
       template: 'kanban',
       title: 'Kanban',
       description:
@@ -102,7 +102,7 @@ export const TEMPLATES: ReadonlyArray<Template> = [
     },
   },
   {
-    app: {
+    tool: {
       template: 'lists',
       title: 'Lists',
       description: 'To-dos, groceries, packing: lists anyone can write in at once, a line each.',
@@ -114,7 +114,7 @@ export const TEMPLATES: ReadonlyArray<Template> = [
     needs: [list, listItem],
   },
   {
-    app: {
+    tool: {
       template: 'bills',
       title: 'Bills',
       description:
@@ -130,7 +130,7 @@ export const TEMPLATES: ReadonlyArray<Template> = [
     needs: [expense, settlement, comment],
   },
   {
-    app: {
+    tool: {
       template: 'polls',
       title: 'Polls',
       description: 'Ask the space a question. Everyone picks one option, and can change their mind.',
@@ -145,7 +145,7 @@ export const TEMPLATES: ReadonlyArray<Template> = [
     needs: [poll, vote],
   },
   {
-    app: {
+    tool: {
       template: 'decisions',
       title: 'Decisions',
       description:
@@ -162,7 +162,7 @@ export const TEMPLATES: ReadonlyArray<Template> = [
     needs: [proposal, ballot, decision],
   },
   {
-    app: {
+    tool: {
       template: 'events',
       title: 'Events',
       description: "Concerts, meetups, parties: what's on, who's going, and a place to talk about each one.",
@@ -178,7 +178,7 @@ export const TEMPLATES: ReadonlyArray<Template> = [
     needs: [event, rsvp, comment],
   },
   {
-    app: {
+    tool: {
       template: 'marketplace',
       title: 'Marketplace',
       description: 'Sell, give away and find things among the people in the space.',

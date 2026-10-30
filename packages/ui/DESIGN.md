@@ -1,7 +1,7 @@
 # Minca's design system
 
 Every UI with Minca's name on it (the site, the app, the account home, the
-Chrome extension, an app's screen) is built from what is in this folder and
+Chrome extension, a tool's screen) is built from what is in this folder and
 the React components on top of it in `apps/shared`. When something looks
 different from one UI to the next, one of them is wrong.
 
@@ -16,10 +16,10 @@ Plain data, here in `@minca/ui`, so any UI can draw with it, React or not:
 | File            |                                                                                                     |
 | --------------- | --------------------------------------------------------------------------------------------------- |
 | `src/tokens.ts` | Every colour, face, corner and shadow, as values and as `--minca-*` CSS custom properties           |
-| `src/shapes.ts` | The shapes' paths, and which shape each app and space has                                           |
+| `src/shapes.ts` | The shapes' paths, and which shape each tool and space has                                          |
 | `src/round.ts`  | The round shapes as formulas, for the shapes, the avatar and the morph between them                 |
 | `src/avatar.ts` | An account's avatar, two round shapes blended by its DID, as data and as an SVG element             |
-| `src/frame/`    | The kit an app's screen draws with: Preact, people's faces and Minca's look (`src/frame/styles.ts`) |
+| `src/frame/`    | The kit a tool's screen draws with: Preact, people's faces and Minca's look (`src/frame/styles.ts`) |
 
 React components on top of it, in `apps/shared` (`@minca/app-shared`):
 
@@ -117,9 +117,9 @@ The look is 70s print, kept clean: flat colour on paper, and room around it.
 
 The shapes are the brand. A space is a grid, and each tool in it is a shape.
 
-- Each ready-made app has its own (`APP_SHAPES`): Chat a scallop, Polls a wave,
+- Each ready-made tool has its own (`TOOL_SHAPES`): Chat a scallop, Polls a wave,
   Decisions a burst, Events a flower, Kanban a checker, Marketplace a leaf,
-  Files a stack, Lists a tick, Bills a coin. Use `shapeFor(id)`; it gives anything else (an app a group
+  Files a stack, Lists a tick, Bills a coin. Use `shapeFor(id)`; it gives anything else (a tool a group
   made, a space) a round shape picked by its id, so it is always the same one.
 - A shape stands alone, flat, in one colour. No outlines, gradients, shadows or
   icons drawn inside it, except a number or a letter in its middle.
@@ -136,7 +136,7 @@ The shapes are the brand. A space is a grid, and each tool in it is a shape.
 - An account's avatar is a shape too: two round shapes melted together at a
   point its DID picks, on a ground (`Avatar`). It is how people tell accounts
   apart before reading a name, so use it wherever an account appears.
-- Use shapes for identity (an app, a space, an account), for empty states, and
+- Use shapes for identity (a tool, a space, an account), for empty states, and
   for marking points in a list. Not as decoration for its own sake.
 - Points in a list are marked with these shapes, never with line icons: on
   the site, `Marked` (`apps/site/src/pages/Site.tsx`) sets them in a ruled grid.

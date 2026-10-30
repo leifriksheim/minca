@@ -4,19 +4,19 @@ import { Loader } from '@minca/app-shared/Loader';
 import { ConnectAgent, stepText } from '../ConnectAgent';
 import { useNode } from '@minca/react';
 import { useLauncherRecords } from './entries';
-import { checkLauncherApp, prepareLauncher } from './launcher';
+import { checkLauncherTool, prepareLauncher } from './launcher';
 import { styles, palette, stack } from '../../styles';
 import { LinkButton, PrimaryButton } from '../Buttons';
 
-const TITLE = 'Add your own app';
+const TITLE = 'Add your own tool';
 
 /**
- * Making an app by asking an agent for it: connect one, then ask it in your
- * own words. It proposes the app as
+ * Making a tool by asking an agent for it: connect one, then ask it in your
+ * own words. It proposes the tool as
  * the guide the launcher writes in the space says, and the proposal shows
  * here when it arrives.
  */
-export function CreateApp({
+export function CreateTool({
   space,
   mayDefine,
   onClose,
@@ -26,7 +26,7 @@ export function CreateApp({
   space: SpaceSummary;
   mayDefine: boolean;
   onClose: () => void;
-  /** Shows the space's apps, where proposals are added */
+  /** Shows the space's tools, where proposals are added */
   onReview: () => void;
   onBuildByHand?: () => void;
 }) {
@@ -36,7 +36,7 @@ export function CreateApp({
     if (mayDefine) void prepareLauncher(node, space.id).catch(() => {});
   }, [node, space.id, mayDefine]);
   const ask = (
-    <AskForApp
+    <AskForTool
       space={space}
       mayDefine={mayDefine}
       onReview={() => {
@@ -57,8 +57,8 @@ export function CreateApp({
   return <ConnectAgent title={TITLE} onClose={onClose} then={ask} />;
 }
 
-/** The last step: what to say to the agent, and the app it proposes once it has */
-function AskForApp({
+/** The last step: what to say to the agent, and the tool it proposes once it has */
+function AskForTool({
   space,
   mayDefine,
   onReview,
@@ -69,18 +69,18 @@ function AskForApp({
   onReview: () => void;
   onBuildByHand?: () => void;
 }) {
-  const apps = useLauncherRecords(space.id);
+  const tools = useLauncherRecords(space.id);
   // A proposal made since this opened is the answer. The creator's clock only shows the way; it decides nothing.
   const [since] = useState(() => new Date(Date.now() - 60_000).toISOString());
-  const proposed = apps.find((one) => one.createdAt >= since && one.body && !one.body.template)?.body;
+  const proposed = tools.find((one) => one.createdAt >= since && one.body && !one.body.template)?.body;
   const adds = mayDefine ? 'you add it' : 'someone who runs the space adds it';
   // Said here too, so the person can tell the agent while its chat is still open.
-  const problem = proposed ? checkLauncherApp(proposed) : null;
+  const problem = proposed ? checkLauncherTool(proposed) : null;
 
   return (
     <>
       <p style={stepText}>
-        In a new chat with your agent, say what {space.name} should have, or what to change in an app it has.
+        In a new chat with your agent, say what {space.name} should have, or what to change in a tool it has.
         For example:
       </p>
       <p style={example}>

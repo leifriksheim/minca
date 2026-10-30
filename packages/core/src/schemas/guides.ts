@@ -3,7 +3,7 @@
  * whoever writes to them next, often an agent.
  *
  * A definition says what a record may hold and who may change it. It can't
- * say "to add an app with its own screen, write one of these, pointing at a
+ * say "to add a tool with its own screen, write one of these, pointing at a
  * blueprint". An app that has more to say about its collections writes a
  * `std.guide` naming them, and `collections_list` points at it from each one,
  * so an agent finds it without knowing the app exists.

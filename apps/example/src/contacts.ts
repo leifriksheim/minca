@@ -2,7 +2,7 @@
 import { useEffect } from 'react';
 import { ROLE_ASSIGN, type ContactView, type P2PNode } from '@minca/core';
 import { useAsync, useLive, useNode, useWatched } from '@minca/react';
-import { addChat } from './components/apps/entries';
+import { addChat } from './components/tools/entries';
 
 /** What a new space for two means when no carrier holds it yet (`spaces.carried`) */
 export const NOT_CARRIED =

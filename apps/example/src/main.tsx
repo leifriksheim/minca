@@ -11,7 +11,7 @@ import { followVisibleHeight } from './viewport';
 // Hover, focus and placeholder states, plus the page background — the things
 // inline styles cannot express.
 injectBaseStyles();
-// An open app fits above a phone's keyboard (`viewport.ts`).
+// An open tool fits above a phone's keyboard (`viewport.ts`).
 followVisibleHeight();
 
 // The node's operations as WebMCP tools, from the start — agents and

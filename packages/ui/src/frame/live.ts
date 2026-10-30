@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Heard } from './minca';
 
-/** What `usePresence` sends, kept apart from an app's own live messages */
+/** What `usePresence` sends, kept apart from a tool's own live messages */
 const PRESENCE = 'minca.presence';
 /** How often someone's state goes out at most, so a cursor fits in a screen's allowance */
 const EVERY_MS = 100;
@@ -16,7 +16,7 @@ const isPresence = (data: unknown): data is { [PRESENCE]: unknown; hello?: boole
 const send = (data: unknown, to?: string) => void minca.live.send(data, to ? { to } : {}).catch(() => {});
 
 /**
- * Calls `onHeard` with each live message another device with this app open
+ * Calls `onHeard` with each live message another device with this tool open
  * sends; not those `usePresence` sends.
  */
 export function useLive(onHeard: (heard: Heard) => void): void {
@@ -25,7 +25,7 @@ export function useLive(onHeard: (heard: Heard) => void): void {
   useEffect(() => minca.live.on((heard) => !isPresence(heard.data) && latest.current(heard)), []);
 }
 
-/** Someone with this app open, and what they share */
+/** Someone with this tool open, and what they share */
 export interface Present<T> {
   readonly did: string;
   readonly device: string;
@@ -34,7 +34,7 @@ export interface Present<T> {
 
 /**
  * Shares `state` (a cursor, what is selected, "typing") with everyone else
- * who has this app open, and gives theirs: one per device, kept current,
+ * who has this tool open, and gives theirs: one per device, kept current,
  * dropping anyone not heard from for ten seconds. Use it once per screen.
  */
 export function usePresence<T>(state: T): Present<T>[] {
@@ -54,12 +54,12 @@ export function usePresence<T>(state: T): Present<T>[] {
       setOthers([...seen.values()].map(({ did, device, state }) => ({ did, device, state })));
     const stop = minca.live.on(({ from, device, data }) => {
       if (!isPresence(data)) return;
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- what each screen of this app shares is its own to agree on
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- what each screen of this tool shares is its own to agree on
       const theirs = data[PRESENCE] as T;
       // A state of null is still someone here, with nothing to show; leaving is said apart.
       if (data.bye) seen.delete(device);
       else seen.set(device, { did: from, device, state: theirs, at: Date.now() });
-      // Someone who just opened the app hears from everyone at once, not at the next "still here".
+      // Someone who just opened the tool hears from everyone at once, not at the next "still here".
       if (data.hello) send({ [PRESENCE]: mine.current ?? null }, device);
       show();
     });

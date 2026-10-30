@@ -10,7 +10,7 @@ const navyWash = (percent: number) => `color-mix(in srgb, ${ink.strong} ${percen
 
 /** How tall the bar along a phone's bottom edge is, with room under it */
 const TABBAR_HEIGHT = 68;
-/** How wide a space's rail of apps is */
+/** How wide a space's rail of tools is */
 const RAIL_WIDTH = 80;
 
 /**
@@ -45,50 +45,50 @@ export function injectBaseStyles(): void {
 
     /* .page and .space-layout come from baseCss: the home's screens sit on the same page. */
 
-    /* In a space: its apps down a rail, and whatever is open beside it, each
+    /* In a space: its tools down a rail, and whatever is open beside it, each
        the height of the window and scrolling on its own, the way chat apps are. */
 
     .space-shell { display: grid; grid-template-columns: ${RAIL_WIDTH}px minmax(0, 1fr); height: 100vh; height: 100dvh; }
-    .app-rail {
+    .tool-rail {
       position: relative; z-index: 15; display: flex; flex-direction: column; min-height: 0; padding: 10px 6px;
       background: ${surface.sunken}; border-right: 1px solid ${surface.rule};
     }
-    /* Only the apps scroll, so the menus at the foot can open out past the rail's edge. */
-    .rail-apps {
+    /* Only the tools scroll, so the menus at the foot can open out past the rail's edge. */
+    .rail-tools {
       flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 2px;
       overflow-y: auto; scrollbar-width: none; margin: -4px -6px 0; padding: 4px 6px 0;
     }
     /* In the desktop app's window (apps/desktop), which has no title bar: room for its buttons. */
-    :root[data-desktop] .app-rail { padding-top: 44px; }
-    /* An app on the rail: its shape, its name under it, and a tile of its own while it is open. */
+    :root[data-desktop] .tool-rail { padding-top: 44px; }
+    /* A tool on the rail: its shape, its name under it, and a tile of its own while it is open. */
     .rail-item {
       position: relative; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 4px;
       padding: 7px 2px 6px; border: none; border-radius: ${radius.md}px; background: none;
       color: ${ink.muted}; font-size: 11.5px; font-weight: 500;
     }
     .rail-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    /* The open app: a soft square behind its shape alone, a shade darker than what it sits on, and its name in bold. */
+    /* The open tool: a soft square behind its shape alone, a shade darker than what it sits on, and its name in bold. */
     .rail-icon {
       position: relative; display: inline-flex; align-items: center; justify-content: center;
       width: 38px; height: 38px; border-radius: ${radius.md}px; transition: background-color .15s ease;
     }
     .rail-item[aria-current] { color: ${ink.strong}; font-weight: 600; }
     .rail-item[aria-current] .rail-icon { background: ${surface.line}; }
-    .app-switch .rail-icon { width: 54px; height: 54px; }
-    .app-switch .rail-item[aria-current] .rail-icon { background: ${surface.sunken}; }
+    .tool-switch .rail-icon { width: 54px; height: 54px; }
+    .tool-switch .rail-item[aria-current] .rail-icon { background: ${surface.sunken}; }
     .rail-count { position: absolute; top: -2px; right: -4px; pointer-events: none; }
     .rail-count .count { box-shadow: 0 0 0 2px ${surface.sunken}; }
     /* The space itself, first: its face opens its menu. */
     .rail-top { flex-shrink: 0; display: flex; justify-content: center; padding-bottom: 8px; margin-bottom: 6px; border-bottom: 1px solid ${surface.line}; }
-    /* Every app, from a phone's bar: their shapes in a grid of three, as the rail has them. */
-    .app-switch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
-    .app-switch > .rail-item { padding: 12px 4px 10px; font-size: 12.5px; gap: 6px; }
-    /* Where the next app goes: an empty tile, dashed. */
+    /* Every tool, from a phone's bar: their shapes in a grid of three, as the rail has them. */
+    .tool-switch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+    .tool-switch > .rail-item { padding: 12px 4px 10px; font-size: 12.5px; gap: 6px; }
+    /* Where the next tool goes: an empty tile, dashed. */
     .rail-slot {
       display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
       border: 1.5px dashed ${surface.lineStrong}; border-radius: ${radius.sm}px; color: ${ink.muted};
     }
-    /* What isn't an app has a glyph on the same tile an app's shape takes. */
+    /* What isn't a tool has a glyph on the same tile a tool's shape takes. */
     .rail-glyph { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; color: ${ink.body}; }
     /* You and what's new for you, at the foot; their menus open beside them. */
     .rail-foot {
@@ -114,7 +114,7 @@ export function injectBaseStyles(): void {
     .space-content { flex: 1; min-height: 0; overflow-y: auto; padding: 28px 32px 64px; }
     .space-inner { max-width: 1040px; margin: 0 auto; }
     .space-inner[data-wide] { max-width: none; }
-    /* An app that is a conversation, or a screen of its own, gets every pixel, edge to edge. */
+    /* A tool that is a conversation, or a screen of its own, gets every pixel, edge to edge. */
     .space-content[data-fill] { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
     .space-content[data-fill] > .space-inner { flex: 1; min-height: 0; width: 100%; max-width: none; display: flex; flex-direction: column; }
     .phone-only { display: none !important; }
@@ -156,8 +156,8 @@ export function injectBaseStyles(): void {
     .space-side { display: flex; flex-direction: column; gap: 28px; }
     .collection-nav { display: flex; flex-direction: column; gap: 2px; }
 
-    /* Ready-made apps to add, one under the other. */
-    .app-list { display: flex; flex-direction: column; gap: 8px; }
+    /* Ready-made tools to add, one under the other. */
+    .tool-list { display: flex; flex-direction: column; gap: 8px; }
 
     /* Views that sit side by side under one heading, like Under the hood's. */
     .segmented { display: flex; gap: 2px; align-self: flex-start; max-width: 100%; padding: 4px; border-radius: ${radius.pill}px; background: ${surface.sunken}; }
@@ -261,7 +261,7 @@ export function injectBaseStyles(): void {
     }
     .chat-places [data-nav]:not([aria-current]):hover { background: ${surface.line} !important; }
 
-    /* Events: covers in a grid, the next one large, a month to look across (components/apps/Events.tsx). */
+    /* Events: covers in a grid, the next one large, a month to look across. */
     .ev-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
     .ev-hero { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); overflow: hidden; border-radius: ${radius.lg}px !important; }
     .ev-hero > button { display: block; width: 100%; }
@@ -291,7 +291,7 @@ export function injectBaseStyles(): void {
     .ev-dots { display: none; gap: 3px; justify-content: center; }
     .ev-dots > i { width: 6px; height: 6px; border-radius: ${radius.pill}px; }
 
-    /* Marketplace: square pictures in a grid, prices first (components/apps/Marketplace.tsx). */
+    /* Marketplace: square pictures in a grid, prices first. */
     .mk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 24px 16px; }
     .mk-tools { display: flex; gap: 8px; }
     .mk-photo { transition: filter .2s ease; }
@@ -362,8 +362,8 @@ export function injectBaseStyles(): void {
 
       /* A phone switches spaces from the list of them, one tap away in the
          tab bar, so the space's own sections get the bottom edge, and its
-         apps are the grid on the first screen rather than a sidebar. */
-      .app-rail, .hide-on-phone, .bar-label { display: none !important; }
+         tools are the grid on the first screen rather than a sidebar. */
+      .tool-rail, .hide-on-phone, .bar-label { display: none !important; }
       .space-foot {
         position: sticky; bottom: 0; z-index: 8; flex-shrink: 0; display: flex; align-items: center; gap: 8px;
         min-height: 56px; padding: 0 max(12px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(12px, env(safe-area-inset-left));
@@ -396,19 +396,19 @@ export function injectBaseStyles(): void {
         overflow: visible;
         padding: 16px max(16px, env(safe-area-inset-right)) 24px max(16px, env(safe-area-inset-left));
       }
-      /* An open app is the whole screen, with the way back at its top, as a conversation is on a phone. */
-      .space-shell[data-app-open] .space-content { overflow-y: auto; padding-bottom: 24px; }
+      /* An open tool is the whole screen, with the way back at its top, as a conversation is on a phone. */
+      .space-shell[data-tool-open] .space-content { overflow-y: auto; padding-bottom: 24px; }
       /* As tall as what shows above the keyboard, once one is up (viewport.ts), so a chat's box stays in view. */
-      .space-shell[data-app-open] {
+      .space-shell[data-tool-open] {
         position: fixed; left: 0; right: 0; top: var(--visible-top, 0px);
         min-height: 0; height: var(--visible-height, 100dvh); overflow: hidden;
       }
       /* With a keyboard up the box being typed in sits right above it: the bar at the foot steps aside. */
-      :root[data-keyboard] .space-shell[data-app-open] .space-foot { display: none; }
-      .space-shell[data-app-open] .space-main { display: flex; height: var(--visible-height, 100dvh); }
-      .space-shell[data-app-open] .space-bar { position: static; }
+      :root[data-keyboard] .space-shell[data-tool-open] .space-foot { display: none; }
+      .space-shell[data-tool-open] .space-main { display: flex; height: var(--visible-height, 100dvh); }
+      .space-shell[data-tool-open] .space-bar { position: static; }
       /* The bar at the foot keeps clear of the phone's own edge, so what fills the space runs right down to it. */
-      .space-content[data-fill], .space-shell[data-app-open] .space-content[data-fill] { padding: 0; }
+      .space-content[data-fill], .space-shell[data-tool-open] .space-content[data-fill] { padding: 0; }
 
       /* Chat, the way a phone's messaging apps are: the list of conversations
          is a screen, and one opens over it with the way back at its top. */

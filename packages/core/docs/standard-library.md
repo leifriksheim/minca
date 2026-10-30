@@ -40,9 +40,9 @@ _Source: `packages/core/src/schemas/blueprints.ts` (`standardCollections`), `pac
 
 ## How the library is shaped
 
-People start with a few apps, then change them, add views, and build new
-apps over the same records, often by asking an agent. That only works if
-every app reaches for the same collection for the same thing. These rules
+People start with a few tools, then change them, add views, and build new
+tools over the same records, often by asking an agent. That only works if
+every tool reaches for the same collection for the same thing. These rules
 keep the library small enough to choose from, and each choice obvious:
 
 1. **One collection per kind of thing.** Variants are optional fields, not
@@ -269,7 +269,7 @@ versions are kept whole (`onePer`), so they can be cited. That is why
 { "outcome": 0, "proposal": "bay24o4l…", "ballots": ["bq7x…", "b3kd…", "bm2a…"] }
 ```
 
-_Source: `packages/core/src/schemas/library/community.ts` (`ballot`, `decision`, `goal`, `pledge`, `goalReached`), `apps/example/src/components/apps/Decisions.tsx`. Tests: `packages/core/tests/contracts.test.ts` ("std.decision and std.goal-reached")._
+_Source: `packages/core/src/schemas/library/community.ts` (`ballot`, `decision`, `goal`, `pledge`, `goalReached`), `apps/example/src/components/tools/templates/decisions.html`. Tests: `packages/core/tests/contracts.test.ts` ("std.decision and std.goal-reached")._
 
 **Settings**
 
@@ -317,13 +317,13 @@ writer may have gone away mid-way. `setActivity(node, space, key, state,
 label?)` writes one, and `activeNow(body)` says whether one is going on now.
 A setting without a label keeps the label it had. The action
 `activity_set` ([actions](actions.md)) lets an agent or bot say what it is
-doing in its own words ("Reading the thread", "Making an app"). A bot's
+doing in its own words ("Reading the thread", "Making a tool"). A bot's
 automation runner marks what set each automation off: `waiting` when queued,
 `working` with the automation's name when it starts, then `done` or `failed`, keeping whatever the
 model last said it was doing; it tells the model which record to say it on
 ([automations.md](automations.md#running)).
 
-_Source: `packages/core/src/schemas/automations.ts` (`activity`, `setActivity`, `activeNow`), `packages/cli/src/bot-runner.ts` (`runAutomations`), `apps/example/src/activity.ts`, `apps/example/src/components/apps/Chat.tsx` (`Working`). Tests: `packages/core/tests/automation-runners.test.ts` ("std.activity"), `packages/cli/tests/agent-automations.test.ts` ("while an automation runs")._
+_Source: `packages/core/src/schemas/automations.ts` (`activity`, `setActivity`, `activeNow`), `packages/cli/src/bot-runner.ts` (`runAutomations`), `apps/example/src/activity.ts`. Tests: `packages/core/tests/automation-runners.test.ts` ("std.activity"), `packages/cli/tests/agent-automations.test.ts` ("while an automation runs")._
 
 **Collections**
 
@@ -378,7 +378,7 @@ mention someone on a record whose own definition has no `mentions`, without
 changing that definition. An app's own collection can name a `mentions` field
 as a topic the same way.
 
-_Source: `packages/core/src/schemas/library/publishing.ts` (`message`, `post`), `packages/core/src/schemas/library/annotations.ts` (`comment`), `packages/core/src/schemas/library/planning.ts` (`task`), `apps/example/src/components/std/Mentions.tsx`, `apps/example/src/components/apps/Chat.tsx`, `apps/example/src/components/std/Comments.tsx`. Tests: `packages/core/tests/topics.test.ts` ("mentions and replies are tagged, so “mentions me” and “replies to me” match only those", "a std.comment is tagged like a message…", "a std.post is tagged like a message…", "a task carries a tag for each assignee…", "an app that needs std.message gets its topics…")._
+_Source: `packages/core/src/schemas/library/publishing.ts` (`message`, `post`), `packages/core/src/schemas/library/annotations.ts` (`comment`), `packages/core/src/schemas/library/planning.ts` (`task`), `apps/example/src/components/std/Mentions.tsx`, `apps/example/src/components/tools/templates/chat.html`, `apps/example/src/components/std/Comments.tsx`. Tests: `packages/core/tests/topics.test.ts` ("mentions and replies are tagged, so “mentions me” and “replies to me” match only those", "a std.comment is tagged like a message…", "a std.post is tagged like a message…", "a task carries a tag for each assignee…", "an app that needs std.message gets its topics…")._
 
 **Responses.** A record written in answer to someone's record names them in
 `respondingTo`: a `std.reaction`, `std.comment` or `std.repost` the author of
@@ -410,7 +410,7 @@ goes through objects only), so `owedBy` repeats those accounts as a list, at
 most 63 so that with `paidBy` every one is tagged: a record carries at most
 64 tags.
 
-_Source: `packages/core/src/schemas/library/annotations.ts`, `packages/core/src/schemas/library/publishing.ts`, `packages/core/src/schemas/library/planning.ts`, `packages/core/src/schemas/library/community.ts`, `packages/core/src/schemas/library/money.ts`, `packages/core/src/schemas/library/social.ts`, `packages/core/src/schemas/library/media.ts`; `apps/example/src/derive/people.ts` (`respondingTo`), `apps/example/src/components/std/Reactions.tsx`, `apps/example/src/components/std/Comments.tsx`, `apps/example/src/components/apps/Polls.tsx`, `apps/example/src/components/apps/Decisions.tsx`, `apps/example/src/components/apps/Events.tsx`, `apps/example/src/components/apps/Marketplace.tsx`. Tests: `packages/core/tests/topics.test.ts` ("every standard collection that names people has them as topics…", "a report names nobody…", "a std.reaction is tagged for the person in its respondingTo…" and the rest of that list)._
+_Source: `packages/core/src/schemas/library/annotations.ts`, `packages/core/src/schemas/library/publishing.ts`, `packages/core/src/schemas/library/planning.ts`, `packages/core/src/schemas/library/community.ts`, `packages/core/src/schemas/library/money.ts`, `packages/core/src/schemas/library/social.ts`, `packages/core/src/schemas/library/media.ts`; `apps/example/src/derive/people.ts` (`respondingTo`), `apps/example/src/components/std/Reactions.tsx`, `apps/example/src/components/std/Comments.tsx`, `apps/example/src/components/tools/templates/polls.html`, `apps/example/src/components/tools/templates/decisions.html`, `apps/example/src/components/tools/templates/events.html`, `apps/example/src/components/tools/templates/marketplace.html`. Tests: `packages/core/tests/topics.test.ts` ("every standard collection that names people has them as topics…", "a report names nobody…", "a std.reaction is tagged for the person in its respondingTo…" and the rest of that list)._
 
 **Channels.** A space with more than one conversation lists `std.channel`
 records, by `position` then name, and a message is `in` its channel:
@@ -429,7 +429,7 @@ show one it can't open as unreadable, not drop it. `to` is a topic, so
 "direct messages to me" is an automation of the account's own whose wake a
 keeper can match unread.
 
-_Source: `packages/core/src/schemas/library/publishing.ts` (`channel`, `direct`), `packages/core/src/privacy/direct.ts`, `apps/example/src/components/apps/Chat.tsx`. Tests: `packages/core/tests/direct.test.ts`._
+_Source: `packages/core/src/schemas/library/publishing.ts` (`channel`, `direct`), `packages/core/src/privacy/direct.ts`. Tests: `packages/core/tests/direct.test.ts`._
 
 **Changes to earlier definitions.** Before v1 the library is reshaped
 without migrations, to keep to the rules above. The last such change merged
@@ -507,7 +507,7 @@ Finding places by name is not part of the library. The example asks Photon
 (OpenStreetMap's data, `apps/shared/src/places.ts`), set by `VITE_MINCA_PLACES`,
 and shows OpenStreetMap's credit beside what it finds.
 
-_Source: `packages/core/src/schemas/geo.ts` (`geohash`, `cellsOf`, `cellsAround`, `aroundCell`, `distanceKm`), `apps/example/src/components/apps/Where.tsx`, `apps/shared/src/places.ts`. Tests: `packages/core/tests/geo.test.ts` (all)._
+_Source: `packages/core/src/schemas/geo.ts` (`geohash`, `cellsOf`, `cellsAround`, `aroundCell`, `distanceKm`), `packages/ui/src/frame/places.ts`, `apps/shared/src/places.ts`. Tests: `packages/core/tests/geo.test.ts` (all)._
 
 ## Planned: what the library still waits on
 

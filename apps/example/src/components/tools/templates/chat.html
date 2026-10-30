@@ -262,11 +262,11 @@
   const nameIn = (people, did) =>
     did === me ? 'You' : (people.find((p) => p.did === did)?.name ?? 'Someone');
 
-  // GIFs come from GIPHY, with the key someone who may add apps gave in the app's settings; without one there are none.
+  // GIFs come from GIPHY, with the key someone who may add tools gave in the tool's settings; without one there are none.
   // What is sent is the GIF itself, kept in the space as a file, so it shows for everyone and stays.
   const GIPHY = 'https://api.giphy.com/v1/gifs';
   const giphyKey = minca.settings.giphy;
-  // GIPHY's numbered media hosts serve the same paths as this one, the only one the app reaches.
+  // GIPHY's numbered media hosts serve the same paths as this one, the only one the tool reaches.
   const giphyMedia = (url) => url.replace(/^https:\/\/media\d\.giphy\.com\//, 'https://media.giphy.com/');
 
   /** GIFs for what was typed, or trending ones before anything is */

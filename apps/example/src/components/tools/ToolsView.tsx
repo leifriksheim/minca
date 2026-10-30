@@ -10,10 +10,10 @@ import { FeatureIcon } from '@minca/app-shared/Feature';
 import { ConnectAgent } from '../ConnectAgent';
 import { sectionsOf, type SpaceScreen } from '../SpaceView';
 import { RowMenu } from '../PeopleParts';
-import type { AppEntry, useSpaceApps } from './entries';
-import { AppIcon, Count } from './AppIcon';
-import { Proposals } from './MadeApps';
-import { copyApp, moveApp, removeApp } from './launcher';
+import type { ToolEntry, useSpaceTools } from './entries';
+import { ToolIcon, Count } from './ToolIcon';
+import { Proposals } from './MadeTools';
+import { copyTool, moveTool, removeTool } from './launcher';
 import { Icon } from '../Icon';
 import { unreadOf, type Unread } from '../../seen';
 import { styles, palette, variants, hstack, stack, ui } from '../../styles';
@@ -21,74 +21,74 @@ import { PrimaryButton } from '../Buttons';
 import { confirmThen } from '../../confirm';
 
 /**
- * A space's apps like a phone's home screen: those added, then proposals.
- * Ready-made ones to add are under New app (`NewApp`). Someone who may add collections can arrange them: move
- * them, or take them off. Taking one off keeps everything it holds. Arranging is also where an app is copied
+ * A space's tools like a phone's home screen: those added, then proposals.
+ * Ready-made ones to add are under New tool (`NewTool`). Someone who may add collections can arrange them: move
+ * them, or take them off. Taking one off keeps everything it holds. Arranging is also where a tool is copied
  * to another of your spaces.
  */
-export function AppsView({
+export function ToolsView({
   space,
   collections,
-  apps,
+  tools,
   unread,
   mayDefine,
   go,
-  onOpenApp,
+  onOpenTool,
   onCreate,
 }: {
   space: SpaceSummary;
   collections: ReadonlyArray<NodeCollection>;
-  apps: ReturnType<typeof useSpaceApps>;
+  tools: ReturnType<typeof useSpaceTools>;
   unread: ReadonlyMap<string, Unread>;
   mayDefine: boolean;
   go: SpaceScreen['go'];
-  onOpenApp: (id: string) => void;
+  onOpenTool: (id: string) => void;
   onCreate: () => void;
 }) {
   const node = useNode();
   const [arranging, setArranging] = useState(false);
   const arrange = useAction();
   const { spaces, pairs } = useWorkspace();
-  // Groups of yours to propose an app in: not this one, nor a space for two.
+  // Groups of yours to propose a tool in: not this one, nor a space for two.
   const others = spaces.filter((other) => other.id !== space.id && other.writable && !pairs.has(other.id));
   const [copied, setCopied] = useState<string | null>(null);
   const [addingBot, setAddingBot] = useState(false);
   const [connecting, setConnecting] = useState(false);
   // A bot runs where the space is kept online, so adding one is for whoever chooses that.
   const mayAddBot = useMay(space.id, SPACE_KEEPERS) && space.writable;
-  const copy = (app: AppEntry, to: SpaceSummary) => {
+  const copy = (tool: ToolEntry, to: SpaceSummary) => {
     setCopied(null);
-    copyApp(node, space.id, app.record, to.id).then(
-      () => setCopied(`${app.title} is proposed in ${to.name}. People there add it if they want it.`),
+    copyTool(node, space.id, tool.record, to.id).then(
+      () => setCopied(`${tool.title} is proposed in ${to.name}. People there add it if they want it.`),
       (e: unknown) => setCopied(message(e)),
     );
   };
 
-  const move = (app: AppEntry, by: number) => {
-    const at = apps.placed.findIndex((record) => record.key === app.record.key);
-    void arrange.run(() => moveApp(node, space.id, apps.placed, app.record.key, at + by));
+  const move = (tool: ToolEntry, by: number) => {
+    const at = tools.placed.findIndex((record) => record.key === tool.record.key);
+    void arrange.run(() => moveTool(node, space.id, tools.placed, tool.record.key, at + by));
   };
-  const remove = (app: AppEntry) =>
+  const remove = (tool: ToolEntry) =>
     confirmThen(
-      app.record.body?.template
+      tool.record.body?.template
         ? 'Everything it holds stays in the space, and adding it again brings it back.'
-        : 'Everything it holds stays in the space; to have the app again, someone proposes it again.',
-      { title: `Take ${app.title} off ${space.name}?`, yes: 'Take it off' },
-      () => arrange.run(() => removeApp(node, space.id, app.record, apps.records)),
+        : 'Everything it holds stays in the space; to have the tool again, someone proposes it again.',
+      { title: `Take ${tool.title} off ${space.name}?`, yes: 'Take it off' },
+      () => arrange.run(() => removeTool(node, space.id, tool.record, tools.records)),
     );
 
   return (
     <div style={stack(36)}>
-      <section aria-label="Apps in this space" style={stack(14)}>
+      <section aria-label="Tools in this space" style={stack(14)}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
           <div>
-            <h2 style={{ ...styles.appTitle, fontSize: 20 }}>Apps</h2>
+            <h2 style={{ ...styles.appTitle, fontSize: 20 }}>Tools</h2>
             <p style={{ ...styles.quiet, marginTop: 2 }}>
               What you use together here. Everything they save stays in the space.
             </p>
           </div>
           <div style={{ ...hstack(8), flexShrink: 0 }}>
-            {mayDefine && apps.ready.length > 0 && (
+            {mayDefine && tools.ready.length > 0 && (
               <button
                 onClick={() => setArranging((was) => !was)}
                 aria-pressed={arranging}
@@ -100,34 +100,34 @@ export function AppsView({
             )}
             {space.writable && !arranging && (
               <PrimaryButton onClick={onCreate} className="hide-on-phone" style={{ ...inlineButton }}>
-                <Icon name="plus" size={14} /> Add app
+                <Icon name="plus" size={14} /> Add tool
               </PrimaryButton>
             )}
           </div>
         </div>
 
         {/* One list, arranging or not: arranging only swaps each row's arrow for its moves. */}
-        {apps.ready.length > 0 || space.writable ? (
-          <ol aria-label={arranging ? 'Arrange apps' : 'Apps'} className="rows" style={ui.list}>
-            {apps.ready.map((app, at) => (
-              <AppRow
-                key={app.id}
-                app={app}
-                unread={unreadOf(unread, app.id)}
-                onOpen={() => onOpenApp(app.id)}
+        {tools.ready.length > 0 || space.writable ? (
+          <ol aria-label={arranging ? 'Arrange tools' : 'Tools'} className="rows" style={ui.list}>
+            {tools.ready.map((tool, at) => (
+              <ToolRow
+                key={tool.id}
+                tool={tool}
+                unread={unreadOf(unread, tool.id)}
+                onOpen={() => onOpenTool(tool.id)}
                 arrange={
                   arranging
                     ? {
                         busy: arrange.busy,
                         first: at === 0,
-                        last: at === apps.ready.length - 1,
-                        onMove: (by) => move(app, by),
+                        last: at === tools.ready.length - 1,
+                        onMove: (by) => move(tool, by),
                         menu: [
                           ...others.map((other) => ({
                             label: `Copy to ${other.name}`,
-                            onClick: () => copy(app, other),
+                            onClick: () => copy(tool, other),
                           })),
-                          { label: 'Remove', danger: true, onClick: () => remove(app) },
+                          { label: 'Remove', danger: true, onClick: () => remove(tool) },
                         ],
                       }
                     : undefined
@@ -141,7 +141,7 @@ export function AppsView({
                     <Icon name="plus" size={16} />
                   </span>
                   <span style={{ ...stack(2), flex: 1, minWidth: 0 }}>
-                    <strong style={{ ...cardTitle, color: palette.ink.body }}>Add app</strong>
+                    <strong style={{ ...cardTitle, color: palette.ink.body }}>Add tool</strong>
                     <span style={cardText}>A ready-made one, or one an agent builds for you</span>
                   </span>
                 </button>
@@ -149,7 +149,7 @@ export function AppsView({
             )}
           </ol>
         ) : (
-          <p style={styles.quiet}>No apps here yet.</p>
+          <p style={styles.quiet}>No tools here yet.</p>
         )}
         {arrange.error && <p style={styles.error}>{arrange.error}</p>}
         {copied && arranging && <p style={styles.quiet}>{copied}</p>}
@@ -157,11 +157,11 @@ export function AppsView({
 
       <Proposals
         space={space}
-        proposals={apps.proposed}
-        placed={apps.placed}
+        proposals={tools.proposed}
+        placed={tools.placed}
         collections={collections}
         mayDefine={mayDefine}
-        onAdded={(key) => onOpenApp(`made:${key}`)}
+        onAdded={(key) => onOpenTool(`made:${key}`)}
       />
 
       <section aria-label="Agents" style={stack(14)}>
@@ -250,16 +250,16 @@ function OverviewRow({
 }
 
 /**
- * An app in the list: its shape, its name, a line on what it's for and what's new in it. A tap opens
+ * A tool in the list: its shape, its name, a line on what it's for and what's new in it. A tap opens
  * it; while arranging, its moves take the arrow's place, so the list itself never changes shape.
  */
-function AppRow({
-  app,
+function ToolRow({
+  tool,
   unread,
   onOpen,
   arrange,
 }: {
-  app: AppEntry;
+  tool: ToolEntry;
   unread: Unread;
   onOpen: () => void;
   arrange:
@@ -275,10 +275,10 @@ function AppRow({
 }) {
   const about = (
     <>
-      <AppIcon id={app.id} size={36} />
+      <ToolIcon id={tool.id} size={36} />
       <span style={{ ...stack(2), flex: 1, minWidth: 0 }}>
-        <strong style={{ ...cardTitle, ...ui.ellipsis }}>{app.title}</strong>
-        {app.description && <span style={{ ...cardText, ...ui.ellipsis }}>{app.description}</span>}
+        <strong style={{ ...cardTitle, ...ui.ellipsis }}>{tool.title}</strong>
+        {tool.description && <span style={{ ...cardText, ...ui.ellipsis }}>{tool.description}</span>}
       </span>
     </>
   );
@@ -294,15 +294,15 @@ function AppRow({
         </button>
       </li>
     );
-  // One line on every screen: the app, its moves, and the rest behind a menu.
+  // One line on every screen: the tool, its moves, and the rest behind a menu.
   return (
     <li style={{ ...rowButton, listStyle: 'none', padding: '8px 10px 8px 16px' }}>
-      <AppIcon id={app.id} size={32} />
-      <strong style={{ ...cardTitle, ...ui.ellipsis, flex: 1, minWidth: 0 }}>{app.title}</strong>
+      <ToolIcon id={tool.id} size={32} />
+      <strong style={{ ...cardTitle, ...ui.ellipsis, flex: 1, minWidth: 0 }}>{tool.title}</strong>
       <button
         onClick={() => arrange.onMove(-1)}
         disabled={arrange.busy || arrange.first}
-        aria-label={`Move ${app.title} up`}
+        aria-label={`Move ${tool.title} up`}
         data-variant="quiet"
         data-round
         style={roundButton}
@@ -314,7 +314,7 @@ function AppRow({
       <button
         onClick={() => arrange.onMove(1)}
         disabled={arrange.busy || arrange.last}
-        aria-label={`Move ${app.title} down`}
+        aria-label={`Move ${tool.title} down`}
         data-variant="quiet"
         data-round
         style={roundButton}
@@ -323,7 +323,7 @@ function AppRow({
           <Icon name="chevron" size={14} />
         </span>
       </button>
-      <RowMenu label={`More for ${app.title}`} items={arrange.menu} />
+      <RowMenu label={`More for ${tool.title}`} items={arrange.menu} />
     </li>
   );
 }
@@ -342,7 +342,7 @@ const rowButton = {
   color: 'inherit',
   textAlign: 'left',
 } as const;
-/** Where the next app goes: an empty tile, dashed */
+/** Where the next tool goes: an empty tile, dashed */
 const slot = {
   width: 36,
   height: 36,
@@ -355,7 +355,7 @@ const slot = {
   color: palette.ink.muted,
 } as const;
 // As tall as a finger needs (`pointer: coarse` raises buttons to 40), and as wide, so they stay round.
-/** A section's line icon, on the same tile an app's shape takes */
+/** A section's line icon, on the same tile a tool's shape takes */
 const sectionIcon = {
   width: 36,
   height: 36,

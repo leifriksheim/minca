@@ -410,13 +410,13 @@ describe('std.activity', () => {
     await person.collections.define(space, activity);
     const set = z
       .object({ state: z.string(), label: z.string() })
-      .parse(await runAction(person, 'activity_set', { space, about: on.key, label: 'Making an app' }));
-    assert.deepEqual(set, { state: 'working', label: 'Making an app' });
+      .parse(await runAction(person, 'activity_set', { space, about: on.key, label: 'Making a tool' }));
+    assert.deepEqual(set, { state: 'working', label: 'Making a tool' });
     await setActivity(person, space, on.key, 'done');
     const [kept] = await person.records.linked(space, on.key, { rel: 'about', collection: activity.name });
     assert.deepEqual(
       z.object({ state: z.string(), label: z.string() }).parse(kept?.body),
-      { state: 'done', label: 'Making an app' },
+      { state: 'done', label: 'Making a tool' },
       'done, still saying what it did',
     );
     await assert.rejects(

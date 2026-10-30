@@ -2,7 +2,7 @@
  * What runs in front of every screen, after `window.minca` and before the
  * screen's own scripts: the `ui` global. Preact with htm, so a screen writes
  * components without a build step; hooks over `minca` that redraw when the
- * space changes; the pieces apps share (faces, comments, places, dialogs,
+ * space changes; the pieces tools share (faces, comments, places, dialogs,
  * shapes); and Minca's look. Bundled into one script by `bundle.ts`. What it
  * offers is in `guide.ts`.
  */

@@ -447,7 +447,9 @@ its password or passkeys. Its note stops working for live checks at
 > already limit writing to some collections, with a policy on `.collection`
 > that every peer checks ([01](01-identity.md) §8), but a home doesn't offer
 > one yet; reading per collection would need collection keys the home can
-> hand out alone. Not designed yet.
+> hand out alone. Not designed yet. The first case is an agent that makes
+> tools for a group from its definitions and guides, without its records
+> ([#348](https://github.com/leifriksheim/minca/issues/348)).
 
 ### 2.9 Expiry and renewal
 
