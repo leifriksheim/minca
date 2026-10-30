@@ -462,6 +462,14 @@ export interface MincaAuth {
   cancelPod(): void;
   /** Removes the copy this browser kept after a move into a pod */
   forgetBrowserCopy(): Promise<void>;
+  /**
+   * Removes the open account from this browser, after `confirm` and once no
+   * app is connected from here: signs out, then deletes the account and its
+   * spaces' data from this browser, as clearing its site data would. Copies elsewhere, on
+   * other devices, carriers or hosts, stay; without one, its private spaces
+   * are gone. Not for an account kept in a folder: that folder is its copy.
+   */
+  removeAccount(): Promise<boolean>;
   dismissMoved(): void;
   /**
    * Asks the person to prove it is them, with the account's password, a
@@ -1771,6 +1779,31 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
           await deleteBrowserData(copy);
         }
         update({ moved: null });
+      });
+    },
+
+    async removeAccount() {
+      const { session, place } = state;
+      if (!session || place?.kind !== 'browser') return false;
+      if (!isConfirmed()) {
+        update({ error: describe(new Error('Confirm it is you first.')) });
+        return false;
+      }
+      // Only this home can disconnect them, and only while it keeps them: removing it first
+      // would leave their keys writing for the account for good.
+      if (auth.connections().some((known) => known.access !== 'carry')) {
+        update({ error: describe(new Error('Disconnect your apps first.')) });
+        return false;
+      }
+      const account = session.account;
+      await auth.signOut();
+      // Its passkey keys stay, as after a move into a pod: a pod's vault may name the same one.
+      return run(async () => {
+        await place.store.remove(account.id);
+        await deleteBrowserData(account);
+        set(`${prefix}.connections:${account.id}`, null);
+        if (get(LAST_ACCOUNT) === account.id) set(LAST_ACCOUNT, null);
+        update({ stage: afterStorage(await refresh(place)) });
       });
     },
 

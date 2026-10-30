@@ -153,7 +153,7 @@ export function describeStores(
 /** Deletes the IndexedDB databases an account kept in this browser, or every one whose name starts with a prefix. */
 export async function deleteBrowserData(account: AccountSummary | string): Promise<void> {
   const prefix = typeof account === 'string' ? account : databaseName(account);
-  const databases = (await globalThis.indexedDB.databases?.()) ?? [];
+  const databases = (await globalThis.indexedDB?.databases?.()) ?? [];
   const names = databases
     .map((db) => db.name)
     .filter((name): name is string => name?.startsWith(prefix) === true);

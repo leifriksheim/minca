@@ -187,17 +187,6 @@ export const styles = {
   },
   /** What a section is for, under its heading */
   sectionText: { color: ink.muted, fontSize: 14, lineHeight: 1.5, marginTop: 4 },
-  /** A line in a settings section: what it is on the left, what you can do about it on the right */
-  settingsRow: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    padding: '10px 12px',
-    background: surface.sunken,
-    borderRadius: radius.md,
-    fontSize: 14,
-  },
   /** An explanation on the consent page, set back from it: what something may do, or may not */
   note: {
     padding: '14px 16px',

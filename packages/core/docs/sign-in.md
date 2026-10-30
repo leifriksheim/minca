@@ -156,8 +156,8 @@ _Source: `packages/core/src/session/auth.ts`, `packages/core/src/session/credent
 Being signed in is no proof anyone is there: a page may be left open, and a
 sign-in kept for days. So whatever hands out the whole account, or changes how
 it signs in, asks again. `auth.recoveryCode()` returns the code,
-`auth.offerToPhone()` starts, `setPassword`, `addPasskey` and
-`removeShortcut` work (outside the first setup of an account just made,
+`auth.offerToPhone()` starts, `setPassword`, `addPasskey`,
+`removeShortcut` and `removeAccount` work (outside the first setup of an account just made,
 restored or paired, which only landing a session opens), only within five
 minutes of `auth.confirm(proof)` succeeding for the account signed in now
 (`isConfirmed()` says whether it has), where `proof` is
@@ -280,6 +280,18 @@ Picking a pod while signed in sets `podChoice` with what the pod holds
 into the pod, copies every space into it (`copyAccountData`, [stores](node.md#stores)), and
 restarts the session there. `forgetBrowserCopy()` then deletes the browser's
 copy. Other accounts in the pod are never touched.
+
+`removeAccount()` takes an account out of the browser altogether, as clearing
+its site data would. It refuses while an app is connected from here: only this
+home can disconnect an app, so the apps go first, from the list where
+`disconnect` says whether each has heard. Then it signs out and deletes the
+account's vault, its spaces' data and what the home remembered of it. A
+revoke no peer but the app has taken in goes with them, as after a disconnect
+nobody heard. Its passkey keys stay, since a pod's vault may name the same
+one; with the vault gone they open nothing.
+Copies on other devices, carriers and hosts stay; with none, its private
+spaces are gone, and so is whatever reached no other copy. An account kept in a pod is not removed this way: the pod is
+its copy.
 
 The page writes to the pod only while it is open. A carrier given the same
 folder, such as the Chrome extension, keeps it up to date while the page is

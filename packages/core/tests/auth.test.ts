@@ -414,6 +414,26 @@ describe('createMincaAuth', () => {
     assert.equal(await auth.confirm({ password: 'chosen by whoever sat down' }), false);
   });
 
+  test('removing an account from this browser takes proof, and leaves the others', async () => {
+    const auth = started();
+    await auth.start();
+    await createAccount(auth, 'Ada');
+    await auth.signOut();
+    await createAccount(auth, 'Bob');
+    assert.equal(await auth.removeAccount(), false, 'not without proof it is you');
+    assert.equal(auth.getState().accounts.length, 2);
+
+    assert.equal(await auth.confirm({ password: PASSWORD }), true);
+    assert.equal(await auth.removeAccount(), true, auth.getState().error?.message ?? 'no reason given');
+    const left = auth.getState();
+    assert.equal(left.session, null);
+    assert.deepEqual(
+      left.accounts.map((account) => account.name),
+      ['Ada'],
+    );
+    assert.equal(left.stage, 'signIn');
+  });
+
   test('proof is for one account, and does not carry over to another', async () => {
     const auth = started();
     await auth.start();

@@ -982,8 +982,10 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     account's other keys. The date chosen at the grant bounds only live use,
     and the home says so where the person grants and lists apps. Only the
     home that granted it can disconnect it, and only while it keeps its
-    record of the connection: site data cleared there leaves the app's keys,
-    and those it replaced, never to be revoked (06 §2.9, §2.10,
+    record of the connection: site data cleared there, or the account
+    removed from that browser before a peer other than the app took in its
+    disconnects (removal does not wait for one), leaves the app's keys, and
+    those it replaced, never to be revoked (06 §2.9, §2.10,
     [#165](https://github.com/leifriksheim/minca/issues/165)). By design.
   - Everything a key thief can do in §3.4, with its own key ([#165](https://github.com/leifriksheim/minca/issues/165)).
   - A version it writes in one of the account's own spaces (the registry,

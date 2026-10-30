@@ -16,6 +16,7 @@ import { usernameIdeas } from '@minca/core/inbox';
 import { UsernamePicker } from '@minca/app-shared/UsernamePicker';
 import { shortUsername, useFreeUsername } from '@minca/app-shared/usernames';
 import { ask } from '@minca/app-shared/Ask';
+import { forgetPicture } from '@minca/app-shared/rememberedPictures';
 import { Shape } from '@minca/app-shared/shapes';
 import { shapeFor, type ShapeKind } from '@minca/ui/shapes';
 import type { ShapeColour } from '@minca/ui/tokens';
@@ -139,8 +140,8 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
       title={
         onlyWayIn ? `${other} first — otherwise you would need your recovery code to get back in.` : undefined
       }
-      data-variant="quiet"
-      style={{ ...styles.smallButton, color: palette.accent.danger }}
+      data-variant="danger"
+      style={dangerButton}
     >
       Remove
     </button>
@@ -172,27 +173,42 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
       {tab === 'security' && (
         <>
           <PageHead title="Security" line="How you get into your account, and how you get it back." />
-          <Section
-            title="Signing in"
-            description="How you open your account here every day. A passkey works in this browser; a password works wherever your account is kept, including your pod in other apps."
-          >
-            {hasPasskey ? (
-              <Row label="A passkey signs you in on this device.">
-                {removeButton('passkey', 'Set a password')}
-              </Row>
-            ) : (
-              <Row label="No passkey on this device.">
-                <button
-                  onClick={() => guarded('add a passkey', () => void auth.addPasskey())}
-                  disabled={state.busy}
-                  data-variant="primary"
-                  style={styles.darkSmall}
+          <Section title="Signing in" description="How you open your account here every day.">
+            <ul className="rows" style={styles.list}>
+              {hasPasskey ? (
+                <Row label="Passkey" detail="Signs you in on this device">
+                  {removeButton('passkey', 'Set a password')}
+                </Row>
+              ) : (
+                <Row label="Passkey" detail="Not set up on this device">
+                  <button
+                    onClick={() => guarded('add a passkey', () => void auth.addPasskey())}
+                    disabled={state.busy}
+                    data-variant="primary"
+                    style={styles.darkSmall}
+                  >
+                    {state.busy ? 'Waiting…' : 'Set up a passkey'}
+                  </button>
+                </Row>
+              )}
+              {!changingPassword && (
+                <Row
+                  label="Password"
+                  detail={hasPassword ? 'Works wherever your account is kept' : 'Not set'}
                 >
-                  {state.busy ? 'Waiting…' : 'Set up a passkey'}
-                </button>
-              </Row>
-            )}
-            {changingPassword ? (
+                  <button
+                    onClick={() => guarded('change the password', () => setChangingPassword(true))}
+                    disabled={state.busy}
+                    data-variant={hasPassword ? 'quiet' : 'primary'}
+                    style={hasPassword ? styles.smallButton : styles.darkSmall}
+                  >
+                    {hasPassword ? 'Change' : 'Set a password'}
+                  </button>
+                  {hasPassword && removeButton('passphrase', 'Set up a passkey')}
+                </Row>
+              )}
+            </ul>
+            {changingPassword && (
               <PasswordForm
                 account={session.account.name}
                 busy={state.busy}
@@ -213,20 +229,6 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
                 }}
                 onCancel={() => setChangingPassword(false)}
               />
-            ) : (
-              <Row label={hasPassword ? 'A password is set.' : 'No password.'}>
-                <span style={hstack(6)}>
-                  <button
-                    onClick={() => guarded('change the password', () => setChangingPassword(true))}
-                    disabled={state.busy}
-                    data-variant="quiet"
-                    style={styles.smallButton}
-                  >
-                    {hasPassword ? 'Change' : 'Set a password'}
-                  </button>
-                  {hasPassword && removeButton('passphrase', 'Set up a passkey')}
-                </span>
-              </Row>
             )}
             {changingPassword && state.error && <p style={styles.error}>{state.error.message}</p>}
             {waiting && (
@@ -276,6 +278,14 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
           >
             <SignOut />
           </Section>
+
+          {place?.kind === 'browser' && (
+            <RemoveAccount
+              alone={(carriers ?? []).length === 0}
+              apps={connections.filter((app) => app.access !== 'carry').length}
+              openApps={() => openTab('apps')}
+            />
+          )}
         </>
       )}
       {tab === 'apps' && (
@@ -520,23 +530,21 @@ function Copies({
       title="Your copies"
       description="Every device and app you use keeps its own copy of your spaces, and they sync with each other. More than one copy is what keeps them safe."
     >
-      <Row label={here}>
-        {folderAvailable && (
-          <button onClick={onChooseFolder} disabled={busy} data-variant="quiet" style={styles.smallButton}>
-            {inFolder ? 'Change folder' : 'Keep in a folder'}
-          </button>
-        )}
-      </Row>
-      {carriers.map((carrier) => (
-        <Row key={carrier.space} label={`${carrier.name} · ${presence(carrier.space)}`}>
-          <span />
+      <ul className="rows" style={styles.list}>
+        <Row label={here}>
+          {folderAvailable && (
+            <button onClick={onChooseFolder} disabled={busy} data-variant="quiet" style={styles.smallButton}>
+              {inFolder ? 'Change folder' : 'Keep in a folder'}
+            </button>
+          )}
         </Row>
-      ))}
-      {hosts.map((host) => (
-        <Row key={host.space} label={`${host.name} · host`}>
-          <span />
-        </Row>
-      ))}
+        {carriers.map((carrier) => (
+          <Row key={carrier.space} label={carrier.name} detail={presence(carrier.space)} />
+        ))}
+        {hosts.map((host) => (
+          <Row key={host.space} label={host.name} detail="Host" />
+        ))}
+      </ul>
       <p style={styles.errorHint}>
         {inFolder
           ? 'This page writes to the folder only while it is open. Give the Minca extension the same folder and it keeps it up to date while Chrome is open; then the folder is a whole copy of your account, which you can open with your password on any computer.'
@@ -864,7 +872,7 @@ function AppRow({
   children: ReactNode;
 }) {
   return (
-    <li style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', flexWrap: 'wrap' }}>
+    <li style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', flexWrap: 'wrap' }}>
       <Shape {...shapeFor(mark)} size={32} />
       <span style={{ ...stack(2), flex: '1 1 200px', minWidth: 0 }}>
         <strong style={{ fontSize: 15, fontWeight: 600, color: palette.ink.strong }}>{title}</strong>
@@ -953,7 +961,7 @@ function Username() {
                 })
               }
               data-variant="danger"
-              style={{ ...styles.smallButton, color: palette.accent.danger }}
+              style={dangerButton}
             >
               Give it up
             </button>
@@ -987,16 +995,94 @@ const usernameStyle = {
   overflowWrap: 'anywhere',
 } as const;
 
-/** A line in a section; `shape` marks what it is about, an app by its address */
-function Row({ label, shape, children }: { label: string; shape?: string; children: ReactNode }) {
+/** A line in a section's list: what it is on the left, what you can do about it on the right */
+function Row({ label, detail, children }: { label: string; detail?: string; children?: ReactNode }) {
   return (
-    <div style={styles.settingsRow}>
-      <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-        {shape !== undefined && <Shape {...shapeFor(shape)} size={18} />}
-        <span>{label}</span>
+    <li style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', flexWrap: 'wrap' }}>
+      <span style={{ ...stack(2), flex: '1 1 200px', minWidth: 0 }}>
+        <strong style={{ fontSize: 15, fontWeight: 600, color: palette.ink.strong }}>{label}</strong>
+        {detail && <span style={{ fontSize: 13, color: palette.ink.muted }}>{detail}</span>}
       </span>
-      {children}
-    </div>
+      {children && <span style={hstack(8)}>{children}</span>}
+    </li>
+  );
+}
+
+/** A button that takes something away: red, as every one on these pages is */
+const dangerButton = { ...styles.smallButton, color: palette.accent.danger } as const;
+
+/**
+ * Taking the account out of this browser, as on a computer you are leaving. It
+ * asks twice: what is lost, then proof it is you, as removing it is for good
+ * here and, with no other copy, for good everywhere.
+ */
+function RemoveAccount({ alone, apps, openApps }: { alone: boolean; apps: number; openApps: () => void }) {
+  const { auth, state } = useAuth();
+  const { did } = useSession();
+  const [proving, setProving] = useState(false);
+  const [refused, setRefused] = useState<string | null>(null);
+  const remove = async () => {
+    setRefused(null);
+    if (await auth.removeAccount()) return forgetPicture(did);
+    setRefused(auth.getState().error?.message ?? 'It could not be removed.');
+    auth.clearError();
+  };
+  const start = async () => {
+    const sure = await ask(
+      alone
+        ? 'Unless your phone or another computer has your account, nothing else keeps a copy of your spaces: your private spaces and their messages are lost for good. Your recovery code brings back the account, but not them.'
+        : 'Your spaces stay on your other copies, up to what they last synced, and your recovery code brings the account back here.',
+      {
+        title: 'Remove your account from this browser?',
+        yes: 'Remove',
+        danger: true,
+      },
+    );
+    if (!sure) return;
+    if (auth.isConfirmed()) await remove();
+    else setProving(true);
+  };
+  return (
+    <Section
+      title="Remove from this browser"
+      description="Deletes your account and your spaces from this browser, as when you leave a computer for good."
+    >
+      {apps > 0 ? (
+        <>
+          <p style={styles.errorHint}>
+            {apps === 1
+              ? 'Disconnect your app first. Only this browser can, so once your account is gone from it, the app would keep its access.'
+              : `Disconnect your ${apps} apps first. Only this browser can, so once your account is gone from it, they would keep their access.`}
+          </p>
+          <button
+            onClick={openApps}
+            data-variant="quiet"
+            style={{ ...styles.smallButton, alignSelf: 'flex-start' }}
+          >
+            Go to Apps
+          </button>
+        </>
+      ) : proving ? (
+        <ConfirmItsYou
+          why="remove your account from this browser"
+          onConfirmed={() => {
+            setProving(false);
+            void remove();
+          }}
+          onCancel={() => setProving(false)}
+        />
+      ) : (
+        <button
+          onClick={() => void start()}
+          disabled={state.busy}
+          data-variant="danger"
+          style={{ ...dangerButton, alignSelf: 'flex-start' }}
+        >
+          Remove from this browser
+        </button>
+      )}
+      {refused && <p style={styles.error}>{refused}</p>}
+    </Section>
   );
 }
 

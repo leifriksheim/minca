@@ -627,6 +627,32 @@ describe('connecting an app to an account home', () => {
     );
   });
 
+  test('an account is removed from a browser only once its apps are disconnected', async () => {
+    // Only this home can revoke them: removing it first would leave the apps' keys writing for good.
+    const hub = createFakeHub({ latencyMs: 1 });
+    const auth = await home(hub);
+    const { node: homeNode } = auth.getState().session!;
+    const shared = await homeNode.spaces.create({ name: 'Team', ...team, visibility: 'private' });
+    const key = await appKey();
+    const grant = await auth.grant({
+      origin: 'https://todo.test',
+      request: await asked({ v: 1, audience: key.did, access: 'write' }, key),
+      spaceIds: [shared.id],
+    });
+    const todo = await app(hub, grant, key);
+    await hold(todo, shared.id);
+    await hold(homeNode, shared.id);
+
+    assert.equal(await auth.removeAccount(), false, 'refused while an app is connected');
+    assert.match(auth.getState().error?.message ?? '', /Disconnect your apps/);
+    assert.equal(auth.getState().accounts.length, 1);
+
+    assert.equal(await auth.disconnect('https://todo.test', { waitMs: 5000 }), true, 'the app heard');
+    assert.equal(await auth.removeAccount(), true, auth.getState().error?.message ?? 'no reason given');
+    assert.equal(auth.getState().accounts.length, 0);
+    await assert.rejects(todo.records.put(shared.id, 'app.todo.item', { text: 'after' }), /revoked/);
+  });
+
   test('disconnecting in a space the home no longer holds: it opens it, and waits for the app to hear', async () => {
     // Slow enough that a freshly opened space has met nobody by the time the revoke is written.
     const hub = createFakeHub({ latencyMs: 100 });
