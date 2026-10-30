@@ -1,4 +1,4 @@
-<!-- Chat: std.message as one room, with "@" mentions, replies, emoji reactions (std.reaction), files (std.file) dropped anywhere on it, pasted or picked, and anything in the space shared with "+" or "/". -->
+<!-- Chat: std.message as one room, with "@" mentions, replies, emoji reactions (std.reaction), files (std.file) dropped anywhere on it, pasted or picked, GIFs from GIPHY once the space has a key, and anything in the space shared with "+" or "/". -->
 <style>
   html,
   body {
@@ -187,11 +187,49 @@
     color: #fff;
     background: rgb(0 0 0 / 0.6);
   }
+  /* Room for the GIF button beside the emoji one, so typing never runs under it */
+  .composer[data-gifs] input {
+    padding-right: 76px;
+  }
+  .gif-button {
+    min-height: 0;
+    height: 28px;
+    padding: 0 6px;
+    border: none;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+  .gifs {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: 6px;
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+  .gifs button {
+    aspect-ratio: 1;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+    border: none;
+    border-radius: var(--minca-radius-md);
+    background: var(--minca-sunken);
+  }
+  .gifs button[aria-busy='true'] {
+    outline: 2px solid var(--minca-accent);
+  }
+  .gifs img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
 </style>
 <script>
   const { html, render, useState, useEffect, useRef, useRecords, useCan, usePeople, useShown, useShare } = ui;
   const { Avatar, Person, MentionInput, MentionText, mentionsIn, Attachments, attach, ago, usePresence } = ui;
-  const { Shared, Sharing, recordTitle, AddMenu, EmojiPicker, Reactions, react } = ui;
+  const { Shared, Sharing, recordTitle, AddMenu, EmojiPicker, Reactions, react, Modal } = ui;
   const MESSAGE = 'std.message';
   const me = minca.me.did;
   const has = (collection) => minca.collections.includes(collection);
@@ -221,6 +259,39 @@
     /^(\p{Extended_Pictographic}|\p{Emoji_Component}|‍|️|\s){1,12}$/u.test(text) && !/\d/.test(text);
   const nameIn = (people, did) =>
     did === me ? 'You' : (people.find((p) => p.did === did)?.name ?? 'Someone');
+
+  // GIFs come from GIPHY, with the key someone who may add apps gave in the app's settings; without one there are none.
+  // What is sent is the GIF itself, kept in the space as a file, so it shows for everyone and stays.
+  const GIPHY = 'https://api.giphy.com/v1/gifs';
+  const giphyKey = minca.settings.giphy;
+  // GIPHY's numbered media hosts serve the same paths as this one, the only one the app reaches.
+  const giphyMedia = (url) => url.replace(/^https:\/\/media\d\.giphy\.com\//, 'https://media.giphy.com/');
+
+  /** GIFs for what was typed, or trending ones before anything is */
+  async function findGifs(query) {
+    const params = new URLSearchParams({ api_key: giphyKey, limit: '24', rating: 'pg-13' });
+    if (query) params.set('q', query);
+    const response = await fetch(`${GIPHY}/${query ? 'search' : 'trending'}?${params}`);
+    if (response.status === 401 || response.status === 403)
+      throw new Error("GIPHY didn't take the space's key.");
+    if (!response.ok) throw new Error(`GIPHY answered ${response.status}.`);
+    const { data } = await response.json();
+    return data
+      .filter((gif) => gif.images?.fixed_height?.url)
+      .map((gif) => ({
+        id: gif.id,
+        title: gif.title?.replace(/\s+GIF\b.*$/i, '').trim() || 'GIF',
+        preview: giphyMedia((gif.images.fixed_width_small ?? gif.images.fixed_height).url),
+        url: giphyMedia(gif.images.fixed_height.url),
+      }));
+  }
+
+  /** A GIF's bytes, as a file to attach */
+  async function gifFile(gif) {
+    const response = await fetch(gif.url);
+    if (!response.ok) throw new Error(`Couldn't fetch the GIF (${response.status}).`);
+    return new File([await response.blob()], `${gif.title}.gif`, { type: 'image/gif' });
+  }
 
   function Chat() {
     const messages = useRecords(MESSAGE);
@@ -429,7 +500,64 @@
     </button>`;
   }
 
-  /** The box: text with "@" mentions and emoji, a reply, and files dropped anywhere on the screen, pasted or picked */
+  /** Search GIPHY and pick one. It sits inside the message form, so Enter in it sends nothing. */
+  function GifPicker({ onPick, onClose }) {
+    const [query, setQuery] = useState('');
+    const [gifs, setGifs] = useState(null);
+    const [error, setError] = useState(null);
+    const [sending, setSending] = useState(null);
+    useEffect(() => {
+      let current = true;
+      const wait = setTimeout(() => {
+        findGifs(query.trim()).then(
+          (found) => current && (setGifs(found), setError(null)),
+          (e) => current && setError(e.message),
+        );
+      }, 300);
+      return () => {
+        current = false;
+        clearTimeout(wait);
+      };
+    }, [query]);
+    const pick = async (gif) => {
+      setSending(gif.id);
+      await onPick(gif);
+      setSending(null);
+    };
+    return html`<${Modal} title="GIFs" onClose=${onClose} width=${440}>
+      <div class="stack">
+        <input
+          type="search"
+          value=${query}
+          onInput=${(event) => setQuery(event.currentTarget.value)}
+          onKeyDown=${(event) => event.key === 'Enter' && event.preventDefault()}
+          placeholder="Search GIPHY"
+          aria-label="Search GIFs"
+        />
+        ${error && html`<p class="error">${error}</p>`}
+        ${gifs?.length === 0 && html`<p class="empty muted">No GIFs for that.</p>`}
+        <div class="gifs">
+          ${(gifs ?? []).map(
+            (gif) =>
+              html`<button
+                type="button"
+                key=${gif.id}
+                title=${gif.title}
+                aria-label=${`Send ${gif.title}`}
+                aria-busy=${sending === gif.id}
+                disabled=${sending !== null}
+                onClick=${() => pick(gif)}
+              >
+                <img src=${gif.preview} alt=${gif.title} loading="lazy" />
+              </button>`,
+          )}
+        </div>
+        <p class="faint" style="font-size: 11px; text-align: right">Powered by GIPHY</p>
+      </div>
+    </${Modal}>`;
+  }
+
+  /** The box: text with "@" mentions and emoji, a reply, GIFs, and files dropped anywhere on the screen, pasted or picked */
   function Composer({ replying, onReplied, typists, people, onTyping }) {
     const [draft, setDraft] = useState('');
     const [files, setFiles] = useState([]);
@@ -438,6 +566,7 @@
     const [dropping, setDropping] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(null);
+    const [pickingGif, setPickingGif] = useState(false);
     const quiet = useRef(null);
     const add = (list) => list?.length && setFiles((was) => [...was, ...list]);
     const type = (next) => {
@@ -493,15 +622,19 @@
       };
     }, []);
 
-    const send = async () => {
+    // A GIF goes as soon as it is picked, with whatever is in the box.
+    const send = async (gif) => {
       const text =
         draft.trim() ||
+        gif?.title ||
         (share.sharing ? recordTitle(share.sharing) : '') ||
         files.map((file) => `📎 ${file.name}`).join('\n');
       if (!text || busy) return;
       setBusy(true);
       setError(null);
       try {
+        // Fetched first, so a GIF that can't be had leaves no message without it
+        const picked = gif ? [await gifFile(gif)] : [];
         const mentions = mentionsIn(draft, people);
         const answering = replying && replying.createdBy !== me ? { replyingTo: replying.createdBy } : {};
         const sent = await minca.put(
@@ -509,7 +642,7 @@
           { text, ...(mentions.length ? { mentions } : {}), ...answering },
           { links: [...share.links, ...(replying ? [{ rel: 'replyTo', to: replying.key }] : [])] },
         );
-        await attach(sent.key, files);
+        await attach(sent.key, [...files, ...picked]);
         setDraft('');
         setFiles([]);
         share.clear();
@@ -531,6 +664,16 @@
       }}
     >
       ${dropping && html`<div class="drop">Drop files to attach</div>`}
+      ${
+        pickingGif &&
+        html`<${GifPicker}
+          onClose=${() => setPickingGif(false)}
+          onPick=${async (gif) => {
+            await send(gif);
+            setPickingGif(false);
+          }}
+        />`
+      }
       ${
         replying &&
         html`<div class="replying">
@@ -557,7 +700,11 @@
         </div>`
       }
       <div class="row">
-        <div class="composer" onKeyDown=${(event) => event.key === 'Escape' && replying && onReplied()}>
+        <div
+          class="composer"
+          data-gifs=${giphyKey ? '' : undefined}
+          onKeyDown=${(event) => event.key === 'Escape' && replying && onReplied()}
+        >
           <${AddMenu} onShare=${() => share.pick()} onFiles=${add} />
           <${MentionInput}
             value=${draft}
@@ -566,6 +713,19 @@
             aria-label="Message"
           />
           <div class="composer-end">
+            ${
+              giphyKey &&
+              html`<button
+                type="button"
+                class="gif-button"
+                data-variant="ghost"
+                title="Send a GIF"
+                disabled=${busy}
+                onClick=${() => setPickingGif(true)}
+              >
+                GIF
+              </button>`
+            }
             <${EmojiPicker} onPick=${(emoji) => type(draft + emoji)} />
           </div>
         </div>

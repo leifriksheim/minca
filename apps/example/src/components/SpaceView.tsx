@@ -24,6 +24,7 @@ import { OpenWith } from './apps/OpenWith';
 import { AppIcon, Count } from './apps/AppIcon';
 import { CreateApp } from './apps/CreateApp';
 import { NotifyButton } from './apps/NotifyButton';
+import { AppSettingsButton } from './apps/AppSettings';
 import { MadeAppScreen } from './apps/MadeApps';
 import { Bell } from './Bell';
 import { fills, useSpaceApps, type AppEntry } from './apps/entries';
@@ -490,6 +491,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
                 </span>
               )}
             </div>
+            {open && mayDefine && <AppSettingsButton space={space} record={open.record} />}
             {open && <NotifyButton space={space} app={open} collections={collections} />}
             {/* A phone has no sidebar, so you are in its top bar instead; an open app has the bar to itself. */}
             {!onApp && (

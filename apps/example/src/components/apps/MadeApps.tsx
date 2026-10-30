@@ -9,7 +9,7 @@ import {
   type BlueprintReview,
 } from '@minca/core/schemas';
 import { AppBoard } from './AppBoard';
-import { addMade, checkLauncherApp, removeApp, updated, type LauncherApp } from './launcher';
+import { addMade, checkLauncherApp, removeApp, settingsOf, updated, type LauncherApp } from './launcher';
 import { ScreenFrame } from './ScreenFrame';
 import { ago } from '@minca/ui/time';
 import { styles, palette, hstack, stack } from '../../styles';
@@ -326,8 +326,8 @@ function ScreenNote({ screen, network }: { screen: string; network: ReadonlyArra
             <strong style={{ color: palette.ink.strong }}>
               {network.map((origin) => origin.replace(/^[a-z]+:\/\//, '')).join(', ')}
             </strong>
-            , and send there anything the person looking can see in it. Each person is asked before their
-            screen gets that; nothing else on the internet is reachable.
+            , and send there anything the person looking can see in it. Adding it allows that for everyone
+            here; nothing else on the internet is reachable.
           </>
         ) : (
           <>It can't reach the internet or anything else in the app.</>
@@ -416,6 +416,7 @@ export function MadeAppScreen({
           collections={names}
           screen={screen}
           network={body.network ?? []}
+          settings={settingsOf(body)}
           title={body.title ?? 'An app'}
           onOpen={onOpen}
           shows={body.shows}

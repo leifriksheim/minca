@@ -176,6 +176,16 @@ and reads a picture that one of the app's own records refers to (`file`),
 or the whole file (`blob`), taking its type from the record rather than from
 the screen.
 
+**Settings and the network.** An app may ask for `settings`, like an API
+key. Someone who may add apps fills them in once, from the open app, for
+everyone in the space, and its screen reads them as `minca.settings`; nobody
+else is asked. They live on the app's own record, so they stand only as it
+does: a new version proposed without values keeps the ones the app has, and a
+copy to another space carries none. The origins an app names in `network` are
+allowed for everyone once it is added, as a workspace's admin adds an
+integration: adding it is the consent. The ready-made Chat asks for a GIPHY
+key, and shows its GIF button only once it has one.
+
 **Opening a record where it belongs.** A `launcher.app` may name, among its
 `collections`, the ones it `shows`: the ones whose records it is the place
 to open (`shows: ["std.message"]` for a chat). Whatever asks the example app
@@ -251,7 +261,7 @@ defines its collections and writes a copy of it, naming where it came from
 (`template: "kanban"`), and from then on the space changes its copy like any
 other app.
 
-_Source: `apps/example/src/components/apps/launcher.ts` (`addTemplate`), `apps/example/src/components/apps/screens.ts`, `apps/example/src/components/apps/ScreenFrame.tsx`, `apps/example/src/components/apps/templates/`, `apps/example/public/screen.html`, `packages/ui/src/frame/`, `packages/ui/src/guide.ts`. Tests: `apps/example/tests/launcher.test.ts` ("adding a ready-made app copies it into the space once, with its collections and first records"), `apps/example/tests/screens.test.ts` ("a screen checks, shows faces and opens things only within its app and its space", "what the page does for a screen, it does only as asked properly", "a screen can’t point a link out of its app, so it can’t probe for keys or reach what no one shared", "a record someone shared is read through the link to it, and only through that", "a screen links out only to what the person picked for it, and is handed what they picked", "the space’s own records are never picked for a screen", "a screen hears the same app's screens on other devices, as who sent it, and no other app's")._
+_Source: `apps/example/src/components/apps/launcher.ts` (`addTemplate`, `saveSettings`, `settingsOf`), `apps/example/src/components/apps/screens.ts`, `apps/example/src/components/apps/ScreenFrame.tsx`, `apps/example/src/components/apps/AppSettings.tsx`, `apps/example/src/components/apps/templates/`, `apps/example/public/screen.html`, `packages/ui/src/frame/`, `packages/ui/src/guide.ts`. Tests: `apps/example/tests/launcher.test.ts` ("adding a ready-made app copies it into the space once, with its collections and first records", "settings filled in once stand for everyone, survive a new version of the app, and stay in their space"), `apps/example/tests/screens.test.ts` ("an app's settings come with the screen, and the screen can't change them", "a screen checks, shows faces and opens things only within its app and its space", "what the page does for a screen, it does only as asked properly", "a screen can’t point a link out of its app, so it can’t probe for keys or reach what no one shared", "a record someone shared is read through the link to it, and only through that", "a screen links out only to what the person picked for it, and is handed what they picked", "the space’s own records are never picked for a screen", "a screen hears the same app's screens on other devices, as who sent it, and no other app's")._
 
 ## Describing a collection
 
