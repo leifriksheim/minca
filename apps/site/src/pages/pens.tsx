@@ -136,9 +136,7 @@ function Guard({
         <rect x={-HEAD} y={line} width={HEAD * 2} height={HEAD} />
       </clipPath>
       {/* A suit, arms folded: he isn't going anywhere */}
-      <rect className="pens-line" x={-12} y={44} width={10} height={20} rx={3} fill="#2b2b33" />
-      <rect className="pens-line" x={2} y={44} width={10} height={20} rx={3} fill="#2b2b33" />
-      <path className="pens-line" d="M-28 14Q-28 -4 -10 -6H10Q28 -4 28 14V46H-28Z" fill={suit} />
+      <Body top={suit} />
       <path className="pens-line" d="M-9 -6L0 12L9 -6Z" fill={shirt} />
       <rect className="pens-line" x={-25} y={20} width={50} height={13} rx={6.5} fill={suit} />
       <rect x={-HEAD * 0.2} y={line - 7} width={HEAD * 0.4} height={9} rx={4.5} fill="#3a1414" />
@@ -181,9 +179,21 @@ function Kept({ who, x, i }: { who: string; x: number; i: number }) {
   );
 }
 
+/** Legs and a torso, under a head of HEAD with its chin at the origin */
+function Body({ top }: { top: string }) {
+  return (
+    <>
+      <rect className="pens-line" x={-12} y={44} width={10} height={20} rx={3} fill="#2b2b33" />
+      <rect className="pens-line" x={2} y={44} width={10} height={20} rx={3} fill="#2b2b33" />
+      <path className="pens-line" d="M-28 14Q-28 -4 -10 -6H10Q28 -4 28 14V46H-28Z" fill={top} />
+    </>
+  );
+}
+
 /**
- * Someone from the demos, standing: their photo cut out to head and shoulders
- * (`public/faces/cut/`), on a body in the colour of what they're wearing
+ * Someone from the demos, standing: their photo cut out to the head, all at
+ * the same size with the chin at the same place (`public/faces/cut/`), on the
+ * guards' body in the colour of what they're wearing, a little smaller
  */
 const TOPS: Readonly<Record<string, string>> = {
   maya: '#a3122a',
@@ -197,50 +207,25 @@ const TOPS: Readonly<Record<string, string>> = {
   ben: '#3c4630',
   ida: '#3a3d48',
 };
-const CUT = 46;
-/** How much of the photo's width the shoulders take, at its foot */
-const SHOULDERS = 0.84;
-const LEGS = 14;
-const TORSO = 24;
+/** How much smaller than a guard everyone else is drawn */
+const SMALL = 0.62;
+/** Where the chin is in a cut-out, as a fraction of its height */
+const CHIN = 0.9;
 
 function Person({ who, x }: { who: string; x: number }) {
-  const shoulders = GROUND - LEGS - TORSO;
   return (
-    <g>
-      <rect
-        className="pens-line"
-        x={x - 8}
-        y={GROUND - LEGS - 2}
-        width={7}
-        height={LEGS + 2}
-        rx={2}
-        fill="#2b2b33"
-      />
-      <rect
-        className="pens-line"
-        x={x + 1}
-        y={GROUND - LEGS - 2}
-        width={7}
-        height={LEGS + 2}
-        rx={2}
-        fill="#2b2b33"
-      />
-      {/* As wide as the shoulders in the photo, so the shirt runs on down */}
-      <rect
-        className="pens-line"
-        x={x - (CUT * SHOULDERS) / 2}
-        y={shoulders - 6}
-        width={CUT * SHOULDERS}
-        height={TORSO + 6}
-        rx={9}
-        fill={TOPS[who] ?? 'var(--card)'}
-      />
+    <g transform={`translate(${x} ${GROUND}) scale(${SMALL}) translate(0 ${-BODY})`}>
+      <clipPath id={`${who}-head`}>
+        <ellipse cx={0} cy={-HEAD * CHIN * 0.5} rx={HEAD * 0.4} ry={HEAD * CHIN * 0.52} />
+      </clipPath>
+      <Body top={TOPS[who] ?? 'var(--card)'} />
       <image
         href={`/faces/cut/${who}.png`}
-        x={x - CUT / 2}
-        y={shoulders - CUT + 4}
-        width={CUT}
-        height={CUT}
+        x={-HEAD / 2}
+        y={-HEAD * CHIN}
+        width={HEAD}
+        height={HEAD}
+        clipPath={`url(#${who}-head)`}
       />
     </g>
   );
