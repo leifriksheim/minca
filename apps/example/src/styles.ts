@@ -342,7 +342,9 @@ export function injectBaseStyles(): void {
       }
       /* An open app is the whole screen, with the way back at its top, as a conversation is on a phone. */
       .space-shell[data-app-open] .space-content { overflow-y: auto; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
-      .space-shell[data-app-open] .space-main { display: flex; height: 100dvh; }
+      /* As tall as what shows above the keyboard, once one is up (viewport.ts), so a chat's box stays in view. */
+      .space-shell[data-app-open] { min-height: 0; height: var(--visible-height, 100dvh); overflow: hidden; }
+      .space-shell[data-app-open] .space-main { display: flex; height: var(--visible-height, 100dvh); }
       .space-shell[data-app-open] .space-bar { position: static; }
       .space-content[data-fill], .space-shell[data-app-open] .space-content[data-fill] { padding: 0 0 env(safe-area-inset-bottom); }
 
