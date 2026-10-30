@@ -264,7 +264,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
       ...SECTIONS,
       ...HOOD,
       { to: APPS_ROUTE, label: 'Overview' },
-      { to: '/spaces/$spaceId/new', label: 'Add apps' },
+      { to: '/spaces/$spaceId/new', label: 'Add app' },
     ].find((part) => part.to === leaf)?.label ??
     name;
 

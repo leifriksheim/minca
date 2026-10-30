@@ -100,7 +100,7 @@ export function AppsView({
             )}
             {space.writable && !arranging && (
               <PrimaryButton onClick={onCreate} className="hide-on-phone" style={{ ...inlineButton }}>
-                <Icon name="plus" size={14} /> Add apps
+                <Icon name="plus" size={14} /> Add app
               </PrimaryButton>
             )}
           </div>
@@ -141,7 +141,7 @@ export function AppsView({
                     <Icon name="plus" size={16} />
                   </span>
                   <span style={{ ...stack(2), flex: 1, minWidth: 0 }}>
-                    <strong style={{ ...cardTitle, color: palette.ink.body }}>Add apps</strong>
+                    <strong style={{ ...cardTitle, color: palette.ink.body }}>Add app</strong>
                     <span style={cardText}>A ready-made one, or one an agent builds for you</span>
                   </span>
                 </button>
