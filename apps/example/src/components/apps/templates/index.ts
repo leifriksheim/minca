@@ -46,7 +46,7 @@ export const TEMPLATES: ReadonlyArray<Template> = [
       template: 'chat',
       title: 'Chat',
       description:
-        'Talk with everyone in the space: reply, react, "@" someone to tell them, and drop files in to share them.',
+        'Talk with everyone in the space: reply, react, "@" someone to tell them, drop files in to share them, and send GIFs.',
       collections: [message.name, file.name, reaction.name],
       shows: [message.name],
       notify: [
@@ -55,6 +55,15 @@ export const TEMPLATES: ReadonlyArray<Template> = [
         notifyOn('New message', message.name),
       ],
       screen: chat,
+      network: ['https://api.giphy.com', 'https://media.giphy.com'],
+      settings: [
+        {
+          key: 'giphy',
+          title: 'GIPHY API key',
+          description:
+            'For GIFs in the chat. Make a free one at developers.giphy.com, under Create an API key. Without it there are no GIFs.',
+        },
+      ],
     },
     needs: [message, file, reaction],
   },

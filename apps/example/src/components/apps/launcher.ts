@@ -66,6 +66,18 @@ export interface LauncherApp {
   readonly updates?: string;
   /** The ready-made app it began as, by id: `kanban`. The space's copy is its own to change. */
   readonly template?: string;
+  /** What whoever adds it fills in once for everyone, like an API key; its screen reads them as `minca.settings` */
+  readonly settings?: ReadonlyArray<AppSetting>;
+}
+
+/** A setting an app asks for, and its value once someone who may add apps has given one */
+export interface AppSetting {
+  /** How its screen reads it: `minca.settings.giphy` */
+  readonly key: string;
+  readonly title: string;
+  /** Where to get it, or what it is for */
+  readonly description?: string;
+  readonly value?: string;
 }
 
 /** An app on the space's launcher, or one proposed for it. */
@@ -94,6 +106,20 @@ export const launcherApp = fragments.typed<LauncherApp>()({
       position: { type: 'string', minLength: 1, maxLength: 200 },
       updates: { type: 'string', minLength: 1, maxLength: 128 },
       template: { type: 'string', minLength: 1, maxLength: 100 },
+      settings: {
+        type: 'array',
+        maxItems: 8,
+        items: {
+          type: 'object',
+          properties: {
+            key: { type: 'string', minLength: 1, maxLength: 40 },
+            title: { type: 'string', minLength: 1, maxLength: 100 },
+            description: { type: 'string', maxLength: 500 },
+            value: { type: 'string', maxLength: 2000 },
+          },
+          required: ['key', 'title'],
+        },
+      },
     },
   },
   links: {
@@ -122,6 +148,11 @@ export function checkLauncherApp(body: LauncherApp): string | null {
   }
   const network = checkScreenNetwork(body.network, body.screen !== undefined);
   if (network) return network;
+  const keys = (body.settings ?? []).map((setting) => setting.key);
+  const odd = keys.find((key) => !/^[a-zA-Z][a-zA-Z0-9_]*$/.test(key));
+  if (odd !== undefined) return `settings: "${odd}" is not a key a screen can read as minca.settings.${odd}`;
+  const twice = keys.find((key, at) => keys.indexOf(key) !== at);
+  if (twice) return `settings: ${twice} is there twice`;
   for (const [index, entry] of (body.notify ?? []).entries()) {
     const problem = checkAppAutomation(entry);
     if (problem) return `notify[${index}]: ${problem}`;
@@ -268,6 +299,9 @@ const LAUNCHER_GUIDE = `To make an app for this space that people open from its 
    name the person it would tell, as the second one does.
 3. If plain lists and forms can't show it (a game board, a calendar, a whiteboard), add "screen": its own HTML UI, one
    document, and, only if it must reach the network, "network": the exact origins. The screen is described below.
+4. If it needs something only the space can give, like an API key, add "settings": what to fill in, like
+   [{ "key": "giphy", "title": "GIPHY API key", "description": "Free at developers.giphy.com" }]. Leave out the values:
+   whoever adds the app fills them in once for everyone, and its screen reads them as minca.settings.
 
 Your screen is not the only way in: anyone in the space can write any record directly, through an agent or another
 app. Ask what a member could do that way. Where the app means nothing unless records keep a rule their shape and
@@ -281,7 +315,8 @@ fields; for anything else, give the new shape a name of its own, and let the old
 Nothing changes until someone who may define collections adds it from the Apps page: that applies the blueprint and
 writes the record again as theirs. A launcher.app record that person did not write is only a proposal, and its screen
 never runs. To change an app that is already added, write a new launcher.app record with "updates": the key of the one
-it replaces, and, if its collections change, a new blueprint whose "updates" names the old blueprint.
+it replaces, and, if its collections change, a new blueprint whose "updates" names the old blueprint. Settings it
+names keep the values the app has.
 
 Removing an app deletes its launcher.app record; its records stay. A made app may not show launcher.app,
 std.blueprint, std.guide or sys.* collections.
@@ -310,7 +345,7 @@ export async function prepareLauncher(node: P2PNode, spaceId: string): Promise<v
 
 /** An app as it stands once added: its place is the launcher's, and it updates nothing */
 function settled(body: LauncherApp): LauncherApp {
-  const { title, description, collections, shows, notify, screen, network, template } = body;
+  const { title, description, collections, shows, notify, screen, network, template, settings } = body;
   return {
     ...(title !== undefined ? { title } : {}),
     ...(description !== undefined ? { description } : {}),
@@ -320,7 +355,42 @@ function settled(body: LauncherApp): LauncherApp {
     ...(screen !== undefined ? { screen } : {}),
     ...(network !== undefined ? { network } : {}),
     ...(template !== undefined ? { template } : {}),
+    ...(settings !== undefined ? { settings } : {}),
   };
+}
+
+/** The values an app's settings hold, by key: what its screen gets as `minca.settings` */
+export const settingsOf = (body: LauncherApp): Readonly<Record<string, string>> =>
+  Object.fromEntries((body.settings ?? []).flatMap((s) => (s.value ? [[s.key, s.value]] : [])));
+
+/**
+ * The settings a change asks for, holding the values the app has now where it
+ * gives none: a new screen from an agent doesn't know the space's key, and
+ * adding it shouldn't lose it.
+ */
+const keepValues = (
+  next: ReadonlyArray<AppSetting> | undefined,
+  now: ReadonlyArray<AppSetting> | undefined,
+): ReadonlyArray<AppSetting> | undefined =>
+  next?.map((setting) => {
+    const value = setting.value ?? now?.find((held) => held.key === setting.key)?.value;
+    return value === undefined ? setting : { ...setting, value };
+  });
+
+/** Fills in an app's settings for everyone: only someone who may add apps writes a version that stands */
+export async function saveSettings(
+  node: P2PNode,
+  spaceId: string,
+  record: NodeRecord<LauncherApp>,
+  values: Readonly<Record<string, string>>,
+): Promise<void> {
+  const body = record.body;
+  if (!body) throw new Error('This app could not be read');
+  const settings = (body.settings ?? []).map(({ value: _, ...setting }) => {
+    const value = values[setting.key]?.trim();
+    return value ? { ...setting, value } : setting;
+  });
+  await node.records.update<LauncherApp>(spaceId, record.key, { ...body, settings }, { links: record.links });
 }
 
 /**
@@ -388,10 +458,15 @@ export async function addMade(
   // A change to an app no longer on the launcher, or to a built-in one, is added as an app of its own.
   const target = updated(proposal, placed);
   if (target) {
+    const settings = keepValues(rest.settings, target.body?.settings);
     await node.records.update<LauncherApp>(
       spaceId,
       target.key,
-      { ...rest, ...(target.body?.position ? { position: target.body.position } : {}) },
+      {
+        ...rest,
+        ...(settings ? { settings } : {}),
+        ...(target.body?.position ? { position: target.body.position } : {}),
+      },
       { links: proposal.links },
     );
     await node.records.delete(spaceId, proposal.key);
@@ -495,7 +570,12 @@ export async function copyApp(
     collections: drafts,
     from: `${fromSpace}/${record.key}`,
   });
-  await node.records.put(toSpace, launcherApp, settled(body), {
-    links: [{ rel: 'blueprint', to: plan.key }],
-  });
+  // What this space filled in, a key say, is this space's: the other fills in its own.
+  const { settings, ...rest } = settled(body);
+  await node.records.put(
+    toSpace,
+    launcherApp,
+    { ...rest, ...(settings ? { settings: settings.map(({ value: _, ...setting }) => setting) } : {}) },
+    { links: [{ rel: 'blueprint', to: plan.key }] },
+  );
 }

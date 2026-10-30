@@ -9,12 +9,13 @@ import { PersonCardHere } from '../Person';
 import { RecordFinder } from '../RecordFinder';
 import { saveFile } from '../../files';
 import { isObject } from '../../derive/schema-ui';
-import { styles, palette, hstack } from '../../styles';
-import { LinkButton, QuietButton } from '../Buttons';
+import { styles, palette } from '../../styles';
+import { QuietButton } from '../Buttons';
 
 /**
  * An app's own screen, run sealed: a sandboxed frame with no network, talking to this app's collections
- * over one message port. Origins it names (`network`) are reached only once the person looking agrees.
+ * over one message port. It reaches only the origins it names (`network`), which whoever added the app
+ * agreed to for everyone, as a workspace's admin adds an integration.
  */
 export function ScreenFrame({
   spaceId,
@@ -22,6 +23,7 @@ export function ScreenFrame({
   collections,
   screen,
   network,
+  settings,
   title,
   onOpen,
   shows = [],
@@ -34,6 +36,8 @@ export function ScreenFrame({
   collections: ReadonlyArray<string>;
   screen: string;
   network: ReadonlyArray<string>;
+  /** The values filled in for its settings (`minca.settings`) */
+  settings: Readonly<Record<string, string>>;
   title: string;
   /** Shows a record the screen asked to open (`minca.open`) */
   onOpen: (record: NodeRecord) => void;
@@ -87,36 +91,22 @@ export function ScreenFrame({
   }, [node, spaceId, shown, showing]);
   // A new screen, or a new app, starts a new frame.
   const [generation, setGeneration] = useState(0);
-  const origins = [...network].sort().join(' ');
   // Compared by value, so a new array with the same names changes nothing.
   const names = collections.join('|');
   const allowed = network.join(' ');
-  const consentKey = `minca.screen-network:${node.did}:${spaceId}:${appKey}`;
-  const [answer, setAnswer] = useState<'yes' | 'no' | null>(() =>
-    origins ? readConsent(consentKey, origins) : 'no',
-  );
-  // Another list of origins asks again, unless this device kept an answer for it.
-  const [askedFor, setAskedFor] = useState(`${consentKey}\n${origins}`);
-  if (askedFor !== `${consentKey}\n${origins}`) {
-    setAskedFor(`${consentKey}\n${origins}`);
-    setAnswer(origins ? readConsent(consentKey, origins) : 'no');
-  }
-  const answerWith = (value: 'yes' | 'no') => {
-    try {
-      globalThis.localStorage?.setItem(consentKey, JSON.stringify({ origins, answer: value }));
-    } catch {
-      // Not remembered: it asks again next time.
-    }
-    setAnswer(value);
-  };
+  // Compared by value too; read when the frame loads, so a change starts it again.
+  const given = JSON.stringify(settings);
+  const settingsNow = useRef(settings);
+  useEffect(() => {
+    settingsNow.current = settings;
+  }, [settings]);
 
   // The run of the frame that navigated away, if this one did; any change runs it afresh.
-  const run = [spaceId, screen, names, account.name, generation, answer, allowed].join('\n');
+  const run = [spaceId, screen, names, account.name, generation, allowed, given].join('\n');
   const [stoppedRun, setStoppedRun] = useState<string | null>(null);
   const stopped = stoppedRun === run;
 
   useEffect(() => {
-    if (answer === null) return;
     const list = names.split('|');
     let bridge: ScreenBridge | null = null;
     let handedOver = false;
@@ -164,9 +154,10 @@ export function ScreenFrame({
       target.postMessage(
         {
           minca: 'load',
-          document: screenDocument(screen, answer === 'yes' && allowed ? allowed.split(' ') : [], ui),
+          document: screenDocument(screen, allowed ? allowed.split(' ') : [], ui),
           me: { did: node.did, name: account.name },
           collections: list,
+          settings: settingsNow.current,
           // Handed over with the document, since a message on the port before it is written in is lost
           shown: pending.current,
         },
@@ -186,34 +177,7 @@ export function ScreenFrame({
       bridge?.close();
       live.current = null;
     };
-  }, [node, spaceId, appKey, screen, names, account.name, generation, answer, allowed, run]);
-
-  if (answer === null) {
-    return (
-      <div
-        style={{
-          ...styles.note,
-          margin: 16,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 10,
-        }}
-      >
-        <p style={{ fontSize: 14, color: palette.ink.strong, lineHeight: 1.5 }}>
-          This screen wants to connect to{' '}
-          <strong>{network.map((origin) => origin.replace(/^[a-z]+:\/\//, '')).join(', ')}</strong>.
-        </p>
-        <p style={{ fontSize: 13, color: palette.ink.body, lineHeight: 1.5 }}>
-          It runs as you, so it could send there anything you can see in it. Nothing else on the internet is
-          reachable. Without it, the screen runs sealed and may do less.
-        </p>
-        <div style={hstack(8)}>
-          <QuietButton onClick={() => answerWith('yes')}>Allow</QuietButton>
-          <QuietButton onClick={() => answerWith('no')}>Keep it sealed</QuietButton>
-        </div>
-      </div>
-    );
-  }
+  }, [node, spaceId, appKey, screen, names, account.name, generation, allowed, given, run]);
 
   if (stopped) {
     return (
@@ -235,31 +199,9 @@ export function ScreenFrame({
     );
   }
 
-  const hosts = network.map((origin) => origin.replace(/^[a-z]+:\/\//, '')).join(', ');
   // It takes whatever height it is given: the app is the whole window (`.space-content[data-fill]`).
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-      {origins && (
-        <p
-          style={{
-            padding: '6px 16px',
-            fontSize: 12,
-            color: palette.ink.muted,
-            display: 'flex',
-            gap: 8,
-            alignItems: 'center',
-            flexWrap: 'wrap',
-          }}
-        >
-          {answer === 'yes' ? `Connects to ${hosts}.` : `Sealed: not connecting to ${hosts}.`}
-          <LinkButton
-            onClick={() => answerWith(answer === 'yes' ? 'no' : 'yes')}
-            style={{ fontSize: 12, padding: 0 }}
-          >
-            {answer === 'yes' ? 'Seal it' : 'Allow'}
-          </LinkButton>
-        </p>
-      )}
       <iframe
         ref={frame}
         title={title}
@@ -268,7 +210,8 @@ export function ScreenFrame({
         // Forms only fire their submit event: the policy's form-action 'none' sends them nowhere.
         sandbox="allow-scripts allow-forms"
         referrerPolicy="no-referrer"
-        key={`${generation}:${answer}`}
+        // A new frame for each run: the bridge goes with the run, and only a frame that loads says ready.
+        key={run}
         style={{
           width: '100%',
           flex: 1,
@@ -351,16 +294,4 @@ function screenHost(kept: string, { open, pick }: Pick<ScreenHost, 'open' | 'pic
       }
     },
   };
-}
-
-/** What this person said to a screen's list of origins, when it was this same list */
-function readConsent(key: string, origins: string): 'yes' | 'no' | null {
-  try {
-    const kept: unknown = JSON.parse(globalThis.localStorage?.getItem(key) ?? 'null');
-    return isObject(kept) && kept.origins === origins && (kept.answer === 'yes' || kept.answer === 'no')
-      ? kept.answer
-      : null;
-  } catch {
-    return null;
-  }
 }

@@ -31,6 +31,8 @@ import {
   moveApp,
   prepareLauncher,
   removeApp,
+  saveSettings,
+  settingsOf,
   sortLauncher,
   type LauncherApp,
   type Template,
@@ -391,6 +393,50 @@ describe('the launcher', () => {
     assert.deepEqual(copied?.contract?.check, check);
   });
 
+  test('settings filled in once stand for everyone, survive a new version of the app, and stay in their space', async () => {
+    const { alice, bob, space } = await setup();
+    const asks = [{ key: 'giphy', title: 'GIPHY API key' }];
+    await addTemplate(alice.node, space, { ...CHAT, app: { ...CHAT.app, settings: asks } }, []);
+    let launcher = await launcherOf(alice.node, space);
+    assert.deepEqual(settingsOf(launcher.placed[0]!.body!), {}, 'nothing until someone fills it in');
+
+    await saveSettings(alice.node, space, launcher.placed[0]!, { giphy: ' secret ' });
+    await waitFor(
+      async () => (await launcherOf(bob.node, space)).placed.length === 1,
+      'the app to reach Bob',
+    );
+    await waitFor(
+      async () => settingsOf((await launcherOf(bob.node, space)).placed[0]!.body!).giphy === 'secret',
+      "Alice's key to reach Bob",
+    );
+    launcher = await launcherOf(alice.node, space);
+    assert.deepEqual(
+      titles(launcher.placed),
+      ['chat'],
+      'still on the launcher, as the one who may add apps wrote it',
+    );
+
+    // An agent's new screen doesn't know the key; adding it keeps the one the space gave.
+    const agent = await agentOf(alice, [space]);
+    await agent.records.put(space, launcherApp, {
+      ...CHAT.app,
+      title: 'Chat 2',
+      settings: asks,
+      updates: launcher.placed[0]!.key,
+    });
+    launcher = await launcherOf(alice.node, space);
+    await addMade(alice.node, space, launcher.proposed[0]!, launcher.placed);
+    launcher = await launcherOf(alice.node, space);
+    assert.deepEqual(titles(launcher.placed), ['Chat 2']);
+    assert.deepEqual(settingsOf(launcher.placed[0]!.body!), { giphy: 'secret' });
+
+    // Copied to another space, it asks there afresh.
+    const { id: other } = await alice.node.spaces.create({ name: 'Other gym', visibility: 'public' });
+    await copyApp(alice.node, space, launcher.placed[0]!, other);
+    const there = await launcherOf(alice.node, other);
+    assert.deepEqual(there.proposed[0]?.body?.settings, asks);
+  });
+
   test('a made app names its collections, and notifies only about those', () => {
     const app = { title: 'Carpool', collections: ['carpool.trip'] };
     assert.equal(checkLauncherApp(app), null);
@@ -404,6 +450,9 @@ describe('the launcher', () => {
     for (const own of ['launcher.app', 'std.blueprint', 'std.guide', 'sys.role'])
       assert.match(checkLauncherApp({ ...app, collections: ['carpool.trip', own] }) ?? '', /space's own/);
     assert.match(checkLauncherApp({ ...app, screen: 'x'.repeat(49 * 1024) }) ?? '', /at most 48 KB/);
+    const asks = { key: 'giphy', title: 'GIPHY API key' };
+    assert.match(checkLauncherApp({ ...app, settings: [asks, asks] }) ?? '', /giphy is there twice/);
+    assert.match(checkLauncherApp({ ...app, settings: [{ ...asks, key: 'api-key' }] }) ?? '', /not a key/);
     // Reactions are standard, so another app's records of them are the same records.
     assert.equal(checkLauncherApp({ ...app, collections: ['carpool.trip', reaction.name] }), null);
   });

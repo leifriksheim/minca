@@ -105,13 +105,13 @@ Keep state in records, never in the page.
 
 If it truly needs the network — weather, a map, a timetable — give the record "network": the exact origins it may
 fetch from and load images from, like ["https://api.open-meteo.com"] (https:// or wss://, a host, no path; at most 8).
-Nothing else is reachable, and fonts never are. Each origin is named when people review the app, and each person is asked
-before a screen they open gets it: a person who says no gets the screen sealed, so it must still work without them.
-Ask for no more than it needs.
+Nothing else is reachable, and fonts never are. Each origin is named when the app is reviewed, and whoever adds it
+decides for everyone. Ask for no more than it needs.
 
 Inside it, window.minca is:
   minca.me                          { did, name } — who is looking
   minca.collections                 the collection names this screen may use (its app's "collections")
+  minca.settings                    the values filled in for its app's "settings", by key: { giphy: "…" }; one not filled in is missing
   await minca.list(collection, { where? })   records, oldest first: { key, collection, body, computed, links, createdBy, createdAt, updatedAt, mine, viaAgent,
                                     version, seq, verified }: version is what another record cites to mean exactly this one
                                     where: { "link:<rel>": "<record key>" } for records linking there, { field: value } for a field's value,
@@ -246,6 +246,7 @@ export const SCREEN_CLIENT = `(() => {
   window.minca = Object.freeze({
     me: Object.freeze(me),
     collections: Object.freeze(given.collections.slice()),
+    settings: Object.freeze({ ...given.settings }),
     list: (collection, options) => call('list', collection, options || {}),
     get: (key, options) => call('get', key, options || {}),
     pick: (options) => call('pick', options || {}),
@@ -290,8 +291,8 @@ export const SCREEN_CLIENT = `(() => {
 
 /**
  * The security policy a screen runs under: inline scripts and styles, and
- * the network only to `network`'s exact origins — none, unless the person
- * looking agreed to them. A host page's own frame policy may allow more
+ * the network only to `network`'s exact origins, which whoever added the
+ * app agreed to for everyone. A host page's own frame policy may allow more
  * (any `https:`); this one is always written too, and a page under two
  * policies gets only what both allow. Origins that don't check out give none.
  */
@@ -315,7 +316,7 @@ export function screenPolicy(network: ReadonlyArray<string> = []): string {
 /**
  * The document a host page writes into its frame: its policy, the client,
  * the kit, then the screen.
- * @param network The origins the person looking agreed to; none keeps it sealed
+ * @param network The origins the app may reach; none keeps it sealed
  * @param ui The kit as one script (`bundleUi` in `@minca/ui/bundle`), which sets up `ui` over `minca`
  */
 export function screenDocument(screen: string, network: ReadonlyArray<string> = [], ui = ''): string {

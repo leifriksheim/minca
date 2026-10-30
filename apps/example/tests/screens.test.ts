@@ -65,6 +65,18 @@ describe('screens', () => {
     assert.equal(Reflect.apply(minca.shown, undefined, []), 'k1');
   });
 
+  test("an app's settings come with the screen, and the screen can't change them", () => {
+    const port = { postMessage: () => {}, onmessage: null };
+    const window: Record<string, unknown> = {
+      __minca: { port, me: { did: 'did:key:zMe', name: 'Anna' }, collections: [], settings: { giphy: 'k' } },
+    };
+    runScreenClient(window, () => {}, {});
+    const minca = window.minca;
+    assert.ok(isRecord(minca) && isRecord(minca.settings));
+    assert.deepEqual(minca.settings, { giphy: 'k' });
+    assert.ok(Object.isFrozen(minca.settings));
+  });
+
   test("the script in front of a screen passes a list's where on, so a screen gets only what it asked for", () => {
     const sent: unknown[] = [];
     const port = { postMessage: (message: unknown) => sent.push(message), onmessage: null };
