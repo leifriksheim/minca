@@ -42,7 +42,16 @@ import { CallButton } from './calls/Calls';
 import { peopleFrom } from '../derive/people';
 import { useBots } from '../bots';
 import { PersonScopeProvider } from './Person';
-import { seenAt, unreadOf, useLookingAt, useSeen, useSpaceUnread, useUnread, type Unread } from '../seen';
+import {
+  seenAt,
+  totalOf,
+  unreadOf,
+  useLookingAt,
+  useSeen,
+  useSpaceUnread,
+  useUnread,
+  type Unread,
+} from '../seen';
 
 /** Under the hood: the views for the curious, folded in the space's menu */
 const HOOD = [
@@ -273,7 +282,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
         {/* The space's apps down the left edge, under the space itself; a phone has them as tabs. */}
         <nav className="app-rail" aria-label={`Apps in ${name}`}>
           <div className="rail-top">
-            <SpaceMenu space={space} pair={pair} title={title} leaf={leaf} go={go} onHome={goBack} face />
+            <SpaceMenu space={space} pair={pair} leaf={leaf} go={go} onHome={goBack} face />
           </div>
           <div className="rail-apps">
             {/* Every app, laid out, with the ones proposed. */}
@@ -321,8 +330,22 @@ function SpaceView({ space }: { space: SpaceSummary }) {
         <main className="space-main">
           <header className="space-bar">
             {/* A phone has no rail: the space is the name at the left of its bar. */}
-            <span className="phone-only" style={{ flex: 1, minWidth: 0 }}>
-              <SpaceMenu space={space} pair={pair} title={title} leaf={leaf} go={go} onHome={goBack} />
+            <span className="phone-only" style={{ flex: '1 1 auto', minWidth: 0 }}>
+              <SpaceMenu space={space} pair={pair} leaf={leaf} go={go} onHome={goBack} />
+            </span>
+            {/* And the app you are in, at the right, opens every app. */}
+            <span className="phone-only" style={{ flex: '0 1 auto', minWidth: 0 }}>
+              <AppSwitcher
+                space={space}
+                apps={apps.ready}
+                unread={unread}
+                newProposals={newProposals}
+                open={open}
+                title={title}
+                onNew={onNew}
+                go={go}
+                openApp={openApp}
+              />
             </span>
             <span className="hide-on-phone" style={{ display: 'contents' }}>
               {open && <AppIcon id={open.id} size={28} />}
@@ -337,40 +360,6 @@ function SpaceView({ space }: { space: SpaceSummary }) {
             </span>
             {open && mayDefine && <AppSettingsButton space={space} record={open.record} />}
           </header>
-          {/* A phone's apps: tabs under the bar, swiped along, the way to the next one a thumb away. */}
-          <nav className="app-tabs scroll-x" aria-label={`Apps in ${name}`}>
-            {apps.ready.map((app) => (
-              <button
-                key={app.id}
-                onClick={() => openApp(app.id)}
-                aria-current={open?.id === app.id ? 'page' : undefined}
-                className="app-tab"
-              >
-                <AppIcon id={app.id} size={18} />
-                {app.title}
-                <Count unread={unreadOf(unread, app.id)} />
-              </button>
-            ))}
-            <button
-              onClick={() => go('/spaces/$spaceId')}
-              aria-current={onApps ? 'page' : undefined}
-              className="app-tab"
-            >
-              <Icon name="apps" size={14} />
-              All
-              <Count unread={newProposals} />
-            </button>
-            {space.writable && (
-              <button
-                onClick={() => go('/spaces/$spaceId/new')}
-                aria-current={onNew ? 'page' : undefined}
-                aria-label="Add apps"
-                className="app-tab"
-              >
-                <Icon name="plus" size={14} />
-              </button>
-            )}
-          </nav>
 
           <div className="space-content" data-fill={fill || undefined}>
             <div className="space-inner" data-wide={hood ? true : undefined}>
@@ -553,7 +542,6 @@ function SideHeading({ children }: { children: ReactNode }) {
 function SpaceMenu({
   space,
   pair,
-  title,
   leaf,
   go,
   onHome,
@@ -561,8 +549,6 @@ function SpaceMenu({
 }: {
   space: SpaceSummary;
   pair: PairWith | undefined;
-  /** Where in the space you are, under its name on a phone */
-  title: string;
   leaf: RouteId | undefined;
   go: (to: SpacePath) => void;
   onHome: () => void;
@@ -593,18 +579,11 @@ function SpaceMenu({
       >
         <SpaceFace space={space} pair={pair} size={face ? 36 : 32} />
         {!face && (
-          <span style={{ ...stack(1), minWidth: 0 }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-              <span style={{ ...styles.appTitle, ...ui.ellipsis, fontSize: 18 }}>{name}</span>
-              <span style={{ display: 'inline-flex', transform: shown ? 'rotate(-90deg)' : 'rotate(90deg)' }}>
-                <Icon name="chevron" size={14} />
-              </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+            <span style={{ ...styles.appTitle, ...ui.ellipsis, fontSize: 18 }}>{name}</span>
+            <span style={{ display: 'inline-flex', transform: shown ? 'rotate(-90deg)' : 'rotate(90deg)' }}>
+              <Icon name="chevron" size={14} />
             </span>
-            {title === name ? (
-              <Privacy space={space} />
-            ) : (
-              <span style={{ ...ui.ellipsis, fontSize: 12.5, color: palette.ink.muted }}>{title}</span>
-            )}
           </span>
         )}
       </button>
@@ -671,6 +650,109 @@ function SpaceMenu({
   );
 }
 
+/**
+ * A phone's way between apps: the one open, named in its bar, opens every app as a grid of their
+ * shapes, with what is new in each, a slot to add one, and the way to all of them laid out.
+ */
+function AppSwitcher({
+  space,
+  apps,
+  unread,
+  newProposals,
+  open,
+  title,
+  onNew,
+  go,
+  openApp,
+}: {
+  space: SpaceSummary;
+  apps: ReadonlyArray<AppEntry>;
+  unread: ReturnType<typeof useUnread>;
+  newProposals: Unread;
+  open: AppEntry | undefined;
+  /** Where in the space you are, when no app is open */
+  title: string;
+  onNew: boolean;
+  go: (to: SpacePath) => void;
+  openApp: (id: string) => void;
+}) {
+  const { open: shown, setOpen, close, root } = usePopover();
+  const then = (action: () => void) => () => {
+    close();
+    action();
+  };
+  // While its grid is shut, what's new in the apps not on screen shows on the button.
+  const elsewhere = totalOf([...unread.entries()].filter(([id]) => id !== open?.id).map(([, one]) => one));
+  return (
+    <div ref={root} style={{ position: 'relative', display: 'flex', minWidth: 0 }}>
+      <button
+        onClick={() => setOpen((was) => !was)}
+        aria-expanded={shown}
+        aria-haspopup="menu"
+        aria-label={`${open?.title ?? title}: every app`}
+        className="group-button"
+        style={switcherButton}
+      >
+        {open ? (
+          <AppIcon id={open.id} size={22} />
+        ) : (
+          <span style={{ display: 'inline-flex', color: palette.ink.body }}>
+            <Icon name="apps" size={16} />
+          </span>
+        )}
+        <span style={{ ...ui.ellipsis, minWidth: 0, fontSize: 15, fontWeight: 600 }}>
+          {open?.title ?? title}
+        </span>
+        <span style={{ display: 'inline-flex', transform: shown ? 'rotate(-90deg)' : 'rotate(90deg)' }}>
+          <Icon name="chevron" size={12} />
+        </span>
+        {!shown && <Count unread={elsewhere} />}
+      </button>
+      {shown && (
+        <nav aria-label="Apps" className="drop" style={{ ...menu, right: 0, left: 'auto', padding: 12 }}>
+          <div className="app-switch">
+            {apps.map((app) => (
+              <button
+                key={app.id}
+                onClick={then(() => openApp(app.id))}
+                aria-current={open?.id === app.id ? 'page' : undefined}
+                className="rail-item"
+              >
+                <span style={{ position: 'relative', display: 'inline-flex' }}>
+                  <AppIcon id={app.id} size={36} />
+                  <span className="rail-count">
+                    <Count unread={unreadOf(unread, app.id)} />
+                  </span>
+                </span>
+                <span className="rail-label">{app.title}</span>
+              </button>
+            ))}
+            {space.writable && (
+              <button
+                onClick={then(() => go('/spaces/$spaceId/new'))}
+                aria-current={onNew ? 'page' : undefined}
+                className="rail-item"
+              >
+                <span className="rail-slot" style={{ width: 36, height: 36 }}>
+                  <Icon name="plus" size={16} />
+                </span>
+                <span className="rail-label">Add</span>
+              </button>
+            )}
+          </div>
+          <div style={{ height: 1, background: palette.surface.line, margin: '10px 0 6px' }} />
+          <SideItem
+            icon={<Icon name="apps" size={16} />}
+            label="All apps"
+            unread={newProposals}
+            onClick={then(() => go('/spaces/$spaceId'))}
+          />
+        </nav>
+      )}
+    </div>
+  );
+}
+
 /** Another group to switch to, with what is new in it */
 function OtherGroup({ space, onClick }: { space: SpaceSummary; onClick: () => void }) {
   return (
@@ -711,6 +793,20 @@ function RailItem({
     </button>
   );
 }
+
+/** The app you are in, at the right of a phone's bar */
+const switcherButton = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  maxWidth: '100%',
+  height: 36,
+  padding: '0 8px',
+  border: 'none',
+  borderRadius: palette.radius.md,
+  background: 'none',
+  color: palette.ink.strong,
+};
 
 const nameButton = {
   display: 'flex',

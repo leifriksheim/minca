@@ -71,6 +71,9 @@ export function injectBaseStyles(): void {
     .rail-count .count { box-shadow: 0 0 0 2px ${surface.sunken}; }
     /* The space itself, first: its face opens its menu. */
     .rail-top { flex-shrink: 0; display: flex; justify-content: center; padding-bottom: 8px; margin-bottom: 6px; border-bottom: 1px solid ${surface.line}; }
+    /* Every app, from a phone's bar: their shapes in a grid of three, as the rail has them. */
+    .app-switch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+    .app-switch > .rail-item { padding: 12px 4px 10px; font-size: 12.5px; gap: 6px; }
     /* Where the next app goes: an empty tile, dashed. */
     .rail-slot {
       display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
@@ -93,14 +96,6 @@ export function injectBaseStyles(): void {
     }
     .side-item[aria-current] { background: ${surface.card}; box-shadow: 0 0 0 1px ${surface.rule}; }
     .space-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-    /* A phone's apps, as tabs under its bar (below); a wide screen has the rail. */
-    .app-tabs { display: none; }
-    .app-tab {
-      display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px;
-      border: 1px solid ${surface.lineStrong}; border-radius: ${radius.pill}px; background: ${surface.card};
-      color: ${ink.body}; font-size: 13.5px; font-weight: 500;
-    }
-    .app-tab[aria-current] { border-color: ${ink.strong}; color: ${ink.strong}; font-weight: 600; }
     .space-bar {
       flex-shrink: 0; display: flex; align-items: center; gap: 10px; height: 60px; padding: 0 24px;
       border-bottom: 1px solid ${surface.rule}; background: ${surface.page};
@@ -351,10 +346,6 @@ export function injectBaseStyles(): void {
          tab bar, so the space's own sections get the bottom edge, and its
          apps are the grid on the first screen rather than a sidebar. */
       .app-rail, .hide-on-phone, .bar-label { display: none !important; }
-      .app-tabs {
-        display: flex; gap: 6px; flex-shrink: 0; padding: 8px max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left));
-        border-bottom: 1px solid ${surface.line}; background: ${surface.page};
-      }
       .phone-only { display: revert !important; }
       .segmented.phone-only { display: flex !important; }
       .space-shell { display: block; height: auto; min-height: 100dvh; }

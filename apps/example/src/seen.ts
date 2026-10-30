@@ -116,7 +116,7 @@ const EMPTY: ReadonlyMap<string, Unread> = new Map();
 export const unreadOf = (unread: ReadonlyMap<string, Unread>, id: string): Unread => unread.get(id) ?? NONE;
 
 /** Everything new across some apps */
-function totalOf(unread: Iterable<Unread>): Unread {
+export function totalOf(unread: Iterable<Unread>): Unread {
   let count = 0;
   let forMe = 0;
   for (const one of unread) {
