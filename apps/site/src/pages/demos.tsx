@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 /**
- * The tiny working apps the front page shows: tools a group made for itself,
+ * The tiny working tools the front page shows, each made by a group for itself,
  * drawn as the app would draw them. Each takes what has happened so far, so a
  * demo can show it before and after someone uses it, or before and after a
  * change.

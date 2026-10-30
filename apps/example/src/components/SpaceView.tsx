@@ -19,13 +19,13 @@ import {
   useSpaceStatus,
 } from '@minca/react';
 import { RecordPanel } from './RecordPanel';
-import { OpenWith } from './apps/OpenWith';
-import { AppIcon, Count } from './apps/AppIcon';
-import { CreateApp } from './apps/CreateApp';
-import { AppSettingsButton } from './apps/AppSettings';
-import { MadeAppScreen } from './apps/MadeApps';
+import { OpenWith } from './tools/OpenWith';
+import { ToolIcon, Count } from './tools/ToolIcon';
+import { CreateTool } from './tools/CreateTool';
+import { ToolSettingsButton } from './tools/ToolSettings';
+import { MadeToolScreen } from './tools/MadeTools';
 import { Bell } from './Bell';
-import { fills, useSpaceApps, type AppEntry } from './apps/entries';
+import { fills, useSpaceTools, type ToolEntry } from './tools/entries';
 import { NEW } from './DataView';
 import { SpaceMark } from './SpaceList';
 import { AddPeople } from './InvitePeople';
@@ -51,7 +51,7 @@ const HOOD = [
     to: '/spaces/$spaceId/data',
     label: 'Data',
     icon: 'table',
-    about: 'Every record in this space, collection by collection: what the apps read and write.',
+    about: 'Every record in this space, collection by collection: what the tools read and write.',
   },
   { id: 'explore', to: '/spaces/$spaceId/explore', label: 'Explore', icon: 'compass' },
   { id: 'query', to: '/spaces/$spaceId/query', label: 'Query', icon: 'search' },
@@ -70,10 +70,10 @@ const HOOD = [
   about?: string;
 }>;
 
-/** Where the seen store keeps when the Overview, and the proposals on it, were last looked at; no app has this id */
+/** Where the seen store keeps when the Overview, and the proposals on it, were last looked at; no tool has this id */
 const PROPOSALS = ':proposals';
 
-/** What belongs to the space rather than to one app, in sidebar order */
+/** What belongs to the space rather than to one tool, in sidebar order */
 const SECTIONS = [
   { to: '/spaces/$spaceId/members', label: 'Members', icon: 'people' },
   { to: '/spaces/$spaceId/invite', label: 'Invite', icon: 'invite' },
@@ -91,35 +91,35 @@ export const sectionsOf = (pair: boolean) =>
 /** Every part of a space you can go to with only its id */
 type SpacePath = Exclude<
   Extract<keyof RegisteredRouter['routesByPath'], `/spaces/${string}`>,
-  `${string}$appId` | `${string}/`
+  `${string}$toolId` | `${string}/`
 >;
 
 /** Every route in the app, by its id */
 type RouteId = keyof RegisteredRouter['routesById'];
 
-/** The route that is a space's apps, and the one that is one app open */
-const APPS_ROUTE: RouteId = '/spaces/$spaceId/';
-const APP_ROUTE: RouteId = '/spaces/$spaceId/apps/$appId';
+/** The route that is a space's tools, and the one that is one tool open */
+const TOOLS_ROUTE: RouteId = '/spaces/$spaceId/';
+const TOOL_ROUTE: RouteId = '/spaces/$spaceId/tools/$toolId';
 
 /** What a space's pages share, from the layout around them */
 export interface SpaceScreen {
   readonly space: SpaceSummary;
   readonly collections: ReturnType<typeof useCollections>;
-  readonly apps: ReturnType<typeof useSpaceApps>;
+  readonly tools: ReturnType<typeof useSpaceTools>;
   readonly unread: ReturnType<typeof useUnread>;
   readonly status: ReturnType<typeof useSpaceStatus>;
   readonly mayDefine: boolean;
-  /** The app open, at `/apps/<id>`, when the space has it */
-  readonly open: AppEntry | undefined;
+  /** The tool open, at `/tools/<id>`, when the space has it */
+  readonly open: ToolEntry | undefined;
   /** Go to another part of this space */
   readonly go: (to: SpacePath) => void;
-  readonly openApp: (id: string) => void;
-  /** Open a record: in the app that shows its collection, else in the panel beside whatever is open */
+  readonly openTool: (id: string) => void;
+  /** Open a record: in the tool that shows its collection, else in the panel beside whatever is open */
   readonly openRecord: (record: NodeRecord, here?: boolean) => void;
-  /** The record the open app was asked to show, until it has been handed over */
+  /** The record the open tool was asked to show, until it has been handed over */
   readonly shown: string | undefined;
   readonly clearShown: () => void;
-  /** Ask an agent to make an app, or make one by hand */
+  /** Ask an agent to make a tool, or make one by hand */
   readonly startCreating: () => void;
 }
 
@@ -154,7 +154,7 @@ export function SpaceLayout() {
   return <SpaceView key={space.id} space={space} />;
 }
 
-/** One space, laid out like a chat app: its apps down a sidebar, the part you're in beside them */
+/** One space, laid out like a chat app: its tools down a sidebar, the part you're in beside them */
 function SpaceView({ space }: { space: SpaceSummary }) {
   const { spaces, pairs, openSpace } = useWorkspace();
   // A space for two is the person it is with, in its name and its face.
@@ -167,15 +167,15 @@ function SpaceView({ space }: { space: SpaceSummary }) {
   const navigate = useNavigate();
   // Where in the space you are, and the record open beside it: the address holds both.
   const leaf = useRouterState({ select: (state) => state.matches.at(-1)?.routeId });
-  const openId = useParams({ strict: false }).appId;
+  const openId = useParams({ strict: false }).toolId;
   const { record, at } = useSearch({ from: '/spaces/$spaceId' });
-  const onApps = leaf === APPS_ROUTE;
-  const onApp = leaf === APP_ROUTE;
+  const onTools = leaf === TOOLS_ROUTE;
+  const onTool = leaf === TOOL_ROUTE;
   const hood = HOOD.find((h) => h.to === leaf);
   const onNew = leaf === '/spaces/$spaceId/new';
 
   const [creating, setCreating] = useState(false);
-  // A record more than one app can open, while the person picks which
+  // A record more than one tool can open, while the person picks which
   const [choosing, setChoosing] = useState<NodeRecord | null>(null);
   // Syncing while it is on screen. Opening writes nothing: standard schemas
   // are added only when someone picks them from the library.
@@ -194,27 +194,27 @@ function SpaceView({ space }: { space: SpaceSummary }) {
     ]),
   );
 
-  const apps = useSpaceApps(space, collections);
-  const unread = useUnread(space.id, apps.ready);
+  const tools = useSpaceTools(space, collections);
+  const unread = useUnread(space.id, tools.ready);
   const seen = useSeen();
-  const open = onApp ? apps.ready.find((app) => app.id === openId) : undefined;
+  const open = onTool ? tools.ready.find((tool) => tool.id === openId) : undefined;
 
   // Back to the list it was opened from.
   const goBack = () => void navigate({ to: pair ? '/people' : '/' });
   const params = { spaceId: space.id };
   const go = (to: SpacePath) => void navigate({ to, params });
-  const openApp = (appId: string) =>
-    void navigate({ to: '/spaces/$spaceId/apps/$appId', params: { spaceId: space.id, appId } });
-  // In Data, a record opens in its own collection. Elsewhere it opens in the app that shows its
+  const openTool = (toolId: string) =>
+    void navigate({ to: '/spaces/$spaceId/tools/$toolId', params: { spaceId: space.id, toolId } });
+  // In Data, a record opens in its own collection. Elsewhere it opens in the tool that shows its
   // collection, so a message opens in the chat: the open one if it does, else the only one, else
-  // the person picks one. With none, or when that app asks (`here`) to open one of its own,
+  // the person picks one. With none, or when that tool asks (`here`) to open one of its own,
   // beside what is open.
   const showing = (collection: string) =>
-    apps.ready.filter((app) => app.record.body?.shows?.includes(collection) === true);
-  const openIn = (r: NodeRecord, app: AppEntry) =>
+    tools.ready.filter((tool) => tool.record.body?.shows?.includes(collection) === true);
+  const openIn = (r: NodeRecord, tool: ToolEntry) =>
     void navigate({
-      to: '/spaces/$spaceId/apps/$appId',
-      params: { spaceId: space.id, appId: app.id },
+      to: '/spaces/$spaceId/tools/$toolId',
+      params: { spaceId: space.id, toolId: tool.id },
       search: (was) => ({ ...was, record: undefined, at: r.key }),
     });
   const openRecord = (r: NodeRecord, here = false) => {
@@ -225,8 +225,8 @@ function SpaceView({ space }: { space: SpaceSummary }) {
         search: { collection: r.collection, record: r.key },
       });
     const can = here ? [] : showing(r.collection);
-    const app = can.find((one) => one.id === open?.id) ?? (can.length === 1 ? can[0] : undefined);
-    if (app) return openIn(r, app);
+    const tool = can.find((one) => one.id === open?.id) ?? (can.length === 1 ? can[0] : undefined);
+    if (tool) return openIn(r, tool);
     if (can.length > 1) return setChoosing(r);
     void navigate({ to: '.', search: (was) => ({ ...was, record: r.key }) });
   };
@@ -236,17 +236,17 @@ function SpaceView({ space }: { space: SpaceSummary }) {
 
   useLookingAt(space.id, open?.id, open ? unreadOf(unread, open.id).count : 0);
 
-  // Proposed apps others, or an agent, wrote since All apps was last looked at.
+  // Proposed tools others, or an agent, wrote since All tools was last looked at.
   const proposalsSeen = Date.parse(seenAt(seen, space.id, PROPOSALS));
   const newProposals: Unread = {
-    count: apps.proposed.filter(
+    count: tools.proposed.filter(
       (proposed) =>
         (proposed.createdBy !== account.did || proposed.recordsOnly) &&
         Date.parse(proposed.updatedAt) > proposalsSeen,
     ).length,
     forMe: 0,
   };
-  useLookingAt(space.id, onApps ? PROPOSALS : undefined, newProposals.count);
+  useLookingAt(space.id, onTools ? PROPOSALS : undefined, newProposals.count);
 
   const fill = open ? fills(open) : false;
   const title =
@@ -254,21 +254,21 @@ function SpaceView({ space }: { space: SpaceSummary }) {
     [
       ...SECTIONS,
       ...HOOD,
-      { to: APPS_ROUTE, label: 'Overview' },
-      { to: '/spaces/$spaceId/new', label: 'Add app' },
+      { to: TOOLS_ROUTE, label: 'Overview' },
+      { to: '/spaces/$spaceId/new', label: 'Add tool' },
     ].find((part) => part.to === leaf)?.label ??
     name;
 
   const screen: SpaceScreen = {
     space,
     collections,
-    apps,
+    tools,
     unread,
     status,
     mayDefine,
     open,
     go,
-    openApp,
+    openTool,
     openRecord,
     shown: at,
     clearShown,
@@ -277,33 +277,33 @@ function SpaceView({ space }: { space: SpaceSummary }) {
 
   return (
     <PersonScopeProvider space={space} people={people} roles={roleOf} me={account.did} openSpace={openSpace}>
-      <div className="space-shell" data-app-open={open ? '' : undefined}>
-        {/* The space's apps down the left edge, under the space itself; a phone has them as tabs. */}
-        <nav className="app-rail" aria-label={`Apps in ${name}`}>
+      <div className="space-shell" data-tool-open={open ? '' : undefined}>
+        {/* The space's tools down the left edge, under the space itself; a phone has them as tabs. */}
+        <nav className="tool-rail" aria-label={`Tools in ${name}`}>
           <div className="rail-top">
             <SpaceMenu space={space} pair={pair} leaf={leaf} go={go} onHome={goBack} face />
           </div>
-          <div className="rail-apps">
-            {/* Every app, laid out, with the ones proposed. */}
+          <div className="rail-tools">
+            {/* Every tool, laid out, with the ones proposed. */}
             <RailItem
               icon={
                 <span className="rail-glyph">
-                  <Icon name="apps" size={16} />
+                  <Icon name="tools" size={16} />
                 </span>
               }
               label="Overview"
               unread={newProposals}
-              on={onApps}
+              on={onTools}
               onClick={() => go('/spaces/$spaceId')}
             />
-            {apps.ready.map((app) => (
+            {tools.ready.map((tool) => (
               <RailItem
-                key={app.id}
-                icon={<AppIcon id={app.id} size={22} />}
-                label={app.title}
-                unread={unreadOf(unread, app.id)}
-                on={open?.id === app.id}
-                onClick={() => openApp(app.id)}
+                key={tool.id}
+                icon={<ToolIcon id={tool.id} size={22} />}
+                label={tool.title}
+                unread={unreadOf(unread, tool.id)}
+                on={open?.id === tool.id}
+                onClick={() => openTool(tool.id)}
               />
             ))}
             {space.writable && (
@@ -340,11 +340,11 @@ function SpaceView({ space }: { space: SpaceSummary }) {
               </span>
             </span>
             <span className="hide-on-phone" style={{ display: 'contents' }}>
-              {open && <AppIcon id={open.id} size={28} />}
+              {open && <ToolIcon id={open.id} size={28} />}
               <h1 style={{ ...styles.appTitle, ...ui.ellipsis, flex: 1, minWidth: 0, fontSize: 18 }}>
                 {title}
               </h1>
-              {/* Who is here, and calling them; a phone has them on the space's apps. */}
+              {/* Who is here, and calling them; a phone has them on the space's tools. */}
               {status && (
                 <WhoIsHere status={status} people={people} onOpen={() => go('/spaces/$spaceId/members')} />
               )}
@@ -352,7 +352,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
             </span>
             {open && mayDefine && (
               <span className="hide-on-phone">
-                <AppSettingsButton space={space} record={open.record} />
+                <ToolSettingsButton space={space} record={open.record} />
               </span>
             )}
           </header>
@@ -361,7 +361,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
             <div className="space-inner" data-wide={hood ? true : undefined}>
               <Notices inSpace />
               {!hood && <RelayDown />}
-              {onApps && (
+              {onTools && (
                 <div className="phone-only">
                   <div
                     style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 20, minWidth: 0 }}
@@ -384,7 +384,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
                     : "You're following this space: you can see it but not change it. Someone who runs it can give you a role."}
                 </p>
               )}
-              {status && status.rejected > 0 && !onApp && (
+              {status && status.rejected > 0 && !onTool && (
                 <button
                   onClick={() => go('/spaces/$spaceId/network')}
                   style={{
@@ -419,20 +419,20 @@ function SpaceView({ space }: { space: SpaceSummary }) {
               </SpaceScreenContext>
             </div>
           </div>
-          {/* A phone's way between apps, under the thumb: the one you're in opens every app, and its settings sit at the other end. */}
+          {/* A phone's way between tools, under the thumb: the one you're in opens every tool, and its settings sit at the other end. */}
           <footer className="space-foot">
-            <AppSwitcher
+            <ToolSwitcher
               space={space}
-              apps={apps.ready}
+              tools={tools.ready}
               unread={unread}
               newProposals={newProposals}
               open={open}
               title={title}
               onNew={onNew}
               go={go}
-              openApp={openApp}
+              openTool={openTool}
             />
-            {open && mayDefine && <AppSettingsButton space={space} record={open.record} />}
+            {open && mayDefine && <ToolSettingsButton space={space} record={open.record} />}
           </footer>
         </main>
       </div>
@@ -450,11 +450,11 @@ function SpaceView({ space }: { space: SpaceSummary }) {
 
       {choosing && (
         <OpenWith
-          apps={showing(choosing.collection)}
+          tools={showing(choosing.collection)}
           onClose={() => setChoosing(null)}
-          onChoose={(app) => {
+          onChoose={(tool) => {
             setChoosing(null);
-            openIn(choosing, app);
+            openIn(choosing, tool);
           }}
         />
       )}
@@ -472,7 +472,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
       )}
 
       {creating && (
-        <CreateApp
+        <CreateTool
           space={space}
           mayDefine={mayDefine}
           onClose={() => setCreating(false)}
@@ -491,15 +491,15 @@ function SpaceFace({ space, pair, size }: { space: SpaceSummary; pair: PairWith 
   return pair ? <Avatar did={pair.face} size={size} round /> : <SpaceMark space={space} size={size} />;
 }
 
-/** An open app: its screen, or its records as lists */
-export function OpenApp({ app }: { app: AppEntry }) {
+/** An open tool: its screen, or its records as lists */
+export function OpenTool({ tool }: { tool: ToolEntry }) {
   const { space, collections, openRecord, shown, clearShown } = useSpaceScreen();
   return (
-    <MadeAppScreen
+    <MadeToolScreen
       space={space}
-      record={app.record}
+      record={tool.record}
       collections={collections}
-      onOpen={(r) => openRecord(r, app.record.body?.shows?.includes(r.collection))}
+      onOpen={(r) => openRecord(r, tool.record.body?.shows?.includes(r.collection))}
       shown={shown}
       onShown={clearShown}
     />
@@ -657,37 +657,37 @@ function SpaceMenu({
 }
 
 /**
- * A phone's way between apps: the one open, named in the bar at its foot, opens every app as a grid of their
+ * A phone's way between tools: the one open, named in the bar at its foot, opens every tool as a grid of their
  * shapes, with what is new in each, a slot to add one, and the way to all of them laid out.
  */
-function AppSwitcher({
+function ToolSwitcher({
   space,
-  apps,
+  tools,
   unread,
   newProposals,
   open,
   title,
   onNew,
   go,
-  openApp,
+  openTool,
 }: {
   space: SpaceSummary;
-  apps: ReadonlyArray<AppEntry>;
+  tools: ReadonlyArray<ToolEntry>;
   unread: ReturnType<typeof useUnread>;
   newProposals: Unread;
-  open: AppEntry | undefined;
-  /** Where in the space you are, when no app is open */
+  open: ToolEntry | undefined;
+  /** Where in the space you are, when no tool is open */
   title: string;
   onNew: boolean;
   go: (to: SpacePath) => void;
-  openApp: (id: string) => void;
+  openTool: (id: string) => void;
 }) {
   const { open: shown, setOpen, close, root } = usePopover();
   const then = (action: () => void) => () => {
     close();
     action();
   };
-  // While its grid is shut, what's new in the apps not on screen shows on the button.
+  // While its grid is shut, what's new in the tools not on screen shows on the button.
   const elsewhere = totalOf([...unread.entries()].filter(([id]) => id !== open?.id).map(([, one]) => one));
   return (
     <div ref={root} style={{ position: 'relative', display: 'flex', minWidth: 0 }}>
@@ -695,15 +695,15 @@ function AppSwitcher({
         onClick={() => setOpen((was) => !was)}
         aria-expanded={shown}
         aria-haspopup="menu"
-        aria-label={`${open?.title ?? title}: every app`}
+        aria-label={`${open?.title ?? title}: every tool`}
         className="group-button"
         style={switcherButton}
       >
         {open ? (
-          <AppIcon id={open.id} size={22} />
+          <ToolIcon id={open.id} size={22} />
         ) : (
           <span style={{ display: 'inline-flex', color: palette.ink.body }}>
-            <Icon name="apps" size={16} />
+            <Icon name="tools" size={16} />
           </span>
         )}
         <span style={{ ...ui.ellipsis, minWidth: 0, fontSize: 15, fontWeight: 600 }}>
@@ -715,22 +715,22 @@ function AppSwitcher({
         {!shown && <Count unread={elsewhere} />}
       </button>
       {shown && (
-        <nav aria-label="Apps" className="rise" style={{ ...menu, padding: 12 }}>
-          <div className="app-switch">
-            {apps.map((app) => (
+        <nav aria-label="Tools" className="rise" style={{ ...menu, padding: 12 }}>
+          <div className="tool-switch">
+            {tools.map((tool) => (
               <button
-                key={app.id}
-                onClick={then(() => openApp(app.id))}
-                aria-current={open?.id === app.id ? 'page' : undefined}
+                key={tool.id}
+                onClick={then(() => openTool(tool.id))}
+                aria-current={open?.id === tool.id ? 'page' : undefined}
                 className="rail-item"
               >
                 <span className="rail-icon">
-                  <AppIcon id={app.id} size={36} />
+                  <ToolIcon id={tool.id} size={36} />
                   <span className="rail-count">
-                    <Count unread={unreadOf(unread, app.id)} />
+                    <Count unread={unreadOf(unread, tool.id)} />
                   </span>
                 </span>
-                <span className="rail-label">{app.title}</span>
+                <span className="rail-label">{tool.title}</span>
               </button>
             ))}
             {space.writable && (
@@ -739,7 +739,7 @@ function AppSwitcher({
                 aria-current={onNew ? 'page' : undefined}
                 className="rail-item"
               >
-                {/* On the same tile an app's shape takes, so its name lines up with theirs. */}
+                {/* On the same tile a tool's shape takes, so its name lines up with theirs. */}
                 <span className="rail-icon">
                   <span className="rail-slot" style={{ width: 36, height: 36 }}>
                     <Icon name="plus" size={16} />
@@ -751,7 +751,7 @@ function AppSwitcher({
           </div>
           <div style={{ height: 1, background: palette.surface.line, margin: '10px 0 6px' }} />
           <SideItem
-            icon={<Icon name="apps" size={16} />}
+            icon={<Icon name="tools" size={16} />}
             label="Overview"
             unread={newProposals}
             onClick={then(() => go('/spaces/$spaceId'))}
@@ -762,7 +762,7 @@ function AppSwitcher({
   );
 }
 
-/** An app on the rail: its shape, its name under it, what's new on its corner, and a bar beside it while open */
+/** A tool on the rail: its shape, its name under it, what's new on its corner, and a bar beside it while open */
 function RailItem({
   icon,
   label,
@@ -791,7 +791,7 @@ function RailItem({
   );
 }
 
-/** The app you are in, at the right of a phone's bar */
+/** The tool you are in, at the right of a phone's bar */
 const switcherButton = {
   display: 'flex',
   alignItems: 'center',

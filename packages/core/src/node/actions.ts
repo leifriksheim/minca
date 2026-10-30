@@ -914,7 +914,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
     name: 'activity_set',
     description:
       'Say what you are doing on a record, for people to see while it lasts, like "Reading the thread" or ' +
-      '"Making an app": your std.activity about it, one per record, changed in place. Set it again as the work ' +
+      '"Making a tool": your std.activity about it, one per record, changed in place. Set it again as the work ' +
       'changes, and "done" or "failed" when it ends. Needs the space to keep std.activity.',
     input: {
       type: 'object',

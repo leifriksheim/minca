@@ -250,7 +250,7 @@
   function Board() {
     const columns = useRecords(COLUMN);
     const all = useRecords(TASK);
-    // A copy of this app may not have comments or files; the same on every draw, so the hooks keep their order
+    // A copy of this tool may not have comments or files; the same on every draw, so the hooks keep their order
     const comments = has(COMMENT) ? useRecords(COMMENT) : [];
     const files = has(FILE) ? useRecords(FILE) : [];
     const people = usePeople() ?? [];

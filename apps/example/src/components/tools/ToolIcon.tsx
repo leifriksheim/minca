@@ -3,12 +3,12 @@ import { shapeFor } from '@minca/ui/shapes';
 import type { Unread } from '../../seen';
 
 /**
- * An app as its shape, the same wherever it appears: a built-in app's own,
+ * A tool as its shape, the same wherever it appears: a built-in tool's own,
  * and any other a round one picked by its id.
  */
-export function AppIcon({ id, size, className }: { id: string; size: number; className?: string }) {
+export function ToolIcon({ id, size, className }: { id: string; size: number; className?: string }) {
   return (
-    <Shape {...shapeFor(id)} size={size} className={className ? `app-shape ${className}` : 'app-shape'} />
+    <Shape {...shapeFor(id)} size={size} className={className ? `tool-shape ${className}` : 'tool-shape'} />
   );
 }
 

@@ -490,7 +490,7 @@ It runs the automations in a space that name it in `by`, made by its founder or
 members whose roles grant `/std.automation/instruct` there. What sets an automation off
 is data to it, except when its writer holds that grant too, and every grant
 of the bot's own roles: then an "Answer when mentioned" automation lets them ask it for
-things ("make us an expenses app"), and it sees the replies before it.
+things ("make us an expenses tool"), and it sees the replies before it.
 An automation's `from` narrows what sets it off to records by some roles, so
 `"from": ["member"]` is "a mention from anyone with a role".
 `--daily-cap-each` limits what each person who sets it off may spend in a

@@ -45,7 +45,7 @@ export function WatchBuilder({
 }: {
   space: SpaceSummary;
   collections: ReadonlyArray<NodeCollection>;
-  /** Collections to offer first: the open app's */
+  /** Collections to offer first: the open tool's */
   prefer?: ReadonlyArray<string>;
   onClose: () => void;
 }) {

@@ -10,7 +10,7 @@ import type { ShapeColour } from '@minca/ui/tokens';
 import { styles, palette, stack, ui } from '../styles';
 import { useSpaceUnread } from '../seen';
 import { Loading } from './Loading';
-import { Count } from './apps/AppIcon';
+import { Count } from './tools/ToolIcon';
 import { Options, type Option } from './Options';
 import { LinkButton, PrimaryButton } from './Buttons';
 
@@ -110,7 +110,7 @@ const READS: ReadonlyArray<Option<SpaceVisibility>> = [
 const STEPS = ['name', 'run', 'read'] as const;
 type Step = (typeof STEPS)[number];
 
-/** Your groups, one to a row the way chat apps list them, each opening into the app it starts with */
+/** Your groups, one to a row the way chat apps list them, each opening into the tool it starts with */
 export function SpaceList({
   spaces,
   loading,
@@ -132,7 +132,7 @@ export function SpaceList({
       ) : spaces.length === 0 ? (
         <div style={{ ...styles.emptyState, ...stack(10), alignItems: 'center' }}>
           <strong style={{ color: palette.ink.strong, fontSize: 15 }}>No groups yet</strong>
-          <span>A group starts as a chat. Add people, then any app it needs: a board, a poll, a list.</span>
+          <span>A group starts as a chat. Add people, then any tool it needs: a board, a poll, a list.</span>
           <PrimaryButton onClick={onNew} style={{ marginTop: 6 }}>
             New group
           </PrimaryButton>
@@ -162,7 +162,7 @@ export function SpaceList({
 }
 
 /**
- * What arrived in a space since you last looked, across its apps, as an app shows it: red with an @
+ * What arrived in a space since you last looked, across its tools, as a tool shows it: red with an @
  * when some of it names you (a mention, a reply), grey when it is only new
  */
 export function SpaceCount({ space }: { space: SpaceSummary }) {

@@ -20,9 +20,9 @@ the routes, in `App.tsx`.
 | Route                                                         | What                                   |
 | ------------------------------------------------------------- | -------------------------------------- |
 | `/`, `/people`                                                | Your groups, the people you talk to    |
-| `/spaces/<id>`                                                | A space's apps                         |
-| `/spaces/<id>/apps/<app>`                                     | One app, open                          |
-| `/spaces/<id>/new`                                            | Adding an app                          |
+| `/spaces/<id>`                                                | A space's tools                        |
+| `/spaces/<id>/tools/<tool>`                                   | One tool, open                         |
+| `/spaces/<id>/new`                                            | Adding a tool                          |
 | `/spaces/<id>/people`, `…/hosting`, `…/automations`, `…/more` | The space's own sections               |
 | `/spaces/<id>/data`, `…/explore`, `…/query`, `…/network`      | Under the hood                         |
 | `?record=<key>`, in a space                                   | The record open in the panel beside it |
@@ -41,8 +41,8 @@ People was before. A space this device doesn't have says so, with a link to your
 spaces, and shows itself if it turns up.
 
 A group is any space that isn't a space for two with one of your contacts; those
-are People. Opening either goes into the first app on its launcher (Chat, for a
-new group), so a group chooses where it opens by moving an app to the top.
+are People. Opening either goes into the first tool on its launcher (Chat, for a
+new group), so a group chooses where it opens by moving a tool to the top.
 
 ```bash
 npm run dev         # at the repository root: this app on :5173, the account home on :5174, a node and relay on :8787
@@ -212,11 +212,11 @@ VITE_SIGNALING_URL=wss://your-relay.example npm run dev
 
 ### Derived UI
 
-A space opens on its **Apps** tab: apps built on the standard schemas (a chat,
+A space opens on its **Tools** tab: tools built on the standard schemas (a chat,
 a kanban board, lists, shared bills, polls, decisions, events, a marketplace
 and a call log) show
 up once someone who may add collections has put them on the space's launcher
-(`launcher.app` records, `src/components/apps/launcher.ts`). Adding one
+(`launcher.app` records, `src/components/tools/launcher.ts`). Adding one
 defines every collection it uses, and someone who may can arrange or remove
 them; removing one keeps what it holds. The
 **Collections** tab lists every collection down the side. Each one is a list
@@ -241,7 +241,7 @@ which rings them. The call sits in a panel in the corner, over whatever page
 you're on, so you keep talking as you move around; the sidebar marks the space
 a call is in. The panel grows to fill the screen, or moves into a
 picture-in-picture window where the browser has one. Someone ringing you shows
-as a card on any page. The **Calls** app keeps a log of a space's calls
+as a card on any page. The **Calls** tool keeps a log of a space's calls
 (`std.call`). Calls come from `@minca/calls` (`packages/calls`); `CallsProvider` makes them once in `App.tsx`, above everything that
 changes as you move around.
 
@@ -255,9 +255,9 @@ and works as the person, with nothing to switch on: anything that can call a
 page's tools can already click through the page. It isn't offered
 `collections_define`: it proposes collections (`collections_propose`) and a
 person adds them. Anything that changes a space's people, or hands out its
-key, asks the person first. An app an agent makes may bring its own screen,
+key, asks the person first. A tool an agent makes for a space may bring its own screen,
 which the example runs in a sandboxed frame with no network (the launcher's
-guide, `src/components/apps/launcher.ts`, and `src/components/apps/screens.ts`).
+guide, `src/components/tools/launcher.ts`, and `src/components/tools/screens.ts`).
 
 **On your computer (Claude Code, Claude Desktop, Cursor, VS Code, …).** "Connect an
 agent", in the account menu, shows one command:
@@ -266,16 +266,16 @@ home, and the command adds `minca` to the agents it finds, which start
 `minca mcp` themselves: a node of its own that keeps working with every tab
 closed. See [agents](../../packages/core/docs/agents.md).
 
-### Ready-made apps
+### Ready-made tools
 
-Every app in a space is a screen: one HTML document on its `launcher.app`
+Every tool in a space is a screen: one HTML document on its `launcher.app`
 record, run in a sealed frame. The ready-made ones are no different from one an
-agent makes. Each is a file in `src/components/apps/templates/`, written
+agent makes. Each is a file in `src/components/tools/templates/`, written
 against the kit every screen gets (`@minca/ui`: Preact, people's faces,
 comments, places, Minca's look), and adding one copies it into the space,
-which then changes its copy like any other app. What the frame can't do (find
+which then changes its copy like any other tool. What the frame can't do (find
 a place, open a page, save a file) the app does for it when asked
-(`src/components/apps/screens.ts`).
+(`src/components/tools/screens.ts`).
 
 Liquid, an app for an assembly that votes and delegates, is an app of its own:
 [apps/liquid](../liquid/README.md).
@@ -302,7 +302,7 @@ src/
 - **Hosting.** An "Always online" mark on spaces a host keeps.
 - **Notifications.** "Notify me when I'm mentioned" in chat; and showing them with the app closed, which needs a service worker and Web Push ([spec 06 §4.4](../../spec/06-nodes-and-sessions.md), planned).
 - **Agents.** A connect dialog left open keeps a relay connection; it should let go.
-- **Compatible definitions in the Apps tab.** Open apps by compatibility (`sortLauncher` in `components/apps/launcher.ts`) and show what breaks, once definitions can be compared ([02](../../spec/02-records.md), compatible definitions).
+- **Compatible definitions in the Tools tab.** Open tools by compatibility (`sortLauncher` in `components/tools/launcher.ts`) and show what breaks, once definitions can be compared ([02](../../spec/02-records.md), compatible definitions).
 - **Typed queries.** Move the example's queries onto typed collections and drop the hand-written record interfaces.
 
 ## Not production

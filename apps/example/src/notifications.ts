@@ -1,4 +1,4 @@
-/** Notifications: each app's `notify` offered through the account home, then matched and shown by this app while it is open. */
+/** Notifications: each tool's `notify` offered through the account home, then matched and shown by this app while it is open. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAccount, useConnection, useNode, useWatched } from '@minca/react';
 import {
@@ -11,13 +11,13 @@ import {
 } from '@minca/core';
 import { accountHomeLink, popupFeatures } from '@minca/core/session';
 import { notifyOn, type AppAutomation } from '@minca/core/schemas';
-import { TEMPLATES } from './components/apps/templates';
-import { madeNotify } from './components/apps/entries';
-import { launcherApp, sortLauncher, type LauncherApp } from './components/apps/launcher';
+import { TEMPLATES } from './components/tools/templates';
+import { madeNotify } from './components/tools/entries';
+import { launcherTool, sortLauncher, type LauncherTool } from './components/tools/launcher';
 import { message } from '@minca/app-shared/action';
 import { addAlert } from './alerts';
 
-/** Offered whatever apps a space has */
+/** Offered whatever tools a space has */
 const CONTACTS: AutomationProposal = notifyOn('Someone asks to be your contact', 'std.contact-request');
 
 const supported = () => typeof globalThis.Notification === 'function';
@@ -122,17 +122,17 @@ export function useAsk() {
 
 /** Everything this app can notify about, in every space, worked out before the click that opens the home's popup */
 function useEverything(): ReadonlyArray<AutomationProposal> {
-  // Apps come and go with records; one look a little after a burst of them is enough.
-  const made = useWatched(madeApps, [], { when: (event) => event.type === 'records', settle: 1500 });
+  // Tools come and go with records; one look a little after a burst of them is enough.
+  const made = useWatched(madeTools, [], { when: (event) => event.type === 'records', settle: 1500 });
   return useMemo(() => gather(made ?? []), [made]);
 }
 
-/** The apps made in every space, as each space's launcher places them */
-async function madeApps(node: P2PNode): Promise<ReadonlyArray<LauncherApp>> {
-  const made: LauncherApp[] = [];
+/** The tools made in every space, as each space's launcher places them */
+async function madeTools(node: P2PNode): Promise<ReadonlyArray<LauncherTool>> {
+  const made: LauncherTool[] = [];
   for (const space of await node.spaces.list()) {
     const [records, collections, access] = await Promise.all([
-      node.records.list<LauncherApp>(space.id, { collection: launcherApp.name }),
+      node.records.list<LauncherTool>(space.id, { collection: launcherTool.name }),
       node.collections.list(space.id),
       node.spaces.access(space.id),
     ]).catch(() => [[], [], null] as const);
@@ -142,9 +142,9 @@ async function madeApps(node: P2PNode): Promise<ReadonlyArray<LauncherApp>> {
   return made;
 }
 
-/** Contact requests, the ready-made apps and those in the spaces, once each, as many as one request may carry */
-function gather(made: ReadonlyArray<LauncherApp>): ReadonlyArray<AutomationProposal> {
-  const all = [CONTACTS, ...TEMPLATES.flatMap(({ app }) => madeNotify(app)), ...made.flatMap(madeNotify)];
+/** Contact requests, the ready-made tools and those in the spaces, once each, as many as one request may carry */
+function gather(made: ReadonlyArray<LauncherTool>): ReadonlyArray<AutomationProposal> {
+  const all = [CONTACTS, ...TEMPLATES.flatMap(({ tool }) => madeNotify(tool)), ...made.flatMap(madeNotify)];
   const once = new Map(all.map((offer) => [lookingFor(offer), offer]));
   return [...once.values()].slice(0, MAX_PROPOSALS);
 }

@@ -9,10 +9,10 @@ deploying anything, and say how they are meant to be used.
 - A **guide** (`std.guide`) is how some of the space's collections are meant
   to be used, in words, for whoever writes to them next, often an agent.
 
-Neither is about any one app. An app that keeps more about itself, such as a
+Neither is about any one tool. A tool that keeps more about itself, such as a
 screen or what to notify about, keeps it in records of its own that point at
 its blueprint. The example app's launcher does
-(`apps/example/src/components/apps/launcher.ts`). Both records' fields are in
+(`apps/example/src/components/tools/launcher.ts`). Both records' fields are in
 the [standard library](standard-library.md).
 
 > Not protocol. This page describes the reference library, and another
@@ -126,7 +126,7 @@ _Source: `packages/core/src/schemas/blueprints.ts` (`supersededBlueprints`, `rev
 ## Guides
 
 A definition says what a record may hold and the rules it keeps. It can't say
-"to add an app with its own screen, write one of these, pointing at a
+"to add a tool with its own screen, write one of these, pointing at a
 blueprint". An app that has more to say about its collections writes a
 `std.guide`: a `name`, a `title`, the `text`, and the `collections` it is
 about. There is one guide of each name: whoever writes it first holds it.
@@ -138,8 +138,8 @@ exists, and reads one with `records_get` before writing there.
 ```json
 {
   "name": "launcher.apps",
-  "title": "Making an app for this space",
-  "text": "To make an app for this space that people open from its launcher: …",
+  "title": "Making a tool for this space",
+  "text": "To make a tool for this space (a launcher.app record) that people open from its launcher: …",
   "collections": ["launcher.app", "std.blueprint"]
 }
 ```
@@ -153,9 +153,9 @@ exists, and reads one with `records_get` before writing there.
 
 _Source: `packages/core/src/schemas/guides.ts` (`writeGuide`, `guidesOf`), `packages/core/src/schemas/library/collections.ts` (`guide`), `packages/core/src/node/actions.ts` (`collections_list`). Tests: `packages/core/tests/records-only.test.ts` ("collections_list points at the guides written about each collection"), `apps/example/tests/launcher.test.ts` ("the guide agents read is in the space, on the collections it is about")._
 
-## Apps with a screen of their own
+## Tools with a screen of their own
 
-Core runs no app's code. An app that lets its people add apps with their own
+Core runs no tool's code. An app that lets its people add tools with their own
 UI keeps them as records of its own and runs the UI itself. The example app
 keeps each as a `launcher.app` record pointing at its blueprint, runs its
 screen in a sealed frame, and trusts a record only when someone who may
@@ -165,29 +165,29 @@ propose one.
 
 **Where a space opens.** The launcher is in one order for everyone in the
 space (each record's `position`). The example app opens a space into the
-first app on it, so a group chooses where it opens by moving an app to the
+first tool on it, so a group chooses where it opens by moving a tool to the
 top. A new group starts with Chat, and so does a new space for two, which
 the one asking makes, so both people open it into a conversation.
 
 A screen reaches the page around it only through `window.minca`, and only for
-its app's collections and the people in its space: it lists and writes
+its tool's collections and the people in its space: it lists and writes
 records as the person looking, asks what they may do (`can`), gets someone's
 picture (`picture`), and asks the page to show a record or a person
 (`open`), or the record one of its own links to (`open` with `link`: the
 message a file was shared on), which shows it to the person and tells the screen nothing. The bridge never follows one to the space's own records (`sys.*`, `launcher.app`), and opening one answers the same whether or not the record is there; but the page visibly opens a record that is there, for the person, who can see it anyway. What a sealed frame can't do, the page does for it when it asks,
 after checking the request: it searches for places and asks where the person
 is (`places`), opens http and https pages (`link`), saves text files
-(`save`), keeps a few kilobytes per app on the device (`remember`, `recall`),
-and reads a picture that one of the app's own records refers to (`file`),
+(`save`), keeps a few kilobytes per tool on the device (`remember`, `recall`),
+and reads a picture that one of the tool's own records refers to (`file`),
 or the whole file (`blob`), taking its type from the record rather than from
 the screen.
 
-**Settings and the network.** An app may ask for `settings`, like an API
-key. Someone who may add apps fills them in once, from the open app, for
+**Settings and the network.** A tool may ask for `settings`, like an API
+key. Someone who may add tools fills them in once, from the open tool, for
 everyone in the space, and its screen reads them as `minca.settings`; nobody
-else is asked. They live on the app's own record, so they stand only as it
-does: a new version proposed without values keeps the ones the app has, and a
-copy to another space carries none. The origins an app names in `network` are
+else is asked. They live on the tool's own record, so they stand only as it
+does: a new version proposed without values keeps the ones the tool has, and a
+copy to another space carries none. The origins a tool names in `network` are
 allowed for everyone once it is added, as a workspace's admin adds an
 integration: adding it is the consent. The ready-made Chat asks for a GIPHY
 key, and shows its GIF button only once it has one.
@@ -196,21 +196,21 @@ key, and shows its GIF button only once it has one.
 `collections`, the ones it `shows`: the ones whose records it is the place
 to open (`shows: ["std.message"]` for a chat). Whatever asks the example app
 to open a record, a screen's `open` or a link beside a record, goes to the
-app that shows that record's collection: the one open, if it does, else the
-only one, else the one the person picks when asked, and that app's
+tool that shows that record's collection: the one open, if it does, else the
+only one, else the one the person picks when asked, and that tool's
 screen is handed the record's key (`minca.shown`, `minca.onShow`, the kit's
 `useShown`) to scroll to or open, but only of a collection it shows, which
-it could list anyway. That app does learn which of those records the person
+it could list anyway. That tool does learn which of those records the person
 opens from elsewhere, which is why only someone who may define collections
-adds an app. With no app that shows it, or when that app opens one of its
+adds a tool. With no tool that shows it, or when that tool opens one of its
 own (a poll's title in Polls, for its comments), the record opens beside
-whatever is open. So the Files app opens a file's message in
-the chat, and a chat's file in Files, without either knowing the other. An
-app that names a collection in `shows` must do something with what it is
+whatever is open. So the Files tool opens a file's message in
+the chat, and a chat's file in Files, without either knowing the other. A
+tool that names a collection in `shows` must do something with what it is
 handed. The kit's `<Record>` draws any standard record as one line the same
-way in every app, and opens it this way when clicked.
+way in every tool, and opens it this way when clicked.
 
-**Sharing a record into an app.** A screen can't list or read what its app
+**Sharing a record into a tool.** A screen can't list or read what its tool
 doesn't name, but a person can hand it one record, as a page gets only the
 file a person picks for it. `minca.pick` asks the page to show a finder over
 the whole space, and gives the screen the record the person chooses, or
@@ -237,10 +237,10 @@ message, or its `/` button, picks one; so does a comment box (the kit's
 `useShare`).
 
 A screen also sends live messages, kept nowhere, to the other devices that
-have the same app open in the space (`live.send`, `live.on`): for cursors,
+have the same tool open in the space (`live.send`, `live.on`): for cursors,
 typing, who is here, or a game. Each goes as a live message of the space
-([node](node.md#live-messages-and-status)) whose payload names the app by its
-`launcher.app` key, and a screen hears only those naming its own app:
+([node](node.md#live-messages-and-status)) whose payload names the tool by its
+`launcher.app` key (`app`), and a screen hears only those naming its own tool:
 
 ```json
 {
@@ -254,7 +254,7 @@ A screen is handed `{ from, device, data, viaAgent }`, `from` being the
 sender's account as the node proved it; a message from a peer with no account
 is not passed on. One screen may send a burst of 30, then 15 a second, below
 what a peer takes from another across everything, so a busy screen leaves
-room for calls and the rest. An edited copy of an app is another
+room for calls and the rest. An edited copy of a tool is another
 `launcher.app` record, so its screens don't hear the original's.
 
 In front of every screen the example app also writes `@minca/ui`
@@ -262,12 +262,12 @@ In front of every screen the example app also writes `@minca/ui`
 faces, and Minca's look, so a screen is mostly what it is about. It isn't
 part of the screen, so it doesn't count toward the 48 KB a screen may be.
 
-The ready-made apps are screens too, written the same way. Adding one
+The ready-made tools are screens too, written the same way. Adding one
 defines its collections and writes a copy of it, naming where it came from
 (`template: "kanban"`), and from then on the space changes its copy like any
-other app.
+other tool.
 
-_Source: `apps/example/src/components/apps/launcher.ts` (`addTemplate`, `firstApp`, `saveSettings`, `settingsOf`), `apps/example/src/components/apps/entries.ts` (`landingApp`, `addChat`), `apps/example/src/contacts.ts` (`withChat`), `apps/example/src/components/apps/screens.ts`, `apps/example/src/components/apps/ScreenFrame.tsx`, `apps/example/src/components/apps/AppSettings.tsx`, `apps/example/src/components/apps/templates/`, `apps/example/public/screen.html`, `packages/ui/src/frame/`, `packages/ui/src/guide.ts`. Tests: `apps/example/tests/launcher.test.ts` ("a space opens with the first app on its launcher, the same for everyone in it, and moving one changes it", "adding a ready-made app copies it into the space once, with its collections and first records", "settings filled in once stand for everyone, survive a new version of the app, and stay in their space"), `apps/example/tests/screens.test.ts` ("an app's settings come with the screen, and the screen can't change them", "a screen checks, shows faces and opens things only within its app and its space", "what the page does for a screen, it does only as asked properly", "a screen can’t point a link out of its app, so it can’t probe for keys or reach what no one shared", "a record someone shared is read through the link to it, and only through that", "a screen links out only to what the person picked for it, and is handed what they picked", "the space’s own records are never picked for a screen", "a screen hears the same app's screens on other devices, as who sent it, and no other app's")._
+_Source: `apps/example/src/components/tools/launcher.ts` (`addTemplate`, `firstTool`, `saveSettings`, `settingsOf`), `apps/example/src/components/tools/entries.ts` (`landingTool`, `addChat`), `apps/example/src/contacts.ts` (`withChat`), `apps/example/src/components/tools/screens.ts`, `apps/example/src/components/tools/ScreenFrame.tsx`, `apps/example/src/components/tools/ToolSettings.tsx`, `apps/example/src/components/tools/templates/`, `apps/example/public/screen.html`, `packages/ui/src/frame/`, `packages/ui/src/guide.ts`. Tests: `apps/example/tests/launcher.test.ts` ("a space opens with the first tool on its launcher, the same for everyone in it, and moving one changes it", "adding a ready-made tool copies it into the space once, with its collections and first records", "settings filled in once stand for everyone, survive a new version of the tool, and stay in their space"), `apps/example/tests/screens.test.ts` ("a tool's settings come with the screen, and the screen can't change them", "a screen checks, shows faces and opens things only within its tool and its space", "what the page does for a screen, it does only as asked properly", "a screen can’t point a link out of its tool, so it can’t probe for keys or reach what no one shared", "a record someone shared is read through the link to it, and only through that", "a screen links out only to what the person picked for it, and is handed what they picked", "the space’s own records are never picked for a screen", "a screen hears the same tool's screens on other devices, as who sent it, and no other tool's")._
 
 ## Describing a collection
 
@@ -424,7 +424,7 @@ loosen them past what an app relies on ("never looser", above).
 
 A definition says what a record may hold and the rules it keeps, not what it
 means to a screen. Views derived from definitions (the blueprint review, an
-app's collection views, made apps without a screen of their own) have to guess
+app's collection views, made tools without a screen of their own) have to guess
 which field is the title or that votes are shown as counts. The plan adds
 optional hints to a definition:
 

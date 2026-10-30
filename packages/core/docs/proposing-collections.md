@@ -102,14 +102,14 @@ await writeGuide(node, space.id, {
 });
 ```
 
-## An app's own UI
+## A tool's own UI
 
-Core runs no app's code. The example app lets a space add apps with a screen
+Core runs no tool's code. The example app lets a space add tools with a screen
 of their own: a `launcher.app` record that points at its blueprint and holds
 one HTML document, run in a sealed frame, as the person looking. It runs only
 once someone who may define collections has written the record, under a note
 that isn't records-only. The pieces
-are in the repository: `apps/example/src/components/apps/launcher.ts`,
+are in the repository: `apps/example/src/components/tools/launcher.ts`,
 `screens.ts` and `ScreenFrame.tsx`, and `apps/example/public/screen.html`.
 
 The details: [blueprints and guides](blueprints-and-guides.md).

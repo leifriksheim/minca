@@ -1,5 +1,5 @@
 /**
- * Screens: a made app's own UI, run sealed. The script in front of it, the
+ * Screens: a made tool's own UI, run sealed. The script in front of it, the
  * policy it runs under, and the bridge that answers it as the person looking.
  */
 import { test, describe } from 'node:test';
@@ -14,7 +14,7 @@ import {
   screenDocument,
   screenPolicy,
   type ScreenHost,
-} from '../src/components/apps/screens';
+} from '../src/components/tools/screens';
 import type { NodeRecord, P2PNode } from '@minca/core';
 import {
   file as fileCollection,
@@ -24,7 +24,7 @@ import {
   poll,
   useSchemas as addSchemas,
 } from '@minca/core/schemas';
-import { checkLauncherApp } from '../src/components/apps/launcher';
+import { checkLauncherTool } from '../src/components/tools/launcher';
 import { setup, waitFor } from './helpers';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -65,7 +65,7 @@ describe('screens', () => {
     assert.equal(Reflect.apply(minca.shown, undefined, []), 'k1');
   });
 
-  test("an app's settings come with the screen, and the screen can't change them", () => {
+  test("a tool's settings come with the screen, and the screen can't change them", () => {
     const port = { postMessage: () => {}, onmessage: null };
     const window: Record<string, unknown> = {
       __minca: { port, me: { did: 'did:key:zMe', name: 'Anna' }, collections: [], settings: { giphy: 'k' } },
@@ -161,7 +161,7 @@ describe('screens', () => {
     ]);
   });
 
-  test('a screen reaches only the exact origins its app names', () => {
+  test('a screen reaches only the exact origins its tool names', () => {
     assert.equal(
       checkScreenNetwork(['https://api.open-meteo.com', 'wss://feed.example.com:8443'], true),
       null,
@@ -204,7 +204,7 @@ describe('screens', () => {
     );
   });
 
-  test("the bridge answers for its app's collections only, as the person looking, under the rules", async () => {
+  test("the bridge answers for its tool's collections only, as the person looking, under the rules", async () => {
     const { alice, bob, space } = await setup();
     // Editors here change only what they added: who may write is the space's grants.
     await alice.node.spaces.defineRole(space, {
@@ -275,7 +275,7 @@ describe('screens', () => {
       assert.equal(
         (await call('history', hers.key)).ok,
         true,
-        "another person's record of the app's, to read",
+        "another person's record of the tool's, to read",
       );
       assert.equal((await call('history', 'nope')).ok, false);
 
@@ -286,7 +286,7 @@ describe('screens', () => {
     }
   });
 
-  test('a screen checks, shows faces and opens things only within its app and its space', async () => {
+  test('a screen checks, shows faces and opens things only within its tool and its space', async () => {
     const { alice, bob, space } = await setup();
     await alice.node.collections.define(space, { name: 'app.chess.game', schema: { type: 'object' } });
     await alice.node.records.put(space, 'app.secret', { pin: 1234 });
@@ -304,7 +304,7 @@ describe('screens', () => {
     const { call, close } = bridgeFor(bob.node, space, ['app.chess.game'], host);
     try {
       assert.equal((await call('can', 'create', 'app.chess.game')).value, true);
-      assert.equal((await call('can', 'create', 'app.secret')).ok, false, "not another app's collection");
+      assert.equal((await call('can', 'create', 'app.secret')).ok, false, "not another tool's collection");
       assert.equal((await call('can', 'define', 'app.chess.game')).ok, false);
       // Editing and deleting are asked of a record, since who wrote it decides; a collection is no record.
       const mine = await call('put', 'app.chess.game', { white: 'bob' });
@@ -312,7 +312,7 @@ describe('screens', () => {
       assert.equal((await call('can', 'edit', key)).value, true);
       assert.equal((await call('can', 'delete', key)).value, true);
       assert.equal((await call('can', 'edit', 'app.chess.game')).value, false);
-      assert.equal((await call('can', 'edit', secret.key)).value, false, "not a record of another app's");
+      assert.equal((await call('can', 'edit', secret.key)).value, false, "not a record of another tool's");
 
       assert.equal(
         (await call('picture', alice.node.did)).value,
@@ -321,7 +321,7 @@ describe('screens', () => {
       assert.equal((await call('picture', 'did:key:zNobodyHere')).value, null);
 
       assert.equal((await call('open', { record: game.key })).ok, true);
-      assert.equal((await call('open', { record: secret.key })).ok, false, "not a record of another app's");
+      assert.equal((await call('open', { record: secret.key })).ok, false, "not a record of another tool's");
       assert.equal((await call('open', { person: alice.node.did })).ok, true);
       assert.equal(
         (await call('open', { person: 'did:key:zNobodyHere' })).ok,
@@ -436,7 +436,7 @@ function fakeHost(chosen: NodeRecord | null = null) {
   return { host, asked };
 }
 
-describe('the Files app', () => {
+describe('the Files tool', () => {
   test("a file kept about nothing is a file of the space, and anyone may put anyone's file in a category", async () => {
     const { alice, bob, space } = await setup();
     const FILES = [fileCollection.name, list.name, listItem.name];
@@ -490,7 +490,7 @@ describe('the Files app', () => {
     }
   });
 
-  test('a file opens the message it was shared on, though the app holds no messages', async () => {
+  test('a file opens the message it was shared on, though the tool holds no messages', async () => {
     const { alice, space } = await setup();
     await addSchemas(alice.node, space, [fileCollection, message]);
     const said = await alice.node.records.put(space, message.name, { text: 'The plan' });
@@ -515,7 +515,7 @@ describe('the Files app', () => {
     }
   });
 
-  test('a screen can’t point a link out of its app, so it can’t probe for keys or reach what no one shared', async () => {
+  test('a screen can’t point a link out of its tool, so it can’t probe for keys or reach what no one shared', async () => {
     const { alice, space } = await setup();
     await addSchemas(alice.node, space, [fileCollection]);
     const secret = await alice.node.records.put(space, 'app.secret', { pin: 1234 });
@@ -547,7 +547,7 @@ describe('the Files app', () => {
   });
 });
 
-describe('sharing a record into an app', () => {
+describe('sharing a record into a tool', () => {
   test('a record someone shared is read through the link to it, and only through that', async () => {
     const { alice, space } = await setup();
     await addSchemas(alice.node, space, [message, poll]);
@@ -562,18 +562,18 @@ describe('sharing a record into an app', () => {
       { text: 'Vote!' },
       { links: [{ rel: 'shares', to: asked.key }] },
     );
-    const app = await alice.node.records.put(space, 'launcher.app', { title: 'Hidden' });
+    const tool = await alice.node.records.put(space, 'launcher.app', { title: 'Hidden' });
     const odd = await alice.node.records.put(
       space,
       message.name,
       { text: 'Look' },
-      { links: [{ rel: 'shares', to: app.key }] },
+      { links: [{ rel: 'shares', to: tool.key }] },
     );
     const { host, asked: opened } = fakeHost();
     const { call, close } = bridgeFor(alice.node, space, [message.name], host);
     try {
       assert.equal((await call('get', asked.key)).value, null, 'not by its key: it is no record of the chat');
-      // Opening what a message shares shows it to the person, but never the space's own apps.
+      // Opening what a message shares shows it to the person, but never the space's own tools.
       assert.equal((await call('open', { record: said.key, link: 'shares' })).ok, true);
       assert.equal((await call('open', { record: odd.key, link: 'shares' })).ok, true, 'answered the same');
       const shown = opened.filter(([what]) => what === 'open').map(([, target]) => target);
@@ -586,7 +586,7 @@ describe('sharing a record into an app', () => {
       assert.equal(
         (await call('get', odd.key, { link: 'shares' })).value,
         null,
-        'never the space’s own apps',
+        'never the space’s own tools',
       );
       assert.equal(
         (await call('get', asked.key, { link: 'shares' })).value,
@@ -646,7 +646,7 @@ describe('sharing a record into an app', () => {
       assert.ok(isRecord(picked.value) && picked.value.key === asked.key);
       const sent = await share(after.call);
       assert.equal(sent.ok, true, sent.error ?? '');
-      // What was picked in one app is not another's: each bridge keeps its own.
+      // What was picked in one tool is not another's: each bridge keeps its own.
       assert.equal((await share(before.call)).ok, false);
     } finally {
       before.close();
@@ -657,15 +657,15 @@ describe('sharing a record into an app', () => {
   test('the space’s own records are never picked for a screen', async () => {
     const { alice, space } = await setup();
     await addSchemas(alice.node, space, [message]);
-    const app = await alice.node.records.put(space, 'launcher.app', { title: 'Hidden' });
-    const { call, close } = bridgeFor(alice.node, space, [message.name], fakeHost(app).host);
+    const tool = await alice.node.records.put(space, 'launcher.app', { title: 'Hidden' });
+    const { call, close } = bridgeFor(alice.node, space, [message.name], fakeHost(tool).host);
     try {
       assert.equal((await call('pick')).value, null);
       const sent = await call(
         'put',
         message.name,
         { text: 'x' },
-        { links: [{ rel: 'shares', to: app.key }] },
+        { links: [{ rel: 'shares', to: tool.key }] },
       );
       assert.equal(sent.ok, false);
     } finally {
@@ -694,18 +694,18 @@ describe('a record opened from elsewhere', () => {
     assert.deepEqual(told, ['message-1']);
   });
 
-  test('an app may only show collections it has', () => {
-    const app = { title: 'Chat', collections: ['std.message'], shows: ['std.message'] };
-    assert.equal(checkLauncherApp(app), null);
+  test('a tool may only show collections it has', () => {
+    const tool = { title: 'Chat', collections: ['std.message'], shows: ['std.message'] };
+    assert.equal(checkLauncherTool(tool), null);
     assert.match(
-      checkLauncherApp({ ...app, shows: ['std.file'] }) ?? '',
+      checkLauncherTool({ ...tool, shows: ['std.file'] }) ?? '',
       /std\.file is not one of its collections/,
     );
   });
 });
 
 describe('live messages between screens', () => {
-  test("a screen hears the same app's screens on other devices, as who sent it, and no other app's", async () => {
+  test("a screen hears the same tool's screens on other devices, as who sent it, and no other tool's", async () => {
     const { alice, bob, space } = await setup();
     const board = bridgeFor(alice.node, space, [], undefined, 'app.board');
     const bobsBoard = bridgeFor(bob.node, space, [], undefined, 'app.board');
@@ -716,7 +716,7 @@ describe('live messages between screens', () => {
       assert.deepEqual(bobsBoard.heard, [
         { from: alice.node.did, device: alice.node.sessionDid, data: { x: 3, y: 4 }, viaAgent: false },
       ]);
-      // To one device only, and kept apart from another app's screens in the same space
+      // To one device only, and kept apart from another tool's screens in the same space
       assert.equal((await board.call('liveSend', 'just you', { to: bob.node.sessionDid })).ok, true);
       await waitFor(async () => bobsBoard.heard.length > 1, 'the reply');
       assert.equal(bobsGame.heard.length, 0);
@@ -744,14 +744,14 @@ function bridgeFor(
   spaceId: string,
   collections: ReadonlyArray<string>,
   host?: ScreenHost,
-  app = 'app.test',
+  tool = 'app.test',
 ) {
   const channel = new MessageChannel();
   const bridge = createScreenBridge({
     node,
     spaceId,
     collections,
-    app,
+    tool,
     port: channel.port1,
     ...(host ? { host } : {}),
   });

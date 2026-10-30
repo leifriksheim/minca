@@ -2,52 +2,52 @@ import { useState } from 'react';
 import { useAction } from '@minca/app-shared/action';
 import type { DefineCollection, NodeCollection, SpaceSummary } from '@minca/core';
 import { useNode } from '@minca/react';
-import type { useSpaceApps } from './entries';
-import { AppIcon } from './AppIcon';
+import type { useSpaceTools } from './entries';
+import { ToolIcon } from './ToolIcon';
 import { addTemplate } from './launcher';
 import { Icon } from '../Icon';
 import { styles, palette, stack } from '../../styles';
 import { QuietButton } from '../Buttons';
 
 /**
- * Adding an app to a space: first one of your own, asked of an agent
- * (`CreateApp`), then the ready-made ones it doesn't have yet.
+ * Adding a tool to a space: first one of your own, asked of an agent
+ * (`CreateTool`), then the ready-made ones it doesn't have yet.
  */
-export function NewApp({
+export function NewTool({
   space,
   collections,
-  apps,
+  tools,
   mayDefine,
-  onOpenApp,
+  onOpenTool,
   onOwn,
 }: {
   space: SpaceSummary;
   collections: ReadonlyArray<NodeCollection>;
-  apps: ReturnType<typeof useSpaceApps>;
+  tools: ReturnType<typeof useSpaceTools>;
   mayDefine: boolean;
-  onOpenApp: (id: string) => void;
+  onOpenTool: (id: string) => void;
   onOwn: () => void;
 }) {
   const node = useNode();
   const [adding, setAdding] = useState<Ready | null>(null);
   const { run, busy, error } = useAction();
   const ready: ReadonlyArray<Ready> = [
-    ...apps.templates.map((template) => ({
-      id: template.app.template,
-      title: template.app.title,
-      description: template.app.description,
+    ...tools.templates.map((template) => ({
+      id: template.tool.template,
+      title: template.tool.title,
+      description: template.tool.description,
       needs: template.needs,
       uses: template.uses,
-      add: () => addTemplate(node, space.id, template, apps.placed),
+      add: () => addTemplate(node, space.id, template, tools.placed),
     })),
   ];
 
-  const add = (app: Ready) => {
-    setAdding(app);
+  const add = (tool: Ready) => {
+    setAdding(tool);
     // Added, it opens: what you added it for is the next thing to do.
     void run(async () => {
-      await app.add();
-      onOpenApp(app.id);
+      await tool.add();
+      onOpenTool(tool.id);
     });
   };
 
@@ -73,34 +73,34 @@ export function NewApp({
       <h2 style={{ ...styles.sectionTitle, marginTop: 18 }}>Ready-made</h2>
       <p style={styles.quiet}>
         {ready.length === 0
-          ? `${space.name} has every ready-made app.`
+          ? `${space.name} has every ready-made tool.`
           : mayDefine
             ? 'Ready-made. Adding one adds every collection it uses, which hold ordinary records.'
             : 'Someone whose role lets them add collections can add these.'}
       </p>
-      <div className="app-list">
-        {ready.map((app) => (
-          <div key={app.id} style={addRow}>
+      <div className="tool-list">
+        {ready.map((tool) => (
+          <div key={tool.id} style={addRow}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <AppIcon id={app.id} size={40} />
+              <ToolIcon id={tool.id} size={40} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <strong style={cardTitle}>{app.title}</strong>
-                <p style={cardText}>{app.description}</p>
+                <strong style={cardTitle}>{tool.title}</strong>
+                <p style={cardText}>{tool.description}</p>
               </div>
               {mayDefine && (
                 <QuietButton
-                  onClick={() => add(app)}
+                  onClick={() => add(tool)}
                   disabled={busy}
-                  aria-label={`Add ${app.title}`}
+                  aria-label={`Add ${tool.title}`}
                   style={{ flexShrink: 0 }}
                 >
-                  {busy && adding?.id === app.id ? 'Adding…' : 'Add'}
+                  {busy && adding?.id === tool.id ? 'Adding…' : 'Add'}
                 </QuietButton>
               )}
             </div>
             <details style={{ marginTop: 6 }}>
               <summary style={{ ...styles.faint, paddingLeft: 52 }}>What it stores</summary>
-              <SchemaList app={app} collections={collections} />
+              <SchemaList tool={tool} collections={collections} />
             </details>
           </div>
         ))}
@@ -114,7 +114,7 @@ export function NewApp({
   );
 }
 
-/** A ready-made app to add: what the list shows of it, and how to add it */
+/** A ready-made tool to add: what the list shows of it, and how to add it */
 interface Ready {
   readonly id: string;
   readonly title: string;
@@ -124,11 +124,11 @@ interface Ready {
   readonly add: () => Promise<unknown>;
 }
 
-/** What an app reads and writes, and whether this space has each yet */
-function SchemaList({ app, collections }: { app: Ready; collections: ReadonlyArray<NodeCollection> }) {
+/** What a tool reads and writes, and whether this space has each yet */
+function SchemaList({ tool, collections }: { tool: Ready; collections: ReadonlyArray<NodeCollection> }) {
   const rows = [
-    ...app.needs.map((s) => ({ s, optional: false })),
-    ...(app.uses ?? []).map((s) => ({ s, optional: true })),
+    ...tool.needs.map((s) => ({ s, optional: false })),
+    ...(tool.uses ?? []).map((s) => ({ s, optional: true })),
   ];
   return (
     <ul

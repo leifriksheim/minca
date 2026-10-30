@@ -43,8 +43,8 @@ export function ConnectAgent({
           <strong style={{ fontSize: 15, color: palette.ink.strong }}>Then just ask</strong>
           {then ?? (
             <p style={stepText}>
-              In a new chat with your agent, say what you need in your own words: what’s new in a group, add
-              an app, change one.
+              In a new chat with your agent, say what you need in your own words: what’s new in a group, add a
+              tool, change one.
             </p>
           )}
         </div>

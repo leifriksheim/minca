@@ -8,8 +8,8 @@ import {
   type Blueprint,
   type BlueprintReview,
 } from '@minca/core/schemas';
-import { AppBoard } from './AppBoard';
-import { addMade, checkLauncherApp, removeApp, settingsOf, updated, type LauncherApp } from './launcher';
+import { ToolBoard } from './ToolBoard';
+import { addMade, checkLauncherTool, removeTool, settingsOf, updated, type LauncherTool } from './launcher';
 import { ScreenFrame } from './ScreenFrame';
 import { ago } from '@minca/ui/time';
 import { styles, palette, hstack, stack } from '../../styles';
@@ -18,12 +18,12 @@ import { LinkButton, QuietButton } from '../Buttons';
 import { confirmThen } from '../../confirm';
 
 /**
- * The blueprint a proposed app points at, if any, and what applying it would
+ * The blueprint a proposed tool points at, if any, and what applying it would
  * do: worked out from its rules rather than its words.
  */
 function useBlueprintReview(
   space: SpaceSummary,
-  record: NodeRecord<LauncherApp>,
+  record: NodeRecord<LauncherTool>,
   collections: ReadonlyArray<NodeCollection>,
 ): { readonly plan: Blueprint | null; readonly review: BlueprintReview | null } {
   const key = record.links.find((link) => link.rel === 'blueprint')?.to;
@@ -50,20 +50,20 @@ export function Proposals({
   onAdded,
 }: {
   space: SpaceSummary;
-  proposals: ReadonlyArray<NodeRecord<LauncherApp>>;
-  /** The apps on the launcher, to name the one an update replaces and to place the new one after */
-  placed: ReadonlyArray<NodeRecord<LauncherApp>>;
+  proposals: ReadonlyArray<NodeRecord<LauncherTool>>;
+  /** The tools on the launcher, to name the one an update replaces and to place the new one after */
+  placed: ReadonlyArray<NodeRecord<LauncherTool>>;
   collections: ReadonlyArray<NodeCollection>;
   mayDefine: boolean;
   onAdded: (key: string) => void;
 }) {
   if (proposals.length === 0) return null;
   return (
-    <section aria-label="Proposed apps" style={stack(10)}>
+    <section aria-label="Proposed tools" style={stack(10)}>
       <div>
         <h2 style={styles.sectionTitle}>Proposed</h2>
         <p style={{ ...styles.quiet, marginTop: 2 }}>
-          Apps someone, or their agent, made for this space. Nothing changes until someone who can add
+          Tools someone, or their agent, made for this space. Nothing changes until someone who can add
           collections adds one. What each allows is worked out from its rules, not from what its author says
           about it.
         </p>
@@ -96,9 +96,9 @@ function Proposal({
   onAdded,
 }: {
   space: SpaceSummary;
-  record: NodeRecord<LauncherApp>;
-  replaces: NodeRecord<LauncherApp> | undefined;
-  placed: ReadonlyArray<NodeRecord<LauncherApp>>;
+  record: NodeRecord<LauncherTool>;
+  replaces: NodeRecord<LauncherTool> | undefined;
+  placed: ReadonlyArray<NodeRecord<LauncherTool>>;
   collections: ReadonlyArray<NodeCollection>;
   mayDefine: boolean;
   onAdded: (key: string) => void;
@@ -115,7 +115,7 @@ function Proposal({
       !plan?.collections.some((c) => c.name === name),
   );
   const problem =
-    (body ? checkLauncherApp(body) : null) ??
+    (body ? checkLauncherTool(body) : null) ??
     review?.problem ??
     (missing.length ? `the space has no ${missing.join(' or ')}` : null);
   // What it shows that the space has already, which its blueprint doesn't cover: listed too, so nothing it can write is unseen.
@@ -135,11 +135,11 @@ function Proposal({
       onAdded(await addMade(node, space.id, record, placed));
     });
   const remove = () => {
-    const title = body?.title ?? 'this app';
+    const title = body?.title ?? 'this tool';
     confirmThen(
       mine ? 'Your proposal is taken back.' : 'It is removed for everyone.',
       { title: mine ? `Withdraw ${title}?` : `Decline ${title}?`, yes: mine ? 'Withdraw' : 'Decline' },
-      () => run(() => removeApp(node, space.id, record, [record])),
+      () => run(() => removeTool(node, space.id, record, [record])),
     );
   };
 
@@ -161,7 +161,7 @@ function Proposal({
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
         <div style={{ minWidth: 0 }}>
           <strong style={{ ...tileTitle, fontSize: 15 }}>
-            {body?.title ?? 'An app that could not be read'}
+            {body?.title ?? 'A tool that could not be read'}
           </strong>
           <p style={{ ...styles.faint, marginTop: 2 }}>
             {wasAdded ? 'Changed by' : 'Proposed by'} <Person did={by} />
@@ -170,7 +170,7 @@ function Proposal({
             {replaces?.body && ` · an update to ${replaces.body.title}`}
             {body?.updates !== undefined &&
               !replaces &&
-              ' · an update to an app no longer here; adding it adds it as its own'}
+              ' · an update to a tool no longer here; adding it adds it as its own'}
           </p>
         </div>
         <div style={{ ...hstack(6), flexShrink: 0 }}>
@@ -300,7 +300,7 @@ function Proposal({
 }
 
 /**
- * An app that brings its own screen. Code can't be summed up the way rules
+ * A tool that brings its own screen. Code can't be summed up the way rules
  * can, so this says what the screen is able to do at all — which the frame
  * enforces — and shows the code for anyone who wants to read it.
  */
@@ -318,7 +318,7 @@ function ScreenNote({ screen, network }: { screen: string; network: ReadonlyArra
     >
       <p style={{ fontSize: 13, color: palette.ink.body, lineHeight: 1.5 }}>
         <strong style={{ color: palette.ink.strong }}>It brings its own screen</strong> ({kb} KB of code). It
-        runs sealed: it can read and change only this app's records, in this space, as whoever is looking —
+        runs sealed: it can read and change only this tool's records, in this space, as whoever is looking —
         under the rules below.{' '}
         {network.length ? (
           <>
@@ -383,8 +383,8 @@ function AgentBadge() {
   );
 }
 
-/** An added app: its own screen when its launcher record carries one, else its records. */
-export function MadeAppScreen({
+/** An added tool: its own screen when its launcher record carries one, else its records. */
+export function MadeToolScreen({
   space,
   record,
   collections,
@@ -393,7 +393,7 @@ export function MadeAppScreen({
   onShown,
 }: {
   space: SpaceSummary;
-  record: NodeRecord<LauncherApp>;
+  record: NodeRecord<LauncherTool>;
   collections: ReadonlyArray<NodeCollection>;
   onOpen: (record: NodeRecord) => void;
   /** A record its screen was asked to show (`shows`), and what to do once it has been handed over */
@@ -412,21 +412,21 @@ export function MadeAppScreen({
       {screen ? (
         <ScreenFrame
           spaceId={space.id}
-          appKey={record.key}
+          toolKey={record.key}
           collections={names}
           screen={screen}
           network={body.network ?? []}
           settings={settingsOf(body)}
-          title={body.title ?? 'An app'}
+          title={body.title ?? 'A tool'}
           onOpen={onOpen}
           shows={body.shows}
           shown={shown}
           onShown={onShown}
         />
       ) : (
-        // The app fills the window edge to edge, so the lists bring their own margin and scroll.
+        // The tool fills the window edge to edge, so the lists bring their own margin and scroll.
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '20px 24px' }}>
-          <AppBoard space={space} names={names} collections={collections} onOpen={onOpen} />
+          <ToolBoard space={space} names={names} collections={collections} onOpen={onOpen} />
         </div>
       )}
     </section>

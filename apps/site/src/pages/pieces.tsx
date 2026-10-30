@@ -1,6 +1,6 @@
 import { useEffect, useState, type PointerEvent, type ReactNode } from 'react';
 import { Shape } from '@minca/app-shared/shapes';
-import { APP_SHAPES, markFor, shapeFor } from '@minca/ui/shapes';
+import { TOOL_SHAPES as APP_SHAPES, markFor, shapeFor } from '@minca/ui/shapes';
 import type { ShapeColour } from '@minca/ui/tokens';
 import { EventHead, Face } from './demos';
 

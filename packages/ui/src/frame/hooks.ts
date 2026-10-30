@@ -106,8 +106,8 @@ export function useBlob(key: string, ref: { readonly hash: string } | null | und
 }
 
 /**
- * The key of the record this app was last asked to show, opened from
- * elsewhere (a file's message, from the Files app, opens in the chat); null
+ * The key of the record this tool was last asked to show, opened from
+ * elsewhere (a file's message, from the Files tool, opens in the chat); null
  * until one is. Each opening is a new value, even of the same record, so an
  * effect on it runs every time.
  */
@@ -121,7 +121,7 @@ export function useShown(): { key: string } | null {
 }
 
 /**
- * For a list: the key of the record this app was asked to show, once the
+ * For a list: the key of the record this tool was asked to show, once the
  * element with that `data-key` is drawn (it looks after each draw). The
  * element is scrolled to, and the key stays a moment, for `data-marked` to
  * light it up.

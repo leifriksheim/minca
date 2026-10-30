@@ -1,12 +1,12 @@
 /**
- * Screens: a made app's own UI, kept on its launcher record and run sealed.
+ * Screens: a made tool's own UI, kept on its launcher record and run sealed.
  *
  * A launcher record (`launcher.ts`) may carry a `screen`: one HTML document,
  * scripts and styles inline. It runs only once someone who may define
  * collections has written that record, and then in a frame that has no network,
  * no storage and no way to reach the page around it, and hands it one thing:
  * a message port to a {@link createScreenBridge bridge}. Through that port the
- * screen reads and writes the records of the collections its app named, in
+ * screen reads and writes the records of the collections its tool named, in
  * one space, as whoever is looking — so every rule still holds, and a screen
  * can do nothing its viewer couldn't.
  *
@@ -34,12 +34,12 @@ const isObject = isRecord;
 
 /**
  * Collections no screen may use: the space's own, and the launcher's, through
- * which a screen running as someone who may define collections could add apps.
+ * which a screen running as someone who may define collections could add tools.
  */
 export const offLimits = (name: string): boolean =>
   name.startsWith('sys.') || ['launcher.app', 'std.blueprint', 'std.guide'].includes(name);
 
-/** The largest screen an app may carry, in bytes of UTF-8: it travels with every copy of its record */
+/** The largest screen a tool may carry, in bytes of UTF-8: it travels with every copy of its record */
 export const MAX_SCREEN_BYTES = 48 * 1024;
 
 /** At most this many origins a screen may reach */
@@ -57,7 +57,7 @@ const SCREEN_ORIGIN =
 export function checkScreenNetwork(network: unknown, hasScreen: boolean): string | null {
   if (network === undefined) return null;
   if (!Array.isArray(network)) return 'network must be a list of origins, like ["https://api.example.com"]';
-  if (!hasScreen && network.length) return 'network is where a screen may connect; this app has no screen';
+  if (!hasScreen && network.length) return 'network is where a screen may connect; this tool has no screen';
   if (network.length > MAX_SCREEN_ORIGINS) return `network may name at most ${MAX_SCREEN_ORIGINS} origins`;
   for (const origin of network) {
     if (typeof origin !== 'string' || !SCREEN_ORIGIN.test(origin)) {
@@ -97,21 +97,21 @@ interface ScreenRecord {
 }
 
 /** How to write a screen, for an agent: part of the guide the launcher writes in the space (`launcher.ts`) */
-export const SCREEN_GUIDE = `A screen is one HTML document (scripts and styles inline, at most 48 KB) put on an app's launcher.app record as "screen".
-When the app is added, the app shows it instead of plain lists. It runs sealed: no network (no fetch, no
+export const SCREEN_GUIDE = `A screen is one HTML document (scripts and styles inline, at most 48 KB) put on a tool's launcher.app record as "screen".
+When the tool is added, the app shows it instead of plain lists. It runs sealed: no network (no fetch, no
 images from URLs, no fonts from URLs), no storage, no popups, and no alert, confirm or prompt (show messages in the page).
 Forms work: handle "submit", call event.preventDefault() and save with minca.put; a form never goes anywhere itself.
 Keep state in records, never in the page.
 
 If it truly needs the network — weather, a map, a timetable — give the record "network": the exact origins it may
 fetch from and load images from, like ["https://api.open-meteo.com"] (https:// or wss://, a host, no path; at most 8).
-Nothing else is reachable, and fonts never are. Each origin is named when the app is reviewed, and whoever adds it
+Nothing else is reachable, and fonts never are. Each origin is named when the tool is reviewed, and whoever adds it
 decides for everyone. Ask for no more than it needs.
 
 Inside it, window.minca is:
   minca.me                          { did, name } — who is looking
-  minca.collections                 the collection names this screen may use (its app's "collections")
-  minca.settings                    the values filled in for its app's "settings", by key: { giphy: "…" }; one not filled in is missing
+  minca.collections                 the collection names this screen may use (its tool's "collections")
+  minca.settings                    the values filled in for its tool's "settings", by key: { giphy: "…" }; one not filled in is missing
   await minca.list(collection, { where? })   records, oldest first: { key, collection, body, computed, links, createdBy, createdAt, updatedAt, mine, viaAgent,
                                     version, seq, verified }: version is what another record cites to mean exactly this one
                                     where: { "link:<rel>": "<record key>" } for records linking there, { field: value } for a field's value,
@@ -130,10 +130,10 @@ Inside it, window.minca is:
   await minca.can("edit" | "delete", key)  whether they may change or delete that record: who wrote it decides
   await minca.picture(did)          the picture someone in the space chose, as a data: URL, or null
   await minca.open({ record: key }) or minca.open({ person: did })   shows it in the app around the screen: a record opens in the
-                                    app that shows its collection (a message in the chat), else beside this screen
+                                    tool that shows its collection (a message in the chat), else beside this screen
   await minca.open({ record: key, link: 'about' })   opens what that record links to with that role, of any collection:
                                     the message a file was shared on, say
-  minca.shown()                     the key of the record this app was last asked to show, or null; minca.onShow(callback)
+  minca.shown()                     the key of the record this tool was last asked to show, or null; minca.onShow(callback)
                                     calls back with each new one: a record of a collection in "shows", opened from anywhere
   await minca.file(key, ref)        a picture one of these records refers to ({ hash, mime, … } in its body), as a data: URL,
                                     made smaller when it is large; null if it isn't a picture or can't be shown
@@ -146,10 +146,10 @@ Inside it, window.minca is:
   await minca.places.here()         where the person is, named, if they let the app know; or null
   await minca.link(url)             opens an http or https page in a new tab; the screen itself can't open one
   await minca.save(name, text, type?)   saves text as a file: text/plain, text/calendar, text/csv or application/json
-  await minca.remember(key, value)  keeps something small (8 KB) on this device for this app; null forgets it
+  await minca.remember(key, value)  keeps something small (8 KB) on this device for this tool; null forgets it
   await minca.recall(key)           what was remembered, or null
   minca.onChange(callback)          called whenever records in the space change, here or on another device; returns a function to stop
-  await minca.live.send(data, { to? })   sends any JSON (at most 64 KB) to everyone in the space who has this app open now, or only to
+  await minca.live.send(data, { to? })   sends any JSON (at most 64 KB) to everyone in the space who has this tool open now, or only to
                                     to's devices (a did, or a device): kept nowhere, so whoever opens it later misses it. For cursors,
                                     typing, who is here, games. About 15 a second at most: → false when one was dropped for going faster
   minca.live.on(callback)           callback({ from, device, data, viaAgent }) for each one sent here: from is the sender's did, device
@@ -292,7 +292,7 @@ export const SCREEN_CLIENT = `(() => {
 /**
  * The security policy a screen runs under: inline scripts and styles, and
  * the network only to `network`'s exact origins, which whoever added the
- * app agreed to for everyone. A host page's own frame policy may allow more
+ * tool agreed to for everyone. A host page's own frame policy may allow more
  * (any `https:`); this one is always written too, and a page under two
  * policies gets only what both allow. Origins that don't check out give none.
  */
@@ -316,7 +316,7 @@ export function screenPolicy(network: ReadonlyArray<string> = []): string {
 /**
  * The document a host page writes into its frame: its policy, the client,
  * the kit, then the screen.
- * @param network The origins the app may reach; none keeps it sealed
+ * @param network The origins the tool may reach; none keeps it sealed
  * @param ui The kit as one script (`bundleUi` in `@minca/ui/bundle`), which sets up `ui` over `minca`
  */
 export function screenDocument(screen: string, network: ReadonlyArray<string> = [], ui = ''): string {
@@ -370,12 +370,12 @@ function linksOf(options: unknown): { links?: ReadonlyArray<Link> } {
 /** What a screen may ask the page around it to show */
 export type ScreenOpen = { readonly record: NodeRecord } | { readonly person: string };
 
-/** The link role that shares a record with an app: the only one a screen reads through (`minca.get`) */
+/** The link role that shares a record with a tool: the only one a screen reads through (`minca.get`) */
 const SHARES = 'shares';
 
 /**
  * Records a person may hand a screen, and a screen may follow a link to: any
- * but the protocol's own and the space's apps.
+ * but the protocol's own and the space's tools.
  */
 const shareable = (record: NodeRecord | null): record is NodeRecord =>
   record !== null && record.body !== null && !offLimits(record.collection);
@@ -398,9 +398,9 @@ export interface ScreenHost {
   link(url: string): void;
   /** Saves bytes as a file on the person's device */
   save(name: string, bytes: Uint8Array, type: string): void;
-  /** What this app kept on this device under a name, or null */
+  /** What this tool kept on this device under a name, or null */
   recall(key: string): unknown;
-  /** Keeps something small on this device for this app; null forgets it */
+  /** Keeps something small on this device for this tool; null forgets it */
   remember(key: string, value: unknown): void;
 }
 
@@ -418,7 +418,7 @@ const MAX_KEPT = 8 * 1024;
 const LIVE_BURST = 30;
 const LIVE_PER_SECOND = 15;
 
-/** A live message of one app's screens, as it goes between nodes */
+/** A live message of one tool's screens, as it goes between nodes; its `app` holds the tool's key */
 const SCREEN_LIVE = 'screen.live';
 
 /** The file a record's body refers to with this hash, if it does */
@@ -492,13 +492,13 @@ export function createScreenBridge(params: {
   readonly node: P2PNode;
   readonly spaceId: string;
   readonly collections: ReadonlyArray<string>;
-  /** The app's key: its screens hear only each other's live messages */
-  readonly app: string;
+  /** The tool's key: its screens hear only each other's live messages */
+  readonly tool: string;
   readonly port: MessagePort;
   /** What the page around the screen does for it; without one, the screen can only read and write */
   readonly host?: ScreenHost;
 }): ScreenBridge {
-  const { node, spaceId, port, app } = params;
+  const { node, spaceId, port, tool } = params;
   const allowed = new Set(params.collections.filter((name) => !offLimits(name)));
   let closed = false;
 
@@ -550,7 +550,7 @@ export function createScreenBridge(params: {
   };
 
   /**
-   * What one of the app's records links to with this role, but never the
+   * What one of the tool's records links to with this role, but never the
    * space's own records: what `open` shows the person, and, for `shares`
    * only, what `get` hands the screen.
    */
@@ -613,7 +613,7 @@ export function createScreenBridge(params: {
       const link = fieldOf(args[1], 'link') ?? fieldOf(args[0], 'link');
       // Only a share is the screen's to read: a file "about" a diary entry, or a reaction to it, shares nothing.
       if (link !== undefined && link !== SHARES)
-        throw new Error('minca.get follows only a "shares" link: what someone shared with this app');
+        throw new Error('minca.get follows only a "shares" link: what someone shared with this tool');
       try {
         const record = link === undefined ? await ownRecord(key) : await linkedFrom(key, link);
         return record ? toScreen(record, node.did) : null;
@@ -699,7 +699,7 @@ export function createScreenBridge(params: {
           host.open({ record });
           return null;
         }
-        // What the app's own record points to, shown by the page; never the space's own records. The answer is
+        // What the tool's own record points to, shown by the page; never the space's own records. The answer is
         // the same whether or not it is here, though the page visibly opens one that is.
         const target = await linkedFrom(record.key, link);
         if (target) host.open({ record: target });
@@ -711,7 +711,7 @@ export function createScreenBridge(params: {
       host.open({ person: did });
       return null;
     },
-    // Only a picture a record of this app's points to, read from the record rather than taken on the screen's word.
+    // Only a picture a record of this tool's points to, read from the record rather than taken on the screen's word.
     file: async (...args) => {
       const { file } = await ownFile('file', args);
       if (!file.mime.startsWith('image/')) return null;
@@ -722,7 +722,7 @@ export function createScreenBridge(params: {
       const { file } = await ownFile('blob', args);
       return new Blob([(await node.records.readFile(spaceId, file)).slice()], { type: file.mime });
     },
-    // A file's bytes, kept in the space as the person looking; a record of the app's then refers to it.
+    // A file's bytes, kept in the space as the person looking; a record of the tool's then refers to it.
     addFile: async (...args) => {
       const [bytes, about] = args;
       if (!(bytes instanceof Uint8Array)) throw new Error('minca.addFile takes the bytes, as a Uint8Array');
@@ -747,7 +747,7 @@ export function createScreenBridge(params: {
       const to = fieldOf(options, 'to');
       if (to !== undefined && (typeof to !== 'string' || !to.startsWith('did:')))
         throw new Error('minca.live.send sends to everyone, or { to: did } of a person or a device');
-      const message = { type: SCREEN_LIVE, app, data: plain(data, 'A live message') };
+      const message = { type: SCREEN_LIVE, app: tool, data: plain(data, 'A live message') };
       if (!mayGoLive()) return false;
       await node.spaces.send(spaceId, message, to);
       return true;
@@ -828,10 +828,10 @@ export function createScreenBridge(params: {
   };
   const stop = node.subscribe((event) => {
     if (event.type === 'records' && event.space === spaceId) changed();
-    // Only another app's screen, or a peer with no account, is not passed on.
+    // Only another tool's screen, or a peer with no account, is not passed on.
     if (event.type !== 'message' || event.space !== spaceId || closed || !event.from) return;
     const { message } = event;
-    if (!isObject(message) || message.type !== SCREEN_LIVE || message.app !== app) return;
+    if (!isObject(message) || message.type !== SCREEN_LIVE || message.app !== tool) return;
     port.postMessage({
       live: { from: event.from, device: event.peer, data: message.data ?? null, viaAgent: event.recordsOnly },
     });

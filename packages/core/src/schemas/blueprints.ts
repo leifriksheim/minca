@@ -11,7 +11,7 @@
  *
  * It is how a key that may only write records asks for new collections: an
  * agent's, whose note grants records only, or a person's, whose role doesn't
- * let them define. Nothing here is about apps. An app that keeps more about
+ * let them define. Nothing here is about tools. A tool that keeps more about
  * itself, such as a screen or what to notify about, keeps that in records of
  * its own that point at the blueprint.
  *

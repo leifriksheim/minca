@@ -38,7 +38,7 @@ implement and less to get wrong, not more.
 | `packages/cli`                                | `@minca/cli`: `minca`, the always-on node, hosting, agents, MCP                                |
 | `packages/relay`                              | The Minca relay: a mailbox peers meet through, and inboxes and short links wait in             |
 | `packages/names`                              | The name service: usernames at a domain (`leif@minca.social`) that lead to inbox codes         |
-| `packages/ui`                                 | `@minca/ui`: the design system (tokens, shapes, avatars) and the kit every app's screen gets   |
+| `packages/ui`                                 | `@minca/ui`: the design system (tokens, shapes, avatars) and the kit every tool's screen gets  |
 | `apps/home`, `apps/example`, `apps/extension` | The account home, the app, the Chrome extension                                                |
 | `apps/liquid`                                 | Liquid: liquid democracy as an app of its own, a reference for what can be built on Minca      |
 | `apps/site`                                   | The website, minca.social                                                                      |
@@ -258,7 +258,7 @@ Elsewhere:
   plus `isbot`. Code-based routes only, so no build plugin or generated
   files. Apps only, never `packages/core`.
 - `preact` 10 with `htm` in `packages/ui` (`packages/ui/src/frame/`):
-  what an app's screen draws with, bundled into the kit written in front of
+  what a tool's screen draws with, bundled into the kit written in front of
   every screen. A diffing renderer with hooks is hard to get right, and agents
   write React-style components far more reliably than DOM code. Preact has
   been released since 2015 and is used very widely; it and htm (its authors'

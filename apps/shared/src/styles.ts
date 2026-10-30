@@ -521,7 +521,7 @@ export const styles = {
 
   /**
    * A card that stands on the page: the navy rule, the surface corner. What
-   * every list of spaces, apps, rules and settings is made of; spread it and
+   * every list of spaces, tools, rules and settings is made of; spread it and
    * add padding. A tile you can pick also gets `data-tile` for its hover.
    */
   tile: {

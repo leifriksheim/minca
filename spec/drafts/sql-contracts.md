@@ -378,7 +378,7 @@ decision, not protocol.
 
 - **CSP.** Compiling wasm needs `'wasm-unsafe-eval'` in `script-src`. An MV3
   extension may add it to `extension_pages` (the one relaxation MV3
-  allows); a site must allow it. The mini-app screen
+  allows); a site must allow it. A tool's screen
   (`apps/example/public/screen.html`) doesn't, which is fine since screens
   don't judge contracts.
 - **OPFS.** Only for a persistent query store, not for contracts. The

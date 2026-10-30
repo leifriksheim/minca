@@ -83,9 +83,9 @@ change without touching this spec:
 - **Collections proposed for a space** (`std.blueprint`), their review, and
   guides to how a space's collections are used (`std.guide`)
   ([blueprints and guides](../packages/core/docs/blueprints-and-guides.md)).
-  Apps with screens of their own are an app's convention
-  ([blueprints and guides](../packages/core/docs/blueprints-and-guides.md#apps-with-a-screen-of-their-own);
-  the example app's launcher, `apps/example/src/components/apps/launcher.ts`).
+  Tools with screens of their own are an app's convention
+  ([blueprints and guides](../packages/core/docs/blueprints-and-guides.md#tools-with-a-screen-of-their-own);
+  the example app's launcher, `apps/example/src/components/tools/launcher.ts`).
 - **Contacts**: the contact list, and asking someone in a space you share
   ([contacts](../packages/core/docs/contacts.md)); the knock itself is
   [07](07-inbox.md) §6.
@@ -152,7 +152,7 @@ they are described; the smaller ones share
 | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | A check character on recovery codes                                             | [01 §2](01-identity.md), [#20](https://github.com/leifriksheim/minca/issues/20)                                                            |
 | One spelling per key                                                            | [01 §4](01-identity.md)                                                                                                                    |
-| Grants narrower than a space (reading)                                          | [06 §2.8](06-nodes-and-sessions.md)                                                                                                        |
+| Grants narrower than a space (reading)                                          | [06 §2.8](06-nodes-and-sessions.md), [#348](https://github.com/leifriksheim/minca/issues/348)                                              |
 | Removing a lost device from another one (sign-out already revokes)              | [01 §7.6](01-identity.md), [#165](https://github.com/leifriksheim/minca/issues/165)                                                        |
 | Merging inside one record                                                       | [02 §4.8](02-records.md)                                                                                                                   |
 | Forgetting in blob stores                                                       | [02 §4.9](02-records.md)                                                                                                                   |

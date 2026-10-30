@@ -21,11 +21,11 @@ ui has:
   usePeople()                       [{ did, name }], kept current
   useName(did)                      their name here, "You" for the person looking
   useFile(key, ref)                 a picture the record \`key\` refers to, as a URL for <img>; null until here
-  useShown()                        { key } of the record this app was last asked to show (its "shows"), a new object each time;
+  useShown()                        { key } of the record this tool was last asked to show (its "shows"), a new object each time;
                                     null until one is. Scroll to it, open it: useEffect(() => …, [shown])
   useMarked()                       for a list, that key once the element with data-key=\${key} is drawn: scrolled to, and kept a
                                     moment, for data-marked=\${key === marked} to light it up
-  usePresence(state)                [{ did, device, state }] of everyone else with this app open, each sharing their state (a cursor,
+  usePresence(state)                [{ did, device, state }] of everyone else with this tool open, each sharing their state (a cursor,
                                     what is selected, "typing"): yours goes out when it changes, ten times a second at most. Once per screen
   useLive(callback)                 callback({ from, device, data }) for each minca.live.send from another device, kept nowhere
   useBlob(key, ref)                 the whole file, as a URL for <img>, <video> or <audio>; null until here
@@ -39,9 +39,9 @@ ui has:
   <\${Playable} record />          a std.file that is a video or a sound, playing where it is; fetched once it comes into view
   useSeen(ref)                      whether the element in ref has come into view: load something large only then
   sizeOf(bytes)                     "812 KB", "3.1 MB"
-  <\${Record} record=\${r} onOpen? />  any record as one line, the same in every app: a file's picture, a task's tick, an event's
-                                    time; a click opens it in the app that shows it, or calls onOpen. Use it for records of collections
-                                    other apps own: a shared one, from minca.get(key, { link: 'shares' }), with
+  <\${Record} record=\${r} onOpen? />  any record as one line, the same in every tool: a file's picture, a task's tick, an event's
+                                    time; a click opens it in the tool that shows it, or calls onOpen. Use it for records of collections
+                                    other tools own: a shared one, from minca.get(key, { link: 'shares' }), with
                                     onOpen=\${() => minca.open({ record: key, link: 'shares' })}
   useShare()                        sharing into what you send, as chat and comments do: share.pick() asks the person to choose a
                                     record (a "/" button), onChange=\${(next) => setDraft(share.typed(draft, next))} does the same for "/"

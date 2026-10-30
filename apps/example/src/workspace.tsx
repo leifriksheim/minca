@@ -20,7 +20,7 @@ export interface Workspace {
   readonly joinLink: (link: string) => Promise<SpaceSummary | null>;
   /** Leave a space, after saying what it costs */
   readonly forget: (id: string) => void;
-  /** Go to a space, into the app it opens with */
+  /** Go to a space, into the tool it opens with */
   readonly openSpace: (id: string) => void;
 }
 

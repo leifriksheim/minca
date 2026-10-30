@@ -6,7 +6,7 @@ import { styles, palette, ui } from '../styles';
 
 /**
  * Records in a space to choose one of, newest first, found by what they say
- * or what kind they are: what linking a record and sharing one into an app
+ * or what kind they are: what linking a record and sharing one into a tool
  * both start from.
  */
 export function RecordFinder({

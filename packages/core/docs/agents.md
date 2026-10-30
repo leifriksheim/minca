@@ -125,9 +125,9 @@ isn't given the person's ([direct messages](direct-messages.md)).
 To make something new, an agent proposes the collections it needs
 (`collections_propose`), the same way a person whose role can't define
 collections does. Someone who may reads what it would do and applies it.
-What else an app keeps, such as a screen or what is worth hearing about, is
-the app's: `collections_list` points at the guides a space's apps wrote
-(`std.guide`), which say how to propose one there. See
+What else an app keeps, such as a tool's screen or what is worth hearing
+about, is the app's: `collections_list` points at the guides a space's apps
+wrote (`std.guide`), which say how to propose one there. See
 [blueprints and guides](blueprints-and-guides.md).
 
 ## Automations

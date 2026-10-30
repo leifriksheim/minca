@@ -22,10 +22,10 @@ import { Loading } from '../Loading';
 import { LinkButton, QuietButton } from '../Buttons';
 
 /**
- * An added app drawn from its definitions alone: unlinked records are the list, what links to them
+ * An added tool drawn from its definitions alone: unlinked records are the list, what links to them
  * is drawn inside, as pick buttons (`x-choicesFrom`), a one-per-person toggle, or a small form.
  */
-export function AppBoard({
+export function ToolBoard({
   space,
   names,
   collections,
@@ -46,18 +46,18 @@ export function AppBoard({
     [space.id, held.map((c) => c.name).join('|')],
   );
 
-  /** Collections of this app that point at `parent`, with the link role they use */
+  /** Collections of this tool that point at `parent`, with the link role they use */
   const childrenOf = (parent: NodeCollection) =>
     held.flatMap((child) =>
       Object.entries(child.links)
         .filter(([, link]) => link.to !== '*' && link.to.includes(parent.name))
         .map(([rel]) => ({ child, rel })),
     );
-  const pointsIntoApp = (c: NodeCollection) =>
+  const pointsIntoTool = (c: NodeCollection) =>
     Object.values(c.links).some(
       (link) => link.to !== '*' && link.to.some((to) => names.includes(to) && to !== c.name),
     );
-  const main = held.filter((c) => !pointsIntoApp(c));
+  const main = held.filter((c) => !pointsIntoTool(c));
 
   if (!records) return <Loading label="Opening" style={styles.emptyState} />;
   const byName = new Map(held.map((c, i) => [c.name, records[i] ?? []]));

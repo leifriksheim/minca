@@ -3,22 +3,22 @@ import type { NodeRecord, SpaceSummary } from '@minca/core';
 import { useNode } from '@minca/react';
 import { useAction } from '@minca/app-shared/action';
 import { Modal } from '@minca/app-shared/Modal';
-import { saveSettings, type LauncherApp } from './launcher';
+import { saveSettings, type LauncherTool } from './launcher';
 import { styles } from '../../styles';
 import { PrimaryButton, QuietButton } from '../Buttons';
 import { Icon } from '../Icon';
 
 /**
- * Settings on an open app, for someone who may add apps: what the app asks
+ * Settings on an open tool, for someone who may add tools: what the tool asks
  * for, like an API key, filled in once for everyone in the space. Nobody else
  * sees the button, and nobody else is asked.
  */
-export function AppSettingsButton({
+export function ToolSettingsButton({
   space,
   record,
 }: {
   space: SpaceSummary;
-  record: NodeRecord<LauncherApp>;
+  record: NodeRecord<LauncherTool>;
 }) {
   const [open, setOpen] = useState(false);
   if (!record.body?.settings?.length) return null;
@@ -33,18 +33,18 @@ export function AppSettingsButton({
       >
         <Icon name="settings" size={16} />
       </QuietButton>
-      {open && <AppSettings space={space} record={record} onClose={() => setOpen(false)} />}
+      {open && <ToolSettings space={space} record={record} onClose={() => setOpen(false)} />}
     </>
   );
 }
 
-function AppSettings({
+function ToolSettings({
   space,
   record,
   onClose,
 }: {
   space: SpaceSummary;
-  record: NodeRecord<LauncherApp>;
+  record: NodeRecord<LauncherTool>;
   onClose: () => void;
 }) {
   const node = useNode();
@@ -60,7 +60,7 @@ function AppSettings({
     });
 
   return (
-    <Modal title={`${record.body?.title ?? 'App'} settings`} onClose={onClose}>
+    <Modal title={`${record.body?.title ?? 'Tool'} settings`} onClose={onClose}>
       <form
         onSubmit={(event) => {
           event.preventDefault();

@@ -107,7 +107,7 @@ const isNear = (value: unknown): value is Near =>
   'km' in value &&
   typeof value.km === 'number';
 
-/** Where this person last said they're looking from, kept on their device for this app */
+/** Where this person last said they're looking from, kept on their device for this tool */
 export function useNear(): [Near | null, (near: Near | null) => void] {
   const [near, setNear] = useState<Near | null>(null);
   useEffect(() => {
