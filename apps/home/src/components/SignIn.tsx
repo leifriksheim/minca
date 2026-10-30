@@ -21,18 +21,29 @@ export function SignIn() {
 
 /**
  * An account's face on the sign-in screens: the picture this browser remembers it by, when it has
- * seen the account signed in, else the shape its DID gives
+ * seen the account signed in, else the shape its DID gives. A picture carries that shape small on its
+ * corner: anyone can copy a picture, but not the shape, so two accounts with one face still differ.
  */
 function face(did: string, size: number, round: boolean): Element {
   const picture = rememberedPicture(did);
   if (!picture) return avatarElement(did, size, round);
-  const img = globalThis.document.createElement('img');
+  const doc = globalThis.document;
+  const holder = doc.createElement('span');
+  holder.style.cssText = `position:relative;display:inline-flex;flex-shrink:0;width:${size}px;height:${size}px`;
+  const img = doc.createElement('img');
   img.src = picture;
   img.alt = '';
   img.width = size;
   img.height = size;
-  img.style.cssText = `width:${size}px;height:${size}px;object-fit:cover;border-radius:${round ? '50%' : '22%'};flex-shrink:0`;
-  return img;
+  // Round here; otherwise the sign-in screens' own corner for a face.
+  img.style.cssText = `width:${size}px;height:${size}px;object-fit:cover${round ? ';border-radius:50%' : ''}`;
+  if (!round) img.className = 'wa-avatar';
+  const badge = Math.max(12, Math.round(size * 0.38));
+  const shape = avatarElement(did, badge, true);
+  if (shape instanceof HTMLElement || shape instanceof SVGElement)
+    shape.style.cssText = `position:absolute;right:-2px;bottom:-2px;box-shadow:0 0 0 2px var(--minca-card);border-radius:50%`;
+  holder.append(img, shape);
+  return holder;
 }
 
 function Claiming({ username, domain }: { username: string; domain: string | null }) {
