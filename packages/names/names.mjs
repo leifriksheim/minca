@@ -35,8 +35,8 @@ export const NAMES_LIMITS = Object.freeze({
   maxNames: 50_000,
   /** New names one address may claim a day: claiming many takes many addresses */
   newNamesPerNetwork: 3,
-  /** Leading zero bits a claim's work must reach, said in every answer: a few seconds on a phone */
-  workBits: 20,
+  /** Leading zero bits a claim's work must reach, said in every answer: about a second on a phone */
+  workBits: 18,
   /** How long a claim holds a name */
   lifetimeMs: 365 * 24 * 3600_000,
   /** How far a claim's time may be from ours */
