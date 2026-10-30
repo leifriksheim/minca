@@ -16,9 +16,9 @@ describe('a popup', () => {
     assert.equal(popupFeatures(460, 720), 'popup,width=460,height=720,left=570,top=140');
   });
 
-  test('never off the screen, when its window is smaller than it', () => {
-    at({ screenX: 0, screenY: 0, outerWidth: 400, outerHeight: 600 });
-    assert.equal(popupFeatures(460, 720), 'popup,width=460,height=720,left=0,top=0');
+  test('centred on a window on a screen left of the main one, at negative coordinates', () => {
+    at({ screenX: -1920, screenY: 0, outerWidth: 1400, outerHeight: 900 });
+    assert.equal(popupFeatures(460, 720), 'popup,width=460,height=720,left=-1450,top=90');
   });
 
   test('off a browser, where there is no window, is just its size', () => {

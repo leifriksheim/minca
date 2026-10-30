@@ -15,7 +15,9 @@ export function popupFeatures(width: number, height: number): string {
   const { screenX, screenY, outerWidth, outerHeight } = globalThis;
   if (![screenX, screenY, outerWidth, outerHeight].every((n) => typeof n === 'number' && Number.isFinite(n)))
     return size;
-  const left = Math.max(0, Math.round(screenX + (outerWidth - width) / 2));
-  const top = Math.max(0, Math.round(screenY + (outerHeight - height) / 2));
+  // Not clamped at 0: a screen left of or above the main one has negative coordinates, and the
+  // browser keeps a window on its screen itself.
+  const left = Math.round(screenX + (outerWidth - width) / 2);
+  const top = Math.round(screenY + (outerHeight - height) / 2);
   return `${size},left=${left},top=${top}`;
 }
