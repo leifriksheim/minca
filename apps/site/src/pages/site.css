@@ -2414,313 +2414,6 @@
   font-size: 13px;
 }
 
-/* ─── Front page: mend it ─────────────────────────────────────────── */
-
-.site .mend {
-  display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
-  gap: 32px;
-  align-items: center;
-}
-.site .mend-asks {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.site .mend-ask {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  padding: 18px 20px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-lg);
-  background: transparent;
-  font: inherit;
-  text-align: left;
-  color: var(--muted);
-  cursor: pointer;
-  transition:
-    color 0.2s ease,
-    border-color 0.2s ease,
-    background-color 0.2s ease;
-}
-.site .mend-ask:hover {
-  color: var(--ink);
-}
-.site .mend-ask[aria-pressed='true'] {
-  border-color: var(--rule);
-  background: var(--card);
-  color: var(--ink);
-}
-.site .mend-ask .shape {
-  flex: none;
-  width: 22px;
-  height: 22px;
-  margin-top: 2px;
-}
-.site .mend-ask span {
-  display: flex;
-  flex-direction: column;
-  font-family: var(--display);
-  font-size: 19px;
-  font-weight: 600;
-  line-height: 1.25;
-  letter-spacing: -0.02em;
-}
-.site .mend-ask small {
-  margin-top: 6px;
-  font-family: var(--minca-font);
-  font-size: 13px;
-  font-weight: 400;
-  letter-spacing: 0;
-  color: var(--faint);
-}
-/* How a change gets made, step by step (story.tsx): the steps are the ask
-   list's buttons, with a number, and only the chosen one says more */
-.site .story-steps {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.site .story .mend-ask {
-  position: relative;
-  width: 100%;
-  overflow: hidden;
-}
-.site .mend-ask .story-num {
-  display: block;
-  min-width: 20px;
-  margin-top: 4px;
-  font-family: var(--minca-font);
-  font-size: 13px;
-  font-style: italic;
-  font-weight: 400;
-  color: var(--ink);
-}
-.site .story .mend-ask:not([aria-pressed='true']) small {
-  display: none;
-}
-.site .story .mend-ask small {
-  line-height: 1.45;
-  color: var(--muted);
-}
-/* How long the playing step has left, filling along its foot */
-.site .story-progress {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 2px;
-  background: var(--accent);
-  transform-origin: left;
-  animation: story-fill linear both;
-}
-@keyframes story-fill {
-  from {
-    transform: scaleX(0);
-  }
-}
-.site .story-body {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  min-height: 340px;
-}
-/* Cards inside the frame take the hairline; the prompt sits in it, not over it */
-.site .story-body .proposal {
-  border: var(--hair);
-}
-.site .prompt.is-inline {
-  width: 100%;
-  margin: 0;
-  border: var(--hair);
-  box-shadow: none;
-}
-.site .story-reply {
-  margin-top: 18px;
-  padding-left: 4px;
-  /* The agent answers once the ask is typed out */
-  animation: story-in 0.3s ease 2.4s both;
-}
-/* The steps keep their place while the chosen one opens */
-.site .story {
-  align-items: start;
-}
-.site .story-facts {
-  display: grid;
-  gap: 10px;
-  margin: 16px 0 0;
-  padding-top: 14px;
-  border-top: var(--hair);
-}
-.site .story-facts > div {
-  display: grid;
-  grid-template-columns: 64px minmax(0, 1fr);
-  align-items: center;
-}
-.site .story-facts dt {
-  font-size: 12.5px;
-  color: var(--faint);
-}
-.site .story-facts dd {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin: 0;
-}
-.site .story-facts .chip {
-  font-size: 12px;
-}
-.site .chip.is-new {
-  border: 1px dashed var(--rule);
-  background: var(--card);
-  color: var(--ink);
-}
-.site .chip.is-no {
-  background: none;
-  color: var(--faint);
-}
-/* Joe, who the group picked to look after things, comes in and adds it */
-.site .story-approver {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 16px;
-  animation: story-in 0.3s ease 0.4s both;
-}
-.site .story-approver b {
-  display: block;
-  font-size: 14px;
-  color: var(--ink);
-}
-.site .story-approver small {
-  font-size: 12.5px;
-  color: var(--muted);
-}
-/* The tool is shared, and other groups take it one after another */
-.site .story-share {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  width: 100%;
-  max-width: 440px;
-  text-align: left;
-}
-.site .story-link,
-.site .story-spread li {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.site .story-link {
-  padding: 14px 16px;
-  border: var(--hair);
-  border-radius: var(--r-lg);
-  background: var(--card);
-}
-.site .story-link > span:nth-child(2),
-.site .story-spread li > span:last-child {
-  flex: 1;
-  min-width: 0;
-}
-.site .story-link b,
-.site .story-spread b {
-  display: block;
-  font-size: 14px;
-  color: var(--ink);
-}
-.site .story-link small,
-.site .story-spread small {
-  font-size: 12.5px;
-  color: var(--muted);
-}
-.site .story-spread {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 0;
-  padding: 0 0 0 16px;
-  list-style: none;
-  border-left: 2px dashed var(--line-strong);
-}
-.site .story-spread li {
-  animation: story-in 0.35s ease both;
-}
-.site .story-spread .w-badge {
-  width: 30px;
-  height: 30px;
-}
-.site .story-spread .w-badge b {
-  font-size: 13px;
-}
-.site .story-count {
-  font-size: 13px;
-  color: var(--muted);
-  animation: story-in 0.35s ease 2.8s both;
-}
-.site .story-press {
-  animation: story-press 0.3s ease 1.6s both;
-}
-@keyframes story-press {
-  50% {
-    transform: scale(0.94);
-  }
-}
-.site .story-passed {
-  animation: story-in 0.3s ease 1.9s both;
-}
-@keyframes story-in {
-  from {
-    opacity: 0;
-  }
-}
-.site .mend-view {
-  overflow: hidden;
-  border: var(--edge);
-  border-radius: var(--r-xl);
-  background: var(--paper);
-}
-.site .frame-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 12px 12px 24px;
-  border-bottom: var(--hair);
-}
-.site .frame-title {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--ink);
-}
-.site .frame-title .shape {
-  width: 22px;
-  height: 22px;
-}
-.site .frame-title b {
-  font-weight: 600;
-}
-.site .frame-body {
-  min-height: 280px;
-  padding: 24px 28px 16px;
-}
-.site .frame-body .app {
-  font-size: 14.5px;
-}
-.site .frame-foot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  padding: 14px 24px;
-  border-top: var(--hair);
-  font-size: 13px;
-  color: var(--faint);
-}
-.site .frame-foot > span:first-child {
-  margin-right: 4px;
-}
 .site .kept {
   padding: 2px 10px;
   border-radius: 999px;
@@ -2752,185 +2445,31 @@
   max-width: 420px;
 }
 
-/* ─── Front page: companies start over, groups build on (compounds.tsx) ─
+/* ─── Front page: what groups asked for, a colour tile each ───────── */
 
-.site .frame .proposal {
-  border: var(--hair);
-}
-/* Two rows over the same five steps: copies that stay level, and a tool that grows */
-.site .compound {
-  display: grid;
-  padding: 0;
-}
-.site .compound-row {
-  display: grid;
-  grid-template-columns: 190px minmax(0, 1fr) 150px;
-  align-items: end;
-  gap: 32px;
-  padding: 28px 32px;
-}
-.site .compound-row + .compound-row {
-  border-top: var(--hair);
-}
-.site .compound-label b {
-  display: block;
-  font-family: var(--display);
-  font-size: 19px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  color: var(--ink);
-}
-.site .compound-label small {
-  display: block;
-  margin-top: 4px;
-  font-size: 13.5px;
-  line-height: 1.4;
-  color: var(--muted);
-}
-.site .compound-cols {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  align-items: end;
-  gap: 10px;
-}
-.site .compound-col {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 0;
-}
-.site .compound-col small {
-  margin-top: 6px;
-  font-size: 12px;
-  text-align: center;
-  color: var(--faint);
-  transition: color 0.4s ease;
-}
-.site .compound-col[data-on] small {
-  color: var(--muted);
-}
-.site .compound-block {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  overflow: hidden;
-  height: 30px;
-  padding: 0 6px;
-  border: var(--hair);
-  border-radius: var(--r-sm);
-  background: color-mix(in srgb, var(--c) calc(var(--tint-tile) * 0.5), var(--card));
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-  color: var(--body);
-  transition:
-    opacity 0.35s ease,
-    transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.site .compound-block .shape {
-  flex: none;
-}
-/* The piece a group adds lands last, on its full colour */
-.site .compound-block.is-new {
-  background: color-mix(in srgb, var(--c) var(--tint-tile), var(--paper));
-  color: var(--ink);
-  transition-delay: 0.25s;
-}
-.site .compound-col:not([data-on]) .compound-block {
-  opacity: 0;
-  transform: translateY(-14px);
-  transition-delay: 0s;
-}
-/* A company's copy: built from scratch every time, the same each time */
-.site .compound-block.is-same {
-  position: relative;
-  border: 1px dashed var(--line-strong);
-  background: var(--card);
-  color: var(--muted);
-}
-.site .compound-block.is-same::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: color-mix(in srgb, var(--ink) 6%, transparent);
-  transform-origin: left;
-  transform: scaleX(0);
-}
-.site .compound-col[data-on] .compound-block.is-same::before {
-  animation: compound-build 0.9s ease-out both;
-}
-@keyframes compound-build {
-  0% {
-    transform: scaleX(0);
-    opacity: 1;
-  }
-  80% {
-    transform: scaleX(1);
-    opacity: 1;
-  }
-  100% {
-    transform: scaleX(1);
-    opacity: 0;
-  }
-}
-.site .compound-sum b {
-  display: block;
-  font-family: var(--display);
-  font-size: 44px;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.05em;
-  color: var(--faint);
-}
-.site .compound-sum.is-ours b {
-  color: var(--ink);
-}
-.site .compound-sum small {
-  display: block;
-  margin-top: 6px;
-  font-size: 13px;
-  line-height: 1.35;
-  color: var(--muted);
-}
-
-/* ─── Front page: what groups asked for, on a colour tile ─────────── */
-
-.site .panel {
-  padding-top: 72px;
-}
-.site .panel .section-head {
-  position: relative;
-  max-width: 620px;
-}
-.site .panel-morph {
-  position: absolute;
-  top: 48px;
-  right: 56px;
-  width: 220px;
-  pointer-events: none;
-}
-/* What groups asked for, one per line, and the tool each became */
 .site .asks {
-  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
+/* The ask on top, the tool it became at the foot */
 .site .asks li {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
-  padding: 22px 0;
-  border-top: 1px solid color-mix(in srgb, var(--rule) 22%, transparent);
+  padding: 24px;
 }
 .site .asks q {
   font-family: var(--display);
-  font-size: clamp(20px, 2.6vw, 28px);
+  font-size: 20px;
   font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: -0.025em;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
   color: var(--ink);
 }
 .site .asks q::before {
@@ -2962,339 +2501,143 @@
   height: 20px;
 }
 
-/* ─── Front page: apps made of shared pieces (pieces.tsx) ────────── */
+/* ─── Front page: a stream of apps into one prism, Minca's colours out (converge.tsx) ─ */
 
-/* The apps a space starts with, a cell each in one ruled grid */
-.site .basics {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1px;
+/* Edge to edge, while the drawing keeps to the page's column */
+.site .converge {
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  padding: 40px 0;
   overflow: hidden;
-  border: var(--edge);
-  border-radius: var(--r-xl);
 }
-.site .basic {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  box-shadow: 0 0 0 1px var(--rule);
-  background: var(--paper);
-}
-/* The lit app and its pieces take their colour's tile ground, on a layer
-   under the content that fades in and out, so the colour never flickers */
-.site .basic,
-.site .piece {
-  position: relative;
-  isolation: isolate;
-  transition: color 0.4s ease;
-}
-.site .basic::before,
-.site .piece::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  background: color-mix(in srgb, var(--c) var(--tint-tile), var(--paper));
-  opacity: 0;
-  transition: opacity 0.4s ease;
-}
-.site .basic[data-lit]::before,
-.site .piece[data-on]::before {
-  opacity: 1;
-}
-.site .basic.is-big {
-  grid-column: span 2;
-  grid-row: span 2;
-}
-.site .basic.is-wide {
-  grid-column: span 2;
-}
-.site .basic-shot {
-  display: grid;
-  flex: 1;
-  place-items: center;
-  min-height: 210px;
-  padding: 20px 20px 4px;
-}
-.site .basic-shot > * {
+.site .converge svg {
+  display: block;
+  box-sizing: border-box;
   width: 100%;
+  max-width: var(--max);
+  height: auto;
+  margin: 0 auto;
+  padding: 0 24px;
+  overflow: visible;
 }
-.site .basic-shot > .app,
-.site .mini-poll {
-  padding: 14px 16px 6px;
-  /* A card inside a cell: the hairline, so the navy rule is only the grid's */
-  border: var(--hair);
-  border-radius: var(--r-lg);
-  background: var(--card);
+.site .converge-tile {
+  fill: var(--card);
+  stroke: var(--rule);
+  stroke-width: 1.5;
 }
-.site .basic-name {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 20px 18px;
+.site .converge-beam {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-opacity: 0.2;
 }
-.site .basic-name b {
-  display: block;
-  font-family: var(--display);
-  font-size: 17px;
-  letter-spacing: -0.025em;
-  color: var(--ink);
+.site .converge-inside {
+  fill: var(--ink);
+  fill-opacity: 0.08;
 }
-.site .basic-name small {
-  display: block;
-  margin-top: 2px;
-  font-size: 13.5px;
-  line-height: 1.4;
-  color: var(--muted);
+.site .converge-prism {
+  fill: var(--paper);
+  stroke: var(--ink);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
 }
 
-/* Under the apps, quietly: the pieces they share, and new apps made of them */
-.site .pieces-key {
+/* ─── Front page: the AI in the middle, and the AI outside the castle (castle.tsx) ─ */
+
+.site .castle-pair {
   display: grid;
-  gap: 14px;
-  margin: 28px 0 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
 }
-.site .pieces-key > div {
-  display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
-  align-items: baseline;
-  gap: 8px 20px;
+.site .castle-pair figure {
+  margin: 0;
+  padding: 28px;
 }
-.site .pieces-key dt {
-  font-size: 14px;
-  color: var(--muted);
+.site .castle-pair svg {
+  display: block;
+  width: 100%;
+  height: auto;
 }
-.site .pieces-key dd {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+.site .castle-pair figcaption {
+  margin-top: 12px;
+}
+.site .castle-pair h3 {
+  margin: 0 0 4px;
+}
+.site .castle-pair p {
   margin: 0;
 }
-.site .piece {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 5px 12px 5px 9px;
-  border: var(--hair);
-  border-radius: 999px;
-  background-color: var(--paper);
-  font-size: 14px;
-  color: var(--muted);
+.site .castle-line,
+.site .castle-wire {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-linejoin: round;
 }
-.site .piece[data-on] {
-  color: var(--ink);
+.site .castle-wire {
+  stroke-opacity: 0.25;
 }
-.site .piece.is-own,
-.site .piece.is-ask {
-  padding-left: 12px;
-  border-style: dashed;
+.site .castle-dot {
+  fill: var(--ink);
 }
-.site .piece.is-app {
-  cursor: default;
+.site .castle-stone rect {
+  fill: var(--card);
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+.site .castle-gate {
+  fill: var(--ink);
+}
+.site .castle-water {
+  fill: color-mix(in srgb, var(--cobalt) 35%, var(--paper));
+}
+.site .castle-bridge {
+  fill: var(--peach);
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+.site .castle-chain {
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-dasharray: 3 3;
 }
 
-/* The chat: rooms down the side, a few messages, an event shared into it */
-.site .mini-chat {
-  display: grid;
-  grid-template-columns: 130px minmax(0, 1fr);
-  grid-template-rows: 1fr auto;
-  align-self: stretch;
-  overflow: hidden;
-  border: var(--hair);
-  border-radius: var(--r-lg);
-  background: var(--card);
-  font-size: 13.5px;
-  text-align: left;
+/* ─── Front page: pens the billionaires guard, and a tower groups share (pens.tsx) ─ */
+
+/* Strokes only; a shape that needs a fill sets its own */
+.site .pens-line {
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-linejoin: round;
 }
-.site .mini-rooms {
-  display: flex;
-  grid-row: span 2;
-  flex-direction: column;
-  gap: 2px;
-  padding: 12px 8px;
-  border-right: var(--hair);
-  background: var(--sunken);
-  font-size: 13px;
-  color: var(--muted);
+.site .pens-picket {
+  fill: var(--card);
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
 }
-.site .mini-rooms span {
-  padding: 4px 8px;
-  border-radius: var(--r-sm);
-  white-space: nowrap;
-}
-.site .mini-rooms .is-on {
-  background: var(--card);
-  font-weight: 500;
-  color: var(--ink);
-}
-.site .mini-thread {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 16px 18px 6px;
-}
-.site .msg {
-  display: flex;
-  gap: 10px;
-}
-.site .msg .app-face {
-  width: 30px;
-  height: 30px;
-}
-.site .msg-who {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-.site .msg-who b {
-  font-weight: 600;
-  color: var(--ink);
-}
-.site .msg-who small {
-  font-size: 11.5px;
-  color: var(--faint);
-}
-.site .msg p {
-  line-height: 1.45;
-  color: var(--body);
-}
-.site .msg-card {
-  max-width: 300px;
-  margin-top: 8px;
-  padding: 10px 12px 0;
-  border: var(--hair);
-  border-radius: var(--r-md);
-  background: var(--paper);
-}
-.site .msg-card .app-event {
-  font-size: 13.5px;
-  color: var(--muted);
-}
-.site .msg-card .app-event b {
-  color: var(--ink);
-}
-.site .msg-reacts {
-  display: flex;
-  gap: 6px;
-  margin-top: 6px;
-}
-.site .msg-reacts span {
-  padding: 1px 8px;
-  border: var(--hair);
-  border-radius: 999px;
-  background: var(--paper);
+.site .pens-credit {
+  display: block;
+  margin-top: 10px;
   font-size: 12px;
+  color: var(--muted);
 }
-.site .mini-compose {
-  margin: 6px 16px 14px;
-  padding: 8px 14px;
-  border: var(--hair);
-  border-radius: 999px;
-  font-size: 13px;
-  color: var(--faint);
+.site .pens-credit a {
+  color: inherit;
 }
-
-.site .mini-poll {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-bottom: 14px;
-  font-size: 13.5px;
-  text-align: left;
-}
-.site .mini-poll > b {
-  margin-bottom: 2px;
-  font-size: 14.5px;
-  color: var(--ink);
-}
-.site .mini-poll .tally-row {
-  height: 32px;
-}
-.site .mini-poll small {
-  font-size: 12px;
-  color: var(--faint);
-}
-
-/* The board: a small app of its own, columns of cards with a tag and whoever took them */
-.site .mini-board {
-  padding: 14px;
-  border: var(--hair);
-  border-radius: var(--r-lg);
-  background: var(--card);
-  text-align: left;
-}
-.site .mini-board-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 0 2px 12px;
-}
-.site .mini-board-head b {
+.site .pens-brick {
+  font-family: var(--display);
   font-size: 15px;
-  color: var(--ink);
-}
-.site .mini-board-columns {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-.site .mini-board-column {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-  padding: 8px;
-  border-radius: var(--r-md);
-  background: var(--sunken);
-}
-.site .mini-board-column small {
-  display: flex;
-  gap: 6px;
-  padding: 0 2px 2px;
-  font-size: 12px;
   font-weight: 600;
-  color: var(--muted);
+  fill: var(--ink);
+  text-anchor: middle;
+  dominant-baseline: central;
 }
-.site .mini-board-column small span {
-  font-weight: 500;
-  color: var(--faint);
-}
-.site .mini-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 8px 10px;
-  border: var(--hair);
-  border-radius: var(--r-sm);
-  background: var(--card);
-}
-.site .mini-card p {
-  font-size: 13px;
-  line-height: 1.3;
-  color: var(--ink);
-}
-.site .mini-card.is-done p {
-  text-decoration: line-through;
-  color: var(--faint);
-}
-.site .mini-card-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-}
-.site .mini-card-foot .app-face {
-  width: 20px;
-  height: 20px;
-}
-.site .mini-tag {
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--lilac) var(--tint-tile), var(--paper));
-  font-size: 11px;
-  color: var(--body);
+
+@media (max-width: 760px) {
+  .site .castle-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* ─── Front page: a message locked on the way, and hosting (trust.tsx) ─ */
@@ -3622,12 +2965,6 @@
 }
 
 @media (max-width: 960px) {
-  .site .basics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .site .basic.is-big {
-    grid-row: auto;
-  }
   .site .sealed {
     grid-template-columns: minmax(0, 1fr);
     gap: 28px;
@@ -3635,41 +2972,6 @@
   }
 }
 @media (max-width: 640px) {
-  .site .basics {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .site .pieces-key > div {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .site .basic.is-big,
-  .site .basic.is-wide {
-    grid-column: auto;
-  }
-  /* Narrow columns: the cards keep their title and who took them */
-  .site .mini-board {
-    padding: 12px 10px;
-  }
-  .site .mini-board-columns {
-    gap: 6px;
-  }
-  .site .mini-board-column {
-    padding: 6px;
-  }
-  .site .mini-tag {
-    display: none;
-  }
-  .site .mini-card-foot {
-    justify-content: flex-end;
-  }
-  .site .basic-shot {
-    padding: 14px;
-  }
-  .site .mini-chat {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .site .mini-rooms {
-    display: none;
-  }
   .site .split-even {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -3775,26 +3077,6 @@
 
 /* ─── Phones ──────────────────────────────────────────────────────── */
 
-@media (max-width: 960px) {
-  .site .mend {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  /* The label goes on top and the sum under the columns */
-  .site .compound-row {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 18px;
-    padding: 24px 20px;
-  }
-  .site .compound-sum {
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-  }
-  .site .compound-sum b {
-    font-size: 32px;
-  }
-}
-
 @media (max-width: 860px) {
   .site .platforms,
   .site .tiles,
@@ -3876,23 +3158,8 @@
   .site .prompt-chip.is-space {
     display: none;
   }
-  .site .frame-body {
-    padding: 20px 18px 12px;
-  }
-  .site .panel {
-    padding: 40px 20px 20px;
-  }
-  .site .panel-morph {
-    position: relative;
-    top: 0;
-    right: 0;
-    width: 96px;
-    margin-bottom: 24px;
-  }
-  .site .asks li {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
+  .site .asks {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .site .cta-panel {
     padding: 64px 20px 220px;
@@ -3955,20 +3222,6 @@
   .site .table td {
     padding: 12px 14px;
   }
-  .site .compound-cols {
-    gap: 4px;
-  }
-  /* No room for the shapes; the shape sets its own display, so it goes to nothing */
-  .site .compound-block {
-    gap: 0;
-    height: 26px;
-    padding: 0 2px;
-    font-size: 10px;
-  }
-  .site .compound-block .shape {
-    width: 0;
-    height: 0;
-  }
   /* Footer links far enough apart for a thumb */
   .site footer a {
     display: inline-block;
@@ -3976,71 +3229,8 @@
   }
 }
 
-/* Only on a phone: the chosen step, told under the numbers */
-.site .story-now {
-  display: none;
-}
-
 /* ─── Phones: the front page, tighter ─────────────────────────────── */
 @media (max-width: 640px) {
-  /* The apps swipe sideways, the next one peeking in */
-  .site .basics {
-    grid-template-columns: none;
-    grid-auto-flow: column;
-    grid-auto-columns: 84%;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scroll-snap-type: x mandatory;
-    scrollbar-width: none;
-  }
-  .site .basics::-webkit-scrollbar {
-    display: none;
-  }
-  .site .basic {
-    scroll-snap-align: start;
-  }
-  .site .basic.is-big {
-    grid-row: auto;
-  }
-
-  /* The steps become a row of numbers; the chosen one is told under them */
-  .site .story-steps {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 6px;
-  }
-  .site .story .mend-ask {
-    justify-content: center;
-    padding: 12px 0;
-  }
-  .site .story .mend-ask > span:not(.story-num) {
-    display: none;
-  }
-  .site .mend-ask .story-num {
-    min-width: 0;
-    margin: 0;
-    font-size: 15px;
-  }
-  .site .story-now {
-    display: block;
-    min-height: 92px;
-    margin: 16px 0 8px;
-    font-size: 14.5px;
-    line-height: 1.5;
-    color: var(--muted);
-  }
-  .site .story-now b {
-    display: block;
-    margin-bottom: 4px;
-    font-family: var(--display);
-    font-size: 20px;
-    letter-spacing: -0.02em;
-    color: var(--ink);
-  }
-  .site .mend.story {
-    gap: 8px;
-  }
-
   /* Each promise: a small shape beside its title, not above it */
   .site .marked > * {
     display: grid;
@@ -4055,7 +3245,10 @@
     margin: 0;
   }
 
-  /* Three asks say it; the rest wait for a wider screen */
+  /* Three asks say it, one under the other; the rest wait for a wider screen */
+  .site .asks {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .site .asks li:nth-child(n + 4) {
     display: none;
   }

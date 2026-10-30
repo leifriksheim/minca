@@ -84,8 +84,10 @@ function Workspace() {
   /**
    * Leaving a space, after saying what it costs. A space for two goes through
    * the contact list instead, so the list never names a space you left, and a
-   * request still waiting is taken back from the spaces you share.
+   * request still waiting is taken back from the spaces you share. Either way
+   * you land back home, in place of the space, so Back doesn't return to it.
    */
+  const home = () => void navigate({ to: '/', replace: true });
   const forget = async (id: string) => {
     const space = spaces.find((found) => found.id === id);
     if (!space) return;
@@ -104,6 +106,7 @@ function Workspace() {
         .filter((other) => other.id !== id && other.writable && !other.joining)
         .map((other) => other.id);
       await takeBack(node, shared, account.did, pair.did);
+      home();
       return;
     }
     if (
@@ -114,6 +117,7 @@ function Workspace() {
     )
       return;
     await mine.leave(id);
+    home();
   };
 
   const workspace: WorkspaceValue = {
