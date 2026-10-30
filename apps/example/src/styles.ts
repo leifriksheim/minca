@@ -11,7 +11,7 @@ const navyWash = (percent: number) => `color-mix(in srgb, ${ink.strong} ${percen
 /** How tall the bar along a phone's bottom edge is, with room under it */
 const TABBAR_HEIGHT = 68;
 /** How wide a space's rail of apps is */
-const RAIL_WIDTH = 72;
+const RAIL_WIDTH = 80;
 
 /**
  * The rules inline styles cannot carry.
@@ -63,7 +63,7 @@ export function injectBaseStyles(): void {
     .rail-item {
       position: relative; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 4px;
       padding: 7px 2px 6px; border: none; border-radius: ${radius.md}px; background: none;
-      color: ${ink.muted}; font-size: 10.5px; font-weight: 500;
+      color: ${ink.muted}; font-size: 11.5px; font-weight: 500;
     }
     .rail-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .rail-item[aria-current] { color: ${ink.strong}; font-weight: 600; background: ${surface.card}; box-shadow: 0 0 0 1px ${surface.rule}; }
