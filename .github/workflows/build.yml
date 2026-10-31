@@ -68,7 +68,7 @@ jobs:
       fail-fast: false
       # `built` is what Electrobun writes; `file` is the name it is offered under.
       matrix:
-        include: ${{ fromJSON(inputs.windows && '[{"name":"macOS arm64","runner":"macos-14","preview":false,"built":"apps/desktop/artifacts/*.dmg","file":"Minca-mac-arm64.dmg"},{"name":"Windows x64","runner":"windows-latest","preview":true,"built":"apps/desktop/artifacts/*.zip","file":"Minca-windows-x64.zip"}]' || '[{"name":"macOS arm64","runner":"macos-14","preview":false,"built":"apps/desktop/artifacts/*.dmg","file":"Minca-mac-arm64.dmg"}]') }}
+        include: ${{ fromJSON(inputs.windows && '[{"name":"macOS arm64","runner":"macos-15","preview":false,"built":"apps/desktop/artifacts/*.dmg","file":"Minca-mac-arm64.dmg"},{"name":"Windows x64","runner":"windows-latest","preview":true,"built":"apps/desktop/artifacts/*.zip","file":"Minca-windows-x64.zip"}]' || '[{"name":"macOS arm64","runner":"macos-15","preview":false,"built":"apps/desktop/artifacts/*.dmg","file":"Minca-mac-arm64.dmg"}]') }}
     env:
       # What the app and its carrier connect to (apps/example/.env.production). Vite
       # reads that file itself; electrobun.config.ts reads only the environment.
