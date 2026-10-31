@@ -25,8 +25,9 @@ export default {
     hosts: list(process.env.VITE_MINCA_HOST),
   },
   // Electrobun's binaries marked for macOS 14 (scripts/macos-floor.ts), and the
-  // .dmg's app signed ad hoc so a downloaded copy opens (scripts/sign-adhoc.ts).
-  scripts: { preBuild: 'scripts/macos-floor.ts', postWrap: 'scripts/sign-adhoc.ts' },
+  // .dmg's app compressed smaller and signed ad hoc so a downloaded copy opens
+  // (scripts/post-wrap.ts).
+  scripts: { preBuild: 'scripts/macos-floor.ts', postWrap: 'scripts/post-wrap.ts' },
   build: {
     // The protocol from the workspace, as source, like everything else here.
     bun: { entrypoint: 'src/bun/index.ts', conditions: ['@minca/source'] },

@@ -1,6 +1,6 @@
 /**
- * Electrobun's `postWrap` hook: signs the self-extracting Minca.app ad hoc,
- * before it goes into the .dmg.
+ * Part of Electrobun's `postWrap` hook (`scripts/post-wrap.ts`): signs the
+ * self-extracting Minca.app ad hoc, before it goes into the .dmg.
  *
  * Unsigned, the wrapper keeps only its launcher's linker signature, which
  * seals none of its resources. macOS then calls a downloaded copy "damaged"

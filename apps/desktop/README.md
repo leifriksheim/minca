@@ -27,11 +27,17 @@ that touches it, and a version tag puts it on a GitHub Release as
 with the packages (`bump.config.ts`).
 
 Neither is signed with a Developer ID yet, so the site tells people how to open
-it the first time. On the Mac, `scripts/sign-adhoc.ts` (Electrobun's `postWrap`
-hook) signs the app ad hoc before it goes into the `.dmg`. Unsigned, its
+it the first time. On the Mac, `scripts/sign-adhoc.ts` (part of Electrobun's
+`postWrap` hook, `scripts/post-wrap.ts`) signs the app ad hoc before it goes
+into the `.dmg`. Unsigned, its
 resources aren't sealed and macOS calls a downloaded copy "damaged", with no
 way to open it. Signed ad hoc, System Settings → Privacy & Security → **Open
 Anyway** opens it.
+
+Before signing, `scripts/recompress.ts` compresses the app inside the `.dmg`
+again at zstd level 19, not Electrobun's default: about a fifth smaller, for
+about half a minute more of building. The `.dmg` is mostly the Bun runtime
+that runs the node and the carrier.
 
 The app runs on macOS 14 and later. Electrobun's Zig-built binaries (the
 `.dmg`'s extractor, `libasar`, `zig-zstd`) come marked with the macOS they
