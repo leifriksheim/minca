@@ -378,9 +378,12 @@ export function injectBaseStyles(): void {
         overflow: visible;
         padding: 16px max(16px, env(safe-area-inset-right)) 24px max(16px, env(safe-area-inset-left));
       }
-      /* An open app is the whole screen, with the way back at its top, as a conversation is on a phone. */
+      /* An open app is the whole screen, with the way back at its top, as a conversation is on a phone.
+         It is pinned to the page rather than 100dvh tall, which ignores the keyboard: a browser that
+         shrinks the page for the keyboard shrinks the app with it, so its field stays above the keyboard. */
+      .space-shell[data-app-open] { position: fixed; inset: 0; min-height: 0; }
       .space-shell[data-app-open] .space-content { overflow-y: auto; padding-bottom: 24px; }
-      .space-shell[data-app-open] .space-main { display: flex; height: 100dvh; }
+      .space-shell[data-app-open] .space-main { display: flex; height: 100%; min-height: 0; }
       .space-shell[data-app-open] .space-bar { position: static; }
       /* What fills the space runs right down to the tab bar. */
       .space-content[data-fill], .space-shell[data-app-open] .space-content[data-fill] { padding: 0; }
@@ -401,7 +404,9 @@ export function injectBaseStyles(): void {
       .chat-room-title { min-height: 48px; padding: 8px 14px !important; }
 
       .tabbar {
-        position: fixed; z-index: 10; left: 0; right: 0; bottom: 0; width: auto; margin: 0; gap: 0;
+        /* Under a space's bar (z-index 8): as a flex item it is a layer of its own even when static,
+           so a dialog opened from it, like an app's settings, can rise no higher than 8. */
+        position: fixed; z-index: 7; left: 0; right: 0; bottom: 0; width: auto; margin: 0; gap: 0;
         padding: 6px max(4px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(4px, env(safe-area-inset-left));
         border: none; border-top: 1px solid ${surface.rule}; border-radius: 0; background: ${surface.page};
       }

@@ -215,7 +215,8 @@ export function ScreenFrame({
         style={{
           width: '100%',
           flex: 1,
-          minHeight: 420,
+          // No floor: on a phone with the keyboard up, what is left can be less than any we'd pick.
+          minHeight: 0,
           border: 'none',
           background: palette.surface.card,
         }}
