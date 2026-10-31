@@ -13,9 +13,8 @@ import {
 } from '@minca/react';
 import { CallsProvider } from '@minca/calls/react';
 import { useShowNotifications } from './notifications';
-import { useAlerts, useTabDot } from './alerts';
 import { useRememberPicture } from '@minca/app-shared/rememberedPictures';
-import { Avatar } from '@minca/app-shared/Avatar';
+import { TabBar } from './components/TabBar';
 import { useRunAutomations } from './automations';
 import { ConnectScreen } from './components/ConnectScreen';
 import { useAccountInAddress } from './account-address';
@@ -148,35 +147,12 @@ const tab = (on: boolean) =>
     color: on ? palette.ink.strong : palette.ink.faint,
   }) as const;
 
-/**
- * The home screen: Home, Activity and you, in one bar that runs along the top of a wide screen
- * and the bottom of a phone's (`.tabbar`), with a dot on Activity while some of it is new.
- */
+/** The home screen: Home, Activity and you (`TabBar`), and the one of them you're on */
 export function HomeLayout() {
-  const account = useAccount();
-  const picture = useAccountPicture();
-  const { unread } = useAlerts(account.did);
-  useTabDot(unread > 0);
-  const path = useRouterState({ select: (state) => state.location.pathname });
-  const onHome = path === '/' || path.startsWith('/people');
   return (
     <div className="page">
       <div style={styles.app}>
-        <nav className="tabbar" aria-label="Minca">
-          <Link to="/" aria-current={onHome ? 'page' : undefined}>
-            <Icon name="home" size={20} />
-            Home
-          </Link>
-          <Link to="/activity">
-            <Icon name="bell" size={20} />
-            {unread > 0 && <span className="tab-dot" aria-label={`${unread} new`} />}
-            Activity
-          </Link>
-          <Link to="/profile">
-            <Avatar did={account.did} size={20} round src={picture} />
-            Profile
-          </Link>
-        </nav>
+        <TabBar />
         <Notices />
         <RelayDown />
         <Outlet />

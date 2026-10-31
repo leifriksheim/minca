@@ -106,7 +106,6 @@ export function injectBaseStyles(): void {
     .side-item[aria-current] { background: ${surface.card}; box-shadow: 0 0 0 1px ${surface.rule}; }
     .space-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
     /* A phone's bar along the foot of a space (below); a wide screen has the rail. */
-    .space-foot { display: none; }
     .space-bar {
       flex-shrink: 0; display: flex; align-items: center; gap: 10px; height: 60px; padding: 0 24px;
       border-bottom: 1px solid ${surface.rule}; background: ${surface.page};
@@ -360,32 +359,15 @@ export function injectBaseStyles(): void {
       /* Room under the last row for the bar along the bottom. */
       .page:has(> * > .tabbar) { padding-bottom: calc(${TABBAR_HEIGHT + 48}px + env(safe-area-inset-bottom)); }
 
-      /* A phone switches spaces from the list of them, one tap away in the
-         tab bar, so the space's own sections get the bottom edge, and its
-         apps are the grid on the first screen rather than a sidebar. */
+      /* A phone keeps the tab bar along its bottom edge in a space too, so
+         home is always one tap away; the space's apps open from the right
+         of its bar rather than a sidebar. */
       .app-rail, .hide-on-phone, .bar-label { display: none !important; }
-      .space-foot {
-        position: sticky; bottom: 0; z-index: 8; flex-shrink: 0; display: flex; align-items: center; gap: 8px;
-        min-height: 56px; padding: 0 max(12px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(12px, env(safe-area-inset-left));
-        border-top: 1px solid ${surface.rule}; background: ${surface.page};
-      }
-      .space-foot > :first-child { flex: 1; min-width: 0; }
-      /* A panel that rises from the bar at the foot spans the screen above it, as one from the top bar drops under it. */
-      .rise {
-        position: fixed !important;
-        top: auto !important;
-        bottom: calc(64px + env(safe-area-inset-bottom)) !important;
-        left: max(12px, env(safe-area-inset-left)) !important;
-        right: max(12px, env(safe-area-inset-right)) !important;
-        width: auto !important;
-        max-height: calc(100dvh - 160px);
-        overflow-y: auto !important;
-      }
       .phone-only { display: revert !important; }
       .segmented.phone-only { display: flex !important; }
       .space-shell { display: block; height: auto; min-height: 100dvh; }
-      /* At least the screen's height, the content taking what is spare, so the bar at the foot sits at the bottom of a short page too. */
-      .space-main { min-height: 100dvh; }
+      /* At least the screen's height, the content taking what is spare and keeping clear of the tab bar over its foot. */
+      .space-main { min-height: 100dvh; box-sizing: border-box; padding-bottom: calc(${TABBAR_HEIGHT}px + env(safe-area-inset-bottom)); }
       .space-content { flex: 1 0 auto; }
       .space-bar {
         position: sticky; top: 0; z-index: 8; height: auto; min-height: 56px; gap: 8px;
@@ -400,7 +382,7 @@ export function injectBaseStyles(): void {
       .space-shell[data-app-open] .space-content { overflow-y: auto; padding-bottom: 24px; }
       .space-shell[data-app-open] .space-main { display: flex; height: 100dvh; }
       .space-shell[data-app-open] .space-bar { position: static; }
-      /* The bar at the foot keeps clear of the phone's own edge, so what fills the space runs right down to it. */
+      /* What fills the space runs right down to the tab bar. */
       .space-content[data-fill], .space-shell[data-app-open] .space-content[data-fill] { padding: 0; }
 
       /* Chat, the way a phone's messaging apps are: the list of conversations
