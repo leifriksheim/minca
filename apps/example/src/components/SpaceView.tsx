@@ -32,6 +32,7 @@ import { AddPeople } from './InvitePeople';
 import { Avatar } from '@minca/app-shared/Avatar';
 import type { PairWith } from '../contacts';
 import { AccountMenu } from './AccountMenu';
+import { TabBar } from './TabBar';
 import { usePopover } from './usePopover';
 import { styles, palette, stack, ui } from '../styles';
 import { Icon, type IconName } from './Icon';
@@ -44,8 +45,8 @@ import { useBots } from '../bots';
 import { PersonScopeProvider } from './Person';
 import { seenAt, totalOf, unreadOf, useLookingAt, useSeen, useUnread, type Unread } from '../seen';
 
-/** Under the hood: the views for the curious, folded in the space's menu */
-const HOOD = [
+/** Under the hood: the views for the curious, at the foot of the space's Overview */
+export const HOOD = [
   {
     id: 'data',
     to: '/spaces/$spaceId/data',
@@ -330,13 +331,23 @@ function SpaceView({ space }: { space: SpaceSummary }) {
           <header className="space-bar">
             {/* A phone has no rail: the space is the name at the left of its bar. */}
             <span className="phone-only" style={{ flex: '1 1 auto', minWidth: 0 }}>
-              <SpaceMenu space={space} pair={pair} leaf={leaf} go={go} onHome={goBack} />
+              <SpaceMenu space={space} pair={pair} leaf={leaf} go={go} />
             </span>
-            {/* You, and what's new for you, at its right, as the rail's foot has them on a wide screen. */}
-            <span className="phone-only" style={{ flexShrink: 0 }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Bell spaces={spaces} here={space} onOpenSpace={openSpace} />
-                <AccountMenu />
+            {/* Its apps at the right, and the open one's settings; you and what's new for you are in the tab bar. */}
+            <span className="phone-only" style={{ flex: '0 1 auto', minWidth: 0, maxWidth: '50%' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
+                <AppSwitcher
+                  space={space}
+                  apps={apps.ready}
+                  unread={unread}
+                  newProposals={newProposals}
+                  open={open}
+                  title={title}
+                  onNew={onNew}
+                  go={go}
+                  openApp={openApp}
+                />
+                {open && mayDefine && <AppSettingsButton space={space} record={open.record} />}
               </span>
             </span>
             <span className="hide-on-phone" style={{ display: 'contents' }}>
@@ -419,21 +430,10 @@ function SpaceView({ space }: { space: SpaceSummary }) {
               </SpaceScreenContext>
             </div>
           </div>
-          {/* A phone's way between apps, under the thumb: the one you're in opens every app, and its settings sit at the other end. */}
-          <footer className="space-foot">
-            <AppSwitcher
-              space={space}
-              apps={apps.ready}
-              unread={unread}
-              newProposals={newProposals}
-              open={open}
-              title={title}
-              onNew={onNew}
-              go={go}
-              openApp={openApp}
-            />
-            {open && mayDefine && <AppSettingsButton space={space} record={open.record} />}
-          </footer>
+          {/* A phone keeps Home, Activity and you along its bottom edge here too. */}
+          <div className="phone-only">
+            <TabBar />
+          </div>
         </main>
       </div>
 
@@ -547,8 +547,7 @@ function SideHeading({ children }: { children: ReactNode }) {
 
 /**
  * The way around a space, from the space itself: its face at the top of the rail, or its name at the
- * left of a phone's bar. A dropdown that names the space, then goes home, and to the space's own
- * sections and what is under its hood.
+ * left of a phone's bar. A dropdown that names the space, then goes to its Overview and its own sections.
  */
 function SpaceMenu({
   space,
@@ -562,15 +561,14 @@ function SpaceMenu({
   pair: PairWith | undefined;
   leaf: RouteId | undefined;
   go: (to: SpacePath) => void;
-  onHome: () => void;
+  /** The way home, for the rail: a phone has the tab bar's */
+  onHome?: () => void;
   /** Opened from the space's face alone, at the top of the rail, rather than from its name */
   face?: boolean;
 }) {
   const { forget } = useWorkspace();
   const { open: shown, setOpen, close, root } = usePopover();
   const name = pair?.name ?? space.name;
-  // Folded away, unless one of its views is open.
-  const [hoodOpen, setHoodOpen] = useState(HOOD.some((h) => h.to === leaf));
   // Each row closes the menu on its way.
   const then = (action: () => void) => () => {
     close();
@@ -610,8 +608,16 @@ function SpaceMenu({
               <Privacy space={space} />
             </span>
           </div>
-          <SideItem icon={<Icon name="arrowLeft" size={16} />} label="Home" onClick={then(onHome)} />
+          {onHome && (
+            <SideItem icon={<Icon name="arrowLeft" size={16} />} label="Home" onClick={then(onHome)} />
+          )}
           <SideHeading>{pair ? 'This chat' : 'This group'}</SideHeading>
+          <SideItem
+            icon={<Icon name="apps" size={16} />}
+            label="Overview"
+            on={leaf === APPS_ROUTE}
+            onClick={then(() => go('/spaces/$spaceId'))}
+          />
           {/* A space for two is the two of you, so nobody is invited to it. */}
           {sectionsOf(!!pair).map((section) => (
             <SideItem
@@ -622,24 +628,6 @@ function SpaceMenu({
               onClick={then(() => go(section.to))}
             />
           ))}
-          <SideItem
-            icon={<Icon name="layers" size={16} />}
-            label="Under the hood"
-            quiet
-            expanded={hoodOpen}
-            onClick={() => setHoodOpen(!hoodOpen)}
-          />
-          {hoodOpen &&
-            HOOD.map((h) => (
-              <SideItem
-                key={h.id}
-                icon={<Icon name={h.icon} size={16} />}
-                label={h.label}
-                quiet
-                on={leaf === h.to}
-                onClick={then(() => go(h.to))}
-              />
-            ))}
           <div style={{ height: 1, background: palette.surface.line, margin: '6px 4px' }} />
           <button
             onClick={then(() => forget(space.id))}
@@ -657,7 +645,7 @@ function SpaceMenu({
 }
 
 /**
- * A phone's way between apps: the one open, named in the bar at its foot, opens every app as a grid of their
+ * A phone's way between apps: the one open, named at the right of its bar, opens every app as a grid of their
  * shapes, with what is new in each, a slot to add one, and the way to all of them laid out.
  */
 function AppSwitcher({
@@ -715,7 +703,7 @@ function AppSwitcher({
         {!shown && <Count unread={elsewhere} />}
       </button>
       {shown && (
-        <nav aria-label="Apps" className="rise" style={{ ...menu, padding: 12 }}>
+        <nav aria-label="Apps" className="drop" style={{ ...menu, left: 'auto', right: 0, padding: 12 }}>
           <div className="app-switch">
             {apps.map((app) => (
               <button
@@ -849,30 +837,23 @@ function SideItem({
   label,
   unread,
   on,
-  quiet,
-  expanded,
   onClick,
 }: {
   icon: ReactNode;
   label: string;
   unread?: Unread;
   on?: boolean;
-  quiet?: boolean;
-  /** For a row that folds others away: whether they show now */
-  expanded?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       onClick={onClick}
       aria-current={on ? 'page' : undefined}
-      aria-expanded={expanded}
       data-nav
       className="side-item"
       style={{
         width: '100%',
-        color:
-          on || (unread?.count ?? 0) > 0 ? palette.ink.strong : quiet ? palette.ink.muted : palette.ink.body,
+        color: on || (unread?.count ?? 0) > 0 ? palette.ink.strong : palette.ink.body,
         fontWeight: on || (unread?.count ?? 0) > 0 ? 600 : 400,
       }}
     >

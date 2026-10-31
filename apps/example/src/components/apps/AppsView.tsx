@@ -8,7 +8,7 @@ import { useMay } from '@minca/app-shared/may';
 import { AddBotDialog } from '@minca/app-shared/CommunitySetup';
 import { FeatureIcon } from '@minca/app-shared/Feature';
 import { ConnectAgent } from '../ConnectAgent';
-import { sectionsOf, type SpaceScreen } from '../SpaceView';
+import { HOOD, sectionsOf, type SpaceScreen } from '../SpaceView';
 import { RowMenu } from '../PeopleParts';
 import type { AppEntry, useSpaceApps } from './entries';
 import { AppIcon, Count } from './AppIcon';
@@ -200,6 +200,25 @@ export function AppsView({
               }
               title={section.label}
               onClick={() => go(section.to)}
+            />
+          ))}
+        </ol>
+      </section>
+
+      {/* The views for the curious: what the space holds and how it travels. */}
+      <section aria-label="Under the hood" style={stack(14)}>
+        <h2 style={{ ...styles.appTitle, fontSize: 20 }}>Under the hood</h2>
+        <ol className="rows" style={ui.list}>
+          {HOOD.map((view) => (
+            <OverviewRow
+              key={view.id}
+              icon={
+                <span style={sectionIcon}>
+                  <Icon name={view.icon} size={18} />
+                </span>
+              }
+              title={view.label}
+              onClick={() => go(view.to)}
             />
           ))}
         </ol>
