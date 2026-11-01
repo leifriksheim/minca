@@ -120,13 +120,22 @@ minca-auth .wa-link {
 minca-auth .wa-link:not(:disabled):hover { color: var(--minca-ink); }
 minca-auth .wa-links { display: flex; flex-wrap: wrap; margin-top: 10px; }
 
-minca-auth .wa-options { display: flex; flex-direction: column; gap: 12px; }
-minca-auth .wa-option {
-  display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 16px;
-  text-align: left; border-radius: var(--minca-radius);
-  border: 1px solid var(--minca-line); background: var(--minca-surface); color: var(--minca-body);
+/* Choices are one list: a box, a hairline between each. */
+minca-auth .wa-options {
+  display: flex; flex-direction: column; overflow: hidden;
+  border: 1px solid var(--minca-line); border-radius: var(--minca-radius); background: var(--minca-surface);
 }
-minca-auth .wa-option:not(:disabled):hover { background: var(--minca-sunken); border-color: var(--minca-line-strong); }
+minca-auth .wa-option {
+  display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px 16px;
+  text-align: left; border: none; border-radius: 0; background: none; color: var(--minca-body);
+}
+minca-auth .wa-option:not(:disabled):hover { background: var(--minca-sunken); }
+/* After .wa-option, which has no border of its own, and as specific: the line between rows wins. */
+minca-auth .wa-options > :not(:first-child) { border-top: 1px solid var(--minca-line); }
+minca-auth .wa-option-body { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+/* Where a page draws each kind of choice's icon, by its data-option; empty, it takes no room. */
+minca-auth .wa-option-icon { display: none; flex-shrink: 0; width: 36px; height: 36px; background: center / contain no-repeat; }
+minca-auth .wa-options > .wa-steps { margin: 0; padding: 12px 16px 14px 36px; }
 minca-auth .wa-option-title { display: flex; align-items: center; gap: 8px; font-weight: 500; color: var(--minca-ink); }
 minca-auth .wa-option-text { color: var(--minca-muted); font-size: 13px; line-height: 1.5; }
 minca-auth .wa-badge {

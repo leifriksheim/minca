@@ -40,8 +40,7 @@ export function InviteView({ space }: { space: SpaceSummary }) {
         }
       >
         <p style={{ ...styles.quiet, lineHeight: 1.5 }}>
-          For anyone who isn't a contact. Whoever has a link can join, so send it only to the people it is
-          for. It works until you close it.
+          For anyone who isn't a contact yet. Anyone with the link can join, until you close it.
         </p>
         <OpenLinks
           space={space}

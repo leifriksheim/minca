@@ -77,13 +77,18 @@ const PROPOSALS = ':proposals';
 /** What belongs to the space rather than to one app, in sidebar order */
 const SECTIONS = [
   { to: '/spaces/$spaceId/members', label: 'Members', icon: 'people' },
+  { to: '/spaces/$spaceId/roles', label: 'Roles', icon: 'shield' },
   { to: '/spaces/$spaceId/invite', label: 'Invite', icon: 'invite' },
   { to: '/spaces/$spaceId/hosting', label: 'Hosting', icon: 'cloud' },
   { to: '/spaces/$spaceId/automations', label: 'Automations', icon: 'bolt' },
 ] as const satisfies ReadonlyArray<{ to: SpacePath; label: string; icon: IconName }>;
 
 /** The sections only a group has: a space for two is the two of you */
-const FOR_GROUPS: ReadonlySet<string> = new Set(['/spaces/$spaceId/members', '/spaces/$spaceId/invite']);
+const FOR_GROUPS: ReadonlySet<string> = new Set([
+  '/spaces/$spaceId/members',
+  '/spaces/$spaceId/roles',
+  '/spaces/$spaceId/invite',
+]);
 
 /** A space's own sections, as its menu and its Overview list them: a space for two has nobody to invite */
 export const sectionsOf = (pair: boolean) =>

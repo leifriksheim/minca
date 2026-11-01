@@ -157,7 +157,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
     <>
       {tab === 'home' && (
         <>
-          <PageHead title={`Hi, ${session.account.name}`} line="Here’s how your account is doing." />
+          <PageHead title={`Hi, ${session.account.name}`} line="Your Minca account." />
           <Overview
             hasPasskey={hasPasskey}
             hasPassword={hasPassword}
@@ -403,78 +403,82 @@ function Overview({
   keepers: number;
   openTab: (tab: TabId) => void;
 }) {
-  const ways = [hasPasskey && 'a passkey', hasPassword && 'a password'].filter(Boolean).join(' and ');
-  const tiles: ReadonlyArray<{
+  const ways = [hasPasskey && 'Passkey', hasPassword && 'password'].filter(Boolean).join(' and ');
+  // One line each: where it stands, in warning colours when something wants doing.
+  const rows: ReadonlyArray<{
     kind: ShapeKind;
     colour: ShapeColour;
     title: string;
     line: string;
-    chip: string;
     warn?: boolean;
-    action: string;
     tab: TabId;
   }> = [
     {
       kind: 'daisy',
       colour: 'coral',
       title: 'Apps',
-      line:
-        apps === 0
-          ? 'Apps you connect show up here.'
-          : `${apps} ${apps === 1 ? 'app uses' : 'apps use'} your account.`,
-      chip: apps === 0 ? 'None yet' : `${apps} connected`,
-      action: 'See apps',
+      line: apps === 0 ? 'None connected yet' : `${apps} connected`,
       tab: 'apps',
     },
-    {
-      kind: 'flower',
-      colour: 'peach',
-      title: 'Devices',
-      line: 'Scan a code, and your phone is the same account.',
-      chip: 'Takes a minute',
-      action: 'Add your phone',
-      tab: 'devices',
-    },
+    { kind: 'flower', colour: 'peach', title: 'Devices', line: 'Add your phone', tab: 'devices' },
     {
       kind: 'burst',
       colour: 'sage',
       title: 'Data',
-      line:
-        keepers === 0
-          ? 'Nothing keeps your spaces while your pages are closed.'
-          : `Kept online by ${keepers} ${keepers === 1 ? 'helper' : 'helpers'}.`,
-      chip: keepers === 0 ? 'Only here' : 'Backed up',
+      line: keepers === 0 ? 'Only on this device' : `Kept online by ${keepers}`,
       warn: keepers === 0,
-      action: 'See your data',
       tab: 'data',
     },
     {
       kind: 'scallop',
       colour: 'cobalt',
       title: 'Security',
-      line: ways ? `You sign in with ${ways}.` : 'Only your recovery code opens your account here.',
-      chip: ways ? 'All set' : 'Set one up',
+      line: ways ? `${ways} set up` : 'Only your recovery code',
       warn: !ways,
-      action: 'See security',
       tab: 'security',
     },
   ];
   return (
-    <div className="home-tiles">
-      {tiles.map((tile) => (
-        <section key={tile.title} className="home-tile" data-c={tile.colour}>
-          <Shape kind={tile.kind} colour={tile.colour} className="home-tile-art" />
-          <span className={tile.warn ? 'home-chip home-chip-warn' : 'home-chip'}>{tile.chip}</span>
-          <h2>{tile.title}</h2>
-          <p>{tile.line}</p>
-          <button onClick={() => openTab(tile.tab)} data-variant="quiet" style={styles.smallButton}>
-            {tile.action}
+    <ul className="rows" aria-label="Your account" style={styles.list}>
+      {rows.map((row) => (
+        <li key={row.title} data-tile style={{ listStyle: 'none' }}>
+          <button onClick={() => openTab(row.tab)} style={overviewRow}>
+            <Shape kind={row.kind} colour={row.colour} size={36} />
+            <span style={{ ...stack(2), flex: 1, minWidth: 0 }}>
+              <strong style={{ fontSize: 15, fontWeight: 600, color: palette.ink.strong }}>
+                {row.title}
+              </strong>
+              <span style={{ fontSize: 13, color: row.warn ? palette.accent.warn : palette.ink.muted }}>
+                {row.line}
+              </span>
+            </span>
+            <svg width={14} height={14} viewBox="0 0 16 16" aria-hidden style={{ color: palette.ink.faint }}>
+              <path
+                d="M6 4l4 4-4 4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.6}
+                strokeLinecap="round"
+              />
+            </svg>
           </button>
-        </section>
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }
+
+const overviewRow = {
+  width: '100%',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 14,
+  padding: '14px 16px',
+  border: 'none',
+  borderRadius: 'inherit',
+  background: 'none',
+  textAlign: 'left',
+} as const;
 
 /** How much this site keeps in the browser, and whether the browser may clear it to make room */
 function useBrowserStorage(): { used: number | null; persisted: boolean | null } {
@@ -930,10 +934,7 @@ function Username() {
   };
 
   return (
-    <Section
-      title="Your username"
-      description="How people find you and add you, in every Minca app. Anyone with it can ask to be your contact, and you choose who gets in."
-    >
+    <Section title="Your username" description="How people find and add you, in every Minca app.">
       {found.status === 'loading' ? null : username && !changing ? (
         <div style={stack(10)}>
           <strong style={usernameStyle}>{shortUsername(username)}</strong>

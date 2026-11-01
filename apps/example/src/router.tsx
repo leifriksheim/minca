@@ -105,11 +105,19 @@ const app = createRoute({
 const members = createRoute({
   getParentRoute: inSpace,
   path: 'members',
-  // tab: Roles, beside the members; without it, the members themselves.
-  validateSearch: (search: Record<string, unknown>): { tab?: 'roles' } => ({
-    tab: search.tab === 'roles' ? 'roles' : undefined,
-  }),
-  component: MembersPage,
+  // Roles were a tab of Members before they had a page of their own: links to that tab still lead there.
+  beforeLoad: ({ params, search }) => {
+    if ('tab' in search && search.tab === 'roles')
+      redirect({ to: '/spaces/$spaceId/roles', params, replace: true, throw: true });
+  },
+  component: page((s) => (
+    <RolesView {...s} show="members" onInvite={() => s.go('/spaces/$spaceId/invite')} />
+  )),
+});
+const roles = createRoute({
+  getParentRoute: inSpace,
+  path: 'roles',
+  component: page((s) => <RolesView {...s} show="roles" onInvite={() => s.go('/spaces/$spaceId/invite')} />),
 });
 const invite = createRoute({
   getParentRoute: inSpace,
@@ -150,13 +158,6 @@ const network = createRoute({
   component: page((s) => <NetworkView {...s} />),
 });
 
-/** Who is in a space, or the roles they hold; which of the two is in the address */
-function MembersPage(): ReactNode {
-  const s = useSpaceScreen();
-  const { tab } = members.useSearch();
-  return <RolesView {...s} tab={tab ?? 'members'} onInvite={() => s.go('/spaces/$spaceId/invite')} />;
-}
-
 /** Every record, collection by collection; which collection, and which record, are in the address */
 function DataPage(): ReactNode {
   const s = useSpaceScreen();
@@ -196,6 +197,7 @@ const routeTree = root.addChildren([
     newApp,
     app,
     members,
+    roles,
     invite,
     hosting,
     automations,

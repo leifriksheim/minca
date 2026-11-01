@@ -23,7 +23,7 @@ export function ConnectScreen() {
         <p style={styles.subtitle}>
           {expired
             ? `This app's access to ${state.grant?.name ?? 'your account'} ran out. Your account home will ask you to allow it again.`
-            : 'Connect your Minca account. You sign in at your account home, and choose what this app may use.'}
+            : 'Sign in with your Minca account to see your groups and people here.'}
         </p>
 
         {own === null ? (
@@ -36,8 +36,8 @@ export function ConnectScreen() {
                   : 'Connect with Minca'}
             </PrimaryButton>
             <p style={{ ...styles.errorHint, marginTop: 16 }}>
-              Opens <strong style={{ color: palette.ink.strong }}>{home}</strong>, where you sign in. This app
-              gets a note signed by your account for its own key — never your password.
+              Opens <strong style={{ color: palette.ink.strong }}>{home}</strong>. This app never sees your
+              password.
             </p>
             <div style={styles.linkRow}>
               <LinkButton onClick={() => setOwn('')} style={{ paddingLeft: 0 }}>

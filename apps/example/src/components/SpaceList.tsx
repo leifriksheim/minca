@@ -297,7 +297,7 @@ export function SpaceDialog({
         {step === 'run' && (
           <>
             <Options label="How it's run" options={RUNS} picked={run} onPick={setRun} />
-            <p style={{ ...styles.errorHint, marginTop: 0 }}>Roles can be changed later, in Members.</p>
+            <p style={{ ...styles.errorHint, marginTop: 0 }}>Roles can be changed later, under Roles.</p>
           </>
         )}
         {step === 'read' && (

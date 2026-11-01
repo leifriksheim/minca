@@ -1,9 +1,39 @@
 import type { CSSProperties } from 'react';
 import { baseCss, hoverCss, hstack, palette, stack, styles as shared } from '@minca/app-shared/styles';
+import { PATHS, type ShapeKind } from '@minca/ui/shapes';
+import { shapeColours, type ShapeColour } from '@minca/ui/tokens';
 
 export { hstack, palette, stack };
 
 const { ink, surface, accent, radius, display, mono, shadow } = palette;
+
+/**
+ * The shape each kind of choice in the sign-in element is marked with (its `data-option`), as the
+ * app's lists of choices have them: the same shapes, in their colours.
+ */
+const OPTION_SHAPES: Readonly<Record<string, { kind: ShapeKind; colour: ShapeColour }>> = {
+  create: { kind: 'sparkle', colour: 'cobalt' },
+  existing: { kind: 'key', colour: 'coral' },
+  reopen: { kind: 'stack', colour: 'sage' },
+  pod: { kind: 'stack', colour: 'sage' },
+  pair: { kind: 'signal', colour: 'peach' },
+  code: { kind: 'lock', colour: 'lilac' },
+  passkey: { kind: 'pass', colour: 'cobalt' },
+  password: { kind: 'key', colour: 'coral' },
+};
+
+/** A shape as a picture the element's stylesheet can put behind an empty span */
+const shapeUrl = ({ kind, colour }: { kind: ShapeKind; colour: ShapeColour }) =>
+  `url("data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="${PATHS[kind]}" fill="${shapeColours[colour]}"/></svg>`,
+  )}")`;
+
+const optionIcons = Object.entries(OPTION_SHAPES)
+  .map(
+    ([name, shape]) =>
+      `html minca-auth .wa-option[data-option="${name}"] .wa-option-icon { display: block; background-image: ${shapeUrl(shape)}; }`,
+  )
+  .join('\n    ');
 
 /**
  * The sign-in element from `@minca/core` dressed as Minca: its
@@ -41,9 +71,12 @@ const authCss = `
     html minca-auth .wa-secondary { border-color: ${surface.rule}; }
     /* A field for one line is a pill, as every control is; a checkbox is not a field. */
     html minca-auth input:not([type="checkbox"]):not([type="radio"]) { border-radius: ${radius.pill}px; padding: 0 16px; }
-    html minca-auth .wa-option, html minca-auth .wa-error-box, html minca-auth .wa-code { border-radius: ${radius.md}px; }
+    html minca-auth .wa-error-box, html minca-auth .wa-code { border-radius: ${radius.md}px; }
     html minca-auth .wa-error-box { border: 1px solid ${accent.danger}; }
-    html minca-auth .wa-option:not(:disabled):hover { border-color: ${surface.rule}; background: ${surface.card}; }
+    /* Choices are a list as the app's are: ruled, round at the ends, each marked by its shape. */
+    html minca-auth .wa-options { border-color: ${surface.rule}; border-radius: ${radius.lg}px; }
+    html minca-auth .wa-option-title { font-size: 15px; font-weight: 600; }
+    ${optionIcons}
     html minca-auth input:focus { border-color: ${accent.base}; box-shadow: 0 0 0 3px ${accent.soft}; }
     html minca-auth input:focus-visible { outline: none; }
     html minca-auth :focus-visible { outline-color: ${accent.base}; }
@@ -117,36 +150,6 @@ export function injectBaseStyles(): void {
     .home-page-head h1 { font-size: 40px; line-height: 1.05; }
     .home-page-head p { margin-top: 8px; font-size: 16px; color: ${ink.muted}; }
 
-    /* Colour tiles, as on the site: a shape colour mixed into the paper, its shape off the corner */
-    .home-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-    .home-tile {
-      position: relative; overflow: hidden; min-height: 240px;
-      display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 28px;
-      border: 1px solid ${surface.rule}; border-radius: ${radius.xl}px;
-      background: color-mix(in srgb, var(--c) var(--minca-tint-tile), ${surface.page});
-    }
-    .home-tile[data-c="cobalt"] { --c: var(--minca-cobalt); }
-    .home-tile[data-c="coral"] { --c: var(--minca-coral); }
-    .home-tile[data-c="sage"] { --c: var(--minca-sage); }
-    .home-tile[data-c="peach"] { --c: var(--minca-peach); }
-    .home-tile[data-c="lilac"] { --c: var(--minca-lilac); }
-    .home-tile > :not(.home-tile-art) { position: relative; z-index: 1; }
-    .home-tile h2 { margin-top: 12px; font-size: 24px; letter-spacing: -0.04em; }
-    .home-tile p { max-width: 230px; font-size: 15px; line-height: 1.45; color: ${ink.body}; }
-    .home-tile button { margin-top: auto; }
-    .home-tile-art {
-      position: absolute; right: -44px; bottom: -44px; width: 170px; height: 170px;
-      transition: transform .6s ease;
-    }
-    .home-tile:hover .home-tile-art { transform: rotate(20deg); }
-    .home-chip {
-      display: inline-flex; align-items: center; height: 24px; padding: 0 10px;
-      border: 1px solid ${surface.rule}; border-radius: ${radius.pill}px; background: ${surface.card};
-      font-size: 12px; font-weight: 500; color: ${ink.strong};
-    }
-    .home-chip-warn { border-color: ${accent.warn}; background: ${accent.warnSoft}; color: ${accent.warn}; }
-
-    @media (prefers-reduced-motion: reduce) { .home-tile-art { transition: none; } .home-tile:hover .home-tile-art { transform: none; } }
     @media (max-width: 640px) {
       .home-nav { padding: 8px 12px 12px; }
       .home-nav-bar { height: 52px; padding: 0 6px 0 16px; }
@@ -154,10 +157,6 @@ export function injectBaseStyles(): void {
       .home-tabs { align-self: stretch; }
       .home-tab { flex: 1; padding: 0 12px; }
       .home-page-head h1 { font-size: 32px; }
-      .home-tiles { grid-template-columns: minmax(0, 1fr); }
-      .home-tile { min-height: 0; padding: 24px; }
-      .home-tile-art { width: 120px; height: 120px; right: -40px; bottom: -40px; }
-      .home-tile p { max-width: 200px; }
     }
     @media (max-width: 420px) { .switcher-name { display: none; } }
   `;

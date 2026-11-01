@@ -89,9 +89,10 @@ export const baseCss = `
     .rows > li + li { border-top: 1px solid ${surface.line}; }
     .rows > li:first-child { border-top-left-radius: inherit; border-top-right-radius: inherit; }
     .rows > li:last-child { border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; }
-    /* Inside a surface (a dialog, or a card marked .surface) a list is no box of its own: never a box in a box,
-       only hairlines above, between and below its rows. */
-    :is(.modal, .surface) .rows {
+    /* Inside a card marked .surface a list is no box of its own: never a box in a box, only hairlines
+       above, between and below its rows. A dialog's lists keep their box, so a choice in one reads as the
+       same list it is on a page. */
+    .surface .rows {
       border: none !important; border-radius: 0 !important; background: none !important;
       border-top: 1px solid ${surface.line} !important; border-bottom: 1px solid ${surface.line} !important;
     }

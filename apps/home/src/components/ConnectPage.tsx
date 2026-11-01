@@ -362,9 +362,9 @@ function Approve({
       <p style={styles.subtitle}>
         {byCode
           ? 'A program on your computer or a server, such as your AI, opened this page. '
-          : request.name && <>It calls itself “{request.name}”. </>}
-        It wants to {writes ? 'read and change' : 'read'} {whole ? 'everything in' : 'spaces in'} your
-        account, <strong style={{ color: palette.ink.strong }}>{session.account.name}</strong>.
+          : request.name && <>It calls itself “{request.name}”, and </>}
+        {byCode || !request.name ? 'It wants' : 'wants'} to {writes ? 'read and change' : 'read'}{' '}
+        {whole ? 'everything in' : 'spaces in'} your account.
         {byCode && ' Allow it only if you started it just now.'}
       </p>
 
@@ -395,9 +395,8 @@ function Approve({
 
       {whole && !recordsOnly && (
         <Note title="Your whole account">
-          Every space, including private ones, the list of them, your contacts, and contact requests sent to
-          you. It can make and join spaces for you. It cannot sign in anywhere as you, or change your password
-          or passkeys. Until you disconnect it, what it changes counts, even after the date below.
+          Every space, private ones too, your contacts and contact requests. It can make and join spaces for
+          you, but can’t sign in as you or change your password or passkeys.
         </Note>
       )}
 
@@ -452,10 +451,9 @@ function Approve({
       )}
 
       <p style={{ ...styles.errorHint, marginBottom: 20 }}>
-        It stays in sync for {lasts(request.days ?? 7)}, then asks again. Disconnecting it, in your account,
-        is what cuts it off for good.
-        {(whole || privateChosen) &&
-          ' It can read the private spaces it gets from now on — that cannot be taken back yet.'}
+        Stays in sync for {lasts(request.days ?? 7)}, then asks again. What it changes stays; disconnect it in
+        your account to cut it off.
+        {(whole || privateChosen) && ' Reading the private spaces it gets can’t be taken back yet.'}
       </p>
 
       <Answer
