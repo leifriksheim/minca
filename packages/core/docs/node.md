@@ -953,9 +953,11 @@ to look for the account registry at before the account says which it uses, so
 an app built with a default host restores an account from its recovery code
 alone. `network.nodes` still adds sockets of its own, to every space.
 
-`network.only` makes a node reach nothing but its own `nodes`, `relays` and
-`transports`: no host a record names (`sys.hosting`, `std.host`), no node an
-invite names, and no place a short link names, so `hosting` calls that ask a
+`network.only` makes a node reach no host a record names (`sys.hosting`,
+`std.host`), no node an invite names, and no place a short link names: only
+its own `nodes` and `transports`. Relays a space or an invite names are still
+joined beside its `relays`, so a node meant to reach nothing else is given
+none, as a host's agents are. With it, `hosting` calls that ask a
 host, and joining or previewing a short link, fail. It is for a node a server
 runs for someone else, such as the agents a host runs for chat apps: what that
 node reads, and the invites it is handed, are the other's to write, and must

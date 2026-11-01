@@ -53,10 +53,12 @@ export interface NodeNetworkConfig {
   /** Extra transports per space, given this node's session DID: for a node serving sockets, or a test */
   readonly transports?: (spaceId: string, sessionDid: string) => ReadonlyArray<PeerTransport>;
   /**
-   * Reach nothing but `nodes`, `relays` and `transports`: no host a record
-   * names, no node an invite names, no place a short link names. For a node a
-   * server runs for someone else, such as a host's agents: what it reads is
-   * theirs, and must not choose where the server connects.
+   * Reach no host a record names, no node an invite names, and no place a
+   * short link names: only `nodes` and `transports`. Relays a space or an
+   * invite names are still joined beside `relays`, so a node meant to reach
+   * nothing else has none. For a node a server runs for someone else, such
+   * as a host's agents: what it reads is theirs, and must not choose where
+   * the server connects.
    */
   readonly only?: boolean;
 }

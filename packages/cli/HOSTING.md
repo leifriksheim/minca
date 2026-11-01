@@ -143,7 +143,8 @@ it: keep that volume as private as the host's own key, and say so in your
 terms. `MINCA_HOST_MCP_HOME` is the account home its consent page suggests
 (default `https://home.minca.social`), and `MINCA_HOST_MCP_APPS` adds chat
 apps a sign-in may go back to, comma separated, each a host
-(`chat.example.com`) or an app's scheme (`zed:`), beside Claude's and
+(`chat.example.com`, any page there, so name only a host that serves nothing
+else) or an app's scheme (`zed:`), beside Claude's and
 ChatGPT's MCP callbacks (`claude.ai/api/mcp/auth_callback`,
 `chatgpt.com/connector_platform_oauth_redirect`, and the same on `claude.com`
 and `chat.openai.com`), `cursor:`, `vscode:` and `vscode-insiders:`. Add only a scheme that opens that app, never one that

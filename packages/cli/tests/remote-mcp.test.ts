@@ -19,6 +19,7 @@ import { createLocalRootSigner } from '../../core/src/identity/root-signer.js';
 import { deriveAccountKey } from '../../core/src/identity/account-vault.js';
 import { generateSeed } from '../../core/src/identity/recovery-code.js';
 import { GRANT_VERSION } from '../../core/src/session/connect.js';
+import { noteTerms } from '../../core/src/identity/abilities.js';
 import { base64UrlEncode } from '../../core/src/utils/encoding.js';
 import { memoryStores } from '../../core/tests/helpers/memory-stores.js';
 import { createFakeHub, type FakeHub } from '../../core/tests/helpers/fake-transport.js';
@@ -58,23 +59,32 @@ async function accountHolder(hub: FakeHub, options: { readonly unnamed?: boolean
   closing.push(() => node.close());
   if (!options.unnamed) named.push(me.did);
   /** What her home signs when she picks every space she has, as the consent page asks: some spaces, records only */
-  const grantFor = async (audience: string, seconds = 3600, command = '/record'): Promise<Grant> => ({
-    v: GRANT_VERSION,
-    did: me.did,
-    name: 'Ada',
-    note: await signer.delegate({ audience, command, expiration: Math.floor(Date.now() / 1000) + seconds }),
-    access: 'write',
-    scope: 'spaces',
-    spaces: await Promise.all(
-      (await node.spaces.list()).map(async (space) => ({
-        id: space.id,
-        name: space.name,
-        invite: await node.spaces.invite(space.id),
-      })),
-    ),
-    expiresAt: Math.floor(Date.now() / 1000) + seconds,
-    home: 'https://home.test/connect',
-  });
+  const grantFor = async (audience: string, seconds = 3600, command = '/record'): Promise<Grant> => {
+    const spaces = await node.spaces.list();
+    const expiration = Math.floor(Date.now() / 1000) + seconds;
+    // Made out for these spaces, as a home's note for picked spaces is (`noteTerms`).
+    const terms = noteTerms(
+      command,
+      spaces.map((space) => space.id),
+    );
+    return {
+      v: GRANT_VERSION,
+      did: me.did,
+      name: 'Ada',
+      note: await signer.delegate({ audience, expiration, ...terms }),
+      access: 'write',
+      scope: 'spaces',
+      spaces: await Promise.all(
+        spaces.map(async (space) => ({
+          id: space.id,
+          name: space.name,
+          invite: await node.spaces.invite(space.id),
+        })),
+      ),
+      expiresAt: expiration,
+      home: 'https://home.test/connect',
+    };
+  };
   /** The whole account, key and all, as an app given everything gets */
   const wholeAccount = async (audience: string): Promise<Grant> => ({
     ...(await grantFor(audience)),
@@ -82,7 +92,16 @@ async function accountHolder(hub: FakeHub, options: { readonly unnamed?: boolean
     spaces: [],
     accountKey: base64UrlEncode(accountKey),
   });
-  return { node, did: me.did, grantFor, wholeAccount };
+  /** A note about the whole account, labelled as for some spaces: the label is the home's word, the note is signed */
+  const wholeNoteLabelledSpaces = async (audience: string): Promise<Grant> => ({
+    ...(await grantFor(audience)),
+    note: await signer.delegate({
+      audience,
+      command: '/record',
+      expiration: Math.floor(Date.now() / 1000) + 3600,
+    }),
+  });
+  return { node, did: me.did, grantFor, wholeAccount, wholeNoteLabelledSpaces };
 }
 
 /** The key the consent page makes in the browser, as it hands it over */
@@ -637,6 +656,13 @@ describe('a host’s MCP endpoint', () => {
       grant: await ada.wholeAccount(wholeKey.did),
     });
     assert.equal(everything.status, 400, 'nor the whole account, whose key opens every space');
+    const labelled = await startSignIn(app, host.resource);
+    const labelledKey = await browserKey();
+    const relabelled = await postFromPage(labelled, 'allow', {
+      key: labelledKey.jwk,
+      grant: await ada.wholeNoteLabelledSpaces(labelledKey.did),
+    });
+    assert.equal(relabelled.status, 400, 'nor a whole-account note called something else');
 
     const started = await startSignIn(app, host.resource);
     const first = await browserKey();
@@ -652,6 +678,28 @@ describe('a host’s MCP endpoint', () => {
     });
     assert.equal(again.status, 409, 'nobody adds connections under an answered sign-in');
     assert.equal(await host.connections(), 1);
+  });
+
+  test('naming a key takes holding it: someone with only an account’s notes can’t connect under them', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    const host = await aHost(hub);
+    const app = await anApp(host.resource);
+    const real = await signIn(app, host.resource, (audience) => ada.grantFor(audience));
+    // Ada's notes travel with every record their keys sign: anyone in her spaces holds them.
+    for (let i = 0; i < 10; i++) {
+      const hers = await browserKey();
+      const theirs = await browserKey();
+      const started = await startSignIn(app, host.resource);
+      const answer = await postFromPage(started, 'allow', {
+        key: { publicKey: hers.jwk.publicKey, privateKey: theirs.jwk.privateKey },
+        grant: await ada.grantFor(hers.did),
+      });
+      assert.equal(answer.status, 400, 'a private key that isn’t the public key’s');
+    }
+    assert.equal(await host.connections(), 1, 'nothing kept, and nothing of hers pushed out');
+    const client = await mcpClient(host.resource, real.tokens.access_token);
+    assert.ok((await client.listTools()).tools.length > 0, 'her app still works');
   });
 
   test('a hosted agent isn’t offered what would dial addresses from the host', async () => {

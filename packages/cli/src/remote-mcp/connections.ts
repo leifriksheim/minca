@@ -21,7 +21,14 @@
  * still count (06 §2.9), so a host doesn't keep it. An account keeps only its
  * newest few.
  */
-import { didOf, type NodeConfig, type P2PNode, type StorageAdapter, type StoreFactory } from '@minca/core';
+import {
+  didOf,
+  noteSpaces,
+  type NodeConfig,
+  type P2PNode,
+  type StorageAdapter,
+  type StoreFactory,
+} from '@minca/core';
 import { checkGrant, usableGrant, type Grant } from '@minca/core/session';
 import { startGrantedAgent } from '../agent.js';
 import { isRecord, messageOf } from '../json.js';
@@ -288,6 +295,9 @@ export function createConnections(options: {
       if (!isKeyJwk(params.key)) throw new Error('That is not a key pair');
       const keys = await importKeyJwk(params.key);
       if (!keys) throw new Error('That is not a key pair');
+      // Its halves belong together: a note is no secret, travelling with every record its key signs,
+      // so naming a key takes holding it (as 06 §2.4 asks of a request at the home).
+      if (!(await holdsTogether(keys))) throw new Error('That private key is not the public key’s');
       if (!isRecord(params.grant)) throw new Error('That is not a grant');
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- checkGrant checks it, and usableGrant its version and time
       const grant = params.grant as unknown as Grant;
@@ -295,8 +305,8 @@ export function createConnections(options: {
       await checkGrant(grant, did, { recordsOnly: true });
       if (!usableGrant(grant) || !noteRunning(grant))
         throw new Error('That grant has run out, or is of a version no peer reads');
-      // The spaces the person picked, never the whole account: the account key opens every one.
-      if (grant.accountKey !== undefined || grant.scope !== 'spaces')
+      // The spaces the person picked, never the whole account: by the note itself, and no account key.
+      if (noteSpaces(grant.note) === 'all' || grant.accountKey !== undefined || grant.scope !== 'spaces')
         throw new Error('A chat app here gets the spaces the person picks, not the whole account');
       if (!options.accounts.includes(grant.did))
         throw new Error('This host connects chat apps only for the accounts it names, and not this one.');
@@ -346,6 +356,19 @@ export function createConnections(options: {
       await Promise.all([...running.keys()].map(stop));
     },
   };
+}
+
+const ECDSA = { name: 'ECDSA', hash: 'SHA-256' } as const;
+
+/** Whether a key pair's private half signs what its public half verifies */
+async function holdsTogether(keys: CryptoKeyPair): Promise<boolean> {
+  const subtle = globalThis.crypto.subtle;
+  const said = globalThis.crypto.getRandomValues(new Uint8Array(32));
+  try {
+    return await subtle.verify(ECDSA, keys.publicKey, await subtle.sign(ECDSA, keys.privateKey, said), said);
+  } catch {
+    return false;
+  }
 }
 
 /** 128 random bits, base64url: a connection's id, which names the account an access token acts for */

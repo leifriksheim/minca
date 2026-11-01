@@ -20,6 +20,7 @@ import { generateSeed } from '../../core/src/identity/recovery-code.js';
 import { createP256Provider } from '../../core/src/identity/crypto-p256.js';
 import { didOf } from '../../core/src/identity/did.js';
 import { GRANT_VERSION } from '../../core/src/session/connect.js';
+import { noteTerms } from '../../core/src/identity/abilities.js';
 import { encodeInvitation, readInvitation } from '../../core/src/space/invitation.js';
 import { memoryStores } from '../../core/tests/helpers/memory-stores.js';
 import { createFakeHub } from '../../core/tests/helpers/fake-transport.js';
@@ -177,7 +178,7 @@ test('a stranger’s grant can’t make the host’s agent dial an address the s
     v: GRANT_VERSION,
     did: me.did,
     name: 'Stranger',
-    note: await signer.delegate({ audience, command: '/record', expiration: expiresAt }),
+    note: await signer.delegate({ audience, expiration: expiresAt, ...noteTerms('/record', [space.id]) }),
     access: 'write',
     scope: 'spaces',
     // Not under any signature: whatever the stranger puts here.
@@ -375,7 +376,11 @@ test('a stranger’s own node can’t fill the host’s disk through an agent', 
       v: GRANT_VERSION,
       did: unlocked.account.did,
       name: 'Stranger',
-      note: await unlocked.signer.delegate({ audience, command: '/record', expiration: expiresAt }),
+      note: await unlocked.signer.delegate({
+        audience,
+        expiration: expiresAt,
+        ...noteTerms('/record', [space.id]),
+      }),
       access: 'write',
       scope: 'spaces',
       spaces: [{ id: space.id, name: 'Anything', invite }],

@@ -78,13 +78,14 @@ function storeAdapter(store: StorageAdapter): (model: string) => Adapter {
         const kept: Kept = { payload, ...(lasts ? { expiresAt: now() + lasts } : {}) };
         await store.put(key(id), encode(kept));
         if (model === 'Session' && payload.uid)
-          await store.put(`oauth:SessionUid:${payload.uid}`, encode(id));
+          await store.put(
+            `oauth:SessionUid:${payload.uid}`,
+            encode({ payload: { id }, ...(lasts ? { expiresAt: now() + lasts } : {}) }),
+          );
       },
       find: (id) => read(key(id)),
       async findByUid(uid) {
-        const bytes = await store.get(`oauth:SessionUid:${uid}`);
-        if (!bytes) return undefined;
-        const id: unknown = JSON.parse(new TextDecoder().decode(bytes));
+        const id = (await read(`oauth:SessionUid:${uid}`))?.id;
         return typeof id === 'string' ? read(key(id)) : undefined;
       },
       // Device codes only, which this host doesn't offer.
@@ -255,7 +256,8 @@ export async function createOAuth(options: OAuthOptions) {
     features: {
       devInteractions: { enabled: false },
       // Any app may register itself; the person sees its name and where it sends them back before allowing it.
-      registration: { enabled: true },
+      // No token to manage a registration with afterwards: this host offers none of that.
+      registration: { enabled: true, issueRegistrationAccessToken: false },
       revocation: { enabled: true },
       userinfo: { enabled: false },
       rpInitiatedLogout: { enabled: false },
