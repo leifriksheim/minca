@@ -16,6 +16,8 @@ body {
 h1, h2, h3, h4 { margin: 0; color: var(--minca-ink); font-family: var(--minca-display); font-weight: 700; letter-spacing: -0.04em; line-height: 1.2; }
 h1 { font-size: 24px; } h2 { font-size: 18px; } h3 { font-size: 15px; } h4 { font-size: 13px; }
 p { margin: 0; }
+/* A screen is written in without a doctype, where a form keeps a margin under it: none here, as in the app. */
+form { margin: 0; }
 a { color: var(--minca-accent); }
 button {
   font: inherit; font-size: 13px; font-weight: 500; min-height: 36px; padding: 0 14px;
@@ -47,6 +49,11 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--m
 .muted { color: var(--minca-muted); }
 .faint { color: var(--minca-faint); font-size: 12px; }
 .empty { padding: 40px 16px; text-align: center; color: var(--minca-muted); }
+/* Nothing here yet (Empty): a shape, a title, a line, and the way to start, in the middle */
+.empty-state { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 48px 20px; text-align: center; }
+.empty-state > svg { margin-bottom: 10px; }
+.empty-state > p { max-width: 300px; color: var(--minca-muted); }
+.empty-state > button, .empty-state > form { margin-top: 12px; }
 .person { display: inline-flex; align-items: center; gap: 6px; min-height: 0; padding: 0; border: none; background: none; color: inherit; font-size: inherit; font-weight: inherit; }
 .person:hover { background: none; text-decoration: underline; text-underline-offset: 3px; }
 .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

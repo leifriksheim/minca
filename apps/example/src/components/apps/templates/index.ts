@@ -6,10 +6,8 @@
  * screen must never be handed text sealed for its viewer alone.
  */
 import {
-  ballot,
   column,
   comment,
-  decision,
   direct,
   event,
   expense,
@@ -23,7 +21,6 @@ import {
   orderUpdate,
   poll,
   positionBetween,
-  proposal,
   reaction,
   rsvp,
   settlement,
@@ -33,7 +30,6 @@ import {
 import { DIRECT, type Template } from '../launcher';
 import bills from './bills.html?raw';
 import chat from './chat.html?raw';
-import decisions from './decisions.html?raw';
 import events from './events.html?raw';
 import files from './files.html?raw';
 import kanban from './kanban.html?raw';
@@ -133,8 +129,8 @@ export const TEMPLATES: ReadonlyArray<Template> = [
       template: 'bills',
       title: 'Bills',
       description:
-        'Split what you spend together, see who owes whom, and settle up in as few payments as can be.',
-      collections: [expense.name, settlement.name, comment.name],
+        'Split what you spend together, on a tab for each trip, flat or dinner, and settle up in as few payments as can be.',
+      collections: [expense.name, settlement.name, comment.name, list.name, listItem.name],
       shows: [expense.name],
       notify: [
         notifyOn('Expenses I owe a part of', expense.name, { owedBy: { $contains: '$me' } }),
@@ -142,7 +138,7 @@ export const TEMPLATES: ReadonlyArray<Template> = [
       ],
       screen: bills,
     },
-    needs: [expense, settlement, comment],
+    needs: [expense, settlement, comment, list, listItem],
   },
   {
     app: {
@@ -158,23 +154,6 @@ export const TEMPLATES: ReadonlyArray<Template> = [
       screen: polls,
     },
     needs: [poll, vote],
-  },
-  {
-    app: {
-      template: 'decisions',
-      title: 'Decisions',
-      description:
-        'Put something to the space, and decide it once enough people agree. Every device checks the count.',
-      collections: [proposal.name, ballot.name, decision.name],
-      shows: [proposal.name],
-      notify: [
-        notifyOn('New proposal', proposal.name),
-        notifyOn('Decided', decision.name),
-        notifyOn('Ballots on my proposals', ballot.name, { respondingTo: { $contains: '$me' } }),
-      ],
-      screen: decisions,
-    },
-    needs: [proposal, ballot, decision],
   },
   {
     app: {

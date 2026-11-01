@@ -34,7 +34,7 @@ import {
   placeLabel,
   useNear,
 } from './places';
-import { Cover, Shape } from './shapes';
+import { Cover, Empty, Shape } from './shapes';
 import { css } from './styles';
 
 /**
@@ -105,6 +105,7 @@ Object.defineProperty(globalThis, 'ui', {
     Sharing,
     Shared,
     Shape,
+    Empty,
     Cover,
     PlaceField,
     NearButton,

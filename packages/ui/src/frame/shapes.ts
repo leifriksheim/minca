@@ -22,6 +22,30 @@ export function Shape({
 }
 
 /**
+ * What an app shows where there is nothing yet, the same in every app: one of Minca's shapes, a
+ * short title, a line on what goes here, and the way to start (a button, as `children`).
+ */
+export function Empty({
+  shape = 'sparkle',
+  colour = 'cobalt',
+  title,
+  text,
+  children,
+}: {
+  shape?: ShapeKind;
+  colour?: ShapeColour;
+  title: string;
+  text?: string;
+  children?: ComponentChildren;
+}) {
+  return html`<div class="empty-state">
+    <${Shape} kind=${shape} colour=${colour} size=${56} />
+    <h3>${title}</h3>
+    ${text && html`<p>${text}</p>`} ${children}
+  </div>`;
+}
+
+/**
  * A picture for something that has none: a big flat shape in a colour, on a
  * sunken ground, picked and turned a little by `seed` (a record's key), so
  * two side by side differ. Whatever is inside sits on top.

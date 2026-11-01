@@ -59,6 +59,8 @@ ui has:
   <\${AddMenu} />, the input, and <div class="composer-end"><\${EmojiPicker} /></div>
   <\${Modal} title onClose width?>…</\${Modal}>   a dialog over the screen, and the only way to draw one: it floats without dimming
                                     what is behind, since the screen is one pane of the app. Never draw a backdrop of your own
+  <\${Empty} shape? colour? title text?>…</\${Empty}>   where there is nothing yet, as every app shows it: a shape, a short
+                                    title, one line on what goes here, and the button that starts it inside. Always use it for an empty app
   <\${Shape} kind colour? size? />  one of Minca's shapes; <\${Cover} seed colour size? class?>…</\${Cover}> a picture for what has none
                                     (colour: cobalt, coral, peach, sage or lilac)
   <\${PlaceField} value onChange coarse? near? placeholder />   find a place by name, or use where the person is
