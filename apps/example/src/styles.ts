@@ -369,7 +369,7 @@ export function injectBaseStyles(): void {
       .space-content { flex: 1 0 auto; }
       /* Back, where you are, the apps: the middle stays in the middle whatever is at either end. */
       .space-bar {
-        display: grid; grid-template-columns: 40px minmax(0, 1fr) 40px;
+        display: grid; grid-template-columns: minmax(40px, 1fr) minmax(0, auto) minmax(40px, 1fr);
         position: sticky; top: 0; z-index: 8; height: auto; min-height: 56px; gap: 8px;
         padding: env(safe-area-inset-top) max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left));
         background: ${surface.page};
@@ -385,7 +385,7 @@ export function injectBaseStyles(): void {
       .space-shell[data-app-open] .space-content { overflow-y: auto; padding-bottom: 24px; }
       .space-shell[data-app-open] .space-main { display: flex; height: 100%; min-height: 0; }
       .space-shell[data-app-open] .space-bar { position: static; }
-      .bar-end { display: flex !important; }
+      .bar-end { display: flex !important; min-width: 0; }
       .bar-middle { display: flex !important; justify-content: center; min-width: 0; }
       /* What fills the space runs right down to the foot of the screen. */
       .space-content[data-fill], .space-shell[data-app-open] .space-content[data-fill] { padding: 0; }

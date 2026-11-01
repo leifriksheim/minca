@@ -370,7 +370,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
                 </button>
               )}
             </span>
-            <span className="phone-only bar-end" style={{ justifySelf: 'end' }}>
+            <span className="phone-only bar-end" style={{ justifySelf: 'end', maxWidth: '100%' }}>
               <AppSwitcher
                 space={space}
                 apps={apps.ready}
@@ -656,8 +656,8 @@ function SpaceMenu({
 }
 
 /**
- * A phone's way between apps: the open one's shape, at the right of its bar, opens every app as a grid of
- * their shapes, with what is new in each, a slot to add one, and the way to all of them laid out.
+ * A phone's way between apps: the grid and the open one's name, at the right of its bar, opens every
+ * app as a grid of their shapes, with what is new in each, a slot to add one, and the way to all of them laid out.
  */
 function AppSwitcher({
   space,
@@ -686,23 +686,23 @@ function AppSwitcher({
   // While its grid is shut, what's new in the apps not on screen shows on the button.
   const elsewhere = totalOf([...unread.entries()].filter(([id]) => id !== open?.id).map(([, one]) => one));
   return (
-    <div ref={root} style={{ position: 'relative', display: 'flex' }}>
+    <div ref={root} style={{ position: 'relative', display: 'flex', minWidth: 0, maxWidth: '100%' }}>
       <button
         onClick={() => setOpen((was) => !was)}
         aria-expanded={shown}
         aria-haspopup="menu"
         aria-label={open ? `${open.title}: every app` : 'Every app'}
-        title="Apps"
+        title={open?.title ?? 'Apps'}
         className="group-button"
-        style={barButton}
+        style={switcherButton}
       >
-        {open ? (
-          <AppIcon id={open.id} size={26} />
-        ) : (
-          <span style={{ display: 'inline-flex', color: palette.ink.body }}>
-            <Icon name="apps" size={18} />
-          </span>
-        )}
+        <span style={{ display: 'inline-flex', flexShrink: 0, color: palette.ink.body }}>
+          <Icon name="apps" size={18} />
+        </span>
+        {/* The app you are in, by name, cut short when it is long. */}
+        <span style={{ ...ui.ellipsis, minWidth: 0, fontSize: 15, fontWeight: 600 }}>
+          {open?.title ?? 'Apps'}
+        </span>
         {!shown && (
           <span className="rail-count">
             <Count unread={elsewhere} />
@@ -786,7 +786,7 @@ function RailItem({
   );
 }
 
-/** A square at either end of a phone's bar: the way back, and the apps behind the open one's shape */
+/** The way back, a square at the left of a phone's bar */
 const barButton = {
   position: 'relative',
   display: 'grid',
@@ -794,6 +794,21 @@ const barButton = {
   width: 40,
   height: 40,
   padding: 0,
+  border: 'none',
+  borderRadius: palette.radius.md,
+  background: 'none',
+  color: palette.ink.strong,
+} as const;
+
+/** Every app, at the right of a phone's bar: their grid, and the name of the one you are in */
+const switcherButton = {
+  position: 'relative',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  maxWidth: '100%',
+  height: 40,
+  padding: '0 8px',
   border: 'none',
   borderRadius: palette.radius.md,
   background: 'none',
