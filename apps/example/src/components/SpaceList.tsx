@@ -70,7 +70,7 @@ const RUNS: ReadonlyArray<Option<Run> & { readonly preset: keyof typeof rolePres
     value: 'friends',
     preset: 'team',
     shape: 'dots',
-    title: 'Friends',
+    title: 'Friends or team',
     detail: 'Everyone can change anything and add people.',
   },
   {
@@ -217,7 +217,7 @@ export function SpaceDialog({
   const [mode, setMode] = useState(initial);
   const [name, setName] = useState('');
   const [visibility, setVisibility] = useState<SpaceVisibility>('private');
-  const [run, setRun] = useState<Run>('community');
+  const [run, setRun] = useState<Run>('friends');
   const [step, setStep] = useState<Step>('name');
   const [invite, setInvite] = useState('');
 
@@ -229,7 +229,7 @@ export function SpaceDialog({
     const after = STEPS[STEPS.indexOf(step) + 1];
     if (after) return setStep(after);
     // Founded with the roles its way of running gives, so inviting someone later needs no setup first.
-    const preset = RUNS.find((option) => option.value === run)?.preset ?? 'community';
+    const preset = RUNS.find((option) => option.value === run)?.preset ?? 'team';
     onCreate({ name: trimmed, visibility, ...rolePresets[preset] });
     onClose();
   };

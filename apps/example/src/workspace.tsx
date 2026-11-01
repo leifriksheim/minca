@@ -12,8 +12,8 @@ export interface Workspace {
   readonly pairs: ReadonlyMap<string, PairWith>;
   readonly loading: boolean;
   readonly error: string | null;
-  /** Make a group with Chat in it, and go to it to add people */
-  readonly create: (params: NewSpace) => void;
+  /** Make a group with Chat in it, invite these contacts (by account), and go to it to add people */
+  readonly create: (params: NewSpace, invite?: ReadonlyArray<string>) => void;
   /** Join with an invite link, and go to the space */
   readonly join: (link: string) => void;
   /** Join with an invite link; the space, or null when it failed */

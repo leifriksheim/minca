@@ -28,16 +28,16 @@ async function shareUsername(username: string, copy: (text: string) => void): Pr
 type Start = 'message' | 'group' | 'share' | 'join';
 
 const STARTS: Record<Start, { shape: ShapeKind; title: string; detail: string }> = {
-  message: { shape: 'scallop', title: 'Message someone', detail: 'A contact, or anyone by their username' },
   group: { shape: 'group', title: 'New group', detail: 'Name it, then add people' },
+  message: { shape: 'scallop', title: 'New contact', detail: 'Find someone by their username' },
   share: { shape: 'signal', title: 'Share your link', detail: 'So people can add you' },
   join: { shape: 'pass', title: 'Join with a link', detail: 'Someone sent you an invite' },
 };
 
 /**
- * The "+" on the home screen: one place to start anything, with what the tab
- * you're on is for first. A chat with someone starts from finding them in
- * People; a group from naming it, then adding people.
+ * The "+" on the home screen: one place to start anything, a new group and a
+ * new contact first, whichever the tab you're on is for leading. A contact
+ * starts from finding them in People; a group from naming it, then adding people.
  */
 export function NewSheet({ on, onClose }: { on: 'people' | 'groups'; onClose: () => void }) {
   const navigate = useNavigate();
@@ -45,7 +45,7 @@ export function NewSheet({ on, onClose }: { on: 'people' | 'groups'; onClose: ()
   const [step, setStep] = useState<'menu' | 'share'>('menu');
   const [dialog, setDialog] = useState<'new' | 'join' | null>(null);
   const order: ReadonlyArray<Start> =
-    on === 'people' ? ['message', 'share', 'group', 'join'] : ['group', 'join', 'message', 'share'];
+    on === 'people' ? ['message', 'group', 'share', 'join'] : ['group', 'message', 'share', 'join'];
 
   const start = (what: Start) => {
     if (what === 'message') {

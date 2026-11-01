@@ -1,6 +1,16 @@
 /** Contacts (`node.contacts`) and the inbox (`node.inbox`), for the screens that show them. */
 import { useEffect } from 'react';
-import { ROLE_ASSIGN, type ContactView, type P2PNode } from '@minca/core';
+import {
+  ROLE_ASSIGN,
+  type ContactRequest,
+  type ContactView,
+  type KnockView,
+  type NodeEvent,
+  type P2PNode,
+  type SentKnockView,
+  type SpaceInviteView,
+  type SpaceSummary,
+} from '@minca/core';
 import { useAsync, useLive, useNode, useWatched } from '@minca/react';
 import { addChat } from './components/apps/entries';
 
@@ -164,4 +174,59 @@ export function useHeldSpaces(ids: ReadonlyArray<string>): void {
       for (const hold of held) void hold.then((release) => release?.());
     };
   }, [node, key]);
+}
+
+/** How often to look in the inbox's mailboxes: knocks wait on relays, which tell nobody */
+const KNOCK_POLL_MS = 30_000;
+
+async function readMailbox(node: P2PNode) {
+  const [inbox, knocks, sent] = await Promise.all([
+    node.inbox.get().catch(() => null),
+    node.inbox.knocks().catch((): KnockView[] => []),
+    node.inbox.sent().catch((): SentKnockView[] => []),
+  ]);
+  return { inbox, knocks, sent };
+}
+
+/**
+ * Who wants to be your contact, kept current: requests left in the spaces you share, knocks on your
+ * inbox, and your own knocks still waiting. Reading knocks also turns knocks of yours someone joined
+ * into contacts. `tick` loads it all again.
+ */
+export function useAsking(spaces: ReadonlyArray<SpaceSummary>, tick = 0) {
+  // Requests are records in the spaces you share, so a change in any of them may bring one.
+  const shared = spaces.filter((space) => !space.joining).map((space) => space.id);
+  const key = shared.join(',');
+  const watch = {
+    when: (event: NodeEvent) =>
+      (event.type === 'records' && shared.includes(event.space)) || event.type === 'spaces',
+    settle: 400,
+  };
+  const requests =
+    useWatched(
+      async (node) =>
+        (
+          await Promise.all(shared.map((id) => node.contacts.requests(id).catch((): ContactRequest[] => [])))
+        ).flat(),
+      [key, tick],
+      watch,
+    ) ?? [];
+  const mailbox = useWatched(readMailbox, [key, tick], { ...watch, every: KNOCK_POLL_MS });
+  return {
+    requests,
+    inbox: mailbox?.inbox ?? null,
+    knocks: mailbox?.knocks ?? [],
+    sent: mailbox?.sent ?? [],
+  };
+}
+
+/** Invites to groups your contacts left for you in your spaces for two, kept current; `tick` loads them again */
+export function useSpaceInvites(tick = 0): ReadonlyArray<SpaceInviteView> {
+  return (
+    useWatched((node) => node.contacts.invites().catch((): SpaceInviteView[] => []), [tick], {
+      when: (event) => event.type === 'records' || event.type === 'spaces',
+      settle: 400,
+      every: 30_000,
+    }) ?? []
+  );
 }

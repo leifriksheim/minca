@@ -1,18 +1,9 @@
 import { useCallback, useState } from 'react';
 import { useRouterState } from '@tanstack/react-router';
-import type {
-  ContactRequest,
-  ContactView,
-  InboxView,
-  NodeEvent,
-  P2PNode,
-  KnockView,
-  SentKnockView,
-  SpaceSummary,
-} from '@minca/core';
+import type { ContactView, InboxView, SentKnockView, SpaceSummary } from '@minca/core';
 import { readInbox } from '@minca/core/inbox';
 import { createP256Provider } from '@minca/core';
-import { useAccount, useAsync, useNode, useSpaceStatus, useWatched } from '@minca/react';
+import { useAccount, useAsync, useNode, useSpaceStatus } from '@minca/react';
 import {
   clearInboxFromUrl,
   inboxLink,
@@ -20,6 +11,7 @@ import {
   readInboxFromUrl,
   readUserFromUrl,
   takeBack,
+  useAsking,
   useContacts,
   useStanding,
   useHeldSpaces,
@@ -43,18 +35,6 @@ import { InviteToSpace } from './InvitePeople';
 import { shortUsername, useUsernameLookup } from '@minca/app-shared/usernames';
 
 const { ink, surface, accent } = palette;
-
-/** How often to look in the inbox's mailboxes: knocks wait on relays, which tell nobody */
-const KNOCK_POLL_MS = 30_000;
-
-async function readMailbox(node: P2PNode) {
-  const [inbox, knocks, sent] = await Promise.all([
-    node.inbox.get().catch(() => null),
-    node.inbox.knocks().catch((): KnockView[] => []),
-    node.inbox.sent().catch((): SentKnockView[] => []),
-  ]);
-  return { inbox, knocks, sent };
-}
 
 /** Checks inbox codes as they are typed */
 const provider = createP256Provider();
@@ -97,30 +77,8 @@ export function ContactsView({
     [run, reload],
   );
 
-  // Requests are records in the spaces you share, so a change in any of them may bring one.
   const shared = spaces.filter((space) => !space.joining);
-  const sharedIds = shared.map((space) => space.id).join(',');
-  const watch = {
-    when: (event: NodeEvent) =>
-      (event.type === 'records' && sharedIds.split(',').includes(event.space)) || event.type === 'spaces',
-    settle: 400,
-  };
-  const requests =
-    useWatched(
-      async (node) => {
-        const found = await Promise.all(
-          shared.map((space) => node.contacts.requests(space.id).catch((): ContactRequest[] => [])),
-        );
-        return found.flat();
-      },
-      [sharedIds, tick],
-      watch,
-    ) ?? [];
-  // The inbox, and the knocks in it. Reading knocks also turns knocks of yours someone joined into contacts.
-  const mailbox = useWatched(readMailbox, [sharedIds, tick], { ...watch, every: KNOCK_POLL_MS });
-  const inbox = mailbox?.inbox ?? null;
-  const knocks = mailbox?.knocks ?? [];
-  const sent = mailbox?.sent ?? [];
+  const { requests, inbox, knocks, sent } = useAsking(spaces, tick);
 
   const listed = (contacts ?? []).filter((contact) => !contact.blocked);
   const blocked = (contacts ?? []).filter((contact) => contact.blocked);
@@ -351,7 +309,7 @@ function FindPeople({
   onSent: (notice: string) => void;
 }) {
   const lookup = useUsernameLookup(query);
-  // Arrived from "Message someone": straight into finding them.
+  // Arrived from "New contact": straight into finding them.
   const finding = useRouterState({ select: (state) => state.location.state.find === true });
   const [adding, setAdding] = useState<{ username: string; name?: string } | null>(null);
   const known = lookup.status === 'found' ? contacts.find((c) => c.username === lookup.username) : undefined;
@@ -378,6 +336,10 @@ function FindPeople({
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Find people by name or username"
           aria-label="Find people by name or username"
+          // A search, so a phone doesn't take it for a sign-in and fill in your own username.
+          type="search"
+          name="find-people"
+          enterKeyHint="search"
           autoFocus={finding}
           autoCapitalize="none"
           autoComplete="off"
@@ -549,6 +511,18 @@ function ContactRow({
       >
         {/* What's new in your chat with them, as a group shows it, and calling them in it. */}
         {joined && space && <SpaceCount space={space} />}
+        {/* Messaging them is a tap on the row too, which isn't plain to see: a button says so. */}
+        {joined && (
+          <QuietButton
+            onClick={() => onOpen(contact.space!)}
+            aria-label={`Message ${contact.name}`}
+            title={`Message ${contact.name}`}
+            data-round
+            style={{ width: 34, height: 34 }}
+          >
+            <Icon name="chat" size={14} />
+          </QuietButton>
+        )}
         {joined && space && standing === 'joined' && (
           <RingButton space={space} did={contact.did} name={contact.name} />
         )}
@@ -556,7 +530,7 @@ function ContactRow({
           label={`More for ${contact.name}`}
           items={[
             ...(joined && standing === 'joined'
-              ? [{ label: 'Add to a group…', onClick: () => setInviting(true) }]
+              ? [{ label: 'Add to group…', onClick: () => setInviting(true) }]
               : []),
             { label: 'Rename', onClick: () => setRenaming(true) },
             {

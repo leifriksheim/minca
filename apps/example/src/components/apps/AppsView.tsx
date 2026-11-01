@@ -49,7 +49,7 @@ export function AppsView({
   const node = useNode();
   const [arranging, setArranging] = useState(false);
   const arrange = useAction();
-  const { spaces, pairs } = useWorkspace();
+  const { spaces, pairs, forget } = useWorkspace();
   // Groups of yours to propose an app in: not this one, nor a space for two.
   const others = spaces.filter((other) => other.id !== space.id && other.writable && !pairs.has(other.id));
   const [copied, setCopied] = useState<string | null>(null);
@@ -207,6 +207,16 @@ export function AppsView({
               onClick={() => go(section.to)}
             />
           ))}
+          <li data-tile style={{ listStyle: 'none' }}>
+            <button onClick={() => forget(space.id)} style={{ ...rowButton, color: palette.accent.danger }}>
+              <span style={{ ...sectionIcon, color: palette.accent.danger }}>
+                <Icon name="arrowLeft" size={18} />
+              </span>
+              <strong style={{ ...cardTitle, color: palette.accent.danger }}>
+                {pairs.has(space.id) ? 'Leave this chat' : 'Leave group'}
+              </strong>
+            </button>
+          </li>
         </ol>
       </section>
 
