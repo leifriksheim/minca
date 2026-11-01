@@ -9,7 +9,9 @@ const { ink, surface, accent, radius, shadow } = palette;
 const navyWash = (percent: number) => `color-mix(in srgb, ${ink.strong} ${percent}%, transparent)`;
 
 /** How tall the bar along a phone's bottom edge is, with room under it */
-const TABBAR_HEIGHT = 68;
+/** A phone's tab bar, floating over the foot of the page: its height, and the gap under it */
+const TABBAR_HEIGHT = 64;
+const TABBAR_GAP = 10;
 /** How wide a space's rail of apps is */
 const RAIL_WIDTH = 80;
 
@@ -108,9 +110,25 @@ export function injectBaseStyles(): void {
     /* A phone's bar along the foot of a space (below); a wide screen has the rail. */
     .space-bar {
       flex-shrink: 0; display: flex; align-items: center; gap: 10px; height: 60px; padding: 0 24px;
-      border-bottom: 1px solid ${surface.rule}; background: ${surface.page};
+      background: ${surface.page};
     }
     .space-content { flex: 1; min-height: 0; overflow-y: auto; padding: 28px 32px 64px; }
+    /* Data arriving: a hairline along the top of the screen, a light running across it, there only while
+       records come in and fading as they stop (SyncLine). */
+    .sync-line {
+      position: fixed; z-index: 30; top: env(safe-area-inset-top); left: 0; right: 0; height: 2px; overflow: hidden;
+      pointer-events: none; opacity: 0; transition: opacity .4s ease;
+    }
+    .sync-line[data-on] { opacity: 1; transition-duration: .15s; }
+    .sync-line::after {
+      content: ''; position: absolute; top: 0; bottom: 0; width: 40%;
+      background: linear-gradient(90deg, transparent, color-mix(in srgb, ${accent.base} 55%, transparent), transparent);
+      animation: sync-run 1.1s ease-in-out infinite;
+    }
+    @keyframes sync-run { from { left: -40%; } to { left: 100%; } }
+    @media (prefers-reduced-motion: reduce) {
+      .sync-line::after { animation: none; left: 0; width: 100%; background: color-mix(in srgb, ${accent.base} 35%, transparent); }
+    }
     .space-inner { max-width: 1040px; margin: 0 auto; }
     .space-inner[data-wide] { max-width: none; }
     /* An app that is a conversation, or a screen of its own, gets every pixel, edge to edge. */
@@ -355,7 +373,7 @@ export function injectBaseStyles(): void {
         padding: 12px max(16px, env(safe-area-inset-right)) calc(48px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
       }
       /* Room under the last row for the bar along the bottom. */
-      .page:has(> * > .tabbar) { padding-bottom: calc(${TABBAR_HEIGHT + 48}px + env(safe-area-inset-bottom)); }
+      .page:has(> * > .tabbar) { padding-bottom: calc(${TABBAR_HEIGHT + TABBAR_GAP + 40}px + env(safe-area-inset-bottom)); }
 
       /* In a space a phone has no tab bar: the way back is at the left of
          the space's bar, and its apps open from the right of it rather than
@@ -405,25 +423,31 @@ export function injectBaseStyles(): void {
       .chat-places-form > button { height: 40px !important; }
       .chat-room-title { min-height: 48px; padding: 8px 14px !important; }
 
+      /* A pill floating over the foot of the page, the page showing through it, blurred; the tab you are
+         on a softer pill inside it, as chat apps have it now. */
       .tabbar {
         /* Under the page's bars (z-index 8): as a flex item it is a layer of its own even when static,
            so a dialog opened from it can rise no higher than 8. */
-        position: fixed; z-index: 7; left: 0; right: 0; bottom: 0; width: auto; margin: 0; gap: 0;
-        padding: 6px max(4px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(4px, env(safe-area-inset-left));
-        border: none; border-top: 1px solid ${surface.rule}; border-radius: 0; background: ${surface.page};
+        position: fixed; z-index: 7; width: auto; margin: 0; gap: 2px; height: ${TABBAR_HEIGHT}px; padding: 5px;
+        left: max(16px, env(safe-area-inset-left)); right: max(16px, env(safe-area-inset-right));
+        bottom: calc(${TABBAR_GAP}px + env(safe-area-inset-bottom));
+        border: 1px solid ${surface.rule}; border-radius: ${radius.pill}px;
+        background: color-mix(in srgb, ${surface.card} 82%, transparent);
+        -webkit-backdrop-filter: blur(18px) saturate(1.4); backdrop-filter: blur(18px) saturate(1.4);
+        box-shadow: ${shadow.float};
       }
       .tabbar > a {
-        flex: 1 1 0; min-width: 0; flex-direction: column; gap: 3px; height: auto; padding: 6px 2px;
-        color: ${ink.faint}; font-size: 11px; white-space: nowrap;
+        flex: 1 1 0; min-width: 0; flex-direction: column; justify-content: center; gap: 2px; height: auto; padding: 0 2px;
+        border-radius: ${radius.pill}px; color: ${ink.muted}; font-size: 11px; white-space: nowrap;
       }
-      .tabbar > a[aria-current="page"] { background: none; color: ${ink.strong}; }
-      .tab-dot { top: 4px; left: calc(50% + 6px); box-shadow: 0 0 0 2px ${surface.page}; }
+      .tabbar > a[aria-current="page"] { background: ${surface.sunken}; color: ${ink.strong}; }
+      .tab-dot { top: 8px; left: calc(50% + 6px); box-shadow: 0 0 0 2px ${surface.card}; }
 
 
       /* The phone says enough on its own. */
       .call-label { display: none; }
 
-      .call-panel { left: 12px; right: 12px; width: auto; bottom: calc(${TABBAR_HEIGHT + 12}px + env(safe-area-inset-bottom)); }
+      .call-panel { left: 12px; right: 12px; width: auto; bottom: calc(${TABBAR_HEIGHT + TABBAR_GAP + 12}px + env(safe-area-inset-bottom)); }
       .call-stage { top: 12px; left: 12px; }
       .call-stack { left: 12px; right: 12px; width: auto; top: 12px; }
       .graph-canvas { height: min(600px, 65dvh); }

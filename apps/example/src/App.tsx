@@ -15,6 +15,7 @@ import { CallsProvider } from '@minca/calls/react';
 import { useShowNotifications } from './notifications';
 import { useRememberPicture } from '@minca/app-shared/rememberedPictures';
 import { TabBar } from './components/TabBar';
+import { SyncLine } from './components/SyncLine';
 import { useRunAutomations } from './automations';
 import { ConnectScreen } from './components/ConnectScreen';
 import { useAccountInAddress } from './account-address';
@@ -165,6 +166,7 @@ const tab = (on: boolean) =>
 export function HomeLayout() {
   return (
     <div className="page">
+      <SyncLine />
       <div style={styles.app}>
         <TabBar />
         <Notices />

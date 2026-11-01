@@ -37,6 +37,7 @@ import { usePopover } from './usePopover';
 import { styles, palette, stack, ui } from '../styles';
 import { Icon, type IconName } from './Icon';
 import { WhoIsHere } from './WhoIsHere';
+import { SyncLine } from './SyncLine';
 import { RelayDown } from './RelayNotice';
 import { homeTab, Notices, useWorkspace } from '../workspace';
 import { CallButton } from './calls/Calls';
@@ -298,6 +299,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
 
   return (
     <PersonScopeProvider space={space} people={people} roles={roleOf} me={account.did} openSpace={openSpace}>
+      <SyncLine space={space.id} />
       <div className="space-shell" data-app-open={open ? '' : undefined}>
         {/* The space's apps down the left edge, under the space itself; a phone has them as tabs. */}
         <nav className="app-rail" aria-label={`Apps in ${name}`}>
@@ -360,7 +362,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
                 style={barButton}
               >
                 <span style={{ display: 'inline-flex', transform: 'rotate(180deg)' }}>
-                  <Icon name="chevron" size={18} />
+                  <Icon name="chevron" size={16} />
                 </span>
               </button>
             </span>
@@ -801,17 +803,17 @@ function RailItem({
   );
 }
 
-/** The way back, a square at the left of a phone's bar */
+/** The way back, at the left of a phone's bar: round and a shade darker than the page, as a dialog's ✕ is */
 const barButton = {
   position: 'relative',
   display: 'grid',
   placeItems: 'center',
-  width: 40,
-  height: 40,
+  width: 36,
+  height: 36,
   padding: 0,
   border: 'none',
-  borderRadius: palette.radius.md,
-  background: 'none',
+  borderRadius: palette.radius.pill,
+  backgroundColor: palette.surface.sunken,
   color: palette.ink.strong,
 } as const;
 
