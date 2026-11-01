@@ -1,38 +1,33 @@
-<!-- Kanban: std.task and std.column as a board, like a small Trello. Dragging a card rewrites only its in link (to its column) and position. A card's checklist is tasks whose parent is the card; they stay off the board. -->
+<!-- Kanban: std.task and std.column as a board, like a small Trello. Moving a card rewrites only its in link (to its column) and position: by dragging with a mouse, or from the card itself. A card opens one level in (minca.go), so the app's bar names it and its Back comes back out. A card's checklist is tasks whose parent is the card; they stay off the board. -->
 <style>
   body {
-    padding: 16px 16px 4px;
+    padding: 0;
   }
   .toolbar {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-wrap: wrap;
-    margin-bottom: 12px;
+    padding: 14px 16px 0;
   }
-  .face-filter {
-    min-height: 0;
-    padding: 2px;
-    border: 2px solid transparent;
-    border-radius: 50%;
-    background: none;
-  }
-  .face-filter[aria-pressed='true'] {
-    border-color: var(--minca-accent);
-  }
+  /* Columns side by side, scrolled across; a phone snaps to one column at a time, the next peeking in. */
   .board {
     display: flex;
-    gap: 12px;
     align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px 24px;
     overflow-x: auto;
-    padding-bottom: 12px;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: 16px;
+  }
+  .lane,
+  .new-column {
+    flex: 0 0 280px;
+    scroll-snap-align: start;
   }
   .lane {
-    flex: 0 0 272px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 8px;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid var(--minca-rule);
     border-radius: var(--minca-radius-lg);
     background: var(--minca-sunken);
   }
@@ -40,49 +35,64 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    min-height: 30px;
-    padding: 2px 4px 6px;
-    font-size: 13px;
-    font-weight: 600;
+    min-height: 32px;
+    padding: 0 2px 0 4px;
   }
-  .lane > header > button:first-child {
+  .lane > header > button.name {
     flex: 1;
+    justify-content: flex-start;
     min-height: 0;
     padding: 0;
     border: none;
     background: none;
+    color: var(--minca-ink);
+    font-size: 15px;
     font-weight: 600;
-    justify-content: flex-start;
   }
-  .lane > header input {
+  .lane > header > button.name:disabled {
+    opacity: 1;
+  }
+  .lane > header form {
+    flex: 1;
+  }
+  .lane > header > button[data-icon] {
+    width: 28px;
     min-height: 28px;
-    padding: 2px 8px;
-    font-weight: 600;
   }
-  .lane > header .quiet {
-    min-height: 0;
-    padding: 0 4px;
-    border: none;
-    background: none;
+  .count {
+    min-width: 22px;
+    padding: 0 7px;
+    border-radius: var(--minca-radius-pill);
+    background: var(--minca-card);
+    color: var(--minca-muted);
+    font-size: 12px;
+    text-align: center;
+  }
+  .lane-empty {
+    padding: 14px 8px;
+    border: 1.5px dashed var(--minca-line-strong);
+    border-radius: var(--minca-radius-md);
     color: var(--minca-faint);
+    font-size: 13px;
+    text-align: center;
   }
   .task {
     width: 100%;
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: 6px;
+    gap: 8px;
     min-height: 0;
-    padding: 10px 12px;
+    padding: 12px 14px;
     border: 1px solid var(--minca-line);
     border-radius: var(--minca-radius-md);
     background: var(--minca-card);
-    color: var(--minca-body);
-    font-size: 14px;
-    font-weight: 400;
-    line-height: 1.4;
+    color: var(--minca-ink);
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1.35;
     text-align: left;
-    word-break: break-word;
+    overflow-wrap: anywhere;
   }
   .task:hover {
     background: var(--minca-card);
@@ -94,9 +104,10 @@
   .meta {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     flex-wrap: wrap;
     font-size: 12px;
+    font-weight: 400;
     color: var(--minca-muted);
   }
   .meta .faces {
@@ -109,67 +120,149 @@
   }
   .pill {
     align-self: flex-start;
-    padding: 1px 8px;
+    padding: 1px 9px;
     border-radius: var(--minca-radius-pill);
     font-size: 11px;
     font-weight: 600;
     color: var(--minca-ink);
-    background: var(--c, var(--minca-sunken));
+    background: color-mix(in srgb, var(--c, var(--minca-sunken)) 45%, var(--minca-card));
   }
   .marker {
-    height: 2px;
-    margin: 2px 0 4px;
+    height: 3px;
     border-radius: var(--minca-radius-pill);
-    background: var(--minca-ink);
+    background: var(--minca-accent);
   }
   .add {
     justify-content: flex-start;
-    min-height: 32px;
-    padding: 0 8px;
-  }
-  .new-column {
-    flex: 0 0 272px;
+    min-height: 40px;
+    padding: 0 10px;
+    border-radius: var(--minca-radius-md);
   }
   .new-column > button {
     width: 100%;
-    height: 40px;
+    min-height: 52px;
+    border: 1.5px dashed var(--minca-line-strong);
+    border-radius: var(--minca-radius-lg);
+    background: none;
+    color: var(--minca-muted);
+  }
+  .new-column > form {
+    padding: 10px;
+    border: 1px solid var(--minca-rule);
+    border-radius: var(--minca-radius-lg);
+    background: var(--minca-sunken);
+  }
+  /* A card opened: one column of it, in the middle */
+  .page {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 18px 16px 48px;
   }
   .card-title {
     min-height: 0;
-    padding: 4px 0;
+    padding: 0;
     border: none;
+    border-radius: 0;
     background: none;
-    font-size: 20px;
-    font-weight: 600;
+    color: var(--minca-ink);
+    font-family: var(--minca-display);
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.2;
   }
-  .fields {
-    display: grid;
-    grid-template-columns: 96px 1fr;
-    gap: 10px 12px;
-    align-items: center;
+  .card-title:focus {
+    outline: none;
   }
-  .fields > .label {
-    align-self: start;
-    padding-top: 8px;
+  .part-of {
+    align-self: flex-start;
+    min-height: 30px;
+    padding: 0 12px;
+    font-weight: 400;
   }
-  .check {
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .rows {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    overflow: hidden;
+    background: var(--minca-card);
+    border: 1px solid var(--minca-rule);
+    border-radius: var(--minca-radius-lg);
+  }
+  .rows > li + li {
+    border-top: 1px solid var(--minca-line);
+  }
+  .item {
     display: flex;
     align-items: center;
-    gap: 8px;
-    min-height: 32px;
+    gap: 12px;
+    min-height: 52px;
+    padding: 6px 8px 6px 16px;
   }
-  .check input[type='checkbox'] {
-    width: 18px;
-    min-height: 18px;
-    flex-shrink: 0;
-    accent-color: var(--minca-ink);
-  }
-  .check span {
+  .item > span {
     flex: 1;
+    min-width: 0;
+    color: var(--minca-ink);
+    font-size: 15px;
+    overflow-wrap: anywhere;
   }
-  .check[data-done='true'] span {
+  .item[data-done='true'] > span {
     color: var(--minca-faint);
     text-decoration: line-through;
+  }
+  .item input {
+    flex: 1;
+    min-width: 0;
+    min-height: 36px;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: none;
+    font-size: 15px;
+  }
+  .item input:focus {
+    outline: none;
+  }
+  .item form {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .tick {
+    width: 24px;
+    height: 24px;
+    min-height: 0;
+    flex-shrink: 0;
+    padding: 0;
+    border: 1.5px solid var(--minca-line-strong);
+    border-radius: 50%;
+    background: none;
+    color: var(--minca-inverse);
+  }
+  .tick:hover {
+    border-color: var(--minca-accent);
+    background: none;
+  }
+  .tick[aria-checked='true'] {
+    border-color: var(--minca-accent);
+    background: var(--minca-accent);
+  }
+  .plus {
+    width: 24px;
+    flex-shrink: 0;
+    color: var(--minca-muted);
+    font-size: 20px;
+    line-height: 1;
+    text-align: center;
   }
   .bar {
     height: 4px;
@@ -182,18 +275,25 @@
     height: 100%;
     background: var(--minca-good);
   }
-  @media (max-width: 520px) {
-    .fields {
-      grid-template-columns: 1fr;
+  .chips {
+    flex-wrap: wrap;
+  }
+  @media (max-width: 640px) {
+    .board {
+      scroll-snap-type: x mandatory;
     }
-    .fields > .label {
-      padding-top: 0;
+    .lane,
+    .new-column {
+      flex-basis: calc(100vw - 56px);
+    }
+    .chips {
+      flex-wrap: nowrap;
     }
   }
 </style>
 <script>
-  const { html, render, useState, useEffect, useRef, useRecords, useCan, usePeople, useShown } = ui;
-  const { Avatar, Person, Modal, Comments, Attachments, attach, positionBetween } = ui;
+  const { html, render, useState, useEffect, useRef, useRecords, useCan, usePeople, useShown, useView } = ui;
+  const { Avatar, Person, Empty, Comments, Attachments, attach, positionBetween } = ui;
   const TASK = 'std.task';
   const COLUMN = 'std.column';
   const COMMENT = 'std.comment';
@@ -209,6 +309,8 @@
     [3, 'Medium', 'lilac'],
     [4, 'Low', 'sage'],
   ];
+  /** Dragging is for a mouse; on a touchscreen a card moves from its own page */
+  const canDrag = matchMedia('(pointer: fine)').matches;
 
   /** By position; records without one go last, oldest first */
   const byPosition = (a, b) => {
@@ -233,6 +335,16 @@
     new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
   const nameIn = (people, did) =>
     did === me ? 'You' : (people.find((p) => p.did === did)?.name ?? 'Someone');
+  const tickIcon = html`<svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true">
+    <path
+      d="M3 8.5 6.5 12 13 4.5"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2.2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </svg>`;
 
   /** Whether the person looking may do this to a record: null until known */
   function useMay(action, key) {
@@ -256,19 +368,36 @@
     const people = usePeople() ?? [];
     const mayAddTask = useCan('create', TASK);
     const mayAddColumn = useCan('create', COLUMN);
-    const [dragging, setDragging] = useState(null);
+    const [dragging, setDraggingState] = useState(null);
     // Where a dragged card would land: a lane, and the card it would go before (null: the end)
-    const [drop, setDrop] = useState(null);
+    const [drop, setDropState] = useState(null);
+    // The same, as the drop reads them: events can come faster than the board redraws.
+    const dragged = useRef(null);
+    const landed = useRef(null);
+    const setDragging = (key) => {
+      dragged.current = key;
+      setDraggingState(key);
+    };
+    const setDrop = (to) => {
+      landed.current = to;
+      setDropState(to);
+    };
     const [addingTo, setAddingTo] = useState(null);
     const [addingColumn, setAddingColumn] = useState(false);
-    const [openKey, setOpenKey] = useState(null);
     // Only the cards one person is on: their did, or null for everyone's
     const [only, setOnly] = useState(null);
+    // A card is one level in: the app's bar names it, and its Back comes back to the board.
+    const [view, go] = useView();
     // A task opened from elsewhere, like one shared in a chat: its card.
     const asked = useShown();
     useEffect(() => {
-      if (asked) setOpenKey(asked.key);
+      if (asked) go(asked.key);
     }, [asked]);
+    // The bar names the open card, once it is here, and again when it is renamed.
+    const openTitle = view && all?.find((t) => t.key === view)?.body?.title;
+    useEffect(() => {
+      if (typeof openTitle === 'string') go(view, openTitle);
+    }, [view, openTitle]);
     if (!columns || !all || !comments || !files) return null;
 
     const tasks = all.filter(isTask);
@@ -319,25 +448,64 @@
         { links: [...t.links.filter((l) => l.rel !== 'in'), ...columnLinks(to.lane)] },
       );
     };
+    const startColumns = async () => {
+      let position = null;
+      for (const name of ['To do', 'Doing', 'Done']) {
+        position = positionBetween(position);
+        await minca.put(COLUMN, { name, position });
+      }
+    };
+
+    if (view) {
+      const opened = tasks.find((t) => t.key === view);
+      if (!opened)
+        return html`<${Empty}
+          shape="checker"
+          colour="lilac"
+          title="This card isn't here"
+          text="It may have been deleted."
+        />`;
+      const parent = tasks.find((t) => t.key === linkOf(opened, 'parent'));
+      return html`<${CardPage}
+        key=${opened.key}
+        task=${opened}
+        parent=${parent ?? null}
+        lanes=${lanes.filter((l) => l.record)}
+        lane=${laneOf(opened)}
+        checklist=${childrenOf(opened.key)}
+        onMove=${(lane) => move(opened.key, { lane, before: null })}
+        go=${go}
+      />`;
+    }
+
+    if (cols.length === 0 && cards.length === 0)
+      return html`<${Empty}
+        shape="checker"
+        colour="lilac"
+        title="No board yet"
+        text="Columns for each stage of the work, and cards that move along them."
+      >
+        ${mayAddColumn && html`<button data-variant="primary" onClick=${startColumns}>Start with To do, Doing, Done</button>`}
+      </${Empty}>`;
+
     const endDrag = () => {
       setDragging(null);
       setDrop(null);
     };
     const overCard = (event, lane, key) => {
-      if (!dragging) return;
+      if (!dragged.current) return;
       event.preventDefault();
       event.stopPropagation();
       const box = event.currentTarget.getBoundingClientRect();
       const before = event.clientY < box.top + box.height / 2 ? key : nextIn(lane, key);
-      if (drop?.lane !== lane || drop.before !== before) setDrop({ lane, before });
+      if (landed.current?.lane !== lane || landed.current.before !== before) setDrop({ lane, before });
     };
     const landing = (lane, before) => dragging !== null && drop?.lane === lane && drop.before === before;
-    const opened = tasks.find((t) => t.key === openKey);
 
     return html`<div>
       ${
         assigned.length > 0 &&
-        html`<div class="toolbar" role="group" aria-label="Show the cards of">
+        html`<div class="toolbar scroll-x" role="group" aria-label="Show the cards of">
           <button class="chip" aria-pressed=${only === null} onClick=${() => setOnly(null)}>Everyone</button>
           ${
             assigned.includes(me) &&
@@ -346,7 +514,7 @@
               aria-pressed=${only === me}
               onClick=${() => setOnly(only === me ? null : me)}
             >
-              Assigned to me
+              Mine
             </button>`
           }
           ${assigned
@@ -355,13 +523,11 @@
               (did) =>
                 html`<button
                   key=${did}
-                  class="face-filter"
+                  class="chip"
                   aria-pressed=${only === did}
-                  title=${nameIn(people, did)}
-                  aria-label=${`Only ${nameIn(people, did)}'s cards`}
                   onClick=${() => setOnly(only === did ? null : did)}
                 >
-                  <${Avatar} did=${did} size=${26} round />
+                  <${Avatar} did=${did} size=${20} round /> ${nameIn(people, did)}
                 </button>`,
             )}
         </div>`
@@ -374,14 +540,16 @@
               key=${lane.key}
               aria-label=${lane.name}
               onDragOver=${(event) => {
-                if (!dragging) return;
+                if (!dragged.current) return;
                 event.preventDefault();
-                if (drop?.lane !== lane.key || drop.before !== null)
+                if (landed.current?.lane !== lane.key || landed.current.before !== null)
                   setDrop({ lane: lane.key, before: null });
               }}
               onDrop=${(event) => {
                 event.preventDefault();
-                if (dragging && drop) move(dragging, drop);
+                const to =
+                  landed.current?.lane === lane.key ? landed.current : { lane: lane.key, before: null };
+                if (dragged.current) move(dragged.current, to);
                 endDrag();
               }}
             >
@@ -392,7 +560,7 @@
               />
               ${tasksIn(lane.key).map(
                 (t) =>
-                  html`<div key=${t.key}>
+                  html`<div key=${t.key} class="stack" style="gap: 8px">
                     ${landing(lane.key, t.key) && html`<div class="marker" aria-hidden="true"></div>`}
                     <${Card}
                       task=${t}
@@ -400,7 +568,7 @@
                       comments=${countAbout(comments, t.key)}
                       files=${countAbout(files, t.key)}
                       faded=${dragging === t.key}
-                      onOpen=${() => setOpenKey(t.key)}
+                      onOpen=${() => go(t.key, t.body.title)}
                       onDragStart=${() => setDragging(t.key)}
                       onDragEnd=${endDrag}
                       onDragOver=${(event) => overCard(event, lane.key, t.key)}
@@ -408,6 +576,12 @@
                   </div>`,
               )}
               ${landing(lane.key, null) && html`<div class="marker" aria-hidden="true"></div>`}
+              ${
+                tasksIn(lane.key).length === 0 &&
+                addingTo !== lane.key &&
+                !landing(lane.key, null) &&
+                html`<div class="lane-empty">${only ? 'None of theirs here' : 'No cards yet'}</div>`
+              }
               ${
                 mayAddTask &&
                 (addingTo === lane.key
@@ -449,19 +623,6 @@
           </div>`
         }
       </div>
-      ${
-        opened &&
-        html`<${CardView}
-          key=${opened.key}
-          task=${opened}
-          lanes=${lanes.filter((l) => l.record)}
-          lane=${laneOf(opened)}
-          checklist=${childrenOf(opened.key)}
-          onMove=${(lane) => move(opened.key, { lane, before: null })}
-          onOpen=${setOpenKey}
-          onClose=${() => setOpenKey(null)}
-        />`
-      }
     </div>`;
   }
 
@@ -473,7 +634,8 @@
     const [renaming, setRenaming] = useState(false);
     if (!lane.record)
       return html`<header>
-        <span class="muted" style="flex: 1">${lane.name}</span><span class="faint">${count}</span>
+        <span class="muted" style="flex: 1; font-weight: 600">${lane.name}</span
+        ><span class="count">${count}</span>
       </header>`;
     return html`<header>
       ${
@@ -488,21 +650,22 @@
               }}
             />`
           : html`<button
+              class="name"
               title=${mayRename ? 'Rename this column' : undefined}
               disabled=${!mayRename}
-              style="opacity: 1"
               onClick=${() => setRenaming(true)}
             >
               ${lane.name}
             </button>`
       }
-      <span class="faint">${count}</span>
+      ${!renaming && html`<span class="count">${count}</span>`}
       ${
         mayDelete &&
         empty &&
         !renaming &&
         html`<button
-          class="quiet"
+          data-variant="ghost"
+          data-icon
           title="Delete this empty column"
           aria-label="Delete this column"
           onClick=${() => minca.remove(key)}
@@ -528,7 +691,7 @@
       type="button"
       class="task"
       data-key=${task.key}
-      draggable=${mayMove}
+      draggable=${canDrag && mayMove}
       style=${{ opacity: faded ? 0.4 : 1 }}
       onDragStart=${(event) => {
         event.dataTransfer.effectAllowed = 'move';
@@ -560,8 +723,8 @@
     </button>`;
   }
 
-  /** A card opened: everything on it, each part changed where it is shown */
-  function CardView({ task, lanes, lane, checklist, onMove, onOpen, onClose }) {
+  /** A card opened, one level in: everything on it, each part changed where it is shown */
+  function CardPage({ task, parent, lanes, lane, checklist, onMove, go }) {
     const people = usePeople() ?? [];
     const mayEdit = useMay('edit', task.key) !== false;
     const mayDelete = useMay('delete', task.key) === true;
@@ -569,6 +732,7 @@
     const [title, setTitle] = useState(task.body.title);
     const [notes, setNotes] = useState(task.body.notes ?? '');
     const [error, setError] = useState(null);
+    const [deleting, setDeleting] = useState(false);
     const fileInput = useRef(null);
     // What someone else changed shows, unless this person is changing it too
     useEffect(() => setTitle(task.body.title), [task.body.title]);
@@ -581,33 +745,58 @@
       return minca.update(task.key, body).catch((e) => setError(e.message));
     };
     const assignees = assigneesOf(task);
-    const parent = linkOf(task, 'parent');
     const due = dayOf(task.body.due);
     const done = checklist.filter((c) => c.body.status === 'done').length;
+    const remove = async () => {
+      // Its checklist first, so nothing is left under a card that is gone
+      await Promise.allSettled(checklist.map((item) => minca.remove(item.key)));
+      await minca.remove(task.key);
+      if (parent) go(parent.key, parent.body.title);
+      else go(null);
+    };
 
-    return html`<${Modal} title=${parent ? 'Checklist item' : 'Card'} onClose=${onClose} width=${600}>
+    return html`<div class="page">
+      ${
+        parent &&
+        html`<button class="part-of" onClick=${() => go(parent.key, parent.body.title)}>
+          On the card <b>${parent.body.title}</b>
+        </button>`
+      }
       <input
         class="card-title"
         value=${title}
         readonly=${!mayEdit}
         aria-label="Title"
+        maxlength="200"
         onInput=${(e) => setTitle(e.currentTarget.value)}
         onKeyDown=${(e) => e.key === 'Enter' && e.currentTarget.blur()}
         onBlur=${() => title.trim() && title.trim() !== task.body.title && set('title', title.trim())}
       />
-      ${parent && html`<button style="align-self: flex-start" onClick=${() => onOpen(parent)}>‹ Back to its card</button>`}
-      <div class="fields">
-        ${
-          !parent &&
-          lanes.length > 0 &&
-          html`<span class="label">Column</span>
-            <select value=${lane} disabled=${!mayEdit} onChange=${(e) => onMove(e.currentTarget.value)}>
-              ${lane === LOOSE && html`<option value="">No column</option>`}
-              ${lanes.map((l) => html`<option key=${l.key} value=${l.key}>${l.name}</option>`)}
-            </select>`
-        }
+      ${
+        !parent &&
+        lanes.length > 0 &&
+        html`<div class="field">
+          <span class="label">Column</span>
+          <div class="row chips scroll-x" role="group" aria-label="Move to">
+            ${lane === LOOSE && html`<button class="chip" aria-pressed="true" disabled>No column</button>`}
+            ${lanes.map(
+              (l) =>
+                html`<button
+                  key=${l.key}
+                  class="chip"
+                  aria-pressed=${l.key === lane}
+                  disabled=${!mayEdit}
+                  onClick=${() => l.key !== lane && onMove(l.key)}
+                >
+                  ${l.name}
+                </button>`,
+            )}
+          </div>
+        </div>`
+      }
+      <div class="field">
         <span class="label">Members</span>
-        <div class="row" style="flex-wrap: wrap; gap: 6px">
+        <div class="row chips scroll-x">
           ${people.map(
             (p) =>
               html`<button
@@ -625,20 +814,29 @@
               </button>`,
           )}
         </div>
+      </div>
+      <div class="field">
         <span class="label">Due</span>
         <div class="row">
           <input
             type="date"
             value=${due ?? ''}
             disabled=${!mayEdit}
-            style="max-width: 180px"
+            style="max-width: 200px"
             onChange=${(e) => set('due', e.currentTarget.value)}
           />
           ${due && due < today() && html`<span class="late" style="font-size: 13px">Overdue</span>`}
         </div>
+      </div>
+      <div class="field">
         <span class="label">Priority</span>
-        <div class="row" style="flex-wrap: wrap; gap: 6px">
-          <button class="chip" aria-pressed=${!task.body.priority} disabled=${!mayEdit} onClick=${() => set('priority', null)}>
+        <div class="row chips scroll-x">
+          <button
+            class="chip"
+            aria-pressed=${!task.body.priority}
+            disabled=${!mayEdit}
+            onClick=${() => set('priority', null)}
+          >
             None
           </button>
           ${PRIORITIES.map(
@@ -655,7 +853,7 @@
           )}
         </div>
       </div>
-      <div class="stack" style="gap: 6px">
+      <div class="field">
         <span class="label">Description</span>
         <textarea
           rows="4"
@@ -668,7 +866,7 @@
       </div>
       ${
         !parent &&
-        html`<div class="stack" style="gap: 6px">
+        html`<div class="field">
           <div class="row">
             <span class="label" style="flex: 1">Checklist</span>
             ${checklist.length > 0 && html`<span class="faint">${done}/${checklist.length}</span>`}
@@ -679,30 +877,41 @@
               <span style=${{ width: `${(done / checklist.length) * 100}%` }}></span>
             </div>`
           }
-          ${checklist.map((item) => html`<${CheckItem} key=${item.key} item=${item} onOpen=${() => onOpen(item.key)} />`)}
           ${
-            mayAddItem &&
-            html`<${OneLine}
-              placeholder="Add an item"
-              still
-              onDone=${() => {}}
-              onSubmit=${(itemTitle) =>
-                minca.put(
-                  TASK,
-                  {
-                    title: itemTitle,
-                    status: 'todo',
-                    position: positionBetween(checklist.at(-1)?.body.position),
-                  },
-                  { links: [{ rel: 'parent', to: task.key }] },
-                )}
-            />`
+            (checklist.length > 0 || mayAddItem) &&
+            html`<ul class="rows" aria-label="Checklist">
+              ${checklist.map(
+                (item) =>
+                  html`<${CheckItem}
+                    key=${item.key}
+                    item=${item}
+                    onOpen=${() => go(item.key, item.body.title)}
+                  />`,
+              )}
+              ${
+                mayAddItem &&
+                html`<li class="item">
+                  <${AddItem}
+                    onAdd=${(itemTitle) =>
+                      minca.put(
+                        TASK,
+                        {
+                          title: itemTitle,
+                          status: 'todo',
+                          position: positionBetween(checklist.at(-1)?.body.position),
+                        },
+                        { links: [{ rel: 'parent', to: task.key }] },
+                      )}
+                  />
+                </li>`
+              }
+            </ul>`
           }
         </div>`
       }
       ${
         has(FILE) &&
-        html`<div class="stack" style="gap: 6px">
+        html`<div class="field">
           <div class="row">
             <span class="label" style="flex: 1">Attachments</span>
             <button onClick=${() => fileInput.current?.click()}>Attach a file</button>
@@ -720,72 +929,77 @@
           <${Attachments} about=${task.key} />
         </div>`
       }
-      ${error && html`<p class="error">${error}</p>`}
-      ${has(COMMENT) && html`<${Comments} about=${task} />`}
-      <div class="row">
+      ${error && html`<p class="error">${error}</p>`} ${has(COMMENT) && html`<${Comments} about=${task} />`}
+      <div class="row" style="flex-wrap: wrap">
         <span class="faint" style="flex: 1">Added by <${Person} did=${task.createdBy} face=${false} /></span>
         ${
           mayDelete &&
-          html`<button
-            data-variant="danger"
-            onClick=${async () => {
-              // Its checklist first, so nothing is left under a card that is gone
-              await Promise.allSettled(checklist.map((item) => minca.remove(item.key)));
-              await minca.remove(task.key);
-              onClose();
-            }}
-          >
-            Delete ${parent ? 'item' : 'card'}
-          </button>`
+          (deleting
+            ? html`<button data-variant="danger" onClick=${remove}>Delete for everyone</button>
+                <button data-variant="ghost" onClick=${() => setDeleting(false)}>Keep it</button>`
+            : html`<button data-variant="ghost" onClick=${() => setDeleting(true)}>
+                Delete ${parent ? 'item' : 'card'}
+              </button>`)
         }
       </div>
-    </${Modal}>`;
+    </div>`;
   }
 
   /** One item of a card's checklist: ticked here, or opened as a task of its own */
   function CheckItem({ item, onOpen }) {
     const mayEdit = useMay('edit', item.key) !== false;
-    const mayDelete = useMay('delete', item.key) === true;
     const isDone = item.body.status === 'done';
-    return html`<div class="check" data-done=${isDone}>
-      <input
-        type="checkbox"
-        checked=${isDone}
-        disabled=${!mayEdit}
+    return html`<li class="item" data-done=${isDone}>
+      <button
+        class="tick"
+        role="checkbox"
+        aria-checked=${isDone}
         aria-label=${isDone ? 'Not done' : 'Done'}
-        onChange=${() => minca.update(item.key, { ...item.body, status: isDone ? 'todo' : 'done' })}
-      />
+        disabled=${!mayEdit}
+        onClick=${() => minca.update(item.key, { ...item.body, status: isDone ? 'todo' : 'done' })}
+      >
+        ${isDone && tickIcon}
+      </button>
       <span>${item.body.title}</span>
-      ${assigneesOf(item).map((did) => html`<${Avatar} key=${did} did=${did} size=${18} round />`)}
+      ${assigneesOf(item).map((did) => html`<${Avatar} key=${did} did=${did} size=${20} round />`)}
       <button data-variant="ghost" data-icon aria-label="Open this item" onClick=${onOpen}>›</button>
-      ${
-        mayDelete &&
-        html`<button
-          data-variant="ghost"
-          data-icon
-          aria-label="Delete this item"
-          onClick=${() => minca.remove(item.key)}
-        >
-          ✕
-        </button>`
-      }
-    </div>`;
+    </li>`;
+  }
+
+  /** The checklist's last row: Enter adds, and the field stays for the next */
+  function AddItem({ onAdd }) {
+    const [text, setText] = useState('');
+    return html`<form
+      onSubmit=${(e) => {
+        e.preventDefault();
+        if (!text.trim()) return;
+        onAdd(text.trim());
+        setText('');
+      }}
+    >
+      <span class="plus" aria-hidden="true">+</span>
+      <input
+        value=${text}
+        placeholder="Add an item"
+        aria-label="Add an item"
+        maxlength="200"
+        enterkeyhint="next"
+        onInput=${(e) => setText(e.currentTarget.value)}
+      />
+      ${text.trim() && html`<button type="submit" data-variant="primary">Add</button>`}
+    </form>`;
   }
 
   /**
    * A one-line input that adds on Enter and stays open for the next. It takes
-   * the cursor and closes on Escape or when left, unless it is `still`: always
-   * there, like a checklist's last line.
+   * the cursor and closes on Escape or when left empty.
    */
-  function OneLine({ placeholder, onSubmit, onDone, initial = '', still = false }) {
+  function OneLine({ placeholder, onSubmit, onDone, initial = '' }) {
     const [text, setText] = useState(initial);
     // autofocus only works on what the page loads with, not on what is added later
     const input = useRef(null);
-    useEffect(() => {
-      if (!still) input.current?.select();
-    }, []);
+    useEffect(() => input.current?.select(), []);
     return html`<form
-      style="flex: 1"
       onSubmit=${(event) => {
         event.preventDefault();
         if (text.trim()) onSubmit(text.trim());
@@ -795,6 +1009,8 @@
       <input
         ref=${input}
         value=${text}
+        maxlength="200"
+        enterkeyhint=${initial ? 'done' : 'next'}
         onInput=${(event) => setText(event.currentTarget.value)}
         onKeyDown=${(event) => event.key === 'Escape' && onDone()}
         onBlur=${() => (!text.trim() || initial) && onDone()}

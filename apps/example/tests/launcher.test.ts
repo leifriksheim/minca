@@ -28,6 +28,8 @@ import {
   EXAMPLE_APP,
   firstApp,
   launcherApp,
+  outdated,
+  updateTemplate,
   moveApp,
   prepareLauncher,
   removeApp,
@@ -164,6 +166,61 @@ describe('the launcher', () => {
     );
     assert.ok((await definedFor(bob.node)).includes(message.name));
     assert.deepEqual(titles((await launcherOf(alice.node, space)).placed), ['chat'], 'placed once');
+  });
+
+  test('an older copy of a ready-made app is brought up to date in its place, keeping what was filled in', async () => {
+    const { alice, space } = await setup();
+    const old: Template = {
+      ...CHAT,
+      app: { ...CHAT.app, screen: '<p>old</p>', settings: [{ key: 'giphy', title: 'GIPHY key' }] },
+    };
+    await addTemplate(
+      alice.node,
+      space,
+      { ...CHAT, app: { ...CHAT.app, template: 'first', title: 'First' } },
+      [],
+    );
+    await addTemplate(alice.node, space, old, (await launcherOf(alice.node, space)).placed);
+    const placed = (await launcherOf(alice.node, space)).placed;
+    const copy = placed.find((record) => record.body?.template === 'chat')!;
+    await saveSettings(alice.node, space, copy, { giphy: 'key-1' });
+
+    // The app now has a new screen, a new setting, and uses a collection the space doesn't have yet.
+    const now: Template = {
+      ...CHAT,
+      app: {
+        ...CHAT.app,
+        screen: '<p>new</p>',
+        collections: [message.name, task.name],
+        settings: [
+          { key: 'giphy', title: 'GIPHY key' },
+          { key: 'theme', title: 'Theme' },
+        ],
+      },
+      needs: [message, task],
+    };
+    const before = (await launcherOf(alice.node, space)).placed.find((record) => record.key === copy.key)!;
+    assert.equal(outdated(before, now), true);
+    assert.equal(
+      outdated(before, { ...old, app: { ...old.app } }),
+      false,
+      'a value filled in is not a difference',
+    );
+
+    await updateTemplate(alice.node, space, before, now);
+    const after = (await launcherOf(alice.node, space)).placed;
+    const updated = after.find((record) => record.key === copy.key)!;
+    assert.equal(updated.body?.screen, '<p>new</p>');
+    assert.deepEqual(updated.body?.settings, [
+      { key: 'giphy', title: 'GIPHY key', value: 'key-1' },
+      { key: 'theme', title: 'Theme' },
+    ]);
+    assert.deepEqual(
+      titles(after),
+      ['First', 'chat'],
+      'where it was, and still standing: its new collection is defined',
+    );
+    assert.equal(outdated(updated, now), false);
   });
 
   test('adding a ready-made app copies it into the space once, with its collections and first records', async () => {

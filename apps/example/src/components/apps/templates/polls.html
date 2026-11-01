@@ -99,8 +99,20 @@
   }
 </style>
 <script>
-  const { html, render, useState, useEffect, useRef, useRecords, useCan, useMarked, usePeople, Person, ago } =
-    ui;
+  const {
+    html,
+    render,
+    useState,
+    useEffect,
+    useRef,
+    useRecords,
+    useCan,
+    useMarked,
+    usePeople,
+    Person,
+    Empty,
+    ago,
+  } = ui;
   const POLL = 'std.poll';
   const VOTE = 'std.vote';
   const me = minca.me.did;
@@ -126,7 +138,8 @@
                 setAsking(false);
               }}
             />`
-          : html`<button
+          : polls.length > 0 &&
+            html`<button
               data-variant="primary"
               style="align-self: flex-start"
               onClick=${() => setAsking(true)}
@@ -137,7 +150,9 @@
       ${
         polls.length === 0 &&
         !asking &&
-        html`<p class="empty">No polls yet.${mayAsk ? ' Ask the space something.' : ''}</p>`
+        html`<${Empty} shape="wave" colour="coral" title="No polls yet" text="Ask the group something, and see what everyone picks.">
+          ${mayAsk && html`<button data-variant="primary" onClick=${() => setAsking(true)}>New poll</button>`}
+        </${Empty}>`
       }
       ${newest.map(
         (poll) =>

@@ -393,6 +393,56 @@ export async function saveSettings(
   await node.records.update<LauncherApp>(spaceId, record.key, { ...body, settings }, { links: record.links });
 }
 
+/** What a ready-made app is, apart from where it sits and the values filled in for its settings */
+const madeOf = (app: LauncherApp) =>
+  JSON.stringify({
+    title: app.title,
+    description: app.description,
+    collections: app.collections,
+    shows: app.shows,
+    notify: app.notify,
+    screen: app.screen,
+    network: app.network,
+    settings: app.settings?.map(({ value: _, ...setting }) => setting),
+  });
+
+/**
+ * Whether a space's copy of a ready-made app is not the one this app now has: the space keeps the copy
+ * made when it was added, so a better screen reaches it only when someone who may add apps updates it.
+ */
+export const outdated = (record: NodeRecord<LauncherApp>, template: Template): boolean =>
+  !!record.body && madeOf(record.body) !== madeOf(template.app);
+
+/**
+ * Brings a space's copy of a ready-made app to the one this app has: defines whatever new collections
+ * it uses, then writes it in place of the old, where it was on the launcher, with what was filled in for
+ * its settings. Anything someone changed in the space's copy is replaced.
+ */
+export async function updateTemplate(
+  node: P2PNode,
+  spaceId: string,
+  record: NodeRecord<LauncherApp>,
+  template: Template,
+): Promise<void> {
+  const was = record.body;
+  if (!was) throw new Error('This app could not be read');
+  await addSchemas(node, spaceId, [...template.needs, ...(template.uses ?? [])]);
+  const settings = template.app.settings?.map((setting) => {
+    const value = was.settings?.find((old) => old.key === setting.key)?.value;
+    return value === undefined ? setting : { ...setting, value };
+  });
+  await node.records.update<LauncherApp>(
+    spaceId,
+    record.key,
+    {
+      ...template.app,
+      ...(was.position !== undefined ? { position: was.position } : {}),
+      ...(settings ? { settings } : {}),
+    },
+    { links: record.links },
+  );
+}
+
 /** The ready-made app for direct messages, which the app draws itself rather than in a screen */
 export const DIRECT = 'direct';
 

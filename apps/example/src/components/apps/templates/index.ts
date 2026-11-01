@@ -116,7 +116,7 @@ export const TEMPLATES: ReadonlyArray<Template> = [
     app: {
       template: 'lists',
       title: 'Lists',
-      description: 'To-dos, groceries, packing: lists anyone can write in at once, a line each.',
+      description: 'To-dos, groceries, packing: lists everyone in the group can tick and add to.',
       collections: [list.name, listItem.name],
       shows: [list.name],
       notify: [notifyOn('New list', list.name)],

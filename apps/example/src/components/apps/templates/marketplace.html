@@ -4,17 +4,36 @@
   seller's answers count. Questions are std.comments on the listing.
 -->
 <style>
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-    gap: 24px 16px;
+  .market {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-width: 1080px;
+    margin: 0 auto;
+    padding-bottom: 48px;
+  }
+  .top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .top .tabs {
+    flex-shrink: 1;
+    min-width: 0;
   }
   .tools {
     display: flex;
     gap: 8px;
   }
+  .tools input {
+    flex: 1;
+    min-width: 0;
+    border-radius: var(--minca-radius-pill);
+    padding-left: 16px;
+  }
   .tools select {
     width: auto;
+    border-radius: var(--minca-radius-pill);
   }
   .count {
     display: inline-flex;
@@ -29,30 +48,48 @@
     font-size: 11px;
     font-weight: 600;
   }
+  /* The things for sale: ruled cards, a square photo and what it costs under it */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 16px;
+  }
   .item {
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: 8px;
+    gap: 0;
     min-height: 0;
     padding: 0;
-    border: none;
-    background: none;
+    overflow: hidden;
+    border: 1px solid var(--minca-rule);
+    border-radius: var(--minca-radius-lg);
+    background: var(--minca-card);
     font-weight: 400;
     text-align: left;
   }
   .item:hover {
-    background: none;
-  }
-  .photo {
-    aspect-ratio: 1 / 1;
-    width: 100%;
-    border-radius: var(--minca-radius-lg);
-    object-fit: cover;
-    transition: filter 0.2s ease;
+    background: var(--minca-card);
   }
   .item:hover .photo {
     filter: brightness(0.96);
+  }
+  .item .about {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    padding: 10px 12px 12px;
+  }
+  .photo {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    transition: filter 0.2s ease;
+  }
+  .frame {
+    position: relative;
   }
   .sold {
     opacity: 0.55;
@@ -74,6 +111,7 @@
   .pill.right {
     right: 10px;
     background: var(--minca-accent);
+    border-color: var(--minca-accent);
     color: var(--minca-card);
   }
   .price {
@@ -87,20 +125,105 @@
   .name {
     font-size: 14px;
     line-height: 1.35;
+    color: var(--minca-body);
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
     word-break: break-word;
   }
+  /* One listing: its photos beside what it is, one above the other on a phone */
   .detail {
     display: grid;
     grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
     gap: 32px;
     align-items: start;
   }
-  .detail .photo {
+  .gallery {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+  .slides {
+    position: relative;
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    border: 1px solid var(--minca-rule);
+    border-radius: var(--minca-radius-lg);
+    background: var(--minca-sunken);
+  }
+  .slides::-webkit-scrollbar {
+    display: none;
+  }
+  .slides > * {
+    flex: 0 0 100%;
+    scroll-snap-align: center;
+  }
+  .slides .photo,
+  .slides .cover {
     aspect-ratio: 4 / 3;
+  }
+  .slides .cover {
+    border-radius: 0;
+  }
+  .counter {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    padding: 2px 9px;
+    border-radius: var(--minca-radius-pill);
+    background: rgba(19, 33, 74, 0.6);
+    color: var(--minca-card);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .thumbs {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .thumbs button {
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--minca-line);
+    border-radius: var(--minca-radius-md);
+    background: var(--minca-sunken);
+  }
+  .thumbs button[aria-current='true'] {
+    border-color: var(--minca-rule);
+    box-shadow: 0 0 0 1px var(--minca-rule);
+  }
+  .thumbs img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+  }
+  .facts {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    min-width: 0;
+  }
+  /* Ruled boxes, as the app's lists are: the seller, the requests */
+  .box {
+    overflow: hidden;
+    border: 1px solid var(--minca-rule);
+    border-radius: var(--minca-radius-lg);
+    background: var(--minca-card);
+  }
+  .box > * + * {
+    border-top: 1px solid var(--minca-line);
+  }
+  .box-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
   }
   .state {
     padding: 16px;
@@ -152,22 +275,110 @@
   .dark:hover {
     background: var(--minca-accent);
   }
-  .requests > div + div {
-    border-top: 1px solid var(--minca-line);
-  }
   .text {
     white-space: pre-wrap;
     word-break: break-word;
   }
+  /* Photos in the form: a square each, and a dashed one to add more */
+  .picks {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+    gap: 8px;
+  }
+  .pick {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    border: 1px solid var(--minca-line);
+    border-radius: var(--minca-radius-md);
+    background: var(--minca-sunken);
+  }
+  .pick img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .pick[data-busy] img {
+    opacity: 0.5;
+  }
+  .pick .remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 24px;
+    height: 24px;
+    min-height: 0;
+    padding: 0;
+    border: none;
+    background: rgba(19, 33, 74, 0.65);
+    color: var(--minca-card);
+    font-size: 14px;
+  }
+  .pick .first {
+    position: absolute;
+    left: 4px;
+    bottom: 4px;
+    padding: 1px 7px;
+    border-radius: var(--minca-radius-pill);
+    background: var(--minca-card);
+    color: var(--minca-ink);
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .add-photo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    aspect-ratio: 1 / 1;
+    border: 1.5px dashed var(--minca-line-strong);
+    border-radius: var(--minca-radius-md);
+    color: var(--minca-muted);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .add-photo:hover,
+  .picks[data-over] .add-photo {
+    border-color: var(--minca-accent);
+    color: var(--minca-accent);
+  }
+  .add-photo b {
+    font-size: 22px;
+    font-weight: 400;
+    line-height: 1;
+  }
+  .add-photo input {
+    display: none;
+  }
   @media (max-width: 760px) {
     .detail {
       grid-template-columns: minmax(0, 1fr);
+      gap: 20px;
+    }
+    /* On a phone the photos run edge to edge, swiped through one at a time */
+    .gallery {
+      margin: -16px -16px 0;
+    }
+    .slides {
+      border: none;
+      border-radius: 0;
+    }
+    .thumbs {
+      display: none;
     }
   }
   @media (max-width: 640px) {
     .grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 18px 10px;
+      gap: 10px;
+    }
+    .item .about {
+      padding: 8px 10px 10px;
+    }
+    .top .sell-label {
+      display: none;
     }
   }
 </style>
@@ -187,9 +398,9 @@
     Avatar,
     Comments,
     Modal,
+    Empty,
   } = ui;
   const {
-    Shape,
     Cover,
     PlaceField,
     NearButton,
@@ -368,8 +579,9 @@
       .reduce((n, l) => n + l.requests.filter((r) => answerTo(r, l) === 'waiting').length, 0);
     const filtered = words || category || freeOnly;
 
-    return html`<div class="stack" style="gap: 18px">
-      <div class="row" style="gap: 12px; flex-wrap: wrap">
+    const sell = () => setEditing('new');
+    return html`<div class="market">
+      <div class="top">
         <div class="tabs" role="tablist" aria-label="Marketplace">
           ${[
             ['browse', 'Browse'],
@@ -383,27 +595,30 @@
           )}
         </div>
         <span style="flex: 1"></span>
-        ${maySell && html`<button data-variant="primary" onClick=${() => setEditing('new')}>+ Sell something</button>`}
-      </div>
-
-      <div class="tools">
-        <input
-          type="search"
-          value=${search}
-          onInput=${(e) => setSearch(e.currentTarget.value)}
-          placeholder="Search the marketplace"
-          aria-label="Search"
-        />
-        <select value=${sort} onChange=${(e) => setSort(e.currentTarget.value)} aria-label="Sort">
-          <option value="new">Newest first</option>
-          ${near && html`<option value="near">Nearest first</option>`}
-          <option value="cheap">Price: low to high</option>
-          <option value="dear">Price: high to low</option>
-        </select>
+        ${maySell && html`<button data-variant="primary" onClick=${sell} aria-label="Sell something">+<span class="sell-label"> Sell</span></button>`}
       </div>
 
       ${
+        listings.length > 0 &&
+        html`<div class="tools">
+          <input
+            type="search"
+            value=${search}
+            onInput=${(e) => setSearch(e.currentTarget.value)}
+            placeholder="Search"
+            aria-label="Search"
+          />
+          <select value=${sort} onChange=${(e) => setSort(e.currentTarget.value)} aria-label="Sort">
+            <option value="new">Newest</option>
+            ${near && html`<option value="near">Nearest</option>`}
+            <option value="cheap">Cheapest</option>
+            <option value="dear">Priciest</option>
+          </select>
+        </div>`
+      }
+      ${
         view === 'browse' &&
+        listings.length > 0 &&
         html`<div class="scroll-x" role="group" aria-label="Categories">
           <${NearButton} near=${near} onChange=${setNear} />
           <span class="divider" aria-hidden="true"></span>
@@ -435,21 +650,27 @@
       }
       ${
         shown.length === 0
-          ? html`<div class="empty stack" style="align-items: center; gap: 12px">
-              <${Shape} kind="leaf" colour="cobalt" size=${40} />
-              <span>
-                ${
-                  filtered
-                    ? 'Nothing matches.'
-                    : view === 'selling'
-                      ? "You aren't selling anything."
-                      : view === 'buying'
-                        ? "You haven't asked for anything yet."
-                        : 'Nothing for sale yet.'
-                }
-              </span>
-              ${maySell && view !== 'buying' && !filtered && html`<button data-variant="primary" onClick=${() => setEditing('new')}>Sell something</button>`}
-            </div>`
+          ? filtered
+            ? html`<${Empty}
+                shape="leaf"
+                colour="cobalt"
+                title="Nothing matches"
+                text="Try other words, or another category."
+              />`
+            : view === 'selling'
+              ? html`<${Empty} shape="leaf" colour="peach" title="You aren't selling anything" text="Put up something you no longer need: people here can ask for it.">
+                  ${maySell && html`<button data-variant="primary" onClick=${sell}>Sell something</button>`}
+                </${Empty}>`
+              : view === 'buying'
+                ? html`<${Empty}
+                    shape="leaf"
+                    colour="sage"
+                    title="Nothing asked for yet"
+                    text="Things you ask a seller for show up here."
+                  />`
+                : html`<${Empty} shape="leaf" colour="cobalt" title="Nothing for sale yet" text="Sell, give away or lend things to the people here.">
+                    ${maySell && html`<button data-variant="primary" onClick=${sell}>Sell something</button>`}
+                  </${Empty}>`
           : html`<div class="grid">
               ${shown.map((l) => html`<${ListingCard} key=${l.key} listing=${l} near=${near} onOpen=${() => setOpenKey(l.key)} />`)}
             </div>`
@@ -458,13 +679,14 @@
     </div>`;
   }
 
-  /** The listing's first photo, or a cover in its category's colour when it has none */
-  function Photo({ listing, size, children }) {
-    const photo = useFile(listing.key, listing.body.images?.[0]?.blob);
+  /** One of a listing's photos, or a cover in its category's colour when it has none */
+  function Photo({ listing, at = 0, size = 64, children }) {
+    const image = listing.body.images?.[at];
+    const photo = useFile(listing.key, image?.blob);
     const sold = listing.body.status === 'sold' ? ' sold' : '';
     if (photo)
-      return html`<div style="position: relative">
-        <img class=${`photo${sold}`} src=${photo} alt=${listing.body.images[0].alt ?? ''} />${children}
+      return html`<div class="frame">
+        <img class=${`photo${sold}`} src=${photo} alt=${image.alt ?? ''} loading="lazy" />${children}
       </div>`;
     return html`<${Cover} seed=${listing.key} colour=${kindOf(listing.body.category).colour} size=${size} class=${`photo${sold}`}>${children}</${Cover}>`;
   }
@@ -481,11 +703,47 @@
         ${body.status && body.status !== 'available' && html`<span class="pill left">${body.status === 'sold' ? 'Sold' : 'Reserved'}</span>`}
         ${mineWaiting > 0 && html`<span class="pill right">${mineWaiting} ${mineWaiting === 1 ? 'request' : 'requests'}</span>`}
       </${Photo}>
-      <span class="stack" style="gap: 2px; min-width: 0; padding: 0 2px">
+      <span class="about">
         <strong class=${isFree(body.price) ? 'price free' : 'price'}>${priceLabel(body.price)}</strong>
         <span class="name">${body.title}</span>
-        <span class="faint ellipsis">${[distanceText(near, body.place), placeLabel(body.place), ago(listing.createdAt)].filter(Boolean).join(' · ')}</span>
+        <span class="faint ellipsis">${[distanceText(near, body.place), placeLabel(body.place) || ago(listing.createdAt)].filter(Boolean).join(' · ')}</span>
       </span>
+    </button>`;
+  }
+
+  /**
+   * A listing's photos: swiped through one at a time, each snapping into place, with how far along on the
+   * last one; on a wide screen also a row of them below to pick from.
+   */
+  function Gallery({ listing }) {
+    const count = Math.max(1, listing.body.images?.length ?? 0);
+    const [at, setAt] = useState(0);
+    const strip = useRef(null);
+    const onScroll = (e) => {
+      const el = e.currentTarget;
+      setAt(Math.round(el.scrollLeft / Math.max(1, el.clientWidth)));
+    };
+    const show = (i) => strip.current?.scrollTo({ left: i * strip.current.clientWidth, behavior: 'smooth' });
+    return html`<div class="gallery">
+      <div class="frame">
+        <div class="slides" ref=${strip} onScroll=${onScroll} aria-label="Photos">
+          ${Array.from({ length: count }, (_, i) => html`<div key=${i}><${Photo} listing=${listing} at=${i} size=${140} /></div>`)}
+        </div>
+        ${count > 1 && html`<span class="counter">${at + 1} / ${count}</span>`}
+      </div>
+      ${
+        count > 1 &&
+        html`<div class="thumbs">
+          ${Array.from({ length: count }, (_, i) => html`<${Thumb} key=${i} listing=${listing} at=${i} current=${i === at} onClick=${() => show(i)} />`)}
+        </div>`
+      }
+    </div>`;
+  }
+
+  function Thumb({ listing, at, current, onClick }) {
+    const src = useFile(listing.key, listing.body.images?.[at]?.blob);
+    return html`<button aria-label=${`Photo ${at + 1}`} aria-current=${current} onClick=${onClick}>
+      ${src ? html`<img src=${src} alt="" />` : html`<span style="display: block; aspect-ratio: 1"></span>`}
     </button>`;
   }
 
@@ -500,15 +758,15 @@
     const [confirmDelete, setConfirmDelete] = useState(false);
     const setStatus = (status) => minca.update(listing.key, { ...body, status });
 
-    return html`<div class="stack" style="gap: 20px">
+    return html`<div class="market" style="gap: 24px">
       <div class="detail">
-        <${Photo} listing=${listing} size=${140} />
-        <div class="stack" style="gap: 18px; min-width: 0">
+        <${Gallery} listing=${listing} />
+        <div class="facts">
           <header class="stack" style="gap: 6px">
-            <h1 style="font-size: 26px; word-break: break-word">${body.title}</h1>
-            <strong class=${isFree(body.price) ? 'price free' : 'price'} style="font-size: 22px"
+            <strong class=${isFree(body.price) ? 'price free' : 'price'} style="font-size: 24px"
               >${priceLabel(body.price)}</strong
             >
+            <h1 style="font-size: 22px; word-break: break-word">${body.title}</h1>
             <span class="muted" style="font-size: 13px">
               ${`Listed ${ago(listing.createdAt)}`}${placeLabel(body.place) ? ` in ${placeLabel(body.place)}` : ''}${away ? ` · ${away} away` : ''}
             </span>
@@ -537,7 +795,7 @@
                     )}
                   </div>
                   <div class="row">
-                    <button style="flex: 1" onClick=${onEdit}>Edit listing</button>
+                    <button style="flex: 1" onClick=${onEdit}>Edit</button>
                     <button
                       style="flex: 1"
                       data-variant="danger"
@@ -555,21 +813,34 @@
               : html`<${Ask} listing=${listing} />`
           }
           ${
-            listing.createdBy &&
-            html`<div class="card row" style="gap: 12px; padding: 14px">
-              <${Avatar} did=${listing.createdBy} size=${40} />
-              <span class="stack" style="gap: 2px; min-width: 0">
-                <span class="faint">Seller</span>
-                <strong><${Person} did=${listing.createdBy} face=${false} /></strong>
-              </span>
+            (listing.createdBy || body.place) &&
+            html`<div class="box">
+              ${
+                listing.createdBy &&
+                html`<div class="box-row">
+                  <${Avatar} did=${listing.createdBy} size=${36} />
+                  <span class="stack" style="gap: 0; min-width: 0">
+                    <span class="faint">Seller</span>
+                    <strong><${Person} did=${listing.createdBy} face=${false} /></strong>
+                  </span>
+                </div>`
+              }
+              ${
+                body.place &&
+                html`<div class="box-row">
+                  <span aria-hidden="true" style="width: 36px; text-align: center; font-size: 18px">📍</span>
+                  <span class="stack" style="gap: 0; min-width: 0; flex: 1">
+                    <span class="faint">Pick up in</span>
+                    <strong class="ellipsis">${placeLabel(body.place)}</strong>
+                  </span>
+                  <${MapLink} place=${body.place} />
+                </div>`
+              }
             </div>`
           }
-
-          <${MapLink} place=${body.place} />
-
           ${
             body.description &&
-            html`<section class="stack">
+            html`<section class="stack" style="gap: 6px">
               <h3>Details</h3>
               <p class="text" style="font-size: 15px; line-height: 1.6">${body.description}</p>
             </section>`
@@ -722,10 +993,10 @@
 
     return html`<section class="stack" style="gap: 10px">
       <h3>Requests <span class="faint">${requests.length}</span></h3>
-      <div class="card requests" style="padding: 0; overflow: hidden">
+      <div class="box">
         ${requests.map((r) => {
           const state = answerTo(r, listing);
-          return html`<div key=${r.key} class="row" style="gap: 12px; align-items: flex-start; padding: 14px">
+          return html`<div key=${r.key} class="box-row" style="align-items: flex-start">
             <${Avatar} did=${r.createdBy ?? ''} size=${32} />
             <div class="stack" style="gap: 4px; flex: 1; min-width: 0">
               <span
@@ -757,6 +1028,146 @@
     </section>`;
   }
 
+  /** At most this many photos on a listing, and this large each once made smaller */
+  const MAX_PHOTOS = 6;
+  const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
+  /** A photo is made at most this many pixels on its longest side, and kept as it is when already small */
+  const LONGEST = 1600;
+  const SMALL = 1.5 * 1024 * 1024;
+
+  /** A photo made smaller in the frame (a canvas needs no network), turned the right way up; as it was when it can't be */
+  async function shrink(file) {
+    if (!/^image\/(jpeg|png|webp|heic|heif|avif)$/.test(file.type)) return file;
+    try {
+      const bitmap = await createImageBitmap(file);
+      const scale = Math.min(1, LONGEST / Math.max(bitmap.width, bitmap.height));
+      if (scale === 1 && file.size <= SMALL) {
+        bitmap.close?.();
+        return file;
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(bitmap.width * scale);
+      canvas.height = Math.round(bitmap.height * scale);
+      canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      bitmap.close?.();
+      const blob = await new Promise((done) => canvas.toBlob(done, 'image/jpeg', 0.85));
+      return blob && blob.size < file.size ? blob : file;
+    } catch {
+      return file;
+    }
+  }
+
+  /** A photo in the form: one being kept (just picked, shown from this device), or one the listing has */
+  function PickImage({ photo, listingKey }) {
+    const kept = useFile(listingKey ?? '', photo.url ? null : photo.ref);
+    const src = photo.url ?? kept;
+    return src ? html`<img src=${src} alt="" />` : null;
+  }
+
+  /**
+   * The photos of a listing being written: picked, dropped or pasted, kept in the space as they are added, so
+   * publishing waits only for the last. The first is the one in the grid.
+   */
+  function Photos({ photos, setPhotos, listingKey, onError }) {
+    const [over, setOver] = useState(false);
+    const urls = useRef([]);
+    useEffect(() => () => urls.current.forEach((url) => URL.revokeObjectURL(url)), []);
+    // Read when adding, so files added in one go, or a paste after a pick, count what is already there.
+    const count = useRef(photos.length);
+    count.current = photos.length;
+    const adding = useRef(null);
+    // A photo pasted anywhere while writing the listing is added too.
+    useEffect(() => {
+      const paste = (e) => {
+        const files = [...(e.clipboardData?.files ?? [])].filter((f) => f.type.startsWith('image/'));
+        if (files.length === 0) return;
+        e.preventDefault();
+        adding.current?.(files);
+      };
+      document.addEventListener('paste', paste);
+      return () => document.removeEventListener('paste', paste);
+    }, []);
+    const change = (id, next) =>
+      setPhotos((all) =>
+        next ? all.map((p) => (p.id === id ? { ...p, ...next } : p)) : all.filter((p) => p.id !== id),
+      );
+    const add = (files) => {
+      const images = [...(files ?? [])].filter((f) => f.type.startsWith('image/'));
+      if (images.length === 0) return;
+      const room = MAX_PHOTOS - count.current;
+      count.current += Math.max(0, Math.min(images.length, room));
+      if (images.length > room) onError(`A listing has at most ${MAX_PHOTOS} photos.`);
+      for (const file of images.slice(0, Math.max(0, room))) {
+        const id = `${Date.now()}-${Math.random()}`;
+        const url = URL.createObjectURL(file);
+        urls.current.push(url);
+        setPhotos((all) => [...all, { id, url, busy: true }]);
+        shrink(file)
+          .then(async (blob) => {
+            if (blob.size > MAX_PHOTO_BYTES)
+              throw new Error(`${file.name || 'That photo'} is too large: pick one under 8 MB.`);
+            const name = blob === file ? file.name : `${(file.name || 'photo').replace(/\.[^.]+$/, '')}.jpg`;
+            const ref = await minca.addFile(new Uint8Array(await blob.arrayBuffer()), {
+              name,
+              mime: blob.type || file.type,
+            });
+            change(id, { ref, busy: false });
+          })
+          .catch((error) => {
+            change(id, null);
+            onError(error.message || 'That photo could not be added.');
+          });
+      }
+    };
+    adding.current = add;
+    return html`<div
+      class="picks"
+      data-over=${over || undefined}
+      onDragOver=${(e) => {
+        e.preventDefault();
+        setOver(true);
+      }}
+      onDragLeave=${() => setOver(false)}
+      onDrop=${(e) => {
+        e.preventDefault();
+        setOver(false);
+        add(e.dataTransfer?.files);
+      }}
+    >
+      ${photos.map(
+        (photo, i) =>
+          html`<div class="pick" key=${photo.id} data-busy=${photo.busy || undefined}>
+            <${PickImage} photo=${photo} listingKey=${listingKey} />
+            ${i === 0 && html`<span class="first">Cover</span>`}
+            <button
+              type="button"
+              class="remove"
+              aria-label="Remove photo"
+              onClick=${() => change(photo.id, null)}
+            >
+              ×
+            </button>
+          </div>`,
+      )}
+      ${
+        photos.length < MAX_PHOTOS &&
+        html`<label class="add-photo">
+          <b aria-hidden="true">+</b>
+          <span>${photos.length === 0 ? 'Add photos' : 'Add'}</span>
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            onChange=${(e) => {
+              add(e.currentTarget.files);
+              e.currentTarget.value = '';
+            }}
+          />
+        </label>`
+      }
+    </div>`;
+  }
+
   function Field({ label, children }) {
     return html`<div class="stack" role="group" aria-label=${label} style="gap: 6px">
       <span class="label">${label}</span>${children}
@@ -773,6 +1184,14 @@
     const [currency, setCurrency] = useState(was?.price?.currency ?? 'EUR');
     const [place, setPlace] = useState(was?.place);
     const [description, setDescription] = useState(was?.description ?? '');
+    const [photos, setPhotos] = useState(() =>
+      (was?.images ?? []).map((image, i) => ({
+        id: `kept-${i}-${image.blob?.hash}`,
+        ref: image.blob,
+        alt: image.alt,
+      })),
+    );
+    const [photoError, setPhotoError] = useState(null);
     const [busy, setBusy] = useState(false);
     const first = useRef(null);
     useEffect(() => {
@@ -784,7 +1203,8 @@
 
     const price = String(amount).trim().replace(',', '.');
     const badPrice = !!price && !/^\d{1,9}(\.\d{1,2})?$/.test(price);
-    const ready = !!title.trim() && !!category && !badPrice;
+    const uploading = photos.some((p) => p.busy);
+    const ready = !!title.trim() && !!category && !badPrice && !uploading;
     const chosenCondition = CONDITIONS.find((c) => c.id === condition)?.id;
 
     return html`<${Modal} title=${initial ? 'Edit listing' : 'Sell something'} onClose=${onClose} width=${560}>
@@ -796,8 +1216,11 @@
           if (!ready) return;
           setBusy(true);
           minca.remember('currency', currency);
+          const images = photos
+            .filter((p) => p.ref)
+            .map((p) => ({ blob: p.ref, ...(p.alt ? { alt: p.alt } : {}) }));
           onSave({
-            ...(was?.images ? { images: was.images } : {}),
+            ...(images.length ? { images } : {}),
             title: title.trim(),
             category,
             ...(price && Number(price) > 0 ? { price: { amount: price, currency } } : {}),
@@ -808,6 +1231,15 @@
           }).finally(() => setBusy(false));
         }}
       >
+        <${Field} label="Photos">
+          <${Photos}
+            photos=${photos}
+            setPhotos=${setPhotos}
+            listingKey=${initial?.key}
+            onError=${(text) => setPhotoError(text)}
+          />
+          ${photoError && html`<p class="error">${photoError}</p>`}
+        </${Field}>
         <${Field} label="What are you selling?">
           <input ref=${first} value=${title} onInput=${(e) => setTitle(e.currentTarget.value)} placeholder="Oak dining table, seats six" maxlength="300" />
         </${Field}>
@@ -860,7 +1292,7 @@
         </${Field}>
         <div class="row" style="justify-content: flex-end">
           <button type="button" onClick=${onClose}>Cancel</button>
-          <button type="submit" data-variant="primary" disabled=${!ready || busy}>${busy ? 'Saving…' : initial ? 'Save' : 'Publish'}</button>
+          <button type="submit" data-variant="primary" disabled=${!ready || busy}>${uploading ? 'Adding photos…' : busy ? 'Saving…' : initial ? 'Save' : 'Publish'}</button>
         </div>
       </form>
     </${Modal}>`;

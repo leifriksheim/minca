@@ -143,6 +143,7 @@
     useCan,
     useShown,
     useView,
+    Empty,
     positionBetween,
   } = ui;
   const LIST = 'std.list';
@@ -180,7 +181,9 @@
     const itemsOf = (key) => items.filter((i) => i.body && inList(i) === key).sort(byPosition);
     const open = view && mine.find((l) => l.key === view);
     if (view && !open)
-      return html`<div class="wrap"><p class="empty">This list isn't here any more.</p></div>`;
+      return html`<div class="wrap">
+        <${Empty} shape="tick" colour="peach" title="This list is gone" text="Someone deleted it." />
+      </div>`;
     return open
       ? html`<${List} key=${open.key} list=${open} items=${itemsOf(open.key)} go=${go} />`
       : html`<${Lists} lists=${mine} itemsOf=${itemsOf} go=${go} />`;
@@ -197,7 +200,7 @@
       go(made.key, title);
     };
     return html`<div class="wrap">
-      ${sorted.length === 0 && html`<p class="empty">No lists yet. Start one for groceries, packing or the week.</p>`}
+      ${sorted.length === 0 && html`<${Empty} shape="tick" colour="peach" title="No lists yet" text="Start one for groceries, packing or the week." />`}
       <ul class="rows" aria-label="Lists">
         ${sorted.map((list) => {
           const all = itemsOf(list.key);

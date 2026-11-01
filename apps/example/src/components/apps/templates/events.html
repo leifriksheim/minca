@@ -554,7 +554,7 @@
           )}
         </div>
         <span style="flex: 1"></span>
-        ${mayCreate && html`<button data-variant="primary" onClick=${() => setEditing('new')}>+ Create event</button>`}
+        ${mayCreate && events.length > 0 && html`<button data-variant="primary" onClick=${() => setEditing('new')}>+ Create event</button>`}
       </div>
       ${
         view !== 'mine' &&
@@ -1037,16 +1037,14 @@
   /** Nothing to show, said for the tab it is on */
   function Empty({ view, mayCreate, filtered, onCreate }) {
     const said = {
-      upcoming: 'Nothing coming up yet.',
-      mine: "You haven't said you're going to anything yet.",
-      hosting: "You aren't hosting anything.",
-      past: 'No past events.',
+      upcoming: 'Nothing coming up yet',
+      mine: "You haven't said you're going to anything",
+      hosting: "You aren't hosting anything",
+      past: 'No past events',
     };
-    return html`<div class="empty stack" style="align-items: center; gap: 12px">
-      <${Shape} kind="flower" colour="sage" size=${40} />
-      <span>${filtered ? 'Nothing of this kind here.' : said[view]}</span>
+    return html`<${ui.Empty} shape="flower" colour="sage" title=${filtered ? 'Nothing of this kind here' : said[view]}>
       ${mayCreate && (view === 'upcoming' || view === 'hosting') && !filtered && html`<button data-variant="primary" onClick=${onCreate}>Create an event</button>`}
-    </div>`;
+    </${ui.Empty}>`;
   }
 
   /** A tear-off calendar page in a cover's corner */

@@ -13,7 +13,8 @@ import { RowMenu } from '../PeopleParts';
 import type { AppEntry, useSpaceApps } from './entries';
 import { AppIcon, Count } from './AppIcon';
 import { Proposals } from './MadeApps';
-import { copyApp, moveApp, removeApp } from './launcher';
+import { copyApp, moveApp, outdated, removeApp, updateTemplate } from './launcher';
+import { TEMPLATES } from './templates';
 import { AppSettings } from './AppSettings';
 import { Icon } from '../Icon';
 import { unreadOf, type Unread } from '../../seen';
@@ -66,6 +67,18 @@ export function AppsView({
     );
   };
 
+  // Ready-made apps this space has an older copy of: someone who may add apps brings them up to date.
+  const stale = mayDefine
+    ? apps.ready.flatMap((app) => {
+        const template = TEMPLATES.find((one) => one.app.template === app.record.body?.template);
+        return template && outdated(app.record, template) ? [{ app, template }] : [];
+      })
+    : [];
+  const update = () =>
+    void arrange.run(async () => {
+      for (const { app, template } of stale) await updateTemplate(node, space.id, app.record, template);
+    });
+
   const move = (app: AppEntry, by: number) => {
     const at = apps.placed.findIndex((record) => record.key === app.record.key);
     void arrange.run(() => moveApp(node, space.id, apps.placed, app.record.key, at + by));
@@ -111,6 +124,19 @@ export function AppsView({
             )}
           </div>
         </div>
+
+        {stale.length > 0 && !arranging && (
+          <div style={updateNote}>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              {stale.length === 1
+                ? `A new version of ${stale[0]!.app.title} is ready.`
+                : `New versions of ${stale.map(({ app }) => app.title).join(', ')} are ready.`}
+            </span>
+            <PrimaryButton onClick={update} disabled={arrange.busy} style={inlineButton}>
+              {arrange.busy ? 'Updating…' : 'Update'}
+            </PrimaryButton>
+          </div>
+        )}
 
         {/* One list, arranging or not: arranging only swaps each row's arrow for its moves. */}
         {apps.ready.length > 0 || space.writable ? (
@@ -404,6 +430,18 @@ const sectionIcon = {
   borderRadius: palette.radius.md,
   background: palette.surface.sunken,
   color: palette.ink.body,
+} as const;
+
+/** A word above the apps that some of them have a newer version, and the button that brings them up to date */
+const updateNote = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 12,
+  padding: '10px 10px 10px 16px',
+  borderRadius: palette.radius.lg,
+  background: palette.accent.soft,
+  color: palette.ink.strong,
+  fontSize: 14,
 } as const;
 
 const roundButton = { ...styles.smallButton, width: 36, height: 36 } as const;

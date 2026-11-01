@@ -424,7 +424,7 @@ export function MadeAppScreen({
       style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1, minHeight: 0 }}
     >
       {isDirect(body) ? (
-        <DirectMessages space={space} shown={shown} onShown={onShown} />
+        <DirectMessages space={space} shown={shown} onShown={onShown} view={view ?? null} onGo={onGo} />
       ) : screen ? (
         <ScreenFrame
           spaceId={space.id}
