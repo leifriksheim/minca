@@ -32,7 +32,7 @@ jobs:
       id-token: write # signing the attestations
       attestations: write
     steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: out
           merge-multiple: true
@@ -43,7 +43,7 @@ jobs:
           cat SHA256SUMS
       # Until the apps are signed, this is how anyone can check a download was
       # built here, from this tag: `gh attestation verify <file> -R <repo>`.
-      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: out/*
       - env:
