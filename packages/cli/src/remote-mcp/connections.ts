@@ -295,6 +295,9 @@ export function createConnections(options: {
       await checkGrant(grant, did, { recordsOnly: true });
       if (!usableGrant(grant) || !noteRunning(grant))
         throw new Error('That grant has run out, or is of a version no peer reads');
+      // The spaces the person picked, never the whole account: the account key opens every one.
+      if (grant.accountKey !== undefined || grant.scope !== 'spaces')
+        throw new Error('A chat app here gets the spaces the person picks, not the whole account');
       if (!options.accounts.includes(grant.did))
         throw new Error('This host connects chat apps only for the accounts it names, and not this one.');
       // One key, one connection: two agents signing with it would fork its line.

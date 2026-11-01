@@ -57,19 +57,32 @@ async function accountHolder(hub: FakeHub, options: { readonly unnamed?: boolean
   });
   closing.push(() => node.close());
   if (!options.unnamed) named.push(me.did);
+  /** What her home signs when she picks every space she has, as the consent page asks: some spaces, records only */
   const grantFor = async (audience: string, seconds = 3600, command = '/record'): Promise<Grant> => ({
     v: GRANT_VERSION,
     did: me.did,
     name: 'Ada',
     note: await signer.delegate({ audience, command, expiration: Math.floor(Date.now() / 1000) + seconds }),
     access: 'write',
-    scope: 'account',
-    spaces: [],
-    accountKey: base64UrlEncode(accountKey),
+    scope: 'spaces',
+    spaces: await Promise.all(
+      (await node.spaces.list()).map(async (space) => ({
+        id: space.id,
+        name: space.name,
+        invite: await node.spaces.invite(space.id),
+      })),
+    ),
     expiresAt: Math.floor(Date.now() / 1000) + seconds,
     home: 'https://home.test/connect',
   });
-  return { node, did: me.did, grantFor };
+  /** The whole account, key and all, as an app given everything gets */
+  const wholeAccount = async (audience: string): Promise<Grant> => ({
+    ...(await grantFor(audience)),
+    scope: 'account',
+    spaces: [],
+    accountKey: base64UrlEncode(accountKey),
+  });
+  return { node, did: me.did, grantFor, wholeAccount };
 }
 
 /** The key the consent page makes in the browser, as it hands it over */
@@ -507,14 +520,59 @@ describe('a host’s MCP endpoint', () => {
     assert.match(again.consent.pathname, /^\/oauth\/interaction\//, again.consent.href);
   });
 
-  test('registering and starting sign-ins are counted by who asks', async () => {
+  test('registering and starting sign-ins are counted by who asks, however the path is spelled', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const host = await aHost(hub);
     const answers: number[] = [];
-    for (let i = 0; i < 21; i++)
+    for (let i = 0; i < 201; i++)
       answers.push((await register(host.issuer, { client_name: 'App', redirect_uris: [CLAUDE] })).status);
-    assert.deepEqual(answers.slice(0, 20), Array(20).fill(201));
-    assert.equal(answers[20], 429, 'twenty a day from one address');
+    assert.deepEqual(answers.slice(0, 200), Array(200).fill(201));
+    assert.equal(answers[200], 429, 'two hundred a day from one address');
+    // Spelled another way, a path the provider would take is not one the host serves.
+    for (const other of ['/oauth/register/', '/oauth/REGISTER', '/oauth/Register/', '/OAUTH/register'])
+      assert.equal(
+        (
+          await fetch(`${host.issuer}${other}`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ redirect_uris: [CLAUDE], token_endpoint_auth_method: 'none' }),
+          })
+        ).status,
+        404,
+        other,
+      );
+    assert.equal(
+      (await fetch(`${host.issuer}/oauth/Authorize?client_id=x`, { redirect: 'manual' })).status,
+      404,
+    );
+  });
+
+  test('an app registers no more than it needs: a few places to go back to, nothing the host would fetch', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const host = await aHost(hub);
+    const many = Array.from({ length: 6 }, (_, i) => `http://127.0.0.1:${4000 + i}/cb`);
+    assert.equal((await register(host.issuer, { redirect_uris: many })).status, 400, 'six places');
+    for (const extra of [
+      { jwks_uri: 'https://example.com/jwks' },
+      { token_endpoint_auth_method: 'private_key_jwt', jwks_uri: 'https://example.com/jwks' },
+    ])
+      assert.equal(
+        (await register(host.issuer, { redirect_uris: [CLAUDE], ...extra })).status,
+        400,
+        JSON.stringify(extra),
+      );
+    // Nor any place to send people after signing out: there is no signing out here, and the field goes.
+    const withLogout = await register(host.issuer, {
+      redirect_uris: [CLAUDE],
+      post_logout_redirect_uris: ['https://example.com/'],
+    });
+    assert.equal(field(await withLogout.json())('post_logout_redirect_uris'), undefined);
+    assert.equal((await fetch(`${host.issuer}/oauth/logout`)).status, 404);
+    assert.equal(
+      (await register(host.issuer, { redirect_uris: [`${CLAUDE}?next=https://example.com`] })).status,
+      400,
+      'a known callback exactly, nothing added',
+    );
   });
 
   test('a connection that can’t act any more is forgotten, key and spaces, and its token stops working', async () => {
@@ -572,6 +630,13 @@ describe('a host’s MCP endpoint', () => {
     });
     assert.equal(answer.status, 400);
     assert.match(String(field(await answer.json())('error')), /only for the accounts it names/);
+    const whole = await startSignIn(app, host.resource);
+    const wholeKey = await browserKey();
+    const everything = await postFromPage(whole, 'allow', {
+      key: wholeKey.jwk,
+      grant: await ada.wholeAccount(wholeKey.did),
+    });
+    assert.equal(everything.status, 400, 'nor the whole account, whose key opens every space');
 
     const started = await startSignIn(app, host.resource);
     const first = await browserKey();

@@ -150,13 +150,15 @@ and `chat.openai.com`), `cursor:`, `vscode:` and `vscode-insiders:`. Add only a 
 opens a browser at an address. `MINCA_HOST_URL` must be https, and must not
 change once apps have connected: every token names it.
 
-What anyone can make it keep is bounded: an address may register 20 apps a
+What anyone can make it keep is bounded: an address may register 200 apps a
 day and start 120 sign-ins an hour (Claude and ChatGPT register from their
-own servers, so watch for `429` there), each sign-in is answered once, and
-what runs out is swept hourly. An account keeps its newest 10 connections, at
+own servers, so watch for `429` there), an app registers at most 5 places to
+go back to and nothing the host would fetch, an app nobody connected through
+goes after a day, each sign-in is answered once, and what runs out is swept
+hourly. An account keeps its newest 10 connections, at
 most 32 agents run at once (more wait their turn), and
 a connection whose note ran out, or whose key the account revoked (heard the
-next time its agent runs), is forgotten with its key and the spaces its agent
+next time its agent runs, in a space this host carries), is forgotten with its key and the spaces its agent
 kept, under `<data>/mcp-agents/`. An agent reaches its spaces only through
 this host's own socket, never a node an invite or a record names, so it holds
 only spaces this host carries: up to one copy of each per connection.

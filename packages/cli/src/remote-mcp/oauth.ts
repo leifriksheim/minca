@@ -73,7 +73,9 @@ function storeAdapter(store: StorageAdapter): (model: string) => Adapter {
     const key = (id: string) => `oauth:${model}:${id}`;
     return {
       async upsert(id, payload, expiresIn) {
-        const kept: Kept = { payload, ...(expiresIn ? { expiresAt: now() + expiresIn } : {}) };
+        // An app registered and never connected goes after a day: anyone may register one.
+        const lasts = expiresIn ?? (model === 'Client' ? UNUSED_CLIENT_SECONDS : undefined);
+        const kept: Kept = { payload, ...(lasts ? { expiresAt: now() + lasts } : {}) };
         await store.put(key(id), encode(kept));
         if (model === 'Session' && payload.uid)
           await store.put(`oauth:SessionUid:${payload.uid}`, encode(id));
@@ -106,6 +108,12 @@ function storeAdapter(store: StorageAdapter): (model: string) => Adapter {
     };
   };
 }
+
+/** How long a registered app is kept with no connection made through it */
+const UNUSED_CLIENT_SECONDS = 86_400;
+/** Most places an app may register to be sent back to, and how long each may be */
+const MAX_REDIRECTS = 5;
+const MAX_REDIRECT_LENGTH = 512;
 
 /** Drops every kept entry that has run out: a sign-in started and never finished, a token past its time */
 async function sweepExpired(store: StorageAdapter): Promise<void> {
@@ -215,7 +223,18 @@ export async function createOAuth(options: OAuthOptions) {
       properties: ['client_name'],
       validator: (_ctx, _key, value, metadata) => {
         const uris: unknown = metadata.redirect_uris;
-        if (Array.isArray(uris) && !uris.every((uri) => typeof uri === 'string' && options.mayRedirect(uri)))
+        if (Array.isArray(uris) && uris.length > MAX_REDIRECTS)
+          throw new errors.InvalidClientMetadata(`at most ${MAX_REDIRECTS} redirect_uris`);
+        // Nothing the host would fetch, nor a place to send people after signing out.
+        for (const field of ['jwks_uri', 'jwks', 'post_logout_redirect_uris', 'sector_identifier_uri'])
+          if (metadata[field] !== undefined)
+            throw new errors.InvalidClientMetadata(`${field} is not taken here`);
+        if (
+          Array.isArray(uris) &&
+          !uris.every(
+            (uri) => typeof uri === 'string' && uri.length <= MAX_REDIRECT_LENGTH && options.mayRedirect(uri),
+          )
+        )
           throw Object.assign(new errors.InvalidRedirectUri(), {
             error_description:
               'a code may go only to a chat app this host knows over https, this computer, or a known app’s scheme',
@@ -226,8 +245,9 @@ export async function createOAuth(options: OAuthOptions) {
           );
       },
     },
-    // The authorization code flow, with PKCE, and nothing else.
+    // The authorization code flow, with PKCE, for apps with no secret, and nothing else.
     responseTypes: ['code'],
+    clientAuthMethods: ['none'],
     scopes: ['offline_access', MCP_SCOPE],
     // The account is a connection: there while it can still act for the person.
     findAccount: async (_ctx, id) =>
@@ -238,6 +258,7 @@ export async function createOAuth(options: OAuthOptions) {
       registration: { enabled: true },
       revocation: { enabled: true },
       userinfo: { enabled: false },
+      rpInitiatedLogout: { enabled: false },
       resourceIndicators: {
         enabled: true,
         defaultResource: () => resource,
@@ -274,7 +295,6 @@ export async function createOAuth(options: OAuthOptions) {
       registration: '/oauth/register',
       revocation: '/oauth/revoke',
       jwks: '/oauth/jwks',
-      end_session: '/oauth/logout',
     },
     renderError: (ctx, out) => {
       ctx.type = 'json';
@@ -292,7 +312,7 @@ export async function createOAuth(options: OAuthOptions) {
   // Its addresses are the issuer's, whatever a request's forwarded headers say, and registering and
   // starting a sign-in are counted by who asks.
   const issued = new URL(issuer);
-  const registers = perAddress(20, 24 * 3600_000);
+  const registers = perAddress(200, 24 * 3600_000);
   const starts = perAddress(120, 3600_000);
   provider.use(async (ctx, next) => {
     const cookie = ctx.get('cookie');
@@ -324,6 +344,16 @@ export async function createOAuth(options: OAuthOptions) {
   return {
     provider,
     stop: () => clearInterval(sweeping),
+    /** Keeps an app registered as long as a connection made through it can last: until `until`, unix seconds */
+    async keepClient(clientId: string, until: number) {
+      const key = `oauth:Client:${clientId}`;
+      const bytes = await options.store.get(key);
+      if (!bytes) return;
+      const kept: unknown = JSON.parse(new TextDecoder().decode(bytes));
+      if (!isKept(kept)) return;
+      const expiresAt = Math.max(kept.expiresAt ?? 0, until);
+      await options.store.put(key, encode({ ...kept, expiresAt }));
+    },
     /**
      * The connection an access token acts for, checked: issued here, for the
      * MCP endpoint, not run out, and its connection still able to act.

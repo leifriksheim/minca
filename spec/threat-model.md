@@ -1256,15 +1256,20 @@ _Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6, §9; 01 §15.2; 06 §3. Tests: 
     its maker's ([#170](https://github.com/leifriksheim/minca/issues/170)).
   - A host that offers chat apps an MCP endpoint, for the accounts it names,
     holds the key of every connection a person allows there, with its records-only note and the
-    member keys of the spaces they picked: it reads those spaces and writes
+    member keys of the spaces they picked (never the account key: it refuses a whole-account grant): it reads those spaces and writes
     records in them as the person, "via agent", as the app's model asks. The
     consent page says so before the person allows it. Records count until the
     key is revoked, not until the note runs out (06 §2.9), so a host that
     keeps a key past its note, or whoever later reads its disk, can still
     sign with it. The reference host forgets a connection, key and agent's
-    spaces, once its note runs out, or once its agent hears the key revoked,
-    which is the next time it runs; and an account's oldest past its newest
-    ten (`createConnections` in `packages/cli/src/remote-mcp/connections.ts`).
+    spaces, once its note runs out, or sooner once its agent hears the key
+    revoked, the next time it runs in a space the host carries; and an
+    account's oldest past its newest ten (`createConnections` in
+    `packages/cli/src/remote-mcp/connections.ts`). The account home keeps one
+    connection per origin (06 §2.10), so every chat app connected through a
+    host is one entry there, named after the latest: disconnecting it
+    disconnects them all, and one more allowed, by a sign-in someone else
+    started, shows as nothing new.
     Member keys open what they opened after that
     ([#165](https://github.com/leifriksheim/minca/issues/165)). Its agents
     reach only the host's own socket (`network.only`), so a grant's invites
@@ -1275,18 +1280,24 @@ _Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6, §9; 01 §15.2; 06 §3. Tests: 
     which no room or fund pays for, so the reference host connects only the
     accounts its operator names: open to anyone, those would be costs a
     stranger makes it bear ([#33](https://github.com/leifriksheim/minca/issues/33)).
+    What a stranger can make it keep without an account is an app's
+    registration, a few places to go back to and nothing it would fetch,
+    counted by address and gone after a day unless someone connects through
+    it.
     It shows its consent page for every sign-in, keeps no sign-in in the
     browser to skip it with, and lets an app register only places a code is
-    safe at: a chat app it knows by name over https, this computer, or a named
-    app's own scheme, never one that opens a browser at any address
+    safe at: a chat app's own MCP callback, exactly, an app on this computer
+    over loopback http, or a named app's own scheme, never one that opens a
+    browser at any address
     (`createOAuth` in `packages/cli/src/remote-mcp/oauth.ts`, `mayRedirect` in
     `packages/cli/src/remote-mcp/redirects.ts`;
     `packages/cli/tests/remote-mcp.test.ts`, "an app can't register a place a
     code may not go…", "a browser that connected an app is shown the consent
-    page again…"). So a code goes only to the app scheme, or the chat app's
-    own MCP callback, the page names; at a site shared by many apps, as
-    claude.ai and chatgpt.com are, that is whichever app registered there
-    under the name shown. A sign-in
+    page again…"). So a code goes only to the callback, the app scheme or
+    this computer the page names; at a site shared by many apps, as claude.ai
+    and chatgpt.com are, that is whichever app registered there under the
+    name shown, and an app scheme or a loopback port is whichever app on the
+    device answers it. A sign-in
     someone else started, and sent the person, can land in the other's
     account at that app, unless the app ties OAuth's `state` to the browser
     that started it; the host can't tell. None of this is protocol: to every

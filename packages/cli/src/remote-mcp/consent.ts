@@ -169,6 +169,8 @@ export function createConsent(options: ConsentOptions) {
       await options.connections.forget(connection.id);
       throw error;
     }
+    // The app stays registered as long as this connection can last.
+    await options.oauth.keepClient(client.clientId, connection.grant.note.payload.exp ?? 0);
     log(`connector ${connection.id}: ${JSON.stringify(name)} connected for ${connection.grant.did}`);
     return sendJson(res, 200, { redirect: redirectTo });
   }
@@ -264,7 +266,7 @@ function consentHtml(params: {
 <ul><li>It reads them, and writes records there as you, marked “via agent”.</li>
 <li>It can’t add collections or change who is in a space: it proposes them for someone who may.</li>
 <li>${host} keeps the key it acts with, so ${host} can read those spaces too.</li></ul>
-<p>You can disconnect it at your account home at any time. Once you allow it, you go back to ${escapeHtml(params.back)}.</p>
+<p>At your account home, ${host} shows as one connection: disconnecting it there disconnects every chat app you connected through ${host}. Once you allow it, you go back to ${escapeHtml(params.back)}.</p>
 <form id="connect"><label for="home">Your account home</label><input id="home" name="home" autocomplete="url" spellcheck="false" value="${escapeHtml(params.home)}">
 <div class="row"><button type="button" id="cancel">Don’t connect</button><button type="submit">Continue</button></div></form>
 <p id="said" role="status"></p></main>

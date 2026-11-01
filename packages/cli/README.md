@@ -304,17 +304,19 @@ Connecting is the sign-in the app already has. The app finds the host's
 authorization server from the endpoint's `401`, registers itself, and opens
 the host's consent page, which says which app it is and where it will send
 you back. There you continue to your account home, as with any app, pick the
-spaces it may use and allow it: the home signs a records-only note, for 30
+spaces it may use (never the whole account) and allow it: the home signs a records-only note, for 30
 days, made out to a key the page made, and the page hands both to the host.
 Then you are back in the app, and its tools arrive. The host keeps that key
 and runs the agent under it, a node of its own that starts on the first call
 and stops when unused; so, unlike `minca connect`, the host can read the
 spaces you gave it. The agent reaches its spaces only through the host's own
 socket, so it works in the spaces this host carries, and nowhere a grant or a
-record would send it. Disconnecting it at your account home stops what it
-writes counting at once; the host forgets the connection, its key and the
-spaces its agent kept, the next time its agent runs or when its note runs
-out, and the app asks you to sign in again.
+record would send it. Your account home shows the host as one connection,
+whichever apps you connected through it: disconnecting it there stops what
+every one of them writes counting at once. The host forgets a connection, its
+key and the spaces its agent kept, when its note runs out, or sooner once its
+agent hears of the disconnect, the next time it runs in a space this host
+carries; and the app asks you to sign in again.
 
 It is OAuth 2.1 with PKCE and dynamic client registration, on
 [`oidc-provider`](https://github.com/panva/node-oidc-provider), and MCP over

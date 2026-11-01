@@ -370,7 +370,6 @@ export function fundFromEnv(env: NodeJS.ProcessEnv): {
   };
 }
 
-/** Whether anyone may see the host's rounded totals at `/host/stats` (MINCA_HOST_STATS, public or off; default public) */
 /**
  * The MCP endpoint chat apps connect to, from MINCA_HOST_MCP=on, for the
  * accounts MINCA_HOST_MCP_ACCOUNTS names (`did:key:…`, comma separated): each
@@ -420,6 +419,7 @@ export function mcpFromEnv(
   };
 }
 
+/** Whether anyone may see the host's rounded totals at `/host/stats` (MINCA_HOST_STATS, public or off; default public) */
 export function statsFromEnv(env: NodeJS.ProcessEnv): boolean {
   const given = env.MINCA_HOST_STATS?.trim() || 'public';
   if (given !== 'public' && given !== 'off')

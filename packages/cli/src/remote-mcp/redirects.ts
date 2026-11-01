@@ -44,7 +44,7 @@ export function mayRedirect(uri: string, more: ReadonlyArray<string> = []): bool
   }
   if (url.protocol === 'https:')
     return (
-      KNOWN_CALLBACKS.includes(`${url.origin}${url.pathname}`) ||
+      KNOWN_CALLBACKS.includes(url.href) ||
       more.filter((app) => !isScheme(app)).includes(url.hostname.toLowerCase())
     );
   if (url.protocol === 'http:') return LOOPBACK.has(url.hostname);

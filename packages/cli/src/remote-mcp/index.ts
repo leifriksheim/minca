@@ -43,6 +43,9 @@ import { mayRedirect } from './redirects.js';
 /** Where the endpoint is, on the host */
 const MCP_PATH = '/mcp';
 
+/** The authorization server's paths, as `oauth.ts` names them: a sign-in resumes at `authorize/<uid>` */
+const PROVIDER_PATH = /^\/oauth\/(authorize|authorize\/[A-Za-z0-9_-]{1,64}|token|register|revoke|jwks)$/;
+
 /** What a connection may do: an agent's tools, as `minca mcp` offers them to a connected agent */
 const AGENT = { agent: true } as const;
 
@@ -262,8 +265,15 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
         return true;
       }
       if (await consent(req, res, path)) return true;
-      if (path === '/.well-known/openid-configuration' || path.startsWith('/oauth/')) {
+      // Only the provider's own paths, exactly: what it would also match spelled another way is not
+      // what the host counts (`oauth.ts`).
+      if (path === '/.well-known/openid-configuration' || PROVIDER_PATH.test(path)) {
         await provider(req, res);
+        return true;
+      }
+      if (path.toLowerCase().startsWith('/oauth')) {
+        res.writeHead(404, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ error: 'not_found' }));
         return true;
       }
       return false;
