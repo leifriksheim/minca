@@ -375,24 +375,36 @@ export function fundFromEnv(env: NodeJS.ProcessEnv): {
  * The MCP endpoint chat apps connect to, from MINCA_HOST_MCP=on: off unless
  * asked for, since each connection is an agent whose key the host holds.
  * MINCA_HOST_MCP_HOME is the account home its consent page suggests, and
- * MINCA_HOST_MCP_APPS more chat apps a sign-in may go back to, by host
- * (comma separated), beside Claude's and ChatGPT's. Needs MINCA_HOST_URL.
+ * MINCA_HOST_MCP_APPS more chat apps a sign-in may go back to (comma
+ * separated), each a host (`chat.example.com`) or an app's scheme (`zed:`),
+ * beside Claude's, ChatGPT's and a few IDEs'. Needs MINCA_HOST_URL, on https
+ * unless on this machine: every token names it.
  */
 export function mcpFromEnv(env: NodeJS.ProcessEnv): { accountHome?: string; moreApps?: string[] } | null {
   const given = env.MINCA_HOST_MCP?.trim() || 'off';
   if (given !== 'on' && given !== 'off') throw new Error(`MINCA_HOST_MCP is on or off, not "${given}"`);
   if (given === 'off') return null;
-  if (!env.MINCA_HOST_URL?.trim())
+  const url = env.MINCA_HOST_URL?.trim();
+  if (!url)
     throw new Error(
       'MINCA_HOST_MCP needs MINCA_HOST_URL, the host’s public https:// address: every token names it.',
     );
+  const { protocol, hostname } = new URL(url);
+  if (protocol !== 'https:' && !['localhost', '127.0.0.1', '[::1]'].includes(hostname))
+    throw new Error('MINCA_HOST_MCP needs MINCA_HOST_URL on https: sign-ins and tokens go through it.');
   const apps = commaList(env.MINCA_HOST_MCP_APPS);
-  const bad = apps.find((app) => !/^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i.test(app));
-  if (bad) throw new Error(`MINCA_HOST_MCP_APPS lists hosts like chat.example.com, not "${bad}"`);
+  const bad = apps.find(
+    (app) =>
+      !/^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i.test(app) && !/^[a-z][a-z0-9+.-]*:$/i.test(app),
+  );
+  if (bad)
+    throw new Error(
+      `MINCA_HOST_MCP_APPS lists hosts like chat.example.com or schemes like zed:, not "${bad}"`,
+    );
   const home = env.MINCA_HOST_MCP_HOME?.trim();
   return {
     ...(home ? { accountHome: home } : {}),
-    ...(apps.length ? { moreApps: apps } : {}),
+    ...(apps.length ? { moreApps: apps.map((app) => app.toLowerCase()) } : {}),
   };
 }
 

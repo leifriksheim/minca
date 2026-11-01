@@ -11,6 +11,7 @@
  * stores, so a restart signs nobody out.
  */
 import Provider, { errors, type Adapter, type AdapterPayload, type Configuration } from 'oidc-provider';
+import type { IncomingMessage } from 'node:http';
 import type { StorageAdapter } from '@minca/core';
 import { isRecord } from '../json.js';
 import type { Connections } from './connections.js';
@@ -25,6 +26,9 @@ export const INTERACTION_PATH = '/oauth/interaction/';
 const ACCESS_TOKEN_SECONDS = 3600;
 /** How long a refresh token lasts: as long as the note a connection gets (`consent.ts`, `CONNECT_DAYS`) */
 const REFRESH_TOKEN_SECONDS = 30 * 86_400;
+
+/** `oidc-provider`'s session cookie and its signature, by their default names */
+const SESSION_COOKIE = /^\s*_session(\.[a-z]+)?=/;
 
 const now = () => Math.floor(Date.now() / 1000);
 const encode = (value: unknown) => new TextEncoder().encode(JSON.stringify(value));
@@ -43,10 +47,11 @@ const GRANTABLE = new Set(['AccessToken', 'AuthorizationCode', 'RefreshToken']);
 /**
  * `oidc-provider`'s storage on one of the host's stores: an entry per model
  * and id, and an index from each session's uid. Small by nature: a client per
- * app registration, a grant per connection, a few tokens each.
+ * app registration, a grant per connection, a few tokens each; and what runs
+ * out is swept ({@link sweepExpired}).
  */
 function storeAdapter(store: StorageAdapter): (model: string) => Adapter {
-  const read = async (key: string): Promise<AdapterPayload | undefined> => {
+  const keptAt = async (key: string): Promise<Kept | undefined> => {
     const bytes = await store.get(key);
     if (!bytes) return undefined;
     let kept: unknown;
@@ -60,8 +65,9 @@ function storeAdapter(store: StorageAdapter): (model: string) => Adapter {
       await store.delete(key);
       return undefined;
     }
-    return kept.payload;
+    return kept;
   };
+  const read = async (key: string) => (await keptAt(key))?.payload;
 
   return (model) => {
     const key = (id: string) => `oauth:${model}:${id}`;
@@ -82,14 +88,9 @@ function storeAdapter(store: StorageAdapter): (model: string) => Adapter {
       // Device codes only, which this host doesn't offer.
       findByUserCode: async () => undefined,
       async consume(id) {
-        const payload = await read(key(id));
-        if (!payload) return;
-        const bytes = await store.get(key(id));
-        const kept: unknown = bytes ? JSON.parse(new TextDecoder().decode(bytes)) : null;
-        await store.put(
-          key(id),
-          encode({ ...(isKept(kept) ? kept : {}), payload: { ...payload, consumed: now() } }),
-        );
+        const kept = await keptAt(key(id));
+        if (kept)
+          await store.put(key(id), encode({ ...kept, payload: { ...kept.payload, consumed: now() } }));
       },
       async destroy(id) {
         await store.delete(key(id));
@@ -103,6 +104,45 @@ function storeAdapter(store: StorageAdapter): (model: string) => Adapter {
           }
       },
     };
+  };
+}
+
+/** Drops every kept entry that has run out: a sign-in started and never finished, a token past its time */
+async function sweepExpired(store: StorageAdapter): Promise<void> {
+  for (const key of await store.list('oauth:')) {
+    const bytes = await store.get(key);
+    if (!bytes) continue;
+    let kept: unknown;
+    try {
+      kept = JSON.parse(new TextDecoder().decode(bytes));
+    } catch {
+      continue;
+    }
+    if (isKept(kept) && kept.expiresAt !== undefined && kept.expiresAt <= now()) await store.delete(key);
+  }
+}
+
+/** How often what has run out is swept */
+const SWEEP_MS = 3600_000;
+/** Longest name an app may register with: the consent page shows it */
+const MAX_CLIENT_NAME = 60;
+
+/**
+ * At most `limit` requests in `windowMs` from one address: registering and
+ * starting a sign-in need no account, so they are what anyone can make a
+ * host keep.
+ */
+function perAddress(limit: number, windowMs: number) {
+  const seen = new Map<string, number[]>();
+  return (address: string): boolean => {
+    const recent = (seen.get(address) ?? []).filter((at) => Date.now() - at < windowMs);
+    if (recent.length >= limit) return false;
+    seen.set(address, [...recent, Date.now()]);
+    // Forget addresses whose window is over, so the map can't grow without end.
+    if (seen.size > 10_000)
+      for (const [known, times] of seen)
+        if (!times.some((at) => Date.now() - at < windowMs)) seen.delete(known);
+    return true;
   };
 }
 
@@ -142,6 +182,10 @@ export interface OAuthOptions {
   readonly resource: string;
   readonly store: StorageAdapter;
   readonly connections: Connections;
+  /** Whether a code may go to a place an app registers (`redirects.ts`) */
+  readonly mayRedirect: (uri: string) => boolean;
+  /** Who is asking, for counting: the address the host trusts for it (`addressOf` in `host.ts`) */
+  readonly addressOf: (req: IncomingMessage) => string;
 }
 
 /** The authorization server, and how the MCP endpoint checks a token it issued */
@@ -155,12 +199,32 @@ export async function createOAuth(options: OAuthOptions) {
     jwks: { keys: [{ ...jwk, alg: 'ES256', use: 'sig' }] },
     enabledJWA: { idTokenSigningAlgValues: ['ES256'] },
     clientDefaults: {
+      // Most MCP apps don't say. Native takes what they use: https at a chat app's own site, this
+      // computer at any port (RFC 8252), or an app's scheme; which of those may get a code is
+      // `mayRedirect`, checked below.
+      application_type: 'native',
       grant_types: ['authorization_code', 'refresh_token'],
       response_types: ['code'],
       token_endpoint_auth_method: 'none',
       id_token_signed_response_alg: 'ES256',
     },
     cookies: { keys },
+    // Checked when an app registers: every place it may be sent back to is one a code may go, so
+    // no sign-in for it can send one anywhere else; and a name short enough to show.
+    extraClientMetadata: {
+      properties: ['client_name'],
+      validator: (_ctx, _key, value, metadata) => {
+        const uris: unknown = metadata.redirect_uris;
+        if (Array.isArray(uris) && !uris.every((uri) => typeof uri === 'string' && options.mayRedirect(uri)))
+          throw new errors.InvalidRedirectUri(
+            'a code may go only to a chat app this host knows, this computer, or a known app',
+          );
+        if (value !== undefined && (typeof value !== 'string' || value.length > MAX_CLIENT_NAME))
+          throw new errors.InvalidClientMetadata(
+            `client_name must be a string of at most ${MAX_CLIENT_NAME} characters`,
+          );
+      },
+    },
     // The authorization code flow, with PKCE, and nothing else.
     responseTypes: ['code'],
     scopes: ['offline_access', MCP_SCOPE],
@@ -190,6 +254,8 @@ export async function createOAuth(options: OAuthOptions) {
     },
     // Every app gets a refresh token, so a connection lasts as long as its note, not an hour.
     issueRefreshToken: async (_ctx, client) => client.grantTypeAllowed('refresh_token'),
+    // Nor do its tokens end with the browser's sign-in here, which lasts only for the one sign-in.
+    expiresWithSession: async () => false,
     pkce: { required: () => true },
     ttl: {
       AccessToken: ACCESS_TOKEN_SECONDS,
@@ -197,7 +263,8 @@ export async function createOAuth(options: OAuthOptions) {
       RefreshToken: REFRESH_TOKEN_SECONDS,
       Grant: REFRESH_TOKEN_SECONDS,
       Interaction: 3600,
-      Session: 3600,
+      // Only as long as one sign-in takes: nothing reads it after (see `provider.use` below).
+      Session: 600,
     },
     interactions: { url: (_ctx, interaction) => `${INTERACTION_PATH}${interaction.uid}` },
     routes: {
@@ -217,9 +284,45 @@ export async function createOAuth(options: OAuthOptions) {
   const provider = new Provider(issuer, configuration);
   // Behind whatever terminates TLS: the address people reach comes from its headers.
   provider.proxy = true;
+  // No single sign-on: signing in is allowing an app at the account home, every time, and each
+  // allowing is a connection of its own. So a browser's earlier sign-in here is never read, and
+  // can't stand in the way of the next app it connects.
+  //
+  // Its addresses are the issuer's, whatever a request's forwarded headers say, and registering and
+  // starting a sign-in are counted by who asks.
+  const issued = new URL(issuer);
+  const registers = perAddress(20, 24 * 3600_000);
+  const starts = perAddress(120, 3600_000);
+  provider.use(async (ctx, next) => {
+    const cookie = ctx.get('cookie');
+    if (cookie)
+      ctx.request.header.cookie = cookie
+        .split(';')
+        .filter((pair) => !SESSION_COOKIE.test(pair))
+        .join(';');
+    ctx.request.header['x-forwarded-host'] = issued.host;
+    ctx.request.header['x-forwarded-proto'] = issued.protocol.slice(0, -1);
+    const counted =
+      ctx.method === 'POST' && ctx.path === '/oauth/register'
+        ? registers
+        : ctx.path === '/oauth/authorize'
+          ? starts
+          : null;
+    if (counted && !counted(options.addressOf(ctx.req))) {
+      ctx.status = 429;
+      ctx.type = 'json';
+      ctx.body = { error: 'slow_down', error_description: 'Too many from here. Try again later.' };
+      return;
+    }
+    await next();
+  });
+
+  const sweeping = setInterval(() => void sweepExpired(options.store).catch(() => {}), SWEEP_MS);
+  sweeping.unref();
 
   return {
     provider,
+    stop: () => clearInterval(sweeping),
     /**
      * The connection an access token acts for, checked: issued here, for the
      * MCP endpoint, not run out, and its connection still able to act.

@@ -32,24 +32,29 @@ import {
   type JSONValue,
 } from '@modelcontextprotocol/server';
 import { toNodeHandler } from '@modelcontextprotocol/node';
-import {
-  callAction,
-  offeredActions,
-  type NodeConfig,
-  type StorageAdapter,
-  type StoreFactory,
-} from '@minca/core';
+import { callAction, type NodeConfig, type StorageAdapter, type StoreFactory } from '@minca/core';
 import { isRecord, messageOf } from '../json.js';
 import { mcpTools, toolInstructions } from '../mcp.js';
 import { createConnections } from './connections.js';
 import { createConsent } from './consent.js';
 import { createOAuth, MCP_SCOPE } from './oauth.js';
+import { mayRedirect } from './redirects.js';
 
 /** Where the endpoint is, on the host */
 const MCP_PATH = '/mcp';
 
 /** What a connection may do: an agent's tools, as `minca mcp` offers them to a connected agent */
 const AGENT = { agent: true } as const;
+
+/**
+ * Not offered here: previewing an invite dials the places its short link
+ * names, and on a host that would be any address a caller chose, its own
+ * network included. An agent can't join a space anyway.
+ */
+const NOT_HOSTED = new Set(['spaces_preview_invite']);
+
+/** The tools a connection is offered */
+const hostedTools = () => mcpTools(AGENT).filter((tool) => !NOT_HOSTED.has(tool.name));
 
 /** A plain copy, as the SDK types JSON: the actions' schemas are frozen, read-only data */
 function json(value: unknown): JSONValue {
@@ -73,6 +78,10 @@ export interface RemoteMcpOptions {
   readonly store: StorageAdapter;
   /** Where each connection's agent keeps its spaces */
   readonly stores: (connection: string) => StoreFactory;
+  /** Removes what a connection's agent kept, once the connection is forgotten */
+  readonly drop: (connection: string) => Promise<void>;
+  /** Who is asking, for counting sign-ins: the address the host trusts for it */
+  readonly addressOf: (req: IncomingMessage) => string;
   /** How a connection's agent reaches its spaces: the host's own socket */
   readonly network: () => NodeConfig['network'];
   /** What the host calls itself */
@@ -80,16 +89,20 @@ export interface RemoteMcpOptions {
   readonly version: string;
   /** The account home the consent page suggests. Default `https://home.minca.social`. */
   readonly accountHome?: string;
-  /** More chat apps a sign-in may go back to, by host */
+  /** More chat apps a sign-in may go back to, by host (`chat.example.com`) or scheme (`zed:`) */
   readonly moreApps?: ReadonlyArray<string>;
   /** How long a connection's agent stays up after its last call */
   readonly idleMs?: number;
+  /** Agents running at once */
+  readonly running?: number;
   readonly log?: (line: string) => void;
 }
 
 export interface RemoteMcp {
   /** Answers the request if it is the endpoint's, the authorization server's or the consent page's */
   routes(req: IncomingMessage, res: ServerResponse): Promise<boolean>;
+  /** Forgets every connection that can't act any more: it runs by itself every hour */
+  sweep(): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -102,11 +115,20 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
   const connections = createConnections({
     store: options.store,
     stores: options.stores,
+    drop: options.drop,
     network: options.network,
     ...(options.idleMs !== undefined ? { idleMs: options.idleMs } : {}),
+    ...(options.running !== undefined ? { running: options.running } : {}),
     log,
   });
-  const oauth = await createOAuth({ issuer, resource, store: options.store, connections });
+  const oauth = await createOAuth({
+    issuer,
+    resource,
+    store: options.store,
+    connections,
+    mayRedirect: (uri) => mayRedirect(uri, options.moreApps),
+    addressOf: options.addressOf,
+  });
   const provider = oauth.provider.callback();
   const consent = createConsent({
     oauth,
@@ -172,14 +194,14 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
         },
       );
       server.setRequestHandler('tools/list', () => ({
-        tools: mcpTools(AGENT).map((tool) => ({
+        tools: hostedTools().map((tool) => ({
           ...tool,
           inputSchema: { ...objectOf(tool.inputSchema), type: 'object' },
         })),
       }));
       server.setRequestHandler('tools/call', async (request) => {
         const name = request.params.name;
-        if (!offeredActions(AGENT).some((action) => action.name === name))
+        if (!hostedTools().some((tool) => tool.name === name))
           return { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true };
         if (!connection) return { content: [{ type: 'text', text: 'Not signed in.' }], isError: true };
         let node;
@@ -241,7 +263,9 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
       }
       return false;
     },
+    sweep: () => connections.sweep(),
     async close() {
+      oauth.stop();
       await mcp.close();
       await connections.close();
     },

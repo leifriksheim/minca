@@ -6,13 +6,17 @@
  * a hosted bot's is, so the host can read what that agent may read.
  *
  * An agent's node starts when its first call comes and stops after a while
- * with none, so a host holds open only the agents people are using. Its
- * spaces stay in the host's stores between starts, so it starts from what it
- * synced last time.
+ * with none, so a host holds open only the agents people are using, and only
+ * so many at once. Its spaces stay in the host's stores between starts, so it
+ * starts from what it synced last time.
+ *
+ * A connection goes, key, spaces and all, once it can't act any more: its
+ * note run out, or its key revoked. So a host keeps no key that could still
+ * sign for someone who has moved on, and an account keeps only its newest few.
  */
 import { didOf, type NodeConfig, type P2PNode, type StorageAdapter, type StoreFactory } from '@minca/core';
 import { checkGrant, usableGrant, type Grant } from '@minca/core/session';
-import { holdEverySpace, startGrantedAgent } from '../agent.js';
+import { startGrantedAgent } from '../agent.js';
 import { isRecord, messageOf } from '../json.js';
 import { importKeyJwk } from '../writer-keys.js';
 
@@ -24,7 +28,7 @@ export interface Connection {
   readonly grant: Grant;
   /** The app the person connected, as it named itself: shown, never trusted */
   readonly client: string;
-  /** Unix seconds */
+  /** Unix milliseconds: which of an account's connections is oldest */
   readonly createdAt: number;
   /** Set once the account revoked the key in some space: a revoked key never writes again */
   readonly revoked?: boolean;
@@ -33,7 +37,8 @@ export interface Connection {
 export interface Connections {
   /**
    * Keeps a new connection, once its grant checks out: a records-only note,
-   * signed by the account, made out to this key, not run out.
+   * signed by the account, made out to this key, not run out. The account's
+   * oldest go past its newest few.
    * @throws When it doesn't
    */
   add(params: {
@@ -46,7 +51,10 @@ export interface Connections {
   usable(id: string): Promise<boolean>;
   /** The connection's agent node, started if it isn't */
   node(id: string): Promise<P2PNode>;
+  /** Forgets a connection: its key, its grant and the spaces its agent kept */
   forget(id: string): Promise<void>;
+  /** Forgets every connection that can't act any more */
+  sweep(): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -55,6 +63,12 @@ const encode = (value: unknown) => new TextEncoder().encode(JSON.stringify(value
 
 /** How long an agent's node stays up after its last call */
 const IDLE_MS = 10 * 60_000;
+/** Connections one account keeps here: connecting another forgets its oldest */
+const PER_ACCOUNT = 10;
+/** Agents running at once: starting another stops the one used longest ago */
+const RUNNING = 32;
+/** How often connections that can't act any more are forgotten */
+const SWEEP_MS = 3600_000;
 
 function isConnection(value: unknown): value is Connection {
   return (
@@ -74,24 +88,30 @@ function isKeyJwk(value: unknown): value is Connection['key'] {
   return isRecord(value) && isRecord(value.privateKey) && isRecord(value.publicKey);
 }
 
+const usableNow = (connection: Connection) => !connection.revoked && usableGrant(connection.grant);
+
+interface Running {
+  readonly started: Promise<{ node: P2PNode; stop(): Promise<void> }>;
+  timer?: ReturnType<typeof setTimeout>;
+}
+
 export function createConnections(options: {
   /** Where connections are kept */
   readonly store: StorageAdapter;
   /** Where each agent's node keeps its spaces, by connection */
   readonly stores: (id: string) => StoreFactory;
+  /** Removes what an agent's node kept, once its connection is forgotten */
+  readonly drop: (id: string) => Promise<void>;
   /** How an agent's node reaches its spaces: the host's own socket, or a test's hub */
   readonly network: () => NodeConfig['network'];
   readonly idleMs?: number;
+  /** Agents running at once. Default 32. */
+  readonly running?: number;
   readonly log?: (line: string) => void;
 }): Connections {
   const log = options.log ?? (() => {});
-  const running = new Map<
-    string,
-    {
-      readonly started: Promise<{ node: P2PNode; stop(): Promise<void> }>;
-      timer?: ReturnType<typeof setTimeout>;
-    }
-  >();
+  /** Agents running, the one used last at the end */
+  const running = new Map<string, Running>();
 
   const read = async (id: string): Promise<Connection | null> => {
     const bytes = await options.store.get(`${PREFIX}${id}`);
@@ -105,6 +125,15 @@ export function createConnections(options: {
   };
   const write = (connection: Connection) =>
     options.store.put(`${PREFIX}${connection.id}`, encode(connection));
+
+  const all = async (): Promise<Connection[]> => {
+    const found: Connection[] = [];
+    for (const key of await options.store.list(PREFIX)) {
+      const connection = await read(key.slice(PREFIX.length));
+      if (connection) found.push(connection);
+    }
+    return found;
+  };
 
   const stop = async (id: string) => {
     const one = running.get(id);
@@ -122,18 +151,27 @@ export function createConnections(options: {
     one.timer.unref?.();
   };
 
+  async function forget(id: string) {
+    await stop(id);
+    await options.store.delete(`${PREFIX}${id}`);
+    await options
+      .drop(id)
+      .catch((error: unknown) => log(`connector ${id}: could not remove its spaces: ${messageOf(error)}`));
+  }
+
+  async function sweep() {
+    for (const connection of await all()) if (!usableNow(connection)) await forget(connection.id);
+  }
+
   async function start(connection: Connection) {
     const keys = await importKeyJwk(connection.key);
     if (!keys) throw new Error('The connection’s key could not be read');
-    const { grant } = connection;
+    // It holds every space it was given, from start to stop.
     const agent = await startGrantedAgent({
-      grant,
+      grant: connection.grant,
       keys,
       stores: options.stores(connection.id),
       network: options.network(),
-    });
-    const stopHolding = await holdEverySpace(agent.node, {
-      log: (line) => log(`connector ${connection.id}: ${line}`),
     });
     const unsubscribe = agent.node.subscribe((event) => {
       if (event.type !== 'revoked') return;
@@ -147,11 +185,16 @@ export function createConnections(options: {
       node: agent.node,
       stop: async () => {
         unsubscribe();
-        stopHolding();
         await agent.stop();
       },
     };
   }
+
+  const sweeping = setInterval(
+    () => void sweep().catch((error: unknown) => log(`connectors: sweeping failed: ${messageOf(error)}`)),
+    SWEEP_MS,
+  );
+  sweeping.unref();
 
   return {
     async add(params) {
@@ -168,9 +211,14 @@ export function createConnections(options: {
         key: params.key,
         grant,
         client: params.client.slice(0, 120),
-        createdAt: Math.floor(Date.now() / 1000),
+        createdAt: Date.now(),
       };
       await write(connection);
+      // The account's newest few: an app connected again and again doesn't pile up keys here.
+      const older = (await all())
+        .filter((one) => one.grant.did === grant.did && one.id !== connection.id)
+        .sort((a, b) => b.createdAt - a.createdAt);
+      for (const old of older.slice(PER_ACCOUNT - 1)) await forget(old.id);
       return connection;
     },
 
@@ -178,33 +226,42 @@ export function createConnections(options: {
 
     async usable(id) {
       const connection = await read(id);
-      return !!connection && !connection.revoked && usableGrant(connection.grant);
+      return !!connection && usableNow(connection);
     },
 
     async node(id) {
       let one = running.get(id);
-      if (!one) {
-        const connection = await read(id);
-        if (!connection || connection.revoked || !usableGrant(connection.grant))
-          throw new Error('This connection can no longer act for the account. Connect again.');
-        const started = start(connection);
-        one = { started };
+      if (one) {
+        // Used now: last in line to be stopped.
+        running.delete(id);
         running.set(id, one);
+      } else {
+        const connection = await read(id);
+        if (!connection || !usableNow(connection))
+          throw new Error('This connection can no longer act for the account. Connect again.');
+        while (running.size >= (options.running ?? RUNNING)) {
+          const [oldest] = running.keys();
+          if (oldest === undefined) break;
+          await stop(oldest);
+        }
+        const started = start(connection);
+        const made: Running = { started };
+        one = made;
+        running.set(id, made);
         started.catch((error: unknown) => {
           log(`connector ${id}: could not start: ${messageOf(error)}`);
-          if (running.get(id) === one) running.delete(id);
+          if (running.get(id) === made) running.delete(id);
         });
       }
       idleLater(id);
       return (await one.started).node;
     },
 
-    async forget(id) {
-      await stop(id);
-      await options.store.delete(`${PREFIX}${id}`);
-    },
+    forget,
+    sweep,
 
     async close() {
+      clearInterval(sweeping);
       await Promise.all([...running.keys()].map(stop));
     },
   };

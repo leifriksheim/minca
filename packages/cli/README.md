@@ -307,17 +307,24 @@ Then you are back in the app, and its tools arrive. The host keeps that key
 and runs the agent under it, a node of its own that starts on the first call
 and stops when unused; so, unlike `minca connect`, the host can read the
 spaces you gave it. Disconnecting it at your account home stops it, and
-when its note runs out the app asks you to sign in again.
+when its note runs out the app asks you to sign in again; either way the
+host then forgets the connection, its key and the spaces its agent kept.
 
 It is OAuth 2.1 with PKCE and dynamic client registration, on
 [`oidc-provider`](https://github.com/panva/node-oidc-provider), and MCP over
 Streamable HTTP on the [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk);
-the tools are the same `NODE_ACTIONS` as `minca mcp`. A sign-in goes back only
-to a chat app the host knows by name over https (Claude's and ChatGPT's, and
-`MINCA_HOST_MCP_APPS`), to this computer, or to an app's own scheme on your
-device, so a link someone else started can't send them your code.
+the tools are the same `NODE_ACTIONS` as `minca mcp`, but for previewing an
+invite, which would have the host dial addresses a caller chose. Every
+sign-in shows the consent page: the host keeps no sign-in in your browser to
+skip it with. An app may register only places a code is safe at: a chat app
+the host knows by name over https (Claude's and ChatGPT's, and
+`MINCA_HOST_MCP_APPS`), this computer, or a known app's own scheme (`cursor:`,
+`vscode:`), never one that opens a browser at any address. So a code never
+goes anywhere but an app you see named on the page. Whether a sign-in someone
+else started, and sent you, could land in their account at that app is the
+app's to check (OAuth's `state`), not the host's.
 
-_Source: `packages/cli/src/remote-mcp/` (`index.ts`, `oauth.ts`, `consent.ts`, `consent-script.ts`, `connections.ts`). Tests: `packages/cli/tests/remote-mcp.test.ts`._
+_Source: `packages/cli/src/remote-mcp/` (`index.ts`, `oauth.ts`, `consent.ts`, `consent-script.ts`, `connections.ts`, `redirects.ts`). Tests: `packages/cli/tests/remote-mcp.test.ts`._
 
 ### From this computer
 

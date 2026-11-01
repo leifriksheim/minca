@@ -25,7 +25,7 @@ import { createFakeHub, type FakeHub } from '../../core/tests/helpers/fake-trans
 import { hold } from '../../core/tests/helpers/hold.js';
 import { until } from '../../core/tests/helpers/until.js';
 import { createRemoteMcp, type RemoteMcp } from '../src/remote-mcp/index.js';
-import { mayRedirect } from '../src/remote-mcp/consent.js';
+import { mayRedirect } from '../src/remote-mcp/redirects.js';
 import { isRecord } from '../src/json.js';
 import { onHub } from './helpers/nodes.js';
 
@@ -83,7 +83,7 @@ async function browserKey() {
 }
 
 /** A host with only its MCP endpoint, on a port of its own, its agents on the hub */
-async function aHost(hub: FakeHub) {
+async function aHost(hub: FakeHub, settings: { readonly running?: number } = {}) {
   let remote: RemoteMcp | null = null;
   const server: Server = createServer((req, res) => {
     void (remote?.routes(req, res) ?? Promise.resolve(false)).then((answered) => {
@@ -98,11 +98,23 @@ async function aHost(hub: FakeHub) {
   assert.ok(address && typeof address === 'object');
   const issuer = `http://127.0.0.1:${address.port}`;
   const stores = memoryStores();
+  const store = await stores('host-mcp');
+  /** Connections whose agents' spaces the host removed, and those whose agents started */
+  const dropped: string[] = [];
+  const started = new Set<string>();
   remote = await createRemoteMcp({
     publicUrl: issuer,
-    store: await stores('host-mcp'),
-    stores: (connection) => (where) => stores(`agents/${connection}/${where}`),
+    store,
+    stores: (connection) => {
+      started.add(connection);
+      return (where) => stores(`agents/${connection}/${where}`);
+    },
+    drop: async (connection) => {
+      dropped.push(connection);
+    },
+    addressOf: () => '127.0.0.1',
     network: () => onHub(hub),
+    ...settings,
     name: 'Test host',
     version: '0',
     accountHome: 'https://home.test',
@@ -113,7 +125,8 @@ async function aHost(hub: FakeHub) {
     await running.close();
     await new Promise<void>((resolve) => server.close(() => resolve()));
   });
-  return { issuer, resource: `${issuer}/mcp` };
+  const connections = async () => (await store.list('connection:')).length;
+  return { issuer, resource: `${issuer}/mcp`, remote: running, dropped, started, connections };
 }
 
 /** A browser's cookies, by name, for this one host */
@@ -132,7 +145,12 @@ function cookieJar() {
 }
 
 /** A chat app: finds the authorization server from the endpoint, and registers itself there */
-async function anApp(resource: string, redirect = CLAUDE, name = 'Claude') {
+async function anApp(
+  resource: string,
+  redirect = CLAUDE,
+  name = 'Claude',
+  more: Record<string, string> = {},
+) {
   const challenge = await fetch(resource, {
     method: 'POST',
     headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
@@ -163,6 +181,7 @@ async function anApp(resource: string, redirect = CLAUDE, name = 'Claude') {
         grant_types: ['authorization_code', 'refresh_token'],
         response_types: ['code'],
         token_endpoint_auth_method: 'none',
+        ...more,
       },
       insecure,
     ),
@@ -173,8 +192,21 @@ async function anApp(resource: string, redirect = CLAUDE, name = 'Claude') {
 
 type App = Awaited<ReturnType<typeof anApp>>;
 
+/** Registers an app as anyone may, and gives the answer as it came */
+const register = (issuer: string, metadata: Record<string, unknown>) =>
+  fetch(`${issuer}/oauth/register`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      grant_types: ['authorization_code', 'refresh_token'],
+      response_types: ['code'],
+      token_endpoint_auth_method: 'none',
+      ...metadata,
+    }),
+  });
+
 /** Starts signing in, as the app sends the person's browser: to the consent page, with its cookies */
-async function startSignIn(app: App, resource: string) {
+async function startSignIn(app: App, resource: string, jar = cookieJar()) {
   const verifier = oauth.generateRandomCodeVerifier();
   const state = oauth.generateRandomState();
   const url = new URL(app.as.authorization_endpoint!);
@@ -188,8 +220,7 @@ async function startSignIn(app: App, resource: string) {
     code_challenge: await oauth.calculatePKCECodeChallenge(verifier),
     code_challenge_method: 'S256',
   }).toString();
-  const jar = cookieJar();
-  const authorize = await fetch(url, { redirect: 'manual' });
+  const authorize = await fetch(url, { redirect: 'manual', headers: { cookie: jar.header() } });
   jar.take(authorize);
   const consent = new URL(authorize.headers.get('location')!, url);
   return { verifier, state, jar, consent };
@@ -211,8 +242,13 @@ const postFromPage = (
   });
 
 /** The whole sign-in, the person allowing it with `grant` for `key`: the app's tokens */
-async function signIn(app: App, resource: string, grantFor: (did: string) => Promise<Grant>) {
-  const started = await startSignIn(app, resource);
+async function signIn(
+  app: App,
+  resource: string,
+  grantFor: (did: string) => Promise<Grant>,
+  jar = cookieJar(),
+) {
+  const started = await startSignIn(app, resource, jar);
   const page = await fetch(started.consent, { headers: { cookie: started.jar.header() } });
   assert.equal(page.status, 200, await page.clone().text());
   const key = await browserKey();
@@ -223,8 +259,10 @@ async function signIn(app: App, resource: string, grantFor: (did: string) => Pro
   assert.ok(typeof redirect === 'string');
   // The browser follows on: the authorization server finishes, and sends it to the app with a code.
   const resumed = await fetch(redirect, { redirect: 'manual', headers: { cookie: started.jar.header() } });
+  // As a browser does, it keeps what the host set on the way.
+  started.jar.take(resumed);
   const back = new URL(resumed.headers.get('location')!, redirect);
-  assert.equal(`${back.origin}${back.pathname}`, app.redirect, 'back to the app, where it registered');
+  assert.equal(back.href.split('?')[0], app.redirect, 'back to the app, where it registered');
   const params = oauth.validateAuthResponse(app.as, app.client, back, started.state);
   const tokens = await oauth.processAuthorizationCodeResponse(
     app.as,
@@ -332,6 +370,22 @@ describe('a host’s MCP endpoint', () => {
     assert.match(textOf(await again.callTool({ name: 'spaces_list', arguments: {} })), new RegExp(space.id));
   });
 
+  test('a second app connected from the same browser is a sign-in of its own, and the first keeps working', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    const host = await aHost(hub);
+    const browser = cookieJar();
+    const claude = await anApp(host.resource);
+    const first = await signIn(claude, host.resource, (audience) => ada.grantFor(audience), browser);
+    const cursor = await anApp(host.resource, 'cursor://anysphere.cursor-mcp/oauth/callback', 'Cursor');
+    const second = await signIn(cursor, host.resource, (audience) => ada.grantFor(audience), browser);
+    assert.notEqual(first.did, second.did, 'a key of its own');
+    for (const tokens of [first.tokens, second.tokens]) {
+      const client = await mcpClient(host.resource, tokens.access_token);
+      assert.ok((await client.listTools()).tools.length > 0);
+    }
+  });
+
   test('serves a 2025-era client too, which posts JSON-RPC without the new envelope', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const ada = await accountHolder(hub);
@@ -414,19 +468,100 @@ describe('a host’s MCP endpoint', () => {
     assert.equal(answer.status, 403);
   });
 
-  test('an app that wants its code sent anywhere but a known chat app, this computer or its own scheme is never shown the page', async () => {
+  test('an app can’t register a place a code may not go: another site, or a browser by its scheme', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const host = await aHost(hub);
+    for (const redirect of [
+      'https://collector.example/callback',
+      'x-safari-https://collector.example/callback',
+      'googlechromes://collector.example/callback',
+    ]) {
+      // Beside one that may: every place it names must be one a code may go.
+      const answer = await register(host.issuer, {
+        client_name: 'Claude',
+        redirect_uris: [CLAUDE, redirect],
+      });
+      assert.equal(answer.status, 400, redirect);
+      assert.equal(field(await answer.json())('error'), 'invalid_redirect_uri', redirect);
+    }
+    const long = await register(host.issuer, { client_name: 'x'.repeat(61), redirect_uris: [CLAUDE] });
+    assert.equal(long.status, 400, 'nor a name too long to show');
+  });
+
+  test('a browser that connected an app is shown the consent page again the next time, not let through', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const ada = await accountHolder(hub);
     const host = await aHost(hub);
-    const app = await anApp(host.resource, 'https://collector.example/callback', 'Claude');
-    const started = await startSignIn(app, host.resource);
-    const page = await fetch(started.consent, { headers: { cookie: started.jar.header() } });
-    assert.equal(page.status, 400);
-    assert.match(await page.text(), /isn’t a chat app this host knows/);
-    // Nor does posting the answer straight away get anywhere.
-    const key = await browserKey();
-    const answer = await postFromPage(started, 'allow', { key: key.jwk, grant: await ada.grantFor(key.did) });
-    assert.equal(answer.status, 400);
+    // A web app, which `oidc-provider` would otherwise let through on the browser's earlier sign-in.
+    const app = await anApp(host.resource, CLAUDE, 'Claude', { application_type: 'web' });
+    const browser = cookieJar();
+    await signIn(app, host.resource, (audience) => ada.grantFor(audience), browser);
+    // Started by anyone, the same app's next sign-in in that browser still waits for the person.
+    const again = await startSignIn(app, host.resource, browser);
+    assert.match(again.consent.pathname, /^\/oauth\/interaction\//, again.consent.href);
+  });
+
+  test('registering and starting sign-ins are counted by who asks', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const host = await aHost(hub);
+    const answers: number[] = [];
+    for (let i = 0; i < 21; i++)
+      answers.push((await register(host.issuer, { client_name: 'App', redirect_uris: [CLAUDE] })).status);
+    assert.deepEqual(answers.slice(0, 20), Array(20).fill(201));
+    assert.equal(answers[20], 429, 'twenty a day from one address');
+  });
+
+  test('a connection that can’t act any more is forgotten, key and spaces, and its token stops working', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    const host = await aHost(hub);
+    const app = await anApp(host.resource);
+    const { tokens } = await signIn(app, host.resource, (audience) => ada.grantFor(audience, 2));
+    const client = await mcpClient(host.resource, tokens.access_token);
+    await client.callTool({ name: 'spaces_list', arguments: {} });
+    assert.equal(await host.connections(), 1);
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+    await host.remote.sweep();
+    assert.equal(await host.connections(), 0, 'its key is gone from the host');
+    assert.equal(host.dropped.length, 1, 'and the spaces its agent kept');
+    const after = await fetch(host.resource, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        authorization: `Bearer ${tokens.access_token}`,
+      },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+    });
+    assert.equal(after.status, 401, 'the app is asked to sign in again');
+  });
+
+  test('an account keeps its newest ten connections here, and a host runs only so many agents at once', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    const host = await aHost(hub, { running: 2 });
+    const app = await anApp(host.resource);
+    const signedIn = [];
+    for (let i = 0; i < 11; i++)
+      signedIn.push(await signIn(app, host.resource, (audience) => ada.grantFor(audience)));
+    assert.equal(await host.connections(), 10);
+    assert.equal(host.dropped.length, 1, 'the oldest went, spaces and all');
+    for (const { tokens } of signedIn.slice(-3)) {
+      const client = await mcpClient(host.resource, tokens.access_token);
+      assert.equal((await client.callTool({ name: 'spaces_list', arguments: {} })).isError, false);
+    }
+  });
+
+  test('a hosted agent isn’t offered what would dial addresses from the host', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    const host = await aHost(hub);
+    const app = await anApp(host.resource);
+    const { tokens } = await signIn(app, host.resource, (audience) => ada.grantFor(audience));
+    const client = await mcpClient(host.resource, tokens.access_token);
+    assert.ok(!(await client.listTools()).tools.some((tool) => tool.name === 'spaces_preview_invite'));
+    const called = await client.callTool({ name: 'spaces_preview_invite', arguments: { invite: 'x' } });
+    assert.equal(called.isError, true);
   });
 
   test('the consent page names the app and where it goes back to, and runs only its own script', async () => {
@@ -443,19 +578,28 @@ describe('a host’s MCP endpoint', () => {
 });
 
 describe('where a code may go', () => {
-  test('known chat apps over https, this computer over http, and apps’ own schemes', () => {
+  test('known chat apps over https, this computer over http, and known apps’ own schemes', () => {
     assert.ok(mayRedirect('https://claude.ai/api/mcp/auth_callback'));
     assert.ok(mayRedirect('https://chatgpt.com/connector_platform_oauth_redirect'));
     assert.ok(mayRedirect('http://127.0.0.1:33418/callback'));
     assert.ok(mayRedirect('http://localhost/callback'));
     assert.ok(mayRedirect('cursor://anysphere.cursor-mcp/oauth/callback'));
+    assert.ok(mayRedirect('vscode://vscode.github-authentication/did-authenticate'));
     assert.ok(mayRedirect('https://chat.example.com/cb', ['chat.example.com']));
+    assert.ok(mayRedirect('zed://oauth/callback', ['zed:']));
   });
   test('nowhere else', () => {
     assert.ok(!mayRedirect('https://claude.ai.evil.example/cb'));
     assert.ok(!mayRedirect('https://evil.example/cb'));
     assert.ok(!mayRedirect('http://claude.ai/api/mcp/auth_callback'), 'not in the clear');
     assert.ok(!mayRedirect('http://192.168.1.10/cb'));
+    assert.ok(
+      !mayRedirect('x-safari-https://evil.example/cb'),
+      'a scheme that opens a browser at any address',
+    );
+    assert.ok(!mayRedirect('googlechromes://evil.example/cb'));
+    assert.ok(!mayRedirect('microsoft-edge-https://evil.example/cb'));
+    assert.ok(!mayRedirect('zed://oauth/callback'), 'an app’s scheme only once named');
     assert.ok(!mayRedirect('javascript:alert(1)'));
     assert.ok(!mayRedirect('data:text/html,hi'));
     assert.ok(!mayRedirect('not a url'));

@@ -5,10 +5,10 @@
  * (`consent-script.ts`). Only once the home has signed a records-only note,
  * and the host has checked it, does the app get a code.
  *
- * The code goes only to where the app registered, and only to a place a code
- * is safe at: the chat apps the host knows by name, this computer, or an app
- * of its own on the person's device. So a link someone else started leads
- * nowhere they can reach, even if the person allows it.
+ * Every sign-in comes here: the host keeps no sign-in in the browser to skip
+ * it with (`oauth.ts`). The code goes only to where the app registered, which
+ * registering checked is a place a code is safe at (`redirects.ts`), checked
+ * here again.
  */
 import { createHash } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -16,43 +16,10 @@ import { isRecord, messageOf } from '../json.js';
 import type { Connections } from './connections.js';
 import { consentScript } from './consent-bundle.js';
 import { INTERACTION_PATH, MCP_SCOPE, type OAuth } from './oauth.js';
+import { mayRedirect } from './redirects.js';
 
 /** How many days the note a connector gets lasts: the home may give fewer */
 const CONNECT_DAYS = 30;
-
-/** Chat apps a code may go to over https, by host: their own servers finish the sign-in */
-const KNOWN_APPS: ReadonlyArray<string> = ['claude.ai', 'claude.com', 'chatgpt.com', 'chat.openai.com'];
-
-const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);
-/** Schemes that run or show something where they land, never an app's own */
-const NOT_APPS = new Set([
-  'javascript:',
-  'data:',
-  'file:',
-  'blob:',
-  'about:',
-  'vbscript:',
-  'ftp:',
-  'ws:',
-  'wss:',
-]);
-
-/**
- * Whether a code may be sent to `uri`: https at a chat app this host knows
- * (`KNOWN_APPS` and `more`), plain http on this computer only, or an app's
- * own scheme (`cursor://`, `vscode://`) on the person's device.
- */
-export function mayRedirect(uri: string, more: ReadonlyArray<string> = []): boolean {
-  let url: URL;
-  try {
-    url = new URL(uri);
-  } catch {
-    return false;
-  }
-  if (url.protocol === 'https:') return [...KNOWN_APPS, ...more].includes(url.hostname.toLowerCase());
-  if (url.protocol === 'http:') return LOOPBACK.has(url.hostname);
-  return !NOT_APPS.has(url.protocol) && /^[a-z][a-z0-9+.-]*:$/.test(url.protocol);
-}
 
 /** A request parameter as given, or nothing */
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
@@ -93,7 +60,7 @@ export interface ConsentOptions {
   readonly name: string;
   /** The account home the page suggests */
   readonly accountHome: string;
-  /** More chat apps a code may go to, by host (`MINCA_HOST_MCP_APPS`) */
+  /** More chat apps a code may go to, by host or scheme (`MINCA_HOST_MCP_APPS`) */
   readonly moreApps?: ReadonlyArray<string>;
   readonly log?: (line: string) => void;
 }

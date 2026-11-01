@@ -40,9 +40,12 @@
  * on by the GB (`fund.ts`). With `limits`, an account's free room needs no payment, while a
  * community past the free line pays for itself through its fund (spec 08 §1.1).
  */
+import { rm } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import path from 'node:path';
 import {
   createHostNode,
+  directoryStores,
   createP256Provider,
   HOST_DESCRIPTION_PATH,
   NotAllowedError,
@@ -60,6 +63,7 @@ import {
   type StoreFactory,
   type Subscription,
 } from '@minca/core';
+import { openFsDirectory } from './fs-directory.js';
 import { isRecord, messageOf } from './json.js';
 import { queue } from './queue.js';
 import { createInboundPeers, serve, type Served } from './serve.js';
@@ -161,9 +165,11 @@ export interface HostOptions {
    * person's account home. Needs `publicUrl`: it is the issuer of every token.
    */
   readonly mcp?: {
+    /** Where each connection's agent keeps the spaces it was given, a folder each */
+    readonly folder: string;
     /** The account home its consent page suggests */
     readonly accountHome?: string;
-    /** More chat apps a sign-in may go back to, by host, beside Claude's and ChatGPT's */
+    /** More chat apps a sign-in may go back to, by host or scheme (`zed:`), beside Claude's, ChatGPT's and a few IDEs' */
     readonly moreApps?: ReadonlyArray<string>;
     /** The version it says it is */
     readonly version?: string;
@@ -1044,18 +1050,24 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
       await reminders.send(await node.list(), (subscription) => node.state(subscription), options.publicUrl);
   }
 
-  const remote: RemoteMcp | null = options.mcp
+  const mcp = options.mcp;
+  const remote: RemoteMcp | null = mcp
     ? await createRemoteMcp({
         publicUrl: mcpUrl(options.publicUrl),
         store: await options.stores('host-mcp'),
-        stores: (connection) => (where, storeOptions) =>
-          options.stores(`host-mcp-agents/${connection}/${where}`, storeOptions),
+        stores: (connection) => {
+          const folder = agentFolder(mcp.folder, connection);
+          return async (where, storeOptions) =>
+            directoryStores(await openFsDirectory(folder))(where, storeOptions);
+        },
+        drop: (connection) => rm(agentFolder(mcp.folder, connection), { recursive: true, force: true }),
+        addressOf: (req) => addressOf(req, options.clientAddressHeader),
         // Its spaces through the host's own socket, as the bots it runs reach theirs.
         network: () => ({ relays: [], nodes: [`ws://127.0.0.1:${listening}/peer`] }),
         name,
-        version: options.mcp.version ?? '0',
-        ...(options.mcp.accountHome ? { accountHome: options.mcp.accountHome } : {}),
-        ...(options.mcp.moreApps ? { moreApps: options.mcp.moreApps } : {}),
+        version: mcp.version ?? '0',
+        ...(mcp.accountHome ? { accountHome: mcp.accountHome } : {}),
+        ...(mcp.moreApps ? { moreApps: mcp.moreApps } : {}),
         log,
       })
     : null;
@@ -1120,6 +1132,12 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
       await spentStore?.close();
     },
   };
+}
+
+/** A connection's agent's folder: its id is base64url, so it is one name, never a path */
+function agentFolder(folder: string, connection: string): string {
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(connection)) throw new Error('Not a connection id');
+  return path.join(folder, connection);
 }
 
 /** The host's address, for the MCP endpoint: the issuer of every token, so it can't change between requests */
