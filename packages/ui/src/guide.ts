@@ -23,6 +23,10 @@ ui has:
   useFile(key, ref)                 a picture the record \`key\` refers to, as a URL for <img>; null until here
   useShown()                        { key } of the record this app was last asked to show (its "shows"), a new object each time;
                                     null until one is. Scroll to it, open it: useEffect(() => …, [shown])
+  useView()                         [view, go]: where in itself the screen is (null at its start), and go(view, title) one level
+                                    in, as a list opened from a list of lists, named title in the app's bar. Its Back, and the phone's,
+                                    come back out: never draw a back button of your own. go(null) is back to the start. Draw what
+                                    view says; the person going back changes it
   useMarked()                       for a list, that key once the element with data-key=\${key} is drawn: scrolled to, and kept a
                                     moment, for data-marked=\${key === marked} to light it up
   usePresence(state)                [{ did, device, state }] of everyone else with this app open, each sharing their state (a cursor,
@@ -55,6 +59,8 @@ ui has:
   <\${AddMenu} />, the input, and <div class="composer-end"><\${EmojiPicker} /></div>
   <\${Modal} title onClose width?>…</\${Modal}>   a dialog over the screen, and the only way to draw one: it floats without dimming
                                     what is behind, since the screen is one pane of the app. Never draw a backdrop of your own
+  <\${Empty} shape? colour? title text?>…</\${Empty}>   where there is nothing yet, as every app shows it: a shape, a short
+                                    title, one line on what goes here, and the button that starts it inside. Always use it for an empty app
   <\${Shape} kind colour? size? />  one of Minca's shapes; <\${Cover} seed colour size? class?>…</\${Cover}> a picture for what has none
                                     (colour: cobalt, coral, peach, sage or lilac)
   <\${PlaceField} value onChange coarse? near? placeholder />   find a place by name, or use where the person is

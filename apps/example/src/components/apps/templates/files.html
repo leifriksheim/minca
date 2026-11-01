@@ -299,7 +299,7 @@
     useBlob,
     useShown,
   } = ui;
-  const { useSeen, Avatar, Person, attach, sizeOf, ago } = ui;
+  const { useSeen, Avatar, Person, Empty, attach, sizeOf, ago } = ui;
   const FILE = 'std.file';
   const LIST = 'std.list';
   const ITEM = 'std.list-item';
@@ -609,7 +609,7 @@
         <div class="bar">
           <h2>
             ${title}
-            <span class="faint" style="font-size: 13px; font-weight: 400"
+            <span class="faint" style="margin-left: 6px; font-size: 13px; font-weight: 400"
               >${shown.length} · ${sizeOf(total)}</span
             >
           </h2>
@@ -655,15 +655,25 @@
         <div class="grid">
           ${
             shown.length === 0 &&
-            html`<p class="empty" style="grid-column: 1 / -1">
+            html`<div style="grid-column: 1 / -1">
               ${
                 query
-                  ? 'Nothing by that name.'
+                  ? html`<${Empty} shape="stack" colour="sage" title="Nothing by that name" />`
                   : group
-                    ? 'Nothing in this category yet. Drag files onto it, or drop new ones here.'
-                    : 'No files yet. Drop some here, paste them, or share them in a chat.'
+                    ? html`<${Empty}
+                        shape="stack"
+                        colour="sage"
+                        title="Nothing in this category yet"
+                        text="Drag files onto it, or drop new ones here."
+                      />`
+                    : html`<${Empty}
+                        shape="stack"
+                        colour="sage"
+                        title="No files yet"
+                        text="Drop some here, paste them, or share them in a chat."
+                      />`
               }
-            </p>`
+            </div>`
           }
           ${shown.map(
             (file) =>

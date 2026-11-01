@@ -148,6 +148,12 @@ Inside it, window.minca is:
   await minca.save(name, text, type?)   saves text as a file: text/plain, text/calendar, text/csv or application/json
   await minca.remember(key, value)  keeps something small (8 KB) on this device for this app; null forgets it
   await minca.recall(key)           what was remembered, or null
+  minca.view()                      where in the screen the person is: a view it named with minca.go, or null at its start
+  minca.go(view, title?)            goes one level in, as a list opened from a list of lists: view is any short text you choose (a
+                                    record's key, "settings"), title what the app's bar names it. The bar's Back comes back out, and so
+                                    do the phone's and browser's Back, so never draw a back button of your own. minca.go(null) goes
+                                    back out to the start; minca.go(view, title) for the view already open only renames it
+  minca.onView(callback)            calls back with each new view, the person's Back included: draw from minca.view() and redraw here
   minca.onChange(callback)          called whenever records in the space change, here or on another device; returns a function to stop
   await minca.live.send(data, { to? })   sends any JSON (at most 64 KB) to everyone in the space who has this app open now, or only to
                                     to's devices (a did, or a device): kept nowhere, so whoever opens it later misses it. For cursors,
@@ -180,6 +186,8 @@ export const SCREEN_CLIENT = `(() => {
   const hearing = new Set();
   const showing = new Set();
   let shown = given.shown || null;
+  let view = given.view || null;
+  const viewing = new Set();
   let next = 0;
   const call = (method, ...args) =>
     new Promise((resolve, reject) => {
@@ -193,6 +201,13 @@ export const SCREEN_CLIENT = `(() => {
       shown = message.show;
       for (const listener of showing) {
         try { listener(shown); } catch (error) { console.error(error); }
+      }
+      return;
+    }
+    if (Object.prototype.hasOwnProperty.call(message, 'view')) {
+      view = message.view || null;
+      for (const listener of viewing) {
+        try { listener(view); } catch (error) { console.error(error); }
       }
       return;
     }
@@ -275,6 +290,12 @@ export const SCREEN_CLIENT = `(() => {
       return () => listeners.delete(listener);
     },
     shown: () => shown,
+    view: () => view,
+    go: (next, title) => call('go', next == null ? null : next, title == null ? null : title),
+    onView: (listener) => {
+      viewing.add(listener);
+      return () => viewing.delete(listener);
+    },
     onShow: (listener) => {
       showing.add(listener);
       return () => showing.delete(listener);
@@ -400,6 +421,8 @@ export interface ScreenHost {
   save(name: string, bytes: Uint8Array, type: string): void;
   /** What this app kept on this device under a name, or null */
   recall(key: string): unknown;
+  /** Goes to a view of the screen's (null: its start), named in the app's bar (`minca.go`) */
+  go(view: string | null, title: string | null): void;
   /** Keeps something small on this device for this app; null forgets it */
   remember(key: string, value: unknown): void;
 }
@@ -410,6 +433,9 @@ const MAX_SAVE = 1024 * 1024;
 /** The largest file a screen may add to the space */
 const MAX_ADD = 25 * 1024 * 1024;
 const MAX_KEPT = 8 * 1024;
+/** The longest view a screen may name (`minca.go`), which goes in the address, and the longest name for it in the bar */
+const MAX_VIEW = 200;
+const MAX_VIEW_TITLE = 80;
 /**
  * How fast one screen may send live messages: a burst, then so many a second.
  * Under what a peer takes from another across everything (60, then 20), so a
@@ -479,6 +505,8 @@ export interface ScreenBridge {
   changed(): void;
   /** Ask the screen to show one of its records, opened from elsewhere (`minca.onShow`) */
   show(key: string): void;
+  /** Tell the screen which of its views is open now (`minca.onView`) */
+  view(view: string | null): void;
   /** Stop answering, and stop listening to the node */
   close(): void;
 }
@@ -781,6 +809,23 @@ export function createScreenBridge(params: {
       hosted().save(name.trim(), new TextEncoder().encode(text), type);
       return null;
     },
+    // Where in itself the screen is: short text of its own, in the address, and a short name for the app's bar.
+    go: async (...args) => {
+      const { view, title } = spread(args, ['view', 'title']);
+      if (view !== null && (typeof view !== 'string' || !view || view.length > MAX_VIEW))
+        throw new Error(
+          `minca.go takes a view, as text of at most ${MAX_VIEW} characters, or null for the start`,
+        );
+      if (
+        title !== null &&
+        title !== undefined &&
+        (typeof title !== 'string' || title.length > MAX_VIEW_TITLE)
+      )
+        throw new Error(`minca.go's title is text of at most ${MAX_VIEW_TITLE} characters`);
+      const named = typeof title === 'string' ? title.replace(/\s+/g, ' ').trim() : '';
+      hosted().go(view, named || null);
+      return null;
+    },
     recall: async (...args) => hosted().recall(keptKey(args[0])) ?? null,
     remember: async (...args) => {
       const [key, value] = args;
@@ -841,6 +886,9 @@ export function createScreenBridge(params: {
     changed,
     show(key) {
       if (!closed) port.postMessage({ show: key });
+    },
+    view(view) {
+      if (!closed) port.postMessage({ view });
     },
     close() {
       closed = true;

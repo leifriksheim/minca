@@ -14,7 +14,7 @@ import * as when from '../when';
 import { Attachments, Playable, attach, useSeen } from './attachments';
 import { sizeOf } from '../size';
 import { Comments } from './comments';
-import { useBlob, useCan, useFile, useMarked, usePeople, useRecords, useShown } from './hooks';
+import { useBlob, useCan, useFile, useMarked, usePeople, useRecords, useShown, useView } from './hooks';
 import { useLive, usePresence } from './live';
 import { html } from './html';
 import { MentionInput, MentionText, mentionsIn } from './mentions';
@@ -34,7 +34,7 @@ import {
   placeLabel,
   useNear,
 } from './places';
-import { Cover, Shape } from './shapes';
+import { Cover, Empty, Shape } from './shapes';
 import { css } from './styles';
 
 /**
@@ -78,6 +78,7 @@ Object.defineProperty(globalThis, 'ui', {
     useFile,
     useBlob,
     useShown,
+    useView,
     useMarked,
     useLive,
     usePresence,
@@ -104,6 +105,7 @@ Object.defineProperty(globalThis, 'ui', {
     Sharing,
     Shared,
     Shape,
+    Empty,
     Cover,
     PlaceField,
     NearButton,

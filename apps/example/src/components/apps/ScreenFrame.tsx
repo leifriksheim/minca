@@ -32,6 +32,8 @@ export function ScreenFrame({
   shows = [],
   shown,
   onShown,
+  view = null,
+  onGo,
 }: {
   spaceId: string;
   /** The app's launcher record, which carries the screen */
@@ -50,6 +52,10 @@ export function ScreenFrame({
   shown?: string | undefined;
   /** Called once `shown` is handed to the screen */
   onShown?: (() => void) | undefined;
+  /** Where in itself the screen is (`minca.view`), as the address holds it */
+  view?: string | null;
+  /** The screen going to one of its views (`minca.go`) */
+  onGo?: ((view: string | null, title: string | null) => void) | undefined;
 }) {
   const node = useNode();
   const account = useAccount();
@@ -74,6 +80,17 @@ export function ScreenFrame({
   useEffect(() => {
     handed.current = onShown;
   }, [onShown]);
+  // The view, read when the screen loads and passed on as it changes, without starting the frame again.
+  const viewNow = useRef(view);
+  const goes = useRef(onGo);
+  useEffect(() => {
+    goes.current = onGo;
+  }, [onGo]);
+  useEffect(() => {
+    if (viewNow.current === view) return;
+    viewNow.current = view;
+    live.current?.view(view);
+  }, [view]);
   // Only a record of a collection it shows: the address is anyone's to write, and a screen
   // handed any key would learn which records exist and which the person opens.
   const showing = shows.join('|');
@@ -137,6 +154,7 @@ export function ScreenFrame({
         app: appKey,
         port: channel.port1,
         host: screenHost(`minca.screen:${node.did}:${spaceId}:${appKey}:`, {
+          go: (next, title) => goes.current?.(next, title),
           open: (open) => ('record' in open ? opens.current(open.record) : setPerson(open.person)),
           // One choice at a time, asked of the person in this page, never the screen's to make.
           pick: (text) => {
@@ -167,6 +185,7 @@ export function ScreenFrame({
           settings: settingsNow.current,
           // Handed over with the document, since a message on the port before it is written in is lost
           shown: pending.current,
+          view: viewNow.current,
         },
         // The frame's origin is opaque, so it can't be named. The port is what carries anything that matters.
         '*',
@@ -276,8 +295,9 @@ function SharePicker({
  * saves files, asks the person to choose a record, and keeps the app's own
  * small things under `kept`, a prefix for this person, space and app.
  */
-function screenHost(kept: string, { open, pick }: Pick<ScreenHost, 'open' | 'pick'>): ScreenHost {
+function screenHost(kept: string, { go, open, pick }: Pick<ScreenHost, 'go' | 'open' | 'pick'>): ScreenHost {
   return {
+    go,
     open,
     pick,
     searchPlaces: (text, near) => searchPlaces(text, near ? { near } : {}),

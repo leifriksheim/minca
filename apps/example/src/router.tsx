@@ -72,10 +72,12 @@ const contacts = createRoute({
 const space = createRoute({
   getParentRoute: () => root,
   path: 'spaces/$spaceId',
-  // record: open in the panel beside; at: the record the open app was asked to show.
-  validateSearch: (search: Record<string, unknown>): { record?: string; at?: string } => ({
+  // record: open in the panel beside; at: the record the open app was asked to show; view: where in itself
+  // the open app's screen is (`minca.go`).
+  validateSearch: (search: Record<string, unknown>): { record?: string; at?: string; view?: string } => ({
     record: text(search.record),
     at: text(search.at),
+    view: text(search.view),
   }),
   component: SpaceLayout,
 });
@@ -222,6 +224,10 @@ declare module '@tanstack/react-router' {
   interface HistoryState {
     addPeople?: boolean;
     find?: boolean;
+    /** What an app's screen named the view this page of history is (`minca.go`), for the bar */
+    viewTitle?: string;
+    /** The page of history the app's screen started at, before its first step into itself */
+    viewBase?: number;
   }
 }
 

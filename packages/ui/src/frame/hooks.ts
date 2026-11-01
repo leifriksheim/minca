@@ -121,6 +121,17 @@ export function useShown(): { key: string } | null {
 }
 
 /**
+ * Where in itself the screen is, and the way to go elsewhere in it: `[view, go]`. `go(view, title)` is
+ * one level in, named `title` in the app's bar; its Back, and the phone's, come back out, so a screen
+ * draws no back button of its own. `go(null)` is back to the start.
+ */
+export function useView(): [string | null, (view: string | null, title?: string) => void] {
+  const [view, setView] = useState<string | null>(() => minca.view());
+  useEffect(() => minca.onView(setView), []);
+  return [view, (next, title) => void minca.go(next, title ?? null)];
+}
+
+/**
  * For a list: the key of the record this app was asked to show, once the
  * element with that `data-key` is drawn (it looks after each draw). The
  * element is scrolled to, and the key stays a moment, for `data-marked` to

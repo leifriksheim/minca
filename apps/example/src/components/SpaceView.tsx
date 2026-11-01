@@ -131,6 +131,9 @@ export interface SpaceScreen {
   readonly clearShown: () => void;
   /** Ask an agent to make an app, or make one by hand */
   readonly startCreating: () => void;
+  /** Where in itself the open app's screen is (`minca.view`), and going elsewhere in it (`minca.go`) */
+  readonly view: string | null;
+  readonly goView: (view: string | null, title: string | null) => void;
 }
 
 const SpaceScreenContext = createContext<SpaceScreen | null>(null);
@@ -178,7 +181,11 @@ function SpaceView({ space }: { space: SpaceSummary }) {
   // Where in the space you are, and the record open beside it: the address holds both.
   const leaf = useRouterState({ select: (state) => state.matches.at(-1)?.routeId });
   const openId = useParams({ strict: false }).appId;
-  const { record, at } = useSearch({ from: '/spaces/$spaceId' });
+  const { record, at, view } = useSearch({ from: '/spaces/$spaceId' });
+  // An app's own views (`minca.go`): which, by the address, and their names, kept with each page of history.
+  const viewTitle = useRouterState({ select: (state) => state.location.state.viewTitle });
+  const viewBase = useRouterState({ select: (state) => state.location.state.viewBase });
+  const historyAt = useRouterState({ select: (state) => state.location.state.__TSR_index });
   const onApps = leaf === APPS_ROUTE;
   const onApp = leaf === APP_ROUTE;
   const hood = HOOD.find((h) => h.to === leaf);
@@ -217,15 +224,48 @@ function SpaceView({ space }: { space: SpaceSummary }) {
   const canGoBack = useCanGoBack();
   // Home, to the list the space was opened from: from an app.
   const goHome = () => void navigate({ to: homeTab() });
-  // Anywhere else in the space (the Overview, its members, an invite, under the hood) is a step aside,
-  // named for itself in the bar: back to where you were. Where this page is where you came in, the
-  // Overview, and from the Overview, home.
-  const aside = !onApp;
+  // An app one level into itself: its bar is the app's own, naming where it is, and Back comes back out.
+  const inView = onApp && view !== undefined;
+  // Anywhere else in the space (the Overview, its members, an invite, under the hood, a view of an
+  // app's) is a step aside, named for itself in the bar: back to where you were. Where this page is
+  // where you came in, an app's start, the Overview, and from the Overview, home.
+  const aside = !onApp || inView;
   const goBack = () => {
     if (!aside) return goHome();
     if (canGoBack) return router.history.back();
+    if (inView) return goView(null, null);
     if (onApps) return goHome();
     go('/spaces/$spaceId');
+  };
+  /**
+   * The open app's screen going somewhere in itself. A step in is a page of history, so every Back
+   * comes back out, but only just after the person did something: a screen can't fill Back on its own.
+   * Its start is wherever it was before the first step in, so going there goes back that far.
+   */
+  const goView = (next: string | null, name: string | null) => {
+    const here = view ?? null;
+    if (next === here) {
+      if (next !== null)
+        void navigate({
+          to: '.',
+          search: (was) => was,
+          state: (was) => ({ ...was, viewTitle: name ?? undefined }),
+          replace: true,
+        });
+      return;
+    }
+    if (next === null) {
+      if (viewBase !== undefined && viewBase < historyAt) return router.history.go(viewBase - historyAt);
+      void navigate({ to: '.', search: (was) => ({ ...was, view: undefined }), replace: true });
+      return;
+    }
+    const tapped = globalThis.navigator.userActivation?.isActive ?? true;
+    void navigate({
+      to: '.',
+      search: (was) => ({ ...was, view: next }),
+      state: { viewTitle: name ?? undefined, viewBase: here === null ? historyAt : viewBase },
+      replace: !tapped,
+    });
   };
   // In Data, a record opens in its own collection. Elsewhere it opens in the app that shows its
   // collection, so a message opens in the chat: the open one if it does, else the only one, else
@@ -272,6 +312,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
 
   const fill = open ? fills(open) : false;
   const title =
+    (inView ? viewTitle : undefined) ??
     open?.title ??
     [
       ...SECTIONS,
@@ -295,6 +336,8 @@ function SpaceView({ space }: { space: SpaceSummary }) {
     shown: at,
     clearShown,
     startCreating: () => setCreating(true),
+    view: view ?? null,
+    goView,
   };
 
   return (
@@ -391,6 +434,20 @@ function SpaceView({ space }: { space: SpaceSummary }) {
               />
             </span>
             <span className="hide-on-phone" style={{ display: 'contents' }}>
+              {/* A wide screen has the rail to go between apps; Back only for an app's own views. */}
+              {inView && (
+                <button
+                  onClick={goBack}
+                  aria-label="Back"
+                  title="Back"
+                  className="group-button"
+                  style={barButton}
+                >
+                  <span style={{ display: 'inline-flex', transform: 'rotate(180deg)' }}>
+                    <Icon name="chevron" size={16} />
+                  </span>
+                </button>
+              )}
               {open && <AppIcon id={open.id} size={28} />}
               <h1 style={{ ...styles.appTitle, ...ui.ellipsis, flex: 1, minWidth: 0, fontSize: 18 }}>
                 {title}
@@ -530,7 +587,7 @@ function SpaceFace({ space, pair, size }: { space: SpaceSummary; pair: PairWith 
 
 /** An open app: its screen, or its records as lists */
 export function OpenApp({ app }: { app: AppEntry }) {
-  const { space, collections, openRecord, shown, clearShown } = useSpaceScreen();
+  const { space, collections, openRecord, shown, clearShown, view, goView } = useSpaceScreen();
   return (
     <MadeAppScreen
       space={space}
@@ -539,6 +596,8 @@ export function OpenApp({ app }: { app: AppEntry }) {
       onOpen={(r) => openRecord(r, app.record.body?.shows?.includes(r.collection))}
       shown={shown}
       onShown={clearShown}
+      view={view}
+      onGo={goView}
     />
   );
 }

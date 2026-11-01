@@ -20,11 +20,17 @@ export function DirectMessages({
   space,
   shown,
   onShown,
+  view,
+  onGo,
 }: {
   space: SpaceSummary;
   /** A message opened from elsewhere, to show in its conversation */
   shown?: string | undefined;
   onShown?: () => void;
+  /** The conversation open, as the app's views name it: who it is with, sorted, joined by commas */
+  view: string | null;
+  /** Opening one, one level in: the app's bar names it, and its Back comes back out */
+  onGo?: ((view: string | null, title: string | null) => void) | undefined;
 }) {
   const here = usePeopleHere();
   const people = here?.people ?? NOBODY;
@@ -36,21 +42,22 @@ export function DirectMessages({
   ]);
   const messages = useLive(space.id, async (n) => (sealable ? n.direct.list(space.id) : []), [sealable]);
   const conversations = conversationsOf(messages ?? [], me);
-  // Who the open conversation is with; null for the list itself.
-  const [open, setOpen] = useState<ReadonlyArray<string> | null>(null);
+  // Who the open conversation is with, from the address; null for the list itself.
+  const open = view ? view.split(',') : null;
+  const setOpen = (group: ReadonlyArray<string>) => onGo?.(group.join(','), namesOf(group, people));
   const [starting, setStarting] = useState(false);
 
   // A message opened from elsewhere opens its conversation, once it has arrived here, and is then
   // handed back so it isn't opened again.
-  const [handled, setHandled] = useState<string>();
-  if (shown && messages && shown !== handled) {
-    setHandled(shown);
+  const handled = useRef<string>(undefined);
+  useEffect(() => {
+    if (!shown || !messages || handled.current === shown) return;
+    handled.current = shown;
     const found = messages.find((m) => m.key === shown);
     if (found) setOpen(groupOf(found, me));
-  }
-  useEffect(() => {
-    if (shown && shown === handled) onShown?.();
-  }, [shown, handled, onShown]);
+    onShown?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setOpen is new each draw; what it reads is listed
+  }, [shown, messages, me, onShown]);
 
   if (!sealable)
     return (
@@ -117,14 +124,7 @@ export function DirectMessages({
         style={{ display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}
       >
         {current ? (
-          <Room
-            space={space}
-            people={people}
-            me={me}
-            with={current.with}
-            messages={current.messages}
-            onBack={() => setOpen(null)}
-          />
+          <Room space={space} people={people} me={me} with={current.with} messages={current.messages} />
         ) : (
           <p style={{ ...styles.emptyState, margin: 'auto' }}>Pick a conversation, or start one.</p>
         )}
@@ -202,14 +202,12 @@ function Room({
   me,
   with: others,
   messages,
-  onBack,
 }: {
   space: SpaceSummary;
   people: People;
   me: string;
   with: ReadonlyArray<string>;
   messages: ReadonlyArray<DirectMessage>;
-  onBack: () => void;
 }) {
   const node = useNode();
   const [draft, setDraft] = useState('');
@@ -233,17 +231,6 @@ function Room({
   return (
     <>
       <header className="chat-room-title" style={roomTitle}>
-        {/* A phone shows the list or a conversation, not both: the way back to the list. */}
-        <button
-          onClick={onBack}
-          aria-label="All conversations"
-          className="phone-only group-button"
-          style={backButton}
-        >
-          <span style={{ display: 'inline-flex', transform: 'rotate(180deg)' }}>
-            <Icon name="chevron" size={14} />
-          </span>
-        </button>
         <Faces dids={others} />
         <span style={{ ...stack(1), minWidth: 0 }}>
           <strong style={{ ...ui.ellipsis, fontSize: 15, color: palette.ink.strong }}>{names}</strong>
@@ -421,16 +408,6 @@ const roomTitle = {
   gap: 10,
   padding: '10px 16px',
   borderBottom: `1px solid ${palette.surface.line}`,
-} as const;
-const backButton = {
-  placeItems: 'center',
-  width: 32,
-  height: 32,
-  padding: 0,
-  border: 'none',
-  borderRadius: palette.radius.md,
-  background: 'none',
-  color: palette.ink.strong,
 } as const;
 const line = {
   display: 'flex',

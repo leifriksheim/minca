@@ -77,6 +77,11 @@ export interface Minca {
   onChange(listener: () => void): () => void;
   shown(): string | null;
   onShow(listener: (key: string) => void): () => void;
+  /** Where in itself the screen is: a view it went to with `go`, or null at its start */
+  view(): string | null;
+  /** Goes to a view, named `title` in the app's bar, whose Back comes back out; null goes back to the start */
+  go(view: string | null, title?: string | null): Promise<null>;
+  onView(listener: (view: string | null) => void): () => void;
   readonly live: {
     send(data: unknown, options?: { to?: string }): Promise<boolean>;
     on(listener: (heard: Heard) => void): () => void;

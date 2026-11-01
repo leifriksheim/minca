@@ -341,10 +341,12 @@
       >
         ${
           messages.length === 0 &&
-          html`<div class="empty">
-            <p style="font-size: 32px">👋</p>
-            <p>No messages yet. Say hello.</p>
-          </div>`
+          html`<${ui.Empty}
+            shape="scallop"
+            colour="cobalt"
+            title="No messages yet"
+            text="Say hello to everyone here."
+          />`
         }
         ${messages.map((m, i) => {
           const before = messages[i - 1];
