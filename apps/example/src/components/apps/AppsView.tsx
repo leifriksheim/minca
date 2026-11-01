@@ -8,7 +8,7 @@ import { useMay } from '@minca/app-shared/may';
 import { AddBotDialog } from '@minca/app-shared/CommunitySetup';
 import { FeatureIcon } from '@minca/app-shared/Feature';
 import { ConnectAgent } from '../ConnectAgent';
-import { APPS_SECTION, HOOD, sectionsOf, type SpaceScreen } from '../SpaceView';
+import { HOOD, sectionsOf, type SpaceScreen } from '../SpaceView';
 import { RowMenu } from '../PeopleParts';
 import type { AppEntry, useSpaceApps } from './entries';
 import { AppIcon, Count } from './AppIcon';
@@ -94,11 +94,7 @@ export function AppsView({
 
   return (
     <div style={stack(36)}>
-      <section
-        id={APPS_SECTION}
-        aria-label="Apps in this space"
-        style={{ ...stack(14), scrollMarginTop: 72 }}
-      >
+      <section aria-label="Apps in this space" style={stack(14)}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
           <div>
             <h2 style={{ ...styles.appTitle, fontSize: 20 }}>Apps</h2>

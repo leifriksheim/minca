@@ -41,8 +41,8 @@ People was before. A space this device doesn't have says so, with a link to your
 spaces, and shows itself if it turns up.
 
 A group is any space that isn't a space for two with one of your contacts; those
-are People. Opening either goes into the first app on its launcher (Chat, for a
-new group), so a group chooses where it opens by moving an app to the top.
+are People. Opening either goes to its Overview: its apps, who is in it and
+what is new.
 
 ```bash
 npm run dev         # at the repository root: this app on :5173, the account home on :5174, a node and relay on :8787

@@ -30,7 +30,7 @@ import { CallLayer } from './components/calls/Calls';
 import { NewSheet } from './components/NewSheet';
 import { AddButton, PrimaryButton } from './components/Buttons';
 import { Icon } from './components/Icon';
-import { addChat, landingApp } from './components/apps/entries';
+import { addChat } from './components/apps/entries';
 
 import { takeBack } from './contacts';
 import { styles, palette, hstack, stack, ui } from './styles';
@@ -68,15 +68,8 @@ function Workspace() {
   const navigate = useNavigate();
   const node = useNode();
   const pairs = usePairSpaces();
-  // Into the app the space opens with, the first on its launcher; a space with none opens on its apps.
-  const openSpace = (id: string) =>
-    void landingApp(node, id)
-      .catch(() => undefined)
-      .then((appId) =>
-        appId
-          ? navigate({ to: '/spaces/$spaceId/apps/$appId', params: { spaceId: id, appId } })
-          : navigate({ to: '/spaces/$spaceId', params: { spaceId: id } }),
-      );
+  // A space opens on its Overview: its apps, who is in it and what is new.
+  const openSpace = (id: string) => void navigate({ to: '/spaces/$spaceId', params: { spaceId: id } });
   const joinLink = (link: string) => mine.join(inviteFromLink(link));
   // A new group starts with Chat, with any contacts it was made for invited, and opens in it to add people.
   const create = async (params: NewSpace, invite: ReadonlyArray<string> = []) => {

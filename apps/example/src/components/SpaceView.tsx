@@ -72,9 +72,6 @@ export const HOOD = [
   about?: string;
 }>;
 
-/** The Overview's list of apps, by its id: where All in the apps menu leads */
-export const APPS_SECTION = 'space-apps';
-
 /** Where the seen store keeps when the Overview, and the proposals on it, were last looked at; no app has this id */
 const PROPOSALS = ':proposals';
 
@@ -226,15 +223,12 @@ function SpaceView({ space }: { space: SpaceSummary }) {
   const goHome = () => void navigate({ to: homeTab() });
   // An app one level into itself: its bar is the app's own, naming where it is, and Back comes back out.
   const inView = onApp && view !== undefined;
-  // Anywhere else in the space (the Overview, its members, an invite, under the hood, a view of an
-  // app's) is a step aside, named for itself in the bar: back to where you were. Where this page is
-  // where you came in, an app's start, the Overview, and from the Overview, home.
-  const aside = !onApp || inView;
+  // The Overview is where a space opens, so its Back goes home. Anywhere else in the space is a step
+  // in from it: back to where you were, or else to the Overview.
   const goBack = () => {
-    if (!aside) return goHome();
+    if (onApps) return goHome();
     if (canGoBack) return router.history.back();
     if (inView) return goView(null, null);
-    if (onApps) return goHome();
     go('/spaces/$spaceId');
   };
   /**
@@ -314,12 +308,8 @@ function SpaceView({ space }: { space: SpaceSummary }) {
   const title =
     (inView ? viewTitle : undefined) ??
     open?.title ??
-    [
-      ...SECTIONS,
-      ...HOOD,
-      { to: APPS_ROUTE, label: 'Overview' },
-      { to: '/spaces/$spaceId/new', label: 'Add app' },
-    ].find((part) => part.to === leaf)?.label ??
+    [...SECTIONS, ...HOOD, { to: '/spaces/$spaceId/new', label: 'Add app' }].find((part) => part.to === leaf)
+      ?.label ??
     name;
 
   const screen: SpaceScreen = {
@@ -399,8 +389,8 @@ function SpaceView({ space }: { space: SpaceSummary }) {
             <span className="phone-only bar-end">
               <button
                 onClick={goBack}
-                aria-label={aside ? 'Back' : 'Home'}
-                title={aside ? 'Back' : 'Home'}
+                aria-label={onApps ? 'Home' : 'Back'}
+                title={onApps ? 'Home' : 'Back'}
                 className="group-button"
                 style={barButton}
               >
@@ -410,25 +400,20 @@ function SpaceView({ space }: { space: SpaceSummary }) {
               </button>
             </span>
             <span className="phone-only bar-middle">
-              {/* In an app, the space's name leads to its Overview; anywhere else is named for itself. */}
-              {aside ? (
+              {/* The space on its Overview, the app in an app, and anywhere else, the page's own name. */}
+              <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                {onApps && <SpaceFace space={space} pair={pair} size={26} />}
+                {open && <AppIcon id={open.id} size={26} />}
                 <h1 style={{ ...styles.appTitle, ...ui.ellipsis, fontSize: 17 }}>{title}</h1>
-              ) : (
-                <button onClick={() => go('/spaces/$spaceId')} className="group-button" style={nameButton}>
-                  <SpaceFace space={space} pair={pair} size={26} />
-                  <span style={{ ...styles.appTitle, ...ui.ellipsis, fontSize: 17 }}>{name}</span>
-                </button>
-              )}
+              </span>
             </span>
             <span className="phone-only bar-end" style={{ justifySelf: 'end', maxWidth: '100%' }}>
               <AppSwitcher
                 space={space}
                 apps={apps.ready}
                 unread={unread}
-                newProposals={newProposals}
                 open={open}
                 onNew={onNew}
-                onOverview={onApps}
                 go={go}
                 openApp={openApp}
               />
@@ -724,27 +709,22 @@ function SpaceMenu({
 
 /**
  * A phone's way between apps: the grid at the right of its bar opens every app as a grid of their
- * shapes, after All (the Overview), with what is new in each, a slot to add one, and the way to all of them laid out.
+ * shapes, with what is new in each and a slot to add one.
  */
 function AppSwitcher({
   space,
   apps,
   unread,
-  newProposals,
   open,
   onNew,
-  onOverview,
   go,
   openApp,
 }: {
   space: SpaceSummary;
   apps: ReadonlyArray<AppEntry>;
   unread: ReturnType<typeof useUnread>;
-  newProposals: Unread;
   open: AppEntry | undefined;
   onNew: boolean;
-  /** On the Overview already */
-  onOverview: boolean;
   go: (to: SpacePath) => void;
   openApp: (id: string) => void;
 }) {
@@ -776,27 +756,6 @@ function AppSwitcher({
       {shown && (
         <nav aria-label="Apps" className="drop" style={{ ...menu, left: 'auto', right: 0, padding: 12 }}>
           <div className="app-switch">
-            {/* Every app laid out, with the ones proposed: the Overview, where its apps come first. */}
-            <button
-              onClick={then(() =>
-                // Already there, it scrolls back up to the apps; elsewhere, the Overview opens at them.
-                onOverview
-                  ? globalThis.document.getElementById(APPS_SECTION)?.scrollIntoView({ behavior: 'smooth' })
-                  : go('/spaces/$spaceId'),
-              )}
-              aria-current={onOverview ? 'page' : undefined}
-              className="rail-item"
-            >
-              <span className="rail-icon">
-                <span className="rail-glyph" style={{ width: 36, height: 36 }}>
-                  <Icon name="apps" size={22} />
-                </span>
-                <span className="rail-count">
-                  <Count unread={newProposals} />
-                </span>
-              </span>
-              <span className="rail-label">All</span>
-            </button>
             {apps.map((app) => (
               <button
                 key={app.id}
@@ -878,18 +837,6 @@ const barButton = {
   color: palette.ink.strong,
 } as const;
 
-const nameButton = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 10,
-  maxWidth: '100%',
-  padding: '4px 10px 4px 4px',
-  border: 'none',
-  borderRadius: palette.radius.md,
-  background: 'none',
-  textAlign: 'left' as const,
-  color: palette.ink.strong,
-};
 /** The space's face alone, as a rail's first tile */
 const faceButton = {
   display: 'flex',
