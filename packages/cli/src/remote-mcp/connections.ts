@@ -11,8 +11,10 @@
  * starts from what it synced last time.
  *
  * A connection goes, key, spaces and all, once it can't act any more: its
- * note run out, or its key revoked. So a host keeps no key that could still
- * sign for someone who has moved on, and an account keeps only its newest few.
+ * note run out, or its key revoked, which its agent hears the next time it
+ * runs. A revoked key writes nothing any peer takes; one past its note would
+ * still count (06 §2.9), so a host doesn't keep it. An account keeps only its
+ * newest few.
  */
 import { didOf, type NodeConfig, type P2PNode, type StorageAdapter, type StoreFactory } from '@minca/core';
 import { checkGrant, usableGrant, type Grant } from '@minca/core/session';
@@ -49,8 +51,11 @@ export interface Connections {
   get(id: string): Promise<Connection | null>;
   /** Whether a connection can still act: there, its note running, its key not revoked */
   usable(id: string): Promise<boolean>;
-  /** The connection's agent node, started if it isn't */
-  node(id: string): Promise<P2PNode>;
+  /**
+   * Runs `work` on the connection's agent node, started if it isn't. One node
+   * per connection, ever: two signing with one key would fork its line.
+   */
+  use<T>(id: string, work: (node: P2PNode) => Promise<T>): Promise<T>;
   /** Forgets a connection: its key, its grant and the spaces its agent kept */
   forget(id: string): Promise<void>;
   /** Forgets every connection that can't act any more */
@@ -93,6 +98,8 @@ const usableNow = (connection: Connection) => !connection.revoked && usableGrant
 interface Running {
   readonly started: Promise<{ node: P2PNode; stop(): Promise<void> }>;
   timer?: ReturnType<typeof setTimeout>;
+  /** Calls running on it now: it isn't stopped under them */
+  busy: number;
 }
 
 export function createConnections(options: {
@@ -112,6 +119,8 @@ export function createConnections(options: {
   const log = options.log ?? (() => {});
   /** Agents running, the one used last at the end */
   const running = new Map<string, Running>();
+  /** Agents stopping: one starts again on the same stores only once it has */
+  const stopping = new Map<string, Promise<void>>();
 
   const read = async (id: string): Promise<Connection | null> => {
     const bytes = await options.store.get(`${PREFIX}${id}`);
@@ -137,19 +146,61 @@ export function createConnections(options: {
 
   const stop = async (id: string) => {
     const one = running.get(id);
-    if (!one) return;
+    if (!one) return stopping.get(id);
     running.delete(id);
     clearTimeout(one.timer);
-    await one.started.then((started) => started.stop()).catch(() => {});
+    const stopped = one.started.then((started) => started.stop()).catch(() => {});
+    stopping.set(id, stopped);
+    await stopped;
+    if (stopping.get(id) === stopped) stopping.delete(id);
   };
 
   const idleLater = (id: string) => {
     const one = running.get(id);
     if (!one) return;
     clearTimeout(one.timer);
-    one.timer = setTimeout(() => void stop(id), options.idleMs ?? IDLE_MS);
+    one.timer = setTimeout(() => {
+      if (one.busy === 0) void stop(id);
+      else idleLater(id);
+    }, options.idleMs ?? IDLE_MS);
     one.timer.unref?.();
   };
+
+  /** Stops agents used longest ago, none with a call running, until there is room for one more */
+  const makeRoom = async () => {
+    for (const [id, one] of running) {
+      if (running.size < (options.running ?? RUNNING)) return;
+      if (one.busy === 0) await stop(id);
+    }
+  };
+
+  /** The connection's agent: running, or started now and marked running before anything is awaited */
+  function agentOf(id: string): Running {
+    const one = running.get(id);
+    if (one) {
+      // Used now: last in line to be stopped.
+      running.delete(id);
+      running.set(id, one);
+      return one;
+    }
+    const made: Running = {
+      busy: 0,
+      started: (async () => {
+        await stopping.get(id);
+        const connection = await read(id);
+        if (!connection || !usableNow(connection))
+          throw new Error('This connection can no longer act for the account. Connect again.');
+        return start(connection);
+      })(),
+    };
+    running.set(id, made);
+    made.started.catch((error: unknown) => {
+      log(`connector ${id}: could not start: ${messageOf(error)}`);
+      if (running.get(id) === made) running.delete(id);
+    });
+    void makeRoom();
+    return made;
+  }
 
   async function forget(id: string) {
     await stop(id);
@@ -171,7 +222,9 @@ export function createConnections(options: {
       grant: connection.grant,
       keys,
       stores: options.stores(connection.id),
-      network: options.network(),
+      // Only the host's own socket: a grant's invites, and the records the agent reads, are the
+      // account's to fill in, and must not choose where the host connects or what it keeps.
+      network: { ...options.network(), only: true },
     });
     const unsubscribe = agent.node.subscribe((event) => {
       if (event.type !== 'revoked') return;
@@ -229,32 +282,16 @@ export function createConnections(options: {
       return !!connection && usableNow(connection);
     },
 
-    async node(id) {
-      let one = running.get(id);
-      if (one) {
-        // Used now: last in line to be stopped.
-        running.delete(id);
-        running.set(id, one);
-      } else {
-        const connection = await read(id);
-        if (!connection || !usableNow(connection))
-          throw new Error('This connection can no longer act for the account. Connect again.');
-        while (running.size >= (options.running ?? RUNNING)) {
-          const [oldest] = running.keys();
-          if (oldest === undefined) break;
-          await stop(oldest);
-        }
-        const started = start(connection);
-        const made: Running = { started };
-        one = made;
-        running.set(id, made);
-        started.catch((error: unknown) => {
-          log(`connector ${id}: could not start: ${messageOf(error)}`);
-          if (running.get(id) === made) running.delete(id);
-        });
+    async use(id, work) {
+      const one = agentOf(id);
+      one.busy += 1;
+      try {
+        const { node } = await one.started;
+        return await work(node);
+      } finally {
+        one.busy -= 1;
+        idleLater(id);
       }
-      idleLater(id);
-      return (await one.started).node;
     },
 
     forget,

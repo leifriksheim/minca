@@ -622,7 +622,8 @@ export async function openPeers(deps: PeersDeps) {
      * are closed.
      */
     useNodes: (nodes: ReadonlyArray<string>): void => {
-      if (!net || deps.isClosed()) return;
+      // A node told to reach only what it was given holds no other socket, whoever names it.
+      if (!net || net.only || deps.isClosed()) return;
       const configured = new Set(net.nodes ?? []);
       const wanted = new Set(nodes.filter((node) => !configured.has(node)));
       for (const [node, network] of hostNetworks) {

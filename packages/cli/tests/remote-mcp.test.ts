@@ -25,6 +25,7 @@ import { createFakeHub, type FakeHub } from '../../core/tests/helpers/fake-trans
 import { hold } from '../../core/tests/helpers/hold.js';
 import { until } from '../../core/tests/helpers/until.js';
 import { createRemoteMcp, type RemoteMcp } from '../src/remote-mcp/index.js';
+import { createConnections } from '../src/remote-mcp/connections.js';
 import { mayRedirect } from '../src/remote-mcp/redirects.js';
 import { isRecord } from '../src/json.js';
 import { onHub } from './helpers/nodes.js';
@@ -574,6 +575,77 @@ describe('a host’s MCP endpoint', () => {
     assert.match(html, /Connect Claude to Minca/);
     assert.match(html, /go back to claude\.ai/);
     assert.match(page.headers.get('content-security-policy') ?? '', /script-src 'sha256-[A-Za-z0-9+/=]+'/);
+  });
+});
+
+describe('a connection’s agent', () => {
+  test('calls at once for an idle connection start one agent, never two under one key', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    const stores = memoryStores();
+    const starts: string[] = [];
+    const connections = createConnections({
+      store: await stores('host-mcp'),
+      stores: (id) => {
+        starts.push(id);
+        return (where) => stores(`agents/${id}/${where}`);
+      },
+      drop: async () => {},
+      network: () => onHub(hub),
+    });
+    closing.push(() => connections.close());
+    const key = await browserKey();
+    const connection = await connections.add({
+      key: key.jwk,
+      grant: await ada.grantFor(key.did),
+      client: 'Claude',
+    });
+    const nodes = await Promise.all(
+      Array.from({ length: 8 }, () => connections.use(connection.id, async (node) => node)),
+    );
+    assert.equal(starts.length, 1, 'one agent started');
+    assert.ok(
+      nodes.every((node) => node === nodes[0]),
+      'and every call ran on it',
+    );
+  });
+
+  test('a key revoked while its agent was idle is heard the next time it runs, and the connection is then forgotten', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    const space = await ada.node.spaces.create({ name: 'Diary', visibility: 'private' });
+    await hold(ada.node, space.id);
+    const host = await aHost(hub);
+    const app = await anApp(host.resource);
+    const { tokens, did } = await signIn(app, host.resource, (audience) => ada.grantFor(audience));
+    const client = await mcpClient(host.resource, tokens.access_token);
+    await until(
+      async () => textOf(await client.callTool({ name: 'spaces_list', arguments: {} })).includes(space.id),
+      8000,
+      'the agent to find the space',
+    );
+    await ada.node.spaces.revoke(space.id, did);
+    // Any call runs the agent, which hears the revoke as it syncs; the sweep then forgets it.
+    await until(
+      async () => {
+        await client.callTool({ name: 'spaces_list', arguments: {} }).catch(() => null);
+        await host.remote.sweep();
+        return (await host.connections()) === 0;
+      },
+      10_000,
+      'the host to forget the revoked connection',
+    );
+    assert.equal(host.dropped.length, 1);
+    const after = await fetch(host.resource, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        authorization: `Bearer ${tokens.access_token}`,
+      },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+    });
+    assert.equal(after.status, 401);
   });
 });
 

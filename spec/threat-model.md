@@ -1261,25 +1261,31 @@ _Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6, §9; 01 §15.2; 06 §3. Tests: 
     consent page says so before the person allows it. Records count until the
     key is revoked, not until the note runs out (06 §2.9), so a host that
     keeps a key past its note, or whoever later reads its disk, can still
-    sign with it; the reference host forgets a connection, key and agent's
-    spaces, once its note runs out or its key is revoked, and an account's
-    oldest past its newest ten (`createConnections` in
-    `packages/cli/src/remote-mcp/connections.ts`). Member keys open what they
-    opened after that ([#165](https://github.com/leifriksheim/minca/issues/165)).
-    The reference host shows its consent page for every sign-in, keeps no
-    sign-in in the browser to skip it with, and lets an app register only
-    places a code is safe at: a chat app it knows by name over https, this
-    computer, or a named app's own scheme, never one that opens a browser at
-    any address (`createOAuth` in `packages/cli/src/remote-mcp/oauth.ts`,
-    `mayRedirect` in `packages/cli/src/remote-mcp/redirects.ts`;
+    sign with it. The reference host forgets a connection, key and agent's
+    spaces, once its note runs out, or once its agent hears the key revoked,
+    which is the next time it runs; and an account's oldest past its newest
+    ten (`createConnections` in `packages/cli/src/remote-mcp/connections.ts`).
+    Member keys open what they opened after that
+    ([#165](https://github.com/leifriksheim/minca/issues/165)). Its agents
+    reach only the host's own socket (`network.only`), so a grant's invites
+    and the records an agent reads can't make the host connect elsewhere or
+    keep a space it doesn't carry (`packages/cli/tests/remote-mcp-host.test.ts`).
+    It shows its consent page for every sign-in, keeps no sign-in in the
+    browser to skip it with, and lets an app register only places a code is
+    safe at: a chat app it knows by name over https, this computer, or a named
+    app's own scheme, never one that opens a browser at any address
+    (`createOAuth` in `packages/cli/src/remote-mcp/oauth.ts`, `mayRedirect` in
+    `packages/cli/src/remote-mcp/redirects.ts`;
     `packages/cli/tests/remote-mcp.test.ts`, "an app can't register a place a
     code may not go…", "a browser that connected an app is shown the consent
-    page again…"). So a code goes only to an app the person saw named. A
-    sign-in someone else started at that app, and sent them, can still land
-    in the other's account there, unless the app ties OAuth's `state` to the
-    browser that started it; the host can't tell. None of this is protocol:
-    to every peer a connection is an app with a records-only note (§3.6), and
-    a dishonest host need not run that code.
+    page again…"). So a code goes only to the site or app scheme the page
+    names; at a site shared by many apps, as claude.ai and chatgpt.com are,
+    that is whichever app registered there under the name shown. A sign-in
+    someone else started, and sent the person, can land in the other's
+    account at that app, unless the app ties OAuth's `state` to the browser
+    that started it; the host can't tell. None of this is protocol: to every
+    peer a connection is an app with a records-only note (§3.6), and a
+    dishonest host need not run that code.
   - A removed carrier keeps proving read until the key changes ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_.
   - It sees envelopes: authors, collections, record keys, timing, and the
     member list. `profile:` keys and collection names say whose and what

@@ -306,9 +306,12 @@ days, made out to a key the page made, and the page hands both to the host.
 Then you are back in the app, and its tools arrive. The host keeps that key
 and runs the agent under it, a node of its own that starts on the first call
 and stops when unused; so, unlike `minca connect`, the host can read the
-spaces you gave it. Disconnecting it at your account home stops it, and
-when its note runs out the app asks you to sign in again; either way the
-host then forgets the connection, its key and the spaces its agent kept.
+spaces you gave it. The agent reaches its spaces only through the host's own
+socket, so it works in the spaces this host carries, and nowhere a grant or a
+record would send it. Disconnecting it at your account home stops what it
+writes counting at once; the host forgets the connection, its key and the
+spaces its agent kept, the next time its agent runs or when its note runs
+out, and the app asks you to sign in again.
 
 It is OAuth 2.1 with PKCE and dynamic client registration, on
 [`oidc-provider`](https://github.com/panva/node-oidc-provider), and MCP over
@@ -319,8 +322,10 @@ sign-in shows the consent page: the host keeps no sign-in in your browser to
 skip it with. An app may register only places a code is safe at: a chat app
 the host knows by name over https (Claude's and ChatGPT's, and
 `MINCA_HOST_MCP_APPS`), this computer, or a known app's own scheme (`cursor:`,
-`vscode:`), never one that opens a browser at any address. So a code never
-goes anywhere but an app you see named on the page. Whether a sign-in someone
+`vscode:`), never one that opens a browser at any address. So a code goes
+only to the site or app scheme the page names: on a shared site such as
+claude.ai, that is any connector there, which is why the name the app gave
+itself is shown beside it. Whether a sign-in someone
 else started, and sent you, could land in their account at that app is the
 app's to check (OAuth's `state`), not the host's.
 

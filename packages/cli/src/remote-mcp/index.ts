@@ -204,13 +204,15 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
         if (!hostedTools().some((tool) => tool.name === name))
           return { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true };
         if (!connection) return { content: [{ type: 'text', text: 'Not signed in.' }], isError: true };
-        let node;
+        let said: Awaited<ReturnType<typeof callAction>>;
         try {
-          node = await connections.node(connection);
+          said = await connections.use(connection, (node) =>
+            callAction(node, name, request.params.arguments ?? {}),
+          );
         } catch (error) {
           return { content: [{ type: 'text', text: messageOf(error) }], isError: true };
         }
-        const { text, isError, value } = await callAction(node, name, request.params.arguments ?? {});
+        const { text, isError, value } = said;
         return {
           content: [{ type: 'text', text }],
           ...(isError ? {} : { structuredContent: isRecord(value) ? value : { result: value } }),

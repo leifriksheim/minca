@@ -153,13 +153,20 @@ export function createConsent(options: ConsentOptions) {
     const asked = text(details.params.scope).split(' ');
     grant.addOIDCScope(['offline_access', ...asked.filter((scope) => scope === MCP_SCOPE)].join(' '));
     grant.addResourceScope(options.resource, MCP_SCOPE);
-    const grantId = await grant.save();
-    const redirectTo = await provider.interactionResult(
-      req,
-      res,
-      { login: { accountId: connection.id }, consent: { grantId } },
-      { mergeWithLastSubmission: false },
-    );
+    let redirectTo: string;
+    try {
+      const grantId = await grant.save();
+      redirectTo = await provider.interactionResult(
+        req,
+        res,
+        { login: { accountId: connection.id }, consent: { grantId } },
+        { mergeWithLastSubmission: false },
+      );
+    } catch (error) {
+      // No app will act through it: its key isn't kept.
+      await options.connections.forget(connection.id);
+      throw error;
+    }
     log(
       `connector ${connection.id}: ${name} connected for ${connection.grant.name} (${connection.grant.did})`,
     );

@@ -148,9 +148,11 @@ change once apps have connected: every token names it.
 What anyone can make it keep is bounded: an address may register 20 apps a
 day and start 120 sign-ins an hour, and what runs out is swept hourly. An
 account keeps its newest 10 connections, at most 32 agents run at once, and
-a connection whose note ran out, or whose key the account revoked, is
-forgotten with its key and the spaces its agent kept, under
-`<data>/mcp-agents/`.
+a connection whose note ran out, or whose key the account revoked (heard the
+next time its agent runs), is forgotten with its key and the spaces its agent
+kept, under `<data>/mcp-agents/`. An agent reaches its spaces only through
+this host's own socket, never a node an invite or a record names, so it holds
+only spaces this host carries, which its limits already bound.
 
 _Source: `packages/cli/src/remote-mcp/` (`connections.ts`, `oauth.ts`, `redirects.ts`), `packages/cli/src/host-setup.ts` (`mcpFromEnv`). Tests: `packages/cli/tests/remote-mcp.test.ts`._
 

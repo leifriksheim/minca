@@ -216,9 +216,10 @@ export async function createOAuth(options: OAuthOptions) {
       validator: (_ctx, _key, value, metadata) => {
         const uris: unknown = metadata.redirect_uris;
         if (Array.isArray(uris) && !uris.every((uri) => typeof uri === 'string' && options.mayRedirect(uri)))
-          throw new errors.InvalidRedirectUri(
-            'a code may go only to a chat app this host knows, this computer, or a known app',
-          );
+          throw Object.assign(new errors.InvalidRedirectUri(), {
+            error_description:
+              'a code may go only to a chat app this host knows over https, this computer, or a known app’s scheme',
+          });
         if (value !== undefined && (typeof value !== 'string' || value.length > MAX_CLIENT_NAME))
           throw new errors.InvalidClientMetadata(
             `client_name must be a string of at most ${MAX_CLIENT_NAME} characters`,
