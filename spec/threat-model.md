@@ -967,6 +967,10 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
   - `scope: account` hands over the account key, and `scope: spaces` member
     keys, neither of which ever rotates. It reads what those keys open after
     its grant expires ([#165](https://github.com/leifriksheim/minca/issues/165)).
+    That includes the account's direct messages in those spaces, though they
+    are sealed beyond the space key: the library refuses to open them for an
+    agent, but the keys it holds open them all the same
+    (`packages/core/docs/direct-messages.md`) _(traced)_.
   - A key whose note grants everything about the account (`/`, no policy),
     an app granted write to every space included, can pose as the account's
     node to a client that pinned the account, and a pin checks no revoke. A

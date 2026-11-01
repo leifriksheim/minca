@@ -97,7 +97,11 @@ moved to another reader's slot.
   with `text: null` for one this node can't open.
 
 They need the account's member key for the space. An agent isn't given it, so
-an agent may only ask `reachable`. A bot is an account of its own and holds
+an agent may only ask `reachable` through `node.direct`. That is the library's
+refusal, not sealing: an app or program granted the whole account holds the
+account key every member key derives from, and one granted a private space
+holds its member key, so either can open the account's direct messages there
+with code of its own ([threat model §3.6](../../../spec/threat-model.md)). A bot is an account of its own and holds
 one, so it reads and sends them like anyone: the actions `direct_list` and
 `direct_send` ([actions](actions.md)) are offered to bots, not to agents,
 and an automation set off by a direct message hands the bot the message opened.

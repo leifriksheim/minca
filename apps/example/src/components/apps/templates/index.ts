@@ -73,7 +73,7 @@ export const TEMPLATES: ReadonlyArray<Template> = [
       template: DIRECT,
       title: 'Direct messages',
       description:
-        'Write to one or a few people in the group. Only they can read it; the rest see that you wrote, not what.',
+        'Write to one or a few people in the group, sealed for them: the rest see that you wrote, not what.',
       collections: [direct.name],
       shows: [direct.name],
       notify: [notifyOn('Messages to me', direct.name, { to: { $contains: '$me' } })],

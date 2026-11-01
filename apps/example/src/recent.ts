@@ -38,6 +38,11 @@ export const byRecent = <T extends { readonly space: SpaceSummary }>(
   items: ReadonlyArray<T>,
   last: ReadonlyMap<string, string>,
 ): ReadonlyArray<T> => {
-  const at = (item: T) => last.get(item.space.id) ?? item.space.createdAt;
+  // A writer dates its own records: one from the future would hold its space at the top for good.
+  const now = new Date().toISOString();
+  const at = (item: T) => {
+    const when = last.get(item.space.id) ?? item.space.createdAt;
+    return when > now ? now : when;
+  };
   return [...items].sort((a, b) => at(b).localeCompare(at(a)));
 };

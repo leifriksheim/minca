@@ -169,7 +169,12 @@ function conversationsOf(messages: ReadonlyArray<DirectMessage>, me: string): Re
     found.messages.push(m);
     byGroup.set(group.join(','), found);
   }
-  const last = (c: Conversation) => c.messages.at(-1)?.createdAt ?? '';
+  // Writers date their own messages: one from the future must not hold its conversation at the top.
+  const now = new Date().toISOString();
+  const last = (c: Conversation) => {
+    const when = c.messages.at(-1)?.createdAt ?? '';
+    return when > now ? now : when;
+  };
   return [...byGroup.values()].sort((a, b) => last(b).localeCompare(last(a)));
 }
 
@@ -243,8 +248,7 @@ function Room({
         <span style={{ ...stack(1), minWidth: 0 }}>
           <strong style={{ ...ui.ellipsis, fontSize: 15, color: palette.ink.strong }}>{names}</strong>
           <span style={{ fontSize: 12.5, color: palette.ink.muted }}>
-            <Icon name="lock" size={11} />{' '}
-            {others.length === 1 ? 'Only the two of you can read this' : 'Only the people here can read this'}
+            <Icon name="lock" size={11} /> Sealed for the people in this conversation
           </span>
         </span>
       </header>
@@ -379,7 +383,7 @@ function StartDialog({
           {found.length === 0 && <p style={styles.quiet}>Nobody by that name.</p>}
         </div>
         <p style={styles.quiet}>
-          Only the people you pick can read it. Others in the group see that you wrote, not what.
+          Sealed for the people you pick. Others in the group see that you wrote, not what.
         </p>
         <PrimaryButton type="submit" disabled={picked.length === 0}>
           Write to {picked.length === 0 ? '…' : namesOf(picked, people)}

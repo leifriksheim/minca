@@ -395,8 +395,8 @@ function Approve({
 
       {whole && !recordsOnly && (
         <Note title="Your whole account">
-          Every space, private ones too, your contacts and contact requests. It can make and join spaces for
-          you, but can’t sign in as you or change your password or passkeys.
+          Every space, private ones too, your direct messages, contacts and contact requests. It can make and
+          join spaces for you, but can’t sign in as you or change your password or passkeys.
         </Note>
       )}
 
@@ -451,8 +451,8 @@ function Approve({
       )}
 
       <p style={{ ...styles.errorHint, marginBottom: 20 }}>
-        Stays in sync for {lasts(request.days ?? 7)}, then asks again. What it changes stays; disconnect it in
-        your account to cut it off.
+        Stays in sync for {lasts(request.days ?? 7)}, then asks again. What it changes, and what it sets up to
+        run, counts until you disconnect it in your account.
         {(whole || privateChosen) && ' Reading the private spaces it gets can’t be taken back yet.'}
       </p>
 
