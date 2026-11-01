@@ -39,7 +39,7 @@
     "@minca/relay": "*",
     "@types/node": "^26.6.5",
     "add-mcp": "2.4.1",
-    "esbuild": "^0.28.0",
+    "esbuild": "^0.28.2",
     "tsx": "^4.19.0"
   },
   "publishConfig": {
