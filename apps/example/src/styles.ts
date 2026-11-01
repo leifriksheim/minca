@@ -110,7 +110,7 @@ export function injectBaseStyles(): void {
     /* A phone's bar along the foot of a space (below); a wide screen has the rail. */
     .space-bar {
       flex-shrink: 0; display: flex; align-items: center; gap: 10px; height: 60px; padding: 0 24px;
-      background: ${surface.page};
+      border-bottom: 1px solid ${surface.rule}; background: ${surface.page};
     }
     .space-content { flex: 1; min-height: 0; overflow-y: auto; padding: 28px 32px 64px; }
     /* Data arriving: a hairline along the top of the screen, a light running across it, there only while
@@ -387,6 +387,8 @@ export function injectBaseStyles(): void {
       .space-content { flex: 1 0 auto; }
       /* Back, where you are, the apps: the middle stays in the middle whatever is at either end. */
       .space-bar {
+        /* No rule under it: on a phone the bar and the page are one. */
+        border-bottom: none;
         display: grid; grid-template-columns: minmax(40px, 1fr) minmax(0, auto) minmax(40px, 1fr);
         position: sticky; top: 0; z-index: 8; height: auto; min-height: 56px; gap: 8px;
         padding: env(safe-area-inset-top) max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left));
