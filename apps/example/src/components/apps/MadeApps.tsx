@@ -400,6 +400,8 @@ export function MadeAppScreen({
   onOpen,
   shown,
   onShown,
+  view,
+  onGo,
 }: {
   space: SpaceSummary;
   record: NodeRecord<LauncherApp>;
@@ -408,6 +410,9 @@ export function MadeAppScreen({
   /** A record its screen was asked to show (`shows`), and what to do once it has been handed over */
   shown?: string | undefined;
   onShown?: () => void;
+  /** Where in itself its screen is, and going somewhere else in it (`minca.go`) */
+  view?: string | null;
+  onGo?: (view: string | null, title: string | null) => void;
 }) {
   const body = record.body!;
   const names = body.collections ?? [];
@@ -433,6 +438,8 @@ export function MadeAppScreen({
           shows={body.shows}
           shown={shown}
           onShown={onShown}
+          view={view ?? null}
+          onGo={onGo}
         />
       ) : (
         // The app fills the window edge to edge, so the lists bring their own margin and scroll.

@@ -421,6 +421,7 @@ function fakeHost(chosen: NodeRecord | null = null) {
   const asked: unknown[][] = [];
   const kept = new Map<string, unknown>();
   const host: ScreenHost = {
+    go: (view, title) => void asked.push(['go', view, title]),
     open: (target) => void asked.push(['open', target]),
     pick: async (text) => (asked.push(['pick', text]), chosen),
     searchPlaces: async (text, near) => (asked.push(['searchPlaces', text, near]), []),
@@ -692,6 +693,44 @@ describe('a record opened from elsewhere', () => {
     port.onmessage?.({ data: { show: 'message-1' } });
     assert.equal(Reflect.apply(minca.shown, undefined, []), 'message-1');
     assert.deepEqual(told, ['message-1']);
+  });
+
+  test('a screen goes one level into itself through the page, which keeps where it is and tells it', async () => {
+    const { alice, space } = await setup();
+    const { host, asked } = fakeHost();
+    const { call, close } = bridgeFor(alice.node, space, [], host);
+    try {
+      assert.equal((await call('go', 'list-1', '  Groceries\n for the week ')).ok, true);
+      assert.equal((await call('go', null)).ok, true, 'back to the start');
+      assert.equal((await call('go', '', 'Empty')).ok, false, 'a view is some text');
+      assert.equal((await call('go', 'x'.repeat(201))).ok, false, 'short enough for the address');
+      assert.equal((await call('go', 'list-1', 'x'.repeat(81))).ok, false, 'short enough for the bar');
+      assert.deepEqual(asked, [
+        ['go', 'list-1', 'Groceries for the week'],
+        ['go', null, null],
+      ]);
+    } finally {
+      close();
+    }
+
+    // The script in front of the screen starts where the page is, and hears each move, Back included.
+    const port: { postMessage: () => void; onmessage: ((event: unknown) => void) | null } = {
+      postMessage: () => {},
+      onmessage: null,
+    };
+    const window: Record<string, unknown> = {
+      __minca: { port, me: { did: 'did:key:zMe', name: 'Anna' }, collections: [], view: 'list-1' },
+    };
+    runScreenClient(window, () => {}, {});
+    const minca = window.minca;
+    assert.ok(isRecord(minca) && typeof minca.view === 'function' && typeof minca.onView === 'function');
+    assert.equal(Reflect.apply(minca.view, undefined, []), 'list-1');
+    const told: unknown[] = [];
+    Reflect.apply(minca.onView, undefined, [(view: unknown) => told.push(view)]);
+    port.onmessage?.({ data: { view: null } });
+    port.onmessage?.({ data: { view: 'list-2' } });
+    assert.equal(Reflect.apply(minca.view, undefined, []), 'list-2');
+    assert.deepEqual(told, [null, 'list-2']);
   });
 
   test('an app may only show collections it has', () => {
