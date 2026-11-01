@@ -1,7 +1,10 @@
 /**
- * A phone draws the whole app a little larger, the way a browser's page zoom does: the page is laid out
- * as if the screen were a little narrower, then scaled up to fill it. Text, icons and spacing grow
- * together, and nothing is laid out for a width it doesn't have. Only on a touchscreen in portrait as
+ * Installed on a phone, the app draws itself a little larger, the way a browser's page zoom does: the
+ * page is laid out as if the screen were a little narrower, then scaled up to fill it. Text, icons and
+ * spacing grow together, and nothing is laid out for a width it doesn't have.
+ *
+ * Only installed (standalone), where there is no browser zoom to set: in a browser the person's own page
+ * zoom decides, and this on top of it would make the app too large. Only on a touchscreen in portrait as
  * narrow as a phone's; a tablet, a phone on its side and every window with a mouse keep their size.
  */
 
@@ -17,7 +20,11 @@ function apply(meta: HTMLMetaElement): void {
   const portrait = globalThis.matchMedia('(orientation: portrait)').matches;
   const { width, height } = globalThis.screen;
   const across = portrait ? Math.min(width, height) : Math.max(width, height);
-  const phone = globalThis.matchMedia('(pointer: coarse)').matches && portrait && across <= 500;
+  // iOS says it was opened from the home screen with navigator.standalone; everyone else, with display-mode.
+  const installed =
+    globalThis.matchMedia('(display-mode: standalone)').matches ||
+    ('standalone' in globalThis.navigator && globalThis.navigator.standalone === true);
+  const phone = installed && globalThis.matchMedia('(pointer: coarse)').matches && portrait && across <= 500;
   const scale = phone ? Math.min(MOST, across / NARROWEST) : 1;
   meta.content =
     scale > 1.01

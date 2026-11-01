@@ -8,7 +8,7 @@ import { tellDesktop } from './desktop';
 import { router } from './router';
 import { scaleForPhone } from './phone-scale';
 
-// Before anything is laid out: a phone draws the app a little larger, as a page zoom would.
+// Before anything is laid out: installed on a phone, the app draws itself a little larger, as a page zoom would.
 scaleForPhone();
 
 // Hover, focus and placeholder states, plus the page background — the things
