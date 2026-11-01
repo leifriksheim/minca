@@ -12,6 +12,9 @@ import { isObject } from '../../derive/schema-ui';
 import { styles, palette } from '../../styles';
 import { QuietButton } from '../Buttons';
 
+/** How long after a screen is written in it fades in: its first paint, not its data */
+const REVEAL_MS = 80;
+
 /**
  * An app's own screen, run sealed: a sandboxed frame with no network, talking to this app's collections
  * over one message port. It reaches only the origins it names (`network`), which whoever added the app
@@ -105,11 +108,15 @@ export function ScreenFrame({
   const run = [spaceId, screen, names, account.name, generation, allowed, given].join('\n');
   const [stoppedRun, setStoppedRun] = useState<string | null>(null);
   const stopped = stoppedRun === run;
+  // The run whose screen has been written in: until then the frame is blank, so it stays out of sight.
+  const [drawnRun, setDrawnRun] = useState<string | null>(null);
+  const drawn = drawnRun === run;
 
   useEffect(() => {
     const list = names.split('|');
     let bridge: ScreenBridge | null = null;
     let handedOver = false;
+    let reveal: ReturnType<typeof setTimeout> | undefined;
     const onMessage = (event: MessageEvent) => {
       const target = frame.current?.contentWindow;
       if (!target || event.source !== target || !isObject(event.data) || event.data.minca !== 'ready') return;
@@ -166,6 +173,8 @@ export function ScreenFrame({
         [channel.port2],
       );
       live.current = bridge;
+      // Written in as the message arrives; a moment more for its first paint, then it fades in.
+      reveal = setTimeout(() => setDrawnRun(run), REVEAL_MS);
       if (pending.current) {
         pending.current = undefined;
         handed.current?.();
@@ -174,6 +183,7 @@ export function ScreenFrame({
     globalThis.addEventListener('message', onMessage);
     return () => {
       globalThis.removeEventListener('message', onMessage);
+      clearTimeout(reveal);
       bridge?.close();
       live.current = null;
     };
@@ -218,7 +228,10 @@ export function ScreenFrame({
           // No floor: on a phone with the keyboard up, what is left can be less than any we'd pick.
           minHeight: 0,
           border: 'none',
-          background: palette.surface.card,
+          // The page's own colour, which a screen's page is drawn on, so nothing lighter shows while it loads.
+          background: palette.surface.page,
+          opacity: drawn ? 1 : 0,
+          transition: 'opacity .15s ease',
         }}
       />
       {person && <PersonCardHere did={person} onClose={() => setPerson(null)} />}

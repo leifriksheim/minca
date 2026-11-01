@@ -22,6 +22,7 @@ import { GraphView } from './components/GraphView';
 import { QueryPlayground } from './components/QueryPlayground';
 import { NetworkView } from './components/NetworkView';
 import { styles } from './styles';
+import { transitionTypes } from './transitions';
 
 /**
  * Where you are in the app, and the small state that belongs in the address:
@@ -209,7 +210,8 @@ const routeTree = root.addChildren([
   elsewhere,
 ]);
 
-export const router = createRouter({ routeTree });
+// Every move between pages is a view transition, of the kind `transitionTypes` says, where the browser has them.
+export const router = createRouter({ routeTree, defaultViewTransition: { types: transitionTypes } });
 
 declare module '@tanstack/react-router' {
   interface Register {

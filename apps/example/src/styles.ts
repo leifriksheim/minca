@@ -113,6 +113,29 @@ export function injectBaseStyles(): void {
       border-bottom: 1px solid ${surface.rule}; background: ${surface.page};
     }
     .space-content { flex: 1; min-height: 0; overflow-y: auto; padding: 28px 32px 64px; }
+    /* Moving between pages (transitions.ts): short and soft. Forward, the new page comes in from a
+       little to the right as the old one leaves a little to the left; back, the other way; a cross-fade
+       between tabs or apps. The bars and the rail stay where they are while the page moves. */
+    ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .18s; animation-timing-function: cubic-bezier(.2, .8, .2, 1); }
+    html:active-view-transition-type(forward)::view-transition-old(root) { animation: vt-out-left .22s cubic-bezier(.2, .8, .2, 1) both; }
+    html:active-view-transition-type(forward)::view-transition-new(root) { animation: vt-in-right .22s cubic-bezier(.2, .8, .2, 1) both; }
+    html:active-view-transition-type(back)::view-transition-old(root) { animation: vt-out-right .22s cubic-bezier(.2, .8, .2, 1) both; }
+    html:active-view-transition-type(back)::view-transition-new(root) { animation: vt-in-left .22s cubic-bezier(.2, .8, .2, 1) both; }
+    html:active-view-transition-type(fade)::view-transition-old(root) { animation: vt-fade-out .14s ease both; }
+    html:active-view-transition-type(fade)::view-transition-new(root) { animation: vt-fade-in .2s cubic-bezier(.2, .8, .2, 1) both; }
+    @keyframes vt-out-left { to { opacity: 0; transform: translateX(-16px); } }
+    @keyframes vt-in-right { from { opacity: 0; transform: translateX(16px); } }
+    @keyframes vt-out-right { to { opacity: 0; transform: translateX(16px); } }
+    @keyframes vt-in-left { from { opacity: 0; transform: translateX(-16px); } }
+    @keyframes vt-fade-out { to { opacity: 0; } }
+    @keyframes vt-fade-in { from { opacity: 0; transform: translateY(4px); } }
+    .tabbar { view-transition-name: tabbar; }
+    .space-bar { view-transition-name: space-bar; }
+    .app-rail { view-transition-name: app-rail; }
+    @media (prefers-reduced-motion: reduce) {
+      ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+    }
+
     /* Data arriving: a hairline along the top of the screen, a light running across it, there only while
        records come in and fading as they stop (SyncLine). */
     .sync-line {
