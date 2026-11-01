@@ -291,7 +291,10 @@ rules): it needs the account unlocked on the server, a host never does.
 ### From a chat app, with nothing to install
 
 A host started with `MINCA_HOST_MCP=on` is also an MCP server that chat apps
-connect to by its address alone: `https://<host>/mcp`. In Claude, add it as a
+connect to by its address alone: `https://<host>/mcp`, for the accounts it
+names in `MINCA_HOST_MCP_ACCOUNTS` (yours, your family's, your team's): each
+connection is a key, a copy of spaces and a node the host keeps, which no
+account's room or fund pays for yet. In Claude, add it as a
 custom connector; in ChatGPT, Cursor, VS Code or Claude Code, wherever remote
 MCP servers go (`claude mcp add --transport http minca https://<host>/mcp`).
 The app's own model does the thinking, on your own plan; the host only runs
@@ -324,8 +327,8 @@ the host knows by name over https (Claude's and ChatGPT's, and
 `MINCA_HOST_MCP_APPS`), this computer, or a known app's own scheme (`cursor:`,
 `vscode:`), never one that opens a browser at any address. So a code goes
 only to the site or app scheme the page names: on a shared site such as
-claude.ai, that is any connector there, which is why the name the app gave
-itself is shown beside it. Whether a sign-in someone
+claude.ai, only its MCP callback, and there any connector, which is why the
+name the app gave itself is shown beside it. Whether a sign-in someone
 else started, and sent you, could land in their account at that app is the
 app's to check (OAuth's `state`), not the host's.
 

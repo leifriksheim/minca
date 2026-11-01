@@ -130,7 +130,11 @@ host's own key.
 `MINCA_HOST_MCP=on`, with `MINCA_HOST_URL` set, makes the host an MCP server
 at `https://<host>/mcp` that Claude, ChatGPT, Cursor and other chat apps
 connect to with OAuth, each person allowing it at their own account home
-(the CLI's README, Agents). The apps' models think on their users' own
+(the CLI's README, Agents), for the accounts `MINCA_HOST_MCP_ACCOUNTS` names
+(`did:key:…`, comma separated). It is for people you know: a connection is a
+key, a copy of the spaces it was given and, while used, a node, and none of
+that is charged to an account's room or a community's fund yet. Opening it to
+anyone needs that first. The apps' models think on their users' own
 plans, so it costs no tokens; each connection the host is using is a node in
 its process, about the memory of the spaces it was given, stopped after ten
 minutes with no call. Like a bot's, a connection's key is on the host's disk,
@@ -139,20 +143,23 @@ it: keep that volume as private as the host's own key, and say so in your
 terms. `MINCA_HOST_MCP_HOME` is the account home its consent page suggests
 (default `https://home.minca.social`), and `MINCA_HOST_MCP_APPS` adds chat
 apps a sign-in may go back to, comma separated, each a host
-(`chat.example.com`) or an app's scheme (`zed:`), beside `claude.ai`,
-`claude.com`, `chatgpt.com`, `chat.openai.com`, `cursor:`, `vscode:` and
-`vscode-insiders:`. Add only a scheme that opens that app, never one that
+(`chat.example.com`) or an app's scheme (`zed:`), beside Claude's and
+ChatGPT's MCP callbacks (`claude.ai/api/mcp/auth_callback`,
+`chatgpt.com/connector_platform_oauth_redirect`, and the same on `claude.com`
+and `chat.openai.com`), `cursor:`, `vscode:` and `vscode-insiders:`. Add only a scheme that opens that app, never one that
 opens a browser at an address. `MINCA_HOST_URL` must be https, and must not
 change once apps have connected: every token names it.
 
 What anyone can make it keep is bounded: an address may register 20 apps a
-day and start 120 sign-ins an hour, and what runs out is swept hourly. An
-account keeps its newest 10 connections, at most 32 agents run at once, and
+day and start 120 sign-ins an hour (Claude and ChatGPT register from their
+own servers, so watch for `429` there), each sign-in is answered once, and
+what runs out is swept hourly. An account keeps its newest 10 connections, at
+most 32 agents run at once (more wait their turn), and
 a connection whose note ran out, or whose key the account revoked (heard the
 next time its agent runs), is forgotten with its key and the spaces its agent
 kept, under `<data>/mcp-agents/`. An agent reaches its spaces only through
 this host's own socket, never a node an invite or a record names, so it holds
-only spaces this host carries, which its limits already bound.
+only spaces this host carries: up to one copy of each per connection.
 
 _Source: `packages/cli/src/remote-mcp/` (`connections.ts`, `oauth.ts`, `redirects.ts`), `packages/cli/src/host-setup.ts` (`mcpFromEnv`). Tests: `packages/cli/tests/remote-mcp.test.ts`._
 

@@ -74,6 +74,8 @@ function objectOf(value: unknown): JSONObject {
 export interface RemoteMcpOptions {
   /** The host's address as people reach it, https://: the issuer, and where the endpoint is */
   readonly publicUrl: string;
+  /** The accounts that may connect, by DID: no account's room or fund pays for a connection yet */
+  readonly accounts: ReadonlyArray<string>;
   /** Where connections and the authorization server's state are kept */
   readonly store: StorageAdapter;
   /** Where each connection's agent keeps its spaces */
@@ -113,6 +115,7 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
   const resourceUrl = new URL(resource);
 
   const connections = createConnections({
+    accounts: options.accounts,
     store: options.store,
     stores: options.stores,
     drop: options.drop,

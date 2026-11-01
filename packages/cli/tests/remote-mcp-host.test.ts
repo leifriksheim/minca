@@ -81,13 +81,15 @@ test('a stranger’s grant can’t make the host’s agent dial an address the s
   // The host, as `minca host` runs it with MINCA_HOST_MCP=on.
   const port = await freePort();
   const issuer = `http://127.0.0.1:${port}`;
+  const accounts: string[] = [];
   const host: RunningHost = await startHost({
     key: await createP256Provider().generateKeyPair(),
     stores: memoryStores(),
     port,
     free: true,
     publicUrl: issuer,
-    mcp: { folder: await tempDir('probe-mcp-'), accountHome: 'https://home.test' },
+    // Named, so its agent runs: what's tested is where that agent may go.
+    mcp: { accounts, folder: await tempDir('mcp-agents-'), accountHome: 'https://home.test' },
   });
   closing.push(() => host.close());
 
@@ -96,6 +98,7 @@ test('a stranger’s grant can’t make the host’s agent dial an address the s
   const manager = createIdentityManager();
   const seed = generateSeed();
   const me = await manager.fromSeed(seed);
+  accounts.push(me.did);
   const signer = createLocalRootSigner(me, manager.getProvider());
   const node = await createNode({
     signer,
@@ -344,7 +347,7 @@ test('a stranger’s own node can’t fill the host’s disk through an agent', 
   const filler = 'x'.repeat(16_000);
   for (let i = 0; i < 40; i++) await daemon.node.records.put(space.id, 'app.bulk', { i, filler });
 
-  // A host with limits, as one open to strangers runs: 100 kB an account, far under what follows.
+  // A host that names the stranger's account: what's tested is what its agent may reach.
   const port = await freePort();
   const issuer = `http://127.0.0.1:${port}`;
   const folder = await tempDir('probe-mcp-agents-');
@@ -353,9 +356,8 @@ test('a stranger’s own node can’t fill the host’s disk through an agent', 
     stores: memoryStores(),
     port,
     free: true,
-    limits: { accountBytes: 100_000, space: { writers: 5, bytes: 100_000, windowDays: 30 }, graceDays: 0 },
     publicUrl: issuer,
-    mcp: { folder, accountHome: 'https://home.test' },
+    mcp: { accounts: [unlocked.account.did], folder, accountHome: 'https://home.test' },
   });
   closing.push(() => host.close());
 

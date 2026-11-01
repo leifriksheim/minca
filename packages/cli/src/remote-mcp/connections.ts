@@ -10,6 +10,11 @@
  * so many at once. Its spaces stay in the host's stores between starts, so it
  * starts from what it synced last time.
  *
+ * Only accounts the host names may connect (`accounts`): each connection is
+ * a key, a copy of the spaces it was given and, while used, a node, none of
+ * which any account's room or fund pays for yet, so a host offers them to
+ * people it knows, not to anyone who makes an account.
+ *
  * A connection goes, key, spaces and all, once it can't act any more: its
  * note run out, or its key revoked, which its agent hears the next time it
  * runs. A revoked key writes nothing any peer takes; one past its note would
@@ -93,7 +98,17 @@ function isKeyJwk(value: unknown): value is Connection['key'] {
   return isRecord(value) && isRecord(value.privateKey) && isRecord(value.publicKey);
 }
 
-const usableNow = (connection: Connection) => !connection.revoked && usableGrant(connection.grant);
+/** Whether a grant's note is still running, by the note itself: the grant's own `expiresAt` is the home's word beside it */
+function noteRunning(grant: Grant): boolean {
+  const exp = grant.note.payload.exp;
+  return exp !== undefined && exp > Math.floor(Date.now() / 1000);
+}
+
+const usableNow = (connection: Connection) =>
+  !connection.revoked && usableGrant(connection.grant) && noteRunning(connection.grant);
+
+/** How long a start waits for room among the agents running before it gives up */
+const ROOM_WAIT_MS = 30_000;
 
 interface Running {
   readonly started: Promise<{ node: P2PNode; stop(): Promise<void> }>;
@@ -103,6 +118,8 @@ interface Running {
 }
 
 export function createConnections(options: {
+  /** The accounts that may connect, by DID */
+  readonly accounts: ReadonlyArray<string>;
   /** Where connections are kept */
   readonly store: StorageAdapter;
   /** Where each agent's node keeps its spaces, by connection */
@@ -121,6 +138,8 @@ export function createConnections(options: {
   const running = new Map<string, Running>();
   /** Agents stopping: one starts again on the same stores only once it has */
   const stopping = new Map<string, Promise<void>>();
+  /** Agents given room to run: started or starting. No more than the cap, ever. */
+  const granted = new Set<string>();
 
   const read = async (id: string): Promise<Connection | null> => {
     const bytes = await options.store.get(`${PREFIX}${id}`);
@@ -152,6 +171,7 @@ export function createConnections(options: {
     const stopped = one.started.then((started) => started.stop()).catch(() => {});
     stopping.set(id, stopped);
     await stopped;
+    granted.delete(id);
     if (stopping.get(id) === stopped) stopping.delete(id);
   };
 
@@ -166,11 +186,22 @@ export function createConnections(options: {
     one.timer.unref?.();
   };
 
-  /** Stops agents used longest ago, none with a call running, until there is room for one more */
-  const makeRoom = async () => {
-    for (const [id, one] of running) {
-      if (running.size < (options.running ?? RUNNING)) return;
-      if (one.busy === 0) await stop(id);
+  /**
+   * Waits for room for `id`'s agent to run: takes a free place, or stops the
+   * agent used longest ago with no call running, or waits for one to finish.
+   */
+  const roomFor = async (id: string) => {
+    const cap = options.running ?? RUNNING;
+    const giveUp = Date.now() + ROOM_WAIT_MS;
+    for (;;) {
+      if (granted.size < cap) {
+        granted.add(id);
+        return;
+      }
+      const idle = [...running].find(([other, one]) => other !== id && granted.has(other) && one.busy === 0);
+      if (idle) await stop(idle[0]);
+      else if (Date.now() > giveUp) throw new Error('This host is busy. Try again in a moment.');
+      else await new Promise((resolve) => setTimeout(resolve, 100));
     }
   };
 
@@ -187,6 +218,7 @@ export function createConnections(options: {
       busy: 0,
       started: (async () => {
         await stopping.get(id);
+        await roomFor(id);
         const connection = await read(id);
         if (!connection || !usableNow(connection))
           throw new Error('This connection can no longer act for the account. Connect again.');
@@ -196,9 +228,11 @@ export function createConnections(options: {
     running.set(id, made);
     made.started.catch((error: unknown) => {
       log(`connector ${id}: could not start: ${messageOf(error)}`);
-      if (running.get(id) === made) running.delete(id);
+      if (running.get(id) === made) {
+        running.delete(id);
+        granted.delete(id);
+      }
     });
-    void makeRoom();
     return made;
   }
 
@@ -257,8 +291,15 @@ export function createConnections(options: {
       if (!isRecord(params.grant)) throw new Error('That is not a grant');
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- checkGrant checks it, and usableGrant its version and time
       const grant = params.grant as unknown as Grant;
-      await checkGrant(grant, await didOf(keys.publicKey), { recordsOnly: true });
-      if (!usableGrant(grant)) throw new Error('That grant has run out, or is of a version no peer reads');
+      const did = await didOf(keys.publicKey);
+      await checkGrant(grant, did, { recordsOnly: true });
+      if (!usableGrant(grant) || !noteRunning(grant))
+        throw new Error('That grant has run out, or is of a version no peer reads');
+      if (!options.accounts.includes(grant.did))
+        throw new Error('This host connects chat apps only for the accounts it names, and not this one.');
+      // One key, one connection: two agents signing with it would fork its line.
+      if ((await all()).some((one) => one.grant.note.payload.aud === did))
+        throw new Error('That key is already connected');
       const connection: Connection = {
         id: randomId(),
         key: params.key,

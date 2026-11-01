@@ -372,15 +372,18 @@ export function fundFromEnv(env: NodeJS.ProcessEnv): {
 
 /** Whether anyone may see the host's rounded totals at `/host/stats` (MINCA_HOST_STATS, public or off; default public) */
 /**
- * The MCP endpoint chat apps connect to, from MINCA_HOST_MCP=on: off unless
- * asked for, since each connection is an agent whose key the host holds.
+ * The MCP endpoint chat apps connect to, from MINCA_HOST_MCP=on, for the
+ * accounts MINCA_HOST_MCP_ACCOUNTS names (`did:key:…`, comma separated): each
+ * connection is a key, a copy of spaces and a node the host keeps, which no
+ * account's room or fund pays for yet, so it is for people the host knows.
  * MINCA_HOST_MCP_HOME is the account home its consent page suggests, and
  * MINCA_HOST_MCP_APPS more chat apps a sign-in may go back to (comma
- * separated), each a host (`chat.example.com`) or an app's scheme (`zed:`),
- * beside Claude's, ChatGPT's and a few IDEs'. Needs MINCA_HOST_URL, on https
- * unless on this machine: every token names it.
+ * separated), each a host (`chat.example.com`) or an app's scheme (`zed:`).
+ * Needs MINCA_HOST_URL, on https unless on this machine: every token names it.
  */
-export function mcpFromEnv(env: NodeJS.ProcessEnv): { accountHome?: string; moreApps?: string[] } | null {
+export function mcpFromEnv(
+  env: NodeJS.ProcessEnv,
+): { accounts: string[]; accountHome?: string; moreApps?: string[] } | null {
   const given = env.MINCA_HOST_MCP?.trim() || 'off';
   if (given !== 'on' && given !== 'off') throw new Error(`MINCA_HOST_MCP is on or off, not "${given}"`);
   if (given === 'off') return null;
@@ -392,6 +395,14 @@ export function mcpFromEnv(env: NodeJS.ProcessEnv): { accountHome?: string; more
   const { protocol, hostname } = new URL(url);
   if (protocol !== 'https:' && !['localhost', '127.0.0.1', '[::1]'].includes(hostname))
     throw new Error('MINCA_HOST_MCP needs MINCA_HOST_URL on https: sign-ins and tokens go through it.');
+  const accounts = commaList(env.MINCA_HOST_MCP_ACCOUNTS);
+  if (!accounts.length)
+    throw new Error(
+      'MINCA_HOST_MCP needs MINCA_HOST_MCP_ACCOUNTS, the accounts (did:key:…) that may connect a chat app here.',
+    );
+  const notAccount = accounts.find((account) => !/^did:key:z[1-9A-HJ-NP-Za-km-z]{1,120}$/.test(account));
+  if (notAccount)
+    throw new Error(`MINCA_HOST_MCP_ACCOUNTS lists accounts like did:key:z…, not "${notAccount}"`);
   const apps = commaList(env.MINCA_HOST_MCP_APPS);
   const bad = apps.find(
     (app) =>
@@ -403,6 +414,7 @@ export function mcpFromEnv(env: NodeJS.ProcessEnv): { accountHome?: string; more
     );
   const home = env.MINCA_HOST_MCP_HOME?.trim();
   return {
+    accounts,
     ...(home ? { accountHome: home } : {}),
     ...(apps.length ? { moreApps: apps.map((app) => app.toLowerCase()) } : {}),
   };

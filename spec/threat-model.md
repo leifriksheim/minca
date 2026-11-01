@@ -1254,8 +1254,8 @@ _Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6, §9; 01 §15.2; 06 §3. Tests: 
     by other code, or a role redefined after the bot was added, can still act
     for someone with more than they hold, and an automation's own words are
     its maker's ([#170](https://github.com/leifriksheim/minca/issues/170)).
-  - A host that offers chat apps an MCP endpoint holds the key of every
-    connection a person allows there, with its records-only note and the
+  - A host that offers chat apps an MCP endpoint, for the accounts it names,
+    holds the key of every connection a person allows there, with its records-only note and the
     member keys of the spaces they picked: it reads those spaces and writes
     records in them as the person, "via agent", as the app's model asks. The
     consent page says so before the person allows it. Records count until the
@@ -1269,7 +1269,12 @@ _Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6, §9; 01 §15.2; 06 §3. Tests: 
     ([#165](https://github.com/leifriksheim/minca/issues/165)). Its agents
     reach only the host's own socket (`network.only`), so a grant's invites
     and the records an agent reads can't make the host connect elsewhere or
-    keep a space it doesn't carry (`packages/cli/tests/remote-mcp-host.test.ts`).
+    keep a space it doesn't carry (`packages/cli/tests/remote-mcp-host.test.ts`,
+    `packages/core/tests/only-given-nodes.test.ts`). It keeps a copy of the
+    spaces each connection was given and runs a node while one is used,
+    which no room or fund pays for, so the reference host connects only the
+    accounts its operator names: open to anyone, those would be costs a
+    stranger makes it bear ([#33](https://github.com/leifriksheim/minca/issues/33)).
     It shows its consent page for every sign-in, keeps no sign-in in the
     browser to skip it with, and lets an app register only places a code is
     safe at: a chat app it knows by name over https, this computer, or a named
@@ -1278,9 +1283,10 @@ _Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6, §9; 01 §15.2; 06 §3. Tests: 
     `packages/cli/src/remote-mcp/redirects.ts`;
     `packages/cli/tests/remote-mcp.test.ts`, "an app can't register a place a
     code may not go…", "a browser that connected an app is shown the consent
-    page again…"). So a code goes only to the site or app scheme the page
-    names; at a site shared by many apps, as claude.ai and chatgpt.com are,
-    that is whichever app registered there under the name shown. A sign-in
+    page again…"). So a code goes only to the app scheme, or the chat app's
+    own MCP callback, the page names; at a site shared by many apps, as
+    claude.ai and chatgpt.com are, that is whichever app registered there
+    under the name shown. A sign-in
     someone else started, and sent the person, can land in the other's
     account at that app, unless the app ties OAuth's `state` to the browser
     that started it; the host can't tell. None of this is protocol: to every

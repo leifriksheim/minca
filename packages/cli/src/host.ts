@@ -165,6 +165,8 @@ export interface HostOptions {
    * person's account home. Needs `publicUrl`: it is the issuer of every token.
    */
   readonly mcp?: {
+    /** The accounts that may connect a chat app here, by DID */
+    readonly accounts: ReadonlyArray<string>;
     /** Where each connection's agent keeps the spaces it was given, a folder each */
     readonly folder: string;
     /** The account home its consent page suggests */
@@ -1054,6 +1056,7 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
   const remote: RemoteMcp | null = mcp
     ? await createRemoteMcp({
         publicUrl: mcpUrl(options.publicUrl),
+        accounts: mcp.accounts,
         store: await options.stores('host-mcp'),
         stores: (connection) => {
           const folder = agentFolder(mcp.folder, connection);

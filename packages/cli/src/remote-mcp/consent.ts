@@ -24,7 +24,7 @@ const CONNECT_DAYS = 30;
 /** A request parameter as given, or nothing */
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
 
-const MAX_BODY = 256 * 1024;
+const MAX_BODY = 64 * 1024;
 
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -130,6 +130,8 @@ export function createConsent(options: ConsentOptions) {
   async function allow(req: IncomingMessage, res: ServerResponse) {
     if (!fromThisPage(req)) return sendJson(res, 403, { error: 'Only the consent page may answer' });
     const { details, client, redirect, name } = await asking(req, res);
+    // One answer to a sign-in: the person allows once, and nobody adds more under it.
+    if (details.result) return sendJson(res, 409, { error: 'This sign-in was answered already' });
     // Checked again here: the page is only a page, and anyone may post.
     if (!mayRedirect(redirect, options.moreApps))
       return sendJson(res, 400, { error: 'This app can’t connect here' });
@@ -167,9 +169,7 @@ export function createConsent(options: ConsentOptions) {
       await options.connections.forget(connection.id);
       throw error;
     }
-    log(
-      `connector ${connection.id}: ${name} connected for ${connection.grant.name} (${connection.grant.did})`,
-    );
+    log(`connector ${connection.id}: ${JSON.stringify(name)} connected for ${connection.grant.did}`);
     return sendJson(res, 200, { redirect: redirectTo });
   }
 

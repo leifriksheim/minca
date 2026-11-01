@@ -14,6 +14,7 @@ import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
 import { encodeInviteLink } from '../src/space/invite-link.js';
+import { host } from '../src/schemas/library/community.js';
 import { memoryStores } from './helpers/memory-stores.js';
 import { createFakeHub } from './helpers/fake-transport.js';
 
@@ -69,6 +70,18 @@ describe('a node that reaches only what it was given', () => {
     const server = await listening();
     const node = await aNode(true);
     await assert.rejects(node.hosting.use(`http://127.0.0.1:${server.port}`), /reaches only/);
+    assert.deepEqual(server.seen, []);
+  });
+
+  test('asks no host a space’s own records name, nor holds a socket to it', async () => {
+    const server = await listening();
+    const node = await aNode(true);
+    const space = await node.spaces.create({ name: 'Club', visibility: 'private' });
+    await node.collections.define(space.id, host);
+    await node.records.put(space.id, host.name, { url: `http://127.0.0.1:${server.port}` });
+    const [view] = await node.hosting.space(space.id);
+    assert.ok(view?.error, 'the host it names is not asked');
+    await new Promise((resolve) => setTimeout(resolve, 500));
     assert.deepEqual(server.seen, []);
   });
 

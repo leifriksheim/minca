@@ -5,8 +5,17 @@
  * again on the consent page (`consent.ts`).
  */
 
-/** Chat apps a code may go to over https, by host: their own servers finish the sign-in */
-const KNOWN_HOSTS: ReadonlyArray<string> = ['claude.ai', 'claude.com', 'chatgpt.com', 'chat.openai.com'];
+/**
+ * Chat apps a code may go to over https, at the one path each finishes an MCP
+ * sign-in at: these sites serve many apps, and a page of theirs that passes on
+ * what it is given would pass on a code too.
+ */
+const KNOWN_CALLBACKS: ReadonlyArray<string> = [
+  'https://claude.ai/api/mcp/auth_callback',
+  'https://claude.com/api/mcp/auth_callback',
+  'https://chatgpt.com/connector_platform_oauth_redirect',
+  'https://chat.openai.com/connector_platform_oauth_redirect',
+];
 
 /**
  * Apps a code may go to by their own scheme, on the person's device. Named,
@@ -21,8 +30,9 @@ const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);
 const isScheme = (entry: string) => entry.endsWith(':');
 
 /**
- * Whether a code may be sent to `uri`: https at a chat app the host knows,
- * plain http on this computer only (RFC 8252), or a known app's own scheme.
+ * Whether a code may be sent to `uri`: a known chat app's own callback, a
+ * host named in `more` over https, plain http on this computer only (RFC
+ * 8252), or a known app's own scheme.
  * @param more More apps, by host (`chat.example.com`) or scheme (`zed:`)
  */
 export function mayRedirect(uri: string, more: ReadonlyArray<string> = []): boolean {
@@ -33,7 +43,10 @@ export function mayRedirect(uri: string, more: ReadonlyArray<string> = []): bool
     return false;
   }
   if (url.protocol === 'https:')
-    return [...KNOWN_HOSTS, ...more.filter((app) => !isScheme(app))].includes(url.hostname.toLowerCase());
+    return (
+      KNOWN_CALLBACKS.includes(`${url.origin}${url.pathname}`) ||
+      more.filter((app) => !isScheme(app)).includes(url.hostname.toLowerCase())
+    );
   if (url.protocol === 'http:') return LOOPBACK.has(url.hostname);
   return [...KNOWN_SCHEMES, ...more.filter(isScheme)].includes(url.protocol);
 }

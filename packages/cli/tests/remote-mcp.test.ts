@@ -38,8 +38,11 @@ after(async () => {
 const CLAUDE = 'https://claude.ai/api/mcp/auth_callback';
 const insecure = { [oauth.allowInsecureRequests]: true };
 
+/** The accounts the test hosts name, as `MINCA_HOST_MCP_ACCOUNTS` does: every one `accountHolder` makes */
+const named: string[] = [];
+
 /** Someone with an account, online, who signs a records-only note for whatever key their home is shown */
-async function accountHolder(hub: FakeHub) {
+async function accountHolder(hub: FakeHub, options: { readonly unnamed?: boolean } = {}) {
   const manager = createIdentityManager();
   const seed = generateSeed();
   const me = await manager.fromSeed(seed);
@@ -53,6 +56,7 @@ async function accountHolder(hub: FakeHub) {
     network: onHub(hub),
   });
   closing.push(() => node.close());
+  if (!options.unnamed) named.push(me.did);
   const grantFor = async (audience: string, seconds = 3600, command = '/record'): Promise<Grant> => ({
     v: GRANT_VERSION,
     did: me.did,
@@ -105,6 +109,7 @@ async function aHost(hub: FakeHub, settings: { readonly running?: number } = {})
   const started = new Set<string>();
   remote = await createRemoteMcp({
     publicUrl: issuer,
+    accounts: named,
     store,
     stores: (connection) => {
       started.add(connection);
@@ -553,6 +558,37 @@ describe('a host’s MCP endpoint', () => {
     }
   });
 
+  test('only an account the host names may connect, and a sign-in is answered once', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const stranger = await accountHolder(hub, { unnamed: true });
+    const ada = await accountHolder(hub);
+    const host = await aHost(hub);
+    const app = await anApp(host.resource);
+    const refused = await startSignIn(app, host.resource);
+    const key = await browserKey();
+    const answer = await postFromPage(refused, 'allow', {
+      key: key.jwk,
+      grant: await stranger.grantFor(key.did),
+    });
+    assert.equal(answer.status, 400);
+    assert.match(String(field(await answer.json())('error')), /only for the accounts it names/);
+
+    const started = await startSignIn(app, host.resource);
+    const first = await browserKey();
+    const allowed = await postFromPage(started, 'allow', {
+      key: first.jwk,
+      grant: await ada.grantFor(first.did),
+    });
+    assert.equal(allowed.status, 200);
+    const second = await browserKey();
+    const again = await postFromPage(started, 'allow', {
+      key: second.jwk,
+      grant: await ada.grantFor(second.did),
+    });
+    assert.equal(again.status, 409, 'nobody adds connections under an answered sign-in');
+    assert.equal(await host.connections(), 1);
+  });
+
   test('a hosted agent isn’t offered what would dial addresses from the host', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const ada = await accountHolder(hub);
@@ -585,6 +621,7 @@ describe('a connection’s agent', () => {
     const stores = memoryStores();
     const starts: string[] = [];
     const connections = createConnections({
+      accounts: named,
       store: await stores('host-mcp'),
       stores: (id) => {
         starts.push(id);
@@ -608,6 +645,42 @@ describe('a connection’s agent', () => {
       nodes.every((node) => node === nodes[0]),
       'and every call ran on it',
     );
+  });
+
+  test('a host runs no more agents at once than its cap: the rest wait their turn', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    const stores = memoryStores();
+    const cap = 2;
+    const connections = createConnections({
+      accounts: named,
+      store: await stores('host-mcp'),
+      stores: (id) => (where) => stores(`agents/${id}/${where}`),
+      drop: async () => {},
+      network: () => onHub(hub),
+      running: cap,
+    });
+    closing.push(() => connections.close());
+    const ids: string[] = [];
+    for (let i = 0; i < 6; i++) {
+      const key = await browserKey();
+      ids.push(
+        (await connections.add({ key: key.jwk, grant: await ada.grantFor(key.did), client: 'Claude' })).id,
+      );
+    }
+    let now = 0;
+    let most = 0;
+    await Promise.all(
+      ids.map((id) =>
+        connections.use(id, async () => {
+          now += 1;
+          most = Math.max(most, now);
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          now -= 1;
+        }),
+      ),
+    );
+    assert.ok(most <= cap, `${most} ran at once under a cap of ${cap}`);
   });
 
   test('a key revoked while its agent was idle is heard the next time it runs, and the connection is then forgotten', async () => {
@@ -657,11 +730,16 @@ describe('where a code may go', () => {
     assert.ok(mayRedirect('http://localhost/callback'));
     assert.ok(mayRedirect('cursor://anysphere.cursor-mcp/oauth/callback'));
     assert.ok(mayRedirect('vscode://vscode.github-authentication/did-authenticate'));
+    assert.ok(mayRedirect('https://claude.com/api/mcp/auth_callback'));
     assert.ok(mayRedirect('https://chat.example.com/cb', ['chat.example.com']));
     assert.ok(mayRedirect('zed://oauth/callback', ['zed:']));
   });
   test('nowhere else', () => {
     assert.ok(!mayRedirect('https://claude.ai.evil.example/cb'));
+    assert.ok(
+      !mayRedirect('https://claude.ai/any/other/page'),
+      'only the path a chat app finishes sign-ins at',
+    );
     assert.ok(!mayRedirect('https://evil.example/cb'));
     assert.ok(!mayRedirect('http://claude.ai/api/mcp/auth_callback'), 'not in the clear');
     assert.ok(!mayRedirect('http://192.168.1.10/cb'));
