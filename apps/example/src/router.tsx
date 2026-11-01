@@ -7,7 +7,7 @@ import {
   redirect,
   retainSearchParams,
 } from '@tanstack/react-router';
-import { App, ChatsLayout, GroupsPage, HomeLayout, PeoplePage } from './App';
+import { AllPage, App, ChatsLayout, GroupsPage, HomeLayout, PeoplePage } from './App';
 import { ActivityPage } from './components/ActivityPage';
 import { ProfilePage } from './components/ProfilePage';
 import { OpenApp, SpaceLayout, useSpaceScreen, type SpaceScreen } from './components/SpaceView';
@@ -45,7 +45,7 @@ const page = (draw: (screen: SpaceScreen) => ReactNode) => () => draw(useSpaceSc
 
 const home = createRoute({ getParentRoute: () => root, id: 'home', component: HomeLayout });
 const chats = createRoute({ getParentRoute: () => home, id: 'chats', component: ChatsLayout });
-const groups = createRoute({
+const all = createRoute({
   getParentRoute: () => chats,
   path: '/',
   // An inbox link is someone asking you to knock, which happens among your people.
@@ -53,8 +53,9 @@ const groups = createRoute({
     if (/(^|&)inbox=/.test(location.hash))
       redirect({ to: '/people', hash: location.hash, replace: true, throw: true });
   },
-  component: GroupsPage,
+  component: AllPage,
 });
+const groups = createRoute({ getParentRoute: () => chats, path: 'groups', component: GroupsPage });
 const people = createRoute({ getParentRoute: () => chats, path: 'people', component: PeoplePage });
 const activity = createRoute({ getParentRoute: () => home, path: 'activity', component: ActivityPage });
 const profile = createRoute({ getParentRoute: () => home, path: 'profile', component: ProfilePage });
@@ -188,7 +189,7 @@ const elsewhere = createRoute({
 // Each route is a constant of its own: one written inline in this list loses
 // the router's types, and every path and param quietly becomes `any`.
 const routeTree = root.addChildren([
-  home.addChildren([chats.addChildren([groups, people]), activity, profile]),
+  home.addChildren([chats.addChildren([all, groups, people]), activity, profile]),
   contacts,
   space.addChildren([
     spaceApps,

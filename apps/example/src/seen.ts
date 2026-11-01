@@ -1,6 +1,7 @@
 /** What is new: records others wrote in an app since you last opened it, tracked in this browser only. */
 import { useEffect } from 'react';
 import type { SpaceSummary } from '@minca/core';
+import { direct } from '@minca/core/schemas';
 import { useAccount, useCollections, useLive } from '@minca/react';
 import { accountStore } from './kept';
 import { namesMe, useSpaceApps, type AppEntry } from './components/apps/entries';
@@ -97,6 +98,8 @@ export function useUnread(spaceId: string, apps: ReadonlyArray<AppEntry>): Reado
             .catch(() => []);
           for (const record of records) {
             if (record.createdBy === did || Date.parse(record.createdAt) <= app.after) continue;
+            // Everyone sees that a direct message was written; only those it is for have something new.
+            if (collection === direct.name && !sentTo(record.body, did)) continue;
             count++;
             if (namesMe(app.notify, collection, record, did)) forMe++;
           }
@@ -111,6 +114,14 @@ export function useUnread(spaceId: string, apps: ReadonlyArray<AppEntry>): Reado
 }
 
 const EMPTY: ReadonlyMap<string, Unread> = new Map();
+
+/** Whether a direct message's body names this account among those it is for */
+const sentTo = (body: unknown, did: string): boolean =>
+  typeof body === 'object' &&
+  body !== null &&
+  'to' in body &&
+  Array.isArray(body.to) &&
+  body.to.includes(did);
 
 /** What is new in one app, or nothing */
 export const unreadOf = (unread: ReadonlyMap<string, Unread>, id: string): Unread => unread.get(id) ?? NONE;

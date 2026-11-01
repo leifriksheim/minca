@@ -140,24 +140,37 @@ export function SpaceList({
       ) : (
         <ul className="rows" style={ui.list}>
           {spaces.map((space) => (
-            <li key={space.id} data-tile style={{ position: 'relative', listStyle: 'none' }}>
-              <button onClick={() => onOpen(space)} style={row}>
-                <SpaceMark space={space} size={44} />
-                <span style={{ ...stack(2), minWidth: 0, flex: 1 }}>
-                  <span style={groupName}>{space.name}</span>
-                  <span style={{ ...ui.ellipsis, fontSize: 13, color: palette.ink.muted }}>
-                    {spaceBadges(space)}
-                  </span>
-                </span>
-                <SpaceCount space={space} />
-              </button>
-            </li>
+            <GroupRow key={space.id} space={space} detail={spaceBadges(space)} onOpen={() => onOpen(space)} />
           ))}
         </ul>
       )}
 
       {error && <p style={{ ...styles.error, marginTop: 10 }}>{error}</p>}
     </>
+  );
+}
+
+/** A group in a list: its mark, its name, a line under it, and what is new in it */
+export function GroupRow({
+  space,
+  detail,
+  onOpen,
+}: {
+  space: SpaceSummary;
+  detail: string;
+  onOpen: () => void;
+}) {
+  return (
+    <li data-tile style={{ position: 'relative', listStyle: 'none' }}>
+      <button onClick={onOpen} style={row}>
+        <SpaceMark space={space} size={44} />
+        <span style={{ ...stack(2), minWidth: 0, flex: 1 }}>
+          <span style={groupName}>{space.name}</span>
+          <span style={{ ...ui.ellipsis, fontSize: 13, color: palette.ink.muted }}>{detail}</span>
+        </span>
+        <SpaceCount space={space} />
+      </button>
+    </li>
   );
 }
 

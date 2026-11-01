@@ -398,6 +398,13 @@ export async function saveSettings(
  * the collections it needs. Adding one copies it into the space, which then
  * changes its copy the way it changes any app.
  */
+/** The ready-made app for direct messages, which the app draws itself rather than in a screen */
+export const DIRECT = 'direct';
+
+/** Whether an app is direct messages: the ready-made one, with no screen of its own */
+export const isDirect = (body: LauncherApp | null | undefined): boolean =>
+  body?.template === DIRECT && body.screen === undefined;
+
 export interface Template {
   readonly app: LauncherApp & {
     readonly template: string;

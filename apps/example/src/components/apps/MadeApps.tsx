@@ -9,7 +9,16 @@ import {
   type BlueprintReview,
 } from '@minca/core/schemas';
 import { AppBoard } from './AppBoard';
-import { addMade, checkLauncherApp, removeApp, settingsOf, updated, type LauncherApp } from './launcher';
+import {
+  addMade,
+  checkLauncherApp,
+  isDirect,
+  removeApp,
+  settingsOf,
+  updated,
+  type LauncherApp,
+} from './launcher';
+import { DirectMessages } from './DirectMessages';
 import { ScreenFrame } from './ScreenFrame';
 import { ago } from '@minca/ui/time';
 import { styles, palette, hstack, stack } from '../../styles';
@@ -409,7 +418,9 @@ export function MadeAppScreen({
       aria-label={body.title}
       style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1, minHeight: 0 }}
     >
-      {screen ? (
+      {isDirect(body) ? (
+        <DirectMessages space={space} shown={shown} onShown={onShown} />
+      ) : screen ? (
         <ScreenFrame
           spaceId={space.id}
           appKey={record.key}

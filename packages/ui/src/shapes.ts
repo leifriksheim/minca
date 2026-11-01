@@ -155,6 +155,7 @@ export type ShapeKind = keyof typeof PATHS;
 /** Each built-in app's shape and colour, the same on the site as in the app */
 export const APP_SHAPES: Readonly<Record<string, { kind: ShapeKind; colour: ShapeColour }>> = {
   chat: { kind: 'scallop', colour: 'cobalt' },
+  direct: { kind: 'lock', colour: 'coral' },
   polls: { kind: 'wave', colour: 'coral' },
   decisions: { kind: 'burst', colour: 'peach' },
   events: { kind: 'flower', colour: 'sage' },
