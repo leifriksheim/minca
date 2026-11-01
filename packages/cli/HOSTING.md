@@ -125,6 +125,25 @@ the memory of the spaces it holds. Unlike the spaces a host carries, a bot's
 keys are on the host's disk, in `bots/`: keep that volume as private as the
 host's own key.
 
+## Chat apps
+
+`MINCA_HOST_MCP=on`, with `MINCA_HOST_URL` set, makes the host an MCP server
+at `https://<host>/mcp` that Claude, ChatGPT, Cursor and other chat apps
+connect to with OAuth, each person allowing it at their own account home
+(the CLI's README, Agents). The apps' models think on their users' own
+plans, so it costs no tokens; each connection the host is using is a node in
+its process, about the memory of the spaces it was given, stopped after ten
+minutes with no call. Like a bot's, a connection's key is on the host's disk,
+in its store (`host-mcp`), so the host can read the spaces each person gave
+it: keep that volume as private as the host's own key, and say so in your
+terms. `MINCA_HOST_MCP_HOME` is the account home its consent page suggests
+(default `https://home.minca.social`), and `MINCA_HOST_MCP_APPS` adds chat
+apps a sign-in may go back to, by host, comma separated, beside `claude.ai`,
+`claude.com`, `chatgpt.com` and `chat.openai.com`. `MINCA_HOST_URL` must not
+change once apps have connected: every token names it.
+
+_Source: `packages/cli/src/remote-mcp/`, `packages/cli/src/host-setup.ts` (`mcpFromEnv`). Tests: `packages/cli/tests/remote-mcp.test.ts`._
+
 ## Stats
 
 Anyone can see what a host carries and takes in, so whoever is thinking of

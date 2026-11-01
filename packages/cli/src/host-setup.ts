@@ -371,6 +371,31 @@ export function fundFromEnv(env: NodeJS.ProcessEnv): {
 }
 
 /** Whether anyone may see the host's rounded totals at `/host/stats` (MINCA_HOST_STATS, public or off; default public) */
+/**
+ * The MCP endpoint chat apps connect to, from MINCA_HOST_MCP=on: off unless
+ * asked for, since each connection is an agent whose key the host holds.
+ * MINCA_HOST_MCP_HOME is the account home its consent page suggests, and
+ * MINCA_HOST_MCP_APPS more chat apps a sign-in may go back to, by host
+ * (comma separated), beside Claude's and ChatGPT's. Needs MINCA_HOST_URL.
+ */
+export function mcpFromEnv(env: NodeJS.ProcessEnv): { accountHome?: string; moreApps?: string[] } | null {
+  const given = env.MINCA_HOST_MCP?.trim() || 'off';
+  if (given !== 'on' && given !== 'off') throw new Error(`MINCA_HOST_MCP is on or off, not "${given}"`);
+  if (given === 'off') return null;
+  if (!env.MINCA_HOST_URL?.trim())
+    throw new Error(
+      'MINCA_HOST_MCP needs MINCA_HOST_URL, the host’s public https:// address: every token names it.',
+    );
+  const apps = commaList(env.MINCA_HOST_MCP_APPS);
+  const bad = apps.find((app) => !/^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i.test(app));
+  if (bad) throw new Error(`MINCA_HOST_MCP_APPS lists hosts like chat.example.com, not "${bad}"`);
+  const home = env.MINCA_HOST_MCP_HOME?.trim();
+  return {
+    ...(home ? { accountHome: home } : {}),
+    ...(apps.length ? { moreApps: apps } : {}),
+  };
+}
+
 export function statsFromEnv(env: NodeJS.ProcessEnv): boolean {
   const given = env.MINCA_HOST_STATS?.trim() || 'public';
   if (given !== 'public' && given !== 'off')

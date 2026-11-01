@@ -37,6 +37,7 @@ import {
   githubFromEnv,
   fundFromEnv,
   statsFromEnv,
+  mcpFromEnv,
   quotaFromEnv,
   limitsFromEnv,
   abuseFromEnv,
@@ -443,6 +444,7 @@ async function host(args: string[]): Promise<number> {
     connectors: github ? [github] : [],
     ...fundFromEnv(env),
     stats: statsFromEnv(env),
+    mcp: withVersion(mcpFromEnv(env)),
     reminders,
     measure: spaceSize(data),
     ...(quotaBytes ? { quotaBytes } : {}),
@@ -460,6 +462,9 @@ async function host(args: string[]): Promise<number> {
   });
   return untilStopped(running);
 }
+
+/** The MCP endpoint's settings, saying this version */
+const withVersion = <T extends object>(mcp: T | null) => (mcp ? { ...mcp, version: VERSION } : null);
 
 /** A host takes payments, hosts for free, or hosts for free within limits past which communities pay */
 function requirePayment(paid: boolean, free: boolean, limited: boolean): void {

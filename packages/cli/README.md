@@ -53,7 +53,7 @@ npm install -g @minca/cli            # or run it without installing: npx @minca/
 ```
 
 From this repo: `npm install` at the repo root (the CLI is a workspace), then `cd packages/cli && npm run bundle && npm link`, or a
-binary with no Node at all: `bun build.ts --native`.
+binary with no Node at all: `bun build.mjs --native`.
 
 ```bash
 minca init --name Leif --passphrase          # prints your recovery code once
@@ -116,7 +116,7 @@ spaces with nothing pointed at it. `--no-relays` leaves that out, for a node
 that browsers dial; a single-file binary, which carries no WebRTC, always does. It validates everything with the same
 gates as any peer. It is an **anchor, not a host** — uptime, no authority.
 
-For a server, `bun build.ts` makes single-file binaries for this machine,
+For a server, `bun build.mjs` makes single-file binaries for this machine,
 `linux-x64` and `linux-arm64`; `minca-node.service` is a systemd unit.
 
 ## Carrying your spaces from a folder
@@ -287,6 +287,39 @@ image needs no flags. A few dollars a month on a small machine.
 rules): it needs the account unlocked on the server, a host never does.
 
 ## Agents
+
+### From a chat app, with nothing to install
+
+A host started with `MINCA_HOST_MCP=on` is also an MCP server that chat apps
+connect to by its address alone: `https://<host>/mcp`. In Claude, add it as a
+custom connector; in ChatGPT, Cursor, VS Code or Claude Code, wherever remote
+MCP servers go (`claude mcp add --transport http minca https://<host>/mcp`).
+The app's own model does the thinking, on your own plan; the host only runs
+the tools, so it costs the host bandwidth, not tokens.
+
+Connecting is the sign-in the app already has. The app finds the host's
+authorization server from the endpoint's `401`, registers itself, and opens
+the host's consent page, which says which app it is and where it will send
+you back. There you continue to your account home, as with any app, pick the
+spaces it may use and allow it: the home signs a records-only note, for 30
+days, made out to a key the page made, and the page hands both to the host.
+Then you are back in the app, and its tools arrive. The host keeps that key
+and runs the agent under it, a node of its own that starts on the first call
+and stops when unused; so, unlike `minca connect`, the host can read the
+spaces you gave it. Disconnecting it at your account home stops it, and
+when its note runs out the app asks you to sign in again.
+
+It is OAuth 2.1 with PKCE and dynamic client registration, on
+[`oidc-provider`](https://github.com/panva/node-oidc-provider), and MCP over
+Streamable HTTP on the [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk);
+the tools are the same `NODE_ACTIONS` as `minca mcp`. A sign-in goes back only
+to a chat app the host knows by name over https (Claude's and ChatGPT's, and
+`MINCA_HOST_MCP_APPS`), to this computer, or to an app's own scheme on your
+device, so a link someone else started can't send them your code.
+
+_Source: `packages/cli/src/remote-mcp/` (`index.ts`, `oauth.ts`, `consent.ts`, `consent-script.ts`, `connections.ts`). Tests: `packages/cli/tests/remote-mcp.test.ts`._
+
+### From this computer
 
 ```bash
 npx @minca/cli connect      # in this repo: npm run minca -- connect

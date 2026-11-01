@@ -27,6 +27,9 @@
  *   GET    /host/paid                             where a checkout page sends people back to
  *   GET    /host/remind/confirm?t=…, /host/remind/stop?t=…   the links in reminder mails
  *
+ * With `mcp`, also an MCP endpoint at `/mcp` that chat apps connect to with OAuth, each
+ * connection an agent of the account that allowed it (`remote-mcp/index.ts`).
+ *
  * `/host/subscriptions` calls are signed with the subscription key. A home shows the price and
  * what `pay` answers itself: a page at the payment provider, or a payment request for a wallet,
  * which the host sees arrive by watching its address. Payment providers sit behind small
@@ -67,6 +70,7 @@ import { createHostStats } from './host-stats.js';
 import { createFunds } from './fund.js';
 import { createBotConnect, type BotConnect } from './host-connect.js';
 import { dailyBudget, isConnectorId, type HostConnector } from './connectors/connector.js';
+import { createRemoteMcp, type RemoteMcp } from './remote-mcp/index.js';
 
 /** What the host needs from a payment provider */
 export interface Billing {
@@ -152,6 +156,18 @@ export interface HostOptions {
   readonly fundMs?: number;
   /** Whether anyone may see its rounded totals, once an hour, at `/host/stats`. Default true. */
   readonly stats?: boolean;
+  /**
+   * An MCP endpoint at `/mcp` for chat apps (Claude, ChatGPT, an IDE), signed in with OAuth at the
+   * person's account home. Needs `publicUrl`: it is the issuer of every token.
+   */
+  readonly mcp?: {
+    /** The account home its consent page suggests */
+    readonly accountHome?: string;
+    /** More chat apps a sign-in may go back to, by host, beside Claude's and ChatGPT's */
+    readonly moreApps?: ReadonlyArray<string>;
+    /** The version it says it is */
+    readonly version?: string;
+  } | null;
   readonly log?: (line: string) => void;
 }
 
@@ -1028,6 +1044,22 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
       await reminders.send(await node.list(), (subscription) => node.state(subscription), options.publicUrl);
   }
 
+  const remote: RemoteMcp | null = options.mcp
+    ? await createRemoteMcp({
+        publicUrl: mcpUrl(options.publicUrl),
+        store: await options.stores('host-mcp'),
+        stores: (connection) => (where, storeOptions) =>
+          options.stores(`host-mcp-agents/${connection}/${where}`, storeOptions),
+        // Its spaces through the host's own socket, as the bots it runs reach theirs.
+        network: () => ({ relays: [], nodes: [`ws://127.0.0.1:${listening}/peer`] }),
+        name,
+        version: options.mcp.version ?? '0',
+        ...(options.mcp.accountHome ? { accountHome: options.mcp.accountHome } : {}),
+        ...(options.mcp.moreApps ? { moreApps: options.mcp.moreApps } : {}),
+        log,
+      })
+    : null;
+
   const served: Served = await serve({
     node: {
       sessionDid: node.did,
@@ -1039,7 +1071,7 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
       },
     },
     inbound,
-    routes,
+    routes: async (req, res) => (await remote?.routes(req, res)) || routes(req, res),
     // Its mailbox serves the links its accounts keep, while every device of theirs is away.
     mailboxFrom: (topic) => node.linksAt(topic),
     port: options.port,
@@ -1080,6 +1112,7 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     async close() {
       for (const timer of timers) clearInterval(timer);
       await bots?.close();
+      await remote?.close();
       // Waits for a claim already under way.
       await oneAtATime(async () => {});
       await served.close();
@@ -1087,6 +1120,15 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
       await spentStore?.close();
     },
   };
+}
+
+/** The host's address, for the MCP endpoint: the issuer of every token, so it can't change between requests */
+function mcpUrl(publicUrl: string | undefined): string {
+  if (!publicUrl)
+    throw new Error(
+      'The MCP endpoint needs the host’s public address (MINCA_HOST_URL): every token names it.',
+    );
+  return publicUrl;
 }
 
 /** How a fund is paid into here: what online costs a month for each GB, and how money goes in; null where nothing is paid */
