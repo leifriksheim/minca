@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
-import { baseCss, hoverCss, hstack, palette, stack, styles } from '@minca/app-shared/styles';
+import { baseCss, hoverCss, hstack, palette, scrim, stack, styles } from '@minca/app-shared/styles';
 
-export { hstack, palette, stack, styles };
+export { hstack, palette, scrim, stack, styles };
 
 const { ink, surface, accent, radius, shadow } = palette;
 
@@ -245,7 +245,8 @@ export function injectBaseStyles(): void {
     .call-overlay {
       position: fixed; z-index: 40; inset: 0; padding: 16px;
       display: flex; flex-direction: column; gap: 12px; align-items: center; justify-content: center;
-      background: ${surface.scrim};
+      /* An image, not a colour, so Safari on iOS doesn't tint its status bar with it (scrim, in @minca/app-shared/styles). */
+      background-image: linear-gradient(${surface.scrim}, ${surface.scrim});
     }
     .call-incoming { width: min(340px, 100%); align-items: center; text-align: center; gap: 16px; padding: 24px; }
     .call-ringing { display: inline-flex; border-radius: 50%; animation: call-ring 1.2s ease-out infinite; }
