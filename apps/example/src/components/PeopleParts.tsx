@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import type { SpaceInviteView } from '@minca/core';
-import { useNode, useWatched } from '@minca/react';
+import { useNode } from '@minca/react';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { Modal } from '@minca/app-shared/Modal';
 import { message } from '@minca/app-shared/action';
@@ -8,7 +8,7 @@ import { Shape } from '@minca/app-shared/shapes';
 import { shapeFor } from '@minca/ui/shapes';
 import { ago } from '@minca/ui/time';
 import { palette, styles } from '../styles';
-import { NOT_CARRIED, withChat } from '../contacts';
+import { NOT_CARRIED, useSpaceInvites, withChat } from '../contacts';
 import { shortUsername } from '@minca/app-shared/usernames';
 import { AddButton, LinkButton } from './Buttons';
 import { Icon } from './Icon';
@@ -39,7 +39,7 @@ export function PersonRow({
   tone?: 'card';
   /** Online now: a dot on their face, as Members shows it */
   online?: boolean;
-  /** Opens your chat with them, from a tap anywhere on their face or name */
+  /** A tap anywhere on their face or name: opens your chat with them, or ticks them in a picker */
   onOpen?: () => void;
 }) {
   const who = (
@@ -263,12 +263,7 @@ export function SpaceInvites({
   const [tick, setTick] = useState(0);
   const [joining, setJoining] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const invites =
-    useWatched((node) => node.contacts.invites().catch((): SpaceInviteView[] => []), [tick], {
-      when: (event) => event.type === 'records' || event.type === 'spaces',
-      settle: 400,
-      every: 30_000,
-    }) ?? [];
+  const invites = useSpaceInvites(tick);
   if (invites.length === 0) return null;
   const join = async (invite: SpaceInviteView) => {
     setJoining(invite.space);

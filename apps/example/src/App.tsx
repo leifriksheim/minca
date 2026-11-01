@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
-import { useHeldSpaces, usePairSpaces } from './contacts';
+import { invitableRoles, useAsking, useHeldSpaces, usePairSpaces, useSpaceInvites } from './contacts';
 import { SpaceInvites } from './components/PeopleParts';
 import type { NewSpace } from '@minca/core';
 import {
@@ -77,11 +77,13 @@ function Workspace() {
           : navigate({ to: '/spaces/$spaceId', params: { spaceId: id } }),
       );
   const joinLink = (link: string) => mine.join(inviteFromLink(link));
-  // A new group starts with Chat, and opens in it to add people.
-  const create = async (params: NewSpace) => {
+  // A new group starts with Chat, with any contacts it was made for invited, and opens in it to add people.
+  const create = async (params: NewSpace, invite: ReadonlyArray<string> = []) => {
     const space = await mine.create(params);
     if (!space) return;
     await addChat(node, space.id).catch(() => {});
+    const [role] = invite.length > 0 ? await invitableRoles(node, space.id).catch(() => []) : [];
+    for (const did of invite) await node.contacts.invite(did, space.id, role ? { role } : {}).catch(() => {});
     void navigate({
       to: '/spaces/$spaceId/apps/$appId',
       params: { spaceId: space.id, appId: 'chat' },
@@ -135,7 +137,7 @@ function Workspace() {
     pairs,
     loading,
     error,
-    create: (params: NewSpace) => void create(params),
+    create: (params, invite) => void create(params, invite),
     join: (link: string) => void joinLink(link).then((space) => space && openSpace(space.id)),
     joinLink,
     forget: (id: string) => void forget(id),
@@ -154,6 +156,7 @@ function Workspace() {
 const tab = (on: boolean) =>
   ({
     ...styles.appTitle,
+    position: 'relative',
     textDecoration: 'none',
     color: on ? palette.ink.strong : palette.ink.faint,
   }) as const;
@@ -175,8 +178,8 @@ export function HomeLayout() {
 /** The home screen's tabs, in order */
 const TABS: ReadonlyArray<{ readonly to: HomeTab; readonly label: string }> = [
   { to: '/', label: 'All' },
-  { to: '/groups', label: 'Groups' },
   { to: '/people', label: 'People' },
+  { to: '/groups', label: 'Groups' },
 ];
 
 /** Home: everything, your groups, or the people you talk to, under one header, and "+" to start either */
@@ -186,6 +189,15 @@ export function ChatsLayout() {
   // Leaving a space comes back to the tab it was opened from.
   useEffect(() => rememberHome(at), [at]);
   const [starting, setStarting] = useState(false);
+  // A dot on People while someone asks to be your contact, and on Groups while an invite to one waits.
+  const { spaces } = useWorkspace();
+  const asking = useAsking(spaces);
+  const invites = useSpaceInvites();
+  const waiting: Record<HomeTab, boolean> = {
+    '/': false,
+    '/people': asking.knocks.length + asking.requests.length > 0,
+    '/groups': invites.length > 0,
+  };
   return (
     <>
       <header style={{ ...hstack(20), alignItems: 'center', marginBottom: 20 }}>
@@ -200,6 +212,7 @@ export function ChatsLayout() {
               inactiveProps={{ 'aria-selected': false, style: tab(false) }}
             >
               {one.label}
+              {waiting[one.to] && <span style={tabDot} aria-label="New" />}
             </Link>
           ))}
         </nav>
@@ -214,6 +227,17 @@ export function ChatsLayout() {
     </>
   );
 }
+
+/** Something waiting for you behind a tab, on its top right corner */
+const tabDot = {
+  position: 'absolute',
+  top: 2,
+  right: -9,
+  width: 8,
+  height: 8,
+  borderRadius: palette.radius.pill,
+  background: palette.accent.danger,
+} as const;
 
 const plus = {
   width: 40,

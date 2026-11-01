@@ -4,8 +4,6 @@ import { useAsync, useNode } from '@minca/react';
 import { Modal } from '@minca/app-shared/Modal';
 import { message, useCopy } from '@minca/app-shared/action';
 import { createInviteLink } from '../spaces';
-import { Shape } from '@minca/app-shared/shapes';
-import { markFor } from '@minca/ui/shapes';
 import { palette, styles, ui } from '../styles';
 import { invitableRoles, useContacts } from '../contacts';
 import { shortUsername, useUsernameLookup } from '@minca/app-shared/usernames';
@@ -13,6 +11,8 @@ import { AddButton } from './Buttons';
 import { Icon } from './Icon';
 import { AddDialog, Handle, PersonRow } from './PeopleParts';
 import { usePopover } from './usePopover';
+import { SpaceDialog, SpaceMark } from './SpaceList';
+import { useWorkspace } from '../workspace';
 
 const { ink, surface, radius } = palette;
 
@@ -20,9 +20,9 @@ const { ink, surface, radius } = palette;
 const titled = (role: string) => role.charAt(0).toUpperCase() + role.slice(1).replace(/-/g, ' ');
 
 /**
- * Inviting one contact into one of your spaces, from their row: pick the
- * space, and they find the invite waiting, as the first role you may give
- * there, or to view when you may give none.
+ * Adding one contact to a group, from their row: a new group, made with them in it, or one of yours,
+ * where they find the invite waiting, as the first role you may give there, or to view when you may
+ * give none. With no groups yet, it is straight to making one.
  */
 export function InviteToSpace({
   contact,
@@ -31,12 +31,14 @@ export function InviteToSpace({
   onDone,
 }: {
   contact: ContactView;
-  /** The spaces to offer: yours to write in, not spaces for two */
+  /** The groups to offer: yours to write in, not spaces for two */
   spaces: ReadonlyArray<SpaceSummary>;
   onClose: () => void;
   onDone: (notice: string) => void;
 }) {
   const node = useNode();
+  const { create, join } = useWorkspace();
+  const [making, setMaking] = useState(spaces.length === 0);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const invite = async (space: SpaceSummary) => {
@@ -51,62 +53,71 @@ export function InviteToSpace({
       setBusy(null);
     }
   };
+  if (making)
+    return (
+      <SpaceDialog
+        initial="new"
+        onClose={onClose}
+        onCreate={(params) => create(params, [contact.did])}
+        onJoin={join}
+      />
+    );
   return (
-    <Modal title={`Invite ${contact.name} to…`} onClose={onClose}>
-      {spaces.length === 0 ? (
-        <p style={{ fontSize: 14, color: ink.muted }}>You have no spaces to invite anyone to yet.</p>
-      ) : (
-        <ul style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 0, margin: 0 }}>
-          {spaces.map((space) => {
-            const mark = markFor(space.id);
-            return (
-              <li key={space.id} style={{ listStyle: 'none' }}>
-                <button
-                  onClick={() => void invite(space)}
-                  disabled={busy !== null}
-                  data-menu-item
-                  style={{
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    padding: '8px 10px',
-                    border: `1px solid ${surface.line}`,
-                    borderRadius: radius.md,
-                    background: surface.card,
-                    textAlign: 'left',
-                  }}
-                >
-                  <span style={{ position: 'relative', display: 'grid', placeItems: 'center' }}>
-                    <Shape kind={mark.kind} colour={mark.colour} size={34} />
-                    <span style={letterOnShape}>{space.name.charAt(0).toUpperCase()}</span>
-                  </span>
-                  <span style={{ flex: 1, fontSize: 15, fontWeight: 600, color: ink.strong }}>
-                    {space.name}
-                  </span>
-                  <span style={{ fontSize: 13, color: palette.accent.base, fontWeight: 600 }}>
-                    {busy === space.id ? 'Inviting…' : 'Invite'}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+    <Modal title={`Add ${contact.name} to…`} onClose={onClose}>
+      <ul style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 0, margin: 0 }}>
+        <li style={{ listStyle: 'none' }}>
+          <button onClick={() => setMaking(true)} disabled={busy !== null} data-menu-item style={groupChoice}>
+            <span style={newMark} aria-hidden>
+              <Icon name="plus" size={16} />
+            </span>
+            <span style={{ flex: 1, fontSize: 15, fontWeight: 600, color: ink.strong }}>New group</span>
+          </button>
+        </li>
+        {spaces.map((space) => (
+          <li key={space.id} style={{ listStyle: 'none' }}>
+            <button
+              onClick={() => void invite(space)}
+              disabled={busy !== null}
+              data-menu-item
+              style={groupChoice}
+            >
+              <SpaceMark space={space} size={34} />
+              <span style={{ flex: 1, fontSize: 15, fontWeight: 600, color: ink.strong }}>{space.name}</span>
+              <span style={{ fontSize: 13, color: palette.accent.base, fontWeight: 600 }}>
+                {busy === space.id ? 'Inviting…' : 'Invite'}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
       {error && <p style={{ ...styles.bad, marginTop: 10 }}>{error}</p>}
       <p style={{ fontSize: 13, lineHeight: 1.5, color: ink.muted, marginTop: 12 }}>
-        The invite waits in your private space with {contact.name}.
+        The invite waits in your chat with {contact.name}.
       </p>
     </Modal>
   );
 }
 
-const letterOnShape = {
-  position: 'absolute',
-  fontSize: 14,
-  fontWeight: 700,
-  color: surface.card,
-  pointerEvents: 'none',
+const groupChoice = {
+  width: '100%',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 12,
+  padding: '8px 10px',
+  border: `1px solid ${surface.line}`,
+  borderRadius: radius.md,
+  background: surface.card,
+  textAlign: 'left',
+} as const;
+const newMark = {
+  width: 34,
+  height: 34,
+  flexShrink: 0,
+  display: 'grid',
+  placeItems: 'center',
+  borderRadius: radius.pill,
+  background: surface.sunken,
+  color: ink.strong,
 } as const;
 
 /**
@@ -153,6 +164,7 @@ export function AddPeople({
         members={members}
         role={role}
         autoFocus
+        onInvited={onClose}
         beside={<JoinsAs offered={offered} role={role} onChange={setRole} />}
       />
       <div style={{ height: 1, background: palette.surface.line, margin: '16px 0 4px' }} />
@@ -353,12 +365,15 @@ export function ContactPicker({
   members,
   role,
   autoFocus,
+  onInvited,
   beside,
 }: {
   space: SpaceSummary;
   members: ReadonlySet<string>;
   role: string | null;
   autoFocus?: boolean;
+  /** Everyone ticked is invited: a dialog closes here, rather than saying so */
+  onInvited?: () => void;
   /** Beside the Invite button: what they join as, when it is chosen here */
   beside?: ReactNode;
 }) {
@@ -414,6 +429,7 @@ export function ContactPicker({
       setError(`${waiting.join(', ')} haven't accepted your contact request yet, so they can't be invited.`);
       return;
     }
+    if (onInvited && waiting.length === 0) return onInvited();
     setDone(
       `Invited ${invited === 1 ? 'one person' : `${invited} people`}. They find it with their invites.` +
         (waiting.length > 0 ? ` ${waiting.join(', ')} haven't accepted your contact request yet.` : ''),
@@ -427,6 +443,13 @@ export function ContactPicker({
         onChange={(event) => setQuery(event.target.value)}
         placeholder="Search contacts, or type a username"
         aria-label="Search contacts, or type a username"
+        // A search, so a phone doesn't take it for a sign-in and fill in your own username.
+        type="search"
+        name="find-contacts"
+        enterKeyHint="search"
+        autoCapitalize="none"
+        autoComplete="off"
+        spellCheck={false}
         autoFocus={autoFocus}
         style={{ ...styles.input, height: 42 }}
       />
@@ -457,6 +480,7 @@ export function ContactPicker({
               face={contact.did}
               name={contact.name}
               detail={contact.username ? <Handle username={contact.username} /> : 'Contact'}
+              onOpen={() => toggle(contact.did)}
             >
               <Tick
                 checked={picked.has(contact.did)}

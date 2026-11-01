@@ -216,7 +216,7 @@ declare module '@tanstack/react-router' {
     router: typeof router;
   }
   // What a move carries without putting it in the address: a new group asks for people once, and
-  // "Message someone" lands in the search for them.
+  // "New contact" lands in the search for them.
   interface HistoryState {
     addPeople?: boolean;
     find?: boolean;

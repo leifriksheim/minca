@@ -184,6 +184,10 @@ export function injectBaseStyles(): void {
       border-radius: ${radius.pill}px; background: ${accent.danger}; box-shadow: 0 0 0 2px ${surface.card};
     }
 
+    /* A search box looks like any field; the people search draws its own clear button. */
+    input[type="search"] { -webkit-appearance: none; appearance: none; }
+    input[type="search"]::-webkit-search-cancel-button { display: none; }
+
     /* A small change offered inside a sentence: its words, underlined once pointed at. */
     .quiet-link { padding: 0; border: none; background: none; font: inherit; color: ${ink.body}; text-decoration: none; text-underline-offset: 3px; }
     .quiet-link:hover, .quiet-link[aria-expanded="true"] { text-decoration: underline; color: ${ink.strong}; }

@@ -297,7 +297,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
         {/* The space's apps down the left edge, under the space itself; a phone has them as tabs. */}
         <nav className="app-rail" aria-label={`Apps in ${name}`}>
           <div className="rail-top">
-            <SpaceMenu space={space} pair={pair} leaf={leaf} go={go} onHome={goHome} face />
+            <SpaceMenu space={space} pair={pair} leaf={leaf} go={go} onHome={goHome} />
           </div>
           <div className="rail-apps">
             {/* Every app, laid out, with the ones proposed. */}
@@ -360,11 +360,14 @@ function SpaceView({ space }: { space: SpaceSummary }) {
               </button>
             </span>
             <span className="phone-only bar-middle">
-              {/* In an app or the Overview, the space's name opens its menu; a step aside is named for itself. */}
+              {/* In an app or the Overview, the space's name leads to its Overview; a step aside is named for itself. */}
               {aside ? (
                 <h1 style={{ ...styles.appTitle, ...ui.ellipsis, fontSize: 17 }}>{title}</h1>
               ) : (
-                <SpaceMenu space={space} pair={pair} leaf={leaf} go={go} />
+                <button onClick={() => go('/spaces/$spaceId')} className="group-button" style={nameButton}>
+                  <SpaceFace space={space} pair={pair} size={26} />
+                  <span style={{ ...styles.appTitle, ...ui.ellipsis, fontSize: 17 }}>{name}</span>
+                </button>
               )}
             </span>
             <span className="phone-only bar-end" style={{ justifySelf: 'end' }}>
@@ -572,8 +575,8 @@ function SideHeading({ children }: { children: ReactNode }) {
 }
 
 /**
- * The way around a space, from the space itself: its face at the top of the rail, or its name in the
- * middle of a phone's bar. A dropdown that names the space, then goes to its Overview and its own sections.
+ * The way around a space, from its face at the top of the rail: a menu that names the space, then goes
+ * home, to its Overview and its own sections. A phone's bar has the space's name lead to the Overview.
  */
 function SpaceMenu({
   space,
@@ -581,16 +584,12 @@ function SpaceMenu({
   leaf,
   go,
   onHome,
-  face,
 }: {
   space: SpaceSummary;
   pair: PairWith | undefined;
   leaf: RouteId | undefined;
   go: (to: SpacePath) => void;
-  /** The way home, for the rail: a phone has Back at the left of its bar */
-  onHome?: () => void;
-  /** Opened from the space's face alone, at the top of the rail, rather than from its name */
-  face?: boolean;
+  onHome: () => void;
 }) {
   const { forget } = useWorkspace();
   const { open: shown, setOpen, close, root } = usePopover();
@@ -606,27 +605,15 @@ function SpaceMenu({
         onClick={() => setOpen((was) => !was)}
         aria-expanded={shown}
         aria-haspopup="menu"
-        aria-label={face ? name : undefined}
-        title={face ? name : undefined}
+        aria-label={name}
+        title={name}
         className="group-button"
-        style={face ? faceButton : nameButton}
+        style={faceButton}
       >
-        <SpaceFace space={space} pair={pair} size={face ? 36 : 26} />
-        {!face && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-            <span style={{ ...styles.appTitle, ...ui.ellipsis, fontSize: 17 }}>{name}</span>
-            <span style={{ display: 'inline-flex', transform: shown ? 'rotate(-90deg)' : 'rotate(90deg)' }}>
-              <Icon name="chevron" size={14} />
-            </span>
-          </span>
-        )}
+        <SpaceFace space={space} pair={pair} size={36} />
       </button>
       {shown && (
-        <nav
-          aria-label={name}
-          className={face ? undefined : 'drop'}
-          style={face ? { ...menu, ...beside } : menu}
-        >
+        <nav aria-label={name} style={{ ...menu, ...beside }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px 10px' }}>
             <SpaceFace space={space} pair={pair} size={32} />
             <span style={{ ...stack(1), minWidth: 0 }}>
@@ -634,9 +621,7 @@ function SpaceMenu({
               <Privacy space={space} />
             </span>
           </div>
-          {onHome && (
-            <SideItem icon={<Icon name="arrowLeft" size={16} />} label="Home" onClick={then(onHome)} />
-          )}
+          <SideItem icon={<Icon name="arrowLeft" size={16} />} label="Home" onClick={then(onHome)} />
           <SideHeading>{pair ? 'This chat' : 'This group'}</SideHeading>
           <SideItem
             icon={<Icon name="apps" size={16} />}
@@ -836,7 +821,7 @@ const faceButton = {
   background: 'none',
 };
 
-/** Below the name; a phone pins it under the bar instead (`.drop`) */
+/** A menu under what opens it; a phone pins it under the bar instead (`.drop`) */
 const menu = {
   ...styles.float,
   ...stack(1),
@@ -850,7 +835,7 @@ const menu = {
   overflowY: 'auto',
   animation: 'minca-fade .1s ease',
 } as const;
-/** Opened from the rail, the menu sits beside the face */
+/** The space's menu sits beside its face on the rail */
 const beside = { top: 0, left: 'calc(100% + 8px)' } as const;
 
 /** A row in the sidebar; bold while something in it is new, the way unread channels are */
