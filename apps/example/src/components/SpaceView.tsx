@@ -37,6 +37,7 @@ import { usePopover } from './usePopover';
 import { styles, palette, stack, ui } from '../styles';
 import { Icon, type IconName } from './Icon';
 import { WhoIsHere } from './WhoIsHere';
+import { SyncLine } from './SyncLine';
 import { RelayDown } from './RelayNotice';
 import { homeTab, Notices, useWorkspace } from '../workspace';
 import { CallButton } from './calls/Calls';
@@ -298,6 +299,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
 
   return (
     <PersonScopeProvider space={space} people={people} roles={roleOf} me={account.did} openSpace={openSpace}>
+      <SyncLine space={space.id} />
       <div className="space-shell" data-app-open={open ? '' : undefined}>
         {/* The space's apps down the left edge, under the space itself; a phone has them as tabs. */}
         <nav className="app-rail" aria-label={`Apps in ${name}`}>
@@ -360,7 +362,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
                 style={barButton}
               >
                 <span style={{ display: 'inline-flex', transform: 'rotate(180deg)' }}>
-                  <Icon name="chevron" size={18} />
+                  <Icon name="chevron" size={16} />
                 </span>
               </button>
             </span>
@@ -662,8 +664,8 @@ function SpaceMenu({
 }
 
 /**
- * A phone's way between apps: the grid and the open one's name, at the right of its bar, opens every
- * app as a grid of their shapes, with what is new in each, a slot to add one, and the way to all of them laid out.
+ * A phone's way between apps: the grid at the right of its bar opens every app as a grid of their
+ * shapes, after All (the Overview), with what is new in each, a slot to add one, and the way to all of them laid out.
  */
 function AppSwitcher({
   space,
@@ -695,23 +697,17 @@ function AppSwitcher({
   // While its grid is shut, what's new in the apps not on screen shows on the button.
   const elsewhere = totalOf([...unread.entries()].filter(([id]) => id !== open?.id).map(([, one]) => one));
   return (
-    <div ref={root} style={{ position: 'relative', display: 'flex', minWidth: 0, maxWidth: '100%' }}>
+    <div ref={root} style={{ position: 'relative', display: 'flex' }}>
       <button
         onClick={() => setOpen((was) => !was)}
         aria-expanded={shown}
         aria-haspopup="menu"
         aria-label={open ? `${open.title}: every app` : 'Every app'}
-        title={open?.title ?? 'Apps'}
+        title="Apps"
         className="group-button"
-        style={switcherButton}
+        style={barButton}
       >
-        <span style={{ display: 'inline-flex', flexShrink: 0, color: palette.ink.body }}>
-          <Icon name="apps" size={18} />
-        </span>
-        {/* The app you are in, by name, cut short when it is long. */}
-        <span style={{ ...ui.ellipsis, minWidth: 0, fontSize: 15, fontWeight: 600 }}>
-          {open?.title ?? 'Apps'}
-        </span>
+        <Icon name="apps" size={16} />
         {!shown && (
           <span className="rail-count">
             <Count unread={elsewhere} />
@@ -721,6 +717,27 @@ function AppSwitcher({
       {shown && (
         <nav aria-label="Apps" className="drop" style={{ ...menu, left: 'auto', right: 0, padding: 12 }}>
           <div className="app-switch">
+            {/* Every app laid out, with the ones proposed: the Overview, where its apps come first. */}
+            <button
+              onClick={then(() =>
+                // Already there, it scrolls back up to the apps; elsewhere, the Overview opens at them.
+                onOverview
+                  ? globalThis.document.getElementById(APPS_SECTION)?.scrollIntoView({ behavior: 'smooth' })
+                  : go('/spaces/$spaceId'),
+              )}
+              aria-current={onOverview ? 'page' : undefined}
+              className="rail-item"
+            >
+              <span className="rail-icon">
+                <span className="rail-glyph" style={{ width: 36, height: 36 }}>
+                  <Icon name="apps" size={22} />
+                </span>
+                <span className="rail-count">
+                  <Count unread={newProposals} />
+                </span>
+              </span>
+              <span className="rail-label">All</span>
+            </button>
             {apps.map((app) => (
               <button
                 key={app.id}
@@ -753,19 +770,6 @@ function AppSwitcher({
               </button>
             )}
           </div>
-          <div style={{ height: 1, background: palette.surface.line, margin: '10px 0 6px' }} />
-          {/* Every app laid out, with the ones proposed: the Overview, where its apps come first. */}
-          <SideItem
-            icon={<Icon name="apps" size={16} />}
-            label="All"
-            unread={newProposals}
-            onClick={then(() =>
-              // Already there, it scrolls back up to the apps; elsewhere, the Overview opens at them.
-              onOverview
-                ? globalThis.document.getElementById(APPS_SECTION)?.scrollIntoView({ behavior: 'smooth' })
-                : go('/spaces/$spaceId'),
-            )}
-          />
         </nav>
       )}
     </div>
@@ -801,32 +805,17 @@ function RailItem({
   );
 }
 
-/** The way back, a square at the left of a phone's bar */
+/** Back and the apps, at either end of a phone's bar: round and a shade darker than the page, as a dialog's ✕ is */
 const barButton = {
   position: 'relative',
   display: 'grid',
   placeItems: 'center',
-  width: 40,
-  height: 40,
+  width: 36,
+  height: 36,
   padding: 0,
   border: 'none',
-  borderRadius: palette.radius.md,
-  background: 'none',
-  color: palette.ink.strong,
-} as const;
-
-/** Every app, at the right of a phone's bar: their grid, and the name of the one you are in */
-const switcherButton = {
-  position: 'relative',
-  display: 'flex',
-  alignItems: 'center',
-  gap: 6,
-  maxWidth: '100%',
-  height: 40,
-  padding: '0 8px',
-  border: 'none',
-  borderRadius: palette.radius.md,
-  background: 'none',
+  borderRadius: palette.radius.pill,
+  backgroundColor: palette.surface.sunken,
   color: palette.ink.strong,
 } as const;
 
