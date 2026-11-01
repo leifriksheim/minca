@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useHeldSpaces, usePairSpaces } from './contacts';
 import { SpaceInvites } from './components/PeopleParts';
@@ -20,17 +20,28 @@ import { ConnectScreen } from './components/ConnectScreen';
 import { useAccountInAddress } from './account-address';
 import { ContactsView } from './components/ContactsView';
 import { RelayDown } from './components/RelayNotice';
-import { SpaceDialog, SpaceList } from './components/SpaceList';
+import { GroupRow, SpaceCount, SpaceDialog, SpaceList } from './components/SpaceList';
+import { PersonRow } from './components/PeopleParts';
+import { Loading } from './components/Loading';
+import { ago } from '@minca/ui/time';
+import { byRecent, useLastActive } from './recent';
 import { CallLayer } from './components/calls/Calls';
 import { NewSheet } from './components/NewSheet';
-import { AddButton } from './components/Buttons';
+import { AddButton, PrimaryButton } from './components/Buttons';
 import { Icon } from './components/Icon';
 import { addChat, landingApp } from './components/apps/entries';
 
 import { takeBack } from './contacts';
-import { styles, palette, hstack } from './styles';
+import { styles, palette, hstack, stack, ui } from './styles';
 import { ask } from '@minca/app-shared/Ask';
-import { Notices, useWorkspace, WorkspaceContext, type Workspace as WorkspaceValue } from './workspace';
+import {
+  Notices,
+  rememberHome,
+  useWorkspace,
+  WorkspaceContext,
+  type HomeTab,
+  type Workspace as WorkspaceValue,
+} from './workspace';
 
 /** The app: connect to your account home, then your spaces, wherever the address says (`router.tsx`) */
 export function App() {
@@ -161,40 +172,45 @@ export function HomeLayout() {
   );
 }
 
-/** Home: your groups or the people you talk to, under one header, and "+" to start either */
+/** The home screen's tabs, in order */
+const TABS: ReadonlyArray<{ readonly to: HomeTab; readonly label: string }> = [
+  { to: '/', label: 'All' },
+  { to: '/groups', label: 'Groups' },
+  { to: '/people', label: 'People' },
+];
+
+/** Home: everything, your groups, or the people you talk to, under one header, and "+" to start either */
 export function ChatsLayout() {
-  const on = useRouterState({ select: (state) => state.location.pathname }).startsWith('/people')
-    ? 'people'
-    : 'groups';
+  const path = useRouterState({ select: (state) => state.location.pathname });
+  const at: HomeTab = path.startsWith('/people') ? '/people' : path.startsWith('/groups') ? '/groups' : '/';
+  // Leaving a space comes back to the tab it was opened from.
+  useEffect(() => rememberHome(at), [at]);
   const [starting, setStarting] = useState(false);
   return (
     <>
       <header style={{ ...hstack(20), alignItems: 'center', marginBottom: 20 }}>
         <nav role="tablist" aria-label="Home" style={{ ...hstack(20), flex: 1 }}>
-          <Link
-            to="/"
-            role="tab"
-            activeOptions={{ exact: true }}
-            activeProps={{ 'aria-selected': true, style: tab(true) }}
-            inactiveProps={{ 'aria-selected': false, style: tab(false) }}
-          >
-            Groups
-          </Link>
-          <Link
-            to="/people"
-            role="tab"
-            activeProps={{ 'aria-selected': true, style: tab(true) }}
-            inactiveProps={{ 'aria-selected': false, style: tab(false) }}
-          >
-            People
-          </Link>
+          {TABS.map((one) => (
+            <Link
+              key={one.to}
+              to={one.to}
+              role="tab"
+              activeOptions={{ exact: one.to === '/' }}
+              activeProps={{ 'aria-selected': true, style: tab(true) }}
+              inactiveProps={{ 'aria-selected': false, style: tab(false) }}
+            >
+              {one.label}
+            </Link>
+          ))}
         </nav>
         <AddButton onClick={() => setStarting(true)} aria-label="New" title="New" style={plus}>
           <Icon name="plus" size={20} />
         </AddButton>
       </header>
       <Outlet />
-      {starting && <NewSheet on={on} onClose={() => setStarting(false)} />}
+      {starting && (
+        <NewSheet on={at === '/people' ? 'people' : 'groups'} onClose={() => setStarting(false)} />
+      )}
     </>
   );
 }
@@ -208,7 +224,75 @@ const plus = {
   borderRadius: palette.radius.pill,
 } as const;
 
-/** Your groups, at `/`: every space but your spaces for two */
+/**
+ * Everything, at `/`: your groups and the people you talk to in one list, the one something last
+ * happened in first, the way a messaging app's chats are
+ */
+export function AllPage() {
+  const { spaces, pairs, loading, error, create, join, openSpace } = useWorkspace();
+  const [naming, setNaming] = useState(false);
+  // Invites contacts leave wait in your spaces for two, so those keep syncing here.
+  useHeldSpaces([...pairs.keys()]);
+  const last = useLastActive(spaces);
+  const rows = byRecent(
+    spaces.map((space) => ({ space, pair: pairs.get(space.id) })),
+    last,
+  );
+  const when = (id: string) => {
+    const at = last.get(id);
+    return at ? ago(at) : '';
+  };
+  return (
+    <>
+      <div style={{ marginBottom: 20 }}>
+        <SpaceInvites
+          names={new Map([...pairs.values()].map((pair) => [pair.face, pair.name]))}
+          onJoined={openSpace}
+        />
+      </div>
+      {loading && spaces.length === 0 ? (
+        <Loading label="Opening your chats" style={styles.emptyState} />
+      ) : rows.length === 0 ? (
+        <div style={{ ...styles.emptyState, ...stack(10), alignItems: 'center' }}>
+          <strong style={{ color: palette.ink.strong, fontSize: 15 }}>Nothing here yet</strong>
+          <span>Start a group, or find someone by their username under People.</span>
+          <PrimaryButton onClick={() => setNaming(true)} style={{ marginTop: 6 }}>
+            New group
+          </PrimaryButton>
+        </div>
+      ) : (
+        <ul className="rows" aria-label="Groups and people" style={ui.list}>
+          {rows.map(({ space, pair }) =>
+            pair ? (
+              <PersonRow
+                key={space.id}
+                face={pair.face}
+                name={pair.name}
+                detail={['Person', when(space.id)].filter(Boolean).join(' · ')}
+                onOpen={() => openSpace(space.id)}
+              >
+                <SpaceCount space={space} />
+              </PersonRow>
+            ) : (
+              <GroupRow
+                key={space.id}
+                space={space}
+                detail={['Group', when(space.id)].filter(Boolean).join(' · ')}
+                onOpen={() => openSpace(space.id)}
+              />
+            ),
+          )}
+        </ul>
+      )}
+      {error && <p style={{ ...styles.error, marginTop: 10 }}>{error}</p>}
+      {naming && (
+        <SpaceDialog initial="new" onClose={() => setNaming(false)} onCreate={create} onJoin={join} />
+      )}
+    </>
+  );
+}
+
+/** Your groups, at `/groups`: every space but your spaces for two */
 export function GroupsPage() {
   const { spaces, pairs, loading, error, create, join, openSpace } = useWorkspace();
   const [naming, setNaming] = useState(false);

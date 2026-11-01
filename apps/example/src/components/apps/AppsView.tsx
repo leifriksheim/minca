@@ -14,6 +14,7 @@ import type { AppEntry, useSpaceApps } from './entries';
 import { AppIcon, Count } from './AppIcon';
 import { Proposals } from './MadeApps';
 import { copyApp, moveApp, removeApp } from './launcher';
+import { AppSettings } from './AppSettings';
 import { Icon } from '../Icon';
 import { unreadOf, type Unread } from '../../seen';
 import { styles, palette, variants, hstack, stack, ui } from '../../styles';
@@ -24,7 +25,7 @@ import { confirmThen } from '../../confirm';
  * A space's apps like a phone's home screen: those added, then proposals.
  * Ready-made ones to add are under New app (`NewApp`). Someone who may add collections can arrange them: move
  * them, or take them off. Taking one off keeps everything it holds. Arranging is also where an app is copied
- * to another of your spaces.
+ * to another of your spaces, and where an app that asks for settings, like an API key, has them filled in.
  */
 export function AppsView({
   space,
@@ -54,6 +55,7 @@ export function AppsView({
   const [copied, setCopied] = useState<string | null>(null);
   const [addingBot, setAddingBot] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [setting, setSetting] = useState<AppEntry | null>(null);
   // A bot runs where the space is kept online, so adding one is for whoever chooses that.
   const mayAddBot = useMay(space.id, SPACE_KEEPERS) && space.writable;
   const copy = (app: AppEntry, to: SpaceSummary) => {
@@ -123,6 +125,9 @@ export function AppsView({
                         last: at === apps.ready.length - 1,
                         onMove: (by) => move(app, by),
                         menu: [
+                          ...(app.record.body?.settings?.length
+                            ? [{ label: 'Settings', onClick: () => setSetting(app) }]
+                            : []),
                           ...others.map((other) => ({
                             label: `Copy to ${other.name}`,
                             onClick: () => copy(app, other),
@@ -236,6 +241,7 @@ export function AppsView({
         />
       )}
       {connecting && <ConnectAgent onClose={() => setConnecting(false)} />}
+      {setting && <AppSettings space={space} record={setting.record} onClose={() => setSetting(null)} />}
     </div>
   );
 }
@@ -287,7 +293,7 @@ function AppRow({
         readonly first: boolean;
         readonly last: boolean;
         readonly onMove: (by: number) => void;
-        /** What else can be done to it: copying it to another group, and taking it off */
+        /** What else can be done to it: its settings, copying it to another group, and taking it off */
         readonly menu: ReadonlyArray<{ label: string; onClick: () => void; danger?: boolean }>;
       }
     | undefined;

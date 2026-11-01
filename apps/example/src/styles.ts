@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
-import { baseCss, hoverCss, hstack, palette, stack, styles } from '@minca/app-shared/styles';
+import { baseCss, hoverCss, hstack, palette, scrim, stack, styles } from '@minca/app-shared/styles';
 
-export { hstack, palette, stack, styles };
+export { hstack, palette, scrim, stack, styles };
 
 const { ink, surface, accent, radius, shadow } = palette;
 
@@ -166,13 +166,6 @@ export function injectBaseStyles(): void {
     }
     .segmented > button:hover { color: ${ink.strong}; }
     .segmented > button[aria-selected="true"] { background: ${surface.card}; border-color: ${surface.rule}; color: ${ink.strong}; }
-    /* The same, as links, where the choice is part of the address. */
-    .segmented > .segment-link {
-      display: inline-flex; align-items: center; height: 30px; padding: 0 14px; border: 1px solid transparent;
-      border-radius: ${radius.pill}px; color: ${ink.muted}; font-size: 13px; font-weight: 500; text-decoration: none;
-    }
-    .segmented > .segment-link:hover { color: ${ink.strong}; }
-    .segmented > .segment-link[aria-selected="true"] { background: ${surface.card}; border-color: ${surface.rule}; color: ${ink.strong}; }
 
     /* Home, Activity and You: a pill along the top of a wide screen, the
        bottom edge of a phone's (below). */
@@ -245,7 +238,8 @@ export function injectBaseStyles(): void {
     .call-overlay {
       position: fixed; z-index: 40; inset: 0; padding: 16px;
       display: flex; flex-direction: column; gap: 12px; align-items: center; justify-content: center;
-      background: ${surface.scrim};
+      /* An image, not a colour, so Safari on iOS doesn't tint its status bar with it (scrim, in @minca/app-shared/styles). */
+      background-image: linear-gradient(${surface.scrim}, ${surface.scrim});
     }
     .call-incoming { width: min(340px, 100%); align-items: center; text-align: center; gap: 16px; padding: 24px; }
     .call-ringing { display: inline-flex; border-radius: 50%; animation: call-ring 1.2s ease-out infinite; }
@@ -359,17 +353,19 @@ export function injectBaseStyles(): void {
       /* Room under the last row for the bar along the bottom. */
       .page:has(> * > .tabbar) { padding-bottom: calc(${TABBAR_HEIGHT + 48}px + env(safe-area-inset-bottom)); }
 
-      /* A phone keeps the tab bar along its bottom edge in a space too, so
-         home is always one tap away; the space's apps open from the right
-         of its bar rather than a sidebar. */
+      /* In a space a phone has no tab bar: the way back is at the left of
+         the space's bar, and its apps open from the right of it rather than
+         a sidebar. */
       .app-rail, .hide-on-phone, .bar-label { display: none !important; }
       .phone-only { display: revert !important; }
       .segmented.phone-only { display: flex !important; }
       .space-shell { display: block; height: auto; min-height: 100dvh; }
-      /* At least the screen's height, the content taking what is spare and keeping clear of the tab bar over its foot. */
-      .space-main { min-height: 100dvh; box-sizing: border-box; padding-bottom: calc(${TABBAR_HEIGHT}px + env(safe-area-inset-bottom)); }
+      /* At least the screen's height, the content taking what is spare, clear of the rounded foot of the screen. */
+      .space-main { min-height: 100dvh; box-sizing: border-box; padding-bottom: env(safe-area-inset-bottom); }
       .space-content { flex: 1 0 auto; }
+      /* Back, where you are, the apps: the middle stays in the middle whatever is at either end. */
       .space-bar {
+        display: grid; grid-template-columns: 40px minmax(0, 1fr) 40px;
         position: sticky; top: 0; z-index: 8; height: auto; min-height: 56px; gap: 8px;
         padding: env(safe-area-inset-top) max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left));
         background: ${surface.page};
@@ -385,7 +381,9 @@ export function injectBaseStyles(): void {
       .space-shell[data-app-open] .space-content { overflow-y: auto; padding-bottom: 24px; }
       .space-shell[data-app-open] .space-main { display: flex; height: 100%; min-height: 0; }
       .space-shell[data-app-open] .space-bar { position: static; }
-      /* What fills the space runs right down to the tab bar. */
+      .bar-end { display: flex !important; }
+      .bar-middle { display: flex !important; justify-content: center; min-width: 0; }
+      /* What fills the space runs right down to the foot of the screen. */
       .space-content[data-fill], .space-shell[data-app-open] .space-content[data-fill] { padding: 0; }
 
       /* Chat, the way a phone's messaging apps are: the list of conversations
@@ -404,8 +402,8 @@ export function injectBaseStyles(): void {
       .chat-room-title { min-height: 48px; padding: 8px 14px !important; }
 
       .tabbar {
-        /* Under a space's bar (z-index 8): as a flex item it is a layer of its own even when static,
-           so a dialog opened from it, like an app's settings, can rise no higher than 8. */
+        /* Under the page's bars (z-index 8): as a flex item it is a layer of its own even when static,
+           so a dialog opened from it can rise no higher than 8. */
         position: fixed; z-index: 7; left: 0; right: 0; bottom: 0; width: auto; margin: 0; gap: 0;
         padding: 6px max(4px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(4px, env(safe-area-inset-left));
         border: none; border-top: 1px solid ${surface.rule}; border-radius: 0; background: ${surface.page};

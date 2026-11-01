@@ -5,40 +5,14 @@ import { useAction } from '@minca/app-shared/action';
 import { Modal } from '@minca/app-shared/Modal';
 import { saveSettings, type LauncherApp } from './launcher';
 import { styles } from '../../styles';
-import { PrimaryButton, QuietButton } from '../Buttons';
-import { Icon } from '../Icon';
+import { PrimaryButton } from '../Buttons';
 
 /**
- * Settings on an open app, for someone who may add apps: what the app asks
- * for, like an API key, filled in once for everyone in the space. Nobody else
- * sees the button, and nobody else is asked.
+ * An app's settings, for someone who may add apps: what the app asks for, like
+ * an API key, filled in once for everyone in the space. Reached from the app's
+ * row while arranging the space's apps (`AppsView`); nobody else is asked.
  */
-export function AppSettingsButton({
-  space,
-  record,
-}: {
-  space: SpaceSummary;
-  record: NodeRecord<LauncherApp>;
-}) {
-  const [open, setOpen] = useState(false);
-  if (!record.body?.settings?.length) return null;
-  return (
-    <>
-      <QuietButton
-        onClick={() => setOpen(true)}
-        aria-label="Settings"
-        title="Settings"
-        data-round
-        style={{ width: 36, height: 36 }}
-      >
-        <Icon name="settings" size={16} />
-      </QuietButton>
-      {open && <AppSettings space={space} record={record} onClose={() => setOpen(false)} />}
-    </>
-  );
-}
-
-function AppSettings({
+export function AppSettings({
   space,
   record,
   onClose,

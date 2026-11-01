@@ -8,7 +8,7 @@ import { styles } from './styles';
  * it is about — creating a list needs a name and two decisions, which is more
  * than belongs permanently under a list of lists.
  *
- * Closes on Escape and on a click outside, moves focus in on open and back out
+ * Closes on Escape, on a click outside and on the ✕ at its top right, moves focus in on open and back out
  * on close, and holds focus inside while open, so it behaves the way a dialog
  * is expected to whether or not someone is using a mouse.
  */
@@ -29,11 +29,11 @@ export function Modal({
   useEffect(() => {
     const returnTo = globalThis.document.activeElement;
 
-    // The first field, or the dialog itself when it has none.
     const focusable = card.current?.querySelectorAll<HTMLElement>(
       'input, button, select, textarea, [tabindex]:not([tabindex="-1"])',
     );
-    (focusable?.[0] ?? card.current)?.focus();
+    // The first field, or the dialog itself when it has none: never the ✕, which would make Enter close it.
+    ([...(focusable ?? [])].find((one) => !one.hasAttribute('data-close')) ?? card.current)?.focus();
 
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -81,7 +81,14 @@ export function Modal({
         className="modal"
         style={width ? { ...styles.modal, maxWidth: width } : styles.modal}
       >
-        <h2 style={styles.modalTitle}>{title}</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <h2 style={{ ...styles.modalTitle, flex: 1, minWidth: 0 }}>{title}</h2>
+          <button type="button" onClick={onClose} aria-label="Close" data-close style={styles.closeButton}>
+            <svg width={16} height={16} viewBox="0 0 16 16" aria-hidden>
+              <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
         {children}
       </div>
     </div>

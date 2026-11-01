@@ -89,9 +89,10 @@ export const baseCss = `
     .rows > li + li { border-top: 1px solid ${surface.line}; }
     .rows > li:first-child { border-top-left-radius: inherit; border-top-right-radius: inherit; }
     .rows > li:last-child { border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; }
-    /* Inside a surface (a dialog, or a card marked .surface) a list is no box of its own: never a box in a box,
-       only hairlines above, between and below its rows. */
-    :is(.modal, .surface) .rows {
+    /* Inside a card marked .surface a list is no box of its own: never a box in a box, only hairlines
+       above, between and below its rows. A dialog's lists keep their box, so a choice in one reads as the
+       same list it is on a page. */
+    .surface .rows {
       border: none !important; border-radius: 0 !important; background: none !important;
       border-top: 1px solid ${surface.line} !important; border-bottom: 1px solid ${surface.line} !important;
     }
@@ -134,6 +135,7 @@ export const hoverCss = `
     [data-variant="primary"]:not(:disabled):hover { background-color: ${accent.hover} !important; border-color: ${accent.hover} !important; color: ${ink.inverse} !important; }
     [data-variant="quiet"]:not(:disabled):hover { background-color: ${surface.sunken} !important; color: ${ink.strong} !important; }
     [data-variant="ghost"]:not(:disabled):hover { color: ${ink.strong} !important; }
+    [data-close]:hover { background-color: ${surface.line} !important; color: ${ink.strong} !important; }
     [data-variant="danger"]:not(:disabled):hover { background-color: ${accent.dangerSoft} !important; color: ${accent.danger} !important; }
 
     tbody tr:hover { background-color: ${surface.sunken}; }
@@ -198,6 +200,17 @@ const chip: CSSProperties = {
   fontSize: 12,
   fontWeight: 500,
   whiteSpace: 'nowrap',
+};
+
+/**
+ * What dims the page behind a dialog, painted as an image rather than a background colour. Safari on
+ * iOS 26 tints the strips above and below the page (its "forehead" and "chin") with the background colour
+ * of a fixed element at the top, and is slow to take it back: a dimmed backdrop left the status bar grey
+ * after the dialog closed. As an image the dimming is the same, and the strips keep the page's colour.
+ * WebKit bug 300965.
+ */
+export const scrim: CSSProperties = {
+  backgroundImage: `linear-gradient(${surface.scrim}, ${surface.scrim})`,
 };
 
 /** A column of children `gap` pixels apart */
@@ -455,7 +468,7 @@ export const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
-    backgroundColor: surface.scrim,
+    ...scrim,
     animation: 'minca-fade .12s ease',
   },
   modal: {
@@ -470,6 +483,20 @@ export const styles = {
     display: 'flex',
     flexDirection: 'column',
     gap: 14,
+  },
+  /** A dialog's ✕, at the right of its title: a round button a shade darker than the card it is on */
+  closeButton: {
+    display: 'grid',
+    placeItems: 'center',
+    width: 36,
+    height: 36,
+    margin: '-4px -6px -4px 0',
+    padding: 0,
+    flexShrink: 0,
+    border: 'none',
+    borderRadius: radius.pill,
+    backgroundColor: surface.sunken,
+    color: ink.body,
   },
   modalTitle: {
     fontFamily: display,

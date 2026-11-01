@@ -1,7 +1,7 @@
 import { matches, type NodeCollection, type NodeRecord, type P2PNode, type SpaceSummary } from '@minca/core';
 import { useAccess, useLive } from '@minca/react';
 import { asRunner, namesTheRunner, notifyOn, type AppAutomation } from '@minca/core/schemas';
-import { addTemplate, firstApp, launcherApp, sortLauncher, type LauncherApp } from './launcher';
+import { addTemplate, firstApp, isDirect, launcherApp, sortLauncher, type LauncherApp } from './launcher';
 import { TEMPLATES } from './templates';
 
 /**
@@ -54,8 +54,8 @@ const entryOf = (record: NodeRecord<LauncherApp>, id = `made:${record.key}`): Ap
   notify: record.body ? madeNotify(record.body) : [],
 });
 
-/** Whether an app takes the whole window: a screen of its own does */
-export const fills = (entry: AppEntry): boolean => !!entry.record.body?.screen;
+/** Whether an app takes the whole window: a screen of its own does, and so do direct messages */
+export const fills = (entry: AppEntry): boolean => !!entry.record.body?.screen || isDirect(entry.record.body);
 
 /** The space's launcher records, live */
 export function useLauncherRecords(spaceId: string): ReadonlyArray<NodeRecord<LauncherApp>> {

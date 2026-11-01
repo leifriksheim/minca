@@ -1,13 +1,16 @@
 /**
  * The ready-made apps: each an ordinary app with a screen (`screens.ts`),
  * written the way an agent would write one, and copied into a space when
- * someone adds it (`addTemplate` in `launcher.ts`).
+ * someone adds it (`addTemplate` in `launcher.ts`). Direct messages are the one
+ * without a screen: the app draws them itself (`DirectMessages.tsx`), since a
+ * screen must never be handed text sealed for its viewer alone.
  */
 import {
   ballot,
   column,
   comment,
   decision,
+  direct,
   event,
   expense,
   file,
@@ -27,7 +30,7 @@ import {
   task,
   vote,
 } from '@minca/core/schemas';
-import type { Template } from '../launcher';
+import { DIRECT, type Template } from '../launcher';
 import bills from './bills.html?raw';
 import chat from './chat.html?raw';
 import decisions from './decisions.html?raw';
@@ -64,6 +67,18 @@ export const TEMPLATES: ReadonlyArray<Template> = [
       ],
     },
     needs: [message, file, reaction],
+  },
+  {
+    app: {
+      template: DIRECT,
+      title: 'Direct messages',
+      description:
+        'Write to one or a few people in the group, sealed for them: the rest see that you wrote, not what.',
+      collections: [direct.name],
+      shows: [direct.name],
+      notify: [notifyOn('Messages to me', direct.name, { to: { $contains: '$me' } })],
+    },
+    needs: [direct],
   },
   {
     app: {

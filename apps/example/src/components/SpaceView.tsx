@@ -2,7 +2,9 @@ import { createContext, useContext, useState, type ReactNode } from 'react';
 import {
   Link,
   Outlet,
+  useCanGoBack,
   useNavigate,
+  useRouter,
   useParams,
   useRouterState,
   useSearch,
@@ -22,7 +24,6 @@ import { RecordPanel } from './RecordPanel';
 import { OpenWith } from './apps/OpenWith';
 import { AppIcon, Count } from './apps/AppIcon';
 import { CreateApp } from './apps/CreateApp';
-import { AppSettingsButton } from './apps/AppSettings';
 import { MadeAppScreen } from './apps/MadeApps';
 import { Bell } from './Bell';
 import { fills, useSpaceApps, type AppEntry } from './apps/entries';
@@ -32,13 +33,12 @@ import { AddPeople } from './InvitePeople';
 import { Avatar } from '@minca/app-shared/Avatar';
 import type { PairWith } from '../contacts';
 import { AccountMenu } from './AccountMenu';
-import { TabBar } from './TabBar';
 import { usePopover } from './usePopover';
 import { styles, palette, stack, ui } from '../styles';
 import { Icon, type IconName } from './Icon';
 import { WhoIsHere } from './WhoIsHere';
 import { RelayDown } from './RelayNotice';
-import { Notices, useWorkspace } from '../workspace';
+import { homeTab, Notices, useWorkspace } from '../workspace';
 import { CallButton } from './calls/Calls';
 import { peopleFrom } from '../derive/people';
 import { useBots } from '../bots';
@@ -77,13 +77,18 @@ const PROPOSALS = ':proposals';
 /** What belongs to the space rather than to one app, in sidebar order */
 const SECTIONS = [
   { to: '/spaces/$spaceId/members', label: 'Members', icon: 'people' },
+  { to: '/spaces/$spaceId/roles', label: 'Roles', icon: 'shield' },
   { to: '/spaces/$spaceId/invite', label: 'Invite', icon: 'invite' },
   { to: '/spaces/$spaceId/hosting', label: 'Hosting', icon: 'cloud' },
   { to: '/spaces/$spaceId/automations', label: 'Automations', icon: 'bolt' },
 ] as const satisfies ReadonlyArray<{ to: SpacePath; label: string; icon: IconName }>;
 
 /** The sections only a group has: a space for two is the two of you */
-const FOR_GROUPS: ReadonlySet<string> = new Set(['/spaces/$spaceId/members', '/spaces/$spaceId/invite']);
+const FOR_GROUPS: ReadonlySet<string> = new Set([
+  '/spaces/$spaceId/members',
+  '/spaces/$spaceId/roles',
+  '/spaces/$spaceId/invite',
+]);
 
 /** A space's own sections, as its menu and its Overview list them: a space for two has nobody to invite */
 export const sectionsOf = (pair: boolean) =>
@@ -200,12 +205,22 @@ function SpaceView({ space }: { space: SpaceSummary }) {
   const seen = useSeen();
   const open = onApp ? apps.ready.find((app) => app.id === openId) : undefined;
 
-  // Back to the list it was opened from.
-  const goBack = () => void navigate({ to: pair ? '/people' : '/' });
   const params = { spaceId: space.id };
   const go = (to: SpacePath) => void navigate({ to, params });
   const openApp = (appId: string) =>
     void navigate({ to: '/spaces/$spaceId/apps/$appId', params: { spaceId: space.id, appId } });
+  const router = useRouter();
+  const canGoBack = useCanGoBack();
+  // Home, to the list the space was opened from: from an app, or the space's Overview.
+  const goHome = () => void navigate({ to: homeTab() });
+  // Anywhere else in the space (its members, an invite, under the hood) is a step aside: back to where
+  // you were, or to the Overview when this page is where you came in.
+  const aside = !onApp && !onApps;
+  const goBack = () => {
+    if (!aside) return goHome();
+    if (canGoBack) return router.history.back();
+    go('/spaces/$spaceId');
+  };
   // In Data, a record opens in its own collection. Elsewhere it opens in the app that shows its
   // collection, so a message opens in the chat: the open one if it does, else the only one, else
   // the person picks one. With none, or when that app asks (`here`) to open one of its own,
@@ -282,7 +297,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
         {/* The space's apps down the left edge, under the space itself; a phone has them as tabs. */}
         <nav className="app-rail" aria-label={`Apps in ${name}`}>
           <div className="rail-top">
-            <SpaceMenu space={space} pair={pair} leaf={leaf} go={go} onHome={goBack} face />
+            <SpaceMenu space={space} pair={pair} leaf={leaf} go={go} onHome={goHome} face />
           </div>
           <div className="rail-apps">
             {/* Every app, laid out, with the ones proposed. */}
@@ -329,26 +344,40 @@ function SpaceView({ space }: { space: SpaceSummary }) {
 
         <main className="space-main">
           <header className="space-bar">
-            {/* A phone has no rail: the space is the name at the left of its bar. */}
-            <span className="phone-only" style={{ flex: '1 1 auto', minWidth: 0 }}>
-              <SpaceMenu space={space} pair={pair} leaf={leaf} go={go} />
+            {/* A phone has no rail: the way back at the left of its bar, where you are in the middle, and the
+                space's apps behind the open one's shape at the right. */}
+            <span className="phone-only bar-end">
+              <button
+                onClick={goBack}
+                aria-label={aside ? 'Back' : 'Home'}
+                title={aside ? 'Back' : 'Home'}
+                className="group-button"
+                style={barButton}
+              >
+                <span style={{ display: 'inline-flex', transform: 'rotate(180deg)' }}>
+                  <Icon name="chevron" size={18} />
+                </span>
+              </button>
             </span>
-            {/* Its apps at the right, and the open one's settings; you and what's new for you are in the tab bar. */}
-            <span className="phone-only" style={{ flex: '0 1 auto', minWidth: 0, maxWidth: '50%' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
-                <AppSwitcher
-                  space={space}
-                  apps={apps.ready}
-                  unread={unread}
-                  newProposals={newProposals}
-                  open={open}
-                  title={title}
-                  onNew={onNew}
-                  go={go}
-                  openApp={openApp}
-                />
-                {open && mayDefine && <AppSettingsButton space={space} record={open.record} />}
-              </span>
+            <span className="phone-only bar-middle">
+              {/* In an app or the Overview, the space's name opens its menu; a step aside is named for itself. */}
+              {aside ? (
+                <h1 style={{ ...styles.appTitle, ...ui.ellipsis, fontSize: 17 }}>{title}</h1>
+              ) : (
+                <SpaceMenu space={space} pair={pair} leaf={leaf} go={go} />
+              )}
+            </span>
+            <span className="phone-only bar-end" style={{ justifySelf: 'end' }}>
+              <AppSwitcher
+                space={space}
+                apps={apps.ready}
+                unread={unread}
+                newProposals={newProposals}
+                open={open}
+                onNew={onNew}
+                go={go}
+                openApp={openApp}
+              />
             </span>
             <span className="hide-on-phone" style={{ display: 'contents' }}>
               {open && <AppIcon id={open.id} size={28} />}
@@ -361,11 +390,6 @@ function SpaceView({ space }: { space: SpaceSummary }) {
               )}
               <CallButton space={space} place="chip" />
             </span>
-            {open && mayDefine && (
-              <span className="hide-on-phone">
-                <AppSettingsButton space={space} record={open.record} />
-              </span>
-            )}
           </header>
 
           <div className="space-content" data-fill={fill || undefined}>
@@ -415,7 +439,13 @@ function SpaceView({ space }: { space: SpaceSummary }) {
                 <div style={{ ...stack(10), marginBottom: 24 }}>
                   <div role="tablist" aria-label="Under the hood" className="segmented phone-only scroll-x">
                     {HOOD.map((h) => (
-                      <button key={h.id} role="tab" aria-selected={hood.id === h.id} onClick={() => go(h.to)}>
+                      <button
+                        key={h.id}
+                        role="tab"
+                        aria-selected={hood.id === h.id}
+                        // In place, so Back leaves under the hood in one step rather than tab by tab.
+                        onClick={() => void navigate({ to: h.to, params, replace: true })}
+                      >
                         <Icon name={h.icon} size={14} />
                         {h.label}
                       </button>
@@ -429,10 +459,6 @@ function SpaceView({ space }: { space: SpaceSummary }) {
                 <Outlet />
               </SpaceScreenContext>
             </div>
-          </div>
-          {/* A phone keeps Home, Activity and you along its bottom edge here too. */}
-          <div className="phone-only">
-            <TabBar />
           </div>
         </main>
       </div>
@@ -546,8 +572,8 @@ function SideHeading({ children }: { children: ReactNode }) {
 }
 
 /**
- * The way around a space, from the space itself: its face at the top of the rail, or its name at the
- * left of a phone's bar. A dropdown that names the space, then goes to its Overview and its own sections.
+ * The way around a space, from the space itself: its face at the top of the rail, or its name in the
+ * middle of a phone's bar. A dropdown that names the space, then goes to its Overview and its own sections.
  */
 function SpaceMenu({
   space,
@@ -561,7 +587,7 @@ function SpaceMenu({
   pair: PairWith | undefined;
   leaf: RouteId | undefined;
   go: (to: SpacePath) => void;
-  /** The way home, for the rail: a phone has the tab bar's */
+  /** The way home, for the rail: a phone has Back at the left of its bar */
   onHome?: () => void;
   /** Opened from the space's face alone, at the top of the rail, rather than from its name */
   face?: boolean;
@@ -585,10 +611,10 @@ function SpaceMenu({
         className="group-button"
         style={face ? faceButton : nameButton}
       >
-        <SpaceFace space={space} pair={pair} size={face ? 36 : 32} />
+        <SpaceFace space={space} pair={pair} size={face ? 36 : 26} />
         {!face && (
           <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-            <span style={{ ...styles.appTitle, ...ui.ellipsis, fontSize: 18 }}>{name}</span>
+            <span style={{ ...styles.appTitle, ...ui.ellipsis, fontSize: 17 }}>{name}</span>
             <span style={{ display: 'inline-flex', transform: shown ? 'rotate(-90deg)' : 'rotate(90deg)' }}>
               <Icon name="chevron" size={14} />
             </span>
@@ -645,8 +671,8 @@ function SpaceMenu({
 }
 
 /**
- * A phone's way between apps: the one open, named at the right of its bar, opens every app as a grid of their
- * shapes, with what is new in each, a slot to add one, and the way to all of them laid out.
+ * A phone's way between apps: the open one's shape, at the right of its bar, opens every app as a grid of
+ * their shapes, with what is new in each, a slot to add one, and the way to all of them laid out.
  */
 function AppSwitcher({
   space,
@@ -654,7 +680,6 @@ function AppSwitcher({
   unread,
   newProposals,
   open,
-  title,
   onNew,
   go,
   openApp,
@@ -664,8 +689,6 @@ function AppSwitcher({
   unread: ReturnType<typeof useUnread>;
   newProposals: Unread;
   open: AppEntry | undefined;
-  /** Where in the space you are, when no app is open */
-  title: string;
   onNew: boolean;
   go: (to: SpacePath) => void;
   openApp: (id: string) => void;
@@ -678,29 +701,28 @@ function AppSwitcher({
   // While its grid is shut, what's new in the apps not on screen shows on the button.
   const elsewhere = totalOf([...unread.entries()].filter(([id]) => id !== open?.id).map(([, one]) => one));
   return (
-    <div ref={root} style={{ position: 'relative', display: 'flex', minWidth: 0 }}>
+    <div ref={root} style={{ position: 'relative', display: 'flex' }}>
       <button
         onClick={() => setOpen((was) => !was)}
         aria-expanded={shown}
         aria-haspopup="menu"
-        aria-label={`${open?.title ?? title}: every app`}
+        aria-label={open ? `${open.title}: every app` : 'Every app'}
+        title="Apps"
         className="group-button"
-        style={switcherButton}
+        style={barButton}
       >
         {open ? (
-          <AppIcon id={open.id} size={22} />
+          <AppIcon id={open.id} size={26} />
         ) : (
           <span style={{ display: 'inline-flex', color: palette.ink.body }}>
-            <Icon name="apps" size={16} />
+            <Icon name="apps" size={18} />
           </span>
         )}
-        <span style={{ ...ui.ellipsis, minWidth: 0, fontSize: 15, fontWeight: 600 }}>
-          {open?.title ?? title}
-        </span>
-        <span style={{ display: 'inline-flex', transform: shown ? 'rotate(-90deg)' : 'rotate(90deg)' }}>
-          <Icon name="chevron" size={12} />
-        </span>
-        {!shown && <Count unread={elsewhere} />}
+        {!shown && (
+          <span className="rail-count">
+            <Count unread={elsewhere} />
+          </span>
+        )}
       </button>
       {shown && (
         <nav aria-label="Apps" className="drop" style={{ ...menu, left: 'auto', right: 0, padding: 12 }}>
@@ -779,19 +801,19 @@ function RailItem({
   );
 }
 
-/** The app you are in, at the right of a phone's bar */
-const switcherButton = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 6,
-  maxWidth: '100%',
-  height: 36,
-  padding: '0 8px',
+/** A square at either end of a phone's bar: the way back, and the apps behind the open one's shape */
+const barButton = {
+  position: 'relative',
+  display: 'grid',
+  placeItems: 'center',
+  width: 40,
+  height: 40,
+  padding: 0,
   border: 'none',
   borderRadius: palette.radius.md,
   background: 'none',
   color: palette.ink.strong,
-};
+} as const;
 
 const nameButton = {
   display: 'flex',

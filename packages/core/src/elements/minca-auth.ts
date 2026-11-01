@@ -123,7 +123,12 @@ function errorBox(error: AuthError | null): HTMLElement | null {
   );
 }
 
+/**
+ * One choice in a list of them (`wa-options`). `name` marks it (`data-option`), so a page can give each
+ * kind its own icon in `.wa-option-icon`, which shows nothing unless the page draws one there.
+ */
 function option(
+  name: string,
   title: string,
   text: string,
   onclick: () => void,
@@ -132,14 +137,19 @@ function option(
 ): HTMLElement {
   return h(
     'button',
-    { type: 'button', class: 'wa-option', onclick, disabled },
+    { type: 'button', class: 'wa-option', 'data-option': name, onclick, disabled },
+    h('span', { class: 'wa-option-icon', 'aria-hidden': 'true' }),
     h(
       'span',
-      { class: 'wa-option-title' },
-      title,
-      recommended ? h('span', { class: 'wa-badge' }, 'Recommended') : null,
+      { class: 'wa-option-body' },
+      h(
+        'span',
+        { class: 'wa-option-title' },
+        title,
+        recommended ? h('span', { class: 'wa-badge' }, 'Recommended') : null,
+      ),
+      h('span', { class: 'wa-option-text' }, text),
     ),
-    h('span', { class: 'wa-option-text' }, text),
   );
 }
 
@@ -469,35 +479,15 @@ export class MincaAuthElement extends Base {
     const auth = this.auth;
     return card(
       'Welcome to Minca',
-      subtitle('One account for every Minca app. Your data stays with you, not on a server.'),
+      subtitle('One account for every Minca app.'),
       h(
         'div',
         { class: 'wa-options' },
-        state.podToReopen && state.folderAvailable
-          ? option(
-              `Open “${state.podToReopen}” again`,
-              'Your account is in this folder. The browser asks once more before opening it.',
-              () => void auth.reopenPod(),
-              state.busy,
-            )
-          : null,
+        option('create', 'Create an account', 'Takes a minute.', () => auth.startCreating(), state.busy),
         option(
-          'Create an account',
-          "Takes a minute. You'll get a recovery code to keep safe, then sign in with a passkey or a password.",
-          () => auth.startCreating(),
-          state.busy,
-        ),
-        state.folderAvailable
-          ? option(
-              'Open a folder',
-              'Your account is in a folder (a pod): open it, and sign in with your password or passkey.',
-              () => void auth.choosePod(),
-              state.busy,
-            )
-          : null,
-        option(
+          'existing',
           'I already have one',
-          'Use your recovery code, or add this device from another.',
+          'Sign in, or bring it to this device.',
           () => auth.showExisting(),
           state.busy,
         ),
@@ -510,7 +500,8 @@ export class MincaAuthElement extends Base {
   /**
    * "I already have an account", from a place that does not list it. Where the
    * data lives comes up here and only here: someone with a pod has something to
-   * point at, and someone without one has other ways in.
+   * point at, and someone without one has other ways in. A pod opened here
+   * before is first, to open again.
    */
   #existing(state: AuthState): HTMLElement {
     const auth = this.auth;
@@ -520,17 +511,28 @@ export class MincaAuthElement extends Base {
       h(
         'div',
         { class: 'wa-options' },
+        state.podToReopen && state.folderAvailable
+          ? option(
+              'reopen',
+              `Open “${state.podToReopen}” again`,
+              'The browser asks once more.',
+              () => void auth.reopenPod(),
+              state.busy,
+            )
+          : null,
         state.folderAvailable
           ? option(
+              'pod',
               'Open your pod',
-              'The folder your Minca data lives in. Its accounts are listed next, ready to unlock with your passkey or password.',
+              'The folder your account is kept in.',
               () => void auth.choosePod(),
               state.busy,
             )
           : null,
         option(
+          'pair',
           'Add this device from another',
-          'From a device where you are signed in. Nothing to type — your spaces come across too.',
+          'Scan a code on a device you’re signed in on.',
           () => {
             this.#showPairHelp = !this.#showPairHelp;
             this.#redraw();
@@ -547,8 +549,9 @@ export class MincaAuthElement extends Base {
             )
           : null,
         option(
+          'code',
           'Use your recovery code',
-          'The 26-character code you kept when you made the account. Works on any device.',
+          'The code you kept when you made it.',
           () => auth.showRestore(),
           state.busy,
         ),
@@ -1089,6 +1092,7 @@ export class MincaAuthElement extends Base {
         { class: 'wa-options' },
         passkeys
           ? option(
+              'passkey',
               'Passkey',
               'Touch ID, Windows Hello, or your password manager. Nothing to type.',
               () => void auth.addPasskey(),
@@ -1098,6 +1102,7 @@ export class MincaAuthElement extends Base {
           : null,
         passkeys && !choosing
           ? option(
+              'password',
               'Password',
               'Saved in your password manager, like any other login.',
               () => {
@@ -1136,12 +1141,13 @@ export class MincaAuthElement extends Base {
       h(
         'p',
         { class: 'wa-hint' },
-        'A pod is a folder on your computer that keeps your account and spaces. Back it up, or put it in iCloud or Dropbox. Any Minca app you point at it opens the same account. It is brought up to date while this page is open.',
+        'A folder on your computer that keeps your account and spaces. Back it up, or keep it in iCloud or Dropbox.',
       ),
       h(
         'div',
         { class: 'wa-options' },
         option(
+          'pod',
           'Choose a folder',
           'Your browser will ask to see it, then to save into it.',
           () => void auth.choosePod(),

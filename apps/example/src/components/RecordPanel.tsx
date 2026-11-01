@@ -32,7 +32,7 @@ import { Tags } from './std/Tags';
 import { Comments } from './std/Comments';
 import { Attachments } from './std/Attachments';
 import { LinkPicker } from './LinkPicker';
-import { styles, palette, ui, hstack, stack } from '../styles';
+import { styles, palette, scrim, ui, hstack, stack } from '../styles';
 import { useAction } from '@minca/app-shared/action';
 import { Person } from './Person';
 import { useDraft } from './useDraft';
@@ -718,7 +718,7 @@ function groupBy<T>(items: ReadonlyArray<T>, key: (item: T) => string): Map<stri
 const scrimStyle = {
   position: 'fixed' as const,
   inset: 0,
-  background: palette.surface.scrim,
+  ...scrim,
   zIndex: 30,
   animation: 'minca-fade .12s ease',
 };

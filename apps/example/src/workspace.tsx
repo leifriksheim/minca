@@ -68,3 +68,17 @@ export function Notices({ inSpace = false }: { inSpace?: boolean }) {
     </>
   );
 }
+
+/** The lists on the home screen, each a tab: everything, your groups, your people */
+export type HomeTab = '/' | '/groups' | '/people';
+
+// The tab you were last on, for this browser tab, so leaving a space returns to it.
+let lastHome: HomeTab = '/';
+
+/** Keeps which home tab is showing, for a space's way back (`homeTab`) */
+export const rememberHome = (tab: HomeTab): void => {
+  lastHome = tab;
+};
+
+/** The home tab a space was opened from, as far as this page knows: All when it doesn't */
+export const homeTab = (): HomeTab => lastHome;

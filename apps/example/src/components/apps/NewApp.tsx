@@ -4,7 +4,8 @@ import type { DefineCollection, NodeCollection, SpaceSummary } from '@minca/core
 import { useNode } from '@minca/react';
 import type { useSpaceApps } from './entries';
 import { AppIcon } from './AppIcon';
-import { addTemplate } from './launcher';
+import { addTemplate, DIRECT } from './launcher';
+import { useWorkspace } from '../../workspace';
 import { Icon } from '../Icon';
 import { styles, palette, stack } from '../../styles';
 import { QuietButton } from '../Buttons';
@@ -31,8 +32,14 @@ export function NewApp({
   const node = useNode();
   const [adding, setAdding] = useState<Ready | null>(null);
   const { run, busy, error } = useAction();
+  // Direct messages are for a group: a space for two is one already. They are sealed to members' keys,
+  // which only a private space's members publish.
+  const forTwo = useWorkspace().pairs.has(space.id);
+  const offered = apps.templates.filter(
+    ({ app }) => app.template !== DIRECT || (!forTwo && space.visibility === 'private'),
+  );
   const ready: ReadonlyArray<Ready> = [
-    ...apps.templates.map((template) => ({
+    ...offered.map((template) => ({
       id: template.app.template,
       title: template.app.title,
       description: template.app.description,
