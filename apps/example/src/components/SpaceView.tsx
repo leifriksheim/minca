@@ -71,6 +71,9 @@ export const HOOD = [
   about?: string;
 }>;
 
+/** The Overview's list of apps, by its id: where All in the apps menu leads */
+export const APPS_SECTION = 'space-apps';
+
 /** Where the seen store keeps when the Overview, and the proposals on it, were last looked at; no app has this id */
 const PROPOSALS = ':proposals';
 
@@ -211,14 +214,16 @@ function SpaceView({ space }: { space: SpaceSummary }) {
     void navigate({ to: '/spaces/$spaceId/apps/$appId', params: { spaceId: space.id, appId } });
   const router = useRouter();
   const canGoBack = useCanGoBack();
-  // Home, to the list the space was opened from: from an app, or the space's Overview.
+  // Home, to the list the space was opened from: from an app.
   const goHome = () => void navigate({ to: homeTab() });
-  // Anywhere else in the space (its members, an invite, under the hood) is a step aside: back to where
-  // you were, or to the Overview when this page is where you came in.
-  const aside = !onApp && !onApps;
+  // Anywhere else in the space (the Overview, its members, an invite, under the hood) is a step aside,
+  // named for itself in the bar: back to where you were. Where this page is where you came in, the
+  // Overview, and from the Overview, home.
+  const aside = !onApp;
   const goBack = () => {
     if (!aside) return goHome();
     if (canGoBack) return router.history.back();
+    if (onApps) return goHome();
     go('/spaces/$spaceId');
   };
   // In Data, a record opens in its own collection. Elsewhere it opens in the app that shows its
@@ -360,7 +365,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
               </button>
             </span>
             <span className="phone-only bar-middle">
-              {/* In an app or the Overview, the space's name leads to its Overview; a step aside is named for itself. */}
+              {/* In an app, the space's name leads to its Overview; anywhere else is named for itself. */}
               {aside ? (
                 <h1 style={{ ...styles.appTitle, ...ui.ellipsis, fontSize: 17 }}>{title}</h1>
               ) : (
@@ -378,6 +383,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
                 newProposals={newProposals}
                 open={open}
                 onNew={onNew}
+                onOverview={onApps}
                 go={go}
                 openApp={openApp}
               />
@@ -666,6 +672,7 @@ function AppSwitcher({
   newProposals,
   open,
   onNew,
+  onOverview,
   go,
   openApp,
 }: {
@@ -675,6 +682,8 @@ function AppSwitcher({
   newProposals: Unread;
   open: AppEntry | undefined;
   onNew: boolean;
+  /** On the Overview already */
+  onOverview: boolean;
   go: (to: SpacePath) => void;
   openApp: (id: string) => void;
 }) {
@@ -745,11 +754,17 @@ function AppSwitcher({
             )}
           </div>
           <div style={{ height: 1, background: palette.surface.line, margin: '10px 0 6px' }} />
+          {/* Every app laid out, with the ones proposed: the Overview, where its apps come first. */}
           <SideItem
             icon={<Icon name="apps" size={16} />}
-            label="Overview"
+            label="All"
             unread={newProposals}
-            onClick={then(() => go('/spaces/$spaceId'))}
+            onClick={then(() =>
+              // Already there, it scrolls back up to the apps; elsewhere, the Overview opens at them.
+              onOverview
+                ? globalThis.document.getElementById(APPS_SECTION)?.scrollIntoView({ behavior: 'smooth' })
+                : go('/spaces/$spaceId'),
+            )}
           />
         </nav>
       )}
