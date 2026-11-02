@@ -1,8 +1,9 @@
 /**
- * `network.only`: a node that reaches nothing but what it was given. What it
- * reads and the invites it is handed are someone else's, so none of them may
- * choose an address for it: not a host a record names, nor a short link's
- * places. (That it dials no node an invite names is shown end to end in
+ * `network.reach`: where a node may connect, asked of every address it found
+ * rather than was given. For a node whose reading and invites are someone
+ * else's, none of them may choose an address it refuses: not a host it asks
+ * about itself, a host a record names, nor a short link's places. (That it
+ * dials no node an invite names, and no relay, is shown end to end in
  * `packages/cli/tests/remote-mcp-server.test.ts`.)
  */
 import { after, describe, test } from 'node:test';
@@ -43,7 +44,8 @@ async function listening() {
   return { port: address.port, seen };
 }
 
-async function aNode(only: boolean) {
+/** A node that may reach nothing it finds, or, given no `reach`, anything */
+async function aNode(refuses: boolean) {
   const hub = createFakeHub({ latencyMs: 1 });
   const manager = createIdentityManager();
   const seed = generateSeed();
@@ -52,7 +54,10 @@ async function aNode(only: boolean) {
     stores: memoryStores(),
     accountKey: await deriveAccountKey(seed),
     watchIntervalMs: 0,
-    network: { transports: (spaceId, did) => [hub.transport(did, spaceId)], ...(only ? { only } : {}) },
+    network: {
+      transports: (spaceId, did) => [hub.transport(did, spaceId)],
+      ...(refuses ? { reach: async () => false } : {}),
+    },
   });
   closing.push(() => node.close());
   return node;
@@ -65,11 +70,11 @@ const link = (port: number) =>
     places: [`ws://localhost:${port}`],
   });
 
-describe('a node that reaches only what it was given', () => {
+describe('a node that may reach nothing it finds', () => {
   test('asks no host about itself', async () => {
     const server = await listening();
     const node = await aNode(true);
-    await assert.rejects(node.hosting.use(`http://127.0.0.1:${server.port}`), /reaches only/);
+    await assert.rejects(node.hosting.use(`http://127.0.0.1:${server.port}`), /may not reach/);
     assert.deepEqual(server.seen, []);
   });
 
@@ -88,8 +93,8 @@ describe('a node that reaches only what it was given', () => {
   test('asks no place a short link names', async () => {
     const server = await listening();
     const node = await aNode(true);
-    await assert.rejects(node.spaces.preview(link(server.port)), /reaches only/);
-    await assert.rejects(node.spaces.join(link(server.port)), /reaches only/);
+    await node.spaces.preview(link(server.port)).catch(() => null);
+    await node.spaces.join(link(server.port)).catch(() => null);
     assert.deepEqual(server.seen, []);
   });
 

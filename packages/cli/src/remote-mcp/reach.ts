@@ -1,17 +1,16 @@
 /**
- * Where a session's node may connect. A grant's invites name the always-on
- * nodes that hold each space, and anyone can make an account and write a
- * grant, so the service follows only those on the public internet: never
- * one that resolves to this machine, its network, or the cloud's metadata
- * address. Its operator's own nodes (`MINCA_NODES`) are taken as given.
+ * Where a session's node may connect (`network.reach`). A grant's invites
+ * and the spaces it syncs name the always-on nodes and relays they meet at,
+ * and anyone can make an account and write a grant, so the service follows
+ * only those on the public internet: never one that resolves to this
+ * machine, its network, or the cloud's metadata address. Its operator's own
+ * (`MINCA_NODES`, `MINCA_RELAYS`) are taken as given.
  *
  * Checked when a session starts, by name: a name that resolves elsewhere
  * when the socket opens (DNS rebinding) is not caught.
  */
 import { lookup } from 'node:dns/promises';
 import { BlockList, isIP } from 'node:net';
-import { parseSpaceInvite } from '@minca/core';
-import type { Grant } from '@minca/core/session';
 
 /** Addresses that aren't the public internet's */
 const NOT_PUBLIC = (() => {
@@ -54,7 +53,7 @@ function publicAddress(address: string): boolean {
   return !NOT_PUBLIC.check(address, family === 4 ? 'ipv4' : 'ipv6');
 }
 
-/** Whether a node's address is over TLS, and every address its name resolves to is public */
+/** Whether an address (a node, a relay, a host) is over TLS, and every address its name resolves to is public */
 export async function publicNode(node: string): Promise<boolean> {
   let url: URL;
   try {
@@ -62,36 +61,9 @@ export async function publicNode(node: string): Promise<boolean> {
   } catch {
     return false;
   }
-  if (url.protocol !== 'wss:') return false;
+  if (url.protocol !== 'wss:' && url.protocol !== 'https:') return false;
   const host = url.hostname.replace(/^\[|\]$/g, '');
   if (isIP(host)) return publicAddress(host);
   const found = await lookup(host, { all: true }).catch(() => []);
   return found.length > 0 && found.every(({ address }) => publicAddress(address));
-}
-
-/** The always-on nodes a grant's invites name, at most this many */
-const MAX_NODES = 8;
-
-/**
- * Where a session's node reaches its spaces: the operator's nodes, and those
- * the grant's invites name that `may` lets it reach.
- */
-export async function nodesFor(
-  grant: Grant,
-  given: ReadonlyArray<string>,
-  may: (node: string) => Promise<boolean> = publicNode,
-): Promise<ReadonlyArray<string>> {
-  const named = new Set<string>();
-  for (const space of grant.spaces ?? []) {
-    if (!space.invite) continue;
-    try {
-      for (const node of parseSpaceInvite(space.invite).nodes ?? []) named.add(node);
-    } catch {
-      // Not an invite: nothing to follow.
-    }
-  }
-  const followed: string[] = [];
-  for (const node of [...named].slice(0, MAX_NODES))
-    if (!given.includes(node) && (await may(node))) followed.push(node);
-  return [...given, ...followed];
 }

@@ -75,12 +75,28 @@ export function meshFor(
   session: { readonly did: string; readonly key: CryptoKey },
 ): Mesh | undefined {
   if (!network?.relays?.length) return undefined;
-  return createMesh({
+  const mesh = createMesh({
     did: session.did,
     key: session.key,
     relays: network.relays,
     ...(network.iceServers ? { iceServers: network.iceServers } : {}),
     ...(network.createTransport ? { createTransport: network.createTransport } : {}),
+  });
+  const { reach } = network;
+  if (!reach) return mesh;
+  // Relays a space or an invite names, found rather than given: each asked of the node's `reach` first.
+  const given = new Set(network.relays);
+  return Object.freeze({
+    ...mesh,
+    useRelays: (room: string, relays: ReadonlyArray<string>) =>
+      void Promise.all(
+        relays.map((url) => (given.has(url) ? Promise.resolve(true) : reach(url).catch(() => false))),
+      ).then((ok) =>
+        mesh.useRelays(
+          room,
+          relays.filter((_, i) => ok[i]),
+        ),
+      ),
   });
 }
 
@@ -559,6 +575,33 @@ export async function openPeers(deps: PeersDeps) {
   }
   for (const network of networks) listen(network);
 
+  /** Holds sockets to these always-on nodes, closing those to any held before and not now */
+  function holdNodes(nodes: ReadonlyArray<string>): void {
+    const wanted = new Set(nodes);
+    for (const [node, network] of hostNetworks) {
+      if (wanted.has(node)) continue;
+      hostNetworks.delete(node);
+      networks.splice(networks.indexOf(network), 1);
+      network.disconnect();
+    }
+    for (const node of wanted) {
+      if (hostNetworks.has(node)) continue;
+      const network = nodeNetwork(node);
+      hostNetworks.set(node, network);
+      networks.push(network);
+      listen(network);
+      if (connection === 'offline') connection = 'connecting';
+      sync.start();
+      void network.connect().then(
+        () => {
+          connection = 'connected';
+          statusChanged();
+        },
+        () => statusChanged(),
+      );
+    }
+  }
+
   return {
     sync,
     readAccess,
@@ -622,32 +665,15 @@ export async function openPeers(deps: PeersDeps) {
      * are closed.
      */
     useNodes: (nodes: ReadonlyArray<string>): void => {
-      // A node told to reach only what it was given holds no other socket, whoever names it.
-      if (!net || net.only || deps.isClosed()) return;
+      if (!net || deps.isClosed()) return;
       const configured = new Set(net.nodes ?? []);
-      const wanted = new Set(nodes.filter((node) => !configured.has(node)));
-      for (const [node, network] of hostNetworks) {
-        if (wanted.has(node)) continue;
-        hostNetworks.delete(node);
-        networks.splice(networks.indexOf(network), 1);
-        network.disconnect();
-      }
-      for (const node of wanted) {
-        if (hostNetworks.has(node)) continue;
-        const network = nodeNetwork(node);
-        hostNetworks.set(node, network);
-        networks.push(network);
-        listen(network);
-        if (connection === 'offline') connection = 'connecting';
-        sync.start();
-        void network.connect().then(
-          () => {
-            connection = 'connected';
-            statusChanged();
-          },
-          () => statusChanged(),
-        );
-      }
+      const named = nodes.filter((node) => !configured.has(node));
+      // Found, not given: each asked of the node's `reach` first.
+      const { reach } = net;
+      if (!reach) return holdNodes(named);
+      void Promise.all(named.map((node) => reach(node).catch(() => false))).then((ok) => {
+        if (!deps.isClosed()) holdNodes(named.filter((_, i) => ok[i]));
+      });
     },
 
     /** Stops telling of relays coming and going */

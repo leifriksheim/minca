@@ -253,12 +253,18 @@ export function createNodeCarriers(ctx: NodeContext) {
    * other, whoever left it, is ignored unopened.
    */
   async function fetchInvite(bare: string): Promise<Resolved> {
-    // Its places are the link's to name: a node that reaches only what it was given asks none.
-    if (config.network?.only)
-      throw new Error('This node reaches only the nodes it was given, so it can’t fetch a short link');
     const link = parseInviteLink(bare);
     const { topic, inviteSecret } = await inviteLinkKeys(link.secret, link.pin);
-    const places = [...new Set([...link.places, ...usableRelays(config.network)])];
+    // Its places are the link's to name: asked only where the node may reach (`network.reach`).
+    const reach = config.network?.reach;
+    const reachable = reach
+      ? (
+          await Promise.all(
+            link.places.map(async (place) => ((await reach(place).catch(() => false)) ? place : null)),
+          )
+        ).filter((place) => place !== null)
+      : link.places;
+    const places = [...new Set([...reachable, ...usableRelays(config.network)])];
     if (places.length === 0)
       throw new Error('That invite names no place to find it, and this app knows none');
     // A slow place can't hold the join up for long: what has come back by then is all there is.

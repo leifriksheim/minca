@@ -1,10 +1,11 @@
 /**
- * The MCP service's nodes reach only the always-on nodes it was given. What a
- * connection brings, the invites in its grant and the records its node reads,
- * is the account's to fill in, so none of it may choose where the service
- * connects or what it keeps: anyone can make an account, and sign a grant of
- * their own. Found by adversarial review; each test was the attack, and fails
- * without `network.only` (`packages/core/src/node/types.ts`).
+ * The MCP service's session nodes follow the always-on nodes and relays their
+ * invites and spaces name, on the public internet only (`network.reach`).
+ * What a connection brings, the invites in its grant and the records its node
+ * reads, is the account's to fill in, and anyone can make an account and sign
+ * a grant of their own, so none of it may make the service connect inside its
+ * own network or keep what it likes. Found by adversarial review; each test
+ * was the attack.
  */
 import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -34,6 +35,10 @@ import { onHub, tempDir } from './helpers/nodes.js';
 import { openHome, createAccount, unlock, chooseAccount } from '../src/home.js';
 import { startDaemon } from '../src/daemon.js';
 import { readdir, stat } from 'node:fs/promises';
+import { WebSocketServer } from 'ws';
+import { createRelay, MAX_MESSAGE_BYTES } from '../../relay/relay.mjs';
+import { enableWebRTC } from '../src/agent.js';
+import { parseSpaceInvite } from '../../core/src/space/space-manager.js';
 import net from 'node:net';
 import path from 'node:path';
 
@@ -96,10 +101,11 @@ test('a stranger’s grant can’t make the service’s node dial an address the
 
   const port = await freePort();
   const issuer = `http://127.0.0.1:${port}`;
-  // Given one node to reach, which isn't there: what's tested is where else it goes.
+  // Given one node to reach, which isn't there, and a relay: what's tested is where else it goes.
   const service = await startMcpServer({
     publicUrl: issuer,
     nodes: ['ws://127.0.0.1:9/peer'],
+    relays: [await aRelay()],
     data: await tempDir('mcp-server-'),
     port,
     version: '0',
@@ -130,7 +136,12 @@ test('a stranger’s grant can’t make the service’s node dial an address the
   const inviter = { did: await didOf(inviterKeys.publicKey), key: inviterKeys.privateKey };
   const body = readInvitation(await node.spaces.invite(space.id, { write: false })).version.body;
   const target = `ws://127.0.0.1:${internal.port}/anything-at-all#did:key:zDnaeWhoever`;
-  const invite = await encodeInvitation(inviter, { ...body, nodes: [target] }, provider);
+  // And, as where its members meet, a relay there too.
+  const invite = await encodeInvitation(
+    inviter,
+    { ...body, nodes: [target], relays: [`ws://127.0.0.1:${internal.port}/relay`] },
+    provider,
+  );
 
   // Register as a chat app, start a sign-in, and answer the consent page with a grant of our own.
   const registered: unknown = await (
@@ -1023,6 +1034,8 @@ test('a space the always-on nodes don’t carry fails its own calls only', async
     'the host to carry the space',
   );
   const invite = await laptop.spaces.invite(space.id);
+  // Time for what it wrote to reach the host, before it goes.
+  await new Promise((resolve) => setTimeout(resolve, 2000));
   await laptop.close();
   // Another space of hers, on a device that never handed it to the host.
   const offline = await createNode({ signer, stores: memoryStores(), accountKey, watchIntervalMs: 0 });
@@ -1071,4 +1084,166 @@ test('a space the always-on nodes don’t carry fails its own calls only', async
   });
   assert.match(elsewhere, /"isError":true/);
   assert.match(elsewhere, /can’t be reached/);
+});
+
+/** A relay on this machine, as a deployment runs one */
+async function aRelay() {
+  const relay = createRelay({});
+  const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_MESSAGE_BYTES });
+  const server = createServer();
+  server.on('upgrade', (req, socket, head) => relay.upgrade(wss, req, socket, head));
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  assert.ok(address && typeof address === 'object');
+  closing.push(async () => {
+    relay.close();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+  return `ws://127.0.0.1:${address.port}`;
+}
+
+test('given no nodes of its own, the service reaches a space through the host her invite names', async () => {
+  const served = await startHost({
+    key: await createP256Provider().generateKeyPair(),
+    stores: memoryStores(),
+    port: 0,
+    free: true,
+  });
+  closing.push(() => served.close());
+  const manager = createIdentityManager();
+  const seed = generateSeed();
+  const me = await manager.fromSeed(seed);
+  const signer = createLocalRootSigner(me, manager.getProvider());
+  const laptop = await createNode({
+    signer,
+    stores: memoryStores(),
+    accountKey: await deriveAccountKey(seed),
+    watchIntervalMs: 0,
+    network: { nodes: [`ws://127.0.0.1:${served.port}/peer`] },
+  });
+  closing.push(() => laptop.close());
+  const space = await laptop.spaces.create({ name: 'Club', visibility: 'private' });
+  await laptop.records.put(space.id, 'app.note', { text: 'Soup on Friday' });
+  await laptop.hosting.use(`http://127.0.0.1:${served.port}`);
+  await until(
+    async () => (await served.node.spaces()).some((one) => one.name === 'Club' && one.peers > 0),
+    15_000,
+    'the host to carry the space',
+  );
+  await keptByHosts(laptop, space.id);
+  const invite = await laptop.spaces.invite(space.id);
+  const named = parseSpaceInvite(invite).nodes ?? [];
+  assert.ok(named.length > 0, 'her invite names her host');
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+  await laptop.close();
+
+  const port = await freePort();
+  const issuer = `http://127.0.0.1:${port}`;
+  const service = await startMcpServer({
+    publicUrl: issuer,
+    data: await tempDir('mcp-server-'),
+    port,
+    version: '0',
+    accountHome: 'https://home.test',
+    // Her host is on this machine here; anywhere else, it would be at a public address.
+    mayReach: async (address) => new URL(address).port === String(served.port),
+  });
+  closing.push(() => service.close());
+  const token = await signInWith(issuer, async (audience) => {
+    const expiresAt = Math.floor(Date.now() / 1000) + 3600;
+    return {
+      v: GRANT_VERSION,
+      did: me.did,
+      name: 'Ada',
+      note: await signer.delegate({ audience, expiration: expiresAt, ...noteTerms('/record', [space.id]) }),
+      access: 'write',
+      scope: 'spaces',
+      spaces: [{ id: space.id, name: 'Club', invite }],
+      expiresAt,
+      home: 'https://home.test/connect',
+    };
+  });
+  await until(
+    async () =>
+      (await callTool(issuer, token, 'records_list', { space: space.id, collection: 'app.note' })).includes(
+        'Soup on Friday',
+      ),
+    30_000,
+    'the chat app to read the space through her host',
+  );
+  const put = await callTool(issuer, token, 'records_put', {
+    space: space.id,
+    collection: 'app.note',
+    body: { text: 'Bread too' },
+  });
+  assert.match(put, /"isError":false/, put);
+});
+
+test('with no host at all, a chat app writes to her open tab through a relay, and is told it is only there', async () => {
+  await enableWebRTC();
+  const relay = await aRelay();
+  const manager = createIdentityManager();
+  const seed = generateSeed();
+  const me = await manager.fromSeed(seed);
+  const signer = createLocalRootSigner(me, manager.getProvider());
+  // Her tab: no host, only the relay its space meets at.
+  const tab = await createNode({
+    signer,
+    stores: memoryStores(),
+    accountKey: await deriveAccountKey(seed),
+    watchIntervalMs: 0,
+    network: { relays: [relay] },
+  });
+  closing.push(() => tab.close());
+  const space = await tab.spaces.create({ name: 'Club', visibility: 'private' });
+  await tab.records.put(space.id, 'app.note', { text: 'Soup on Friday' });
+  const invite = await tab.spaces.invite(space.id);
+
+  const port = await freePort();
+  const issuer = `http://127.0.0.1:${port}`;
+  const service = await startMcpServer({
+    publicUrl: issuer,
+    relays: [relay],
+    data: await tempDir('mcp-server-'),
+    port,
+    version: '0',
+    accountHome: 'https://home.test',
+  });
+  closing.push(() => service.close());
+  const token = await signInWith(issuer, async (audience) => {
+    const expiresAt = Math.floor(Date.now() / 1000) + 3600;
+    return {
+      v: GRANT_VERSION,
+      did: me.did,
+      name: 'Ada',
+      note: await signer.delegate({ audience, expiration: expiresAt, ...noteTerms('/record', [space.id]) }),
+      access: 'write',
+      scope: 'spaces',
+      spaces: [{ id: space.id, name: 'Club', invite }],
+      expiresAt,
+      home: 'https://home.test/connect',
+    };
+  });
+  await until(
+    async () =>
+      (await callTool(issuer, token, 'records_list', { space: space.id, collection: 'app.note' })).includes(
+        'Soup on Friday',
+      ),
+    40_000,
+    'the chat app to read the space from her tab',
+  );
+  // The space names no keepers: her tab has what it writes, and the app is told that is all.
+  const put = await callTool(issuer, token, 'records_put', {
+    space: space.id,
+    collection: 'app.note',
+    body: { text: 'Bread too' },
+  });
+  assert.match(put, /"isError":false/, put);
+  assert.match(put, /Kept by a device of this space that is online now/);
+  assert.ok(
+    (await tab.records.list(space.id, { collection: 'app.note' })).some(
+      (record) => isRecord(record.body) && record.body.text === 'Bread too',
+    ),
+    'her tab has it',
+  );
 });

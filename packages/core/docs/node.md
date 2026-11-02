@@ -974,15 +974,15 @@ to look for the account registry at before the account says which it uses, so
 an app built with a default host restores an account from its recovery code
 alone. `network.nodes` still adds sockets of its own, to every space.
 
-`network.only` makes a node reach no host a record names (`sys.hosting`,
-`std.host`), no node an invite names, and no place a short link names: only
-its own `nodes` and `transports`. Relays a space or an invite names are still
-joined beside its `relays`, so a node meant to reach nothing else is given
-none, as the MCP service's are. With it, `hosting` calls that ask a
-host, and joining or previewing a short link, fail. It is for a node a server
-runs for someone else, such as the MCP service's for chat apps: what that
-node reads, and the invites it is handed, are the other's to write, and must
-not choose where the server connects or what it keeps.
+`network.reach` says where a node may connect, asked of every address it
+found rather than was given: a host or node a record or an invite names, a
+relay a space or an invite names, a place a short link names, a host it asks
+to describe itself. Its own `relays`, `nodes` and `hosts` are taken as given;
+without `reach`, anywhere. Refused, a host is not asked (`hosting` calls fail),
+a node or relay not dialled, a short link's place not asked. It is for a node
+a server runs for someone else, such as the MCP service's for chat apps: what
+that node reads, and the invites it is handed, are the other's to write, and
+must not make the server connect inside its own network.
 
 A device waits 15 seconds for a host to answer any call, and a minute for
 `startBot`. A host that gives no answer, or none in time, is a `HostError`
@@ -1012,7 +1012,7 @@ hour (`evaluate`) holds each to the free line. Past a space's `until`, every
 account's carry space stops carrying it (`skip`, in `createCarryCore`), while
 its own subscription still may. Each change is a line in the host's log.
 
-_Source: `packages/core/src/node/node-carriers.ts` (`carriers`, `fetchInvite`), `packages/core/src/node/node-hosting.ts` (`hosting`, `describeAt`), `packages/core/src/node/space-peers.ts` (`useNodes`), `packages/core/src/node/carrier.ts` (`arrived`, `skip`, `onArrived`), `packages/core/src/node/host.ts` (`evaluate`), `packages/core/src/session/hosting.ts`, `packages/cli/src/host.ts`. Tests: `packages/core/tests/carrier.test.ts`, `packages/core/tests/host-limits.test.ts`, `packages/core/tests/only-given-nodes.test.ts`, `packages/cli/tests/host.test.ts`, `packages/cli/tests/remote-mcp-server.test.ts`._
+_Source: `packages/core/src/node/node-carriers.ts` (`carriers`, `fetchInvite`), `packages/core/src/node/node-hosting.ts` (`hosting`, `describeAt`), `packages/core/src/node/space-peers.ts` (`useNodes`, `meshFor`), `packages/core/src/node/carrier.ts` (`arrived`, `skip`, `onArrived`), `packages/core/src/node/host.ts` (`evaluate`), `packages/core/src/session/hosting.ts`, `packages/cli/src/host.ts`. Tests: `packages/core/tests/carrier.test.ts`, `packages/core/tests/host-limits.test.ts`, `packages/core/tests/reach.test.ts`, `packages/cli/tests/host.test.ts`, `packages/cli/tests/remote-mcp-server.test.ts`._
 
 ### A space paying for itself
 

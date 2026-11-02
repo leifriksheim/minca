@@ -3,10 +3,12 @@
  * Chat apps connect to it by its address (`remote-mcp/index.ts`). It keeps
  * nothing per connection: a token carries the key, and each session's node
  * holds its spaces in memory while it runs, reaching them through the
- * always-on nodes the grant's invites name (`reach.ts`), and these.
+ * always-on nodes and relays its invites and spaces name, on the public
+ * internet only (`reach.ts`), and these.
  *
  *   MINCA_MCP_URL     its public address, https:// (localhost may be http://)
- *   MINCA_NODES       always-on nodes of the operator's own, wss://host/peer#did:key:…, for spaces their invites name none of
+ *   MINCA_NODES       always-on nodes of the operator's own, wss://host/peer#did:key:…, besides those spaces name
+ *   MINCA_RELAYS      relays sessions meet devices through, besides those spaces name. Default wss://relay.minca.social
  *   MINCA_MCP_DATA    where it keeps its token secret and its sign-ins under way. Default ~/.minca-mcp
  *   MINCA_MCP_HOME    the account home its consent page suggests
  *   MINCA_MCP_APPS    more chat apps a sign-in may go back to: hosts (chat.example.com) or schemes (zed:)
@@ -20,13 +22,16 @@ import { openFsDirectory } from '../fs-directory.js';
 import { addressOf } from '../host.js';
 import { commaList, errorCode } from '../json.js';
 import { createRemoteMcp, type RemoteMcp } from './index.js';
-import { nodesFor } from './reach.js';
+import { publicNode } from './reach.js';
+import { configuredRelays, enableWebRTC } from '../agent.js';
 
 export interface McpServerOptions {
   readonly publicUrl: string;
-  /** Always-on nodes of the operator's own, besides those a grant's invites name */
+  /** Always-on nodes of the operator's own, besides those a grant's invites and spaces name */
   readonly nodes?: ReadonlyArray<string>;
-  /** Whether a session may reach a node an invite names; public addresses only, by default */
+  /** Relays its sessions meet devices through, besides those the spaces name: WebRTC, for an open tab */
+  readonly relays?: ReadonlyArray<string>;
+  /** Whether a session may reach a node, relay or host it found; public addresses only, by default */
   readonly mayReach?: (node: string) => Promise<boolean>;
   readonly data: string;
   readonly port: number;
@@ -60,6 +65,8 @@ export async function startMcpServer(
   options: McpServerOptions,
 ): Promise<{ readonly port: number; readonly remote: RemoteMcp; close(): Promise<void> }> {
   await mkdir(options.data, { recursive: true, mode: 0o700 });
+  // Meeting an open tab, or a member's device, takes WebRTC.
+  if (options.relays?.length) await enableWebRTC();
   const store = await directoryStores(await openFsDirectory(path.join(options.data, 'store')))('mcp');
   const remote = await createRemoteMcp({
     publicUrl: options.publicUrl,
@@ -67,9 +74,12 @@ export async function startMcpServer(
     store,
     addressOf: (req) => addressOf(req, options.clientAddressHeader),
     // The nodes its invites name that are public, and the operator's own: nowhere a stranger's grant points.
-    network: async (grant) => ({
-      relays: [],
-      nodes: [...(await nodesFor(grant, options.nodes ?? [], options.mayReach))],
+    // Its own relays and nodes as given; any other a grant's invites or the spaces name, only on the
+    // public internet: what a session reads is a stranger's to write, never where the service connects.
+    network: async () => ({
+      relays: [...(options.relays ?? [])],
+      nodes: [...(options.nodes ?? [])],
+      reach: options.mayReach ?? publicNode,
     }),
     name: new URL(options.publicUrl).host,
     version: options.version,
@@ -142,6 +152,7 @@ export function mcpServerFromEnv(env: NodeJS.ProcessEnv) {
   return {
     publicUrl: url.replace(/\/+$/, ''),
     ...(nodes.length ? { nodes } : {}),
+    relays: configuredRelays(),
     data: env.MINCA_MCP_DATA?.trim() || path.join(os.homedir(), '.minca-mcp'),
     ...(home ? { accountHome: home } : {}),
     ...(apps.length ? { moreApps: apps.map((app) => app.toLowerCase()) } : {}),

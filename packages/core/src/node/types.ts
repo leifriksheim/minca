@@ -53,14 +53,15 @@ export interface NodeNetworkConfig {
   /** Extra transports per space, given this node's session DID: for a node serving sockets, or a test */
   readonly transports?: (spaceId: string, sessionDid: string) => ReadonlyArray<PeerTransport>;
   /**
-   * Reach no host a record names, no node an invite names, and no place a
-   * short link names: only `nodes` and `transports`. Relays a space or an
-   * invite names are still joined beside `relays`, so a node meant to reach
-   * nothing else has none. For a node a server runs for someone else, such
-   * as the MCP service's: what it reads is theirs, and must not choose where
-   * the server connects.
+   * Whether this node may connect to an address it found rather than was
+   * given: a host or node a record or an invite names, a relay a space or an
+   * invite names, a place a short link names, a host it asks to describe
+   * itself. Asked before each; `relays`, `nodes` and `hosts` here are taken as
+   * given. Default: anywhere. For a node a server runs for someone else, such
+   * as the MCP service's: what it reads is theirs to write, and must not make
+   * the server connect inside its own network.
    */
-  readonly only?: boolean;
+  readonly reach?: (address: string) => Promise<boolean>;
 }
 
 export interface NodeConfig {

@@ -1039,17 +1039,19 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     started, shows as nothing new. The reference service takes a key only with
     the private half that goes with it, since a note travels with every record
     and is no secret; refuses a note for the whole account, read from the note
-    itself; and reaches the spaces only through the always-on nodes the
-    grant's invites name over TLS at public addresses, and its operator's own
-    (`network.only`), so a grant's invites and the records its node reads
-    can't make it connect to its own network, and what a node holds is at
-    most 32 MB, in memory (`checkGranted` and `createSessions` in
-    `packages/cli/src/remote-mcp/sessions.ts`, `nodesFor` in
+    itself; and reaches the spaces through the always-on nodes and relays
+    the grant's invites and the spaces name only over TLS at public
+    addresses, besides its operator's own (`network.reach`), so a grant's
+    invites and the records its node reads can't make it connect inside its
+    own network, and what a node holds is at most 32 MB, in memory
+    (`checkGranted` and `createSessions` in
+    `packages/cli/src/remote-mcp/sessions.ts`, `publicNode` in
     `packages/cli/src/remote-mcp/reach.ts`, `boundedMemory` in
     `packages/cli/src/remote-mcp/memory.ts`;
     `packages/cli/tests/remote-mcp-server.test.ts`,
     `packages/cli/tests/remote-mcp-reach.test.ts`,
-    `packages/core/tests/only-given-nodes.test.ts`). A name that resolves
+    `packages/core/tests/reach.test.ts`). A stranger's own public node or
+    relay, named by their own grant, is reached, as their device would be. A name that resolves
     elsewhere once the socket opens (DNS rebinding) is not caught. It shows its consent page
     for every sign-in, and lets an app register only places a code is safe at:
     a chat app's own MCP callback exactly, a host its operator names (any page

@@ -216,7 +216,7 @@ export function createSessions(options: {
       keys,
       // In memory: what it holds is the always-on nodes', and goes when it stops.
       stores: boundedMemory(options.budget),
-      network: { ...(await options.network(given.grant)), only: true },
+      network: await options.network(given.grant),
     });
     // Disconnected at the account home: it reads and writes no more, from now on.
     const unsubscribe = agent.node.subscribe((event) => {

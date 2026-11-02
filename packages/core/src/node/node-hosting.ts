@@ -45,11 +45,12 @@ const SPACE_HOSTS_EVERY_MS = 10 * 60_000;
 export function createNodeHosting(ctx: NodeContext) {
   const { config, provider, registry, runtimes } = ctx;
 
-  /** What a host at an address says about itself: never asked by a node that reaches only what it was given */
-  const describeAt = (url: string): Promise<HostDescription> =>
-    config.network?.only
-      ? Promise.reject(new Error('This node reaches only the nodes it was given'))
-      : describeHost(url);
+  /** What a host at an address says about itself, asked only where the node may reach (`network.reach`) */
+  const describeAt = async (url: string): Promise<HostDescription> => {
+    const reach = config.network?.reach;
+    if (reach && !(await reach(url).catch(() => false))) throw new Error(`This node may not reach ${url}`);
+    return describeHost(url);
+  };
 
   // ─── The account's hosts ───────────────────────────────────────────
 

@@ -314,10 +314,14 @@ and its tools arrive.
 The service keeps nothing per connection: the key and note live in the
 token, and each call opens it and starts a node from what it carries. That
 node holds your spaces in memory while the app uses it (at most 32 MB), and
-reaches them through the always-on nodes your invites name, such as your
-free host, so it works with every device of yours offline. It follows only
-those over TLS at public addresses, never one on the service's own network,
-and those its operator adds (`MINCA_NODES`). A call in a space runs once the
+reaches them as any device would: through the always-on nodes your invites
+and spaces name, such as your free host, so it works with every device of
+yours offline; and through the relays they meet at (and
+`wss://relay.minca.social`, or `MINCA_RELAYS`), over WebRTC, so with no host
+at all it works while your tab, or a member's device, is open. It follows
+only addresses over TLS on the public internet, never one on the service's
+own network, besides those its operator gives it (`MINCA_NODES`,
+`MINCA_RELAYS`). A call in a space runs once the
 node is level with them there (it waits up to 15 seconds, then says to try
 again): a node behind would miss records, and could start a line of payments
 that already has one. A call that writes is done once the space's keepers
