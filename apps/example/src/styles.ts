@@ -304,14 +304,6 @@ export function injectBaseStyles(): void {
     @keyframes call-ring { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, ${accent.good} 45%, transparent); } 100% { box-shadow: 0 0 0 12px transparent; } }
     @media (prefers-reduced-motion: reduce) { .call-ringing { animation: none; } }
 
-    /* Chat: its channels and conversations down the left, the one open beside them. */
-    .chat-shell { display: grid; grid-template-columns: 208px minmax(0, 1fr); }
-    .chat-places {
-      display: flex; flex-direction: column; min-height: 0; overflow-y: auto;
-      padding: 4px 8px 12px; border-right: 1px solid ${surface.line}; background: ${surface.sunken};
-    }
-    .chat-places [data-nav]:not([aria-current]):hover { background: ${surface.line} !important; }
-
     /* Events: covers in a grid, the next one large, a month to look across (components/apps/Events.tsx). */
     .ev-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
     .ev-hero { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); overflow: hidden; border-radius: ${radius.lg}px !important; }
@@ -390,20 +382,6 @@ export function injectBaseStyles(): void {
       .collection-nav-heading { display: none; }
     }
 
-    /* Between a phone and a laptop, the chat's list becomes a row of tabs
-       above it, as the side column's does. A phone gives each a screen (below). */
-    @media (min-width: 641px) and (max-width: 760px) {
-      .chat-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
-      .chat-places {
-        flex-direction: row; align-items: center; gap: 4px; overflow-x: auto; scrollbar-width: none;
-        padding: 6px 8px; border-right: none; border-bottom: 1px solid ${surface.line};
-      }
-      .chat-places::-webkit-scrollbar { display: none; }
-      .chat-places > * { flex-shrink: 0; width: auto !important; }
-      .chat-places-heading { padding: 0 2px 0 6px !important; }
-      .chat-places-heading > span, .chat-places-note { display: none; }
-    }
-
     @media (max-width: 640px) {
       .page {
         padding: 12px max(16px, env(safe-area-inset-right)) calc(48px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
@@ -446,20 +424,6 @@ export function injectBaseStyles(): void {
       /* What fills the space runs right down to the foot of the screen. */
       .space-content[data-fill], .space-shell[data-app-open] .space-content[data-fill] { padding: 0; }
 
-      /* Chat, the way a phone's messaging apps are: the list of conversations
-         is a screen, and one opens over it with the way back at its top. */
-      .chat-shell { grid-template-columns: minmax(0, 1fr); }
-      .chat-shell[data-view="list"] > .chat-room, .chat-shell[data-view="room"] > .chat-places { display: none !important; }
-      .chat-places { padding: 8px 12px 24px; border-right: none; background: none; }
-      .chat-places [data-nav] { height: 48px !important; padding: 0 12px !important; gap: 10px !important; font-size: 16px !important; }
-      .chat-places-heading { padding: 10px 2px 2px 12px !important; }
-      .chat-places-heading > span { font-size: 13px !important; }
-      .chat-places-heading > button { padding: 10px !important; }
-      .chat-shell[data-view="list"] .chat-places [aria-current] { background: none !important; box-shadow: none !important; font-weight: 400 !important; }
-      .chat-places-note { padding: 4px 12px !important; font-size: 13px !important; }
-      .chat-places-form > input { height: 40px !important; font-size: 16px !important; }
-      .chat-places-form > button { height: 40px !important; }
-      .chat-room-title { min-height: 48px; padding: 8px 14px !important; }
 
       /* A pill floating over the foot of the page, the page showing through it, blurred; the tab you are
          on a softer pill inside it, as chat apps have it now. */
