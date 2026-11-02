@@ -31,7 +31,7 @@ export function useNow(): number {
 }
 
 /** The carriers this account has, read again when the ones syncing the space change */
-export function useCarriers(status: SpaceStatus): ReadonlyArray<CarrierSummary> {
+function useCarriers(status: SpaceStatus): ReadonlyArray<CarrierSummary> {
   const node = useNode();
   const [carriers, setCarriers] = useState<ReadonlyArray<CarrierSummary>>([]);
   const carrierKeys = status.carriers.join(',');
@@ -46,7 +46,7 @@ export function useCarriers(status: SpaceStatus): ReadonlyArray<CarrierSummary> 
 }
 
 /** The colour of each health, and of each relay state, as a dot */
-export const HEALTH_COLOR: Record<Health, string> = {
+const HEALTH_COLOR: Record<Health, string> = {
   syncing: palette.accent.good,
   alone: palette.ink.faint,
   connecting: palette.accent.warn,
@@ -60,7 +60,7 @@ const RELAY_COLOR: Record<RelayStatus['state'], string> = {
   stopped: palette.ink.faint,
 };
 
-export function Dot({ color, size = 8 }: { color: string; size?: number }) {
+function Dot({ color, size = 8 }: { color: string; size?: number }) {
   return (
     <span
       aria-hidden

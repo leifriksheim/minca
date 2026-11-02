@@ -36,11 +36,9 @@ import { AccountMenu } from './AccountMenu';
 import { usePopover } from './usePopover';
 import { styles, palette, stack, ui } from '../styles';
 import { Icon, type IconName } from './Icon';
-import { WhoIsHere } from './WhoIsHere';
 import { SyncLine } from './SyncLine';
 import { RelayDown } from './RelayNotice';
 import { homeTab, Notices, useWorkspace } from '../workspace';
-import { CallButton } from './calls/Calls';
 import { peopleFrom } from '../derive/people';
 import { useBots } from '../bots';
 import { PersonScopeProvider } from './Person';
@@ -443,11 +441,6 @@ function SpaceView({ space }: { space: SpaceSummary }) {
               <h1 style={{ ...styles.appTitle, ...ui.ellipsis, flex: 1, minWidth: 0, fontSize: 18 }}>
                 {title}
               </h1>
-              {/* Who is here, and calling them; a phone has them on the space's apps. */}
-              {status && (
-                <WhoIsHere status={status} people={people} onOpen={() => go('/spaces/$spaceId/members')} />
-              )}
-              <CallButton space={space} place="chip" />
             </span>
           </header>
 
@@ -455,23 +448,6 @@ function SpaceView({ space }: { space: SpaceSummary }) {
             <div className="space-inner" data-wide={hood ? true : undefined}>
               <Notices inSpace />
               {!hood && <RelayDown />}
-              {onApps && (
-                <div className="phone-only">
-                  <div
-                    style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 20, minWidth: 0 }}
-                  >
-                    {status && (
-                      <WhoIsHere
-                        status={status}
-                        people={people}
-                        onOpen={() => go('/spaces/$spaceId/members')}
-                      />
-                    )}
-                    {/* A space for two has Call in the row under this. */}
-                    {!pair && <CallButton space={space} place="chip" />}
-                  </div>
-                </div>
-              )}
               {!space.writable && (
                 <p style={{ ...styles.errorHint, marginTop: 0, marginBottom: 16 }}>
                   {space.joining

@@ -474,14 +474,8 @@ const whoCanJoin = (space: SpaceSummary) =>
     ? 'Anyone who joins this space with a role can join the call'
     : 'Only people in this space can join';
 
-/** "Start a call", or "Join call · 3" when one is going on: in the space's sidebar, beside who is here on a phone, or on its own */
-export function CallButton({
-  space,
-  place = 'button',
-}: {
-  space: SpaceSummary;
-  place?: 'button' | 'chip' | 'tile';
-}) {
+/** Starts a call in the space, or joins the one going: in the row atop its Overview (`quick-action`) */
+export function CallButton({ space }: { space: SpaceSummary }) {
   const { state, calls } = useCalls();
   const [busy, setBusy] = useState(false);
   if (!calls || !space.writable) return null;
@@ -492,92 +486,16 @@ export function CallButton({
     setBusy(true);
     void calls.start(space.id).finally(() => setBusy(false));
   };
-  const label = here ? 'In the call' : going ? `Join call · ${going.people.length}` : 'Start a call';
-  const live = here || going !== undefined;
-  // In the row atop a space's Overview (`quick-action`), beside its other pages.
-  if (place === 'tile')
-    return (
-      <button
-        onClick={() => void startHere()}
-        disabled={busy || here}
-        title={whoCanJoin(space)}
-        className="quick-action"
-        style={live ? { color: palette.accent.good } : undefined}
-      >
-        <Icon name="phone" size={20} />
-        {live ? label : 'Call'}
-      </button>
-    );
-  if (place === 'chip')
-    return (
-      <button
-        type="button"
-        onClick={() => void startHere()}
-        disabled={busy || here}
-        title={whoCanJoin(space)}
-        style={{
-          ...styles.badge,
-          borderColor: palette.surface.lineStrong,
-          flexShrink: 0,
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-          font: 'inherit',
-          fontSize: 12,
-          cursor: here ? 'default' : 'pointer',
-          ...(here ? { color: palette.accent.good, borderColor: palette.accent.good } : {}),
-          ...(going && !here
-            ? {
-                background: palette.accent.good,
-                borderColor: palette.accent.good,
-                color: palette.surface.card,
-                fontWeight: 600,
-              }
-            : {}),
-        }}
-      >
-        <Icon name="phone" size={12} /> {live ? label : 'Call'}
-      </button>
-    );
-  if (here) {
-    return (
-      <span
-        style={{
-          ...styles.badge,
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-          color: palette.accent.good,
-          border: `1px solid ${palette.accent.good}`,
-        }}
-      >
-        <Icon name="phone" size={12} /> In the call
-      </span>
-    );
-  }
   return (
     <button
       onClick={() => void startHere()}
-      disabled={busy}
-      data-variant={going ? 'primary' : 'quiet'}
-      style={{
-        ...styles.smallButton,
-        height: 28,
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 6,
-        ...(going
-          ? {
-              background: palette.accent.good,
-              border: `1px solid ${palette.accent.good}`,
-              color: palette.surface.card,
-            }
-          : {}),
-      }}
+      disabled={busy || here}
       title={whoCanJoin(space)}
+      className="quick-action"
+      style={here || going ? { color: palette.accent.good } : undefined}
     >
-      <Icon name="phone" size={12} />
-      {going ? `Join call · ${going.people.length}` : <span className="call-label">Start a call</span>}
+      <Icon name="phone" size={20} />
+      {here ? 'In the call' : going ? `Join · ${going.people.length}` : 'Call'}
     </button>
   );
 }

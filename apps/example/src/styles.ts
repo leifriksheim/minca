@@ -194,7 +194,7 @@ export function injectBaseStyles(): void {
 
     /* The row of a space's own pages atop its Overview: an icon over its name, each an equal share. */
     .quick-row { display: flex; align-items: center; gap: 4px; }
-    .quick-row > .quick-action { flex: 1 0 76px; max-width: 112px; }
+    .quick-row > .quick-action { flex: 1 0 64px; max-width: 112px; }
     .quick-action {
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
       padding: 10px 6px; border: none; border-radius: ${radius.md}px; background: none;

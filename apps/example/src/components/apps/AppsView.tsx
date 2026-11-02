@@ -88,9 +88,9 @@ export function AppsView({
 
   return (
     <div style={stack(28)}>
-      {/* The space's own pages, a tap away; a space for two has a call and its settings. */}
+      {/* A call, and the space's own pages, a tap away. */}
       <nav aria-label={pair ? 'This chat' : 'This group'} className="quick-row scroll-x">
-        {pair && <CallButton space={space} place="tile" />}
+        <CallButton space={space} />
         {sectionsOf(pair).map((section) => (
           <button key={section.to} onClick={() => go(section.to)} className="quick-action">
             <Icon name={section.icon} size={20} />
