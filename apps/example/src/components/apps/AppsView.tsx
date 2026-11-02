@@ -17,6 +17,7 @@ import { unreadOf, type Unread } from '../../seen';
 import { styles, palette, stack, ui } from '../../styles';
 import { LinkButton, PrimaryButton } from '../Buttons';
 import { confirmThen } from '../../confirm';
+import { cardText, cardTitle, rowButton, sectionHeading } from '../rows';
 
 /**
  * A space's Overview: a row of its own pages, then its apps like a phone's home screen, those added and then
@@ -272,20 +273,6 @@ function AppRow({
   );
 }
 
-export const rowButton = {
-  width: '100%',
-  display: 'flex',
-  alignItems: 'center',
-  gap: 14,
-  minHeight: 64,
-  padding: '12px 16px',
-  border: 'none',
-  borderRadius: 'inherit',
-  background: 'none',
-  font: 'inherit',
-  color: 'inherit',
-  textAlign: 'left',
-} as const;
 /** Where the next app goes: an empty tile, dashed */
 const slot = {
   width: 36,
@@ -310,11 +297,7 @@ const updateNote = {
   fontSize: 14,
 } as const;
 
-/** A section's title: smaller on a phone */
-export const sectionHeading = { ...styles.appTitle, fontSize: 'clamp(16px, 4vw, 20px)' };
 const roundButton = { ...styles.smallButton, width: 36, height: 36 } as const;
-export const cardTitle = { fontSize: 15, fontWeight: 600, color: palette.ink.strong };
-export const cardText = { fontSize: 13, lineHeight: 1.45, color: palette.ink.muted };
 const inlineButton = {
   width: 'auto',
   height: 36,

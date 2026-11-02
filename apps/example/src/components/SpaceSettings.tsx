@@ -6,7 +6,7 @@ import { FeatureIcon } from '@minca/app-shared/Feature';
 import { useWorkspace } from '../workspace';
 import { ConnectAgent } from './ConnectAgent';
 import { HOOD, SETTINGS, type SpaceScreen } from './SpaceView';
-import { cardText, cardTitle, rowButton, sectionHeading } from './apps/AppsView';
+import { cardText, cardTitle, rowButton, sectionHeading } from './rows';
 import { Icon, type IconName } from './Icon';
 import { palette, stack, ui } from '../styles';
 

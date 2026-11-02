@@ -8,7 +8,7 @@ import { ago } from '@minca/ui/time';
 import { nameOf, type People } from '../../derive/people';
 import { usePeopleHere } from '../Person';
 import { LinkButton, PrimaryButton, QuietButton } from '../Buttons';
-import { cardText, cardTitle, rowButton, sectionHeading } from './AppsView';
+import { cardText, cardTitle, rowButton, sectionHeading } from '../rows';
 import { Icon } from '../Icon';
 import { palette, stack, styles, ui } from '../../styles';
 
