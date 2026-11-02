@@ -92,6 +92,41 @@
     height: 240px;
     border-radius: var(--minca-radius-lg);
   }
+  /* An event's own photo, over its cover's shape, filling it */
+  .cover-photo {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  /* Choosing it, atop the form: the photo, or a dashed space for one */
+  .cover-pick {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 132px;
+    overflow: hidden;
+    border: 1.5px dashed var(--minca-line-strong);
+    border-radius: var(--minca-radius-lg);
+    color: var(--minca-muted);
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .cover-pick:hover {
+    border-color: var(--minca-accent);
+    color: var(--minca-accent);
+  }
+  .cover-pick > span {
+    position: relative;
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: var(--minca-card);
+  }
+  .cover-pick input {
+    display: none;
+  }
   .page h1 {
     font-size: 30px;
     line-height: 1.15;
@@ -383,11 +418,34 @@
     Modal,
     Shape,
     Cover,
+    useFile,
+    attach,
   } = ui;
   const { PlaceField, NearButton, MapLink, useNear, placeLabel, distanceText, inReach, nearWhere, when } = ui;
   const EVENT = 'std.event';
   const RSVP = 'std.rsvp';
+  const FILE = 'std.file';
   const me = minca.me.did;
+
+  /**
+   * An event's cover photo: the newest picture its host kept about it (a std.file, ui.attach). Only the
+   * host's, so nobody else can put a picture of their own on someone's event. Null while there is none.
+   */
+  function useCoverPhoto(event) {
+    const files = useRecords(FILE, { 'link:about': event?.key ?? '' });
+    const photo = (files ?? [])
+      .filter((f) => f.createdBy === event?.createdBy && f.body.mime?.startsWith('image/'))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    return useFile(photo?.key ?? '', photo?.body.blob);
+  }
+
+  /** An event's cover: its photo when it has one, or else a shape in its kind's colour, with whatever goes on it */
+  function EventCover({ event, size, class: className, children }) {
+    const photo = useCoverPhoto(event);
+    return html`<${Cover} seed=${event.key} colour=${kindOf(event.body.category).colour} size=${size} class=${className}>
+      ${photo && html`<img class="cover-photo" src=${photo} alt="" />`}${children}
+    </${Cover}>`;
+  }
 
   /** What an event can be, for its cover and for browsing by kind. The last is the catch-all. */
   const KINDS = [
@@ -509,9 +567,11 @@
         initial=${editing === 'new' ? null : editing}
         near=${near}
         onClose=${() => setEditing(null)}
-        onSave=${async (body) => {
-          if (editing === 'new') goTo((await minca.put(EVENT, body)).key, body.title);
-          else await minca.update(editing.key, body);
+        onSave=${async (body, photo) => {
+          const key = editing === 'new' ? (await minca.put(EVENT, body)).key : editing.key;
+          if (editing !== 'new') await minca.update(key, body);
+          if (photo) await attach(key, [photo]);
+          if (editing === 'new') goTo(key, body.title);
           setEditing(null);
         }}
       />`;
@@ -633,7 +693,7 @@
     const going = [...answers.values()].filter((a) => a.body.status === 'going').map((a) => a.createdBy);
     return html`<article class="card hero">
       <button class="bare" aria-label=${`Open ${body.title}`} onClick=${() => onOpen(event)}>
-        <${Cover} seed=${event.key} colour=${kindOf(body.category).colour} size=${96}><${DateTile} at=${body.start} large /></${Cover}>
+        <${EventCover} event=${event} size=${96}><${DateTile} at=${body.start} large /></${EventCover}>
       </button>
       <div class="about">
         <span class="when" style=${live ? 'color: var(--minca-good)' : ''}>
@@ -665,10 +725,10 @@
     const where = [placeLabel(body.place), distanceText(near, body.place)].filter(Boolean).join(' · ');
     return html`<article class="card tile">
       <button class="bare" onClick=${() => onOpen(event)}>
-        <${Cover} seed=${event.key} colour=${kindOf(body.category).colour} size=${52} class=${past ? 'past' : ''}>
+        <${EventCover} event=${event} size=${52} class=${past ? 'past' : ''}>
           <${DateTile} at=${body.start} />
           ${body.status === 'cancelled' && html`<span class="badge cancelled">Cancelled</span>`}
-        </${Cover}>
+        </${EventCover}>
         <div class="what">
           <span class="when">${when.shortWhen(body)}</span>
           <strong>${body.title}</strong>
@@ -705,7 +765,7 @@
     const away = distanceText(near, body.place);
     const answers = answersOf(event);
     return html`<div class="stack page" style="gap: 20px">
-      <${Cover} seed=${event.key} colour=${k.colour} size=${120} class="banner"><${DateTile} at=${body.start} large /></${Cover}>
+      <${EventCover} event=${event} size=${120} class="banner"><${DateTile} at=${body.start} large /></${EventCover}>
       <header class="stack">
         <span class="when">${when.longWhen(body)}</span>
         <h1>${body.title}</h1>
@@ -911,7 +971,7 @@
             : pickedEvents.map(
                 (e) =>
                   html`<button key=${e.key} class="card event-row" onClick=${() => onOpen(e)}>
-                    <${Cover} seed=${e.key} colour=${kindOf(e.body.category).colour} size=${26} />
+                    <${EventCover} event=${e} size=${26} />
                     <span class="stack" style="gap: 2px; min-width: 0">
                       <strong class="ellipsis">${e.body.title}</strong>
                       <span class="muted ellipsis"
@@ -945,6 +1005,11 @@
     const [place, setPlace] = useState(was?.place);
     const [url, setUrl] = useState(was?.url ?? '');
     const [description, setDescription] = useState(was?.description ?? '');
+    // A photo picked here, kept once the event is saved; shown from this device until then.
+    const [photo, setPhoto] = useState(null);
+    const [picked, setPicked] = useState(null);
+    const current = useCoverPhoto(initial);
+    const shown = picked ?? current;
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(null);
 
@@ -970,22 +1035,39 @@
           if (!ready) return;
           setBusy(true);
           setError(null);
-          onSave({
-            title: title.trim(),
-            category,
-            start: startAt,
-            ...(endAt ? { end: endAt } : {}),
-            ...(allDay ? { allDay: true } : { tz: when.localZone() }),
-            ...(place ? { place } : {}),
-            ...(url.trim() ? { url: url.trim() } : {}),
-            ...(description.trim() ? { description: description.trim() } : {}),
-            ...(was?.status ? { status: was.status } : {}),
-            ...(was?.rrule ? { rrule: was.rrule } : {}),
-          })
+          onSave(
+            {
+              title: title.trim(),
+              category,
+              start: startAt,
+              ...(endAt ? { end: endAt } : {}),
+              ...(allDay ? { allDay: true } : { tz: when.localZone() }),
+              ...(place ? { place } : {}),
+              ...(url.trim() ? { url: url.trim() } : {}),
+              ...(description.trim() ? { description: description.trim() } : {}),
+              ...(was?.status ? { status: was.status } : {}),
+              ...(was?.rrule ? { rrule: was.rrule } : {}),
+            },
+            photo,
+          )
             .catch((e) => setError(e.message))
             .finally(() => setBusy(false));
         }}
       >
+        <label class="cover-pick" aria-label="Cover photo">
+          ${shown && html`<img class="cover-photo" src=${shown} alt="" />`}
+          <span>${shown ? 'Change photo' : '+ Add a cover photo'}</span>
+          <input
+            type="file"
+            accept="image/*"
+            onChange=${(e) => {
+              const file = e.currentTarget.files?.[0];
+              if (!file) return;
+              setPhoto(file);
+              setPicked(URL.createObjectURL(file));
+            }}
+          />
+        </label>
         <label class="stack"><span class="label">Name</span>
           <input value=${title} onInput=${value(setTitle)} placeholder="Summer concert in the park" maxlength="500" />
         </label>
