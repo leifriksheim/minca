@@ -403,7 +403,7 @@ async function startWithKey(
 ): Promise<{ node: P2PNode; stop(): Promise<void> }> {
   if (!options.network) await enableWebRTC();
   const { relays } = nodeOptionsFromGrant(grant, configuredRelays());
-  return startGrantedAgent({
+  const agent = await startGrantedAgent({
     grant,
     keys: key.keys,
     // The spaces in the folder every session shares, one account apart from another; the rest, its key's places in its logs among them, in its slot.
@@ -417,13 +417,23 @@ async function startWithKey(
       ...(options.nodes?.length ? { nodes: options.nodes } : {}),
     },
   });
+  // Every space syncs while it runs, so it is up to date when asked.
+  const stopHolding = await holdEverySpace(agent.node);
+  return {
+    node: agent.node,
+    stop: async () => {
+      stopHolding();
+      await agent.stop();
+    },
+  };
 }
 
 /**
  * An agent's node under a records-only grant made out to `keys`: a node of
- * its own following the account, holding every space it was given, acting as
- * the agent. `minca agent` runs one in a slot; the MCP service runs one for
- * each session a chat app opens (`remote-mcp/sessions.ts`).
+ * its own following the account, acting as the agent. It opens a space when
+ * something asks for it. `minca agent` runs one in a slot, holding every
+ * space; the MCP service runs one for each session a chat app opens, holding
+ * the spaces its calls use (`remote-mcp/sessions.ts`).
  */
 export async function startGrantedAgent(params: {
   readonly grant: Grant;
@@ -445,11 +455,9 @@ export async function startGrantedAgent(params: {
   await joinGranted(base, grant, () => {});
 
   const node = await base.asAgent({ keys: sessionKey, note: grant.note });
-  const stopHolding = await holdEverySpace(node);
   return {
     node,
     stop: async () => {
-      stopHolding();
       await node.close().catch(() => {});
       await base.close();
     },

@@ -1014,11 +1014,16 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     is such an app, holding its key inside the app's access token, sealed
     under a key of its own: on its disk only between the person allowing it
     and the app collecting the token, twenty minutes at most, and in memory
-    while a node runs. While the app uses it, a node of its holds the spaces
-    the person picked in memory, reads them and writes records there "via
-    agent", as the app's model asks; and whoever holds its sealing key and a
-    token can do the same until the note runs out or the person disconnects
-    it. A write is done once the space's keepers have it (05 §9), or, in a
+    while a node runs. Unless the person chooses spaces, its note is for
+    records in the whole account and comes with the account key, so the
+    token opens every space the account is in, those it joins later, its
+    direct messages and its contacts space (a records note still can't write
+    in the account's own spaces). While the app uses it, a node of its opens
+    a space when a call first uses it, holds it in memory, reads it and
+    writes records there "via agent", as the app's model asks, and closes the
+    one used longest ago when it needs room; and whoever holds its sealing
+    key and a token can do the same in any of those spaces until the note
+    runs out or the person disconnects it. A write is done once the space's keepers have it (05 §9), or, in a
     space that names none, once a member's device online then does, which the
     app is told is less sure, since a peer that holds part of the space, or
     refused the write, counts too. What outlives the node is only where its
@@ -1041,20 +1046,25 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     ([#287](https://github.com/leifriksheim/minca/issues/287)). Records count until the key is revoked, not until the
     note runs out (06 §2.9), so a token outlives nothing the person can't end
     at their home; the service refuses a token for good once its node sees
-    the revoke, but member keys open what they opened after that, so a call
-    until then may read what synced alongside it
+    the revoke (in a space it opens, or for the whole account in its
+    registry, which the node always holds), but member keys open what they
+    opened after that, so a call until then may read what synced alongside it
     ([#165](https://github.com/leifriksheim/minca/issues/165)). The home keeps
     one connection per origin (06 §2.10): every chat app connected through a
     service is one entry there, named after the latest, so disconnecting it
     disconnects them all, and one more allowed, by a sign-in someone else
     started, shows as nothing new. The reference service takes a key only with
     the private half that goes with it, since a note travels with every record
-    and is no secret; refuses a note for the whole account, read from the note
-    itself; and reaches the spaces through the always-on nodes and relays
+    and is no secret; refuses a grant whose scope or account key disagrees
+    with its note, read from the note itself, and one naming more than 8
+    spaces; answers calls only in the spaces the account's list or the grant
+    names, so never in the account's registry or contacts space; and reaches the spaces through the always-on nodes and relays
     the grant's invites and the spaces name only over TLS at public
     addresses, besides its operator's own (`network.reach`), so a grant's
     invites and the records its node reads can't make it connect inside its
-    own network, and what a node holds is at most 32 MB, in memory
+    own network, and what a node holds is at most 32 MB, in memory, past
+    half of which opening a space closes the one used longest ago, but
+    never one holding a write the keepers don't have yet
     (`checkGranted` and `createSessions` in
     `packages/cli/src/remote-mcp/sessions.ts`, `publicNode` in
     `packages/cli/src/remote-mcp/reach.ts`, `boundedMemory` in

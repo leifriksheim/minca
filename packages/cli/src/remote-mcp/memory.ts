@@ -11,31 +11,44 @@ const SESSION_BYTES = 32 * 1024 * 1024;
 
 const encoder = new TextEncoder();
 
-export function boundedMemory(budget = SESSION_BYTES): StoreFactory {
-  let used = 0;
-  const take = (bytes: number) => {
-    if (used + bytes > budget)
-      throw new Error(
-        `This connection holds more than ${Math.round(budget / 1024 / 1024)} MB of these spaces`,
-      );
-    used += bytes;
-  };
-  const adapters = new Map<string, StorageAdapter>();
+export interface BoundedMemory {
+  readonly stores: StoreFactory;
+  readonly budget: number;
+  /** Bytes held now, in every store */
+  used(): number;
+  /** Bytes held now in one store, by its path: none for a store never opened */
+  usedBy(path: string): number;
+  /** Forgets a store and what it holds, for a space closed for good: opened again, it starts empty */
+  drop(path: string): void;
+}
 
-  function adapter(): StorageAdapter {
+export function boundedMemory(budget = SESSION_BYTES): BoundedMemory {
+  let used = 0;
+  const adapters = new Map<string, { adapter: StorageAdapter; bytes: () => number; clear: () => void }>();
+
+  function adapter() {
+    let bytes = 0;
+    const count = (change: number) => {
+      if (change > 0 && used + change > budget)
+        throw new Error(
+          `This connection holds more than ${Math.round(budget / 1024 / 1024)} MB of these spaces`,
+        );
+      used += change;
+      bytes += change;
+    };
     const entries = new Map<string, Uint8Array>();
     const versions = new Map<string, { version: Version; size: number }>();
     const put = (key: string, value: Uint8Array) => {
       const old = entries.get(key);
-      take(old ? value.length - old.length : value.length + key.length);
+      count(old ? value.length - old.length : value.length + key.length);
       entries.set(key, value);
     };
     const remove = (key: string) => {
       const value = entries.get(key);
-      if (value) used -= value.length + key.length;
+      if (value) count(-(value.length + key.length));
       entries.delete(key);
     };
-    return {
+    const store: StorageAdapter = {
       get: async (key) => entries.get(key) ?? null,
       put: async (key, value) => put(key, value),
       delete: async (key) => remove(key),
@@ -43,12 +56,12 @@ export function boundedMemory(budget = SESSION_BYTES): StoreFactory {
       putVersion: async (version) => {
         if (versions.has(version.id)) return;
         const size = encoder.encode(JSON.stringify(version)).length;
-        take(size);
+        count(size);
         versions.set(version.id, { version, size });
       },
       getVersion: async (id) => versions.get(id)?.version ?? null,
       deleteVersion: async (id) => {
-        used -= versions.get(id)?.size ?? 0;
+        count(-(versions.get(id)?.size ?? 0));
         versions.delete(id);
       },
       batch: async (ops: ReadonlyArray<BatchOp>) => {
@@ -60,14 +73,30 @@ export function boundedMemory(budget = SESSION_BYTES): StoreFactory {
       // Closing a space must not lose what it holds while the node runs: it may open it again.
       close: async () => {},
     };
+    const clear = () => {
+      used -= bytes;
+      bytes = 0;
+      entries.clear();
+      versions.clear();
+    };
+    return { adapter: store, bytes: () => bytes, clear };
   }
 
-  return async (path) => {
-    let found = adapters.get(path);
-    if (!found) {
-      found = adapter();
-      adapters.set(path, found);
-    }
-    return found;
+  return {
+    budget,
+    stores: async (path) => {
+      let found = adapters.get(path);
+      if (!found) {
+        found = adapter();
+        adapters.set(path, found);
+      }
+      return found.adapter;
+    },
+    used: () => used,
+    usedBy: (path) => adapters.get(path)?.bytes() ?? 0,
+    drop(path) {
+      adapters.get(path)?.clear();
+      adapters.delete(path);
+    },
   };
 }

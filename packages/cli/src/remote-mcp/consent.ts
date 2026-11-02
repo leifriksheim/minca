@@ -2,8 +2,9 @@
  * Where the person allows a chat app: the interaction `oidc-provider` hands
  * over (`oauth.ts`). The page says which app it is and where it will send
  * them back, and connects at their account home like any app does
- * (`consent-script.ts`). Only once the home has signed a records-only note,
- * and the service has checked it, does the app get a code.
+ * (`consent-script.ts`), for records in all their spaces unless they choose
+ * some. Only once the home has signed a records-only note, and the service
+ * has checked it, does the app get a code. How it looks is `consent-page.ts`.
  *
  * Every sign-in comes here: the service keeps no sign-in in the browser to skip
  * it with (`oauth.ts`). The code goes only to where the app registered, which
@@ -15,6 +16,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { isRecord, messageOf } from '../json.js';
 import { checkGranted } from './sessions.js';
 import { consentScript } from './consent-bundle.js';
+import { consentHtml, noticeHtml } from './consent-page.js';
 import { INTERACTION_PATH, MCP_SCOPE, type OAuth } from './oauth.js';
 import { mayRedirect } from './redirects.js';
 
@@ -208,10 +210,6 @@ function displayOf(uri: string): string {
   return `an app on this device (${url.protocol.slice(0, -1)})`;
 }
 
-const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-/** JSON inside a `<script>` element: nothing in it can close the element */
-const scriptJson = (value: unknown) => JSON.stringify(value).replace(/</g, '\\u003c');
-
 const sha256 = (text: string) => createHash('sha256').update(text, 'utf8').digest('base64');
 
 /** A page, its script allowed by hash and nothing else: no other script runs, and it reaches only this service */
@@ -227,46 +225,4 @@ function sendPage(res: ServerResponse, status: number, html: string, script?: st
       "base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
   });
   res.end(html);
-}
-
-// Minca's paper, navy ink and rainbow mark, inline so the page loads nothing from anyone.
-const MARK_SVG =
-  '<svg width="32" height="17" viewBox="0 0 24 13" aria-hidden="true"><path d="M0.5 12.5A11.5 11.5 0 0 1 23.5 12.5H20.75A8.75 8.75 0 0 0 3.25 12.5Z" fill="#2340d6"/><path d="M3.25 12.5A8.75 8.75 0 0 1 20.75 12.5H18A6 6 0 0 0 6 12.5Z" fill="#ff6b4a"/><path d="M6 12.5A6 6 0 0 1 18 12.5H15.25A3.25 3.25 0 0 0 8.75 12.5Z" fill="#ffc46b"/><path d="M8.75 12.5A3.25 3.25 0 0 1 15.25 12.5Z" fill="#4e8f6c"/></svg>';
-const CSS =
-  'body{margin:0;background:#f6f3ee;color:#2a3352;font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}' +
-  'main{max-width:460px;margin:0 auto;padding:64px 20px}' +
-  'h1{margin:28px 0 12px;font:700 28px/1.15 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;letter-spacing:-0.03em;color:#13214a}' +
-  'p{margin:0 0 12px}ul{margin:0 0 16px;padding-left:20px}li{margin:4px 0}' +
-  'label{display:block;margin:20px 0 6px;font-weight:600;color:#13214a}' +
-  'input{box-sizing:border-box;width:100%;padding:10px 12px;border:1px solid #c9c3b8;border-radius:10px;font:inherit;background:#fff;color:inherit}' +
-  '.row{display:flex;gap:10px;margin-top:16px}button{flex:1;padding:11px 14px;border-radius:999px;border:1px solid #13214a;font:inherit;font-weight:600;line-height:1;cursor:pointer}' +
-  'button[type=submit]{background:#13214a;color:#fff}button[type=button]{background:transparent;color:#13214a}button:disabled{opacity:.5;cursor:default}' +
-  '#said{min-height:1.5em;margin-top:14px;color:#5a6178}';
-
-function consentHtml(params: {
-  readonly app: string;
-  readonly host: string;
-  readonly back: string;
-  readonly home: string;
-  readonly data: unknown;
-  readonly script: string;
-}): string {
-  const app = escapeHtml(params.app);
-  const host = escapeHtml(params.host);
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Connect ${app} to Minca</title><style>${CSS}</style></head><body><main>${MARK_SVG}
-<h1>Connect ${app} to Minca</h1>
-<p>${app} will act for you in the spaces you pick at your account home:</p>
-<ul><li>It reads them, and writes records there as you, marked “via agent”.</li>
-<li>It can’t add collections or change who is in a space: it proposes them for someone who may.</li>
-<li>The key it acts with lives in ${app}’s sign-in, sealed so only ${host} can open it. While ${app} is working, ${host} holds those spaces in memory, and can read them; they go once ${app} has been idle for 10 minutes, and nothing is kept after.</li></ul>
-<p>At your account home, ${host} shows as one connection: disconnecting it there disconnects every chat app you connected through ${host}. Once you allow it, you go back to ${escapeHtml(params.back)}.</p>
-<form id="connect"><label for="home">Your account home</label><input id="home" name="home" autocomplete="url" spellcheck="false" value="${escapeHtml(params.home)}">
-<div class="row"><button type="button" id="cancel">Don’t connect</button><button type="submit">Continue</button></div></form>
-<p id="said" role="status"></p></main>
-<script type="application/json" id="minca-consent">${scriptJson(params.data)}</script>
-<script>${params.script}</script></body></html>`;
-}
-
-function noticeHtml(title: string, said: string): string {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)}</title><style>${CSS}</style></head><body><main>${MARK_SVG}<h1>${escapeHtml(title)}</h1><p>${escapeHtml(said)}</p></main></body></html>`;
 }
