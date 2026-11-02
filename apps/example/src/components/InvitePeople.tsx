@@ -8,7 +8,7 @@ import { createInviteLink } from '../spaces';
 import { palette, styles, ui } from '../styles';
 import { invitableRoles, useContacts } from '../contacts';
 import { shortUsername, useUsernameLookup } from '@minca/app-shared/usernames';
-import { AddButton } from './Buttons';
+import { AddButton, QuietButton } from './Buttons';
 import { Icon } from './Icon';
 import { AddDialog, Handle, PersonRow } from './PeopleParts';
 import { usePopover } from './usePopover';
@@ -408,6 +408,22 @@ export function ContactPicker({
       return next;
     });
 
+  // The invite stops working, and the record of it in your space for two goes, so they no longer see it.
+  const takeBack = async (contact: ContactView) => {
+    const sent = invited.get(contact.did);
+    if (!sent) return;
+    setSending(true);
+    setError(null);
+    setDone(null);
+    try {
+      await node.spaces.closeInvite(space.id, sent.invite);
+      await node.records.delete(sent.pairSpace, sent.key);
+    } catch (e) {
+      setError(message(e));
+    }
+    setSending(false);
+  };
+
   const send = async () => {
     setSending(true);
     setError(null);
@@ -484,9 +500,14 @@ export function ContactPicker({
               detail={contact.username ? <Handle username={contact.username} /> : 'Contact'}
               {...(invited.has(contact.did) ? {} : { onOpen: () => toggle(contact.did) })}
             >
-              {/* Invited already: it waits in your space for two until they join. */}
+              {/* Invited already: it waits in your space for two until they join, or you take it back. */}
               {invited.has(contact.did) ? (
-                <span style={{ fontSize: 13, color: ink.muted }}>Invited</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 13, color: ink.muted }}>Invited</span>
+                  <QuietButton onClick={() => void takeBack(contact)} disabled={sending}>
+                    Take back
+                  </QuietButton>
+                </span>
               ) : (
                 <Tick
                   checked={picked.has(contact.did)}
@@ -542,20 +563,31 @@ export function ContactPicker({
   );
 }
 
+/** An invite of yours waiting for a contact: where it was left, and the invite itself */
+interface SentInvite {
+  readonly pairSpace: string;
+  readonly key: string;
+  readonly invite: string;
+}
+
 /**
  * The contacts with an invite of yours to this space waiting: a `std.space-invite` you left in your space
  * for two with them (`contacts.invite`). It goes once they join, and then they are members.
  */
-function useInvitedTo(spaceId: string, contacts: ReadonlyArray<ContactView>): ReadonlySet<string> {
+function useInvitedTo(
+  spaceId: string,
+  contacts: ReadonlyArray<ContactView>,
+): ReadonlyMap<string, SentInvite> {
   const pairs = contacts.flatMap((c) => (c.space ? [{ did: c.did, space: c.space }] : []));
   const found = useWatched(
     async (node) => {
-      const invited = new Set<string>();
+      const invited = new Map<string, SentInvite>();
       for (const { did, space } of pairs) {
         const records = await node.records
           .list<SpaceInviteRecord>(space, { collection: spaceInvite.name })
           .catch(() => []);
-        if (records.some((r) => r.root === node.did && r.body?.space === spaceId)) invited.add(did);
+        const mine = records.find((r) => r.root === node.did && r.body?.space === spaceId);
+        if (mine?.body) invited.set(did, { pairSpace: space, key: mine.key, invite: mine.body.invite });
       }
       return invited;
     },
@@ -565,7 +597,7 @@ function useInvitedTo(spaceId: string, contacts: ReadonlyArray<ContactView>): Re
   return found ?? NOBODY;
 }
 
-const NOBODY: ReadonlySet<string> = new Set();
+const NOBODY: ReadonlyMap<string, SentInvite> = new Map();
 
 function Tick({ checked, onChange, label }: { checked: boolean; onChange: () => void; label?: string }) {
   return (
