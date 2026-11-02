@@ -88,7 +88,7 @@ export function NewApp({
         {ready.map((app) => (
           <div key={app.id} style={addRow}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <AppIcon id={app.id} size={40} />
+              <AppIcon app={app} size={40} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <strong style={cardTitle}>{app.title}</strong>
                 <p style={cardText}>{app.description}</p>

@@ -1,14 +1,30 @@
 import { Shape } from '@minca/app-shared/shapes';
 import { shapeFor } from '@minca/ui/shapes';
 import type { Unread } from '../../seen';
+import type { AppEntry } from './entries';
 
 /**
- * An app as its shape, the same wherever it appears: a built-in app's own,
- * and any other a round one picked by its id.
+ * An app as its shape, the same wherever it appears: the icon its record gives it, or else a built-in
+ * app's own, and any other a round one picked by its id.
  */
-export function AppIcon({ id, size, className }: { id: string; size: number; className?: string }) {
+export function AppIcon({
+  app,
+  size,
+  className,
+}: {
+  app: Pick<AppEntry, 'id' | 'icon'>;
+  size: number;
+  className?: string;
+}) {
+  const { kind, colour } = shapeFor(app.id);
   return (
-    <Shape {...shapeFor(id)} size={size} className={className ? `app-shape ${className}` : 'app-shape'} />
+    <Shape
+      kind={kind}
+      path={app.icon?.path}
+      colour={app.icon?.colour ?? colour}
+      size={size}
+      className={className ? `app-shape ${className}` : 'app-shape'}
+    />
   );
 }
 

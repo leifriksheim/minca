@@ -191,6 +191,17 @@ allowed for everyone once it is added, as a workspace's admin adds an
 integration: adding it is the consent. The ready-made Chat asks for a GIPHY
 key, and shows its GIF button only once it has one.
 
+**An app's icon.** A `launcher.app` may carry an `icon`: `{ "path": "M10 10…Z",
+"colour": "coral" }`, the data of one SVG path on a 100 × 100 grid and one
+of the shapes' colours (cobalt, coral, peach, sage, lilac, ink). The example
+app draws it filled, in place of the shape the app would have otherwise, and
+only when the path is path data and nothing else (commands, numbers and
+separators, at most 4,000 characters), since it comes from other people; the
+stored schema can't hold that rule, so the check is where it is drawn. The
+guide asks an agent for one when it makes an app. Changing an icon is changing
+the app, as any other field is; updating a ready-made app keeps the icon the
+space gave it.
+
 **Opening a record where it belongs.** A `launcher.app` may name, among its
 `collections`, the ones it `shows`: the ones whose records it is the place
 to open (`shows: ["std.message"]` for a chat). Whatever asks the example app
@@ -266,7 +277,7 @@ defines its collections and writes a copy of it, naming where it came from
 (`template: "kanban"`), and from then on the space changes its copy like any
 other app.
 
-_Source: `apps/example/src/components/apps/launcher.ts` (`addTemplate`, `saveSettings`, `settingsOf`), `apps/example/src/components/apps/entries.ts` (`addChat`), `apps/example/src/contacts.ts` (`withChat`), `apps/example/src/components/apps/screens.ts`, `apps/example/src/components/apps/ScreenFrame.tsx`, `apps/example/src/components/apps/AppSettings.tsx`, `apps/example/src/components/apps/templates/`, `apps/example/public/screen.html`, `packages/ui/src/frame/`, `packages/ui/src/guide.ts`. Tests: `apps/example/tests/launcher.test.ts` ("adding a ready-made app copies it into the space once, with its collections and first records", "settings filled in once stand for everyone, survive a new version of the app, and stay in their space"), `apps/example/tests/screens.test.ts` ("an app's settings come with the screen, and the screen can't change them", "a screen checks, shows faces and opens things only within its app and its space", "what the page does for a screen, it does only as asked properly", "a screen can’t point a link out of its app, so it can’t probe for keys or reach what no one shared", "a record someone shared is read through the link to it, and only through that", "a screen links out only to what the person picked for it, and is handed what they picked", "the space’s own records are never picked for a screen", "a screen hears the same app's screens on other devices, as who sent it, and no other app's")._
+_Source: `apps/example/src/components/apps/launcher.ts` (`addTemplate`, `iconOf`, `saveSettings`, `settingsOf`), `apps/example/src/components/apps/entries.ts` (`addChat`), `apps/example/src/contacts.ts` (`withChat`), `apps/example/src/components/apps/screens.ts`, `apps/example/src/components/apps/ScreenFrame.tsx`, `apps/example/src/components/apps/AppSettings.tsx`, `apps/example/src/components/apps/templates/`, `apps/example/public/screen.html`, `packages/ui/src/frame/`, `packages/ui/src/guide.ts`. Tests: `apps/example/tests/launcher.test.ts` ("an app's own icon is drawn only as path data in a shape colour, and outlives an update of its ready-made app", "adding a ready-made app copies it into the space once, with its collections and first records", "settings filled in once stand for everyone, survive a new version of the app, and stay in their space"), `apps/example/tests/screens.test.ts` ("an app's settings come with the screen, and the screen can't change them", "a screen checks, shows faces and opens things only within its app and its space", "what the page does for a screen, it does only as asked properly", "a screen can’t point a link out of its app, so it can’t probe for keys or reach what no one shared", "a record someone shared is read through the link to it, and only through that", "a screen links out only to what the person picked for it, and is handed what they picked", "the space’s own records are never picked for a screen", "a screen hears the same app's screens on other devices, as who sent it, and no other app's")._
 
 ## Describing a collection
 
