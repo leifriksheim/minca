@@ -15,7 +15,8 @@
  * records-only note their account home signed for the spaces they picked
  * (`sessions.ts`). It writes as them, "via agent", and can't add collections
  * or change who is in a space. The tools are `NODE_ACTIONS`, as `minca mcp`
- * offers them (`mcp.ts`). It keeps nothing per connection: the token does.
+ * offers them (`mcp.ts`). The token holds the key; the service holds a
+ * copy of the spaces only while their node runs (`sessions.ts`).
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
@@ -119,6 +120,7 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
     stores: options.stores,
     drop: options.drop,
     network: options.network,
+    onRevoked: (session) => void oauth.revoke(session),
     ...(options.idleMs !== undefined ? { idleMs: options.idleMs } : {}),
     ...(options.running !== undefined ? { running: options.running } : {}),
     log,

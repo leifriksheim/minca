@@ -1,9 +1,11 @@
 /**
- * What a chat app acts with, and the node it acts through. The service keeps
- * neither: the key and the records-only note a person's account home signed
- * travel inside the app's access token, sealed under a key only the service
- * holds (`oauth.ts`). Each call opens them, and the node they start runs while
- * the app is using it, its spaces kept in a folder that goes when it stops.
+ * What a chat app acts with, and the node it acts through. The key and the
+ * records-only note a person's account home signed travel inside the app's
+ * access token, sealed under a key only the service holds (`oauth.ts`). Each
+ * call opens them, and the node they start runs while the app is using it,
+ * its spaces kept in a folder that goes when it stops. Only where the key has
+ * signed in each log outlives the node (`server.ts`): a node that forgot it
+ * would sign at a place it signed before, and fork the key.
  */
 import { didOf, noteSpaces, type NodeConfig, type P2PNode, type StoreFactory } from '@minca/core';
 import { checkGrant, usableGrant, type Grant } from '@minca/core/session';
@@ -99,6 +101,8 @@ export function createSessions(options: {
   readonly drop: (id: string) => Promise<void>;
   /** How a node reaches the spaces it was given */
   readonly network: () => NodeConfig['network'];
+  /** Told once a session's key was revoked in some space: the person disconnected the app */
+  readonly onRevoked?: (id: string) => void;
   readonly idleMs?: number;
   readonly running?: number;
   readonly log?: (line: string) => void;
@@ -165,7 +169,19 @@ export function createSessions(options: {
       stores: options.stores(id),
       network: { ...options.network(), only: true },
     });
-    return agent;
+    // Disconnected at the account home: it reads and writes no more, from now on.
+    const unsubscribe = agent.node.subscribe((event) => {
+      if (event.type !== 'revoked') return;
+      options.onRevoked?.(id);
+      void stop(id);
+    });
+    return {
+      node: agent.node,
+      stop: async () => {
+        unsubscribe();
+        await agent.stop();
+      },
+    };
   }
 
   /** The session's node: running, or started now and marked running before anything is awaited */

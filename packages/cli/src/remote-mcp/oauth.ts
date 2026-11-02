@@ -7,13 +7,12 @@
  * (`consent.ts`), which signs a records-only note for a key the page made.
  *
  * That key and note travel inside the access token, an encrypted JWT under a
- * key only this service holds, so it keeps nothing per connection: between
- * the person allowing it and the app collecting its token, a few minutes at
- * most, and never after. There is no refresh token; a token lasts as long as
+ * key only this service holds, so it keeps neither: only between the person
+ * allowing it and the app collecting its token, a few minutes at most. There is no refresh token; a token lasts as long as
  * the note, and disconnecting at the account home is what ends it sooner.
  *
- * What it does keep (registered apps, codes, sign-ins under way) is small,
- * runs out, and holds no key.
+ * What it does keep (registered apps, codes, sign-ins under way, tokens
+ * disconnected at the home) is small, runs out, and holds no key.
  */
 import Provider, { errors, type Adapter, type AdapterPayload, type Configuration } from 'oidc-provider';
 import type { IncomingMessage } from 'node:http';
@@ -35,6 +34,8 @@ const ACCESS_TOKEN_SECONDS = 30 * 86_400;
 const PENDING_SECONDS = 600;
 /** Where it waits */
 const PENDING = 'oauth:Pending:';
+/** Tokens whose key was revoked: kept as long as such a token could last */
+const REVOKED = 'oauth:Revoked:';
 
 /** `oidc-provider`'s session cookie and its signature, by their default names */
 const SESSION_COOKIE = /^\s*_session(\.[a-z]+)?=/;
@@ -380,6 +381,13 @@ export async function createOAuth(options: OAuthOptions) {
   return {
     provider,
     stop: () => clearInterval(sweeping),
+    /** Refuses a token from now on: its key was revoked, so the person disconnected the app */
+    async revoke(session: string) {
+      await options.store.put(
+        `${REVOKED}${session}`,
+        encode({ payload: {}, expiresAt: now() + ACCESS_TOKEN_SECONDS }),
+      );
+    },
     /** Keeps what a person allowed until the app collects its token: the id the sign-in names */
     async pend(granted: Granted): Promise<string> {
       const id = Buffer.from(globalThis.crypto.getRandomValues(new Uint8Array(16))).toString('base64url');
@@ -405,6 +413,8 @@ export async function createOAuth(options: OAuthOptions) {
       if (!isRecord(carried)) throw new errors.InvalidToken('it carries nothing');
       const granted = await checkGranted(carried.key, carried.grant).catch(() => null);
       if (!granted) throw new errors.InvalidToken('what it carries no longer checks out; connect again');
+      if (typeof payload.jti === 'string' && (await options.store.get(`${REVOKED}${payload.jti}`)))
+        throw new errors.InvalidToken('disconnected at the account home; connect again');
       const scopes = typeof payload.scope === 'string' ? payload.scope.split(' ') : [];
       return {
         session: typeof payload.jti === 'string' ? payload.jti : '',

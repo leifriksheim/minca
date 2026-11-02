@@ -408,7 +408,7 @@ test('a stranger’s own node can’t fill the service’s disk', async () => {
   assert.ok((await bytesUnder(folder)) < 40 * 16_000, 'nor the host’s disk');
 });
 
-test('with every device of theirs offline, a chat app reads and writes through the free host', async () => {
+test('with every device of theirs offline, a chat app reads and writes through the free host, until she disconnects it', async () => {
   // A free host, and Ada's laptop handing it her space, as the home does for every new account.
   const served = await startHost({
     key: await createP256Provider().generateKeyPair(),
@@ -451,19 +451,25 @@ test('with every device of theirs offline, a chat app reads and writes through t
   await new Promise((resolve) => setTimeout(resolve, 500));
   await laptop.close();
 
-  // The service, reaching spaces through that host alone.
+  // The service, reaching spaces through that host alone. A short idle time
+  // stands for the default ten minutes, a restart of the service, or a stranger
+  // filling its room: each stops the chat app's node and drops its folder.
   const port = await freePort();
   const issuer = `http://127.0.0.1:${port}`;
+  const data = await tempDir('mcp-server-');
   const service = await startMcpServer({
     publicUrl: issuer,
     nodes: [peer],
-    data: await tempDir('mcp-server-'),
+    data,
     port,
     version: '0',
     accountHome: 'https://home.test',
+    idleMs: 1500,
   });
   closing.push(() => service.close());
+  let agent = '';
   const token = await signInWith(issuer, async (audience) => {
+    agent = audience;
     const expiresAt = Math.floor(Date.now() / 1000) + 3600;
     return {
       v: GRANT_VERSION,
@@ -492,7 +498,30 @@ test('with every device of theirs offline, a chat app reads and writes through t
     body: { text: 'Bread too' },
   });
   assert.match(put, /"isError":false/);
-  // Her phone, later, gets it from the host, as hers and "via agent".
+  // Its node goes idle and its spaces go with it. Where its key has signed stays:
+  // a node that forgot would sign at a place it signed before, a fork of the key
+  // that withdraws everything it wrote (found by adversarial review).
+  await until(
+    async () => (await readdir(path.join(data, 'sessions')).catch(() => [])).length === 0,
+    10_000,
+    'the idle node to be dropped',
+  );
+  assert.equal((await readdir(path.join(data, 'places'))).length, 1, 'its key’s places kept');
+  await until(
+    async () =>
+      (await callTool(issuer, token, 'records_list', { space: space.id, collection: 'app.note' })).includes(
+        'Bread too',
+      ),
+    20_000,
+    'a fresh node to read the space again',
+  );
+  const again = await callTool(issuer, token, 'records_put', {
+    space: space.id,
+    collection: 'app.note',
+    body: { text: 'Cake' },
+  });
+  assert.match(again, /"isError":false/);
+  // Her phone, later, gets both from the host, as hers and "via agent".
   await new Promise((resolve) => setTimeout(resolve, 1000));
   const phone = await onHost();
   // Asked only once it holds the space: listing one it hasn't joined yet waits for it.
@@ -514,4 +543,40 @@ test('with every device of theirs offline, a chat app reads and writes through t
   );
   assert.equal(written?.root, me.did, 'written as Ada');
   assert.equal(written?.recordsOnly, true, 'via agent');
+  await until(
+    async () =>
+      (await phone.records.list(space.id, { collection: 'app.note' })).some(
+        (record) => isRecord(record.body) && record.body.text === 'Cake',
+      ),
+    40_000,
+    'the phone to get what the restarted node wrote',
+  );
+  // Time to see both writes and find any place signed twice.
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+  const texts = (await phone.records.list(space.id, { collection: 'app.note' }))
+    .map((record) => (isRecord(record.body) ? record.body.text : null))
+    .sort();
+  assert.deepEqual(texts, ['Bread too', 'Cake', 'Soup on Friday'], 'nothing it wrote was withdrawn');
+
+  // She disconnects it at her account home: the key is revoked. Peers refuse what
+  // it writes after; its token still carries the space's key, so the service must
+  // stop answering it once its node sees the revoke, and go on refusing it after
+  // that node stops (found by adversarial review).
+  assert.ok(await phone.revokeKey(agent, { waitMs: 5000 }), 'a peer took the revoke in');
+  const refused = async () =>
+    callTool(issuer, token, 'records_list', { space: space.id, collection: 'app.note' }).then(
+      (read) => {
+        assert.ok(!read.includes('Secret plan'), 'it read what she wrote after it was refused');
+        return false;
+      },
+      (error: unknown) => String(error).includes('invalid_token'),
+    );
+  await until(refused, 20_000, 'the service to refuse the token');
+  await phone.records.put(space.id, 'app.note', { text: 'Secret plan' });
+  await until(
+    async () => (await readdir(path.join(data, 'sessions')).catch(() => [])).length === 0,
+    10_000,
+    'its node to stop',
+  );
+  assert.ok(await refused(), 'and to go on refusing it');
 });

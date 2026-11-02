@@ -1004,13 +1004,20 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     that include their collection (02 §4.1). By design.
   - An MCP service a person connects a chat app through (`minca mcp-server`)
     is such an app, holding its key only inside the app's access token,
-    sealed under a key of its own, so it keeps no key, note or space between
-    calls. While a call runs it reads the spaces the person picked and writes
-    records there "via agent", as the app's model asks; and whoever holds its
-    sealing key and a token can do the same until the note runs out or the
-    person disconnects it. Records count until the key is revoked, not until
-    the note runs out (06 §2.9), so a token outlives nothing the person can't
-    end at their home; member keys open what they opened after that
+    sealed under a key of its own, so it keeps no key or note between calls.
+    While the app uses it, a node of its holds the spaces the person picked
+    on the service's disk, until it has been idle ten minutes (or the service
+    next starts, after a crash), reads them and writes records there "via
+    agent", as the app's model asks; and whoever holds its sealing key and a
+    token can do the same until the note runs out or the person disconnects
+    it. Where the key has signed in each log is kept apart, for as long as the
+    token lasts, so a node started again never signs at the same place twice
+    and forks the key; two copies of the service sharing a sealing key would,
+    so it runs as one. Records count until the key is revoked, not until the
+    note runs out (06 §2.9), so a token outlives nothing the person can't end
+    at their home; the service refuses a token for good once its node sees
+    the revoke, but member keys open what they opened after that, so a call
+    until then may read what synced alongside it
     ([#165](https://github.com/leifriksheim/minca/issues/165)). The home keeps
     one connection per origin (06 §2.10): every chat app connected through a
     service is one entry there, named after the latest, so disconnecting it
@@ -1032,15 +1039,19 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     `packages/cli/src/remote-mcp/oauth.ts`, `mayRedirect` in
     `packages/cli/src/remote-mcp/redirects.ts`;
     `packages/cli/tests/remote-mcp.test.ts`). A sign-in someone else started,
-    and sent the person, can land in the other's account at the chat app,
-    unless the app ties OAuth's `state` to the browser that started it; the
-    service can't tell. What a stranger can make it keep or do is an app's
+    and sent the person, can't be allowed from her browser: its consent page
+    answers only the browser that started it. The other way round, someone can
+    finish a sign-in in their own account and send her where it ends: her chat
+    app then acts in their spaces, unless it ties OAuth's `state` to the
+    browser that started it; the service can't tell. What a stranger can make it keep or do is an app's
     registration, gone after a day unless used, and nodes that run while
-    called, a few dozen at once, each with up to 8 spaces those always-on
-    nodes carry, counted by address
+    called, each with up to 8 spaces those always-on nodes carry. They are
+    counted by address, but nodes are not: a stranger with accounts of their
+    own can keep all of them running, and make honest calls wait, then fail
     ([#33](https://github.com/leifriksheim/minca/issues/33)). None of this is
     protocol: a dishonest service need not run that code.
-    _Source: 01 §7.5, §8, §11; 06 §2, §3; 05 §14, §15; 02 §4.1. Tests: `packages/core/tests/live.test.ts` ("a records-only key cannot shed its label by passing its note on"), `packages/core/tests/inbox.test.ts` ("opens only with its inbox…"), `packages/core/tests/record-keys.test.ts` ("a key in another collection"), `packages/core/tests/connect.test.ts` ("an app can only ask for a key it holds, and none the home already uses for something else", "a request with a field it does not know is refused…"), `packages/core/tests/records-only.test.ts`, `packages/core/tests/connect-code.test.ts`, `packages/core/tests/ucan.test.ts`, `packages/core/tests/account-vault.test.ts` ("the account key does not open the registry store's sealed entries", "a wrap from another account does not open as this one", "a passphrase wrap edited to fewer rounds, another salt or another id does not open")._
+
+_Source: 01 §7.5, §8, §11; 06 §2, §3; 05 §14, §15; 02 §4.1. Tests: `packages/core/tests/live.test.ts` ("a records-only key cannot shed its label by passing its note on"), `packages/core/tests/inbox.test.ts` ("opens only with its inbox…"), `packages/core/tests/record-keys.test.ts` ("a key in another collection"), `packages/core/tests/connect.test.ts` ("an app can only ask for a key it holds, and none the home already uses for something else", "a request with a field it does not know is refused…"), `packages/core/tests/records-only.test.ts`, `packages/core/tests/connect-code.test.ts`, `packages/core/tests/ucan.test.ts`, `packages/core/tests/account-vault.test.ts` ("the account key does not open the registry store's sealed entries", "a wrap from another account does not open as this one", "a passphrase wrap edited to fewer rounds, another salt or another id does not open")._
 
 ### 3.7 Relay
 

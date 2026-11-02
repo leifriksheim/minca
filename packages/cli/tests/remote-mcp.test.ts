@@ -502,6 +502,21 @@ describe('a host’s MCP endpoint', () => {
     assert.equal(answer.status, 403);
   });
 
+  test('a sign-in someone else started, and sent the person, can’t be allowed from her browser', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    const host = await aHost(hub);
+    const app = await anApp(host.resource);
+    // Mallory starts it in her browser and sends Ada the consent page's address.
+    const mallory = await startSignIn(app, host.resource);
+    const adas = { ...mallory, jar: cookieJar() };
+    const page = await fetch(adas.consent, { headers: { cookie: adas.jar.header() } });
+    assert.notEqual(page.status, 200, 'the page is only for the browser that started it');
+    const key = await browserKey();
+    const answer = await postFromPage(adas, 'allow', { key: key.jwk, grant: await ada.grantFor(key.did) });
+    assert.notEqual(answer.status, 200, 'nor can she allow it');
+  });
+
   test('an app can’t register a place a code may not go: another site, or a browser by its scheme', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const host = await aHost(hub);

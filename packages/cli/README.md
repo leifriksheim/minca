@@ -313,19 +313,30 @@ page hands both to the service, which checks them and seals them into the
 app's access token, under a key only it holds. Then you are back in the app,
 and its tools arrive.
 
-The service keeps nothing per connection: no key, no note, no copy of your
-spaces. Each call opens the token, and a node starts from what it carries.
-That node reaches your spaces only through the always-on nodes the service
-was given (`MINCA_NODES`, such as your free host), so it works with every
-device of yours offline, in the spaces those carry, and nowhere a grant or a
-record would send it. It runs while the app uses it, at most 32 at once, and
-when it stops, its copy of your spaces goes. While a call runs, the service
-can read the spaces you gave it, as the chat app's maker can read what its
-model sees.
+The key and note live in the token, not on the service. Each call opens
+the token, and a node starts from what it carries. That node reaches your
+spaces only through the always-on nodes the service was given
+(`MINCA_NODES`, such as your free host), so it works with every device of
+yours offline, in the spaces those carry, and nowhere a grant or a record
+would send it. It is a full node: it syncs the spaces you picked and keeps a
+copy of them on the service's disk while the app uses it, and answers from
+that. After 10 minutes without a call it stops and the copy is deleted (or,
+after a crash, when the service next starts); the next call syncs them
+again. At most 32 run at once. So while the app is working, whoever runs the
+service can read those spaces, as the chat app's maker can read what its
+model sees. What stays is where the key has signed in each log, so a node
+started again never signs at the same place twice (which would fork the
+key): no content, kept until the token can no longer be used.
+
+Run one process per sealing key (`token-secret` in `MINCA_MCP_DATA`): two
+copies sharing it would each start a node for the same token, and sign at the
+same places.
 
 A token lasts as long as its note, with no refresh token. Disconnecting at
 your account home is what ends it sooner: what the key writes after stops
-counting everywhere at once. Your home shows the service as one connection,
+counting everywhere, and once the service's node sees the revoke it refuses
+the token for good. Until then, a call may still read what synced alongside
+the revoke. Your home shows the service as one connection,
 whichever apps you connected through it, so disconnecting there
 disconnects them all.
 
