@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- The plain viewport every page gives, not the app's: this measures the browser alone. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Viewport probe</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 24px 16px;
+        font:
+          16px/1.4 -apple-system,
+          system-ui,
+          sans-serif;
+        background: #f6f3ee;
+        color: #13214a;
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0 0 4px;
+      }
+      p {
+        margin: 0 0 16px;
+        color: #5b6480;
+        font-size: 14px;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 15px;
+      }
+      td {
+        padding: 6px 0;
+        border-bottom: 1px solid #e2dcd0;
+        vertical-align: top;
+      }
+      td:last-child {
+        text-align: right;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        word-break: break-all;
+      }
+      .ruler {
+        margin-top: 20px;
+        width: 200px;
+        height: 24px;
+        background: #2340d6;
+        color: #fff;
+        font-size: 12px;
+        line-height: 24px;
+        padding-left: 8px;
+        box-sizing: border-box;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Viewport probe</h1>
+    <p>Open this in Safari and in Brave, and compare the numbers. Nothing here comes from the Minca app.</p>
+    <table id="facts"></table>
+    <div class="ruler">200 CSS px</div>
+    <script>
+      // What the browser lays the page out at, and how much it scales it. A browser's page zoom shows as a
+      // layout width narrower than the screen's (393 at 100% on most iPhones, ~342 at 115%).
+      function show() {
+        const vv = window.visualViewport;
+        const facts = [
+          ['Layout width (innerWidth)', innerWidth],
+          ['Document width (clientWidth)', document.documentElement.clientWidth],
+          ['Screen width', screen.width],
+          ['Screen ÷ layout (zoom)', (screen.width / document.documentElement.clientWidth).toFixed(3)],
+          ['Visual viewport width', vv ? vv.width.toFixed(1) : 'n/a'],
+          ['Visual viewport scale', vv ? vv.scale.toFixed(3) : 'n/a'],
+          ['Device pixel ratio', devicePixelRatio],
+          [
+            'Installed (standalone)',
+            String(matchMedia('(display-mode: standalone)').matches || navigator.standalone === true),
+          ],
+          ['Coarse pointer', String(matchMedia('(pointer: coarse)').matches)],
+          ['16px text renders at', getComputedStyle(document.body).fontSize],
+          ['User agent', navigator.userAgent],
+        ];
+        document.getElementById('facts').innerHTML = facts
+          .map(([k, v]) => `<tr><td>${k}</td><td>${String(v).replace(/</g, '&lt;')}</td></tr>`)
+          .join('');
+      }
+      show();
+      addEventListener('resize', show);
+    </script>
+  </body>
+</html>
