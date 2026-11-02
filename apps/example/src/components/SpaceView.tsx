@@ -218,8 +218,14 @@ function SpaceView({ space }: { space: SpaceSummary }) {
 
   const params = { spaceId: space.id };
   const go = (to: SpacePath) => void navigate({ to, params });
+  // Going into an app is a step Back comes out of; from one app to another is a swap, as tabs are, so Back
+  // leaves the apps rather than going through each one.
   const openApp = (appId: string) =>
-    void navigate({ to: '/spaces/$spaceId/apps/$appId', params: { spaceId: space.id, appId } });
+    void navigate({
+      to: '/spaces/$spaceId/apps/$appId',
+      params: { spaceId: space.id, appId },
+      replace: onApp,
+    });
   const router = useRouter();
   const canGoBack = useCanGoBack();
   // Home, to the list the space was opened from: from an app.
