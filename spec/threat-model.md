@@ -1011,7 +1011,8 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     agent", as the app's model asks; and whoever holds its sealing key and a
     token can do the same until the note runs out or the person disconnects
     it. Nothing of it outlives the node: a write is done once the space's
-    keepers have it (05 §9; one that names none is read, not written), and
+    keepers have it (05 §9), or, in a space that names none, once a member's
+    device online then does, which the app is told is less sure; and
     a node started again carries on after what they hold of its key's
     writes. One the app was told wasn't done, lost before a keeper has it
     (the node evicted, the service stopped), leaves a place nobody saw used,

@@ -270,10 +270,9 @@ export async function openSpaceHolding(ctx: HoldingContext) {
   /**
    * Waits up to `waitMs` for the space's keepers to have every write of this
    * node's from `since` on (ms; all of them by default). False when that long
-   * passed first, or at once when the space names no keepers: nobody can.
+   * passed first.
    */
   async function kept(waitMs: number, since = 0): Promise<boolean> {
-    if ((await access()).history.current.keepers.length === 0) return false;
     if (!(await waiting(since))) return true;
     return new Promise((resolve) => {
       let looking = Promise.resolve();

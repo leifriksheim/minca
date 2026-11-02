@@ -400,7 +400,7 @@ describe('a host’s MCP endpoint', () => {
     assert.notEqual(did, ada.did);
   });
 
-  test('in a space that names no keeper, a chat app reads but doesn’t write: nothing would keep it', async () => {
+  test('in a space that names no keeper, a write is kept by a member online, and the app is told it is only that', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const ada = await accountHolder(hub);
     const space = await ada.node.spaces.create({ name: 'Notes', visibility: 'private' });
@@ -421,13 +421,21 @@ describe('a host’s MCP endpoint', () => {
       8000,
       'the chat app to read the space',
     );
-    // Its node's copy goes when it stops, and no always-on node is named to have it before then.
+    // Its node's copy goes when it stops, and no always-on node is named to keep it: her laptop, online, does.
     const put = await client.callTool({
       name: 'records_put',
       arguments: { space: space.id, collection: 'app.note', body: { text: 'Bread too' } },
     });
-    assert.equal(put.isError, true);
-    assert.match(textOf(put), /names no always-on node/);
+    assert.equal(put.isError, false, textOf(put));
+    assert.match(textOf(put), /Kept by a device of this space that is online now/);
+    await until(
+      async () =>
+        (await ada.node.records.list(space.id, { collection: 'app.note' })).some(
+          (record) => isRecord(record.body) && record.body.text === 'Bread too',
+        ),
+      5000,
+      'her laptop to have it',
+    );
   });
 
   test('a second app connected from the same browser is a sign-in of its own, and the first keeps working', async () => {

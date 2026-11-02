@@ -295,30 +295,34 @@ describe('holding part of a space', () => {
     );
   });
 
-  test('kept waits for the keepers to have what the app wrote since, and is false at once where none are named', async () => {
+  test('kept waits for the keepers to have what the app wrote since; where none are named, for a peer online', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const { alice, carol, space } = await spaceWithKeepers(hub);
     const dave = await app(hub, alice, space);
     // Carol's keeper is away: one keeper is not enough, so an earlier write stays pending.
     await letGo(carol.node, space);
     await dave.node.records.put(space, 'app.chat', { text: 'earlier' });
-    assert.equal(await dave.node.spaces.kept(space, 300), false, 'not kept yet');
+    assert.equal(await dave.node.spaces.kept(space, 300), null, 'not kept yet');
     // A node holding the whole space waits on its keepers the same way.
     await alice.node.records.put(space, 'app.chat', { text: 'from the whole node' });
-    assert.equal(await alice.node.spaces.kept(space, 300), false, 'nor the whole node’s');
+    assert.equal(await alice.node.spaces.kept(space, 300), null, 'nor the whole node’s');
     // What was written since is all a caller waits for; the earlier write still waits.
     const since = Date.now();
-    assert.equal(await dave.node.spaces.kept(space, 300, since), true, 'nothing since');
+    assert.equal(await dave.node.spaces.kept(space, 300, since), 'keepers', 'nothing since');
     await hold(carol.node, space);
-    assert.equal(await dave.node.spaces.kept(space, 5000), true, 'once both keepers have it');
-    assert.equal(await alice.node.spaces.kept(space, 5000), true, 'the whole node’s too');
+    assert.equal(await dave.node.spaces.kept(space, 5000), 'keepers', 'once both keepers have it');
+    assert.equal(await alice.node.spaces.kept(space, 5000), 'keepers', 'the whole node’s too');
 
+    // A space that names no keepers: every member's node is a copy, so one online that has it will do.
     const { alice: anne, space: unkept } = await spaceWithKeepers(hub, { keepers: false });
     const erin = await app(hub, anne, unkept);
     await erin.node.records.put(unkept, 'app.chat', { text: 'hi' });
-    const started = Date.now();
-    assert.equal(await erin.node.spaces.kept(unkept, 5000), false, 'nobody to keep it');
-    assert.ok(Date.now() - started < 1000, 'said at once');
+    assert.equal(await erin.node.spaces.kept(unkept, 5000), 'peer', 'a member online has it');
+    // Alone, nobody does.
+    const solo = await person(hub);
+    const { id: mine } = await solo.node.spaces.create({ name: 'Mine', ...team, visibility: 'public' });
+    await solo.node.records.put(mine, 'app.chat', { text: 'alone' });
+    assert.equal(await solo.node.spaces.kept(mine, 500), null, 'nobody to keep it');
   });
 
   test('a collection nobody used for a while is dropped when the app opens again; declared ones stay', async () => {

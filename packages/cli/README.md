@@ -323,7 +323,9 @@ again): a node behind would miss records, and could start a line of payments
 that already has one. A call that writes is done once the space's keepers
 (06 `sys.keepers`; your hosts, named by your home) have what it wrote;
 otherwise the app is told, and should read it back before writing it again.
-A space that names no keepers is read, not written. After 10 minutes without
+In a space that names no keepers, where every member's device is a copy, a
+write is done once a device of the space online now has it, your open tab or
+a member's, and the app is told it is only that. After 10 minutes without
 a call the node stops, and what it held goes; one waiting for the keepers to
 have its writes waits up to an hour first. The next node carries on after
 what the keepers hold of the key's writes. At most 32 nodes run at once. So

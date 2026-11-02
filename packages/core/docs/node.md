@@ -378,12 +378,14 @@ collection. Only a peer named in `sys.keepers` counts
 ([spec 05 §9](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md)).
 
 `node.spaces.kept(spaceId, waitMs, since?)` waits up to `waitMs` (at most a
-minute) for the keepers to have this node's writes there from `since` (ms)
-on, or all of them: true once none of those is pending, false when that long
-passed first, and false at once when the space names no keepers, since then
-nobody can. A node that may stop before it syncs again waits on it: a tab
-about to close, a command about to exit, a node a server runs for a while
-(the MCP service's).
+minute) for this node's writes in a space to be kept elsewhere. In a space
+that names keepers, it says `'keepers'` once none of its writes from `since`
+(ms) on, or all of them, is pending. In one that names none, every member's
+node is a copy, so it says `'peer'` once a peer connected now holds all this
+node does: less sure, since that peer may be a device that goes away. Null
+when nobody had, in time. A node that may stop before it syncs again waits on
+it: a tab about to close, a command about to exit, a node a server runs for a
+while (the MCP service's).
 
 This state is kept in the space's own store (`spaces/<spaceId>`):
 

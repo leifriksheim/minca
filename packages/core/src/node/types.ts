@@ -499,12 +499,13 @@ export interface NodeSpaces {
   /** Waits up to `waitMs` (at most a minute) for one peer, by its key, to hold all this node does of a space; for a node about to close */
   reached(spaceId: string, peer: string, waitMs: number): Promise<boolean>;
   /**
-   * Waits up to `waitMs` (at most a minute) for the space's keepers to have
-   * every write of this node's there from `since` (ms) on, all of them by
-   * default. False when that long passed first, or at once when the space
-   * names no keepers: nobody can.
+   * Waits up to `waitMs` (at most a minute) for this node's writes in a space
+   * to be kept elsewhere: by the space's keepers, every write from `since`
+   * (ms) on, all by default (`'keepers'`); or, in a space that names none,
+   * where every member's node is a copy, by a peer connected now that holds
+   * all this node does (`'peer'`). Null when nobody had, in time.
    */
-  kept(spaceId: string, waitMs: number, since?: number): Promise<boolean>;
+  kept(spaceId: string, waitMs: number, since?: number): Promise<'keepers' | 'peer' | null>;
   /** How a node serving this space checks connecting peers and signs its welcome; null for a space it does not hold */
   authenticator(spaceId: string): Promise<ServerAuth | null>;
   /** The name each person gave in this space; yours is published from the account's name */
