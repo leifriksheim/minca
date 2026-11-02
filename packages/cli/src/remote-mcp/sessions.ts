@@ -3,8 +3,9 @@
  * records-only note a person's account home signed travel inside the app's
  * access token, sealed under a key only the service holds (`oauth.ts`). Each
  * call opens them, and the node they start runs while the app is using it,
- * its spaces kept in a folder that goes when it stops, once an always-on node
- * holds what it wrote. Where the key has signed in each log outlives the node
+ * its spaces kept in a folder that goes when it stops. A call that writes
+ * succeeds only once an always-on node stored what it wrote, so nothing is
+ * lost with the folder. Where the key has signed in each log outlives the node
  * (`server.ts`): a node that forgot it would sign at a place it signed
  * before, and fork the key.
  */
@@ -83,20 +84,18 @@ const ROOM_WAIT_MS = 30_000;
 
 /** How long a call waits for its node to be level with an always-on node in its space */
 const CATCH_UP_MS = 15_000;
-/** How long a stopping node waits for an always-on node to hold what it wrote */
-const SEND_MS = 5_000;
+/** How long a write waits for an always-on node to say it stored it */
+const STORED_MS = 10_000;
 
 interface Started {
   readonly node: P2PNode;
-  /** The spaces calls have run in: what it wrote, if anything, is in these */
-  readonly used: Set<string>;
   stop(): Promise<void>;
 }
 
 /**
- * Waits up to `waitMs` for the node to be level with one of the always-on
- * nodes in a space: nothing in flight either way, so it holds what they hold
- * and they hold what it wrote. False when none was, in time.
+ * Waits up to `waitMs` for the node to be level with every always-on node
+ * connected in a space, and at least one: nothing in flight either way, so it
+ * holds what they hold. False when it wasn't, in time.
  */
 async function levelIn(node: P2PNode, space: string, waitMs: number): Promise<boolean> {
   const deadline = Date.now() + waitMs;
@@ -107,8 +106,10 @@ async function levelIn(node: P2PNode, space: string, waitMs: number): Promise<bo
       (status) => status.peers,
       () => [],
     );
-    for (const peer of peers)
-      if (await node.spaces.reached(space, peer, Math.min(2000, left)).catch(() => false)) return true;
+    const level = await Promise.all(
+      peers.map((peer) => node.spaces.reached(space, peer, Math.min(2000, left)).catch(() => false)),
+    );
+    if (level.length > 0 && level.every(Boolean)) return true;
     await new Promise((resolve) => setTimeout(resolve, Math.min(250, left)));
   }
 }
@@ -127,12 +128,13 @@ export interface Sessions {
    * Runs `work` on the node for session `id`, started from `granted` if it
    * isn't running. One node per session, ever: two signing with one key
    * would fork its line. Work in a space runs only once the node is level
-   * with an always-on node there.
+   * with the always-on nodes there, and work that writes succeeds only once
+   * one of them stored what it wrote.
    */
   use<T>(
     id: string,
     granted: Granted,
-    space: string | undefined,
+    call: { readonly space?: string | undefined; readonly writes?: boolean },
     work: (node: P2PNode) => Promise<T>,
   ): Promise<T>;
   close(): Promise<void>;
@@ -141,7 +143,7 @@ export interface Sessions {
 export function createSessions(options: {
   /** A folder of stores for a session's node, made when it starts, and where its key (by DID) has signed */
   readonly stores: (id: string, key: string) => StoreFactory;
-  /** Removes that folder, once its node has stopped with everything it wrote held by an always-on node */
+  /** Removes that folder, once its node has stopped */
   readonly drop: (id: string, key: string) => Promise<void>;
   /** How a node reaches the spaces it was given */
   readonly network: () => NodeConfig['network'];
@@ -165,14 +167,7 @@ export function createSessions(options: {
     running.delete(id);
     clearTimeout(one.timer);
     const stopped = (async () => {
-      const started = await one.started.catch(() => null);
-      // What it wrote and no always-on node holds yet stays, for its next start to send:
-      // removed, the place it was signed at would point at nothing, a gap in the key's log.
-      let sent = true;
-      if (started)
-        for (const space of started.used) if (sent) sent = await levelIn(started.node, space, SEND_MS);
-      await started?.stop().catch(() => {});
-      if (!sent) return log('session: stopped with writes no always-on node holds yet: its folder stays');
+      await one.started.then((started) => started.stop()).catch(() => {});
       await options
         .drop(id, one.key)
         .catch((error: unknown) => log(`session: could not remove its spaces: ${messageOf(error)}`));
@@ -228,7 +223,6 @@ export function createSessions(options: {
     });
     return {
       node: agent.node,
-      used: new Set(),
       stop: async () => {
         unsubscribe();
         await agent.stop();
@@ -266,7 +260,7 @@ export function createSessions(options: {
   }
 
   return {
-    async use(id, given, space, work) {
+    async use(id, given, call, work) {
       if (!noteRunning(given.grant)) throw new Error('This connection has run out. Connect again.');
       const one = nodeOf(id, given);
       one.busy += 1;
@@ -275,14 +269,20 @@ export function createSessions(options: {
         // A node starts from nothing: one that answered sooner would say a record isn't
         // there, and write a first version in a line that has one, which ends it (09 §7.5).
         // Checked on every call, since a link that drops leaves it behind again.
-        if (space !== undefined) {
-          if (!(await levelIn(started.node, space, CATCH_UP_MS)))
-            throw new Error(
-              'This space can’t be reached through the always-on nodes right now. Try again in a moment.',
-            );
-          started.used.add(space);
-        }
-        return await work(started.node);
+        const { space } = call;
+        if (space !== undefined && !(await levelIn(started.node, space, CATCH_UP_MS)))
+          throw new Error(
+            'This space can’t be reached through the always-on nodes right now. Try again in a moment.',
+          );
+        const done = await work(started.node);
+        // Its folder goes when it stops: a version no always-on node stored would go with it, and
+        // the place it was signed at, which is kept, would point at nothing. Said, so the app knows.
+        if (space !== undefined && call.writes && !(await started.node.spaces.delivered(space, STORED_MS)))
+          throw new Error(
+            'Written here, but no always-on node has said it stored it yet. It may still arrive: ' +
+              'read it back before writing it again.',
+          );
+        return done;
       } finally {
         one.busy -= 1;
         idleLater(id);

@@ -323,19 +323,20 @@ copy of them on the service's disk while the app uses it, and answers from
 that. A call in a space runs only once the node is level with an always-on
 node there (it waits up to 15 seconds, then says to try again): a node
 behind would miss records, and could start a line of payments that already
-has one. After 10 minutes without a call the node stops, and its copy is
-deleted once an always-on node holds everything it wrote. Writes one
-doesn't hold yet (the link was down) stay until the token's next call sends
-them, as does whatever a crash left, for at most a month. At most 32 nodes
-run at once. So while the app is working, whoever runs the service can read
+has one. A call that writes succeeds only once an always-on node has said
+it stored what was written; otherwise the app is told, and should read it
+back before writing it again. After 10 minutes without a call the node
+stops and its copy is deleted (after a crash, at the next start). At most
+32 nodes run at once. So while the app is working, whoever runs the service can read
 those spaces, as the chat app's maker can read what its model sees.
 
 What stays, for a token that wrote, is where its key has signed: which
 spaces and collections, and how many versions in each. A node started again
 then never signs at the same place twice, which would fork the key. It is
 kept until the token can no longer be used. So run one process on a data
-folder (`MINCA_MCP_DATA`; a second refuses to start), and don't restore it
-from a backup while tokens are in use: a rolled-back folder signs at places
+folder (`MINCA_MCP_DATA`; a second on the same machine refuses to start,
+but two containers sharing a volume can't tell), and don't restore it from
+a backup while tokens are in use: a rolled-back folder signs at places
 already used.
 
 A token lasts as long as its note, with no refresh token. Disconnecting at

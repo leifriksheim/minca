@@ -1011,19 +1011,25 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     there "via agent", as the app's model asks; and whoever holds its sealing
     key and a token can do the same until the note runs out or the person
     disconnects it. The node stops after ten idle minutes, and its copy goes
-    once an always-on node holds everything it wrote; what one doesn't yet
-    (the link was down) stays until the token's next call sends it, as does
-    what a crash left, for at most a month. A call in a space runs only once
-    the node is level with one of those always-on nodes there: a node behind
+    with it (the registry sealed under a key that dies with the node), or at
+    the next start after a crash. A call that writes says it wrote only once
+    an always-on node said it stored the version; one that didn't is told to
+    the app, and the version is lost if the node stops before it is sent: a
+    gap in the key's log, so a later disconnect withdraws what the key wrote
+    after it (03 §6.3), as it would on any device that lost a write. A call
+    in a space runs only once the node is level with every always-on node
+    connected there: a node behind
     would say a record isn't there, and write a first version in a line that
     has one, ending it (09 §7.5). A space they don't carry fails its own
-    calls only. Once level, the node is one more device writing in the
+    calls only, after waiting for one. Once level, the node is one more device writing in the
     account's lines, with the gap two devices have (§3.2). Where a key that
     wrote has signed (which spaces and collections, and how much) is kept
     apart for as long as its token lasts, so a node started again never signs
     at the same place twice and forks the key. A second service on the same
-    folder refuses to start; one restored from a backup, or a copy given the
-    same sealing key, would fork keys
+    folder refuses to start, when both run on one machine; two containers
+    sharing a volume can't tell each other's process apart, and like a folder
+    restored from a backup, or a copy given the same sealing key, would fork
+    keys
     ([#287](https://github.com/leifriksheim/minca/issues/287)). Records count until the key is revoked, not until the
     note runs out (06 §2.9), so a token outlives nothing the person can't end
     at their home; the service refuses a token for good once its node sees

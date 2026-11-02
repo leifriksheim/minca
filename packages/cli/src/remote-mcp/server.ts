@@ -73,7 +73,7 @@ const sessionFolder = (data: string, session: string) => path.join(data, 'sessio
 const placesFolder = (data: string, key: string) =>
   path.join(data, 'places', createHash('sha256').update(key).digest('base64url'));
 
-/** How long what a token's node left is kept: as long as the token can last, and a day */
+/** How long a key's places are kept: as long as its token can last, and a day */
 const KEEP_DAYS = 31;
 
 /** Whether a folder holds a file anywhere under it */
@@ -82,18 +82,18 @@ async function holdsAFile(folder: string): Promise<boolean> {
   return entries.some((entry) => entry.isFile());
 }
 
-/** Removes what tokens that can no longer be used left: their keys' places, and writes never sent */
+/** Removes the places of keys whose tokens can no longer be used */
 async function sweep(data: string): Promise<void> {
   const before = Date.now() - KEEP_DAYS * 86_400_000;
-  for (const root of [path.join(data, 'places'), path.join(data, 'sessions')])
-    for (const entry of await readdir(root).catch(() => [])) {
-      const at = path.join(root, entry);
-      const since = await stat(at).then(
-        (s) => s.mtimeMs,
-        () => Date.now(),
-      );
-      if (since < before) await rm(at, { recursive: true, force: true });
-    }
+  const root = path.join(data, 'places');
+  for (const entry of await readdir(root).catch(() => [])) {
+    const at = path.join(root, entry);
+    const since = await stat(at).then(
+      (s) => s.mtimeMs,
+      () => Date.now(),
+    );
+    if (since < before) await rm(at, { recursive: true, force: true });
+  }
 }
 
 export async function startMcpServer(
@@ -116,8 +116,8 @@ async function serve(
   options: McpServerOptions,
   letGo: () => Promise<void>,
 ): Promise<{ readonly port: number; readonly remote: RemoteMcp; close(): Promise<void> }> {
-  // What an earlier run's nodes left, stopped by a crash, stays for the token's next call:
-  // it may hold writes no always-on node has yet, whose places are already kept.
+  // The spaces an earlier run's nodes held: an always-on node has whatever a call said was written.
+  await rm(path.join(options.data, 'sessions'), { recursive: true, force: true });
   await sweep(options.data);
   const store = await directoryStores(await openFsDirectory(path.join(options.data, 'store')))('mcp');
   const remote = await createRemoteMcp({
@@ -127,8 +127,15 @@ async function serve(
     stores: (session, key) => {
       const folder = sessionFolder(options.data, session);
       const places = placesFolder(options.data, key);
+      // The registry, which holds the spaces' keys, sealed under a key that lives only as long as the node.
+      const localKey = globalThis.crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, [
+        'encrypt',
+        'decrypt',
+      ]);
       return async (where, storeOptions) =>
-        directoryStores(await openFsDirectory(where === 'writers' ? places : folder))(where, storeOptions);
+        where === 'writers'
+          ? directoryStores(await openFsDirectory(places))(where, storeOptions)
+          : directoryStores(await openFsDirectory(folder), { localKey: await localKey })(where, storeOptions);
     },
     // Retried: a store may still be finishing its last write as the node stops.
     // Places it never signed at go too: a token that only read leaves nothing.

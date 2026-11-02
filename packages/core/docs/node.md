@@ -915,7 +915,15 @@ true once that peer holds all this node does of the space, false when
 `waitMs` (at most a minute) passed first or the peer never came. For a node about to close,
 like a connect page waiting for the app to have what it wrote.
 
-_Source: `packages/core/src/node/node.ts` (`spaces.carried`, `spaces.reached`), `packages/core/src/node/node-contacts.ts` (`makePair`). Tests: `packages/core/tests/carrier.test.ts` ("a space made just now, carried before its invite goes out…", "carried is false at once with no carrier…"), `packages/core/tests/usernames.test.ts` ("spaces.reached is true once a peer holds the space…")._
+`node.spaces.delivered(spaceId, waitMs)` waits for what this node signed in a
+space since it started: true once a peer has said it stored each version,
+false when `waitMs` (at most a minute) passed first. Level is not enough for
+this, since a peer that refused a version is level all the same. For a node
+whose folder goes when it stops, like the MCP service's
+(`packages/cli/src/remote-mcp/sessions.ts`): a version signed and never
+stored leaves a gap in its key's log.
+
+_Source: `packages/core/src/node/node.ts` (`spaces.carried`, `spaces.reached`, `spaces.delivered`), `packages/core/src/node/space-peers.ts` (`delivered`), `packages/core/src/node/node-contacts.ts` (`makePair`). Tests: `packages/core/tests/carrier.test.ts` ("a space made just now, carried before its invite goes out…", "carried is false at once with no carrier…"), `packages/core/tests/usernames.test.ts` ("spaces.reached is true once a peer holds the space…", "spaces.delivered is true once a peer stored what this node wrote…")._
 
 **The account's own automations.** `node.automations` (needs the account
 key) lists, adds, updates (`name`, `paused`) and removes the account's own

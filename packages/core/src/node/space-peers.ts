@@ -559,10 +559,38 @@ export async function openPeers(deps: PeersDeps) {
   }
   for (const network of networks) listen(network);
 
+  // What this node signed here and no peer has said it stored yet, since it started.
+  const unsent = new Set<string>();
+  const whenSent = new Set<() => void>();
+  sync.on('stored', (_peer: string, ids: ReadonlyArray<string>) => {
+    for (const id of ids) unsent.delete(id);
+    if (unsent.size === 0) for (const done of whenSent) done();
+  });
+
   return {
     sync,
     readAccess,
     connectedPeers,
+    /** A version this node signed, sent to its peers: unsent until one says it stored it */
+    signed: (id: string): void => {
+      unsent.add(id);
+    },
+    /**
+     * Waits up to `waitMs` for a peer to say it stored every version this
+     * node signed here since it started. False when that long passed first.
+     */
+    delivered: (waitMs: number): Promise<boolean> => {
+      if (unsent.size === 0) return Promise.resolve(true);
+      return new Promise((resolve) => {
+        const done = () => {
+          clearTimeout(timer);
+          whenSent.delete(done);
+          resolve(unsent.size === 0);
+        };
+        const timer = setTimeout(done, waitMs);
+        whenSent.add(done);
+      });
+    },
     letGoOfOutsiders,
     announceSoon,
     send,

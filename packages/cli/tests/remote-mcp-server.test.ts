@@ -741,7 +741,7 @@ async function stallable(target: number) {
   };
 }
 
-test('a write no always-on node got before its node stopped is kept and sent later, so a disconnect withdraws nothing', async () => {
+test('a write no always-on node stored is not said to be written', async () => {
   const served = await startHost({
     key: await createP256Provider().generateKeyPair(),
     stores: memoryStores(),
@@ -796,9 +796,7 @@ test('a write no always-on node got before its node stopped is kept and sent lat
     idleMs: 1000,
   });
   closing.push(() => service.close());
-  let agent = '';
   const token = await signInWith(issuer, async (audience) => {
-    agent = audience;
     const expiresAt = Math.floor(Date.now() / 1000) + 3600;
     return {
       v: GRANT_VERSION,
@@ -815,50 +813,31 @@ test('a write no always-on node got before its node stopped is kept and sent lat
   const read = await callTool(issuer, token, 'records_list', { space: space.id, collection: 'app.note' });
   assert.ok(read.includes('Soup on Friday'), read);
 
-  // The link to the host stalls just as the chat app writes, and the node idles out before it mends.
+  // The link to the host stalls just as the chat app writes. Its node's folder goes when it
+  // stops, so a version no always-on node stored would go with it, and the place it was signed
+  // at, which is kept, would point at nothing (found by adversarial review): the app is told.
   link.stall();
   const put = await callTool(issuer, token, 'records_put', {
     space: space.id,
     collection: 'app.note',
     body: { text: 'Bread too' },
   });
-  assert.match(put, /"isError":false/);
-  await new Promise((resolve) => setTimeout(resolve, 9000));
-  // Removed, its version would be gone while its place is kept: the next write would
-  // follow a gap, and a disconnect withdraws whatever follows one (found by adversarial review).
-  assert.equal((await readdir(path.join(data, 'sessions'))).length, 1, 'its folder was kept');
+  assert.match(put, /"isError":true/);
+  assert.match(put, /no always-on node has said it stored it/);
   link.mend();
-
+  // Once the link is back, writing works again.
   await until(
     async () =>
-      (await callTool(issuer, token, 'records_list', { space: space.id, collection: 'app.note' })).includes(
-        'Bread too',
-      ),
-    20_000,
-    'the next node to start from what was kept',
+      (
+        await callTool(issuer, token, 'records_put', {
+          space: space.id,
+          collection: 'app.note',
+          body: { text: 'Cake' },
+        })
+      ).includes('"isError":false'),
+    30_000,
+    'a write to be stored again',
   );
-  const again = await callTool(issuer, token, 'records_put', {
-    space: space.id,
-    collection: 'app.note',
-    body: { text: 'Cake' },
-  });
-  assert.match(again, /"isError":false/);
-
-  const phone = await onHost();
-  await until(
-    async () => (await phone.spaces.list()).some((one) => one.id === space.id),
-    40_000,
-    'the phone to learn of the space',
-  );
-  const texts = async () =>
-    (await phone.records.list(space.id, { collection: 'app.note' }))
-      .map((record) => (isRecord(record.body) ? record.body.text : null))
-      .sort();
-  await until(async () => (await texts()).includes('Cake'), 40_000, 'the phone to get both writes');
-  assert.deepEqual(await texts(), ['Bread too', 'Cake', 'Soup on Friday']);
-  assert.ok(await phone.revokeKey(agent, { waitMs: 5000 }), 'a peer took the revoke in');
-  await new Promise((resolve) => setTimeout(resolve, 1000));
-  assert.deepEqual(await texts(), ['Bread too', 'Cake', 'Soup on Friday'], 'disconnecting withdrew nothing');
 });
 
 test('a space the always-on nodes don’t carry fails its own calls only', async () => {

@@ -33,7 +33,13 @@ import {
   type JSONValue,
 } from '@modelcontextprotocol/server';
 import { toNodeHandler } from '@modelcontextprotocol/node';
-import { callAction, type NodeConfig, type StorageAdapter, type StoreFactory } from '@minca/core';
+import {
+  callAction,
+  NODE_ACTIONS,
+  type NodeConfig,
+  type StorageAdapter,
+  type StoreFactory,
+} from '@minca/core';
 import { createSessions, type Granted } from './sessions.js';
 import { isRecord, messageOf } from '../json.js';
 import { mcpTools, toolInstructions } from '../mcp.js';
@@ -218,7 +224,10 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
         try {
           const args = request.params.arguments ?? {};
           const space = typeof args.space === 'string' ? args.space : undefined;
-          said = await sessions.use(session, granted, space, (node) => callAction(node, name, args));
+          const writes = !NODE_ACTIONS.find((action) => action.name === name)?.readOnly;
+          said = await sessions.use(session, granted, { space, writes }, (node) =>
+            callAction(node, name, args),
+          );
         } catch (error) {
           return { content: [{ type: 'text', text: messageOf(error) }], isError: true };
         }
