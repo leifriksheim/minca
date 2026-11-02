@@ -313,8 +313,8 @@ const shown = (value: unknown) => JSON.stringify(value, null, 2).replaceAll('\n'
  */
 const LAUNCHER_GUIDE = `To make an app for this space that people open from its launcher:
 
-1. Propose the collections it needs with collections_propose (one std.blueprint). Use standard ones by name where they fit
-   (std.event, std.task, std.poll, …): their records then open in, and are shared with, the other apps here. Note its key.
+1. Propose the collections it needs with collections_propose (one std.blueprint). Use standard ones (std.event, std.task,
+   std.poll, …) where they fit, so the other apps here share their records. Note its key.
 2. Write one launcher.app record with records_put, like this one:
    ${shown(EXAMPLE_APP)}
    with links [{ "rel": "blueprint", "to": "<the blueprint's key>" }].
@@ -323,16 +323,15 @@ const LAUNCHER_GUIDE = `To make an app for this space that people open from its 
    screen hears through minca.onShow. "notify" is optional: what is worth hearing about, each a name and
    the query whose new records it tells of, in one of its collections. A "where" naming "$me" keeps it to records that
    name the person it would tell, as the second one does.
-3. If plain lists and forms can't show it (a game board, a calendar, a whiteboard), add "screen": its own HTML UI, one
+3. If plain lists and forms can't show it (a game board, a whiteboard), add "screen": its own HTML UI, one
    document, and, only if it must reach the network, "network": the exact origins. The screen is described below.
 4. If it needs something only the space can give, like an API key, add "settings": what to fill in, like
-   [{ "key": "giphy", "title": "GIPHY API key", "description": "Free at developers.giphy.com" }]. Leave out the values:
-   whoever adds the app fills them in once for everyone, and its screen reads them as minca.settings.
-5. Add an "icon" showing what it is for: { "path": "<SVG path data, 100 × 100 grid>", "colour": "coral" } (or
-   cobalt, peach, sage, lilac, ink). Flat and rounded, details cut out as holes. Keep it when changing the app.
+   [{ "key": "giphy", "title": "GIPHY API key", "description": "Free at developers.giphy.com" }]. Leave out values:
+   whoever adds the app fills them in, and its screen reads them as minca.settings.
+5. Add an "icon": { "path": "<SVG path data, 100 × 100>", "colour": "coral" } (or cobalt, peach, sage, lilac, ink),
+   one flat, rounded shape for what it is, details cut out. Keep it when changing the app.
 
-Your screen is not the only way in: anyone in the space can write any record directly, through an agent or another
-app. Ask what a member could do that way. Where the app means nothing unless records keep a rule their shape and
+Your screen is not the only way in: anyone here can write records directly, through an agent or another app. Where the app means nothing unless records keep a rule their shape and
 rules can't say (whose turn it is, a legal move, a vote counted once), give the collection a "contract", as
 collections_propose describes, and try it there with "examples": fair moves that must count and cheats that must not.
 A screen only shows what the contract allows; it is not what stops a cheat.
