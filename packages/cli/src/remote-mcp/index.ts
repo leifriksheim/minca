@@ -81,6 +81,9 @@ function objectOf(value: unknown): JSONObject {
   return copied !== null && typeof copied === 'object' && !Array.isArray(copied) ? copied : {};
 }
 
+/** How long a call that writes waits for an always-on node to say it stored what it wrote */
+const STORED_MS = 10_000;
+
 export interface RemoteMcpOptions {
   /** The service's address as people reach it, https://: the issuer, and where the endpoint is */
   readonly publicUrl: string;
@@ -225,9 +228,20 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
           const args = request.params.arguments ?? {};
           const space = typeof args.space === 'string' ? args.space : undefined;
           const writes = !NODE_ACTIONS.find((action) => action.name === name)?.readOnly;
-          said = await sessions.use(session, granted, { space, writes }, (node) =>
-            callAction(node, name, args),
-          );
+          said = await sessions.use(session, granted, space, async (node) => {
+            const before = writes && space !== undefined ? new Set(await node.spaces.unsent(space)) : null;
+            const done = await callAction(node, name, args);
+            if (done.isError || !before || space === undefined) return done;
+            // The node's folder goes when it stops: a version this call signed that no always-on node
+            // stored would go with it, and the place it was signed at, which is kept, would point at nothing.
+            const signed = (await node.spaces.unsent(space)).filter((id) => !before.has(id));
+            if (await node.spaces.delivered(space, STORED_MS, signed)) return done;
+            throw new Error(
+              'Saved on this connection, but no always-on node has confirmed it yet: it is sent when one ' +
+                'is reachable, unless this connection is idle for 10 minutes first. Don’t write it again; ' +
+                'check later that it is there.',
+            );
+          });
         } catch (error) {
           return { content: [{ type: 'text', text: messageOf(error) }], isError: true };
         }

@@ -757,7 +757,7 @@ describe('a session’s node', () => {
     const key = await browserKey();
     const granted = await checkGranted(key.jwk, await ada.grantFor(key.did));
     const nodes = await Promise.all(
-      Array.from({ length: 8 }, () => sessions.use('one', granted, {}, async (node) => node)),
+      Array.from({ length: 8 }, () => sessions.use('one', granted, undefined, async (node) => node)),
     );
     assert.equal(starts.length, 1, 'one node started');
     assert.ok(
@@ -777,7 +777,7 @@ describe('a session’s node', () => {
       Array.from({ length: 6 }, async (_, i) => {
         const key = await browserKey();
         const granted = await checkGranted(key.jwk, await ada.grantFor(key.did));
-        await sessions.use(`s${i}`, granted, {}, async () => {
+        await sessions.use(`s${i}`, granted, undefined, async () => {
           now += 1;
           most = Math.max(most, now);
           await new Promise((resolve) => setTimeout(resolve, 300));

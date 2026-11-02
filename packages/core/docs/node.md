@@ -204,7 +204,15 @@ before the version leaves the node. Where the places are kept depends on the key
   or in separate processes without a shared lock, fork its lines, and every
   peer then withdraws what it signed in a forked collection from the fork on.
 
-_Source: `packages/core/src/node/writers.ts` (`createWriters`, `exclusively`). Tests: `packages/core/tests/writer-logs.test.ts` ("a writer’s log", "two nodes sharing a handed-in key…")._
+A key's last place in a collection names the version it signed there. A node
+whose store doesn't hold that version, because the store was emptied or
+rolled back while the places were kept (a restored folder, or the MCP
+service's nodes, whose folder goes when they stop), signs nothing more in that
+collection until sync brings it back: it would build on an older version than
+its own, and in a line write a twin of its own payment (09 §7.5). One another
+tab signed and is storing now is waited for, up to 3 seconds.
+
+_Source: `packages/core/src/node/writers.ts` (`createWriters`, `exclusively`, `arrives`). Tests: `packages/core/tests/writer-logs.test.ts` ("a writer’s log", "two nodes sharing a handed-in key…", "a node whose own last version is gone from its store…"), `packages/cli/tests/remote-mcp-server.test.ts` ("a node behind on its own last payment…")._
 
 ### Writer keys
 
@@ -915,9 +923,13 @@ true once that peer holds all this node does of the space, false when
 `waitMs` (at most a minute) passed first or the peer never came. For a node about to close,
 like a connect page waiting for the app to have what it wrote.
 
-`node.spaces.delivered(spaceId, waitMs)` waits for what this node signed in a
-space since it started: true once a peer has said it stored each version,
-false when `waitMs` (at most a minute) passed first. Level is not enough for
+`node.spaces.unsent(spaceId)` lists the versions this node signed in a space
+since it started that no peer has said it stored yet, and
+`node.spaces.delivered(spaceId, waitMs, only?)` waits for them, or for those
+in `only`: true once a peer has said it stored each, false when `waitMs` (at
+most a minute) passed first. A peer met again is sent them once more, since
+its word may have been lost with the link. A version a peer refused is never
+stored, so it stays in the list. Level is not enough for
 this, since a peer that refused a version is level all the same. For a node
 whose folder goes when it stops, like the MCP service's
 (`packages/cli/src/remote-mcp/sessions.ts`): a version signed and never

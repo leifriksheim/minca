@@ -29,12 +29,14 @@ export interface Writers {
   /**
    * Signs the next version of `did`'s log in a space's collection. `sign` gets
    * the place and returns the version, or throws to give it back. The place is
-   * remembered before this returns.
+   * remembered before this returns. `holds` says whether the store holds a
+   * version: the one at the last place must be there, or nothing is signed.
    */
   append(
     did: string,
     spaceId: string,
     collection: string,
+    holds: (id: string) => Promise<boolean>,
     sign: (log: WriterLog) => Promise<Version>,
   ): Promise<Version>;
 }
@@ -83,6 +85,22 @@ function exclusively<T>(name: string, work: () => Promise<T>): Promise<T> {
   return run;
 }
 
+/** How long a write waits for the version at its key's last place, signed by another tab and on its way to the store */
+const IN_FLIGHT_MS = 3_000;
+
+/**
+ * Whether the store holds the version at a key's last place, waiting a little
+ * for one another tab signed and is storing now.
+ */
+async function arrives(id: string, holds: (id: string) => Promise<boolean>): Promise<boolean> {
+  const until = Date.now() + IN_FLIGHT_MS;
+  while (!(await holds(id))) {
+    if (Date.now() > until) return false;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return true;
+}
+
 /** The next place after a head, or the first */
 const after = (head: Head | undefined): WriterLog => (head ? { n: head.n + 1, prev: head.id } : { n: 0 });
 
@@ -110,11 +128,30 @@ export function createWriters(storeOf: (did: string) => HeadStore | null): Write
   }
 
   return Object.freeze({
-    append(did: string, spaceId: string, collection: string, sign: (log: WriterLog) => Promise<Version>) {
+    append(
+      did: string,
+      spaceId: string,
+      collection: string,
+      holds: (id: string) => Promise<boolean>,
+      sign: (log: WriterLog) => Promise<Version>,
+    ) {
       const key = headKey(did, spaceId);
       const take = async () => {
         const places = await placesOf(did, spaceId);
-        const log = after(places?.collections[collection]);
+        const head = places?.collections[collection];
+        // Its own last version here, missing: the store was emptied or rolled back while the places
+        // were kept, as a node whose folder goes when it stops does. Signing on would build on an
+        // older version than its own, a twin in a line (09 §7.5): nothing until sync brings it back.
+        // One this node signed itself is stored as soon as this returns.
+        if (
+          head &&
+          head.id !== kept.get(key)?.collections[collection]?.id &&
+          !(await arrives(head.id, holds))
+        )
+          throw new Error(
+            `Its own last write in ${collection} isn't here yet; it writes there again once that has synced`,
+          );
+        const log = after(head);
         const version = await sign(log);
         const next: Places = {
           collections: { ...places?.collections, [collection]: { n: log.n, id: version.id } },

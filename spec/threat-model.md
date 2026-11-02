@@ -1013,12 +1013,15 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     disconnects it. The node stops after ten idle minutes, and its copy goes
     with it (the registry sealed under a key that dies with the node), or at
     the next start after a crash. A call that writes says it wrote only once
-    an always-on node said it stored the version; one that didn't is told to
-    the app, and the version is lost if the node stops before it is sent: a
-    gap in the key's log, so a later disconnect withdraws what the key wrote
-    after it (03 §6.3), as it would on any device that lost a write. A call
-    in a space runs only once the node is level with every always-on node
-    connected there: a node behind
+    an always-on node said it stored what it signed; one that didn't is told
+    to the app, and the version is lost if the node stops before it is sent,
+    as it may when idle, evicted, or the service stops: a gap in the key's
+    log, so a later disconnect withdraws what the key wrote after it (03
+    §6.3), as on any device that lost a write. A node whose store lacks the
+    version at its key's last place signs nothing more in that collection, so
+    one that only an unreachable always-on node holds isn't followed by a
+    twin. A call in a space runs only once the node is level with every
+    always-on node connected there: a node behind
     would say a record isn't there, and write a first version in a line that
     has one, ending it (09 §7.5). A space they don't carry fails its own
     calls only, after waiting for one. Once level, the node is one more device writing in the
@@ -1026,10 +1029,9 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     wrote has signed (which spaces and collections, and how much) is kept
     apart for as long as its token lasts, so a node started again never signs
     at the same place twice and forks the key. A second service on the same
-    folder refuses to start, when both run on one machine; two containers
-    sharing a volume can't tell each other's process apart, and like a folder
-    restored from a backup, or a copy given the same sealing key, would fork
-    keys
+    folder refuses to start: on one machine by its process id, on another
+    sharing the folder while the first keeps its lock fresh. A folder restored
+    from a backup, or a copy given the same sealing key, would fork keys
     ([#287](https://github.com/leifriksheim/minca/issues/287)). Records count until the key is revoked, not until the
     note runs out (06 §2.9), so a token outlives nothing the person can't end
     at their home; the service refuses a token for good once its node sees

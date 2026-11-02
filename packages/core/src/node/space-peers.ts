@@ -217,6 +217,32 @@ export async function openPeers(deps: PeersDeps) {
     },
   });
 
+  // What this node signed here and no peer has said it stored yet, since it started.
+  const unsent = new Set<string>();
+  const whenSent = new Set<() => void>();
+  sync.on('stored', (_peer: string, ids: ReadonlyArray<string>) => {
+    for (const id of ids) unsent.delete(id);
+    for (const check of [...whenSent]) check();
+  });
+  // A peer met again may have stored one and its word been lost with the link: level then, nobody
+  // would say so. Sent again once a collection is found level with it, as a push, the peer says it
+  // stored them (05 §4), or takes them in now.
+  const sendAgain = new Map<string, Set<string>>();
+  sync.on('level', (peer: string, collection: string) => {
+    const done = sendAgain.get(peer);
+    if (!done || done.has(collection) || unsent.size === 0) return;
+    done.add(collection);
+    void (async () => {
+      for (const id of unsent) {
+        const version = await storage.getVersion(id);
+        if (version?.collection === collection)
+          routes
+            .get(peer)
+            ?.send(peer, { type: 'sync', from: session.did, payload: { type: 'push-update', version } });
+      }
+    })().catch(() => {});
+  });
+
   /**
    * Tells every connected peer this node's root, soon after it took in
    * something new — from a peer or from a folder. Without it, a record passed
@@ -534,6 +560,8 @@ export async function openPeers(deps: PeersDeps) {
       introduce(network, info.did);
       routes.set(info.did, network);
       sync.addPeer(info.did);
+      if (unsent.size > 0) sendAgain.set(info.did, new Set());
+      else sendAgain.delete(info.did);
       // Reconcile at once rather than waiting for the heartbeat.
       sync.notifyPeers([info.did]);
       // It may hold a file nobody else had.
@@ -559,14 +587,6 @@ export async function openPeers(deps: PeersDeps) {
   }
   for (const network of networks) listen(network);
 
-  // What this node signed here and no peer has said it stored yet, since it started.
-  const unsent = new Set<string>();
-  const whenSent = new Set<() => void>();
-  sync.on('stored', (_peer: string, ids: ReadonlyArray<string>) => {
-    for (const id of ids) unsent.delete(id);
-    if (unsent.size === 0) for (const done of whenSent) done();
-  });
-
   return {
     sync,
     readAccess,
@@ -575,20 +595,27 @@ export async function openPeers(deps: PeersDeps) {
     signed: (id: string): void => {
       unsent.add(id);
     },
+    /** The versions this node signed here since it started that no peer has said it stored */
+    unsent: (): ReadonlyArray<string> => [...unsent],
     /**
-     * Waits up to `waitMs` for a peer to say it stored every version this
-     * node signed here since it started. False when that long passed first.
+     * Waits up to `waitMs` for a peer to say it stored each of these versions,
+     * or every one this node signed here. False when that long passed first.
      */
-    delivered: (waitMs: number): Promise<boolean> => {
-      if (unsent.size === 0) return Promise.resolve(true);
+    delivered: (waitMs: number, only?: ReadonlyArray<string>): Promise<boolean> => {
+      const left = () => (only ?? [...unsent]).some((id) => unsent.has(id));
+      if (!left()) return Promise.resolve(true);
       return new Promise((resolve) => {
-        const done = () => {
-          clearTimeout(timer);
-          whenSent.delete(done);
-          resolve(unsent.size === 0);
+        const check = () => {
+          if (left()) return;
+          finish();
         };
-        const timer = setTimeout(done, waitMs);
-        whenSent.add(done);
+        const finish = () => {
+          clearTimeout(timer);
+          whenSent.delete(check);
+          resolve(!left());
+        };
+        const timer = setTimeout(finish, waitMs);
+        whenSent.add(check);
       });
     },
     letGoOfOutsiders,

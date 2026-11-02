@@ -552,6 +552,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     },
 
     syncedWith: peers.syncedWith,
+    unsent: peers.unsent,
     delivered: peers.delivered,
 
     async versionsOf(keys: ReadonlyArray<string>) {

@@ -103,6 +103,7 @@ export async function startMcpServer(
   // One process to a folder: two would each start a node for one token, sign at
   // the same places, and fork its key; and each would remove the other's spaces.
   const letGo = await holdLock(path.join(options.data, 'lock'));
+  // One another machine held and stopped keeping fresh is taken over 30 seconds on: started again by then, this one starts.
   if (!letGo) throw new Error(`Another mcp-server is using ${options.data}`);
   try {
     return await serve(options, letGo);

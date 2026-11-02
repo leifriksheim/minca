@@ -132,7 +132,13 @@ is handed one and writes as that account. Each connection is named for its
 slot: "Agent on <host>", then ", session <n>" from slot 2. A slot's lock is
 numbered files, `lock.<n>`, each linked into place whole: the highest is the
 lock, taken over once its process is gone by linking the next number, and
-let go of by writing `released` into it, so no number is used twice. Only one
+let go of by writing `released` into it, so no number is used twice. Each
+names its process and machine (`<pid> <hostname>`). On this machine the
+process id says whether it is held, but one naming this process's own id only
+if this process took it, since a container started again often gets its last
+run's id. A lock from another machine sharing the folder is held while its
+holder touches it, every 10 seconds, and taken over 30 seconds after it
+stopped. A minca from before reads the new form as held. Only one
 session of an account runs its automations, under
 `<home>/agent/automations-<account key>.lock`. A new key each time, since a key the
 account home revoked stays revoked in every space, so a new note made out to

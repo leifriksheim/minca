@@ -246,7 +246,8 @@ export function createWriting(deps: WritingDeps) {
       (!deleted && hasContract(definition?.contract));
 
     // The next place in this key's line for the collection: given back if the version is refused below.
-    const signed = await deps.writers.append(writer.did, space.id, collection, async (log) => {
+    const held = async (id: string) => (await storage.getVersion(id)) !== null;
+    const signed = await deps.writers.append(writer.did, space.id, collection, held, async (log) => {
       const { history, events: held } = await access();
       const seen = await seenFor(history, collection);
       // Checks in force as of the very point it names: a definition arriving meanwhile can't leave it unkept.

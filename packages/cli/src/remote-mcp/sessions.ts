@@ -84,9 +84,6 @@ const ROOM_WAIT_MS = 30_000;
 
 /** How long a call waits for its node to be level with an always-on node in its space */
 const CATCH_UP_MS = 15_000;
-/** How long a write waits for an always-on node to say it stored it */
-const STORED_MS = 10_000;
-
 interface Started {
   readonly node: P2PNode;
   stop(): Promise<void>;
@@ -128,13 +125,12 @@ export interface Sessions {
    * Runs `work` on the node for session `id`, started from `granted` if it
    * isn't running. One node per session, ever: two signing with one key
    * would fork its line. Work in a space runs only once the node is level
-   * with the always-on nodes there, and work that writes succeeds only once
-   * one of them stored what it wrote.
+   * with the always-on nodes there.
    */
   use<T>(
     id: string,
     granted: Granted,
-    call: { readonly space?: string | undefined; readonly writes?: boolean },
+    space: string | undefined,
     work: (node: P2PNode) => Promise<T>,
   ): Promise<T>;
   close(): Promise<void>;
@@ -260,7 +256,7 @@ export function createSessions(options: {
   }
 
   return {
-    async use(id, given, call, work) {
+    async use(id, given, space, work) {
       if (!noteRunning(given.grant)) throw new Error('This connection has run out. Connect again.');
       const one = nodeOf(id, given);
       one.busy += 1;
@@ -269,20 +265,11 @@ export function createSessions(options: {
         // A node starts from nothing: one that answered sooner would say a record isn't
         // there, and write a first version in a line that has one, which ends it (09 §7.5).
         // Checked on every call, since a link that drops leaves it behind again.
-        const { space } = call;
         if (space !== undefined && !(await levelIn(started.node, space, CATCH_UP_MS)))
           throw new Error(
             'This space can’t be reached through the always-on nodes right now. Try again in a moment.',
           );
-        const done = await work(started.node);
-        // Its folder goes when it stops: a version no always-on node stored would go with it, and
-        // the place it was signed at, which is kept, would point at nothing. Said, so the app knows.
-        if (space !== undefined && call.writes && !(await started.node.spaces.delivered(space, STORED_MS)))
-          throw new Error(
-            'Written here, but no always-on node has said it stored it yet. It may still arrive: ' +
-              'read it back before writing it again.',
-          );
-        return done;
+        return await work(started.node);
       } finally {
         one.busy -= 1;
         idleLater(id);

@@ -498,8 +498,10 @@ export interface NodeSpaces {
   carried(spaceId: string, options?: { readonly waitMs?: number }): Promise<boolean>;
   /** Waits up to `waitMs` (at most a minute) for one peer, by its key, to hold all this node does of a space; for a node about to close */
   reached(spaceId: string, peer: string, waitMs: number): Promise<boolean>;
-  /** Waits up to `waitMs` (at most a minute) for a peer to say it stored every version this node signed in a space since it started */
-  delivered(spaceId: string, waitMs: number): Promise<boolean>;
+  /** The versions this node signed in a space since it started that no peer has said it stored yet */
+  unsent(spaceId: string): Promise<ReadonlyArray<string>>;
+  /** Waits up to `waitMs` (at most a minute) for a peer to say it stored each of `only`, or every version this node signed in a space since it started */
+  delivered(spaceId: string, waitMs: number, only?: ReadonlyArray<string>): Promise<boolean>;
   /** How a node serving this space checks connecting peers and signs its welcome; null for a space it does not hold */
   authenticator(spaceId: string): Promise<ServerAuth | null>;
   /** The name each person gave in this space; yours is published from the account's name */

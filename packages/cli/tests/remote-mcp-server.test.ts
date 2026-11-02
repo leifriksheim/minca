@@ -32,8 +32,9 @@ import { isRecord } from '../src/json.js';
 import { onHub, tempDir } from './helpers/nodes.js';
 import { openHome, createAccount, unlock, chooseAccount } from '../src/home.js';
 import { startDaemon } from '../src/daemon.js';
-import { readdir, stat, writeFile } from 'node:fs/promises';
+import { readdir, stat, utimes, writeFile } from 'node:fs/promises';
 import net from 'node:net';
+import os from 'node:os';
 import path from 'node:path';
 
 /** A JSON object's string field, or a failed test */
@@ -692,6 +693,26 @@ test('a fresh node answers only once it holds what the free host does: a payment
   assert.notEqual(verdict?.passes, false, JSON.stringify(verdict));
 });
 
+test('a service on a folder another machine’s service holds doesn’t start, though it can’t see that process', async () => {
+  const data = await tempDir('mcp-server-');
+  // A lock another container holds: its own machine name, and a process id that says nothing here.
+  await writeFile(path.join(data, 'lock.0'), `${process.pid} another-container`);
+  // That service keeps it fresh, as a running one does.
+  const touching = setInterval(() => {
+    const now = new Date();
+    void utimes(path.join(data, 'lock.0'), now, now);
+  }, 5000);
+  closing.push(async () => clearInterval(touching));
+  const settings = {
+    publicUrl: 'http://127.0.0.1:1',
+    nodes: ['ws://127.0.0.1:9/peer'],
+    data,
+    port: 0,
+    version: '0',
+  };
+  await assert.rejects(startMcpServer(settings), /Another mcp-server/);
+});
+
 test('a second service on the same folder doesn’t start: it would sign where the first one does', async () => {
   const data = await tempDir('mcp-server-');
   const settings = {
@@ -706,20 +727,23 @@ test('a second service on the same folder doesn’t start: it would sign where t
   await assert.rejects(startMcpServer(settings), /Another mcp-server/);
 });
 
-/** A TCP proxy to a host: the network between the service and it, which can stall */
-async function stallable(target: number) {
-  let stalled = false;
+/** A TCP proxy to a host: the network between the service and it, whose answers can be lost, or which can refuse */
+async function between(target: number) {
+  let backCut = false;
+  let refusing = false;
   const open = new Set<net.Socket>();
   const server = net.createServer((client) => {
-    if (stalled) return void client.destroy();
+    if (refusing) return void client.destroy();
     const upstream = net.connect(target, '127.0.0.1');
     for (const socket of [client, upstream]) {
       open.add(socket);
       socket.on('close', () => open.delete(socket));
       socket.on('error', () => {});
     }
-    client.pipe(upstream);
-    upstream.pipe(client);
+    client.on('data', (data) => upstream.write(data));
+    upstream.on('data', (data) => {
+      if (!backCut) client.write(data);
+    });
     client.on('close', () => upstream.destroy());
     upstream.on('close', () => client.destroy());
   });
@@ -729,13 +753,18 @@ async function stallable(target: number) {
   assert.ok(address && typeof address === 'object');
   return {
     port: address.port,
-    /** Nothing gets through, and no connection is closed: what is sent is in flight */
-    stall() {
-      stalled = true;
-      for (const socket of open) socket.pause();
+    /** What the host says is lost on the way back; what the service sends still arrives */
+    cutBack() {
+      backCut = true;
+    },
+    /** Nobody gets through */
+    refuse() {
+      refusing = true;
+      for (const socket of open) socket.destroy();
     },
     mend() {
-      stalled = false;
+      backCut = false;
+      refusing = false;
       for (const socket of open) socket.destroy();
     },
   };
@@ -782,7 +811,7 @@ test('a write no always-on node stored is not said to be written', async () => {
   await new Promise((resolve) => setTimeout(resolve, 500));
   await laptop.close();
 
-  const link = await stallable(served.port);
+  const link = await between(served.port);
   const port = await freePort();
   const issuer = `http://127.0.0.1:${port}`;
   const data = await tempDir('mcp-server-');
@@ -813,31 +842,174 @@ test('a write no always-on node stored is not said to be written', async () => {
   const read = await callTool(issuer, token, 'records_list', { space: space.id, collection: 'app.note' });
   assert.ok(read.includes('Soup on Friday'), read);
 
-  // The link to the host stalls just as the chat app writes. Its node's folder goes when it
-  // stops, so a version no always-on node stored would go with it, and the place it was signed
-  // at, which is kept, would point at nothing (found by adversarial review): the app is told.
-  link.stall();
+  // The host's answers are lost just as the chat app writes: it stores the version, but its
+  // word never comes back. The node's folder goes when it stops, so a version no always-on node
+  // stored would go with it, and the place it was signed at, which is kept, would point at
+  // nothing (found by adversarial review): the app is told it isn't confirmed.
+  link.cutBack();
   const put = await callTool(issuer, token, 'records_put', {
     space: space.id,
     collection: 'app.note',
     body: { text: 'Bread too' },
   });
   assert.match(put, /"isError":true/);
-  assert.match(put, /no always-on node has said it stored it/);
+  assert.match(put, /no always-on node has confirmed it yet/);
+  // Once the link is back, the host's word on it comes back too, and every write after is
+  // confirmed, not reported lost for the life of the node (found by adversarial review).
   link.mend();
-  // Once the link is back, writing works again.
+  let n = 0;
   await until(
     async () =>
       (
         await callTool(issuer, token, 'records_put', {
           space: space.id,
           collection: 'app.note',
-          body: { text: 'Cake' },
+          body: { text: `Cake ${n++}` },
         })
       ).includes('"isError":false'),
     30_000,
-    'a write to be stored again',
+    'a write to be confirmed again',
   );
+  for (let more = 0; more < 3; more++)
+    assert.match(
+      await callTool(issuer, token, 'records_put', {
+        space: space.id,
+        collection: 'app.note',
+        body: { text: `Pie ${more}` },
+      }),
+      /"isError":false/,
+    );
+});
+
+test('a node behind on its own last payment, with another always-on node answering, doesn’t pay again from an older balance', async () => {
+  const hosts = await Promise.all(
+    [0, 1].map(async () => {
+      const served = await startHost({
+        key: await createP256Provider().generateKeyPair(),
+        stores: memoryStores(),
+        port: 0,
+        free: true,
+      });
+      closing.push(() => served.close());
+      return served;
+    }),
+  );
+  const [h1, h2] = hosts;
+  assert.ok(h1 && h2);
+  const manager = createIdentityManager();
+  const seed = generateSeed();
+  const me = await manager.fromSeed(seed);
+  const signer = createLocalRootSigner(me, manager.getProvider());
+  const accountKey = await deriveAccountKey(seed);
+  const peers = hosts.map((served) => `ws://127.0.0.1:${served.port}/peer`);
+  const onHosts = async () => {
+    const node = await createNode({
+      signer,
+      stores: memoryStores(),
+      accountKey,
+      watchIntervalMs: 0,
+      network: { nodes: peers },
+    });
+    closing.push(() => node.close());
+    return node;
+  };
+  const laptop = await onHosts();
+  const space = await laptop.spaces.create({ name: 'Credit', visibility: 'private' });
+  await laptop.collections.define(space.id, {
+    name: 'app.pay',
+    schema: { type: 'object' },
+    contract: {
+      check: [
+        {
+          that: 'body.balance == (prev == null ? 0.0 : prev.body.balance) - body.amount',
+          else: 'The balance follows from the one before',
+        },
+      ],
+      line: { once: ['received'] },
+    },
+  });
+  const line = await lineKey(me.did, 'app.pay');
+  const first = await laptop.records.put(space.id, 'app.pay', { amount: 10, balance: -10 }, { key: line });
+  for (const served of hosts) await laptop.hosting.use(`http://127.0.0.1:${served.port}`);
+  for (const served of hosts)
+    await until(
+      async () => (await served.node.spaces()).some((one) => one.name === 'Credit' && one.peers > 0),
+      15_000,
+      'each host to carry the space',
+    );
+  const invite = await laptop.spaces.invite(space.id);
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+  await laptop.close();
+
+  const link1 = await between(h1.port);
+  const link2 = await between(h2.port);
+  const port = await freePort();
+  const issuer = `http://127.0.0.1:${port}`;
+  const data = await tempDir('mcp-server-');
+  const service = await startMcpServer({
+    publicUrl: issuer,
+    nodes: [`ws://127.0.0.1:${link1.port}/peer`, `ws://127.0.0.1:${link2.port}/peer`],
+    data,
+    port,
+    version: '0',
+    accountHome: 'https://home.test',
+    idleMs: 1500,
+  });
+  closing.push(() => service.close());
+  const token = await signInWith(issuer, async (audience) => {
+    const expiresAt = Math.floor(Date.now() / 1000) + 3600;
+    return {
+      v: GRANT_VERSION,
+      did: me.did,
+      name: 'Ada',
+      note: await signer.delegate({ audience, expiration: expiresAt, ...noteTerms('/record', [space.id]) }),
+      access: 'write',
+      scope: 'spaces',
+      spaces: [{ id: space.id, name: 'Credit', invite }],
+      expiresAt,
+      home: 'https://home.test/connect',
+    };
+  });
+
+  // One session: the second host can't be reached. She pays 5; the first host stores it.
+  link2.refuse();
+  const paid = await callTool(issuer, token, 'records_update', {
+    space: space.id,
+    key: line,
+    body: { amount: 5, balance: -15 },
+  });
+  assert.match(paid, /"isError":false/, paid);
+  await until(
+    async () => (await readdir(path.join(data, 'sessions')).catch(() => [])).length === 0,
+    10_000,
+    'the idle node to be dropped',
+  );
+  // The next: the first can't be reached, and the second never got that payment. A node that
+  // paid on would pay after her first payment again: a double spend, which ends her line (09 §7.5).
+  // Its places say where it signed last, so it pays nothing until it holds that (found by adversarial review).
+  link1.refuse();
+  link2.mend();
+  const again = await callTool(issuer, token, 'records_update', {
+    space: space.id,
+    key: line,
+    body: { amount: 1, balance: -11 },
+  });
+  assert.match(again, /"isError":true/, again);
+  assert.match(again, /own last write in app\.pay/);
+
+  link1.mend();
+  const phone = await onHosts();
+  await until(
+    async () => (await phone.spaces.list()).some((one) => one.id === space.id),
+    40_000,
+    'the phone to learn of the space',
+  );
+  await until(
+    async () => (await phone.records.get<{ balance: number }>(space.id, line))?.body?.balance === -15,
+    40_000,
+    'the phone to get the payment',
+  );
+  assert.notEqual((await phone.records.contracts(space.id, line, first.version))?.passes, false);
 });
 
 test('a space the always-on nodes don’t carry fails its own calls only', async () => {
@@ -923,8 +1095,8 @@ test('a space the always-on nodes don’t carry fails its own calls only', async
 
 test('a service whose last run crashed starts again, though its process id came back the same', async () => {
   const data = await tempDir('mcp-server-');
-  // What that run left: its lock, naming the id a container gives the process again.
-  await writeFile(path.join(data, 'lock.0'), String(process.pid));
+  // What that run left: its lock, naming the id a container gives the process again, on this machine.
+  await writeFile(path.join(data, 'lock.0'), `${process.pid} ${os.hostname()}`);
   const service = await startMcpServer({
     publicUrl: 'http://127.0.0.1:1',
     nodes: ['ws://127.0.0.1:9/peer'],
