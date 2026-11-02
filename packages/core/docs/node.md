@@ -204,16 +204,7 @@ before the version leaves the node. Where the places are kept depends on the key
   or in separate processes without a shared lock, fork its lines, and every
   peer then withdraws what it signed in a forked collection from the fork on.
 
-What the node holds counts as much as what it remembers: the next place comes
-after the last one the key holds a version at, if that is later than the last
-one kept. So a key whose places were lost, or never kept, carries on after
-what sync brought back instead of at a place it used, as a node a server
-starts afresh from a key it was handed does (the MCP service's,
-`packages/cli/src/remote-mcp/sessions.ts`). A version it signed that no other
-node holds and this one lost leaves a place nobody saw used, which is taken
-again with nothing to fork.
-
-_Source: `packages/core/src/node/writers.ts` (`createWriters`, `exclusively`), `packages/core/src/node/space-lines.ts` (`lastPlace`). Tests: `packages/core/tests/writer-logs.test.ts` ("a writer’s log", "two nodes sharing a handed-in key…", "a key whose places were lost carries on…")._
+_Source: `packages/core/src/node/writers.ts` (`createWriters`, `exclusively`). Tests: `packages/core/tests/writer-logs.test.ts` ("a writer’s log", "two nodes sharing a handed-in key…")._
 
 ### Writer keys
 

@@ -325,6 +325,14 @@ describe('holding part of a space', () => {
     assert.equal(await solo.node.spaces.kept(mine, 500), null, 'nobody to keep it');
   });
 
+  test('a keeper’s own writes are kept once the other keepers have them: it is one of the copies', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const { bob, space } = await spaceWithKeepers(hub);
+    for (let i = 0; i < 3; i++) await bob.node.records.put(space, 'app.chat', { text: `from Bob ${i}` });
+    assert.equal(await bob.node.spaces.kept(space, 5000), 'keepers');
+    assert.equal((await bob.node.spaces.status(space)).pending, 0, 'nothing waits for good');
+  });
+
   test('a collection nobody used for a while is dropped when the app opens again; declared ones stay', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const { alice, space } = await spaceWithKeepers(hub);

@@ -98,6 +98,35 @@ describe('a node that may reach nothing it finds', () => {
     assert.deepEqual(server.seen, []);
   });
 
+  test('follows no host’s redirect to an address it may not reach', async () => {
+    const inside = await listening();
+    // A host it may reach, which sends whoever asks to an address inside the network.
+    const outside = createServer((_req, res) => {
+      res.writeHead(302, { location: `http://127.0.0.1:${inside.port}/latest/meta-data/` });
+      res.end();
+    });
+    await new Promise<void>((resolve) => outside.listen(0, '127.0.0.1', resolve));
+    closing.push(() => new Promise<void>((resolve) => outside.close(() => resolve())));
+    const address = outside.address();
+    assert.ok(address && typeof address === 'object');
+    const hub = createFakeHub({ latencyMs: 1 });
+    const manager = createIdentityManager();
+    const seed = generateSeed();
+    const node = await createNode({
+      signer: createLocalRootSigner(await manager.fromSeed(seed), manager.getProvider()),
+      stores: memoryStores(),
+      accountKey: await deriveAccountKey(seed),
+      watchIntervalMs: 0,
+      network: {
+        transports: (spaceId, did) => [hub.transport(did, spaceId)],
+        reach: async (url) => new URL(url).port === String(address.port),
+      },
+    });
+    closing.push(() => node.close());
+    await node.hosting.use(`http://127.0.0.1:${address.port}`).catch(() => null);
+    assert.deepEqual(inside.seen, [], 'the redirect was not followed');
+  });
+
   test('where any other node would', async () => {
     const server = await listening();
     const node = await aNode(false);

@@ -33,7 +33,13 @@ import {
   type JSONValue,
 } from '@modelcontextprotocol/server';
 import { toNodeHandler } from '@modelcontextprotocol/node';
-import { callAction, NODE_ACTIONS, type NodeConfig, type StorageAdapter } from '@minca/core';
+import {
+  callAction,
+  NODE_ACTIONS,
+  type NodeConfig,
+  type StorageAdapter,
+  type StoreFactory,
+} from '@minca/core';
 import type { Grant } from '@minca/core/session';
 import { createSessions, type Granted } from './sessions.js';
 import { isRecord, messageOf } from '../json.js';
@@ -90,6 +96,8 @@ export interface RemoteMcpOptions {
   readonly addressOf: (req: IncomingMessage) => string;
   /** How a session's node reaches the spaces a grant gives it: the always-on nodes that hold them (`reach.ts`) */
   readonly network: (grant: Grant) => Promise<NodeConfig['network']>;
+  /** Where a key, by DID, keeps its places in its logs, past its node: the one thing the service keeps for it */
+  readonly places?: (key: string) => StoreFactory;
   /** What the service calls itself */
   readonly name: string;
   readonly version: string;
@@ -118,6 +126,7 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
 
   const sessions = createSessions({
     network: options.network,
+    ...(options.places ? { places: options.places } : {}),
     // Refused again by the next node that sees the revoke, if keeping it fails now.
     onRevoked: (session) =>
       void oauth
@@ -234,8 +243,8 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
               };
             throw new Error(
               'Written, but nobody else has it yet: the space’s always-on nodes, or a member online, if it ' +
-                'names none. It is sent when one is reachable, unless this connection is idle for 10 minutes ' +
-                'first: read it back before writing it again.',
+                'names none. It is sent when one is reachable, while this connection is up: read it back ' +
+                'before writing it again.',
             );
           });
         } catch (error) {

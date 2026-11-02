@@ -13,7 +13,8 @@
  *   MINCA_MCP_HOME    the account home its consent page suggests
  *   MINCA_MCP_APPS    more chat apps a sign-in may go back to: hosts (chat.example.com) or schemes (zed:)
  */
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
@@ -61,12 +62,35 @@ async function tokenSecret(data: string): Promise<Uint8Array> {
   return made;
 }
 
+/** How long a key's places are kept: as long as its token can last, and a day */
+const PLACES_DAYS = 31;
+
+/** Removes the places of keys whose tokens can no longer be used, and those of keys that never signed */
+async function sweepPlaces(data: string): Promise<void> {
+  const root = path.join(data, 'places');
+  const before = Date.now() - PLACES_DAYS * 86_400_000;
+  for (const entry of await readdir(root).catch(() => [])) {
+    const at = path.join(root, entry);
+    const files = await readdir(at, { recursive: true, withFileTypes: true }).catch(() => []);
+    const since = await stat(at).then(
+      (found) => found.mtimeMs,
+      () => 0,
+    );
+    // One with nothing in it a day on: a key that only read, its node long stopped.
+    const unused = !files.some((file) => file.isFile()) && since < Date.now() - 86_400_000;
+    if (since < before || unused) await rm(at, { recursive: true, force: true });
+  }
+}
+
 export async function startMcpServer(
   options: McpServerOptions,
 ): Promise<{ readonly port: number; readonly remote: RemoteMcp; close(): Promise<void> }> {
   await mkdir(options.data, { recursive: true, mode: 0o700 });
   // Meeting an open tab, or a member's device, takes WebRTC.
   if (options.relays?.length) await enableWebRTC();
+  await sweepPlaces(options.data);
+  const sweeping = setInterval(() => void sweepPlaces(options.data).catch(() => {}), 3_600_000);
+  sweeping.unref();
   const store = await directoryStores(await openFsDirectory(path.join(options.data, 'store')))('mcp');
   const remote = await createRemoteMcp({
     publicUrl: options.publicUrl,
@@ -76,6 +100,12 @@ export async function startMcpServer(
     // The nodes its invites name that are public, and the operator's own: nowhere a stranger's grant points.
     // Its own relays and nodes as given; any other a grant's invites or the spaces name, only on the
     // public internet: what a session reads is a stranger's to write, never where the service connects.
+    // A key's places outlast its node, by its DID: forgotten, a node would sign at a place it used.
+    places: (key) => {
+      const folder = path.join(options.data, 'places', createHash('sha256').update(key).digest('base64url'));
+      return async (where, storeOptions) =>
+        directoryStores(await openFsDirectory(folder))(where, storeOptions);
+    },
     network: async () => ({
       relays: [...(options.relays ?? [])],
       nodes: [...(options.nodes ?? [])],
@@ -112,6 +142,7 @@ export async function startMcpServer(
     http.once('error', reject);
     http.listen(options.port, options.host ?? '127.0.0.1', () => resolve());
   }).catch(async (error: unknown) => {
+    clearInterval(sweeping);
     await remote.close();
     await store.close();
     throw error;
@@ -121,6 +152,7 @@ export async function startMcpServer(
     port: typeof address === 'object' && address ? address.port : options.port,
     remote,
     async close() {
+      clearInterval(sweeping);
       await remote.close();
       await store.close();
       await new Promise<void>((resolve) => http.close(() => resolve()));

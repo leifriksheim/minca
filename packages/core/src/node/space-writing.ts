@@ -115,8 +115,6 @@ export interface WritingDeps extends SpaceBase {
   readonly stored: (version: Version) => Promise<void>;
   /** Marks collections used, on a node that holds part of the space */
   readonly use: (collections: ReadonlyArray<string>) => boolean;
-  /** The last place a key holds a version at in a collection here */
-  readonly lastPlace: (did: string, collection: string) => Promise<{ n: number; id: string } | null>;
 }
 
 export function createWriting(deps: WritingDeps) {
@@ -252,8 +250,7 @@ export function createWriting(deps: WritingDeps) {
       (!deleted && hasContract(definition?.contract));
 
     // The next place in this key's line for the collection: given back if the version is refused below.
-    const held = () => deps.lastPlace(writer.did, collection);
-    const signed = await deps.writers.append(writer.did, space.id, collection, held, async (log) => {
+    const signed = await deps.writers.append(writer.did, space.id, collection, async (log) => {
       const { history, events: held } = await access();
       const seen = await seenFor(history, collection);
       // Checks in force as of the very point it names: a definition arriving meanwhile can't leave it unkept.

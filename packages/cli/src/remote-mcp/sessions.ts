@@ -3,11 +3,11 @@
  * records-only note a person's account home signed travel inside the app's
  * access token, sealed under a key only the service holds (`oauth.ts`). Each
  * call opens them, and the node they start runs while the app is using it,
- * holding its spaces in memory. Nothing outlives it: a write is done once the
- * space's keepers have it, and a node started again carries on after what
- * they hold of its key's writes (`createWriters` in core).
+ * holding its spaces in memory. A write is done once the space's keepers have
+ * it. What outlives the node is only where its key has signed (`places`): a
+ * key that outlives its node must keep that, or the next would fork it.
  */
-import { didOf, noteSpaces, type NodeConfig, type P2PNode } from '@minca/core';
+import { didOf, noteSpaces, type NodeConfig, type P2PNode, type StoreFactory } from '@minca/core';
 import { checkGrant, usableGrant, type Grant } from '@minca/core/session';
 import { startGrantedAgent } from '../agent.js';
 import { isRecord, messageOf } from '../json.js';
@@ -149,6 +149,12 @@ export function createSessions(options: {
   readonly network: (grant: Grant) => Promise<NodeConfig['network']>;
   /** What a session's node may hold, in bytes */
   readonly budget?: number;
+  /**
+   * Where a key, by DID, keeps its places in its logs: past the node, since its
+   * token lasts for weeks and a node that forgot them would sign at a place it
+   * used, forking the key. In memory with the rest by default.
+   */
+  readonly places?: (key: string) => StoreFactory;
   /** Told once a session's key was revoked in some space: the person disconnected the app */
   readonly onRevoked?: (id: string) => void;
   readonly idleMs?: number;
@@ -207,6 +213,13 @@ export function createSessions(options: {
     }
   };
 
+  /** What a session's node holds in memory, but for its key's places, which last */
+  function storesFor(given: Granted): StoreFactory {
+    const memory = boundedMemory(options.budget);
+    const places = options.places?.(given.grant.note.payload.aud);
+    return (where, storeOptions) => (where === 'writers' && places ? places : memory)(where, storeOptions);
+  }
+
   async function start(id: string, given: Granted): Promise<Started> {
     const keys = await importKeyJwk(given.key);
     if (!keys) throw new Error('The key could not be read');
@@ -215,7 +228,7 @@ export function createSessions(options: {
       grant: given.grant,
       keys,
       // In memory: what it holds is the always-on nodes', and goes when it stops.
-      stores: boundedMemory(options.budget),
+      stores: storesFor(given),
       network: await options.network(given.grant),
     });
     // Disconnected at the account home: it reads and writes no more, from now on.

@@ -29,15 +29,12 @@ export interface Writers {
   /**
    * Signs the next version of `did`'s log in a space's collection. `sign` gets
    * the place and returns the version, or throws to give it back. The place is
-   * remembered before this returns. `held` is the last place the store holds a
-   * version of the key's at: the next comes after it, or after the last one
-   * remembered, whichever is later.
+   * remembered before this returns.
    */
   append(
     did: string,
     spaceId: string,
     collection: string,
-    held: () => Promise<Head | null>,
     sign: (log: WriterLog) => Promise<Version>,
   ): Promise<Version>;
 }
@@ -113,21 +110,11 @@ export function createWriters(storeOf: (did: string) => HeadStore | null): Write
   }
 
   return Object.freeze({
-    append(
-      did: string,
-      spaceId: string,
-      collection: string,
-      held: () => Promise<Head | null>,
-      sign: (log: WriterLog) => Promise<Version>,
-    ) {
+    append(did: string, spaceId: string, collection: string, sign: (log: WriterLog) => Promise<Version>) {
       const key = headKey(did, spaceId);
       const take = async () => {
         const places = await placesOf(did, spaceId);
-        // What it holds of its own counts as much as what it remembers: a key whose places were never
-        // kept, or were lost, carries on after what sync brought back, rather than at a place it used.
-        const remembered = places?.collections[collection];
-        const found = await held();
-        const log = after(found && found.n > (remembered?.n ?? -1) ? found : remembered);
+        const log = after(places?.collections[collection]);
         const version = await sign(log);
         const next: Places = {
           collections: { ...places?.collections, [collection]: { n: log.n, id: version.id } },

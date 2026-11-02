@@ -331,13 +331,16 @@ In a space that names no keepers, where every member's device is a copy, a
 write is done once a device of the space online now has it, your open tab or
 a member's, and the app is told it is only that. After 10 minutes without
 a call the node stops, and what it held goes; one waiting for the keepers to
-have its writes waits up to an hour first. The next node carries on after
-what the keepers hold of the key's writes. At most 32 nodes run at once. So
+have its writes waits up to an hour first. At most 32 nodes run at once. So
 while the app is working, whoever runs the service can read those spaces, as
 the chat app's maker can read what its model sees.
 
-Run one process for a token: two would each start a node for it and sign at
-the same places, forking its key.
+The one thing kept for a connection is where its key has signed: its last
+place in each collection, a few bytes, in `MINCA_MCP_DATA`, for as long as
+its token lasts. A key that outlives its node must keep them, or the next
+node signs at a place it used, forking the key (02 §4.10). So run one
+process on a data folder, and don't restore it from a backup while tokens are
+in use: two processes, or a rolled-back folder, sign at the same places.
 
 A token lasts as long as its note, with no refresh token. Disconnecting at
 your account home is what ends it sooner: what the key writes after stops

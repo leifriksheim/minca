@@ -477,20 +477,20 @@ test('with every device of theirs offline, a chat app reads and writes through t
   await laptop.close();
 
   // The service, reaching spaces through that host alone. A short idle time
-  // stands for the default ten minutes, a restart of the service, or a stranger
-  // filling its room: each stops the chat app's node and drops its folder.
+  // stands for the default ten minutes, or a stranger filling its room: each
+  // stops the chat app's node, and what it held goes.
   const port = await freePort();
   const issuer = `http://127.0.0.1:${port}`;
-  const data = await tempDir('mcp-server-');
-  const service = await startMcpServer({
+  const settings = {
     publicUrl: issuer,
     nodes: [peer],
-    data,
+    data: await tempDir('mcp-server-'),
     port,
     version: '0',
     accountHome: 'https://home.test',
     idleMs: 1500,
-  });
+  };
+  let service = await startMcpServer(settings);
   closing.push(() => service.close());
   let agent = '';
   const token = await signInWith(issuer, async (audience) => {
@@ -526,8 +526,12 @@ test('with every device of theirs offline, a chat app reads and writes through t
   // Its node goes idle and its spaces go with it. Where its key has signed stays:
   // a node that forgot would sign at a place it signed before, a fork of the key
   // that withdraws everything it wrote (found by adversarial review).
-  // Nothing is kept of it: the next node carries on after what the host holds of its key's writes.
+  // Its node stops, and so does the service; one started again keeps only where the key signed,
+  // so its next write follows its last rather than taking a place it used, a fork of the key
+  // that would withdraw everything it wrote (found by adversarial review).
   await new Promise((resolve) => setTimeout(resolve, 4000));
+  await service.close();
+  service = await startMcpServer(settings);
   await until(
     async () =>
       (await callTool(issuer, token, 'records_list', { space: space.id, collection: 'app.note' })).includes(

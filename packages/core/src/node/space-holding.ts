@@ -219,11 +219,21 @@ export async function openSpaceHolding(ctx: HoldingContext) {
     if (changed) saveCache();
   }
 
+  /** How many of the space's keepers a write must reach */
+  const copiesWanted = (state: {
+    readonly keepers: ReadonlyArray<unknown>;
+    readonly copies: number | null;
+  }) => Math.min(state.keepers.length, Math.max(state.copies ?? 2, cache?.copies ?? 0));
+
   /** A write of this node's, waiting for the space's keepers, on any node: none when it names none */
   async function markPending(version: Version): Promise<void> {
     if (version.author !== sessionDid || version.collection.startsWith('sys.')) return;
-    if ((await access()).history.current.keepers.length === 0) return;
-    const pending: Pending = { collection: version.collection, by: [], at: Date.now() };
+    const state = (await access()).history.current;
+    if (state.keepers.length === 0) return;
+    // A keeper's own node is one of the copies it waits for.
+    const by = state.keepers.some((keeper) => keeper.did === sessionDid) ? [sessionDid] : [];
+    if (by.length >= copiesWanted(state)) return;
+    const pending: Pending = { collection: version.collection, by, at: Date.now() };
     await adapter.put(`${PENDING_PREFIX}${version.id}`, encodeJson(pending));
   }
 
@@ -238,7 +248,7 @@ export async function openSpaceHolding(ctx: HoldingContext) {
   ): Promise<void> {
     const state = (await access()).history.current;
     if (!state.keepers.some((keeper) => keeper.did === peer)) return;
-    const target = Math.min(state.keepers.length, Math.max(state.copies ?? 2, cache?.copies ?? 0));
+    const target = copiesWanted(state);
     for (const name of await adapter.list(PENDING_PREFIX)) {
       const id = name.slice(PENDING_PREFIX.length);
       if (which.ids && !which.ids.has(id)) continue;

@@ -232,7 +232,6 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     index,
     keys,
     stored,
-    lastPlace: (did, collection) => lines.lastPlace(did, collection),
     use: holding.use,
   });
   const lines = createLines({

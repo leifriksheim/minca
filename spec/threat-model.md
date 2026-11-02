@@ -1010,23 +1010,24 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     the person picked in memory, reads them and writes records there "via
     agent", as the app's model asks; and whoever holds its sealing key and a
     token can do the same until the note runs out or the person disconnects
-    it. Nothing of it outlives the node: a write is done once the space's
-    keepers have it (05 §9), or, in a space that names none, once a member's
-    device online then does, which the app is told is less sure; and
-    a node started again carries on after what they hold of its key's
-    writes. One the app was told wasn't done, lost before a keeper has it
-    (the node evicted, the service stopped), leaves a place nobody saw used,
-    taken again with nothing to fork; held by one keeper and not the one
-    answering the next node, it is followed by a second version at that
-    place, a fork of the key, as on any device that lost a write. An idle
-    node waits up to an hour for its keepers first. A call in a space runs
+    it. A write is done once the space's keepers have it (05 §9), or, in a
+    space that names none, once a member's device online then does, which the
+    app is told is less sure, since a peer that holds part of the space, or
+    refused the write, counts too. What outlives the node is only where its
+    key has signed, its last place in each collection, kept for as long as
+    the token lasts: a key that outlives its node must keep that (02 §4.10).
+    One the app was told wasn't done, lost before a keeper has it (the node
+    evicted, the service stopped), leaves a gap in the key's log, so a later
+    disconnect withdraws what it wrote after (03 §6.3), as on any device that
+    lost a write; an idle node waits up to an hour for its keepers first. A call in a space runs
     only once the node is level with every always-on node connected there: a
     node behind would say a record isn't there, and write a first version in
     a line that has one, ending it (09 §7.5). A space they don't carry fails
     its own calls only, after waiting for one. Once level, the node is one
     more device writing in the account's lines, with the gap two devices have
-    (§3.2). Two copies of the service serving one token, or one given the
-    same sealing key, would fork keys
+    (§3.2), and another device's write that only an unreachable always-on node
+    holds can still be followed by a twin. Two processes on one data folder,
+    or one restored from a backup, sign at the same places and fork keys
     ([#287](https://github.com/leifriksheim/minca/issues/287)). Records count until the key is revoked, not until the
     note runs out (06 §2.9), so a token outlives nothing the person can't end
     at their home; the service refuses a token for good once its node sees
@@ -1050,10 +1051,13 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     `packages/cli/src/remote-mcp/memory.ts`;
     `packages/cli/tests/remote-mcp-server.test.ts`,
     `packages/cli/tests/remote-mcp-reach.test.ts`,
-    `packages/core/tests/reach.test.ts`). A stranger's own public node or
-    relay, named by their own grant, is reached, as their device would be. A name that resolves
-    elsewhere once the socket opens (DNS rebinding) is not caught. It shows its consent page
-    for every sign-in, and lets an app register only places a code is safe at:
+    `packages/core/tests/reach.test.ts`); a host that answers with a redirect
+    is refused, not followed. A stranger's own public node or relay, named by
+    their own grant, is reached, as their device would be: so are the STUN
+    and TURN servers such a relay offers, and the addresses a stranger's
+    WebRTC peer offers, which `reach` does not cover, nor a name that
+    resolves elsewhere once the socket opens (DNS rebinding). It shows its
+    consent page for every sign-in, and lets an app register only places a code is safe at:
     a chat app's own MCP callback exactly, a host its operator names (any page
     there), an app on this computer over loopback http, or a named app's own
     scheme, never one that opens a browser at any address (`createOAuth` in
@@ -1068,7 +1072,9 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     it keep or do is an app's registration, gone after a day unless used;
     nodes that run while called, each with up to 8 spaces those always-on
     nodes carry, in memory, and up to an hour after for writes their keepers
-    don't have. Registrations and sign-ins are counted by address, but nodes are
+    don't have; each a few bytes of places for a key that wrote, for a
+    month; and, through its own spaces' records, requests to as many public
+    hosts as it names, and sockets to them while its node runs. Registrations and sign-ins are counted by address, but nodes are
     not: a stranger with accounts of their own can keep all of them running,
     and make honest calls wait, then fail
     ([#33](https://github.com/leifriksheim/minca/issues/33)). None of this is

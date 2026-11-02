@@ -176,19 +176,7 @@ export function createLines(deps: LinesDeps) {
     );
   }
 
-  /** The last place a key holds a version at in a collection here, as its log names it */
-  async function lastPlace(did: string, collection: string): Promise<{ n: number; id: string } | null> {
-    const prefix = `${LOG_PREFIX}${did}/${collection}/`;
-    let last: { n: number; id: string } | null = null;
-    for (const at of await adapter.list(prefix)) {
-      const n = Number(at.slice(prefix.length));
-      const id = await adapter.get(at);
-      if (Number.isSafeInteger(n) && id && (!last || n > last.n)) last = { n, id: utf8Decode(id) };
-    }
-    return last;
-  }
-
-  return { placeInLog, cutoffFor, lastPlace };
+  return { placeInLog, cutoffFor };
 }
 
 export type Lines = ReturnType<typeof createLines>;

@@ -34,10 +34,12 @@ const NOT_PUBLIC = (() => {
   for (const [net, prefix] of [
     ['::', 127],
     ['64:ff9b::', 96],
+    ['64:ff9b:1::', 48],
     ['100::', 64],
     ['2001:db8::', 32],
     ['fc00::', 7],
     ['fe80::', 10],
+    ['fec0::', 10],
     ['ff00::', 8],
   ] as const)
     list.addSubnet(net, prefix, 'ipv6');

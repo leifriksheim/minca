@@ -1,8 +1,8 @@
 /**
  * Where a session's node keeps what it holds: in memory, gone when the node
- * stops, and at most `budget` bytes all told. A node holds only what its
- * calls use (`cache`), what an always-on node has, so nothing in here is the
- * only copy of anything, and a stranger's space can't grow without bound.
+ * stops, and at most `budget` bytes all told, so a stranger's space can't
+ * grow it without bound. A call that writes is done once the space's keepers
+ * have it, so nothing in here is the only copy of anything said to be done.
  */
 import type { BatchOp, StorageAdapter, StoreFactory, Version } from '@minca/core';
 
