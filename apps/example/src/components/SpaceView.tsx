@@ -434,15 +434,18 @@ function SpaceView({ space }: { space: SpaceSummary }) {
               </span>
             </span>
             <span className="phone-only bar-end" style={{ justifySelf: 'end', maxWidth: '100%' }}>
-              <AppSwitcher
-                space={space}
-                apps={apps.ready}
-                unread={unread}
-                open={open}
-                onNew={onNew}
-                go={go}
-                openApp={openApp}
-              />
+              {/* The Overview lists the apps already. */}
+              {!onApps && (
+                <AppSwitcher
+                  space={space}
+                  apps={apps.ready}
+                  unread={unread}
+                  open={open}
+                  onNew={onNew}
+                  go={go}
+                  openApp={openApp}
+                />
+              )}
             </span>
             <span className="hide-on-phone" style={{ display: 'contents' }}>
               {/* A wide screen has the rail to go between apps; Back for everywhere a step in from them. */}
