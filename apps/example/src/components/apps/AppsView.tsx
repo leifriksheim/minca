@@ -14,7 +14,7 @@ import { TEMPLATES } from './templates';
 import { AppSettings } from './AppSettings';
 import { Icon } from '../Icon';
 import { unreadOf, type Unread } from '../../seen';
-import { styles, palette, hstack, stack, ui } from '../../styles';
+import { styles, palette, stack, ui } from '../../styles';
 import { LinkButton, PrimaryButton } from '../Buttons';
 import { confirmThen } from '../../confirm';
 
@@ -103,22 +103,15 @@ export function AppsView({
       <section aria-label="Apps in this space" style={stack(12)}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <h2 style={sectionHeading}>Apps</h2>
-          <div style={{ ...hstack(8), flexShrink: 0 }}>
-            {mayDefine && apps.ready.length > 0 && (
-              <LinkButton
-                onClick={() => setArranging((was) => !was)}
-                aria-pressed={arranging}
-                style={{ paddingRight: 0 }}
-              >
-                {arranging ? 'Done' : 'Arrange'}
-              </LinkButton>
-            )}
-            {space.writable && !arranging && (
-              <PrimaryButton onClick={onCreate} className="hide-on-phone" style={{ ...inlineButton }}>
-                <Icon name="plus" size={14} /> Add app
-              </PrimaryButton>
-            )}
-          </div>
+          {mayDefine && apps.ready.length > 0 && (
+            <LinkButton
+              onClick={() => setArranging((was) => !was)}
+              aria-pressed={arranging}
+              style={{ paddingRight: 0 }}
+            >
+              {arranging ? 'Done' : 'Arrange'}
+            </LinkButton>
+          )}
         </div>
 
         {stale.length > 0 && !arranging && (

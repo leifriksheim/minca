@@ -496,7 +496,7 @@ export function CallButton({ space, video = false }: { space: SpaceSummary; vide
       style={here || going ? { color: palette.accent.good } : undefined}
     >
       <Icon name={video ? 'camera' : 'phone'} size={20} />
-      {video ? 'Video' : 'Audio'}
+      {video ? 'Video' : 'Voice'}
     </button>
   );
 }
