@@ -3,7 +3,7 @@ import { message, useAction } from '@minca/app-shared/action';
 import type { NodeCollection, SpaceSummary } from '@minca/core';
 import { useNode } from '@minca/react';
 import { useWorkspace } from '../../workspace';
-import { sectionsOf, type SpaceScreen } from '../SpaceView';
+import { PEOPLE_PAGES, SETTINGS_PAGE, type SpaceScreen } from '../SpaceView';
 import { CallButton } from '../calls/Calls';
 import { RowMenu } from '../PeopleParts';
 import type { AppEntry, useSpaceApps } from './entries';
@@ -89,16 +89,12 @@ export function AppsView({
 
   return (
     <div style={stack(28)}>
-      {/* A call, and the space's own pages, a tap away. */}
+      {/* Who is here, a call, and the rest of the space, a tap away. */}
       <nav aria-label={pair ? 'This chat' : 'This group'} className="quick-row scroll-x">
+        {!pair && PEOPLE_PAGES.map((page) => <QuickPage key={page.to} page={page} go={go} />)}
         <CallButton space={space} />
         <CallButton space={space} video />
-        {sectionsOf(pair).map((section) => (
-          <button key={section.to} onClick={() => go(section.to)} className="quick-action">
-            <Icon name={section.icon} size={20} />
-            {section.label}
-          </button>
-        ))}
+        <QuickPage page={SETTINGS_PAGE} go={go} />
       </nav>
 
       <section aria-label="Apps in this space" style={stack(12)}>
@@ -191,6 +187,22 @@ export function AppsView({
 
       {setting && <AppSettings space={space} record={setting.record} onClose={() => setSetting(null)} />}
     </div>
+  );
+}
+
+/** One of the space's own pages in the row atop the Overview: its icon over its name */
+function QuickPage({
+  page,
+  go,
+}: {
+  page: typeof SETTINGS_PAGE | (typeof PEOPLE_PAGES)[number];
+  go: SpaceScreen['go'];
+}) {
+  return (
+    <button onClick={() => go(page.to)} className="quick-action">
+      <Icon name={page.icon} size={20} />
+      {page.label}
+    </button>
   );
 }
 

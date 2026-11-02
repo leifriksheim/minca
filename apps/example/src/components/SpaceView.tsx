@@ -73,30 +73,32 @@ export const HOOD = [
 /** Where the seen store keeps when the Overview, and the proposals on it, were last looked at; no app has this id */
 const PROPOSALS = ':proposals';
 
-/** What belongs to the space rather than to one app: the row atop its Overview, and its menu */
-const SECTIONS = [
-  { to: '/spaces/$spaceId/members', label: 'Members', icon: 'people' },
-  { to: '/spaces/$spaceId/roles', label: 'Roles', icon: 'shield' },
-  { to: '/spaces/$spaceId/invite', label: 'Invite', icon: 'invite' },
-  { to: '/spaces/$spaceId/settings', label: 'Settings', icon: 'settings' },
-] as const satisfies ReadonlyArray<{ to: SpacePath; label: string; icon: IconName }>;
+type Page = { readonly to: SpacePath; readonly label: string; readonly icon: IconName };
 
-/** What a space's Settings lead to */
-export const SETTINGS = [
+/** Who is in a group, and bringing more in: a space for two is the two of you, so it has neither */
+export const PEOPLE_PAGES = [
+  { to: '/spaces/$spaceId/members', label: 'Members', icon: 'people' },
+  { to: '/spaces/$spaceId/invite', label: 'Invite', icon: 'invite' },
+] as const satisfies ReadonlyArray<Page>;
+
+/** Everything else about the space, behind one page */
+export const SETTINGS_PAGE = {
+  to: '/spaces/$spaceId/settings',
+  label: 'Settings',
+  icon: 'settings',
+} as const satisfies Page;
+
+/** What Settings lead to; roles are a group's, as members are */
+const SETTINGS = [
+  { to: '/spaces/$spaceId/roles', label: 'Roles', icon: 'shield' },
   { to: '/spaces/$spaceId/hosting', label: 'Hosting', icon: 'cloud' },
   { to: '/spaces/$spaceId/automations', label: 'Automations', icon: 'bolt' },
-] as const satisfies ReadonlyArray<{ to: SpacePath; label: string; icon: IconName }>;
+] as const satisfies ReadonlyArray<Page>;
+export const settingsPagesOf = (pair: boolean) =>
+  SETTINGS.filter((page) => !pair || page.to !== '/spaces/$spaceId/roles');
 
-/** The sections only a group has: a space for two is the two of you */
-const FOR_GROUPS: ReadonlySet<string> = new Set([
-  '/spaces/$spaceId/members',
-  '/spaces/$spaceId/roles',
-  '/spaces/$spaceId/invite',
-]);
-
-/** A space's own sections: a space for two has nobody to invite */
-export const sectionsOf = (pair: boolean) =>
-  SECTIONS.filter((section) => !pair || !FOR_GROUPS.has(section.to));
+/** A space's own pages, as its menu lists them */
+const sectionsOf = (pair: boolean): ReadonlyArray<Page> => [...(pair ? [] : PEOPLE_PAGES), SETTINGS_PAGE];
 
 /** Every part of a space you can go to with only its id */
 type SpacePath = Exclude<
@@ -317,9 +319,13 @@ function SpaceView({ space }: { space: SpaceSummary }) {
   const title =
     (inView ? viewTitle : undefined) ??
     open?.title ??
-    [...SECTIONS, ...SETTINGS, ...HOOD, { to: '/spaces/$spaceId/new', label: 'Add app' }].find(
-      (part) => part.to === leaf,
-    )?.label ??
+    [
+      ...PEOPLE_PAGES,
+      SETTINGS_PAGE,
+      ...SETTINGS,
+      ...HOOD,
+      { to: '/spaces/$spaceId/new', label: 'Add app' },
+    ].find((part) => part.to === leaf)?.label ??
     name;
 
   const screen: SpaceScreen = {
@@ -347,10 +353,20 @@ function SpaceView({ space }: { space: SpaceSummary }) {
         {/* The space's apps down the left edge, under the space itself; a phone has them as tabs. */}
         <nav className="app-rail" aria-label={`Apps in ${name}`}>
           <div className="rail-top">
-            <SpaceMenu space={space} pair={pair} leaf={leaf} go={go} onHome={goHome} />
+            <SpaceMenu space={space} pair={pair} leaf={leaf} go={go} />
           </div>
           <div className="rail-apps">
-            {/* Every app, laid out, with the ones proposed. */}
+            {/* Back to your spaces and people, then this one's Overview: every app, with the ones proposed. */}
+            <RailItem
+              icon={
+                <span className="rail-glyph">
+                  <Icon name="arrowLeft" size={16} />
+                </span>
+              }
+              label="Home"
+              on={false}
+              onClick={goHome}
+            />
             <RailItem
               icon={
                 <span className="rail-glyph">
@@ -386,9 +402,9 @@ function SpaceView({ space }: { space: SpaceSummary }) {
             )}
           </div>
           <div className="rail-foot">
-            {/* You, and what's new for you, at its foot. */}
-            <Bell spaces={spaces} here={space} onOpenSpace={openSpace} />
+            {/* You, and what's new for you beside you, at its foot. */}
             <AccountMenu />
+            <Bell spaces={spaces} here={space} onOpenSpace={openSpace} />
           </div>
         </nav>
 
@@ -444,8 +460,9 @@ function SpaceView({ space }: { space: SpaceSummary }) {
                 </button>
               )}
               {open && <AppIcon id={open.id} size={28} />}
+              {/* The rail names the space, so here the Overview is named for itself. */}
               <h1 style={{ ...styles.appTitle, ...ui.ellipsis, flex: 1, minWidth: 0, fontSize: 18 }}>
-                {title}
+                {onApps ? 'Overview' : title}
               </h1>
             </span>
           </header>
@@ -616,21 +633,19 @@ function SideHeading({ children }: { children: ReactNode }) {
 }
 
 /**
- * The way around a space, from its face at the top of the rail: a menu that names the space, then goes
- * home, to its Overview and its own sections. A phone's bar has the space's name lead to the Overview.
+ * The way around a space, from its face and name at the top of the rail: a menu that names the space,
+ * then goes to its Overview and its own sections.
  */
 function SpaceMenu({
   space,
   pair,
   leaf,
   go,
-  onHome,
 }: {
   space: SpaceSummary;
   pair: PairWith | undefined;
   leaf: RouteId | undefined;
   go: (to: SpacePath) => void;
-  onHome: () => void;
 }) {
   const { forget } = useWorkspace();
   const { open: shown, setOpen, close, root } = usePopover();
@@ -652,6 +667,7 @@ function SpaceMenu({
         style={faceButton}
       >
         <SpaceFace space={space} pair={pair} size={36} />
+        <span style={{ ...styles.appTitle, ...ui.ellipsis, fontSize: 16 }}>{name}</span>
       </button>
       {shown && (
         <nav aria-label={name} style={{ ...menu, ...beside }}>
@@ -662,7 +678,6 @@ function SpaceMenu({
               <Privacy space={space} />
             </span>
           </div>
-          <SideItem icon={<Icon name="arrowLeft" size={16} />} label="Home" onClick={then(onHome)} />
           <SideHeading>{pair ? 'This chat' : 'This group'}</SideHeading>
           <SideItem
             icon={<Icon name="apps" size={16} />}
@@ -826,9 +841,13 @@ const barButton = {
   color: palette.ink.strong,
 } as const;
 
-/** The space's face alone, as a rail's first tile */
+/** The space's face and name, atop the rail */
 const faceButton = {
   display: 'flex',
+  alignItems: 'center',
+  gap: 10,
+  width: '100%',
+  minWidth: 0,
   padding: 6,
   border: 'none',
   borderRadius: palette.radius.md,

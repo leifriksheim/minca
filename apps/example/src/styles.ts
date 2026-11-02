@@ -13,7 +13,7 @@ const navyWash = (percent: number) => `color-mix(in srgb, ${ink.strong} ${percen
 const TABBAR_HEIGHT = 64;
 const TABBAR_GAP = 10;
 /** How wide a space's rail of apps is */
-const RAIL_WIDTH = 80;
+const RAIL_WIDTH = 232;
 
 /**
  * The rules inline styles cannot carry.
@@ -36,6 +36,7 @@ export function injectBaseStyles(): void {
     @media (hover: hover) {
       ${hoverCss}
       .rail-item:not([aria-current]):hover .rail-icon { background: ${surface.line}; }
+      .app-rail .rail-item:not([aria-current]):hover { background: ${surface.line}; }
       .you-button:hover, .you-button[aria-expanded="true"],
       .group-button:hover, .group-button[aria-expanded="true"] { background: ${surface.line} !important; }
       .quick-action:not(:disabled):hover { background: ${surface.sunken}; }
@@ -53,7 +54,7 @@ export function injectBaseStyles(): void {
 
     .space-shell { display: grid; grid-template-columns: ${RAIL_WIDTH}px minmax(0, 1fr); height: 100vh; height: 100dvh; }
     .app-rail {
-      position: relative; z-index: 15; display: flex; flex-direction: column; min-height: 0; padding: 10px 6px;
+      position: relative; z-index: 15; display: flex; flex-direction: column; min-height: 0; padding: 10px 8px;
       background: ${surface.sunken}; border-right: 1px solid ${surface.rule};
     }
     /* Only the apps scroll, so the menus at the foot can open out past the rail's edge. */
@@ -70,6 +71,10 @@ export function injectBaseStyles(): void {
       color: ${ink.muted}; font-size: 11.5px; font-weight: 500;
     }
     .rail-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* On the rail an app is one row, its shape beside its name, and the open one's row a tile of its own. */
+    .app-rail .rail-item { flex-direction: row; gap: 10px; padding: 4px 8px 4px 4px; font-size: 14px; text-align: left; }
+    .app-rail .rail-icon { width: 32px; height: 32px; flex-shrink: 0; }
+    .app-rail .rail-item[aria-current], .app-rail .rail-item[aria-current] .rail-icon { background: ${surface.line}; }
     /* The open app: a soft square behind its shape alone, a shade darker than what it sits on, and its name in bold. */
     .rail-icon {
       position: relative; display: inline-flex; align-items: center; justify-content: center;
@@ -82,7 +87,8 @@ export function injectBaseStyles(): void {
     .rail-count { position: absolute; top: -2px; right: -4px; pointer-events: none; }
     .rail-count .count { box-shadow: 0 0 0 2px ${surface.sunken}; }
     /* The space itself, first: its face opens its menu. */
-    .rail-top { flex-shrink: 0; display: flex; justify-content: center; padding-bottom: 8px; margin-bottom: 6px; border-bottom: 1px solid ${surface.line}; }
+    .rail-top { flex-shrink: 0; display: flex; padding-bottom: 8px; margin-bottom: 6px; border-bottom: 1px solid ${surface.line}; }
+    .rail-top > div { flex: 1; min-width: 0; }
     /* Every app, from a phone's bar: their shapes in a grid of three, as the rail has them. */
     .app-switch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
     .app-switch > .rail-item { padding: 12px 4px 10px; font-size: 12.5px; gap: 6px; }
@@ -95,12 +101,15 @@ export function injectBaseStyles(): void {
     .rail-glyph { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; color: ${ink.body}; }
     /* You and what's new for you, at the foot; their menus open beside them. */
     .rail-foot {
-      position: relative; flex-shrink: 0; padding-top: 8px; display: flex; flex-direction: column; align-items: center; gap: 8px;
+      position: relative; flex-shrink: 0; padding-top: 8px; display: flex; align-items: center; gap: 4px;
       border-top: 1px solid ${surface.line};
     }
+    /* You, as a row: your picture and your name, what's new for you beside it, as Discord has it. */
+    .rail-foot > :first-child { flex: 1; min-width: 0; }
     .you-button {
-      display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0;
-      border: none; border-radius: ${radius.pill}px; background: none;
+      display: flex; align-items: center; gap: 10px; width: 100%; height: 44px; padding: 0 8px 0 4px;
+      border: none; border-radius: ${radius.md}px; background: none; font-size: 14px; font-weight: 600;
+      color: ${ink.strong}; text-align: left;
     }
     .side-item {
       display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px;

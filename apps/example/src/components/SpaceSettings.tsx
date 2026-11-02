@@ -5,7 +5,7 @@ import { AddBotDialog } from '@minca/app-shared/CommunitySetup';
 import { FeatureIcon } from '@minca/app-shared/Feature';
 import { useWorkspace } from '../workspace';
 import { ConnectAgent } from './ConnectAgent';
-import { HOOD, SETTINGS, type SpaceScreen } from './SpaceView';
+import { HOOD, settingsPagesOf, type SpaceScreen } from './SpaceView';
 import { cardText, cardTitle, rowButton, sectionHeading } from './rows';
 import { Icon, type IconName } from './Icon';
 import { palette, stack, ui } from '../styles';
@@ -44,7 +44,7 @@ export function SpaceSettings({ space, go }: Pick<SpaceScreen, 'space' | 'go'>) 
       <section aria-label={pair ? 'Chat' : 'Group'} style={stack(12)}>
         <h2 style={sectionHeading}>{pair ? 'Chat' : 'Group'}</h2>
         <ol className="rows" style={ui.list}>
-          {SETTINGS.map((section) => (
+          {settingsPagesOf(pair).map((section) => (
             <SettingsRow
               key={section.to}
               icon={<LineIcon name={section.icon} />}

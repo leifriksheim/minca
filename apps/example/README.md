@@ -17,17 +17,17 @@ paths, params and search params. The address holds where you are and the small
 state that goes with it; what lives longer (your spaces, a call) sits above
 the routes, in `App.tsx`.
 
-| Route                                                       | What                                   |
-| ----------------------------------------------------------- | -------------------------------------- |
-| `/`, `/people`                                              | Your groups, the people you talk to    |
-| `/spaces/<id>`                                              | A space's Overview: its pages and apps |
-| `/spaces/<id>/apps/<app>`                                   | One app, open                          |
-| `/spaces/<id>/new`                                          | Adding an app                          |
-| `/spaces/<id>/members`, `…/roles`, `…/invite`, `…/settings` | The space's own sections               |
-| `/spaces/<id>/hosting`, `…/automations`                     | Reached from Settings                  |
-| `/spaces/<id>/data`, `…/explore`, `…/query`, `…/network`    | Under the hood                         |
-| `?record=<key>`, in a space                                 | The record open in the panel beside it |
-| `?collection=<name>`, in Data                               | The collection Data shows              |
+| Route                                                    | What                                   |
+| -------------------------------------------------------- | -------------------------------------- |
+| `/`, `/people`                                           | Your groups, the people you talk to    |
+| `/spaces/<id>`                                           | A space's Overview: its pages and apps |
+| `/spaces/<id>/apps/<app>`                                | One app, open                          |
+| `/spaces/<id>/new`                                       | Adding an app                          |
+| `/spaces/<id>/members`, `…/invite`, `…/settings`         | The space's own sections               |
+| `/spaces/<id>/roles`, `…/hosting`, `…/automations`       | Reached from Settings                  |
+| `/spaces/<id>/data`, `…/explore`, `…/query`, `…/network` | Under the hood                         |
+| `?record=<key>`, in a space                              | The record open in the panel beside it |
+| `?collection=<name>`, in Data                            | The collection Data shows              |
 
 A space's layout (`SpaceLayout` in `src/components/SpaceView.tsx`) hands its
 pages, drawn in `src/router.tsx`, the space through `useSpaceScreen`.

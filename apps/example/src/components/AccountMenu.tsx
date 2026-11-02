@@ -25,7 +25,7 @@ export function AccountMenu() {
   const [connecting, setConnecting] = useState(false);
 
   return (
-    // The menu opens beside the button, from its bottom edge, as the bell's panel does.
+    // The menu opens above your row at the foot of the rail.
     <div ref={root} style={{ position: 'relative' }}>
       <button
         onClick={() => setOpen((was) => !was)}
@@ -35,6 +35,7 @@ export function AccountMenu() {
         className="you-button"
       >
         <Avatar did={account.did} size={32} round src={picture} />
+        <span style={ui.ellipsis}>{name}</span>
       </button>
 
       {open && (
@@ -210,8 +211,8 @@ function Note({ children, faint = false }: { children: ReactNode; faint?: boolea
 
 const menu = {
   position: 'absolute' as const,
-  left: 'calc(100% + 10px)',
-  bottom: 0,
+  left: 0,
+  bottom: 'calc(100% + 8px)',
   zIndex: 20,
   width: 280,
   ...styles.float,
