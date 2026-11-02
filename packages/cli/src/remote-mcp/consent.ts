@@ -3,9 +3,9 @@
  * over (`oauth.ts`). The page says which app it is and where it will send
  * them back, and connects at their account home like any app does
  * (`consent-script.ts`). Only once the home has signed a records-only note,
- * and the host has checked it, does the app get a code.
+ * and the service has checked it, does the app get a code.
  *
- * Every sign-in comes here: the host keeps no sign-in in the browser to skip
+ * Every sign-in comes here: the service keeps no sign-in in the browser to skip
  * it with (`oauth.ts`). The code goes only to where the app registered, which
  * registering checked is a place a code is safe at (`redirects.ts`), checked
  * here again.
@@ -13,7 +13,7 @@
 import { createHash } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { isRecord, messageOf } from '../json.js';
-import type { Connections } from './connections.js';
+import { checkGranted } from './sessions.js';
 import { consentScript } from './consent-bundle.js';
 import { INTERACTION_PATH, MCP_SCOPE, type OAuth } from './oauth.js';
 import { mayRedirect } from './redirects.js';
@@ -51,16 +51,15 @@ const sendJson = (res: ServerResponse, status: number, body: unknown) => {
 
 export interface ConsentOptions {
   readonly oauth: OAuth;
-  readonly connections: Connections;
-  /** The host's public address */
+  /** The service's public address */
   readonly issuer: string;
   /** The MCP endpoint tokens are for */
   readonly resource: string;
-  /** What the host calls itself */
+  /** What the service calls itself */
   readonly name: string;
   /** The account home the page suggests */
   readonly accountHome: string;
-  /** More chat apps a code may go to, by host or scheme (`MINCA_HOST_MCP_APPS`) */
+  /** More chat apps a code may go to, by host or scheme (`MINCA_MCP_APPS`) */
   readonly moreApps?: ReadonlyArray<string>;
   readonly log?: (line: string) => void;
 }
@@ -100,7 +99,7 @@ export function createConsent(options: ConsentOptions) {
         400,
         noticeHtml(
           'This app can’t connect here',
-          `${name} wants its sign-in sent to ${redirect}, which isn’t a chat app this host knows. If you started this from a chat app, tell its makers; if someone sent you this link, close it.`,
+          `${name} wants its sign-in sent to ${redirect}, which isn’t a chat app this service knows. If you started this from a chat app, tell its makers; if someone sent you this link, close it.`,
         ),
       );
     }
@@ -142,36 +141,30 @@ export function createConsent(options: ConsentOptions) {
       return sendJson(res, 400, { error: 'That isn’t JSON' });
     }
     if (!isRecord(body)) return sendJson(res, 400, { error: 'Send the key and the grant' });
-    let connection;
+    let granted;
     try {
-      connection = await options.connections.add({ key: body.key, grant: body.grant, client: name });
+      granted = await checkGranted(body.key, body.grant);
     } catch (error) {
       return sendJson(res, 400, { error: messageOf(error) });
     }
+    // Kept only until the app collects its token, which then carries it (`oauth.ts`).
+    const id = await options.oauth.pend(granted);
     // Signing in and consenting are one step here: the person consented at their home. So the grant
     // covers what the app asked for, which can only be this endpoint's scope (`oauth.ts` refuses any
-    // other resource), and a refresh token.
-    const grant = new provider.Grant({ accountId: connection.id, clientId: client.clientId });
+    // other resource).
+    const grant = new provider.Grant({ accountId: id, clientId: client.clientId });
     const asked = text(details.params.scope).split(' ');
-    grant.addOIDCScope(['offline_access', ...asked.filter((scope) => scope === MCP_SCOPE)].join(' '));
+    const scopes = asked.filter((scope) => scope === MCP_SCOPE);
+    if (scopes.length) grant.addOIDCScope(scopes.join(' '));
     grant.addResourceScope(options.resource, MCP_SCOPE);
-    let redirectTo: string;
-    try {
-      const grantId = await grant.save();
-      redirectTo = await provider.interactionResult(
-        req,
-        res,
-        { login: { accountId: connection.id }, consent: { grantId } },
-        { mergeWithLastSubmission: false },
-      );
-    } catch (error) {
-      // No app will act through it: its key isn't kept.
-      await options.connections.forget(connection.id);
-      throw error;
-    }
-    // The app stays registered as long as this connection can last.
-    await options.oauth.keepClient(client.clientId, connection.grant.note.payload.exp ?? 0);
-    log(`connector ${connection.id}: ${JSON.stringify(name)} connected for ${connection.grant.did}`);
+    const grantId = await grant.save();
+    const redirectTo = await provider.interactionResult(
+      req,
+      res,
+      { login: { accountId: id }, consent: { grantId } },
+      { mergeWithLastSubmission: false },
+    );
+    log(`connector: ${JSON.stringify(name)} connected for ${granted.grant.did}`);
     return sendJson(res, 200, { redirect: redirectTo });
   }
 
@@ -221,7 +214,7 @@ const scriptJson = (value: unknown) => JSON.stringify(value).replace(/</g, '\\u0
 
 const sha256 = (text: string) => createHash('sha256').update(text, 'utf8').digest('base64');
 
-/** A page, its script allowed by hash and nothing else: no other script runs, and it reaches only this host */
+/** A page, its script allowed by hash and nothing else: no other script runs, and it reaches only this service */
 function sendPage(res: ServerResponse, status: number, html: string, script?: string): void {
   res.writeHead(status, {
     'content-type': 'text/html; charset=utf-8',
@@ -265,7 +258,7 @@ function consentHtml(params: {
 <p>${app} will act for you in the spaces you pick at your account home:</p>
 <ul><li>It reads them, and writes records there as you, marked “via agent”.</li>
 <li>It can’t add collections or change who is in a space: it proposes them for someone who may.</li>
-<li>${host} keeps the key it acts with, so ${host} can read those spaces too.</li></ul>
+<li>The key it acts with lives in ${app}’s sign-in, sealed so only ${host} can open it: while ${app} uses it, ${host} reads those spaces too, and keeps nothing after.</li></ul>
 <p>At your account home, ${host} shows as one connection: disconnecting it there disconnects every chat app you connected through ${host}. Once you allow it, you go back to ${escapeHtml(params.back)}.</p>
 <form id="connect"><label for="home">Your account home</label><input id="home" name="home" autocomplete="url" spellcheck="false" value="${escapeHtml(params.home)}">
 <div class="row"><button type="button" id="cancel">Don’t connect</button><button type="submit">Continue</button></div></form>

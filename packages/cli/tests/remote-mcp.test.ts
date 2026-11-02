@@ -26,7 +26,7 @@ import { createFakeHub, type FakeHub } from '../../core/tests/helpers/fake-trans
 import { hold } from '../../core/tests/helpers/hold.js';
 import { until } from '../../core/tests/helpers/until.js';
 import { createRemoteMcp, type RemoteMcp } from '../src/remote-mcp/index.js';
-import { createConnections } from '../src/remote-mcp/connections.js';
+import { checkGranted, createSessions } from '../src/remote-mcp/sessions.js';
 import { mayRedirect } from '../src/remote-mcp/redirects.js';
 import { isRecord } from '../src/json.js';
 import { onHub } from './helpers/nodes.js';
@@ -39,11 +39,8 @@ after(async () => {
 const CLAUDE = 'https://claude.ai/api/mcp/auth_callback';
 const insecure = { [oauth.allowInsecureRequests]: true };
 
-/** The accounts the test hosts name, as `MINCA_HOST_MCP_ACCOUNTS` does: every one `accountHolder` makes */
-const named: string[] = [];
-
 /** Someone with an account, online, who signs a records-only note for whatever key their home is shown */
-async function accountHolder(hub: FakeHub, options: { readonly unnamed?: boolean } = {}) {
+async function accountHolder(hub: FakeHub) {
   const manager = createIdentityManager();
   const seed = generateSeed();
   const me = await manager.fromSeed(seed);
@@ -57,7 +54,6 @@ async function accountHolder(hub: FakeHub, options: { readonly unnamed?: boolean
     network: onHub(hub),
   });
   closing.push(() => node.close());
-  if (!options.unnamed) named.push(me.did);
   /** What her home signs when she picks every space she has, as the consent page asks: some spaces, records only */
   const grantFor = async (audience: string, seconds = 3600, command = '/record'): Promise<Grant> => {
     const spaces = await node.spaces.list();
@@ -135,25 +131,21 @@ async function aHost(hub: FakeHub, settings: { readonly running?: number } = {})
   assert.ok(address && typeof address === 'object');
   const issuer = `http://127.0.0.1:${address.port}`;
   const stores = memoryStores();
-  const store = await stores('host-mcp');
-  /** Connections whose agents' spaces the host removed, and those whose agents started */
+  const store = await stores('mcp');
+  /** Sessions whose spaces the service removed */
   const dropped: string[] = [];
-  const started = new Set<string>();
   remote = await createRemoteMcp({
     publicUrl: issuer,
-    accounts: named,
+    secret: crypto.getRandomValues(new Uint8Array(32)),
     store,
-    stores: (connection) => {
-      started.add(connection);
-      return (where) => stores(`agents/${connection}/${where}`);
-    },
-    drop: async (connection) => {
-      dropped.push(connection);
+    stores: (session) => (where) => stores(`sessions/${session}/${where}`),
+    drop: async (session) => {
+      dropped.push(session);
     },
     addressOf: () => '127.0.0.1',
     network: () => onHub(hub),
     ...settings,
-    name: 'Test host',
+    name: 'Test service',
     version: '0',
     accountHome: 'https://home.test',
     idleMs: 60_000,
@@ -163,8 +155,16 @@ async function aHost(hub: FakeHub, settings: { readonly running?: number } = {})
     await running.close();
     await new Promise<void>((resolve) => server.close(() => resolve()));
   });
-  const connections = async () => (await store.list('connection:')).length;
-  return { issuer, resource: `${issuer}/mcp`, remote: running, dropped, started, connections };
+  /** Everything the service keeps, as text: to look for what it must not */
+  const kept = async () => {
+    const all: string[] = [];
+    for (const key of await store.list('')) {
+      const bytes = await store.get(key);
+      all.push(`${key} ${bytes ? new TextDecoder().decode(bytes) : ''}`);
+    }
+    return all.join('\n');
+  };
+  return { issuer, resource: `${issuer}/mcp`, remote: running, dropped, kept };
 }
 
 /** A browser's cookies, by name, for this one host */
@@ -318,7 +318,7 @@ async function signIn(
       },
     ),
   );
-  return { tokens, did: key.did };
+  return { tokens, did: key.did, key: key.jwk };
 }
 
 async function mcpClient(resource: string, token: string) {
@@ -352,9 +352,17 @@ describe('a host’s MCP endpoint', () => {
     const host = await aHost(hub);
 
     const app = await anApp(host.resource);
-    const { tokens, did } = await signIn(app, host.resource, (audience) => ada.grantFor(audience));
+    const { tokens, did, key } = await signIn(app, host.resource, (audience) => ada.grantFor(audience));
     assert.ok(tokens.access_token);
-    assert.ok(tokens.refresh_token, 'a refresh token, so the connection lasts as long as its note');
+    assert.equal(tokens.refresh_token, undefined, 'no refresh token: the token lasts as long as its note');
+    // The key and note travel in the token: the service keeps neither, nor anything naming them.
+    const kept = await host.kept();
+    assert.ok(!kept.includes(did), 'no key it acts with');
+    assert.ok(
+      typeof key.privateKey.d === 'string' && !kept.includes(key.privateKey.d),
+      'nor its private half',
+    );
+    assert.ok(!kept.includes(tokens.access_token.slice(-40)), 'nor the token');
 
     const client = await mcpClient(host.resource, tokens.access_token);
     const { tools } = await client.listTools();
@@ -394,18 +402,6 @@ describe('a host’s MCP endpoint', () => {
     assert.equal(note!.root, ada.did, 'written as Ada');
     assert.equal(note!.recordsOnly, true, 'marked as written under a records-only note');
     assert.notEqual(did, ada.did);
-
-    // A refreshed token acts for the same connection.
-    const refreshed = await oauth.processRefreshTokenResponse(
-      app.as,
-      app.client,
-      await oauth.refreshTokenGrantRequest(app.as, app.client, oauth.None(), tokens.refresh_token, {
-        additionalParameters: { resource: host.resource },
-        ...insecure,
-      }),
-    );
-    const again = await mcpClient(host.resource, refreshed.access_token);
-    assert.match(textOf(await again.callTool({ name: 'spaces_list', arguments: {} })), new RegExp(space.id));
   });
 
   test('a second app connected from the same browser is a sign-in of its own, and the first keeps working', async () => {
@@ -594,19 +590,15 @@ describe('a host’s MCP endpoint', () => {
     );
   });
 
-  test('a connection that can’t act any more is forgotten, key and spaces, and its token stops working', async () => {
+  test('a token whose note has run out gets the challenge again', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const ada = await accountHolder(hub);
     const host = await aHost(hub);
     const app = await anApp(host.resource);
-    const { tokens } = await signIn(app, host.resource, (audience) => ada.grantFor(audience, 2));
+    const { tokens } = await signIn(app, host.resource, (audience) => ada.grantFor(audience, 3));
     const client = await mcpClient(host.resource, tokens.access_token);
-    await client.callTool({ name: 'spaces_list', arguments: {} });
-    assert.equal(await host.connections(), 1);
-    await new Promise((resolve) => setTimeout(resolve, 2500));
-    await host.remote.sweep();
-    assert.equal(await host.connections(), 0, 'its key is gone from the host');
-    assert.equal(host.dropped.length, 1, 'and the spaces its agent kept');
+    assert.equal((await client.callTool({ name: 'spaces_list', arguments: {} })).isError, false);
+    await new Promise((resolve) => setTimeout(resolve, 3500));
     const after = await fetch(host.resource, {
       method: 'POST',
       headers: {
@@ -619,36 +611,35 @@ describe('a host’s MCP endpoint', () => {
     assert.equal(after.status, 401, 'the app is asked to sign in again');
   });
 
-  test('an account keeps its newest ten connections here, and a host runs only so many agents at once', async () => {
+  test('a token sealed by another service, or changed, is no token here', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const ada = await accountHolder(hub);
-    const host = await aHost(hub, { running: 2 });
-    const app = await anApp(host.resource);
-    const signedIn = [];
-    for (let i = 0; i < 11; i++)
-      signedIn.push(await signIn(app, host.resource, (audience) => ada.grantFor(audience)));
-    assert.equal(await host.connections(), 10);
-    assert.equal(host.dropped.length, 1, 'the oldest went, spaces and all');
-    for (const { tokens } of signedIn.slice(-3)) {
-      const client = await mcpClient(host.resource, tokens.access_token);
-      assert.equal((await client.callTool({ name: 'spaces_list', arguments: {} })).isError, false);
-    }
+    const one = await aHost(hub);
+    const other = await aHost(hub);
+    const app = await anApp(one.resource);
+    const { tokens } = await signIn(app, one.resource, (audience) => ada.grantFor(audience));
+    const call = (resource: string, token: string) =>
+      fetch(resource, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+          authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+      });
+    assert.equal((await call(other.resource, tokens.access_token)).status, 401, 'another service’s');
+    const parts = tokens.access_token.split('.');
+    const tail = parts[3]!;
+    parts[3] = `${tail.slice(0, -2)}${tail.endsWith('AA') ? 'BB' : 'AA'}`;
+    assert.equal((await call(one.resource, parts.join('.'))).status, 401, 'one changed on the way');
   });
 
-  test('only an account the host names may connect, and a sign-in is answered once', async () => {
+  test('a sign-in is answered once, and never for the whole account', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
-    const stranger = await accountHolder(hub, { unnamed: true });
     const ada = await accountHolder(hub);
     const host = await aHost(hub);
     const app = await anApp(host.resource);
-    const refused = await startSignIn(app, host.resource);
-    const key = await browserKey();
-    const answer = await postFromPage(refused, 'allow', {
-      key: key.jwk,
-      grant: await stranger.grantFor(key.did),
-    });
-    assert.equal(answer.status, 400);
-    assert.match(String(field(await answer.json())('error')), /only for the accounts it names/);
     const whole = await startSignIn(app, host.resource);
     const wholeKey = await browserKey();
     const everything = await postFromPage(whole, 'allow', {
@@ -677,7 +668,6 @@ describe('a host’s MCP endpoint', () => {
       grant: await ada.grantFor(second.did),
     });
     assert.equal(again.status, 409, 'nobody adds connections under an answered sign-in');
-    assert.equal(await host.connections(), 1);
   });
 
   test('naming a key takes holding it: someone with only an account’s notes can’t connect under them', async () => {
@@ -697,7 +687,7 @@ describe('a host’s MCP endpoint', () => {
       });
       assert.equal(answer.status, 400, 'a private key that isn’t the public key’s');
     }
-    assert.equal(await host.connections(), 1, 'nothing kept, and nothing of hers pushed out');
+
     const client = await mcpClient(host.resource, real.tokens.access_token);
     assert.ok((await client.listTools()).tools.length > 0, 'her app still works');
   });
@@ -727,76 +717,63 @@ describe('a host’s MCP endpoint', () => {
   });
 });
 
-describe('a connection’s agent', () => {
-  test('calls at once for an idle connection start one agent, never two under one key', async () => {
-    const hub = createFakeHub({ latencyMs: 1 });
-    const ada = await accountHolder(hub);
+describe('a session’s node', () => {
+  /** Sessions on the hub, and the ids whose nodes started */
+  async function someSessions(hub: FakeHub, running?: number) {
     const stores = memoryStores();
     const starts: string[] = [];
-    const connections = createConnections({
-      accounts: named,
-      store: await stores('host-mcp'),
+    const sessions = createSessions({
       stores: (id) => {
         starts.push(id);
-        return (where) => stores(`agents/${id}/${where}`);
+        return (where) => stores(`sessions/${id}/${where}`);
       },
       drop: async () => {},
       network: () => onHub(hub),
+      ...(running !== undefined ? { running } : {}),
     });
-    closing.push(() => connections.close());
+    closing.push(() => sessions.close());
+    return { sessions, starts };
+  }
+
+  test('calls at once for an idle session start one node, never two under one key', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    const { sessions, starts } = await someSessions(hub);
     const key = await browserKey();
-    const connection = await connections.add({
-      key: key.jwk,
-      grant: await ada.grantFor(key.did),
-      client: 'Claude',
-    });
+    const granted = await checkGranted(key.jwk, await ada.grantFor(key.did));
     const nodes = await Promise.all(
-      Array.from({ length: 8 }, () => connections.use(connection.id, async (node) => node)),
+      Array.from({ length: 8 }, () => sessions.use('one', granted, async (node) => node)),
     );
-    assert.equal(starts.length, 1, 'one agent started');
+    assert.equal(starts.length, 1, 'one node started');
     assert.ok(
       nodes.every((node) => node === nodes[0]),
       'and every call ran on it',
     );
   });
 
-  test('a host runs no more agents at once than its cap: the rest wait their turn', async () => {
+  test('no more run at once than the cap: the rest wait their turn', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const ada = await accountHolder(hub);
-    const stores = memoryStores();
     const cap = 2;
-    const connections = createConnections({
-      accounts: named,
-      store: await stores('host-mcp'),
-      stores: (id) => (where) => stores(`agents/${id}/${where}`),
-      drop: async () => {},
-      network: () => onHub(hub),
-      running: cap,
-    });
-    closing.push(() => connections.close());
-    const ids: string[] = [];
-    for (let i = 0; i < 6; i++) {
-      const key = await browserKey();
-      ids.push(
-        (await connections.add({ key: key.jwk, grant: await ada.grantFor(key.did), client: 'Claude' })).id,
-      );
-    }
+    const { sessions } = await someSessions(hub, cap);
     let now = 0;
     let most = 0;
     await Promise.all(
-      ids.map((id) =>
-        connections.use(id, async () => {
+      Array.from({ length: 6 }, async (_, i) => {
+        const key = await browserKey();
+        const granted = await checkGranted(key.jwk, await ada.grantFor(key.did));
+        await sessions.use(`s${i}`, granted, async () => {
           now += 1;
           most = Math.max(most, now);
           await new Promise((resolve) => setTimeout(resolve, 300));
           now -= 1;
-        }),
-      ),
+        });
+      }),
     );
     assert.ok(most <= cap, `${most} ran at once under a cap of ${cap}`);
   });
 
-  test('a key revoked while its agent was idle is heard the next time it runs, and the connection is then forgotten', async () => {
+  test('a key revoked at the account home writes nothing anyone takes', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const ada = await accountHolder(hub);
     const space = await ada.node.spaces.create({ name: 'Diary', visibility: 'private' });
@@ -808,30 +785,19 @@ describe('a connection’s agent', () => {
     await until(
       async () => textOf(await client.callTool({ name: 'spaces_list', arguments: {} })).includes(space.id),
       8000,
-      'the agent to find the space',
+      'the node to find the space',
     );
     await ada.node.spaces.revoke(space.id, did);
-    // Any call runs the agent, which hears the revoke as it syncs; the sweep then forgets it.
-    await until(
-      async () => {
-        await client.callTool({ name: 'spaces_list', arguments: {} }).catch(() => null);
-        await host.remote.sweep();
-        return (await host.connections()) === 0;
-      },
-      10_000,
-      'the host to forget the revoked connection',
-    );
-    assert.equal(host.dropped.length, 1);
-    const after = await fetch(host.resource, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        accept: 'application/json, text/event-stream',
-        authorization: `Bearer ${tokens.access_token}`,
-      },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
-    });
-    assert.equal(after.status, 401);
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await client
+      .callTool({
+        name: 'records_put',
+        arguments: { space: space.id, collection: 'app.note', body: { text: 'after' } },
+      })
+      .catch(() => null);
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    const notes = await ada.node.records.list(space.id, { collection: 'app.note' });
+    assert.ok(!notes.some((note) => field(note.body)('text') === 'after'));
   });
 });
 

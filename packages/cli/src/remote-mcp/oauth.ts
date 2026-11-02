@@ -1,31 +1,40 @@
 /**
- * The host as an OAuth 2.1 authorization server for its MCP endpoint, so a
- * chat app (Claude, ChatGPT, an IDE) connects with the sign-in flow it already
- * has. `oidc-provider` does the protocol: dynamic client registration, PKCE,
- * resource indicators, codes, tokens and refresh. What is Minca's is the one
- * step it hands over, the interaction: the person allows the app at their own
- * account home (`remote-mcp/consent.ts`), and the account the token acts for
- * is the connection that made (`remote-mcp/connections.ts`).
+ * The MCP service as an OAuth 2.1 authorization server, so a chat app
+ * (Claude, ChatGPT, an IDE) connects with the sign-in flow it already has.
+ * `oidc-provider` does the protocol: dynamic client registration, PKCE,
+ * resource indicators, codes and tokens. What is Minca's is the step it hands
+ * over, the interaction: the person allows the app at their own account home
+ * (`consent.ts`), which signs a records-only note for a key the page made.
  *
- * Its state (clients, grants, codes, tokens) is kept in the host's own
- * stores, so a restart signs nobody out.
+ * That key and note travel inside the access token, an encrypted JWT under a
+ * key only this service holds, so it keeps nothing per connection: between
+ * the person allowing it and the app collecting its token, a few minutes at
+ * most, and never after. There is no refresh token; a token lasts as long as
+ * the note, and disconnecting at the account home is what ends it sooner.
+ *
+ * What it does keep (registered apps, codes, sign-ins under way) is small,
+ * runs out, and holds no key.
  */
 import Provider, { errors, type Adapter, type AdapterPayload, type Configuration } from 'oidc-provider';
 import type { IncomingMessage } from 'node:http';
+import { createSecretKey, type KeyObject } from 'node:crypto';
+import { jwtDecrypt } from 'jose';
 import type { StorageAdapter } from '@minca/core';
 import { isRecord } from '../json.js';
-import type { Connections } from './connections.js';
+import { checkGranted, type Granted } from './sessions.js';
 
-/** The one scope: use the account's spaces through this host's MCP endpoint, as the person allowed */
+/** The one scope: use the account's spaces through this MCP endpoint, as the person allowed */
 export const MCP_SCOPE = 'mcp';
 
 /** Where the person allows an app: `oidc-provider` sends them here with the interaction's id */
 export const INTERACTION_PATH = '/oauth/interaction/';
 
-/** How long an access token lasts: an app refreshes it, and the host checks the connection each time */
-const ACCESS_TOKEN_SECONDS = 3600;
-/** How long a refresh token lasts: as long as the note a connection gets (`consent.ts`, `CONNECT_DAYS`) */
-const REFRESH_TOKEN_SECONDS = 30 * 86_400;
+/** How long an access token lasts: as long as the note it carries can (`consent.ts`, `CONNECT_DAYS`) */
+const ACCESS_TOKEN_SECONDS = 30 * 86_400;
+/** How long what a person allowed waits for the app to collect its token */
+const PENDING_SECONDS = 600;
+/** Where it waits */
+const PENDING = 'oauth:Pending:';
 
 /** `oidc-provider`'s session cookie and its signature, by their default names */
 const SESSION_COOKIE = /^\s*_session(\.[a-z]+)?=/;
@@ -190,7 +199,8 @@ export interface OAuthOptions {
   /** The MCP endpoint, the one resource tokens are for, e.g. `https://mcp.minca.social/mcp` */
   readonly resource: string;
   readonly store: StorageAdapter;
-  readonly connections: Connections;
+  /** 32 bytes only this service holds: tokens are sealed under it */
+  readonly secret: Uint8Array;
   /** Whether a code may go to a place an app registers (`redirects.ts`) */
   readonly mayRedirect: (uri: string) => boolean;
   /** Who is asking, for counting: the address the host trusts for it (`addressOf` in `host.ts`) */
@@ -199,7 +209,24 @@ export interface OAuthOptions {
 
 /** The authorization server, and how the MCP endpoint checks a token it issued */
 export async function createOAuth(options: OAuthOptions) {
-  const { issuer, resource, connections } = options;
+  const { issuer, resource } = options;
+  if (options.secret.length !== 32) throw new Error('The token secret must be 32 bytes');
+  const sealing: KeyObject = createSecretKey(options.secret);
+
+  /** What a person allowed, until the app collects it */
+  const pending = {
+    async take(id: string): Promise<Granted | null> {
+      const bytes = await options.store.get(`${PENDING}${id}`);
+      if (!bytes) return null;
+      await options.store.delete(`${PENDING}${id}`);
+      const kept: unknown = JSON.parse(new TextDecoder().decode(bytes));
+      if (!isKept(kept) || (kept.expiresAt ?? 0) <= now()) return null;
+      return checkGranted(kept.payload.key, kept.payload.grant).catch(() => null);
+    },
+    async has(id: string): Promise<boolean> {
+      return (await options.store.get(`${PENDING}${id}`)) !== null;
+    },
+  };
   const jwk = await keptSecret(options.store, 'signing-key', signingKey);
   const keys = await keptSecret(options.store, 'cookie-keys', cookieKeys);
 
@@ -212,7 +239,7 @@ export async function createOAuth(options: OAuthOptions) {
       // computer at any port (RFC 8252), or an app's scheme; which of those may get a code is
       // `mayRedirect`, checked below.
       application_type: 'native',
-      grant_types: ['authorization_code', 'refresh_token'],
+      grant_types: ['authorization_code'],
       response_types: ['code'],
       token_endpoint_auth_method: 'none',
       id_token_signed_response_alg: 'ES256',
@@ -249,16 +276,24 @@ export async function createOAuth(options: OAuthOptions) {
     // The authorization code flow, with PKCE, for apps with no secret, and nothing else.
     responseTypes: ['code'],
     clientAuthMethods: ['none'],
-    scopes: ['offline_access', MCP_SCOPE],
-    // The account is a connection: there while it can still act for the person.
+    scopes: [MCP_SCOPE],
+    // The account is what the person allowed, until the app collects it.
     findAccount: async (_ctx, id) =>
-      (await connections.usable(id)) ? { accountId: id, claims: () => ({ sub: id }) } : undefined,
+      (await pending.has(id)) ? { accountId: id, claims: () => ({ sub: id }) } : undefined,
+    // The key and the note go into the token, sealed with it, and leave the service with it.
+    extraTokenClaims: async (_ctx, token) => {
+      if (token.kind !== 'AccessToken' || !token.accountId) return undefined;
+      const granted = await pending.take(token.accountId);
+      if (!granted) throw new errors.InvalidGrant('what was allowed has run out; connect again');
+      return { minca: granted };
+    },
     features: {
       devInteractions: { enabled: false },
       // Any app may register itself; the person sees its name and where it sends them back before allowing it.
-      // No token to manage a registration with afterwards: this host offers none of that.
+      // No token to manage a registration with afterwards: this service offers none of that.
       registration: { enabled: true, issueRegistrationAccessToken: false },
-      revocation: { enabled: true },
+      // A sealed token is the service's to read, not to remember: there is nothing here to revoke.
+      revocation: { enabled: false },
       userinfo: { enabled: false },
       rpInitiatedLogout: { enabled: false },
       resourceIndicators: {
@@ -271,21 +306,21 @@ export async function createOAuth(options: OAuthOptions) {
             scope: MCP_SCOPE,
             audience: resource,
             accessTokenTTL: ACCESS_TOKEN_SECONDS,
-            accessTokenFormat: 'opaque',
+            accessTokenFormat: 'jwt',
+            jwt: { encrypt: { alg: 'dir', enc: 'A256GCM', key: sealing } },
           };
         },
       },
     },
-    // Every app gets a refresh token, so a connection lasts as long as its note, not an hour.
-    issueRefreshToken: async (_ctx, client) => client.grantTypeAllowed('refresh_token'),
-    // Nor do its tokens end with the browser's sign-in here, which lasts only for the one sign-in.
+    // No refresh token: it would be kept here, and with it what it renews.
+    issueRefreshToken: async () => false,
+    // Nor does a token end with the browser's sign-in here, which lasts only for the one sign-in.
     expiresWithSession: async () => false,
     pkce: { required: () => true },
     ttl: {
       AccessToken: ACCESS_TOKEN_SECONDS,
       AuthorizationCode: 60,
-      RefreshToken: REFRESH_TOKEN_SECONDS,
-      Grant: REFRESH_TOKEN_SECONDS,
+      Grant: PENDING_SECONDS,
       Interaction: 3600,
       // Only as long as one sign-in takes: nothing reads it after (see `provider.use` below).
       Session: 600,
@@ -295,7 +330,6 @@ export async function createOAuth(options: OAuthOptions) {
       authorization: '/oauth/authorize',
       token: '/oauth/token',
       registration: '/oauth/register',
-      revocation: '/oauth/revoke',
       jwks: '/oauth/jwks',
     },
     renderError: (ctx, out) => {
@@ -346,32 +380,38 @@ export async function createOAuth(options: OAuthOptions) {
   return {
     provider,
     stop: () => clearInterval(sweeping),
-    /** Keeps an app registered as long as a connection made through it can last: until `until`, unix seconds */
-    async keepClient(clientId: string, until: number) {
-      const key = `oauth:Client:${clientId}`;
-      const bytes = await options.store.get(key);
-      if (!bytes) return;
-      const kept: unknown = JSON.parse(new TextDecoder().decode(bytes));
-      if (!isKept(kept)) return;
-      const expiresAt = Math.max(kept.expiresAt ?? 0, until);
-      await options.store.put(key, encode({ ...kept, expiresAt }));
+    /** Keeps what a person allowed until the app collects its token: the id the sign-in names */
+    async pend(granted: Granted): Promise<string> {
+      const id = Buffer.from(globalThis.crypto.getRandomValues(new Uint8Array(16))).toString('base64url');
+      await options.store.put(
+        `${PENDING}${id}`,
+        encode({ payload: granted, expiresAt: now() + PENDING_SECONDS }),
+      );
+      return id;
     },
     /**
-     * The connection an access token acts for, checked: issued here, for the
-     * MCP endpoint, not run out, and its connection still able to act.
+     * What an access token carries, checked: sealed here, for the MCP
+     * endpoint, not run out, and a key and note that still check out.
      * @throws `errors.InvalidToken` otherwise
      */
     async verify(token: string) {
-      const found = await provider.AccessToken.find(token);
-      if (!found || found.isExpired || !found.accountId) throw new errors.InvalidToken('unknown token');
-      if (found.aud !== resource) throw new errors.InvalidToken('not for this resource');
-      if (!(await connections.usable(found.accountId)))
-        throw new errors.InvalidToken('the connection can no longer act for the account');
+      let payload;
+      try {
+        ({ payload } = await jwtDecrypt(token, sealing, { issuer, audience: resource }));
+      } catch {
+        throw new errors.InvalidToken('not a token this service sealed, or run out');
+      }
+      const carried: unknown = payload.minca;
+      if (!isRecord(carried)) throw new errors.InvalidToken('it carries nothing');
+      const granted = await checkGranted(carried.key, carried.grant).catch(() => null);
+      if (!granted) throw new errors.InvalidToken('what it carries no longer checks out; connect again');
+      const scopes = typeof payload.scope === 'string' ? payload.scope.split(' ') : [];
       return {
-        connection: found.accountId,
-        clientId: found.clientId,
-        scopes: [...(found.scopes ?? [])],
-        expiresAt: found.exp,
+        session: typeof payload.jti === 'string' ? payload.jti : '',
+        granted,
+        clientId: typeof payload.client_id === 'string' ? payload.client_id : '',
+        scopes,
+        ...(typeof payload.exp === 'number' ? { expiresAt: payload.exp } : {}),
       };
     },
   };

@@ -1,8 +1,8 @@
 /**
- * A host's MCP endpoint, so a chat app connects to Minca by its address alone:
- * Claude, ChatGPT, an IDE, from the web, the desktop or a phone. The app's
- * own model does the thinking, on the person's own plan; the host runs the
- * tools.
+ * Minca's MCP service, so a chat app connects to someone's spaces by an
+ * address alone: Claude, ChatGPT, an IDE, from the web, the desktop or a
+ * phone. The app's own model does the thinking, on the person's own plan; the
+ * service runs the tools.
  *
  *   POST /mcp                                          MCP over Streamable HTTP, with a bearer token
  *   GET  /.well-known/oauth-protected-resource[/mcp]   where to get a token (RFC 9728)
@@ -11,11 +11,11 @@
  *        /oauth/...                                    registering, signing in, tokens (`oauth.ts`)
  *        /oauth/interaction/:uid                       where the person allows the app (`consent.ts`)
  *
- * Each connection is an agent of the person's account, with a records-only
- * note their account home signed, in the spaces they picked
- * (`connections.ts`): it writes as them, "via agent", and can't add
- * collections or change who is in a space. The tools are `NODE_ACTIONS`, as
- * `minca mcp` offers them (`mcp.ts`).
+ * Each token carries an agent of the person's account: a key, with a
+ * records-only note their account home signed for the spaces they picked
+ * (`sessions.ts`). It writes as them, "via agent", and can't add collections
+ * or change who is in a space. The tools are `NODE_ACTIONS`, as `minca mcp`
+ * offers them (`mcp.ts`). It keeps nothing per connection: the token does.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
@@ -33,25 +33,25 @@ import {
 } from '@modelcontextprotocol/server';
 import { toNodeHandler } from '@modelcontextprotocol/node';
 import { callAction, type NodeConfig, type StorageAdapter, type StoreFactory } from '@minca/core';
+import { createSessions, type Granted } from './sessions.js';
 import { isRecord, messageOf } from '../json.js';
 import { mcpTools, toolInstructions } from '../mcp.js';
-import { createConnections } from './connections.js';
 import { createConsent } from './consent.js';
 import { createOAuth, MCP_SCOPE } from './oauth.js';
 import { mayRedirect } from './redirects.js';
 
-/** Where the endpoint is, on the host */
+/** Where the endpoint is */
 const MCP_PATH = '/mcp';
 
 /** The authorization server's paths, as `oauth.ts` names them: a sign-in resumes at `authorize/<uid>` */
-const PROVIDER_PATH = /^\/oauth\/(authorize|authorize\/[A-Za-z0-9_-]{1,64}|token|register|revoke|jwks)$/;
+const PROVIDER_PATH = /^\/oauth\/(authorize|authorize\/[A-Za-z0-9_-]{1,64}|token|register|jwks)$/;
 
 /** What a connection may do: an agent's tools, as `minca mcp` offers them to a connected agent */
 const AGENT = { agent: true } as const;
 
 /**
  * Not offered here: previewing an invite dials the places its short link
- * names, and on a host that would be any address a caller chose, its own
+ * names, and on a server that would be any address a caller chose, its own
  * network included. An agent can't join a space anyway.
  */
 const NOT_HOSTED = new Set(['spaces_preview_invite']);
@@ -75,30 +75,30 @@ function objectOf(value: unknown): JSONObject {
 }
 
 export interface RemoteMcpOptions {
-  /** The host's address as people reach it, https://: the issuer, and where the endpoint is */
+  /** The service's address as people reach it, https://: the issuer, and where the endpoint is */
   readonly publicUrl: string;
-  /** The accounts that may connect, by DID: no account's room or fund pays for a connection yet */
-  readonly accounts: ReadonlyArray<string>;
-  /** Where connections and the authorization server's state are kept */
+  /** 32 bytes only this service holds: every token is sealed under them */
+  readonly secret: Uint8Array;
+  /** Where the authorization server keeps what it must: apps registered, sign-ins under way */
   readonly store: StorageAdapter;
-  /** Where each connection's agent keeps its spaces */
-  readonly stores: (connection: string) => StoreFactory;
-  /** Removes what a connection's agent kept, once the connection is forgotten */
-  readonly drop: (connection: string) => Promise<void>;
-  /** Who is asking, for counting sign-ins: the address the host trusts for it */
+  /** A folder of stores for a session's node while it runs */
+  readonly stores: (session: string) => StoreFactory;
+  /** Removes that folder once the node stops */
+  readonly drop: (session: string) => Promise<void>;
+  /** Who is asking, for counting sign-ins */
   readonly addressOf: (req: IncomingMessage) => string;
-  /** How a connection's agent reaches its spaces: the host's own socket */
+  /** How a session's node reaches the spaces it was given: the hosts the service names */
   readonly network: () => NodeConfig['network'];
-  /** What the host calls itself */
+  /** What the service calls itself */
   readonly name: string;
   readonly version: string;
   /** The account home the consent page suggests. Default `https://home.minca.social`. */
   readonly accountHome?: string;
   /** More chat apps a sign-in may go back to, by host (`chat.example.com`) or scheme (`zed:`) */
   readonly moreApps?: ReadonlyArray<string>;
-  /** How long a connection's agent stays up after its last call */
+  /** How long a session's node stays up after its last call */
   readonly idleMs?: number;
-  /** Agents running at once */
+  /** Nodes running at once */
   readonly running?: number;
   readonly log?: (line: string) => void;
 }
@@ -106,8 +106,6 @@ export interface RemoteMcpOptions {
 export interface RemoteMcp {
   /** Answers the request if it is the endpoint's, the authorization server's or the consent page's */
   routes(req: IncomingMessage, res: ServerResponse): Promise<boolean>;
-  /** Forgets every connection that can't act any more: it runs by itself every hour */
-  sweep(): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -117,9 +115,7 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
   const resource = `${issuer}${MCP_PATH}`;
   const resourceUrl = new URL(resource);
 
-  const connections = createConnections({
-    accounts: options.accounts,
-    store: options.store,
+  const sessions = createSessions({
     stores: options.stores,
     drop: options.drop,
     network: options.network,
@@ -131,14 +127,13 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
     issuer,
     resource,
     store: options.store,
-    connections,
+    secret: options.secret,
     mayRedirect: (uri) => mayRedirect(uri, options.moreApps),
     addressOf: options.addressOf,
   });
   const provider = oauth.provider.callback();
   const consent = createConsent({
     oauth,
-    connections,
     issuer,
     resource,
     name: options.name,
@@ -173,7 +168,7 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
             scopes: found.scopes,
             ...(found.expiresAt !== undefined ? { expiresAt: found.expiresAt } : {}),
             resource: resourceUrl,
-            extra: { connection: found.connection },
+            extra: { session: found.session, granted: found.granted },
           };
         } catch (error) {
           // A 401 with the challenge, so the app signs in again.
@@ -189,14 +184,16 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
   /** A server for one request, acting as the connection the token names */
   const mcp = createMcpHandler(
     async ({ authInfo }) => {
-      const connection = typeof authInfo?.extra?.connection === 'string' ? authInfo.extra.connection : null;
-      const kept = connection ? await connections.get(connection) : null;
+      const session = typeof authInfo?.extra?.session === 'string' ? authInfo.extra.session : null;
+      // Put there by the verifier above, from the token it opened.
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- checked by checkGranted in oauth.verify
+      const granted = (authInfo?.extra?.granted ?? null) as Granted | null;
       const server = new Server(
         { name: 'minca', version: options.version },
         {
           capabilities: { tools: {} },
           // Who it acts for, from the grant: said without starting the agent.
-          ...(kept ? { instructions: toolInstructions({ did: kept.grant.did }, AGENT) } : {}),
+          ...(granted ? { instructions: toolInstructions({ did: granted.grant.did }, AGENT) } : {}),
         },
       );
       server.setRequestHandler('tools/list', () => ({
@@ -209,10 +206,11 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
         const name = request.params.name;
         if (!hostedTools().some((tool) => tool.name === name))
           return { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true };
-        if (!connection) return { content: [{ type: 'text', text: 'Not signed in.' }], isError: true };
+        if (!session || !granted)
+          return { content: [{ type: 'text', text: 'Not signed in.' }], isError: true };
         let said: Awaited<ReturnType<typeof callAction>>;
         try {
-          said = await connections.use(connection, (node) =>
+          said = await sessions.use(session, granted, (node) =>
             callAction(node, name, request.params.arguments ?? {}),
           );
         } catch (error) {
@@ -266,7 +264,7 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
       }
       if (await consent(req, res, path)) return true;
       // Only the provider's own paths, exactly: what it would also match spelled another way is not
-      // what the host counts (`oauth.ts`).
+      // what the service counts (`oauth.ts`).
       if (path === '/.well-known/openid-configuration' || PROVIDER_PATH.test(path)) {
         await provider(req, res);
         return true;
@@ -278,11 +276,10 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
       }
       return false;
     },
-    sweep: () => connections.sweep(),
     async close() {
       oauth.stop();
       await mcp.close();
-      await connections.close();
+      await sessions.close();
     },
   };
 }

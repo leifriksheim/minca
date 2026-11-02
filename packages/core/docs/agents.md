@@ -56,21 +56,19 @@ without a restart.
 terminal and thinks with the person's own Anthropic API key, offering the model
 the same tools. See `packages/cli/README.md`.
 
-## Connecting a chat app through a host
+## Connecting a chat app
 
-A host can offer the same tools to chat apps over the network (`minca host`
-with `MINCA_HOST_MCP=on`, for the accounts it names): an MCP endpoint at
-`/mcp`, signed in with OAuth.
-The consent page the app opens is an app like any other to the account home:
-it makes a key in the browser and asks for a note with `connectToHome`,
-records only, in the spaces the person picks, then hands the key and the note
-to the host, which checks the note (`checkGrant(grant, did, { recordsOnly:
-true })`) before the app gets a code. Each connection is an agent of the
-account, as `minca connect` makes one, but the host holds its key, so the
-host can read what it was given. Its node reaches only the host's own socket
+Minca's MCP service (`minca mcp-server`) offers the same tools to chat apps
+over the network: an MCP endpoint at `/mcp`, signed in with OAuth. The
+consent page the app opens is an app like any other to the account home: it
+makes a key in the browser and asks for a note with `connectToHome`, records
+only, in the spaces the person picks, then hands the key and the note to the
+service, which checks them (`checkGrant(grant, did, { recordsOnly: true })`,
+and that the key's halves belong together) and seals them into the app's
+access token. Each call starts a node from what the token carries
+(`startGrantedAgent`), reaching only the always-on nodes the service was given
 (`network.only`, [node.md](node.md)). Nothing new goes over the wire between
-the home and the page: the host is only where the key is kept. See
-`packages/cli/README.md`, Agents.
+the home and the page. See `packages/cli/README.md`, Agents.
 
 ## Connecting at your account home
 

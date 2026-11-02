@@ -290,51 +290,66 @@ rules): it needs the account unlocked on the server, a host never does.
 
 ### From a chat app, with nothing to install
 
-A host started with `MINCA_HOST_MCP=on` is also an MCP server that chat apps
-connect to by its address alone: `https://<host>/mcp`, for the accounts it
-names in `MINCA_HOST_MCP_ACCOUNTS` (yours, your family's, your team's): each
-connection is a key, a copy of spaces and a node the host keeps, which no
-account's room or fund pays for yet. In Claude, add it as a
-custom connector; in ChatGPT, Cursor, VS Code or Claude Code, wherever remote
-MCP servers go (`claude mcp add --transport http minca https://<host>/mcp`).
-The app's own model does the thinking, on your own plan; the host only runs
-the tools, so it costs the host bandwidth, not tokens.
+`minca mcp-server` is Minca's MCP service: chat apps connect to it by its
+address alone, `https://<service>/mcp`. In Claude, add it as a custom
+connector; in ChatGPT, Cursor, VS Code or Claude Code, wherever remote MCP
+servers go (`claude mcp add --transport http minca https://<service>/mcp`).
+The app's own model does the thinking, on your own plan; the service only
+runs the tools.
 
-Connecting is the sign-in the app already has. The app finds the host's
+```bash
+MINCA_MCP_URL=https://mcp.example.com \
+MINCA_NODES=wss://host.example.com/peer#did:key:z… \
+npx @minca/cli mcp-server --port 8788 --host 0.0.0.0
+```
+
+Connecting is the sign-in the app already has. The app finds the service's
 authorization server from the endpoint's `401`, registers itself, and opens
-the host's consent page, which says which app it is and where it will send
-you back. There you continue to your account home, as with any app, pick the
-spaces it may use (never the whole account) and allow it: the home signs a records-only note, for 30
-days, made out to a key the page made, and the page hands both to the host.
-Then you are back in the app, and its tools arrive. The host keeps that key
-and runs the agent under it, a node of its own that starts on the first call
-and stops when unused; so, unlike `minca connect`, the host can read the
-spaces you gave it. The agent reaches its spaces only through the host's own
-socket, so it works in the spaces this host carries, and nowhere a grant or a
-record would send it. Your account home shows the host as one connection,
-whichever apps you connected through it: disconnecting it there stops what
-every one of them writes counting at once. The host forgets a connection, its
-key and the spaces its agent kept, when its note runs out, or sooner once its
-agent hears of the disconnect, the next time it runs in a space this host
-carries; and the app asks you to sign in again.
+the consent page, which says which app it is and where it will send you
+back. There you continue to your account home, as with any app, pick the
+spaces it may use (up to 8, never the whole account) and allow it: the home
+signs a records-only note, for 30 days, made out to a key the page made. The
+page hands both to the service, which checks them and seals them into the
+app's access token, under a key only it holds. Then you are back in the app,
+and its tools arrive.
+
+The service keeps nothing per connection: no key, no note, no copy of your
+spaces. Each call opens the token, and a node starts from what it carries.
+That node reaches your spaces only through the always-on nodes the service
+was given (`MINCA_NODES`, such as your free host), so it works with every
+device of yours offline, in the spaces those carry, and nowhere a grant or a
+record would send it. It runs while the app uses it, at most 32 at once, and
+when it stops, its copy of your spaces goes. While a call runs, the service
+can read the spaces you gave it, as the chat app's maker can read what its
+model sees.
+
+A token lasts as long as its note, with no refresh token. Disconnecting at
+your account home is what ends it sooner: what the key writes after stops
+counting everywhere at once. Your home shows the service as one connection,
+whichever apps you connected through it, so disconnecting there
+disconnects them all.
 
 It is OAuth 2.1 with PKCE and dynamic client registration, on
-[`oidc-provider`](https://github.com/panva/node-oidc-provider), and MCP over
-Streamable HTTP on the [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk);
-the tools are the same `NODE_ACTIONS` as `minca mcp`, but for previewing an
-invite, which would have the host dial addresses a caller chose. Every
-sign-in shows the consent page: the host keeps no sign-in in your browser to
-skip it with. An app may register only places a code is safe at: a chat app
-the host knows by name over https (Claude's and ChatGPT's, and
-`MINCA_HOST_MCP_APPS`), this computer, or a known app's own scheme (`cursor:`,
-`vscode:`), never one that opens a browser at any address. So a code goes
-only to the site or app scheme the page names: on a shared site such as
-claude.ai, only its MCP callback, and there any connector, which is why the
-name the app gave itself is shown beside it. Whether a sign-in someone
-else started, and sent you, could land in their account at that app is the
-app's to check (OAuth's `state`), not the host's.
+[`oidc-provider`](https://github.com/panva/node-oidc-provider), tokens as
+encrypted JWTs (`jose`), and MCP over Streamable HTTP on the
+[MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk).
+The tools are the same `NODE_ACTIONS` as `minca mcp`, but for previewing an
+invite, which would have the service dial addresses a caller chose. Every
+sign-in shows the consent page. An app may register only places a code is
+safe at: Claude's and ChatGPT's MCP callbacks exactly, a host in
+`MINCA_MCP_APPS` (any page there), this computer, or a known app's own scheme
+(`cursor:`, `vscode:`), never one that opens a browser at any address. Whether
+a sign-in someone else started, and sent you, could land in their account at
+that app is the app's to check (OAuth's `state`), not the service's. An
+address may register 200 apps a day and start 120 sign-ins an hour, and an
+app nobody connected through goes after a day.
 
-_Source: `packages/cli/src/remote-mcp/` (`index.ts`, `oauth.ts`, `consent.ts`, `consent-script.ts`, `connections.ts`, `redirects.ts`). Tests: `packages/cli/tests/remote-mcp.test.ts`._
+`MINCA_MCP_DATA` is where it keeps its token secret and sign-ins under way
+(default `~/.minca-mcp`): losing the secret signs every app out. `MINCA_MCP_HOME`
+is the account home the consent page suggests, and `MINCA_MCP_APPS` more chat
+apps a sign-in may go back to.
+
+_Source: `packages/cli/src/remote-mcp/` (`index.ts`, `oauth.ts`, `consent.ts`, `consent-script.ts`, `sessions.ts`, `redirects.ts`, `server.ts`). Tests: `packages/cli/tests/remote-mcp.test.ts`, `packages/cli/tests/remote-mcp-server.test.ts`._
 
 ### From this computer
 

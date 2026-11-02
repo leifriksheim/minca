@@ -422,8 +422,8 @@ async function startWithKey(
 /**
  * An agent's node under a records-only grant made out to `keys`: a node of
  * its own following the account, holding every space it was given, acting as
- * the agent. `minca agent` runs one in a slot; a host runs one for each
- * connector a person allowed (`remote-mcp/connections.ts`).
+ * the agent. `minca agent` runs one in a slot; the MCP service runs one for
+ * each session a chat app opens (`remote-mcp/sessions.ts`).
  */
 export async function startGrantedAgent(params: {
   readonly grant: Grant;

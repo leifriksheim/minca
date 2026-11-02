@@ -1,10 +1,10 @@
 /**
- * A host's MCP agents reach only the host's own socket. What a connection
- * brings, the invites in its grant and the records its agent reads, is the
- * account's to fill in, so none of it may choose where the host connects or
- * what it keeps: anyone can make an account, and sign a grant of their own.
- * Found by adversarial review; each test was the attack, and fails without
- * `network.only` (`packages/core/src/node/types.ts`).
+ * The MCP service's nodes reach only the always-on nodes it was given. What a
+ * connection brings, the invites in its grant and the records its node reads,
+ * is the account's to fill in, so none of it may choose where the service
+ * connects or what it keeps: anyone can make an account, and sign a grant of
+ * their own. Found by adversarial review; each test was the attack, and fails
+ * without `network.only` (`packages/core/src/node/types.ts`).
  */
 import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -24,7 +24,9 @@ import { noteTerms } from '../../core/src/identity/abilities.js';
 import { encodeInvitation, readInvitation } from '../../core/src/space/invitation.js';
 import { memoryStores } from '../../core/tests/helpers/memory-stores.js';
 import { createFakeHub } from '../../core/tests/helpers/fake-transport.js';
-import { startHost, type RunningHost } from '../src/host.js';
+import { startMcpServer } from '../src/remote-mcp/server.js';
+import { startHost } from '../src/host.js';
+import { until } from '../../core/tests/helpers/until.js';
 import { isRecord } from '../src/json.js';
 import { onHub, tempDir } from './helpers/nodes.js';
 import { openHome, createAccount, unlock, chooseAccount } from '../src/home.js';
@@ -76,30 +78,27 @@ async function internalService() {
   return { port: address.port, seen };
 }
 
-test('a stranger’s grant can’t make the host’s agent dial an address the stranger chose', async () => {
+test('a stranger’s grant can’t make the service’s node dial an address the stranger chose', async () => {
   const internal = await internalService();
 
-  // The host, as `minca host` runs it with MINCA_HOST_MCP=on.
   const port = await freePort();
   const issuer = `http://127.0.0.1:${port}`;
-  const accounts: string[] = [];
-  const host: RunningHost = await startHost({
-    key: await createP256Provider().generateKeyPair(),
-    stores: memoryStores(),
-    port,
-    free: true,
+  // Given one node to reach, which isn't there: what's tested is where else it goes.
+  const service = await startMcpServer({
     publicUrl: issuer,
-    // Named, so its agent runs: what's tested is where that agent may go.
-    mcp: { accounts, folder: await tempDir('mcp-agents-'), accountHome: 'https://home.test' },
+    nodes: ['ws://127.0.0.1:9/peer'],
+    data: await tempDir('mcp-server-'),
+    port,
+    version: '0',
+    accountHome: 'https://home.test',
   });
-  closing.push(() => host.close());
+  closing.push(() => service.close());
 
   // The stranger: an account of their own, made just now, and a space of theirs.
   const hub = createFakeHub({ latencyMs: 1 });
   const manager = createIdentityManager();
   const seed = generateSeed();
   const me = await manager.fromSeed(seed);
-  accounts.push(me.did);
   const signer = createLocalRootSigner(me, manager.getProvider());
   const node = await createNode({
     signer,
@@ -337,7 +336,7 @@ async function bytesUnder(dir: string): Promise<number> {
   return bytes;
 }
 
-test('a stranger’s own node can’t fill the host’s disk through an agent', async () => {
+test('a stranger’s own node can’t fill the service’s disk', async () => {
   // The stranger runs an always-on node of their own, with a space the host has never carried.
   const home = await openHome(await tempDir());
   const created = await createAccount(home, { name: 'Stranger' });
@@ -348,19 +347,19 @@ test('a stranger’s own node can’t fill the host’s disk through an agent', 
   const filler = 'x'.repeat(16_000);
   for (let i = 0; i < 40; i++) await daemon.node.records.put(space.id, 'app.bulk', { i, filler });
 
-  // A host that names the stranger's account: what's tested is what its agent may reach.
+  // The service, given one node to reach that isn't the stranger's.
   const port = await freePort();
   const issuer = `http://127.0.0.1:${port}`;
-  const folder = await tempDir('probe-mcp-agents-');
-  const host: RunningHost = await startHost({
-    key: await createP256Provider().generateKeyPair(),
-    stores: memoryStores(),
-    port,
-    free: true,
+  const folder = await tempDir('mcp-server-');
+  const service = await startMcpServer({
     publicUrl: issuer,
-    mcp: { accounts: [unlocked.account.did], folder, accountHome: 'https://home.test' },
+    nodes: ['ws://127.0.0.1:9/peer'],
+    data: folder,
+    port,
+    version: '0',
+    accountHome: 'https://home.test',
   });
-  closing.push(() => host.close());
+  closing.push(() => service.close());
 
   // An invitation naming the stranger's own node, pinned to it, signed by a key of no account.
   const provider = createP256Provider();
@@ -407,4 +406,112 @@ test('a stranger’s own node can’t fill the host’s disk through an agent', 
     'nothing of it reached',
   );
   assert.ok((await bytesUnder(folder)) < 40 * 16_000, 'nor the host’s disk');
+});
+
+test('with every device of theirs offline, a chat app reads and writes through the free host', async () => {
+  // A free host, and Ada's laptop handing it her space, as the home does for every new account.
+  const served = await startHost({
+    key: await createP256Provider().generateKeyPair(),
+    stores: memoryStores(),
+    port: 0,
+    free: true,
+  });
+  closing.push(() => served.close());
+  const peer = `ws://127.0.0.1:${served.port}/peer`;
+  const manager = createIdentityManager();
+  const seed = generateSeed();
+  const me = await manager.fromSeed(seed);
+  const signer = createLocalRootSigner(me, manager.getProvider());
+  const accountKey = await deriveAccountKey(seed);
+  const onHost = async () => {
+    const node = await createNode({
+      signer,
+      stores: memoryStores(),
+      accountKey,
+      watchIntervalMs: 0,
+      network: { nodes: [peer] },
+    });
+    closing.push(() => node.close());
+    return node;
+  };
+  const laptop = await onHost();
+  const space = await laptop.spaces.create({ name: 'Club', visibility: 'private' });
+  await laptop.records.put(space.id, 'app.note', { text: 'Soup on Friday' });
+  await laptop.hosting.use(`http://127.0.0.1:${served.port}`);
+  // Its registry too, which is how her other devices learn of the space: as `host.test.ts` waits.
+  await until(
+    async () => {
+      const reached = (await served.node.spaces()).filter((one) => one.peers > 0).map((one) => one.name);
+      return reached.includes('Account registry') && reached.includes('Club');
+    },
+    15_000,
+    'the host to carry her registry and the space',
+  );
+  const invite = await laptop.spaces.invite(space.id);
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  await laptop.close();
+
+  // The service, reaching spaces through that host alone.
+  const port = await freePort();
+  const issuer = `http://127.0.0.1:${port}`;
+  const service = await startMcpServer({
+    publicUrl: issuer,
+    nodes: [peer],
+    data: await tempDir('mcp-server-'),
+    port,
+    version: '0',
+    accountHome: 'https://home.test',
+  });
+  closing.push(() => service.close());
+  const token = await signInWith(issuer, async (audience) => {
+    const expiresAt = Math.floor(Date.now() / 1000) + 3600;
+    return {
+      v: GRANT_VERSION,
+      did: me.did,
+      name: 'Ada',
+      note: await signer.delegate({ audience, expiration: expiresAt, ...noteTerms('/record', [space.id]) }),
+      access: 'write',
+      scope: 'spaces',
+      spaces: [{ id: space.id, name: 'Club', invite }],
+      expiresAt,
+      home: 'https://home.test/connect',
+    };
+  });
+
+  await until(
+    async () =>
+      (await callTool(issuer, token, 'records_list', { space: space.id, collection: 'app.note' })).includes(
+        'Soup on Friday',
+      ),
+    20_000,
+    'the chat app to read what the laptop wrote, from the host',
+  );
+  const put = await callTool(issuer, token, 'records_put', {
+    space: space.id,
+    collection: 'app.note',
+    body: { text: 'Bread too' },
+  });
+  assert.match(put, /"isError":false/);
+  // Her phone, later, gets it from the host, as hers and "via agent".
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  const phone = await onHost();
+  // Asked only once it holds the space: listing one it hasn't joined yet waits for it.
+  await until(
+    async () => (await phone.spaces.list()).some((one) => one.id === space.id),
+    40_000,
+    'the phone to learn of the space',
+  );
+  await until(
+    async () =>
+      (await phone.records.list(space.id, { collection: 'app.note' })).some(
+        (record) => isRecord(record.body) && record.body.text === 'Bread too',
+      ),
+    40_000,
+    'the phone to get what the chat app wrote',
+  );
+  const written = (await phone.records.list(space.id, { collection: 'app.note' })).find(
+    (record) => isRecord(record.body) && record.body.text === 'Bread too',
+  );
+  assert.equal(written?.root, me.did, 'written as Ada');
+  assert.equal(written?.recordsOnly, true, 'via agent');
 });

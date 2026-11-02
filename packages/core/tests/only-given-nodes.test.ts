@@ -3,7 +3,7 @@
  * reads and the invites it is handed are someone else's, so none of them may
  * choose an address for it: not a host a record names, nor a short link's
  * places. (That it dials no node an invite names is shown end to end in
- * `packages/cli/tests/remote-mcp-host.test.ts`.)
+ * `packages/cli/tests/remote-mcp-server.test.ts`.)
  */
 import { after, describe, test } from 'node:test';
 import assert from 'node:assert/strict';

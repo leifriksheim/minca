@@ -957,9 +957,9 @@ alone. `network.nodes` still adds sockets of its own, to every space.
 `std.host`), no node an invite names, and no place a short link names: only
 its own `nodes` and `transports`. Relays a space or an invite names are still
 joined beside its `relays`, so a node meant to reach nothing else is given
-none, as a host's agents are. With it, `hosting` calls that ask a
+none, as the MCP service's are. With it, `hosting` calls that ask a
 host, and joining or previewing a short link, fail. It is for a node a server
-runs for someone else, such as the agents a host runs for chat apps: what that
+runs for someone else, such as the MCP service's for chat apps: what that
 node reads, and the invites it is handed, are the other's to write, and must
 not choose where the server connects or what it keeps.
 
@@ -991,7 +991,7 @@ hour (`evaluate`) holds each to the free line. Past a space's `until`, every
 account's carry space stops carrying it (`skip`, in `createCarryCore`), while
 its own subscription still may. Each change is a line in the host's log.
 
-_Source: `packages/core/src/node/node-carriers.ts` (`carriers`, `fetchInvite`), `packages/core/src/node/node-hosting.ts` (`hosting`, `describeAt`), `packages/core/src/node/space-peers.ts` (`useNodes`), `packages/core/src/node/carrier.ts` (`arrived`, `skip`, `onArrived`), `packages/core/src/node/host.ts` (`evaluate`), `packages/core/src/session/hosting.ts`, `packages/cli/src/host.ts`. Tests: `packages/core/tests/carrier.test.ts`, `packages/core/tests/host-limits.test.ts`, `packages/core/tests/only-given-nodes.test.ts`, `packages/cli/tests/host.test.ts`, `packages/cli/tests/remote-mcp-host.test.ts`._
+_Source: `packages/core/src/node/node-carriers.ts` (`carriers`, `fetchInvite`), `packages/core/src/node/node-hosting.ts` (`hosting`, `describeAt`), `packages/core/src/node/space-peers.ts` (`useNodes`), `packages/core/src/node/carrier.ts` (`arrived`, `skip`, `onArrived`), `packages/core/src/node/host.ts` (`evaluate`), `packages/core/src/session/hosting.ts`, `packages/cli/src/host.ts`. Tests: `packages/core/tests/carrier.test.ts`, `packages/core/tests/host-limits.test.ts`, `packages/core/tests/only-given-nodes.test.ts`, `packages/cli/tests/host.test.ts`, `packages/cli/tests/remote-mcp-server.test.ts`._
 
 ### A space paying for itself
 

@@ -27,9 +27,6 @@
  *   GET    /host/paid                             where a checkout page sends people back to
  *   GET    /host/remind/confirm?t=…, /host/remind/stop?t=…   the links in reminder mails
  *
- * With `mcp`, also an MCP endpoint at `/mcp` that chat apps connect to with OAuth, each
- * connection an agent of the account that allowed it (`remote-mcp/index.ts`).
- *
  * `/host/subscriptions` calls are signed with the subscription key. A home shows the price and
  * what `pay` answers itself: a page at the payment provider, or a payment request for a wallet,
  * which the host sees arrive by watching its address. Payment providers sit behind small
@@ -40,12 +37,9 @@
  * on by the GB (`fund.ts`). With `limits`, an account's free room needs no payment, while a
  * community past the free line pays for itself through its fund (spec 08 §1.1).
  */
-import { rm } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import path from 'node:path';
 import {
   createHostNode,
-  directoryStores,
   createP256Provider,
   HOST_DESCRIPTION_PATH,
   NotAllowedError,
@@ -63,7 +57,6 @@ import {
   type StoreFactory,
   type Subscription,
 } from '@minca/core';
-import { openFsDirectory } from './fs-directory.js';
 import { isRecord, messageOf } from './json.js';
 import { queue } from './queue.js';
 import { createInboundPeers, serve, type Served } from './serve.js';
@@ -74,7 +67,6 @@ import { createHostStats } from './host-stats.js';
 import { createFunds } from './fund.js';
 import { createBotConnect, type BotConnect } from './host-connect.js';
 import { dailyBudget, isConnectorId, type HostConnector } from './connectors/connector.js';
-import { createRemoteMcp, type RemoteMcp } from './remote-mcp/index.js';
 
 /** What the host needs from a payment provider */
 export interface Billing {
@@ -160,22 +152,6 @@ export interface HostOptions {
   readonly fundMs?: number;
   /** Whether anyone may see its rounded totals, once an hour, at `/host/stats`. Default true. */
   readonly stats?: boolean;
-  /**
-   * An MCP endpoint at `/mcp` for chat apps (Claude, ChatGPT, an IDE), signed in with OAuth at the
-   * person's account home. Needs `publicUrl`: it is the issuer of every token.
-   */
-  readonly mcp?: {
-    /** The accounts that may connect a chat app here, by DID */
-    readonly accounts: ReadonlyArray<string>;
-    /** Where each connection's agent keeps the spaces it was given, a folder each */
-    readonly folder: string;
-    /** The account home its consent page suggests */
-    readonly accountHome?: string;
-    /** More chat apps a sign-in may go back to, by host or scheme (`zed:`), beside Claude's, ChatGPT's and a few IDEs' */
-    readonly moreApps?: ReadonlyArray<string>;
-    /** The version it says it is */
-    readonly version?: string;
-  } | null;
   readonly log?: (line: string) => void;
 }
 
@@ -1052,29 +1028,6 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
       await reminders.send(await node.list(), (subscription) => node.state(subscription), options.publicUrl);
   }
 
-  const mcp = options.mcp;
-  const remote: RemoteMcp | null = mcp
-    ? await createRemoteMcp({
-        publicUrl: mcpUrl(options.publicUrl),
-        accounts: mcp.accounts,
-        store: await options.stores('host-mcp'),
-        stores: (connection) => {
-          const folder = agentFolder(mcp.folder, connection);
-          return async (where, storeOptions) =>
-            directoryStores(await openFsDirectory(folder))(where, storeOptions);
-        },
-        drop: (connection) => rm(agentFolder(mcp.folder, connection), { recursive: true, force: true }),
-        addressOf: (req) => addressOf(req, options.clientAddressHeader),
-        // Its spaces through the host's own socket, as the bots it runs reach theirs.
-        network: () => ({ relays: [], nodes: [`ws://127.0.0.1:${listening}/peer`] }),
-        name,
-        version: mcp.version ?? '0',
-        ...(mcp.accountHome ? { accountHome: mcp.accountHome } : {}),
-        ...(mcp.moreApps ? { moreApps: mcp.moreApps } : {}),
-        log,
-      })
-    : null;
-
   const served: Served = await serve({
     node: {
       sessionDid: node.did,
@@ -1086,7 +1039,7 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
       },
     },
     inbound,
-    routes: async (req, res) => (await remote?.routes(req, res)) || routes(req, res),
+    routes,
     // Its mailbox serves the links its accounts keep, while every device of theirs is away.
     mailboxFrom: (topic) => node.linksAt(topic),
     port: options.port,
@@ -1127,7 +1080,6 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     async close() {
       for (const timer of timers) clearInterval(timer);
       await bots?.close();
-      await remote?.close();
       // Waits for a claim already under way.
       await oneAtATime(async () => {});
       await served.close();
@@ -1135,21 +1087,6 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
       await spentStore?.close();
     },
   };
-}
-
-/** A connection's agent's folder: its id is base64url, so it is one name, never a path */
-function agentFolder(folder: string, connection: string): string {
-  if (!/^[A-Za-z0-9_-]{1,64}$/.test(connection)) throw new Error('Not a connection id');
-  return path.join(folder, connection);
-}
-
-/** The host's address, for the MCP endpoint: the issuer of every token, so it can't change between requests */
-function mcpUrl(publicUrl: string | undefined): string {
-  if (!publicUrl)
-    throw new Error(
-      'The MCP endpoint needs the host’s public address (MINCA_HOST_URL): every token names it.',
-    );
-  return publicUrl;
 }
 
 /** How a fund is paid into here: what online costs a month for each GB, and how money goes in; null where nothing is paid */

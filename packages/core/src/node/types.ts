@@ -57,7 +57,7 @@ export interface NodeNetworkConfig {
    * short link names: only `nodes` and `transports`. Relays a space or an
    * invite names are still joined beside `relays`, so a node meant to reach
    * nothing else has none. For a node a server runs for someone else, such
-   * as a host's agents: what it reads is theirs, and must not choose where
+   * as the MCP service's: what it reads is theirs, and must not choose where
    * the server connects.
    */
   readonly only?: boolean;
