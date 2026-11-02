@@ -1021,9 +1021,7 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     token can write the same until the note runs out or the person
     disconnects it, and read those spaces after that too, with the member
     keys the token carries
-    ([#165](https://github.com/leifriksheim/minca/issues/165)). It never
-    takes a note for the whole account: its account key would open every
-    space the account is in or joins, and its own spaces, for good. A write is done once the space's keepers have it (05 §9), or, in a
+    ([#169](https://github.com/leifriksheim/minca/issues/169)). A write is done once the space's keepers have it (05 §9), or, in a
     space that names none, once a member's device online then does, which the
     app is told is less sure, since a peer that holds part of the space, or
     refused the write, counts too. What outlives the node is only where its
@@ -1055,7 +1053,8 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     started, shows as nothing new. The reference service takes a key only with
     the private half that goes with it, since a note travels with every record
     and is no secret; refuses a note for the whole account, read from the note
-    itself; and reaches the spaces through the always-on nodes and relays
+    itself, and any account key, which would open every space the account is
+    in or joins, and its own spaces, for good; and reaches the spaces through the always-on nodes and relays
     the grant's invites and the spaces name only over TLS at public
     addresses, besides its operator's own (`network.reach`), so a grant's
     invites and the records its node reads can't make it connect inside its
@@ -1064,6 +1063,7 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     `packages/cli/src/remote-mcp/sessions.ts`, `publicNode` in
     `packages/cli/src/remote-mcp/reach.ts`, `boundedMemory` in
     `packages/cli/src/remote-mcp/memory.ts`;
+    `packages/cli/tests/remote-mcp.test.ts`,
     `packages/cli/tests/remote-mcp-server.test.ts`,
     `packages/cli/tests/remote-mcp-reach.test.ts`,
     `packages/core/tests/reach.test.ts`); a host that answers with a redirect

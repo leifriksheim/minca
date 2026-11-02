@@ -101,7 +101,7 @@ export function consentHtml(params: {
 <details><summary>What this allows</summary>
 <ul><li>What ${app} writes shows as yours, marked as from an AI.</li>
 <li>It can’t add people or change what they may do.</li>
-<li>While ${app} works, ${host} keeps the spaces it uses in memory. They’re gone ten minutes after it stops.</li>
+<li>While ${app} works, ${host} keeps your spaces in memory and can read them. They’re gone ten minutes after its last call, or up to an hour while a write waits for the space’s always-on hosts.</li>
 <li>Disconnect ${host} at your account home to stop it. That stops every chat app you connected here.</li>
 <li>Its sign-in carries a key to the spaces you give it. Disconnecting stops it writing, but what that key can read can’t be taken back yet.</li></ul>
 <label class="field" for="home">Your account home</label><input id="home" name="home" type="url" autocomplete="url" spellcheck="false" value="${escapeHtml(params.home)}">
