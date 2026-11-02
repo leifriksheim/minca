@@ -362,19 +362,21 @@ someone does, with the same fields. Apps show its `name` in place of the name
 the space was founded with, and its `avatar` as the space's picture. The
 founding name stays in the constitution, where nobody can change it, so an
 invite shows it to someone who can't read the space yet, and the name shown
-after joining may differ from it. There is one per space: `space` names the
-space by its id, and `onePer: [space]` gives everyone the same shared key, so
-changing it is editing it, and which edit stands is the versions' order,
-never a writer's clock. A reader takes only the record at the key its own
+after joining may differ from it. There is one key per space: `space` names
+the space by its id, and `onePer: [space]` gives everyone the same shared key,
+so changing it is editing it, and which edit stands is the versions' order,
+never a writer's clock. Whoever may write there can also start a rival chain
+at that key (02 §7.1), so who may write it matters. A reader takes only the record at the key its own
 space's id gives, so one naming another space is never read. Who may write
 it is the space's grants: it is in `STAFF_COLLECTIONS`, so in a `community`
 admins and moderators can, and members can't; in a `coop`, stewards. A space
-made before it was added keeps the grants it was made with, where a member
-still can, until an admin redefines the member role. The example app reads
+made before it was added keeps the grants it was made with: there, any
+member decides the space's name and picture, outranking staff and taking it
+back after each staff edit, until an admin redefines the member role. The example app reads
 no `std.space-profile` in a space for two, which it names for whom it is
 with.
 
-_Source: `packages/core/src/schemas/library/social.ts` (`spaceProfile`), `packages/core/src/space/presets.ts` (`STAFF_COLLECTIONS`), `apps/example/src/pictures.ts` (`useSpaceFaces`). Tests: `packages/core/tests/space-profile.test.ts` ("in a community, a member may not change how the space presents itself, and an admin may", "a writer's clock decides nothing: a later edit stands over a profile dated far ahead")._
+_Source: `packages/core/src/schemas/library/social.ts` (`spaceProfile`), `packages/core/src/space/presets.ts` (`STAFF_COLLECTIONS`), `apps/example/src/pictures.ts` (`useSpaceFaces`). Tests: `packages/core/tests/space-profile.test.ts` ("in a community, a member may not change how the space presents itself, and an admin may", "a peer refuses a member's profile forged past their own node's check", "a writer's clock decides nothing: a later edit stands over a profile dated far ahead")._
 
 **Mentions and replies.** A `std.message`, `std.comment` or `std.post` names
 the accounts it calls on in `mentions` (as do `std.note`, `std.doc-block` and

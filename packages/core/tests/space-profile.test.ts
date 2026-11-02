@@ -5,7 +5,7 @@ import type { P2PNode } from '../src/node/types.js';
 import { community } from '../src/space/presets.js';
 import { spaceProfile, type SpaceProfileRecord } from '../src/schemas/library/social.js';
 import { createFakeHub } from './helpers/fake-transport.js';
-import { forge, open, person } from './helpers/person.js';
+import { forge, open, person, settle } from './helpers/person.js';
 import { hold, letGo } from './helpers/hold.js';
 import { joined } from './helpers/joined.js';
 import { until } from './helpers/until.js';
@@ -46,6 +46,30 @@ describe('std.space-profile', () => {
     await assert.rejects(other.node.records.put(space, spaceProfile, { space, name: 'Members only' }));
     await admin.records.put(space, spaceProfile, { space, name: 'The Club', bio: 'Chess on Tuesdays' });
     assert.equal((await profileOf(admin, space))?.name, 'The Club');
+  });
+
+  test("a peer refuses a member's profile forged past their own node's check", async () => {
+    const { admin, other, space } = await club('member');
+    await admin.records.put(space, spaceProfile, { space, name: 'The Club' });
+    await until(
+      async () => (await profileOf(other.node, space))?.name === 'The Club',
+      4000,
+      'the profile to reach them',
+    );
+    // A chain of their own at the shared key, signed by hand, so their node's own refusal is no part of it.
+    const key = (await other.node.records.onePerKey(space, spaceProfile.name, { space }))!;
+    await letGo(other.node, space);
+    await forge(other, space, {
+      author: '',
+      collection: spaceProfile.name,
+      body: { space, name: 'Hijacked' },
+      retain: true,
+      version: { key, seq: 0 },
+    });
+    await hold(other.node, space);
+    await settle(800);
+    assert.equal((await profileOf(admin, space))?.name, 'The Club');
+    assert.ok(!(await admin.records.history(space, key)).some((v) => v.body?.name === 'Hijacked'));
   });
 
   test("a writer's clock decides nothing: a later edit stands over a profile dated far ahead", async () => {
