@@ -980,6 +980,35 @@ describe('a session’s node', () => {
     );
   });
 
+  test('after a disconnect, a read in a space the session never opened is refused', async () => {
+    const hub = createFakeHub({ latencyMs: 5 });
+    const ada = await accountHolder(hub);
+    const ids: string[] = [];
+    for (const name of ['A', 'B']) {
+      const space = await ada.node.spaces.create({ name, visibility: 'private' });
+      await ada.node.records.put(space.id, 'app.note', { text: 'x' });
+      await hold(ada.node, space.id);
+      ids.push(space.id);
+    }
+    let revoked = 0;
+    const sessions = createSessions({
+      network: async () => onHub(hub),
+      onRevoked: () => void (revoked += 1),
+    });
+    closing.push(() => sessions.close());
+    const key = await browserKey();
+    const granted = await checkGranted(key.jwk, await ada.grantFor(key.did));
+    // Its node runs with no space open, as after a call that names none.
+    await sessions.use('s', granted, undefined, async () => null);
+    for (const id of ids) await ada.node.spaces.revoke(id, key.did);
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const space = ids[1]!;
+    await assert.rejects(
+      sessions.use('s', granted, space, async (node) => node.records.list(space, { collection: 'app.note' })),
+    );
+    assert.equal(revoked, 1, 'and the token is refused from then on');
+  });
+
   test('a grant of some spaces says a space it doesn’t name isn’t connected, and how to add it', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const ada = await accountHolder(hub);

@@ -1033,10 +1033,11 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     One the app was told wasn't done, lost before a keeper has it (the node
     evicted, the service stopped), leaves a gap in the key's log, so a later
     disconnect withdraws what it wrote after (03 §6.3), as on any device that
-    lost a write; an idle node waits up to an hour for its keepers first. A call in a space runs
+    lost a write; an idle node waits up to an hour for its keepers first, or, in a space that names none, for any peer to have its write. A call in a space runs
     only once the node is level with the space's keepers connected then, or
     any one peer where it names none (a member who connects and says nothing
-    can't hold it up): a
+    can't hold it up; so a space closed for room and opened again starts
+    from nothing and waits again): a
     node behind would say a record isn't there, and write a first version in
     a line that has one, ending it (09 §7.5). A space they don't carry fails
     its own calls only, after waiting for one. Once level, the node is one
@@ -1063,7 +1064,7 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     own network, and what a node holds is at most 32 MB, in memory, past
     half of which opening a space closes the one used longest ago, but
     never one holding a write the keepers don't have yet, nor, in a space
-    that names none, one it wrote in
+    that names none, one holding a write no peer had
     (`checkGranted` and `createSessions` in
     `packages/cli/src/remote-mcp/sessions.ts`, `publicNode` in
     `packages/cli/src/remote-mcp/reach.ts`, `boundedMemory` in

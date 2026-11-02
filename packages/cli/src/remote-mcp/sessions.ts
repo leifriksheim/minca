@@ -98,7 +98,7 @@ interface Started {
 interface OpenSpace {
   /** Calls running in it now */
   busy: number;
-  /** Whether a call wrote in it */
+  /** Whether it holds a write of a call's that nobody else had, when last asked */
   wrote: boolean;
 }
 
@@ -346,7 +346,6 @@ export function createSessions(options: {
     for (let closing = started.closing.get(space); closing; closing = started.closing.get(space))
       await closing;
     const one = started.open.get(space) ?? { busy: 0, wrote: false };
-    one.wrote ||= writes;
     // Used now: last in line to be closed.
     started.open.delete(space);
     started.open.set(space, one);
@@ -360,7 +359,13 @@ export function createSessions(options: {
         throw new Error(
           'This space can’t be reached through the always-on nodes right now. Try again in a moment.',
         );
-      return await work();
+      const since = Date.now();
+      try {
+        return await work();
+      } finally {
+        // Kept by nobody, its copy here is the only one: it isn't closed for room, nor the node stopped early.
+        if (writes) one.wrote = (await started.node.spaces.kept(space, 0, since).catch(() => null)) === null;
+      }
     } finally {
       one.busy -= 1;
     }

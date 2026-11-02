@@ -16,15 +16,13 @@ export interface BoundedMemory {
   readonly budget: number;
   /** Bytes held now, in every store */
   used(): number;
-  /** Bytes held now in one store, by its path: none for a store never opened */
-  usedBy(path: string): number;
   /** Forgets a store and what it holds, for a space closed for good: opened again, it starts empty */
   drop(path: string): void;
 }
 
 export function boundedMemory(budget = SESSION_BYTES): BoundedMemory {
   let used = 0;
-  const adapters = new Map<string, { adapter: StorageAdapter; bytes: () => number; clear: () => void }>();
+  const adapters = new Map<string, { adapter: StorageAdapter; clear: () => void }>();
 
   function adapter() {
     let bytes = 0;
@@ -79,7 +77,7 @@ export function boundedMemory(budget = SESSION_BYTES): BoundedMemory {
       entries.clear();
       versions.clear();
     };
-    return { adapter: store, bytes: () => bytes, clear };
+    return { adapter: store, clear };
   }
 
   return {
@@ -93,7 +91,6 @@ export function boundedMemory(budget = SESSION_BYTES): BoundedMemory {
       return found.adapter;
     },
     used: () => used,
-    usedBy: (path) => adapters.get(path)?.bytes() ?? 0,
     drop(path) {
       adapters.get(path)?.clear();
       adapters.delete(path);
