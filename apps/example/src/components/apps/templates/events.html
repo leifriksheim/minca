@@ -1128,7 +1128,7 @@
       hosting: "You aren't hosting anything",
       past: 'No past events',
     };
-    return html`<${ui.Empty} shape="flower" colour="sage" title=${filtered ? 'Nothing of this kind here' : said[view]}>
+    return html`<${ui.Empty} shape="calendar" colour="sage" title=${filtered ? 'Nothing of this kind here' : said[view]}>
       ${mayCreate && (view === 'upcoming' || view === 'hosting') && !filtered && html`<button data-variant="primary" onClick=${onCreate}>Create an event</button>`}
     </${ui.Empty}>`;
   }

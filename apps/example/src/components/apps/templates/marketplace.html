@@ -654,23 +654,23 @@
         shown.length === 0
           ? filtered
             ? html`<${Empty}
-                shape="leaf"
+                shape="tag"
                 colour="cobalt"
                 title="Nothing matches"
                 text="Try other words, or another category."
               />`
             : view === 'selling'
-              ? html`<${Empty} shape="leaf" colour="peach" title="You aren't selling anything" text="Put up something you no longer need: people here can ask for it.">
+              ? html`<${Empty} shape="tag" colour="peach" title="You aren't selling anything" text="Put up something you no longer need: people here can ask for it.">
                   ${maySell && html`<button data-variant="primary" onClick=${sell}>Sell something</button>`}
                 </${Empty}>`
               : view === 'buying'
                 ? html`<${Empty}
-                    shape="leaf"
+                    shape="tag"
                     colour="sage"
                     title="Nothing asked for yet"
                     text="Things you ask a seller for show up here."
                   />`
-                : html`<${Empty} shape="leaf" colour="cobalt" title="Nothing for sale yet" text="Sell, give away or lend things to the people here.">
+                : html`<${Empty} shape="tag" colour="cobalt" title="Nothing for sale yet" text="Sell, give away or lend things to the people here.">
                     ${maySell && html`<button data-variant="primary" onClick=${sell}>Sell something</button>`}
                   </${Empty}>`
           : html`<div class="grid">

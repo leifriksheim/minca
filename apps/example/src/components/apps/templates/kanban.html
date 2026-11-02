@@ -464,8 +464,8 @@
       const opened = tasks.find((t) => t.key === view);
       if (!opened)
         return html`<${Empty}
-          shape="checker"
-          colour="lilac"
+          shape="columns"
+          colour="cobalt"
           title="This card isn't here"
           text="It may have been deleted."
         />`;
@@ -484,8 +484,8 @@
 
     if (cols.length === 0 && cards.length === 0)
       return html`<${Empty}
-        shape="checker"
-        colour="lilac"
+        shape="columns"
+        colour="cobalt"
         title="No board yet"
         text="Columns for each stage of the work, and cards that move along them."
       >
