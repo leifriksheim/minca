@@ -105,10 +105,13 @@ export function Playable({ record }: { record: ScreenRecord<AttachmentBody> }) {
 /** One attachment: the picture, opened larger when clicked, or the file's name and size, saved when clicked */
 function Attachment({ record }: { record: ScreenRecord<AttachmentBody> }) {
   const { name, mime, size, blob } = record.body;
-  const picture = useFile(record.key, mime.startsWith('image/') ? blob : null);
+  // A GIF shows whole, since the smaller one made to show in the list is a still of its first frame.
+  const moving = mime === 'image/gif';
+  const still = useFile(record.key, mime.startsWith('image/') && !moving ? blob : null);
   const [open, setOpen] = useState(false);
   // Opened, the whole picture, not the one made smaller to show in the list
-  const whole = useBlob(record.key, open ? blob : null);
+  const whole = useBlob(record.key, open || moving ? blob : null);
+  const picture = moving ? whole : still;
   const save = () => void minca.download(record.key, blob.hash);
   if (blob && /^(video|audio)\//.test(mime)) return html`<${Playable} record=${record} />`;
   if (picture)

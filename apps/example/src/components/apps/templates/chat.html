@@ -206,11 +206,23 @@
     font-weight: 700;
     letter-spacing: 0.04em;
   }
+  /* Opens above the GIF button, its right edge on the composer's, like the emoji grid beside it */
+  .gif-popover {
+    position: absolute;
+    z-index: 7;
+    bottom: calc(100% + 8px);
+    right: -32px;
+    padding: 12px;
+    background: var(--minca-card);
+    border: 1px solid var(--minca-line);
+    border-radius: var(--minca-radius-md);
+    box-shadow: var(--minca-shadow-small);
+  }
   .gifs {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
     gap: 6px;
-    max-height: 50vh;
+    max-height: min(360px, 50vh);
     overflow-y: auto;
   }
   .gifs button {
@@ -235,7 +247,7 @@
 <script>
   const { html, render, useState, useEffect, useRef, useRecords, useCan, usePeople, useShown, useShare } = ui;
   const { Avatar, Person, MentionInput, MentionText, mentionsIn, Attachments, attach, ago, usePresence } = ui;
-  const { Shared, Sharing, recordTitle, AddMenu, EmojiPicker, Reactions, react, Modal } = ui;
+  const { Shared, Sharing, recordTitle, AddMenu, EmojiPicker, Reactions, react } = ui;
   const MESSAGE = 'std.message';
   const me = minca.me.did;
   const has = (collection) => minca.collections.includes(collection);
@@ -508,13 +520,39 @@
     </button>`;
   }
 
-  /** Search GIPHY and pick one. It sits inside the message form, so Enter in it sends nothing. */
-  function GifPicker({ onPick, onClose }) {
+  /** How wide the GIF picker opens, and how far past the GIF button it reaches, to line up with the box's edge */
+  const GIF_WIDTH = 400;
+  const GIF_OVERHANG = 32;
+
+  /**
+   * The GIF button, and above it, while open, a search of GIPHY to pick one from. It sits inside the message form, so
+   * Enter in it sends nothing. Escape or a press outside closes it.
+   */
+  function GifPicker({ onPick, disabled }) {
+    const [open, setOpen] = useState(false);
+    const [width, setWidth] = useState(GIF_WIDTH);
     const [query, setQuery] = useState('');
     const [gifs, setGifs] = useState(null);
     const [error, setError] = useState(null);
     const [sending, setSending] = useState(null);
+    const box = useRef(null);
+    const search = useRef(null);
     useEffect(() => {
+      if (!open) return;
+      search.current?.focus();
+      const away = (event) => {
+        const outside = event.target instanceof Node && !box.current?.contains(event.target);
+        if (event instanceof KeyboardEvent ? event.key === 'Escape' : outside) setOpen(false);
+      };
+      addEventListener('pointerdown', away);
+      addEventListener('keydown', away);
+      return () => {
+        removeEventListener('pointerdown', away);
+        removeEventListener('keydown', away);
+      };
+    }, [open]);
+    useEffect(() => {
+      if (!open) return;
       let current = true;
       const wait = setTimeout(() => {
         findGifs(query.trim()).then(
@@ -526,43 +564,67 @@
         current = false;
         clearTimeout(wait);
       };
-    }, [query]);
+    }, [open, query]);
     const pick = async (gif) => {
       setSending(gif.id);
-      await onPick(gif);
-      setSending(null);
+      try {
+        await onPick(gif);
+        setOpen(false);
+      } finally {
+        setSending(null);
+      }
     };
-    return html`<${Modal} title="GIFs" onClose=${onClose} width=${440}>
-      <div class="stack">
-        <input
-          type="search"
-          value=${query}
-          onInput=${(event) => setQuery(event.currentTarget.value)}
-          onKeyDown=${(event) => event.key === 'Enter' && event.preventDefault()}
-          placeholder="Search GIPHY"
-          aria-label="Search GIFs"
-        />
-        ${error && html`<p class="error">${error}</p>`}
-        ${gifs?.length === 0 && html`<p class="empty muted">No GIFs for that.</p>`}
-        <div class="gifs">
-          ${(gifs ?? []).map(
-            (gif) =>
-              html`<button
-                type="button"
-                key=${gif.id}
-                title=${gif.title}
-                aria-label=${`Send ${gif.title}`}
-                aria-busy=${sending === gif.id}
-                disabled=${sending !== null}
-                onClick=${() => pick(gif)}
-              >
-                <img src=${gif.preview} alt=${gif.title} loading="lazy" />
-              </button>`,
-          )}
-        </div>
-        <p class="faint" style="font-size: 11px; text-align: right">Powered by GIPHY</p>
-      </div>
-    </${Modal}>`;
+    return html`<div class="menu-anchor" ref=${box}>
+      <button
+        type="button"
+        class="gif-button"
+        data-variant="ghost"
+        title="Send a GIF"
+        aria-expanded=${open}
+        disabled=${disabled}
+        onClick=${() => {
+          // As wide as there is room for left of where it ends, on a narrow screen too
+          const end = box.current?.getBoundingClientRect().right ?? innerWidth;
+          setWidth(Math.min(GIF_WIDTH, end + GIF_OVERHANG - 16));
+          setOpen(!open);
+        }}
+      >
+        GIF
+      </button>
+      ${
+        open &&
+        html`<div class="gif-popover stack" role="dialog" aria-label="GIFs" style=${{ width: `${width}px` }}>
+          <input
+            type="search"
+            value=${query}
+            onInput=${(event) => setQuery(event.currentTarget.value)}
+            onKeyDown=${(event) => event.key === 'Enter' && event.preventDefault()}
+            placeholder="Search GIPHY"
+            aria-label="Search GIFs"
+            ref=${search}
+          />
+          ${error && html`<p class="error">${error}</p>`}
+          ${gifs?.length === 0 && html`<p class="empty muted">No GIFs for that.</p>`}
+          <div class="gifs">
+            ${(gifs ?? []).map(
+              (gif) =>
+                html`<button
+                  type="button"
+                  key=${gif.id}
+                  title=${gif.title}
+                  aria-label=${`Send ${gif.title}`}
+                  aria-busy=${sending === gif.id}
+                  disabled=${sending !== null}
+                  onClick=${() => pick(gif)}
+                >
+                  <img src=${gif.preview} alt=${gif.title} loading="lazy" />
+                </button>`,
+            )}
+          </div>
+          <p class="faint" style="font-size: 11px; text-align: right">Powered by GIPHY</p>
+        </div>`
+      }
+    </div>`;
   }
 
   /** The box: text with "@" mentions and emoji, a reply, GIFs, and files dropped anywhere on the screen, pasted or picked */
@@ -574,7 +636,6 @@
     const [dropping, setDropping] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(null);
-    const [pickingGif, setPickingGif] = useState(false);
     const quiet = useRef(null);
     // Replying puts you in the box, ready to type.
     const bar = useRef(null);
@@ -679,16 +740,6 @@
     >
       ${dropping && html`<div class="drop">Drop files to attach</div>`}
       ${
-        pickingGif &&
-        html`<${GifPicker}
-          onClose=${() => setPickingGif(false)}
-          onPick=${async (gif) => {
-            await send(gif);
-            setPickingGif(false);
-          }}
-        />`
-      }
-      ${
         replying &&
         html`<div class="replying">
           <span class="ellipsis" style="flex: 1"
@@ -733,19 +784,7 @@
             aria-label="Message"
           />
           <div class="composer-end">
-            ${
-              giphyKey &&
-              html`<button
-                type="button"
-                class="gif-button"
-                data-variant="ghost"
-                title="Send a GIF"
-                disabled=${busy}
-                onClick=${() => setPickingGif(true)}
-              >
-                GIF
-              </button>`
-            }
+            ${giphyKey && html`<${GifPicker} onPick=${send} disabled=${busy} />`}
             <${EmojiPicker} onPick=${(emoji) => type(draft + emoji)} />
           </div>
         </div>
