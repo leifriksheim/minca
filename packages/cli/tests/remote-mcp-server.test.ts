@@ -21,6 +21,7 @@ import { createP256Provider } from '../../core/src/identity/crypto-p256.js';
 import { didOf } from '../../core/src/identity/did.js';
 import { GRANT_VERSION } from '../../core/src/session/connect.js';
 import { noteTerms } from '../../core/src/identity/abilities.js';
+import { lineKey } from '../../core/src/records/key.js';
 import { encodeInvitation, readInvitation } from '../../core/src/space/invitation.js';
 import { memoryStores } from '../../core/tests/helpers/memory-stores.js';
 import { createFakeHub } from '../../core/tests/helpers/fake-transport.js';
@@ -579,4 +580,127 @@ test('with every device of theirs offline, a chat app reads and writes through t
     'its node to stop',
   );
   assert.ok(await refused(), 'and to go on refusing it');
+});
+
+test('a fresh node answers only once it holds what the free host does: a payment never starts her line again', async () => {
+  // Ada's laptop pays twice in her line (09 §7), hands the space to the free host, and goes offline.
+  const served = await startHost({
+    key: await createP256Provider().generateKeyPair(),
+    stores: memoryStores(),
+    port: 0,
+    free: true,
+  });
+  closing.push(() => served.close());
+  const peer = `ws://127.0.0.1:${served.port}/peer`;
+  const manager = createIdentityManager();
+  const seed = generateSeed();
+  const me = await manager.fromSeed(seed);
+  const signer = createLocalRootSigner(me, manager.getProvider());
+  const accountKey = await deriveAccountKey(seed);
+  const onHost = async () => {
+    const node = await createNode({
+      signer,
+      stores: memoryStores(),
+      accountKey,
+      watchIntervalMs: 0,
+      network: { nodes: [peer] },
+    });
+    closing.push(() => node.close());
+    return node;
+  };
+  const laptop = await onHost();
+  const space = await laptop.spaces.create({ name: 'Credit', visibility: 'private' });
+  await laptop.collections.define(space.id, {
+    name: 'app.pay',
+    schema: { type: 'object' },
+    contract: {
+      check: [
+        {
+          that: 'body.balance == (prev == null ? 0.0 : prev.body.balance) - body.amount',
+          else: 'The balance follows from the one before',
+        },
+      ],
+      line: { once: ['received'] },
+    },
+  });
+  const line = await lineKey(me.did, 'app.pay');
+  for (let i = 0; i < 20; i++) await laptop.records.put(space.id, 'app.note', { i });
+  const first = await laptop.records.put(space.id, 'app.pay', { amount: 10, balance: -10 }, { key: line });
+  await laptop.records.update(space.id, line, { amount: 5, balance: -15 });
+  await laptop.hosting.use(`http://127.0.0.1:${served.port}`);
+  await until(
+    async () => {
+      const reached = (await served.node.spaces()).filter((one) => one.peers > 0).map((one) => one.name);
+      return reached.includes('Account registry') && reached.includes('Credit');
+    },
+    15_000,
+    'the host to carry her registry and the space',
+  );
+  const invite = await laptop.spaces.invite(space.id);
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+  await laptop.close();
+
+  const port = await freePort();
+  const issuer = `http://127.0.0.1:${port}`;
+  const service = await startMcpServer({
+    publicUrl: issuer,
+    nodes: [peer],
+    data: await tempDir('mcp-server-'),
+    port,
+    version: '0',
+    accountHome: 'https://home.test',
+  });
+  closing.push(() => service.close());
+  const token = await signInWith(issuer, async (audience) => {
+    const expiresAt = Math.floor(Date.now() / 1000) + 3600;
+    return {
+      v: GRANT_VERSION,
+      did: me.did,
+      name: 'Ada',
+      note: await signer.delegate({ audience, expiration: expiresAt, ...noteTerms('/record', [space.id]) }),
+      access: 'write',
+      scope: 'spaces',
+      spaces: [{ id: space.id, name: 'Credit', invite }],
+      expiresAt,
+      home: 'https://home.test/connect',
+    };
+  });
+
+  // The chat app's first call, from a node started just now: her line is there, so it pays after it.
+  // A node that answered from what it had so far would say there is none, and the model would start one.
+  const paid = await callTool(issuer, token, 'records_update', {
+    space: space.id,
+    key: line,
+    body: { amount: 1, balance: -16 },
+  });
+  assert.match(paid, /"isError":false/, paid);
+
+  // Her phone sees one line, and her first payment still counts (found by adversarial review).
+  const phone = await onHost();
+  await until(
+    async () => (await phone.spaces.list()).some((one) => one.id === space.id),
+    40_000,
+    'the phone to learn of the space',
+  );
+  await until(
+    async () => (await phone.records.get<{ balance: number }>(space.id, line))?.body?.balance === -16,
+    40_000,
+    'the phone to get the chat app’s payment',
+  );
+  const verdict = await phone.records.contracts(space.id, line, first.version);
+  assert.notEqual(verdict?.passes, false, JSON.stringify(verdict));
+});
+
+test('a second service on the same folder doesn’t start: it would sign where the first one does', async () => {
+  const data = await tempDir('mcp-server-');
+  const settings = {
+    publicUrl: 'http://127.0.0.1:1',
+    nodes: ['ws://127.0.0.1:9/peer'],
+    data,
+    port: 0,
+    version: '0',
+  };
+  const first = await startMcpServer(settings);
+  closing.push(() => first.close());
+  await assert.rejects(startMcpServer(settings), /Another mcp-server/);
 });

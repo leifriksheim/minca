@@ -1010,10 +1010,16 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     next starts, after a crash), reads them and writes records there "via
     agent", as the app's model asks; and whoever holds its sealing key and a
     token can do the same until the note runs out or the person disconnects
-    it. Where the key has signed in each log is kept apart, for as long as the
-    token lasts, so a node started again never signs at the same place twice
-    and forks the key; two copies of the service sharing a sealing key would,
-    so it runs as one. Records count until the key is revoked, not until the
+    it. A node starts from nothing, so it answers no call until it is level
+    with one of those always-on nodes in every space it was given: one that
+    answered sooner would say a record isn't there, and write a first version
+    in a line that has one, ending it (09 §7.5). Where a key that wrote has
+    signed (which spaces and collections, and how much) is kept apart for as
+    long as its token lasts, so a node started again never signs at the same
+    place twice and forks the key. A second service on the same folder
+    refuses to start; one restored from a backup, or a copy given the same
+    sealing key, would fork keys
+    ([#287](https://github.com/leifriksheim/minca/issues/287)). Records count until the key is revoked, not until the
     note runs out (06 §2.9), so a token outlives nothing the person can't end
     at their home; the service refuses a token for good once its node sees
     the revoke, but member keys open what they opened after that, so a call
@@ -1043,11 +1049,13 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     answers only the browser that started it. The other way round, someone can
     finish a sign-in in their own account and send her where it ends: her chat
     app then acts in their spaces, unless it ties OAuth's `state` to the
-    browser that started it; the service can't tell. What a stranger can make it keep or do is an app's
-    registration, gone after a day unless used, and nodes that run while
-    called, each with up to 8 spaces those always-on nodes carry. They are
-    counted by address, but nodes are not: a stranger with accounts of their
-    own can keep all of them running, and make honest calls wait, then fail
+    browser that started it; the service can't tell. What a stranger can make
+    it keep or do is an app's registration, gone after a day unless used;
+    nodes that run while called, each with up to 8 spaces those always-on
+    nodes carry; and, for each token that wrote, where it signed, for a
+    month. Registrations and sign-ins are counted by address, but nodes are
+    not: a stranger with accounts of their own can keep all of them running,
+    and make honest calls wait, then fail
     ([#33](https://github.com/leifriksheim/minca/issues/33)). None of this is
     protocol: a dishonest service need not run that code.
 

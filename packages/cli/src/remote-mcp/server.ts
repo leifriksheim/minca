@@ -20,6 +20,7 @@ import { directoryStores } from '@minca/core';
 import { openFsDirectory } from '../fs-directory.js';
 import { addressOf } from '../host.js';
 import { commaList, errorCode } from '../json.js';
+import { holdLock } from '../writer-keys.js';
 import { createRemoteMcp, type RemoteMcp } from './index.js';
 
 export interface McpServerOptions {
@@ -74,6 +75,12 @@ const placesFolder = (data: string, session: string) => path.join(data, 'places'
 /** How long a key's places are kept: as long as its token can last, and a day */
 const PLACES_DAYS = 31;
 
+/** Whether a folder holds a file anywhere under it */
+async function holdsAFile(folder: string): Promise<boolean> {
+  const entries = await readdir(folder, { recursive: true, withFileTypes: true }).catch(() => []);
+  return entries.some((entry) => entry.isFile());
+}
+
 /** Removes the places of tokens that can no longer be used */
 async function sweepPlaces(data: string): Promise<void> {
   const root = path.join(data, 'places');
@@ -92,6 +99,10 @@ export async function startMcpServer(
   options: McpServerOptions,
 ): Promise<{ readonly port: number; readonly remote: RemoteMcp; close(): Promise<void> }> {
   await mkdir(options.data, { recursive: true, mode: 0o700 });
+  // One process to a folder: two would each start a node for one token, sign at
+  // the same places, and fork its key; and each would remove the other's spaces.
+  const letGo = await holdLock(path.join(options.data, 'lock'));
+  if (!letGo) throw new Error(`Another mcp-server is using ${options.data}`);
   // The spaces an earlier run's nodes held: nothing in them is anyone's to keep. Their keys' places stay.
   await rm(path.join(options.data, 'sessions'), { recursive: true, force: true });
   await sweepPlaces(options.data);
@@ -109,13 +120,17 @@ export async function startMcpServer(
         directoryStores(await openFsDirectory(where === 'writers' ? places : folder))(where, storeOptions);
     },
     // Retried: a store may still be finishing its last write as the node stops.
-    drop: (session) =>
-      rm(sessionFolder(options.data, session), {
+    // Places it never signed at go too: a token that only read leaves nothing.
+    drop: async (session) => {
+      await rm(sessionFolder(options.data, session), {
         recursive: true,
         force: true,
         maxRetries: 5,
         retryDelay: 100,
-      }),
+      });
+      const places = placesFolder(options.data, session);
+      if (!(await holdsAFile(places))) await rm(places, { recursive: true, force: true });
+    },
     addressOf: (req) => addressOf(req, options.clientAddressHeader),
     network: () => ({ relays: [], nodes: [...options.nodes] }),
     name: new URL(options.publicUrl).host,
@@ -158,6 +173,7 @@ export async function startMcpServer(
       await remote.close();
       await store.close();
       await new Promise<void>((resolve) => http.close(() => resolve()));
+      await letGo();
     },
   };
 }

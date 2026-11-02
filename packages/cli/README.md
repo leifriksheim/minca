@@ -322,15 +322,20 @@ would send it. It is a full node: it syncs the spaces you picked and keeps a
 copy of them on the service's disk while the app uses it, and answers from
 that. After 10 minutes without a call it stops and the copy is deleted (or,
 after a crash, when the service next starts); the next call syncs them
-again. At most 32 run at once. So while the app is working, whoever runs the
-service can read those spaces, as the chat app's maker can read what its
-model sees. What stays is where the key has signed in each log, so a node
-started again never signs at the same place twice (which would fork the
-key): no content, kept until the token can no longer be used.
+again, and answers nothing until it is level with an always-on node in each
+space (a call waits up to 20 seconds, then says to try again): a node that
+answered from what it had so far would miss records, and could start a line
+of payments that already has one. At most 32 run at once. So while the app
+is working, whoever runs the service can read those spaces, as the chat
+app's maker can read what its model sees.
 
-Run one process per sealing key (`token-secret` in `MINCA_MCP_DATA`): two
-copies sharing it would each start a node for the same token, and sign at the
-same places.
+What stays, for a token that wrote, is where its key has signed: which
+spaces and collections, and how many versions in each. A node started again
+then never signs at the same place twice, which would fork the key. It is
+kept until the token can no longer be used. So run one process on a data
+folder (`MINCA_MCP_DATA`; a second refuses to start), and don't restore it
+from a backup while tokens are in use: a rolled-back folder signs at places
+already used.
 
 A token lasts as long as its note, with no refresh token. Disconnecting at
 your account home is what ends it sooner: what the key writes after stops

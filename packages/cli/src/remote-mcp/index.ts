@@ -120,7 +120,11 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
     stores: options.stores,
     drop: options.drop,
     network: options.network,
-    onRevoked: (session) => void oauth.revoke(session),
+    // Refused again by the next node that sees the revoke, if keeping it fails now.
+    onRevoked: (session) =>
+      void oauth
+        .revoke(session)
+        .catch((error: unknown) => log(`could not refuse a disconnected token: ${String(error)}`)),
     ...(options.idleMs !== undefined ? { idleMs: options.idleMs } : {}),
     ...(options.running !== undefined ? { running: options.running } : {}),
     log,

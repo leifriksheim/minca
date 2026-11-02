@@ -77,8 +77,53 @@ const RUNNING = 32;
 /** How long a start waits for room before giving up */
 const ROOM_WAIT_MS = 30_000;
 
+/** How long a call waits for its node to catch up with the always-on nodes before it is told to try again */
+const CATCH_UP_MS = 20_000;
+
+interface Started {
+  readonly node: P2PNode;
+  /** The spaces it was given */
+  readonly spaces: ReadonlyArray<string>;
+  /** Those it has been level with an always-on node in since it started */
+  readonly level: Set<string>;
+  stop(): Promise<void>;
+}
+
+/**
+ * Waits until the node has been level with an always-on node in each space it
+ * was given: nothing in flight either way. A node starts from an empty folder,
+ * and until then it would answer "no such record" for one it hasn't synced
+ * yet, and write a first version in a line that has one: a twin, which ends
+ * that line for good (09 §7.5: sync before writing to a line). Once level, it
+ * stays in sync as any device does.
+ */
+async function catchUp(started: Started): Promise<void> {
+  const deadline = Date.now() + CATCH_UP_MS;
+  const levelIn = async (space: string) => {
+    while (!started.level.has(space)) {
+      const left = deadline - Date.now();
+      if (left <= 0) return false;
+      const peers = await started.node.spaces.status(space).then(
+        (status) => status.peers,
+        () => [],
+      );
+      for (const peer of peers) {
+        if (!(await started.node.spaces.reached(space, peer, Math.min(2000, left)).catch(() => false)))
+          continue;
+        started.level.add(space);
+        break;
+      }
+      if (!started.level.has(space)) await new Promise((resolve) => setTimeout(resolve, Math.min(250, left)));
+    }
+    return true;
+  };
+  const all = await Promise.all(started.spaces.map(levelIn));
+  if (!all.every(Boolean))
+    throw new Error('Still fetching these spaces from the always-on nodes. Try again in a moment.');
+}
+
 interface Running {
-  readonly started: Promise<{ node: P2PNode; stop(): Promise<void> }>;
+  readonly started: Promise<Started>;
   timer?: ReturnType<typeof setTimeout>;
   /** Calls running on it now: it isn't stopped under them */
   busy: number;
@@ -159,7 +204,7 @@ export function createSessions(options: {
     }
   };
 
-  async function start(id: string, given: Granted) {
+  async function start(id: string, given: Granted): Promise<Started> {
     const keys = await importKeyJwk(given.key);
     if (!keys) throw new Error('The key could not be read');
     // Reaching only what it was given: what it reads, and the invites in its grant, are the account's to write.
@@ -177,6 +222,8 @@ export function createSessions(options: {
     });
     return {
       node: agent.node,
+      spaces: given.grant.spaces?.map((space) => space.id) ?? [],
+      level: new Set(),
       stop: async () => {
         unsubscribe();
         await agent.stop();
@@ -218,8 +265,9 @@ export function createSessions(options: {
       const one = nodeOf(id, given);
       one.busy += 1;
       try {
-        const { node } = await one.started;
-        return await work(node);
+        const started = await one.started;
+        await catchUp(started);
+        return await work(started.node);
       } finally {
         one.busy -= 1;
         idleLater(id);
