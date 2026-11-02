@@ -109,7 +109,7 @@ export function SpaceSettings({ space, go, mayDefine }: Pick<SpaceScreen, 'space
 
 /**
  * How the group presents itself (`std.space-profile`): its picture, the name shown in place of the one
- * it was founded with, and a line about it. Saving writes your version, the newest, so it is the one shown.
+ * it was founded with, and a line about it. One record per group, which saving writes or edits.
  */
 function GroupProfile({ space }: { space: SpaceSummary }) {
   const node = useNode();
@@ -131,11 +131,16 @@ function GroupProfile({ space }: { space: SpaceSummary }) {
       const avatar = image
         ? await node.records.addFile(space.id, image.bytes, { mime: image.mime })
         : face?.avatar;
-      await node.records.put(space.id, spaceProfile, {
+      const body = {
+        space: space.id,
         ...(name.trim() ? { name: name.trim() } : {}),
         ...(bio.trim() ? { bio: bio.trim() } : {}),
         ...(avatar ? { avatar } : {}),
-      });
+      };
+      // One record per space: the first writes it, everyone after edits it.
+      const key = await node.records.onePerKey(space.id, spaceProfile.name, body);
+      if (key && (await node.records.get(space.id, key))) await node.records.update(space.id, key, body);
+      else await node.records.put(space.id, spaceProfile, body);
       setPicked(null);
       setSaved(true);
     });

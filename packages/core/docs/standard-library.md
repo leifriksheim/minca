@@ -143,7 +143,7 @@ anything, and only moderators and admins write in the collections in
 | Name                | Body                                                                                                                                                                                                                                                                                                                                                                                                                                   | Links | Rules                    |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ------------------------ |
 | `std.profile`       | `name` string ≤ 100; `bio` string ≤ 2000; `avatar` blob; `banner` blob; `pronouns` string ≤ 50; `links` { `title` string ≤ 100, **`url`** string 1–2048 }[] (≤ 16); `bot` boolean                                                                                                                                                                                                                                                      | —     | `onePer: [@author]`      |
-| `std.space-profile` | `name` string ≤ 100; `bio` string ≤ 2000; `avatar` blob; `banner` blob                                                                                                                                                                                                                                                                                                                                                                 | —     | `onePer: [@author]`      |
+| `std.space-profile` | **`space`** string 1–256; `name` string ≤ 100; `bio` string ≤ 2000; `avatar` blob; `banner` blob                                                                                                                                                                                                                                                                                                                                       | —     | `onePer: [space]`        |
 | `std.card`          | `name` { `full` string ≤ 200, `given` string ≤ 100, `family` string ≤ 100 }; `emails` { **`address`** string 1–320, `label` string ≤ 50 }[] (≤ 16); `phones` { **`number`** string 1–64, `label` string ≤ 50 }[] (≤ 16); `addresses` { **`address`** address, `label` string ≤ 50 }[] (≤ 16); `organization` string ≤ 200; `jobTitle` string ≤ 200; `birthday` day; `photo` blob; `urls` string 1–2048[] (≤ 16); `note` string ≤ 10000 | —     | —                        |
 | `std.follow`        | **`did`** DID; `space` string ≤ 256; topic `did`                                                                                                                                                                                                                                                                                                                                                                                       | —     | `onePer: [@author, did]` |
 | `std.block`         | **`did`** DID; `until` when                                                                                                                                                                                                                                                                                                                                                                                                            | —     | `onePer: [@author, did]` |
@@ -355,20 +355,26 @@ What it writes shows as the bot, and every member's device checks it against
 the bot's role, so a role that may post messages but not delete keeps a
 misled bot from deleting.
 
+_Source: `packages/core/src/schemas/library/social.ts` (`profile`), `packages/core/src/schemas/automations.ts` (`automationsFor`), `packages/cli/src/agent.ts` (`discloseBot`). Tests: `packages/cli/tests/agent-automations.test.ts` ("says it is a bot…", "adds std.profile itself…", "a bot’s name"), `packages/core/tests/automation-runners.test.ts` ("a bot")._
+
 `std.space-profile` is how a space presents itself, as `std.profile` is how
 someone does, with the same fields. Apps show its `name` in place of the name
 the space was founded with, and its `avatar` as the space's picture. The
 founding name stays in the constitution, where nobody can change it, so an
-invite shows it to someone who can't read the space yet. Each writer keeps
-one, as with `std.profile`; the space's is the newest version among them. Who
-may write one is the space's grants: it is in `STAFF_COLLECTIONS`, so a
-`community` or `coop` member can't. A space made before it was added keeps
-the grants it was made with, where a member still can, until an admin
-redefines the member role.
+invite shows it to someone who can't read the space yet, and the name shown
+after joining may differ from it. There is one per space: `space` names the
+space by its id, and `onePer: [space]` gives everyone the same shared key, so
+changing it is editing it, and which edit stands is the versions' order,
+never a writer's clock. A reader takes only the record at the key its own
+space's id gives, so one naming another space is never read. Who may write
+it is the space's grants: it is in `STAFF_COLLECTIONS`, so in a `community`
+admins and moderators can, and members can't; in a `coop`, stewards. A space
+made before it was added keeps the grants it was made with, where a member
+still can, until an admin redefines the member role. The example app reads
+no `std.space-profile` in a space for two, which it names for whom it is
+with.
 
-_Source: `packages/core/src/schemas/library/social.ts` (`spaceProfile`), `packages/core/src/space/presets.ts` (`STAFF_COLLECTIONS`). Tests: `packages/core/tests/space-profile.test.ts` ("in a community, a member may not change how the space presents itself, and an admin may")._
-
-_Source: `packages/core/src/schemas/library/social.ts` (`profile`), `packages/core/src/schemas/automations.ts` (`automationsFor`), `packages/cli/src/agent.ts` (`discloseBot`). Tests: `packages/cli/tests/agent-automations.test.ts` ("says it is a bot…", "adds std.profile itself…", "a bot’s name"), `packages/core/tests/automation-runners.test.ts` ("a bot")._
+_Source: `packages/core/src/schemas/library/social.ts` (`spaceProfile`), `packages/core/src/space/presets.ts` (`STAFF_COLLECTIONS`), `apps/example/src/pictures.ts` (`useSpaceFaces`). Tests: `packages/core/tests/space-profile.test.ts` ("in a community, a member may not change how the space presents itself, and an admin may", "a writer's clock decides nothing: a later edit stands over a profile dated far ahead")._
 
 **Mentions and replies.** A `std.message`, `std.comment` or `std.post` names
 the accounts it calls on in `mentions` (as do `std.note`, `std.doc-block` and

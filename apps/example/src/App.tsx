@@ -67,14 +67,14 @@ function Workspace() {
   const mine = useSpaces();
   const { loading, error } = mine;
   // A space's own profile names it, in place of the name it was founded with (`std.space-profile`).
-  const faces = useSpaceFaces(mine.spaces);
+  const pairs = usePairSpaces();
+  const faces = useSpaceFaces(mine.spaces.filter((space) => !pairs.has(space.id)));
   const spaces = mine.spaces.map((space) => {
     const name = faces.get(space.id)?.name;
     return name ? { ...space, name } : space;
   });
   const navigate = useNavigate();
   const node = useNode();
-  const pairs = usePairSpaces();
   const pictures = usePictures(spaces);
   // A space opens on its Overview: its apps, who is in it and what is new.
   const openSpace = (id: string) => void navigate({ to: '/spaces/$spaceId', params: { spaceId: id } });

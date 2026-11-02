@@ -45,25 +45,30 @@ export type Profile = BodyOf<typeof profile>;
 /**
  * How the space presents itself, as `std.profile` is how someone does: what
  * apps show in place of the name its constitution was founded with, and a
- * picture. One per writer, like `std.profile`; the space's is the newest
- * version among them. Who may write one is the space's grants, so the
- * presets leave it to those who keep order (`STAFF_COLLECTIONS`).
+ * picture. One record per space: it names the space it is of, and `onePer`
+ * that gives every writer the same shared key, so changing it is editing it,
+ * and which edit stands is the versions' order, never a writer's clock. A
+ * reader takes only the one whose `space` is the space it is in. Who may
+ * write it is the space's grants, so the presets leave it to those who keep
+ * order (`STAFF_COLLECTIONS`).
  */
 export const spaceProfile = define({
   name: 'std.space-profile',
   title: 'Space profile',
   description:
-    'How the space presents itself: its name, a line about it and its picture. The newest one counts.',
+    'How the space presents itself: its name, a line about it and its picture. One per space: "space" is its id.',
   schema: {
     type: 'object',
     properties: {
+      space: { type: 'string', minLength: 1, maxLength: 256, description: 'The space it presents: its id' },
       name: text(100),
       bio: text(2000),
       avatar: blob(),
       banner: blob(),
     },
+    required: ['space'],
   },
-  rules: { onePer: ['@author'] },
+  rules: { onePer: ['space'] },
 });
 export type SpaceProfileRecord = BodyOf<typeof spaceProfile>;
 

@@ -54,22 +54,25 @@ export interface SpaceFace {
 
 const NO_FACES: ReadonlyMap<string, SpaceFace> = new Map();
 
-/** Each space's newest `std.space-profile`, by space; read again as records arrive */
+/**
+ * Each space's `std.space-profile`, by space: the one record at the key the space's own id gives it, so
+ * one naming another space is never read. Not a space for two, which is named for whom it is with.
+ */
 export function useSpaceFaces(spaces: ReadonlyArray<SpaceSummary>): ReadonlyMap<string, SpaceFace> {
   const ids = spaces.map((space) => space.id);
   const found = useWatched(
     async (node) => {
       const faces = new Map<string, SpaceFace>();
-      for (const spaceId of ids) {
-        const records = await node.records
-          .list<SpaceProfileRecord>(spaceId, { collection: spaceProfile.name })
-          .catch(() => []);
-        const newest = [...records].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]?.body;
-        if (newest)
-          faces.set(spaceId, {
-            name: newest.name?.trim() || undefined,
-            bio: newest.bio,
-            avatar: fileRefOf(newest.avatar) ?? undefined,
+      for (const space of ids) {
+        const key = await node.records.onePerKey(space, spaceProfile.name, { space }).catch(() => null);
+        const body = key
+          ? (await node.records.get<SpaceProfileRecord>(space, key).catch(() => null))?.body
+          : null;
+        if (body)
+          faces.set(space, {
+            name: body.name?.trim() || undefined,
+            bio: body.bio,
+            avatar: fileRefOf(body.avatar) ?? undefined,
           });
       }
       return faces;
