@@ -318,7 +318,7 @@ and its tools arrive.
 The service keeps nothing per connection: the key and note live in the
 token, and each call opens it and starts a node from what it carries. That
 node opens a space when a call first uses it and holds it in memory while the
-app works (at most 32 MB): past half of that, opening another closes the one
+app works (at most 32 MB and 8 spaces): past half of that, or 8, opening another closes the one
 used longest ago, unless it holds a write the keepers don't have yet. A call
 in a space the connection doesn't reach says so, and how to add it: connect
 again and choose it, or choose all spaces. The node reaches spaces as any
@@ -342,7 +342,10 @@ a call the node stops, and what it held goes; one waiting for the keepers to
 have its writes waits up to an hour first. At most 32 nodes run at once. So
 while the app is working, whoever runs the service can read the spaces it
 opens, and with all your spaces given, any of them, as the chat app's maker can
-read what its model sees.
+read what its model sees. And whoever holds the service's secret and a token
+can read those spaces for good: with all your spaces given, the token carries
+your account key, which opens every space you are in or join later, after a
+disconnect too. Choose spaces if that is too much.
 
 The one thing kept for a connection is where its key has signed: its last
 place in each collection, a few bytes, in `MINCA_MCP_DATA`, for as long as

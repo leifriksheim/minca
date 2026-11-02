@@ -945,6 +945,31 @@ describe('a session’s node', () => {
     await assert.rejects(read(his.id), /isn’t one of the person’s spaces/);
   });
 
+  test('a session keeps at most 8 spaces open, however small: each holds sockets and timers', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    const spaces: Array<{ readonly id: string }> = [];
+    for (const name of 'abcdefghijkl'.split('')) {
+      const space = await ada.node.spaces.create({ name, visibility: 'private' });
+      await ada.node.records.put(space.id, 'app.note', { text: 'x' });
+      await hold(ada.node, space.id);
+      spaces.push(space);
+    }
+    const sessions = createSessions({ network: async () => onHub(hub) });
+    closing.push(() => sessions.close());
+    const key = await browserKey();
+    const granted = await checkGranted(key.jwk, await ada.wholeAccount(key.did));
+    for (const space of spaces)
+      await sessions.use('s', granted, space.id, async (node) => node.records.list(space.id, {}));
+    // Found by adversarial review: a stranger's many tiny spaces all stayed open.
+    const openIn = async (space: string) => (await ada.node.spaces.status(space)).peers.includes(key.did);
+    await until(
+      async () => (await Promise.all(spaces.map((space) => openIn(space.id)))).filter(Boolean).length <= 8,
+      5000,
+      'the spaces used longest ago to close',
+    );
+  });
+
   test('a grant of some spaces says a space it doesn’t name isn’t connected, and how to add it', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const ada = await accountHolder(hub);

@@ -138,14 +138,18 @@ async function closeSpace(started: Started, space: string): Promise<void> {
   if (started.closing.get(space) === closed) started.closing.delete(space);
 }
 
+/** Most spaces a node keeps open at once: each holds sockets and timers, however little it stores */
+const MAX_OPEN = 8;
+
 /**
- * Makes room for `space`: while the node holds more than half its budget,
- * closes the space used longest ago. Never one a call is using, or one
- * holding a write the keepers don't have yet.
+ * Makes room for `space`: while the node holds more than half its budget, or
+ * more than {@link MAX_OPEN} spaces, closes the space used longest ago. Never
+ * one a call is using, or one holding a write the keepers don't have yet.
  */
 async function makeRoom(started: Started, space: string): Promise<void> {
+  const full = () => started.memory.used() > started.memory.budget / 2 || started.open.size > MAX_OPEN;
   for (const [other, one] of [...started.open]) {
-    if (started.memory.used() <= started.memory.budget / 2) return;
+    if (!full()) return;
     if (other === space || one.busy > 0 || (await holdsUnkept(started.node, other))) continue;
     // A call may have started in it meanwhile.
     if (one.busy === 0 && started.open.get(other) === one) await closeSpace(started, other);
