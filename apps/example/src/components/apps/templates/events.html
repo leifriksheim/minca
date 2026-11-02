@@ -990,7 +990,7 @@
           <input value=${title} onInput=${value(setTitle)} placeholder="Summer concert in the park" maxlength="500" />
         </label>
         <div class="stack" role="group" aria-label="Kind"><span class="label">Kind</span>
-          <div class="row" style="flex-wrap: wrap; gap: 6px">
+          <div class="scroll-x">
             ${KINDS.map(
               (k) =>
                 html`<button

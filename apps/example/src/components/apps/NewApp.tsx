@@ -63,17 +63,16 @@ export function NewApp({
       {space.writable && (
         <button onClick={onOwn} style={ownCard}>
           <span style={ownIcon}>
-            <Icon name="sparkle" size={22} />
+            <Icon name="sparkle" size={18} />
           </span>
-          <span style={{ ...stack(4), flex: 1, minWidth: 0 }}>
-            <strong style={{ ...styles.appTitle, fontSize: 19 }}>Add your own</strong>
-            <span style={{ fontSize: 14, lineHeight: 1.5, color: palette.ink.body }}>
-              Say what {space.name} needs in your own words, and your agent builds it. You add it once it
-              looks right.
+          <span style={{ ...stack(2), flex: 1, minWidth: 0 }}>
+            <strong style={{ ...styles.appTitle, fontSize: 17 }}>Add your own</strong>
+            <span style={{ fontSize: 13, lineHeight: 1.45, color: palette.ink.body }}>
+              Say what {space.name} needs, and your agent builds it.
             </span>
           </span>
-          <span data-variant="primary" style={ownGo}>
-            Start
+          <span style={{ display: 'inline-flex', color: palette.accent.base }}>
+            <Icon name="chevron" size={14} />
           </span>
         </button>
       )}
@@ -182,9 +181,8 @@ const ownCard = {
   ...styles.tile,
   display: 'flex',
   alignItems: 'center',
-  flexWrap: 'wrap',
-  gap: 16,
-  padding: '20px 22px',
+  gap: 14,
+  padding: '14px 16px',
   background: palette.accent.soft,
   borderColor: palette.accent.base,
   font: 'inherit',
@@ -193,8 +191,8 @@ const ownCard = {
   cursor: 'pointer',
 } as const;
 const ownIcon = {
-  width: 52,
-  height: 52,
+  width: 40,
+  height: 40,
   flexShrink: 0,
   display: 'inline-flex',
   alignItems: 'center',
@@ -202,12 +200,4 @@ const ownIcon = {
   borderRadius: palette.radius.lg,
   background: palette.accent.base,
   color: palette.ink.inverse,
-} as const;
-const ownGo = {
-  ...styles.button,
-  width: 'auto',
-  padding: '0 20px',
-  display: 'inline-flex',
-  alignItems: 'center',
-  flexShrink: 0,
 } as const;
