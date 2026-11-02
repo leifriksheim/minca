@@ -423,8 +423,8 @@ function SpaceView({ space }: { space: SpaceSummary }) {
               />
             </span>
             <span className="hide-on-phone" style={{ display: 'contents' }}>
-              {/* A wide screen has the rail to go between apps; Back only for an app's own views. */}
-              {inView && (
+              {/* A wide screen has the rail to go between apps; Back for everywhere a step in from them. */}
+              {!onApps && (!onApp || inView) && (
                 <button
                   onClick={goBack}
                   aria-label="Back"

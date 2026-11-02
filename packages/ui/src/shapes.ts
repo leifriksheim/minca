@@ -68,6 +68,10 @@ const disc = (cx: number, cy: number, r: number) =>
 const roundRect = (x: number, y: number, w: number, h: number, r: number) =>
   `M${x + r} ${y}H${x + w - r}A${r} ${r} 0 0 1 ${x + w} ${y + r}V${y + h - r}A${r} ${r} 0 0 1 ${x + w - r} ${y + h}` +
   `H${x + r}A${r} ${r} 0 0 1 ${x} ${y + h - r}V${y + r}A${r} ${r} 0 0 1 ${x + r} ${y}Z`;
+/** A rounded rectangle wound the other way: a slot cut out of what it sits on */
+const slot = (x: number, y: number, w: number, h: number, r: number) =>
+  `M${x + r} ${y}A${r} ${r} 0 0 0 ${x} ${y + r}V${y + h - r}A${r} ${r} 0 0 0 ${x + r} ${y + h}` +
+  `H${x + w - r}A${r} ${r} 0 0 0 ${x + w} ${y + h - r}V${y + r}A${r} ${r} 0 0 0 ${x + w - r} ${y}Z`;
 
 /** Nobody watching: a closed eye, its lid and three lashes */
 function eyeShut(): string {
@@ -146,6 +150,41 @@ export const PATHS = {
   pawn: disc(50, 24, 16) + pill(32, 46, 68, 46, 12) + 'M40 46H60L66 78H34Z' + roundRect(20, 76, 60, 18, 9),
   /** Money of a group's own: a coin, a groove round its face */
   coin: disc(50, 50, 46) + circle(50, 50, 35) + disc(50, 50, 28),
+  /** Chat: a round speech bubble, its tail curling out at the bottom left, two lines of talk cut out */
+  bubble:
+    disc(52, 46, 44) +
+    'M38 88C26 92 16 97 4 96C7 90 10 78 9 58Z' +
+    slot(32, 32, 40, 11, 5.5) +
+    slot(32, 51, 26, 11, 5.5),
+  /** Polls: three bars of a count */
+  bars: pill(20, 86, 20, 50, 20) + pill(50, 86, 50, 14, 20) + pill(80, 86, 80, 34, 20),
+  /** Events: a calendar page on its two rings, its days cut out */
+  calendar:
+    roundRect(6, 16, 88, 78, 16) +
+    pill(30, 6, 30, 26, 12) +
+    pill(70, 6, 70, 26, 12) +
+    [50, 74].flatMap((y) => [28, 50, 72].map((x) => circle(x, y, 7))).join(''),
+  /** Kanban: cards in three columns, fewer as they go */
+  columns: [
+    [4, 3],
+    [37, 2],
+    [70, 1],
+  ]
+    .flatMap(([x = 0, cards = 0]) =>
+      Array.from({ length: cards }, (_, i) => roundRect(x, 10 + i * 28, 26, 22, 7)),
+    )
+    .join(''),
+  /** Marketplace: a price tag, its hole for the string */
+  tag: 'M42 10H84A12 12 0 0 1 96 22V78A12 12 0 0 1 84 90H42L6 50Z' + circle(38, 50, 8),
+  /** Files: a folder and its tab */
+  folder:
+    'M6 26A12 12 0 0 1 18 14H36A8 8 0 0 1 42 17L48 24H82A12 12 0 0 1 94 36V78A12 12 0 0 1 82 90H18A12 12 0 0 1 6 78Z',
+  /** Bills: a receipt, torn along its foot, its lines cut out */
+  receipt:
+    'M14 4H86V94L74 86L62 94L50 86L38 94L26 86L14 94Z' +
+    slot(26, 18, 48, 9, 4.5) +
+    slot(26, 36, 48, 9, 4.5) +
+    slot(26, 54, 30, 9, 4.5),
 } as const;
 
 export type { RoundKind };
@@ -154,16 +193,15 @@ export type ShapeKind = keyof typeof PATHS;
 
 /** Each built-in app's shape and colour, the same on the site as in the app */
 export const APP_SHAPES: Readonly<Record<string, { kind: ShapeKind; colour: ShapeColour }>> = {
-  chat: { kind: 'scallop', colour: 'cobalt' },
+  chat: { kind: 'bubble', colour: 'cobalt' },
   direct: { kind: 'lock', colour: 'coral' },
-  polls: { kind: 'wave', colour: 'coral' },
-  decisions: { kind: 'burst', colour: 'peach' },
-  events: { kind: 'flower', colour: 'sage' },
-  kanban: { kind: 'checker', colour: 'lilac' },
-  marketplace: { kind: 'leaf', colour: 'cobalt' },
-  files: { kind: 'stack', colour: 'sage' },
+  polls: { kind: 'bars', colour: 'coral' },
+  events: { kind: 'calendar', colour: 'sage' },
+  kanban: { kind: 'columns', colour: 'cobalt' },
+  marketplace: { kind: 'tag', colour: 'peach' },
+  files: { kind: 'folder', colour: 'sage' },
   lists: { kind: 'tick', colour: 'peach' },
-  bills: { kind: 'coin', colour: 'lilac' },
+  bills: { kind: 'receipt', colour: 'lilac' },
 };
 
 const CYCLE: readonly ShapeColour[] = ['cobalt', 'coral', 'peach', 'sage', 'lilac'];
