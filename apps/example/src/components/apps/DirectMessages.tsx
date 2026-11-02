@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { PersonFace } from '../PersonFace';
 import type { DirectMessage, SpaceSummary } from '@minca/core';
 import { useLive, useNode } from '@minca/react';
 import { useAction } from '@minca/app-shared/action';
-import { Avatar } from '@minca/app-shared/Avatar';
 import { Modal } from '@minca/app-shared/Modal';
 import { ago } from '@minca/ui/time';
 import { nameOf, type People } from '../../derive/people';
@@ -170,14 +170,14 @@ function conversationsOf(messages: ReadonlyArray<DirectMessage>, me: string): Re
 function Faces({ dids }: { dids: ReadonlyArray<string> }) {
   const [first, second] = dids;
   if (!first) return null;
-  if (!second) return <Avatar did={first} size={36} round />;
+  if (!second) return <PersonFace did={first} size={36} round />;
   return (
     <span style={{ position: 'relative', width: 36, height: 36, flexShrink: 0 }}>
       <span style={{ position: 'absolute', left: 0, top: 0 }}>
-        <Avatar did={first} size={26} round />
+        <PersonFace did={first} size={26} round />
       </span>
       <span style={{ position: 'absolute', right: 0, bottom: 0 }}>
-        <Avatar did={second} size={26} round />
+        <PersonFace did={second} size={26} round />
       </span>
     </span>
   );
@@ -239,7 +239,7 @@ function Room({
         )}
         {messages.map((m) => (
           <div key={m.key} className="chat-line" tabIndex={0} style={line}>
-            <Avatar did={m.from} size={28} round />
+            <PersonFace did={m.from} size={28} round />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                 <strong style={{ fontSize: 14, color: palette.ink.strong }}>
@@ -351,7 +351,7 @@ function StartDialog({
                 disabled={!picked.includes(p.did) && picked.length >= 16}
                 style={styles.checkbox}
               />
-              <Avatar did={p.did} size={24} round />
+              <PersonFace did={p.did} size={24} round />
               <span style={{ ...ui.ellipsis, color: palette.ink.strong }}>{p.name}</span>
             </label>
           ))}

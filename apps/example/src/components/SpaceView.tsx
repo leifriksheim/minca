@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
+import { PersonFace } from './PersonFace';
 import {
   Link,
   Outlet,
@@ -30,7 +31,6 @@ import { fills, useSpaceApps, type AppEntry } from './apps/entries';
 import { NEW } from './DataView';
 import { SpaceMark } from './SpaceList';
 import { AddPeople } from './InvitePeople';
-import { Avatar } from '@minca/app-shared/Avatar';
 import type { PairWith } from '../contacts';
 import { AccountMenu } from './AccountMenu';
 import { usePopover } from './usePopover';
@@ -556,7 +556,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
 
 /** A space's face: the person's, for a space for two, else its own mark */
 function SpaceFace({ space, pair, size }: { space: SpaceSummary; pair: PairWith | undefined; size: number }) {
-  return pair ? <Avatar did={pair.face} size={size} round /> : <SpaceMark space={space} size={size} />;
+  return pair ? <PersonFace did={pair.face} size={size} round /> : <SpaceMark space={space} size={size} />;
 }
 
 /** An open app: its screen, or its records as lists */

@@ -19,6 +19,7 @@ import { SyncLine } from './components/SyncLine';
 import { useRunAutomations } from './automations';
 import { ConnectScreen } from './components/ConnectScreen';
 import { useAccountInAddress } from './account-address';
+import { Pictures, usePictures } from './pictures';
 import { ContactsView } from './components/ContactsView';
 import { RelayDown } from './components/RelayNotice';
 import { GroupRow, SpaceCount, SpaceDialog, SpaceList } from './components/SpaceList';
@@ -68,6 +69,7 @@ function Workspace() {
   const navigate = useNavigate();
   const node = useNode();
   const pairs = usePairSpaces();
+  const pictures = usePictures(spaces);
   // A space opens on its Overview: its apps, who is in it and what is new.
   const openSpace = (id: string) => void navigate({ to: '/spaces/$spaceId', params: { spaceId: id } });
   const joinLink = (link: string) => mine.join(inviteFromLink(link));
@@ -140,8 +142,10 @@ function Workspace() {
 
   return (
     <WorkspaceContext value={workspace}>
-      <Outlet />
-      <CallLayer spaces={spaces} onGoTo={(space) => openSpace(space.id)} />
+      <Pictures value={pictures}>
+        <Outlet />
+        <CallLayer spaces={spaces} onGoTo={(space) => openSpace(space.id)} />
+      </Pictures>
     </WorkspaceContext>
   );
 }

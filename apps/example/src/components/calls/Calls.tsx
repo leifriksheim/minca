@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { PersonFace } from '../PersonFace';
 import { createPortal } from 'react-dom';
 import type { SpaceSummary } from '@minca/core';
 import type { CallAround, CallPeer, CurrentCall, IncomingCall } from '@minca/calls';
 import { useCalls } from '@minca/calls/react';
 import { useAccount, useProfiles } from '@minca/react';
 import { nameOf, peopleFrom } from '../../derive/people';
-import { Avatar } from '@minca/app-shared/Avatar';
 import { Icon, type ICONS } from '../Icon';
 import { styles, palette, hstack } from '../../styles';
 import { ask } from '@minca/app-shared/Ask';
@@ -263,7 +263,7 @@ function Tile({
       {stream && <Video stream={stream} mirror={self} hidden={!showVideo} />}
       {!showVideo && (
         <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-          <Avatar did={did} size={40} />
+          <PersonFace did={did} size={40} />
         </span>
       )}
       <figcaption className="call-name">
@@ -359,7 +359,7 @@ function Ringing({
       aria-labelledby={`ring-${ring.id}`}
     >
       <span className="call-ringing">
-        <Avatar did={ring.from} size={72} />
+        <PersonFace did={ring.from} size={72} />
       </span>
       <div>
         <p id={`ring-${ring.id}`} style={styles.modalTitle}>

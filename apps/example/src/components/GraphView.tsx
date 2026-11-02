@@ -1,3 +1,4 @@
+import { PersonFace } from './PersonFace';
 import {
   useEffect,
   useId,
@@ -14,7 +15,6 @@ import type { NodeCollection, NodeRecord, SpaceSummary } from '@minca/core';
 import { collectionLabel, humanize, recordLabel } from '../derive/schema-ui';
 import { nameOf, peopleFrom } from '../derive/people';
 import { ago } from '@minca/ui/time';
-import { Avatar } from '@minca/app-shared/Avatar';
 import { RecordPanel } from './RecordPanel';
 import { SHAPE_CYCLE } from '@minca/ui/tokens';
 import { styles, palette, ui, stack } from '../styles';
@@ -861,7 +861,7 @@ export function GraphView({
                         strokeWidth={1}
                       />
                       <g transform="translate(2,2)">
-                        <Avatar did={dot.did} size={dot.r * 2 - 4} />
+                        <PersonFace did={dot.did} size={dot.r * 2 - 4} />
                       </g>
                     </g>
                   ) : (
@@ -911,7 +911,7 @@ export function GraphView({
                 color: palette.ink.muted,
               }}
             >
-              <Avatar did={writerOf(hover.record)} size={14} />
+              <PersonFace did={writerOf(hover.record)} size={14} />
               {nameOf(writerOf(hover.record), people)} · {nameOfCollection(hover.collection)} ·{' '}
               {ago(hover.record.createdAt)}
             </div>
@@ -1003,7 +1003,7 @@ function Details({
       </header>
       <div style={panelBody}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Avatar did={did} size={32} />
+          <PersonFace did={did} size={32} />
           <div>
             <h3 style={{ ...styles.appTitle, fontSize: 16 }}>
               <Person did={did} />
