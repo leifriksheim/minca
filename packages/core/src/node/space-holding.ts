@@ -4,9 +4,12 @@
  *
  * With `cache` set, and once the space names a keeper, this node holds only
  * the collections it uses, besides the space's own. Sync takes in nothing
- * else. Its own writes are pending until enough keepers have them, and a
- * collection holding a pending write is never dropped. Without a keeper the
- * space is held whole: then this node may be one of its copies.
+ * else. A collection holding a pending write is never dropped. Without a
+ * keeper the space is held whole: then this node may be one of its copies.
+ *
+ * On any node, holding part of a space or all of it, its own writes are
+ * pending until enough of the space's keepers have them (05 §9): what a node
+ * that may stop before it syncs again waits on (`kept`).
  */
 import type { StorageAdapter, Version } from '../types.js';
 import type { StorageProvider } from '../storage/storage-provider.js';
@@ -43,10 +46,11 @@ interface CacheState {
   missing: Record<string, string[]>;
 }
 
-/** A write waiting for keepers: its collection, and the keepers that have it */
+/** A write waiting for keepers: its collection, the keepers that have it, and when it was written */
 interface Pending {
   readonly collection: string;
   readonly by: string[];
+  readonly at?: number;
 }
 
 async function loadCacheState(adapter: StorageAdapter): Promise<CacheState> {
@@ -215,10 +219,11 @@ export async function openSpaceHolding(ctx: HoldingContext) {
     if (changed) saveCache();
   }
 
-  /** A write of this node's, waiting for keepers — only on a node that may hold part of a space */
+  /** A write of this node's, waiting for the space's keepers, on any node: none when it names none */
   async function markPending(version: Version): Promise<void> {
-    if (!cache || version.author !== sessionDid || version.collection.startsWith('sys.')) return;
-    const pending: Pending = { collection: version.collection, by: [] };
+    if (version.author !== sessionDid || version.collection.startsWith('sys.')) return;
+    if ((await access()).history.current.keepers.length === 0) return;
+    const pending: Pending = { collection: version.collection, by: [], at: Date.now() };
     await adapter.put(`${PENDING_PREFIX}${version.id}`, encodeJson(pending));
   }
 
@@ -231,10 +236,9 @@ export async function openSpaceHolding(ctx: HoldingContext) {
     peer: string,
     which: { ids?: ReadonlySet<string>; collection?: string },
   ): Promise<void> {
-    if (!cache) return;
     const state = (await access()).history.current;
     if (!state.keepers.some((keeper) => keeper.did === peer)) return;
-    const target = Math.min(state.keepers.length, Math.max(state.copies ?? 2, cache.copies ?? 0));
+    const target = Math.min(state.keepers.length, Math.max(state.copies ?? 2, cache?.copies ?? 0));
     for (const name of await adapter.list(PENDING_PREFIX)) {
       const id = name.slice(PENDING_PREFIX.length);
       if (which.ids && !which.ids.has(id)) continue;
@@ -247,6 +251,45 @@ export async function openSpaceHolding(ctx: HoldingContext) {
       if (pending.by.length >= target) await adapter.delete(name);
       else await adapter.put(name, encodeJson(pending));
     }
+    for (const check of [...whenKept]) check();
+  }
+
+  /** Waits on `kept` to look again */
+  const whenKept = new Set<() => void>();
+
+  /** Whether a write of this node's from `since` on still waits for keepers */
+  async function waiting(since: number): Promise<boolean> {
+    for (const name of await adapter.list(PENDING_PREFIX)) {
+      const bytes = await adapter.get(name);
+      const pending: unknown = bytes ? JSON.parse(utf8Decode(bytes)) : null;
+      if (isPending(pending) && (pending.at ?? 0) >= since) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Waits up to `waitMs` for the space's keepers to have every write of this
+   * node's from `since` on (ms; all of them by default). False when that long
+   * passed first, or at once when the space names no keepers: nobody can.
+   */
+  async function kept(waitMs: number, since = 0): Promise<boolean> {
+    if ((await access()).history.current.keepers.length === 0) return false;
+    if (!(await waiting(since))) return true;
+    return new Promise((resolve) => {
+      let looking = Promise.resolve();
+      const finish = (done: boolean) => {
+        clearTimeout(timer);
+        whenKept.delete(check);
+        resolve(done);
+      };
+      const check = () => {
+        looking = looking.then(async () => {
+          if (!(await waiting(since))) finish(true);
+        });
+      };
+      const timer = setTimeout(() => void waiting(since).then((left) => finish(!left)), waitMs);
+      whenKept.add(check);
+    });
   }
 
   /**
@@ -323,6 +366,7 @@ export async function openSpaceHolding(ctx: HoldingContext) {
     held: () => (partial ? Object.keys(cacheState.used).sort() : ('all' as const)),
     /** How many of this node's writes still wait for keepers */
     pending: async () => (await adapter.list(PENDING_PREFIX)).length,
+    kept,
     async close(): Promise<void> {
       if (dropTimer) clearInterval(dropTimer);
       await tidying;

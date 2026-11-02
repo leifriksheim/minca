@@ -1007,31 +1007,25 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     under a key of its own: on its disk only between the person allowing it
     and the app collecting the token, ten minutes at most, and in memory
     while a node runs. While the app uses it, a node of its holds the spaces
-    the person picked on the service's disk, reads them and writes records
-    there "via agent", as the app's model asks; and whoever holds its sealing
-    key and a token can do the same until the note runs out or the person
-    disconnects it. The node stops after ten idle minutes, and its copy goes
-    with it (the registry sealed under a key that dies with the node), or at
-    the next start after a crash. A call that writes says it wrote only once
-    an always-on node said it stored what it signed; one that didn't is told
-    to the app, and the version is lost if the node stops before it is sent,
-    as it may when idle, evicted, or the service stops: a gap in the key's
-    log, so a later disconnect withdraws what the key wrote after it (03
-    §6.3), as on any device that lost a write. A node whose store lacks the
-    version at its key's last place signs nothing more in that collection, so
-    one that only an unreachable always-on node holds isn't followed by a
-    twin. A call in a space runs only once the node is level with every
-    always-on node connected there: a node behind
-    would say a record isn't there, and write a first version in a line that
-    has one, ending it (09 §7.5). A space they don't carry fails its own
-    calls only, after waiting for one. Once level, the node is one more device writing in the
-    account's lines, with the gap two devices have (§3.2). Where a key that
-    wrote has signed (which spaces and collections, and how much) is kept
-    apart for as long as its token lasts, so a node started again never signs
-    at the same place twice and forks the key. A second service on the same
-    folder refuses to start: on one machine by its process id, on another
-    sharing the folder while the first keeps its lock fresh. A folder restored
-    from a backup, or a copy given the same sealing key, would fork keys
+    the person picked in memory, reads them and writes records there "via
+    agent", as the app's model asks; and whoever holds its sealing key and a
+    token can do the same until the note runs out or the person disconnects
+    it. Nothing of it outlives the node: a write is done once the space's
+    keepers have it (05 §9; one that names none is read, not written), and
+    a node started again carries on after what they hold of its key's
+    writes. One the app was told wasn't done, lost before a keeper has it
+    (the node evicted, the service stopped), leaves a place nobody saw used,
+    taken again with nothing to fork; held by one keeper and not the one
+    answering the next node, it is followed by a second version at that
+    place, a fork of the key, as on any device that lost a write. An idle
+    node waits up to an hour for its keepers first. A call in a space runs
+    only once the node is level with every always-on node connected there: a
+    node behind would say a record isn't there, and write a first version in
+    a line that has one, ending it (09 §7.5). A space they don't carry fails
+    its own calls only, after waiting for one. Once level, the node is one
+    more device writing in the account's lines, with the gap two devices have
+    (§3.2). Two copies of the service serving one token, or one given the
+    same sealing key, would fork keys
     ([#287](https://github.com/leifriksheim/minca/issues/287)). Records count until the key is revoked, not until the
     note runs out (06 §2.9), so a token outlives nothing the person can't end
     at their home; the service refuses a token for good once its node sees
@@ -1044,13 +1038,18 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     started, shows as nothing new. The reference service takes a key only with
     the private half that goes with it, since a note travels with every record
     and is no secret; refuses a note for the whole account, read from the note
-    itself; and reaches the spaces only through the always-on nodes its
-    operator gives it (`network.only`), so a grant's invites and the records
-    its node reads can't make it connect elsewhere or keep a space those
-    don't carry (`checkGranted` and `createSessions` in
-    `packages/cli/src/remote-mcp/sessions.ts`;
+    itself; and reaches the spaces only through the always-on nodes the
+    grant's invites name over TLS at public addresses, and its operator's own
+    (`network.only`), so a grant's invites and the records its node reads
+    can't make it connect to its own network, and what a node holds is at
+    most 32 MB, in memory (`checkGranted` and `createSessions` in
+    `packages/cli/src/remote-mcp/sessions.ts`, `nodesFor` in
+    `packages/cli/src/remote-mcp/reach.ts`, `boundedMemory` in
+    `packages/cli/src/remote-mcp/memory.ts`;
     `packages/cli/tests/remote-mcp-server.test.ts`,
-    `packages/core/tests/only-given-nodes.test.ts`). It shows its consent page
+    `packages/cli/tests/remote-mcp-reach.test.ts`,
+    `packages/core/tests/only-given-nodes.test.ts`). A name that resolves
+    elsewhere once the socket opens (DNS rebinding) is not caught. It shows its consent page
     for every sign-in, and lets an app register only places a code is safe at:
     a chat app's own MCP callback exactly, a host its operator names (any page
     there), an app on this computer over loopback http, or a named app's own
@@ -1065,8 +1064,8 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     browser that started it; the service can't tell. What a stranger can make
     it keep or do is an app's registration, gone after a day unless used;
     nodes that run while called, each with up to 8 spaces those always-on
-    nodes carry; and, for each token that wrote, where it signed, for a
-    month. Registrations and sign-ins are counted by address, but nodes are
+    nodes carry, in memory, and up to an hour after for writes their keepers
+    don't have. Registrations and sign-ins are counted by address, but nodes are
     not: a stranger with accounts of their own can keep all of them running,
     and make honest calls wait, then fail
     ([#33](https://github.com/leifriksheim/minca/issues/33)). None of this is

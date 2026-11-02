@@ -258,7 +258,7 @@ function consentHtml(params: {
 <p>${app} will act for you in the spaces you pick at your account home:</p>
 <ul><li>It reads them, and writes records there as you, marked “via agent”.</li>
 <li>It can’t add collections or change who is in a space: it proposes them for someone who may.</li>
-<li>The key it acts with lives in ${app}’s sign-in, sealed so only ${host} can open it. While ${app} is working, ${host} keeps a copy of those spaces, and can read them; it deletes it once ${app} has been idle for 10 minutes, keeping only where ${app} wrote, until the connection ends.</li></ul>
+<li>The key it acts with lives in ${app}’s sign-in, sealed so only ${host} can open it. While ${app} is working, ${host} holds those spaces in memory, and can read them; they go once ${app} has been idle for 10 minutes, and nothing is kept after.</li></ul>
 <p>At your account home, ${host} shows as one connection: disconnecting it there disconnects every chat app you connected through ${host}. Once you allow it, you go back to ${escapeHtml(params.back)}.</p>
 <form id="connect"><label for="home">Your account home</label><input id="home" name="home" autocomplete="url" spellcheck="false" value="${escapeHtml(params.home)}">
 <div class="row"><button type="button" id="cancel">Don’t connect</button><button type="submit">Continue</button></div></form>

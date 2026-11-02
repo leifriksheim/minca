@@ -13,6 +13,7 @@ import * as oauth from 'oauth4webapi';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import type { Grant } from '@minca/core/session';
 import { createNode } from '../../core/src/node/node.js';
+import type { P2PNode } from '../../core/src/node/types.js';
 import { createIdentityManager } from '../../core/src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../../core/src/identity/root-signer.js';
 import { deriveAccountKey } from '../../core/src/identity/account-vault.js';
@@ -32,10 +33,19 @@ import { isRecord } from '../src/json.js';
 import { onHub, tempDir } from './helpers/nodes.js';
 import { openHome, createAccount, unlock, chooseAccount } from '../src/home.js';
 import { startDaemon } from '../src/daemon.js';
-import { readdir, stat, utimes, writeFile } from 'node:fs/promises';
+import { readdir, stat } from 'node:fs/promises';
 import net from 'node:net';
-import os from 'node:os';
 import path from 'node:path';
+
+/** Names her carriers as a space's keepers, as her home does for a space it hands a host */
+async function keptByHosts(node: P2PNode, space: string, hosts = 1): Promise<void> {
+  await until(async () => (await node.carriers.list()).length >= hosts, 10_000, 'her hosts to be carriers');
+  const carriers = await node.carriers.list();
+  await node.spaces.setKeepers(
+    space,
+    carriers.map((carrier) => ({ did: carrier.did, name: carrier.name })),
+  );
+}
 
 /** A JSON object's string field, or a failed test */
 function stringField(value: unknown, name: string): string {
@@ -450,8 +460,9 @@ test('with every device of theirs offline, a chat app reads and writes through t
     15_000,
     'the host to carry her registry and the space',
   );
+  await keptByHosts(laptop, space.id);
   const invite = await laptop.spaces.invite(space.id);
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  await new Promise((resolve) => setTimeout(resolve, 1000));
   await laptop.close();
 
   // The service, reaching spaces through that host alone. A short idle time
@@ -504,12 +515,8 @@ test('with every device of theirs offline, a chat app reads and writes through t
   // Its node goes idle and its spaces go with it. Where its key has signed stays:
   // a node that forgot would sign at a place it signed before, a fork of the key
   // that withdraws everything it wrote (found by adversarial review).
-  await until(
-    async () => (await readdir(path.join(data, 'sessions')).catch(() => [])).length === 0,
-    10_000,
-    'the idle node to be dropped',
-  );
-  assert.equal((await readdir(path.join(data, 'places'))).length, 1, 'its key’s places kept');
+  // Nothing is kept of it: the next node carries on after what the host holds of its key's writes.
+  await new Promise((resolve) => setTimeout(resolve, 4000));
   await until(
     async () =>
       (await callTool(issuer, token, 'records_list', { space: space.id, collection: 'app.note' })).includes(
@@ -576,11 +583,8 @@ test('with every device of theirs offline, a chat app reads and writes through t
     );
   await until(refused, 20_000, 'the service to refuse the token');
   await phone.records.put(space.id, 'app.note', { text: 'Secret plan' });
-  await until(
-    async () => (await readdir(path.join(data, 'sessions')).catch(() => [])).length === 0,
-    10_000,
-    'its node to stop',
-  );
+  // Its node stops; the next is refused before it starts.
+  await new Promise((resolve) => setTimeout(resolve, 4000));
   assert.ok(await refused(), 'and to go on refusing it');
 });
 
@@ -638,6 +642,7 @@ test('a fresh node answers only once it holds what the free host does: a payment
     15_000,
     'the host to carry her registry and the space',
   );
+  await keptByHosts(laptop, space.id);
   const invite = await laptop.spaces.invite(space.id);
   await new Promise((resolve) => setTimeout(resolve, 2000));
   await laptop.close();
@@ -693,40 +698,6 @@ test('a fresh node answers only once it holds what the free host does: a payment
   assert.notEqual(verdict?.passes, false, JSON.stringify(verdict));
 });
 
-test('a service on a folder another machine’s service holds doesn’t start, though it can’t see that process', async () => {
-  const data = await tempDir('mcp-server-');
-  // A lock another container holds: its own machine name, and a process id that says nothing here.
-  await writeFile(path.join(data, 'lock.0'), `${process.pid} another-container`);
-  // That service keeps it fresh, as a running one does.
-  const touching = setInterval(() => {
-    const now = new Date();
-    void utimes(path.join(data, 'lock.0'), now, now);
-  }, 5000);
-  closing.push(async () => clearInterval(touching));
-  const settings = {
-    publicUrl: 'http://127.0.0.1:1',
-    nodes: ['ws://127.0.0.1:9/peer'],
-    data,
-    port: 0,
-    version: '0',
-  };
-  await assert.rejects(startMcpServer(settings), /Another mcp-server/);
-});
-
-test('a second service on the same folder doesn’t start: it would sign where the first one does', async () => {
-  const data = await tempDir('mcp-server-');
-  const settings = {
-    publicUrl: 'http://127.0.0.1:1',
-    nodes: ['ws://127.0.0.1:9/peer'],
-    data,
-    port: 0,
-    version: '0',
-  };
-  const first = await startMcpServer(settings);
-  closing.push(() => first.close());
-  await assert.rejects(startMcpServer(settings), /Another mcp-server/);
-});
-
 /** A TCP proxy to a host: the network between the service and it, whose answers can be lost, or which can refuse */
 async function between(target: number) {
   let backCut = false;
@@ -770,7 +741,7 @@ async function between(target: number) {
   };
 }
 
-test('a write no always-on node stored is not said to be written', async () => {
+test('a write the keepers haven’t confirmed is not said to be written', async () => {
   const served = await startHost({
     key: await createP256Provider().generateKeyPair(),
     stores: memoryStores(),
@@ -807,6 +778,7 @@ test('a write no always-on node stored is not said to be written', async () => {
     15_000,
     'the host to carry her registry and the space',
   );
+  await keptByHosts(laptop, space.id);
   const invite = await laptop.spaces.invite(space.id);
   await new Promise((resolve) => setTimeout(resolve, 500));
   await laptop.close();
@@ -853,7 +825,7 @@ test('a write no always-on node stored is not said to be written', async () => {
     body: { text: 'Bread too' },
   });
   assert.match(put, /"isError":true/);
-  assert.match(put, /no always-on node has confirmed it yet/);
+  assert.match(put, /haven’t confirmed it yet/);
   // Once the link is back, the host's word on it comes back too, and every write after is
   // confirmed, not reported lost for the life of the node (found by adversarial review).
   link.mend();
@@ -881,7 +853,7 @@ test('a write no always-on node stored is not said to be written', async () => {
     );
 });
 
-test('a node behind on its own last payment, with another always-on node answering, doesn’t pay again from an older balance', async () => {
+test('with two always-on keepers, a payment one of them missed isn’t done until both have it, and the next builds on it', async () => {
   const hosts = await Promise.all(
     [0, 1].map(async () => {
       const served = await startHost({
@@ -937,6 +909,7 @@ test('a node behind on its own last payment, with another always-on node answeri
       15_000,
       'each host to carry the space',
     );
+  await keptByHosts(laptop, space.id, 2);
   const invite = await laptop.spaces.invite(space.id);
   await new Promise((resolve) => setTimeout(resolve, 2000));
   await laptop.close();
@@ -971,31 +944,36 @@ test('a node behind on its own last payment, with another always-on node answeri
     };
   });
 
-  // One session: the second host can't be reached. She pays 5; the first host stores it.
+  // The second host can't be reached. She pays 5; the first stores it, but a payment is done
+  // only once both keepers have it: a node behind, answered by the second alone, would pay again
+  // from the balance before it, a double spend that ends her line (09 §7.5; found by adversarial review).
   link2.refuse();
   const paid = await callTool(issuer, token, 'records_update', {
     space: space.id,
     key: line,
     body: { amount: 5, balance: -15 },
   });
-  assert.match(paid, /"isError":false/, paid);
-  await until(
-    async () => (await readdir(path.join(data, 'sessions')).catch(() => [])).length === 0,
-    10_000,
-    'the idle node to be dropped',
-  );
-  // The next: the first can't be reached, and the second never got that payment. A node that
-  // paid on would pay after her first payment again: a double spend, which ends her line (09 §7.5).
-  // Its places say where it signed last, so it pays nothing until it holds that (found by adversarial review).
-  link1.refuse();
+  assert.match(paid, /"isError":true/, paid);
+  assert.match(paid, /haven’t confirmed it yet/);
+  // Its node waits for them, idle or not, rather than lose what they don't have.
   link2.mend();
+  await until(
+    async () => (await callTool(issuer, token, 'spaces_status', { space: space.id })).includes('"pending":0'),
+    60_000,
+    'both keepers to have the payment',
+  );
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+
+  // Next time the first can't be reached. The second has the payment now, so a node started
+  // from it carries on after it: the line and the key's log both go on unbroken. Not done until
+  // the first has it too, but written, once.
+  link1.refuse();
   const again = await callTool(issuer, token, 'records_update', {
     space: space.id,
     key: line,
-    body: { amount: 1, balance: -11 },
+    body: { amount: 1, balance: -16 },
   });
-  assert.match(again, /"isError":true/, again);
-  assert.match(again, /own last write in app\.pay/);
+  assert.match(again, /"isError":false|haven’t confirmed it yet/, again);
 
   link1.mend();
   const phone = await onHosts();
@@ -1005,11 +983,13 @@ test('a node behind on its own last payment, with another always-on node answeri
     'the phone to learn of the space',
   );
   await until(
-    async () => (await phone.records.get<{ balance: number }>(space.id, line))?.body?.balance === -15,
+    async () => (await phone.records.get<{ balance: number }>(space.id, line))?.body?.balance === -16,
     40_000,
-    'the phone to get the payment',
+    'the phone to get both payments',
   );
   assert.notEqual((await phone.records.contracts(space.id, line, first.version))?.passes, false);
+  const forks = await phone.records.list(space.id, { collection: 'sys.fork' }).catch(() => []);
+  assert.equal(forks.length, 0, 'no key forked');
 });
 
 test('a space the always-on nodes don’t carry fails its own calls only', async () => {
@@ -1091,18 +1071,4 @@ test('a space the always-on nodes don’t carry fails its own calls only', async
   });
   assert.match(elsewhere, /"isError":true/);
   assert.match(elsewhere, /can’t be reached/);
-});
-
-test('a service whose last run crashed starts again, though its process id came back the same', async () => {
-  const data = await tempDir('mcp-server-');
-  // What that run left: its lock, naming the id a container gives the process again, on this machine.
-  await writeFile(path.join(data, 'lock.0'), `${process.pid} ${os.hostname()}`);
-  const service = await startMcpServer({
-    publicUrl: 'http://127.0.0.1:1',
-    nodes: ['ws://127.0.0.1:9/peer'],
-    data,
-    port: 0,
-    version: '0',
-  });
-  await service.close();
 });

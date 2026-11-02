@@ -11,8 +11,7 @@
  * key, as the registry is, bound to the account and the slot, so a copy of
  * the files can't sign, and a key file moved to another slot doesn't open.
  */
-import { link, mkdir, readdir, readFile, rename, rm, stat, utimes, writeFile } from 'node:fs/promises';
-import os from 'node:os';
+import { link, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
   openEnvelope,
@@ -36,64 +35,6 @@ function alive(pid: number): boolean {
     // EPERM: it runs, as someone else.
     return errorCode(error) === 'EPERM';
   }
-}
-
-/** How often a lock this process holds is touched, to say it still does */
-const REFRESH_MS = 10_000;
-/** A lock touched more recently than this is held, whatever its process id says */
-const FRESH_MS = 30_000;
-
-/** The lock files this process holds now, each with the timer that keeps it fresh */
-const ours = new Map<string, ReturnType<typeof setInterval>>();
-
-/** Whether a lock file was touched lately: its holder is running, wherever that is */
-async function fresh(file: string): Promise<boolean> {
-  const touched = await stat(file).then(
-    (s) => s.mtimeMs,
-    () => 0,
-  );
-  return Date.now() - touched < FRESH_MS;
-}
-
-/** What a lock file names: the process holding it, and the machine it runs on (none from a minca before) */
-function holderOf(text: string): { readonly pid: number; readonly host: string | null } | null {
-  const [pid, host] = text.trim().split(' ');
-  const number = Number(pid);
-  return Number.isSafeInteger(number) && number > 0 ? { pid: number, host: host ?? null } : null;
-}
-
-/** What this process writes in a lock it takes */
-const holderText = () => `${process.pid} ${os.hostname()}`;
-
-/**
- * Whether the process a lock file names still holds it. On this machine its
- * id says, but one naming this process's own id holds it only if this process
- * took it: a container started again often gets the id its last run had. On
- * another, sharing the folder, its id says nothing here, so a lock its holder
- * touched lately is held.
- */
-async function holds(holder: { readonly pid: number; readonly host: string | null }, file: string) {
-  if (holder.host !== null && holder.host !== os.hostname()) return fresh(file);
-  return holder.pid === process.pid ? ours.has(file) : alive(holder.pid);
-}
-
-/** Starts keeping a lock this process is taking fresh: the timer that does, or null when another claim here is */
-function keepFresh(mine: string): ReturnType<typeof setInterval> | null {
-  if (ours.has(mine)) return null;
-  const timer = setInterval(() => {
-    const now = new Date();
-    void utimes(mine, now, now).catch(() => {});
-  }, REFRESH_MS);
-  timer.unref?.();
-  ours.set(mine, timer);
-  return timer;
-}
-
-/** Stops keeping a lock fresh: only by the claim that started it */
-function stopFresh(mine: string, timer?: ReturnType<typeof setInterval>): void {
-  if (timer !== undefined && ours.get(mine) !== timer) return;
-  clearInterval(ours.get(mine));
-  ours.delete(mine);
 }
 
 /**
@@ -122,8 +63,8 @@ const RELEASED = 'released';
 export async function lockHolder(file: string): Promise<number | null> {
   const [top] = await numbers(file);
   if (top === undefined) return null;
-  const holder = holderOf(await readFile(`${file}.${top}`, 'utf8').catch(() => ''));
-  return holder && (await holds(holder, `${file}.${top}`)) ? holder.pid : null;
+  const holder = Number((await readFile(`${file}.${top}`, 'utf8').catch(() => '')).trim());
+  return Number.isSafeInteger(holder) && holder > 0 && alive(holder) ? holder : null;
 }
 
 /**
@@ -133,8 +74,8 @@ export async function lockHolder(file: string): Promise<number | null> {
  */
 async function free(file: string): Promise<boolean> {
   const text = (await readFile(file, 'utf8').catch(() => '')).trim();
-  const holder = holderOf(text);
-  return text === RELEASED || (holder !== null && !(await holds(holder, file)));
+  const holder = Number(text);
+  return text === RELEASED || (Number.isSafeInteger(holder) && holder > 0 && !alive(holder));
 }
 
 /** Links a file into place, or creates it there where the disk has no hard links (exFAT, some network mounts) */
@@ -160,10 +101,7 @@ async function putWhole(file: string, text: string, place: (from: string, to: st
 }
 
 /** Lets go of a lock, keeping its number: none is used twice */
-const letGo = async (mine: string) => {
-  stopFresh(mine);
-  await putWhole(mine, RELEASED, rename);
-};
+const letGo = (mine: string) => putWhole(mine, RELEASED, rename);
 
 /**
  * Takes a lock, or says another running process holds it: the path this
@@ -174,21 +112,16 @@ const letGo = async (mine: string) => {
  */
 async function lock(file: string): Promise<string | null> {
   // A minca from before the numbered lock holds the bare file, and reads no other.
-  const older = holderOf(await readFile(file, 'utf8').catch(() => ''));
-  if (older && (await holds(older, file))) return null;
+  const older = Number((await readFile(file, 'utf8').catch(() => '')).trim());
+  if (Number.isSafeInteger(older) && older > 0 && alive(older)) return null;
   for (let attempt = 0; attempt < 5; attempt += 1) {
     // One look decides: the number this one takes is above the one it saw free.
     const [top = -1] = await numbers(file);
     if (top >= 0 && !(await free(`${file}.${top}`))) return null;
     const mine = `${file}.${top + 1}`;
-    // Ours before it is in place: another claim in this process must never see it as a lock nobody holds.
-    const timer = keepFresh(mine);
-    // Another claim in this process is taking this number: it is held.
-    if (!timer) return null;
     try {
-      await putWhole(mine, holderText(), linkOrCreate);
+      await putWhole(mine, String(process.pid), linkOrCreate);
     } catch (error) {
-      stopFresh(mine, timer);
       if (errorCode(error) !== 'EEXIST') throw error;
       continue;
     }
@@ -199,7 +132,6 @@ async function lock(file: string): Promise<string | null> {
         if (below < top + 1) await rm(`${file}.${below}`, { force: true });
       return mine;
     }
-    stopFresh(mine, timer);
     await rm(mine, { force: true });
   }
   return null;

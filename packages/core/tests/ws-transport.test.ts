@@ -5,6 +5,7 @@
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { createServer } from 'node:net';
 import * as z from 'zod';
 import { WebSocketServer, type RawData, type WebSocket as ServerSocket } from 'ws';
 import { portOf, textOf } from './helpers/net.js';
@@ -108,6 +109,25 @@ function watch(transport: ReturnType<typeof createWebSocketTransport>) {
 }
 
 describe('WebSocket transport', () => {
+  test('a node that refuses the first dial is dialled again, though no close follows the error', async () => {
+    // Node's WebSocket says only `error` when the socket goes before it opens: a host down when a node starts.
+    let attempts = 0;
+    const server = createServer((socket) => {
+      attempts += 1;
+      socket.destroy();
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const transport = createWebSocketTransport({
+      url: `ws://127.0.0.1:${portOf(server)}/peer`,
+      did: 'did:key:zTest',
+      maxBackoffMs: 500,
+    });
+    await transport.connect?.().catch(() => {});
+    await until(async () => attempts >= 3, 5000, 'it to be dialled again');
+    transport.closeAll();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
   test('introduces itself, learns the node, and round-trips binary frames', async () => {
     const node = startNode();
     const port = await node.ready;

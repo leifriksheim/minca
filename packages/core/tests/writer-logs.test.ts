@@ -146,15 +146,17 @@ describe('a writer’s log', () => {
     assert.deepEqual(now, { n: was.n + 1, prev: a.version });
   });
 
-  test('a node whose own last version is gone from its store, its places kept, signs nothing more there until it is back', async () => {
+  test('a key whose places were lost carries on after the versions of its own it holds', async () => {
     const { me, manager } = await person();
     const keys = await provider.generateKeyPair();
     const stores = memoryStores();
+    // Its places kept nowhere that lasts, as a node a server starts afresh for each use keeps them.
     const start = async () => {
+      const forgetful = memoryStores();
       const node = await createNode({
         signer: createLocalRootSigner(me, manager.getProvider()),
         sessionKey: keys,
-        stores,
+        stores: (path, options) => (path === 'writers' ? forgetful(path, options) : stores(path, options)),
         watchIntervalMs: 0,
       });
       open.push(node);
@@ -162,16 +164,17 @@ describe('a writer’s log', () => {
     };
     const before = await start();
     const { id: space } = await before.spaces.create({ name: 'Mine', visibility: 'public' });
-    const a = await before.records.put(space, 'app.note', { text: 'a' });
+    await before.records.put(space, 'app.note', { text: 'a' });
+    const b = await before.records.put(space, 'app.note', { text: 'b' });
     await before.close();
-    // Its store rolled back, as a folder restored or one the MCP service drops: the places stay.
-    await createStorageProvider(await stores(`spaces/${space}`)).removeVersion(a.version);
 
     const after = await start();
-    // Writing on would build on an older version than its own: in a line, a twin of its own write.
-    await assert.rejects(after.records.put(space, 'app.note', { text: 'b' }), /own last write in app\.note/);
-    // Its other collections are as they were.
-    await after.records.put(space, 'app.other', { text: 'c' });
+    const c = await after.records.put(space, 'app.note', { text: 'c' });
+    const read = async (id: string) =>
+      (await createStorageProvider(await stores(`spaces/${space}`)).getVersion(id))!.log;
+    const [was, now] = [(await read(b.version))!, (await read(c.version))!];
+    // At place 0 again it would fork its own line, and every peer would withdraw what it signed there.
+    assert.deepEqual(now, { n: was.n + 1, prev: b.version });
   });
 
   test('places a node kept before a line per collection are not carried on', async () => {

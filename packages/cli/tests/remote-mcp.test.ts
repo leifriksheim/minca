@@ -132,18 +132,12 @@ async function aHost(hub: FakeHub, settings: { readonly running?: number } = {})
   const issuer = `http://127.0.0.1:${address.port}`;
   const stores = memoryStores();
   const store = await stores('mcp');
-  /** Sessions whose spaces the service removed */
-  const dropped: string[] = [];
   remote = await createRemoteMcp({
     publicUrl: issuer,
     secret: crypto.getRandomValues(new Uint8Array(32)),
     store,
-    stores: (session) => (where) => stores(`sessions/${session}/${where}`),
-    drop: async (session) => {
-      dropped.push(session);
-    },
     addressOf: () => '127.0.0.1',
-    network: () => onHub(hub),
+    network: async () => onHub(hub),
     ...settings,
     name: 'Test service',
     version: '0',
@@ -164,7 +158,7 @@ async function aHost(hub: FakeHub, settings: { readonly running?: number } = {})
     }
     return all.join('\n');
   };
-  return { issuer, resource: `${issuer}/mcp`, remote: running, dropped, kept };
+  return { issuer, resource: `${issuer}/mcp`, remote: running, kept };
 }
 
 /** A browser's cookies, by name, for this one host */
@@ -349,6 +343,8 @@ describe('a host’s MCP endpoint', () => {
     const ada = await accountHolder(hub);
     const space = await ada.node.spaces.create({ name: 'Lunch club', visibility: 'private' });
     await hold(ada.node, space.id);
+    // Her node keeps the space, as her free host does: what the chat app writes is done once it has it.
+    await ada.node.spaces.setKeepers(space.id, [{ did: ada.node.sessionDid, name: 'Ada’s laptop' }]);
     const host = await aHost(hub);
 
     const app = await anApp(host.resource);
@@ -402,6 +398,36 @@ describe('a host’s MCP endpoint', () => {
     assert.equal(note!.root, ada.did, 'written as Ada');
     assert.equal(note!.recordsOnly, true, 'marked as written under a records-only note');
     assert.notEqual(did, ada.did);
+  });
+
+  test('in a space that names no keeper, a chat app reads but doesn’t write: nothing would keep it', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    const space = await ada.node.spaces.create({ name: 'Notes', visibility: 'private' });
+    await ada.node.records.put(space.id, 'app.note', { text: 'Soup on Friday' });
+    await hold(ada.node, space.id);
+    const host = await aHost(hub);
+    const app = await anApp(host.resource);
+    const { tokens } = await signIn(app, host.resource, (audience) => ada.grantFor(audience));
+    const client = await mcpClient(host.resource, tokens.access_token);
+    await until(
+      async () =>
+        textOf(
+          await client.callTool({
+            name: 'records_list',
+            arguments: { space: space.id, collection: 'app.note' },
+          }),
+        ).includes('Soup on Friday'),
+      8000,
+      'the chat app to read the space',
+    );
+    // Its node's copy goes when it stops, and no always-on node is named to have it before then.
+    const put = await client.callTool({
+      name: 'records_put',
+      arguments: { space: space.id, collection: 'app.note', body: { text: 'Bread too' } },
+    });
+    assert.equal(put.isError, true);
+    assert.match(textOf(put), /names no always-on node/);
   });
 
   test('a second app connected from the same browser is a sign-in of its own, and the first keeps working', async () => {
@@ -735,15 +761,12 @@ describe('a host’s MCP endpoint', () => {
 describe('a session’s node', () => {
   /** Sessions on the hub, and the ids whose nodes started */
   async function someSessions(hub: FakeHub, running?: number) {
-    const stores = memoryStores();
     const starts: string[] = [];
     const sessions = createSessions({
-      stores: (id) => {
-        starts.push(id);
-        return (where) => stores(`sessions/${id}/${where}`);
+      network: async (grant) => {
+        starts.push(grant.note.payload.aud);
+        return onHub(hub);
       },
-      drop: async () => {},
-      network: () => onHub(hub),
       ...(running !== undefined ? { running } : {}),
     });
     closing.push(() => sessions.close());

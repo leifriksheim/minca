@@ -1,19 +1,17 @@
 /**
  * `minca mcp-server`: Minca's MCP service on its own, apart from any host.
- * Chat apps connect to it by its address (`remote-mcp/index.ts`); each call
- * runs on a node that reaches the person's spaces through the always-on
- * nodes it is given (`MINCA_NODES`), such as the free host's, and nowhere
- * else. It keeps no key and no space past a session: a token carries the key,
- * and a session's spaces go when its node stops.
+ * Chat apps connect to it by its address (`remote-mcp/index.ts`). It keeps
+ * nothing per connection: a token carries the key, and each session's node
+ * holds its spaces in memory while it runs, reaching them through the
+ * always-on nodes the grant's invites name (`reach.ts`), and these.
  *
  *   MINCA_MCP_URL     its public address, https:// (localhost may be http://)
- *   MINCA_NODES       the always-on nodes it reaches spaces through, wss://host/peer#did:key:…
+ *   MINCA_NODES       always-on nodes of the operator's own, wss://host/peer#did:key:…, for spaces their invites name none of
  *   MINCA_MCP_DATA    where it keeps its token secret and its sign-ins under way. Default ~/.minca-mcp
  *   MINCA_MCP_HOME    the account home its consent page suggests
  *   MINCA_MCP_APPS    more chat apps a sign-in may go back to: hosts (chat.example.com) or schemes (zed:)
  */
-import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
-import { createHash } from 'node:crypto';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
@@ -21,13 +19,15 @@ import { directoryStores } from '@minca/core';
 import { openFsDirectory } from '../fs-directory.js';
 import { addressOf } from '../host.js';
 import { commaList, errorCode } from '../json.js';
-import { holdLock } from '../writer-keys.js';
 import { createRemoteMcp, type RemoteMcp } from './index.js';
+import { nodesFor } from './reach.js';
 
 export interface McpServerOptions {
   readonly publicUrl: string;
-  /** The always-on nodes sessions reach spaces through */
-  readonly nodes: ReadonlyArray<string>;
+  /** Always-on nodes of the operator's own, besides those a grant's invites name */
+  readonly nodes?: ReadonlyArray<string>;
+  /** Whether a session may reach a node an invite names; public addresses only, by default */
+  readonly mayReach?: (node: string) => Promise<boolean>;
   readonly data: string;
   readonly port: number;
   readonly host?: string;
@@ -56,102 +56,21 @@ async function tokenSecret(data: string): Promise<Uint8Array> {
   return made;
 }
 
-/** A session's id is a token's: letters, digits, `-` and `_`, so one name, never a path */
-function checkId(session: string): string {
-  if (!/^[A-Za-z0-9_-]{1,64}$/.test(session)) throw new Error('Not a session id');
-  return session;
-}
-
-/** Where a session's node keeps its spaces while it runs */
-const sessionFolder = (data: string, session: string) => path.join(data, 'sessions', checkId(session));
-
-/**
- * Where a key's places in each log are kept, by its DID: past the node and
- * past a restart of the service, for as long as a token can last. A node that
- * forgot them would sign at a place it signed before, and fork the key.
- */
-const placesFolder = (data: string, key: string) =>
-  path.join(data, 'places', createHash('sha256').update(key).digest('base64url'));
-
-/** How long a key's places are kept: as long as its token can last, and a day */
-const KEEP_DAYS = 31;
-
-/** Whether a folder holds a file anywhere under it */
-async function holdsAFile(folder: string): Promise<boolean> {
-  const entries = await readdir(folder, { recursive: true, withFileTypes: true }).catch(() => []);
-  return entries.some((entry) => entry.isFile());
-}
-
-/** Removes the places of keys whose tokens can no longer be used */
-async function sweep(data: string): Promise<void> {
-  const before = Date.now() - KEEP_DAYS * 86_400_000;
-  const root = path.join(data, 'places');
-  for (const entry of await readdir(root).catch(() => [])) {
-    const at = path.join(root, entry);
-    const since = await stat(at).then(
-      (s) => s.mtimeMs,
-      () => Date.now(),
-    );
-    if (since < before) await rm(at, { recursive: true, force: true });
-  }
-}
-
 export async function startMcpServer(
   options: McpServerOptions,
 ): Promise<{ readonly port: number; readonly remote: RemoteMcp; close(): Promise<void> }> {
   await mkdir(options.data, { recursive: true, mode: 0o700 });
-  // One process to a folder: two would each start a node for one token, sign at
-  // the same places, and fork its key; and each would remove the other's spaces.
-  const letGo = await holdLock(path.join(options.data, 'lock'));
-  // One another machine held and stopped keeping fresh is taken over 30 seconds on: started again by then, this one starts.
-  if (!letGo) throw new Error(`Another mcp-server is using ${options.data}`);
-  try {
-    return await serve(options, letGo);
-  } catch (error) {
-    await letGo();
-    throw error;
-  }
-}
-
-async function serve(
-  options: McpServerOptions,
-  letGo: () => Promise<void>,
-): Promise<{ readonly port: number; readonly remote: RemoteMcp; close(): Promise<void> }> {
-  // The spaces an earlier run's nodes held: an always-on node has whatever a call said was written.
-  await rm(path.join(options.data, 'sessions'), { recursive: true, force: true });
-  await sweep(options.data);
   const store = await directoryStores(await openFsDirectory(path.join(options.data, 'store')))('mcp');
   const remote = await createRemoteMcp({
     publicUrl: options.publicUrl,
     secret: await tokenSecret(options.data),
     store,
-    stores: (session, key) => {
-      const folder = sessionFolder(options.data, session);
-      const places = placesFolder(options.data, key);
-      // The registry, which holds the spaces' keys, sealed under a key that lives only as long as the node.
-      const localKey = globalThis.crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, [
-        'encrypt',
-        'decrypt',
-      ]);
-      return async (where, storeOptions) =>
-        where === 'writers'
-          ? directoryStores(await openFsDirectory(places))(where, storeOptions)
-          : directoryStores(await openFsDirectory(folder), { localKey: await localKey })(where, storeOptions);
-    },
-    // Retried: a store may still be finishing its last write as the node stops.
-    // Places it never signed at go too: a token that only read leaves nothing.
-    drop: async (session, key) => {
-      await rm(sessionFolder(options.data, session), {
-        recursive: true,
-        force: true,
-        maxRetries: 5,
-        retryDelay: 100,
-      });
-      const places = placesFolder(options.data, key);
-      if (!(await holdsAFile(places))) await rm(places, { recursive: true, force: true });
-    },
     addressOf: (req) => addressOf(req, options.clientAddressHeader),
-    network: () => ({ relays: [], nodes: [...options.nodes] }),
+    // The nodes its invites name that are public, and the operator's own: nowhere a stranger's grant points.
+    network: async (grant) => ({
+      relays: [],
+      nodes: [...(await nodesFor(grant, options.nodes ?? [], options.mayReach))],
+    }),
     name: new URL(options.publicUrl).host,
     version: options.version,
     ...(options.accountHome ? { accountHome: options.accountHome } : {}),
@@ -187,18 +106,14 @@ async function serve(
     await store.close();
     throw error;
   });
-  const sweeping = setInterval(() => void sweep(options.data).catch(() => {}), 3_600_000);
-  sweeping.unref();
   const address = http.address();
   return {
     port: typeof address === 'object' && address ? address.port : options.port,
     remote,
     async close() {
-      clearInterval(sweeping);
       await remote.close();
       await store.close();
       await new Promise<void>((resolve) => http.close(() => resolve()));
-      await letGo();
     },
   };
 }
@@ -216,10 +131,6 @@ export function mcpServerFromEnv(env: NodeJS.ProcessEnv) {
   if (pathname !== '/')
     throw new Error('MINCA_MCP_URL is an address like https://mcp.example.com, with no path');
   const nodes = commaList(env.MINCA_NODES);
-  if (!nodes.length)
-    throw new Error(
-      'minca mcp-server needs MINCA_NODES, the always-on nodes it reaches spaces through, like wss://host.example/peer#did:key:…',
-    );
   const apps = commaList(env.MINCA_MCP_APPS);
   const bad = apps.find(
     (app) =>
@@ -230,7 +141,7 @@ export function mcpServerFromEnv(env: NodeJS.ProcessEnv) {
   const home = env.MINCA_MCP_HOME?.trim();
   return {
     publicUrl: url.replace(/\/+$/, ''),
-    nodes,
+    ...(nodes.length ? { nodes } : {}),
     data: env.MINCA_MCP_DATA?.trim() || path.join(os.homedir(), '.minca-mcp'),
     ...(home ? { accountHome: home } : {}),
     ...(apps.length ? { moreApps: apps.map((app) => app.toLowerCase()) } : {}),

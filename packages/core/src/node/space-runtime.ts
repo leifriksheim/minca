@@ -232,6 +232,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     index,
     keys,
     stored,
+    lastPlace: (did, collection) => lines.lastPlace(did, collection),
+    use: holding.use,
   });
   const lines = createLines({
     ...base,
@@ -251,7 +253,6 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     await lines.placeInLog(version);
     await holding.markPending(version);
     mirrors.tellTabs();
-    peers.signed(version.id);
     peers.sync.onLocalChange(version);
     recordsChanged([version]);
   }
@@ -552,8 +553,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     },
 
     syncedWith: peers.syncedWith,
-    unsent: peers.unsent,
-    delivered: peers.delivered,
+    kept: holding.kept,
 
     async versionsOf(keys: ReadonlyArray<string>) {
       return (await Promise.all(keys.map((key) => storage.history(key)))).flat();

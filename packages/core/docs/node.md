@@ -204,15 +204,16 @@ before the version leaves the node. Where the places are kept depends on the key
   or in separate processes without a shared lock, fork its lines, and every
   peer then withdraws what it signed in a forked collection from the fork on.
 
-A key's last place in a collection names the version it signed there. A node
-whose store doesn't hold that version, because the store was emptied or
-rolled back while the places were kept (a restored folder, or the MCP
-service's nodes, whose folder goes when they stop), signs nothing more in that
-collection until sync brings it back: it would build on an older version than
-its own, and in a line write a twin of its own payment (09 §7.5). One another
-tab signed and is storing now is waited for, up to 3 seconds.
+What the node holds counts as much as what it remembers: the next place comes
+after the last one the key holds a version at, if that is later than the last
+one kept. So a key whose places were lost, or never kept, carries on after
+what sync brought back instead of at a place it used, as a node a server
+starts afresh from a key it was handed does (the MCP service's,
+`packages/cli/src/remote-mcp/sessions.ts`). A version it signed that no other
+node holds and this one lost leaves a place nobody saw used, which is taken
+again with nothing to fork.
 
-_Source: `packages/core/src/node/writers.ts` (`createWriters`, `exclusively`, `arrives`). Tests: `packages/core/tests/writer-logs.test.ts` ("a writer’s log", "two nodes sharing a handed-in key…", "a node whose own last version is gone from its store…"), `packages/cli/tests/remote-mcp-server.test.ts` ("a node behind on its own last payment…")._
+_Source: `packages/core/src/node/writers.ts` (`createWriters`, `exclusively`), `packages/core/src/node/space-lines.ts` (`lastPlace`). Tests: `packages/core/tests/writer-logs.test.ts` ("a writer’s log", "two nodes sharing a handed-in key…", "a key whose places were lost carries on…")._
 
 ### Writer keys
 
@@ -349,7 +350,8 @@ node's own choice; how it tells peers what it holds is in
 - Collections listed in `cache.collections` are held from the start and never
   dropped.
 - A query marks the collections it reads (its own and every `include … from`)
-  as used; sync then fetches them. A query's result has `complete: false`
+  as used, and a write the collection it writes in; sync then fetches them. A
+  writer holds its own earlier writes that way, and the rest beside them. A query's result has `complete: false`
   until, for every collection it reads, the node has once been level with a
   node holding the whole space, **and** it lacks nothing a writer's line in
   that collection names
@@ -359,9 +361,7 @@ node's own choice; how it tells peers what it holds is in
   collection is level with a peer.
 - Until the node has once caught up fully with a node holding the whole space,
   it cannot know whether the space names keepers, so it holds only what it uses.
-- The node's own writes are _pending_ until `min(keepers named, max(copies ?? 2,
-cache.copies ?? 0))` of the space's named keepers have them. A collection
-  holding a pending write is never dropped.
+- A collection holding a pending write (below) is never dropped.
 - A collection unused for `cache.unusedAfterDays` (default 30) days is dropped
   when the space opens and every 6 hours while it stays open. It stops being
   held _before_ its versions are removed, so nothing syncs it back meanwhile.
@@ -370,16 +370,27 @@ cache.copies ?? 0))` of the space's named keepers have them. A collection
 - When what it holds changes (whole or part, or a newly used collection), the
   node says hello to every peer.
 
-A keeper confirms a write the way the spec says: by `stored`, or by being
-level with the writer on its collection. Only a peer named in `sys.keepers`
-counts ([spec 05 §9](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md)).
+On every node, holding part of a space or all of it, its own writes in a
+space that names keepers are _pending_ until `min(keepers named, max(copies ??
+2, cache.copies ?? 0))` of them have them. A keeper confirms a write the way
+the spec says: by `stored`, or by being level with the writer on its
+collection. Only a peer named in `sys.keepers` counts
+([spec 05 §9](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md)).
+
+`node.spaces.kept(spaceId, waitMs, since?)` waits up to `waitMs` (at most a
+minute) for the keepers to have this node's writes there from `since` (ms)
+on, or all of them: true once none of those is pending, false when that long
+passed first, and false at once when the space names no keepers, since then
+nobody can. A node that may stop before it syncs again waits on it: a tab
+about to close, a command about to exit, a node a server runs for a while
+(the MCP service's).
 
 This state is kept in the space's own store (`spaces/<spaceId>`):
 
 | Key                    | Value (UTF-8 JSON)                                                                                                                                                                                                                                                                                                                         |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `cache`                | `{ "settled": boolean, "used": { [collection]: ms }, "level": { [collection]: ms }, "missing": { [collection]: [version id…] } }`. `settled`: has synced with a whole-space peer; `used`: when a query last used it; `level`: when it was first level with a whole-space peer; `missing`: what a writer's line there names that isn't here |
-| `pending/<version id>` | `{ "collection": string, "by": [keeper DID…] }`, deleted once `by` reaches the target                                                                                                                                                                                                                                                      |
+| `pending/<version id>` | `{ "collection": string, "by": [keeper DID…], "at": ms }`, deleted once `by` reaches the target                                                                                                                                                                                                                                            |
 
 What a keeper withholds from the middle of a writer's line shows up as
 missing, whichever peer the node was level with. A writer's newest versions
@@ -389,7 +400,7 @@ with to do it.
 The account registry, the contacts space and carry spaces are always held
 whole. Apps connected to an account home use `cache: {}` by default ([the app-side client](#the-app-side-client)).
 
-_Source: `packages/core/src/node/space-holding.ts` (`openSpaceHolding`), `packages/core/src/node/types.ts` (`CacheConfig`). Tests: `packages/core/tests/caches.test.ts`, `packages/core/tests/reconcile.test.ts` ("holding part of a space")._
+_Source: `packages/core/src/node/space-holding.ts` (`openSpaceHolding`, `kept`), `packages/core/src/node/space-writing.ts` (`write`), `packages/core/src/node/types.ts` (`CacheConfig`). Tests: `packages/core/tests/caches.test.ts`, `packages/core/tests/reconcile.test.ts` ("holding part of a space")._
 
 ### Planned: caches that widen and trim
 
@@ -923,19 +934,7 @@ true once that peer holds all this node does of the space, false when
 `waitMs` (at most a minute) passed first or the peer never came. For a node about to close,
 like a connect page waiting for the app to have what it wrote.
 
-`node.spaces.unsent(spaceId)` lists the versions this node signed in a space
-since it started that no peer has said it stored yet, and
-`node.spaces.delivered(spaceId, waitMs, only?)` waits for them, or for those
-in `only`: true once a peer has said it stored each, false when `waitMs` (at
-most a minute) passed first. A peer met again is sent them once more, since
-its word may have been lost with the link. A version a peer refused is never
-stored, so it stays in the list. Level is not enough for
-this, since a peer that refused a version is level all the same. For a node
-whose folder goes when it stops, like the MCP service's
-(`packages/cli/src/remote-mcp/sessions.ts`): a version signed and never
-stored leaves a gap in its key's log.
-
-_Source: `packages/core/src/node/node.ts` (`spaces.carried`, `spaces.reached`, `spaces.delivered`), `packages/core/src/node/space-peers.ts` (`delivered`), `packages/core/src/node/node-contacts.ts` (`makePair`). Tests: `packages/core/tests/carrier.test.ts` ("a space made just now, carried before its invite goes out…", "carried is false at once with no carrier…"), `packages/core/tests/usernames.test.ts` ("spaces.reached is true once a peer holds the space…", "spaces.delivered is true once a peer stored what this node wrote…")._
+_Source: `packages/core/src/node/node.ts` (`spaces.carried`, `spaces.reached`), `packages/core/src/node/node-contacts.ts` (`makePair`). Tests: `packages/core/tests/carrier.test.ts` ("a space made just now, carried before its invite goes out…", "carried is false at once with no carrier…"), `packages/core/tests/usernames.test.ts` ("spaces.reached is true once a peer holds the space…")._
 
 **The account's own automations.** `node.automations` (needs the account
 key) lists, adds, updates (`name`, `paused`) and removes the account's own

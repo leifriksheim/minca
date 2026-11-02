@@ -33,13 +33,8 @@ import {
   type JSONValue,
 } from '@modelcontextprotocol/server';
 import { toNodeHandler } from '@modelcontextprotocol/node';
-import {
-  callAction,
-  NODE_ACTIONS,
-  type NodeConfig,
-  type StorageAdapter,
-  type StoreFactory,
-} from '@minca/core';
+import { callAction, NODE_ACTIONS, type NodeConfig, type StorageAdapter } from '@minca/core';
+import type { Grant } from '@minca/core/session';
 import { createSessions, type Granted } from './sessions.js';
 import { isRecord, messageOf } from '../json.js';
 import { mcpTools, toolInstructions } from '../mcp.js';
@@ -81,8 +76,8 @@ function objectOf(value: unknown): JSONObject {
   return copied !== null && typeof copied === 'object' && !Array.isArray(copied) ? copied : {};
 }
 
-/** How long a call that writes waits for an always-on node to say it stored what it wrote */
-const STORED_MS = 10_000;
+/** How long a call that writes waits for the space's keepers to have what it wrote */
+const KEPT_MS = 10_000;
 
 export interface RemoteMcpOptions {
   /** The service's address as people reach it, https://: the issuer, and where the endpoint is */
@@ -91,14 +86,10 @@ export interface RemoteMcpOptions {
   readonly secret: Uint8Array;
   /** Where the authorization server keeps what it must: apps registered, sign-ins under way */
   readonly store: StorageAdapter;
-  /** A folder of stores for a session's node while it runs, and where its key (by DID) has signed */
-  readonly stores: (session: string, key: string) => StoreFactory;
-  /** Removes that folder once the node stops with what it wrote held by an always-on node */
-  readonly drop: (session: string, key: string) => Promise<void>;
   /** Who is asking, for counting sign-ins */
   readonly addressOf: (req: IncomingMessage) => string;
-  /** How a session's node reaches the spaces it was given: the hosts the service names */
-  readonly network: () => NodeConfig['network'];
+  /** How a session's node reaches the spaces a grant gives it: the always-on nodes that hold them (`reach.ts`) */
+  readonly network: (grant: Grant) => Promise<NodeConfig['network']>;
   /** What the service calls itself */
   readonly name: string;
   readonly version: string;
@@ -126,8 +117,6 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
   const resourceUrl = new URL(resource);
 
   const sessions = createSessions({
-    stores: options.stores,
-    drop: options.drop,
     network: options.network,
     // Refused again by the next node that sees the revoke, if keeping it fails now.
     onRevoked: (session) =>
@@ -229,17 +218,19 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
           const space = typeof args.space === 'string' ? args.space : undefined;
           const writes = !NODE_ACTIONS.find((action) => action.name === name)?.readOnly;
           said = await sessions.use(session, granted, space, async (node) => {
-            const before = writes && space !== undefined ? new Set(await node.spaces.unsent(space)) : null;
+            if (!writes || space === undefined) return callAction(node, name, args);
+            // What the node holds goes when it stops: a write is done once the space's keepers have it.
+            if ((await node.spaces.access(space)).keepers.length === 0)
+              throw new Error(
+                'This space names no always-on node to keep it, so nothing written here through this ' +
+                  'service could be kept. Write it from a device of yours.',
+              );
+            const since = Date.now();
             const done = await callAction(node, name, args);
-            if (done.isError || !before || space === undefined) return done;
-            // The node's folder goes when it stops: a version this call signed that no always-on node
-            // stored would go with it, and the place it was signed at, which is kept, would point at nothing.
-            const signed = (await node.spaces.unsent(space)).filter((id) => !before.has(id));
-            if (await node.spaces.delivered(space, STORED_MS, signed)) return done;
+            if (done.isError || (await node.spaces.kept(space, KEPT_MS, since))) return done;
             throw new Error(
-              'Saved on this connection, but no always-on node has confirmed it yet: it is sent when one ' +
-                'is reachable, unless this connection is idle for 10 minutes first. Don’t write it again; ' +
-                'check later that it is there.',
+              'Written, but the space’s always-on nodes haven’t confirmed it yet. It is sent when they are ' +
+                'reachable, unless this connection is idle for 10 minutes first: read it back before writing it again.',
             );
           });
         } catch (error) {

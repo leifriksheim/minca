@@ -389,16 +389,6 @@ describe('a username at sign-up', () => {
     assert.equal(await leif.spaces.reached(space, peer, 2000), true);
     assert.equal(await leif.spaces.reached(space, 'did:key:zDnaeNobodyAtAll', 100), false);
   });
-
-  test('spaces.delivered is true once a peer stored what this node wrote, and false while none has', async () => {
-    const hub = createFakeHub({ latencyMs: 1 });
-    const { leif, space } = await contacts(hub);
-    await leif.records.put(space, 'app.note', { text: 'hi' });
-    assert.equal(await leif.spaces.delivered(space, 5000), true, 'Anna stored it');
-    const alone = await leif.spaces.create({ name: 'Alone', visibility: 'private' });
-    await leif.records.put(alone.id, 'app.note', { text: 'nobody here' });
-    assert.equal(await leif.spaces.delivered(alone.id, 200), false, 'nobody could');
-  });
 });
 
 describe('usernameIdeas and usernameFree', () => {

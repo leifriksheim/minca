@@ -298,9 +298,7 @@ The app's own model does the thinking, on your own plan; the service only
 runs the tools.
 
 ```bash
-MINCA_MCP_URL=https://mcp.example.com \
-MINCA_NODES=wss://host.example.com/peer#did:key:z… \
-npx @minca/cli mcp-server --port 8788 --host 0.0.0.0
+MINCA_MCP_URL=https://mcp.example.com npx @minca/cli mcp-server --port 8788 --host 0.0.0.0
 ```
 
 Connecting is the sign-in the app already has. The app finds the service's
@@ -313,31 +311,27 @@ page hands both to the service, which checks them and seals them into the
 app's access token, under a key only it holds. Then you are back in the app,
 and its tools arrive.
 
-The key and note live in the token, not on the service. Each call opens
-the token, and a node starts from what it carries. That node reaches your
-spaces only through the always-on nodes the service was given
-(`MINCA_NODES`, such as your free host), so it works with every device of
-yours offline, in the spaces those carry, and nowhere a grant or a record
-would send it. It is a full node: it syncs the spaces you picked and keeps a
-copy of them on the service's disk while the app uses it, and answers from
-that. A call in a space runs only once the node is level with an always-on
-node there (it waits up to 15 seconds, then says to try again): a node
-behind would miss records, and could start a line of payments that already
-has one. A call that writes succeeds only once an always-on node has said
-it stored what was written; otherwise the app is told, and should read it
-back before writing it again. After 10 minutes without a call the node
-stops and its copy is deleted (after a crash, at the next start). At most
-32 nodes run at once. So while the app is working, whoever runs the service can read
-those spaces, as the chat app's maker can read what its model sees.
+The service keeps nothing per connection: the key and note live in the
+token, and each call opens it and starts a node from what it carries. That
+node holds your spaces in memory while the app uses it (at most 32 MB), and
+reaches them through the always-on nodes your invites name, such as your
+free host, so it works with every device of yours offline. It follows only
+those over TLS at public addresses, never one on the service's own network,
+and those its operator adds (`MINCA_NODES`). A call in a space runs once the
+node is level with them there (it waits up to 15 seconds, then says to try
+again): a node behind would miss records, and could start a line of payments
+that already has one. A call that writes is done once the space's keepers
+(06 `sys.keepers`; your hosts, named by your home) have what it wrote;
+otherwise the app is told, and should read it back before writing it again.
+A space that names no keepers is read, not written. After 10 minutes without
+a call the node stops, and what it held goes; one waiting for the keepers to
+have its writes waits up to an hour first. The next node carries on after
+what the keepers hold of the key's writes. At most 32 nodes run at once. So
+while the app is working, whoever runs the service can read those spaces, as
+the chat app's maker can read what its model sees.
 
-What stays, for a token that wrote, is where its key has signed: which
-spaces and collections, and how many versions in each. A node started again
-then never signs at the same place twice, which would fork the key. It is
-kept until the token can no longer be used. So run one process on a data
-folder (`MINCA_MCP_DATA`; a second on the same machine refuses to start,
-but two containers sharing a volume can't tell), and don't restore it from
-a backup while tokens are in use: a rolled-back folder signs at places
-already used.
+Run one process for a token: two would each start a node for it and sign at
+the same places, forking its key.
 
 A token lasts as long as its note, with no refresh token. Disconnecting at
 your account home is what ends it sooner: what the key writes after stops

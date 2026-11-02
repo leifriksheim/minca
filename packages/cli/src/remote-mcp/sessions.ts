@@ -3,17 +3,16 @@
  * records-only note a person's account home signed travel inside the app's
  * access token, sealed under a key only the service holds (`oauth.ts`). Each
  * call opens them, and the node they start runs while the app is using it,
- * its spaces kept in a folder that goes when it stops. A call that writes
- * succeeds only once an always-on node stored what it wrote, so nothing is
- * lost with the folder. Where the key has signed in each log outlives the node
- * (`server.ts`): a node that forgot it would sign at a place it signed
- * before, and fork the key.
+ * holding its spaces in memory. Nothing outlives it: a write is done once the
+ * space's keepers have it, and a node started again carries on after what
+ * they hold of its key's writes (`createWriters` in core).
  */
-import { didOf, noteSpaces, type NodeConfig, type P2PNode, type StoreFactory } from '@minca/core';
+import { didOf, noteSpaces, type NodeConfig, type P2PNode } from '@minca/core';
 import { checkGrant, usableGrant, type Grant } from '@minca/core/session';
 import { startGrantedAgent } from '../agent.js';
 import { isRecord, messageOf } from '../json.js';
 import { importKeyJwk } from '../writer-keys.js';
+import { boundedMemory } from './memory.js';
 
 /** What a token carries: a key, and the note made out to it */
 export interface Granted {
@@ -72,9 +71,6 @@ export async function checkGranted(key: unknown, grant: unknown): Promise<Grante
   return { key, grant: checked };
 }
 
-/** The DID of the key a grant is made out to: `checkGranted` checked it is the key's */
-const keyOf = (given: Granted): string => given.grant.note.payload.aud;
-
 /** How long a node stays up after its last call */
 const IDLE_MS = 10 * 60_000;
 /** Nodes running at once: a start past it waits for one to stop */
@@ -86,7 +82,19 @@ const ROOM_WAIT_MS = 30_000;
 const CATCH_UP_MS = 15_000;
 interface Started {
   readonly node: P2PNode;
+  /** The spaces it was given */
+  readonly spaces: ReadonlyArray<string>;
   stop(): Promise<void>;
+}
+
+/** How long an idle node stays up for its writes the space's keepers don't have yet */
+const UNKEPT_MS = 60 * 60_000;
+
+/** Whether a node wrote something a space's keepers don't have yet: stopped, it would be lost */
+async function unkept(started: Started): Promise<boolean> {
+  for (const space of started.spaces)
+    if ((await started.node.spaces.status(space).catch(() => null))?.pending) return true;
+  return false;
 }
 
 /**
@@ -113,9 +121,9 @@ async function levelIn(node: P2PNode, space: string, waitMs: number): Promise<bo
 
 interface Running {
   readonly started: Promise<Started>;
-  /** The DID of the key it signs with */
-  readonly key: string;
   timer?: ReturnType<typeof setTimeout>;
+  /** When a call last ended */
+  used: number;
   /** Calls running on it now: it isn't stopped under them */
   busy: number;
 }
@@ -137,12 +145,10 @@ export interface Sessions {
 }
 
 export function createSessions(options: {
-  /** A folder of stores for a session's node, made when it starts, and where its key (by DID) has signed */
-  readonly stores: (id: string, key: string) => StoreFactory;
-  /** Removes that folder, once its node has stopped */
-  readonly drop: (id: string, key: string) => Promise<void>;
-  /** How a node reaches the spaces it was given */
-  readonly network: () => NodeConfig['network'];
+  /** How a session's node reaches the spaces it was given: the always-on nodes that hold them */
+  readonly network: (grant: Grant) => Promise<NodeConfig['network']>;
+  /** What a session's node may hold, in bytes */
+  readonly budget?: number;
   /** Told once a session's key was revoked in some space: the person disconnected the app */
   readonly onRevoked?: (id: string) => void;
   readonly idleMs?: number;
@@ -152,7 +158,7 @@ export function createSessions(options: {
   const log = options.log ?? (() => {});
   /** Nodes running, the one used last at the end */
   const running = new Map<string, Running>();
-  /** Nodes stopping: one starts again on the same folder only once it has */
+  /** Nodes stopping: one starts again with the same key only once it has */
   const stopping = new Map<string, Promise<void>>();
   /** Nodes given room to run: started or starting, never more than the cap */
   const granted = new Set<string>();
@@ -162,12 +168,7 @@ export function createSessions(options: {
     if (!one) return stopping.get(id);
     running.delete(id);
     clearTimeout(one.timer);
-    const stopped = (async () => {
-      await one.started.then((started) => started.stop()).catch(() => {});
-      await options
-        .drop(id, one.key)
-        .catch((error: unknown) => log(`session: could not remove its spaces: ${messageOf(error)}`));
-    })();
+    const stopped = one.started.then((started) => started.stop()).catch(() => {});
     stopping.set(id, stopped);
     await stopped;
     granted.delete(id);
@@ -179,8 +180,13 @@ export function createSessions(options: {
     if (!one) return;
     clearTimeout(one.timer);
     one.timer = setTimeout(() => {
-      if (one.busy === 0) void stop(id);
-      else idleLater(id);
+      void (async () => {
+        if (one.busy > 0) return idleLater(id);
+        // Its writes the keepers don't have yet would go with it: it waits for them, for a while.
+        const waiting = await one.started.then(unkept, () => false);
+        if (waiting && Date.now() - one.used < UNKEPT_MS) return idleLater(id);
+        await stop(id);
+      })();
     }, options.idleMs ?? IDLE_MS);
     one.timer.unref?.();
   };
@@ -208,8 +214,9 @@ export function createSessions(options: {
     const agent = await startGrantedAgent({
       grant: given.grant,
       keys,
-      stores: options.stores(id, keyOf(given)),
-      network: { ...options.network(), only: true },
+      // In memory: what it holds is the always-on nodes', and goes when it stops.
+      stores: boundedMemory(options.budget),
+      network: { ...(await options.network(given.grant)), only: true },
     });
     // Disconnected at the account home: it reads and writes no more, from now on.
     const unsubscribe = agent.node.subscribe((event) => {
@@ -219,6 +226,7 @@ export function createSessions(options: {
     });
     return {
       node: agent.node,
+      spaces: given.grant.spaces?.map((space) => space.id) ?? [],
       stop: async () => {
         unsubscribe();
         await agent.stop();
@@ -236,7 +244,7 @@ export function createSessions(options: {
       return one;
     }
     const made: Running = {
-      key: keyOf(given),
+      used: Date.now(),
       busy: 0,
       started: (async () => {
         await stopping.get(id);
@@ -272,6 +280,7 @@ export function createSessions(options: {
         return await work(started.node);
       } finally {
         one.busy -= 1;
+        one.used = Date.now();
         idleLater(id);
       }
     },

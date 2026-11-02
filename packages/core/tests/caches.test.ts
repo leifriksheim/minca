@@ -249,6 +249,19 @@ describe('holding part of a space', () => {
     assert.equal((await chat()).records.length, 12);
   });
 
+  test('an app that writes in a collection holds it from then on, and fetches the rest of it', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const { alice, space } = await spaceWithKeepers(hub);
+    const dave = await app(hub, alice, space);
+    await until(async () => (await dave.node.spaces.status(space)).holds !== 'all', 5000, 'holding part');
+    // Written without a query first: what it writes stays here, and the collection comes whole,
+    // as it must for a writer to see its own earlier writes there.
+    await dave.node.records.put(space, 'app.photos', { title: 'mine' });
+    const holds = (await dave.node.spaces.status(space)).holds;
+    assert.ok(holds !== 'all' && holds.includes('app.photos'), JSON.stringify(holds));
+    await until(async () => (await held(dave, space, 'app.photos')) === 11, 5000, 'the rest of the photos');
+  });
+
   test('a space that names no keeper is held whole, as before', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const { alice, space } = await spaceWithKeepers(hub, { keepers: false });
@@ -280,6 +293,32 @@ describe('holding part of a space', () => {
       5000,
       'the second keeper to have it',
     );
+  });
+
+  test('kept waits for the keepers to have what the app wrote since, and is false at once where none are named', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const { alice, carol, space } = await spaceWithKeepers(hub);
+    const dave = await app(hub, alice, space);
+    // Carol's keeper is away: one keeper is not enough, so an earlier write stays pending.
+    await letGo(carol.node, space);
+    await dave.node.records.put(space, 'app.chat', { text: 'earlier' });
+    assert.equal(await dave.node.spaces.kept(space, 300), false, 'not kept yet');
+    // A node holding the whole space waits on its keepers the same way.
+    await alice.node.records.put(space, 'app.chat', { text: 'from the whole node' });
+    assert.equal(await alice.node.spaces.kept(space, 300), false, 'nor the whole node’s');
+    // What was written since is all a caller waits for; the earlier write still waits.
+    const since = Date.now();
+    assert.equal(await dave.node.spaces.kept(space, 300, since), true, 'nothing since');
+    await hold(carol.node, space);
+    assert.equal(await dave.node.spaces.kept(space, 5000), true, 'once both keepers have it');
+    assert.equal(await alice.node.spaces.kept(space, 5000), true, 'the whole node’s too');
+
+    const { alice: anne, space: unkept } = await spaceWithKeepers(hub, { keepers: false });
+    const erin = await app(hub, anne, unkept);
+    await erin.node.records.put(unkept, 'app.chat', { text: 'hi' });
+    const started = Date.now();
+    assert.equal(await erin.node.spaces.kept(unkept, 5000), false, 'nobody to keep it');
+    assert.ok(Date.now() - started < 1000, 'said at once');
   });
 
   test('a collection nobody used for a while is dropped when the app opens again; declared ones stay', async () => {

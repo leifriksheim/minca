@@ -66,9 +66,12 @@ only, in the spaces the person picks, then hands the key and the note to the
 service, which checks them (`checkGrant(grant, did, { recordsOnly: true })`,
 and that the key's halves belong together) and seals them into the app's
 access token. Each call starts a node from what the token carries
-(`startGrantedAgent`), reaching only the always-on nodes the service was given
-(`network.only`, [node.md](node.md)). Nothing new goes over the wire between
-the home and the page. See `packages/cli/README.md`, Agents.
+(`startGrantedAgent`), in memory, reaching only the always-on nodes its
+invites name at public addresses and the service's own (`network.only`,
+[node.md](node.md)). A write is done once the space's keepers have it
+(`spaces.kept`), and a node started again carries on after what they hold of
+the key's writes. Nothing new goes over the wire between the home and the
+page. See `packages/cli/README.md`, Agents.
 
 ## Connecting at your account home
 
