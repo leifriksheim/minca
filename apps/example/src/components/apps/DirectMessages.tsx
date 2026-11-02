@@ -7,7 +7,7 @@ import { Modal } from '@minca/app-shared/Modal';
 import { ago } from '@minca/ui/time';
 import { nameOf, type People } from '../../derive/people';
 import { usePeopleHere } from '../Person';
-import { LinkButton, PrimaryButton, QuietButton } from '../Buttons';
+import { AddButton, PrimaryButton, QuietButton } from '../Buttons';
 import { cardText, cardTitle, rowButton, sectionHeading } from '../rows';
 import { Icon } from '../Icon';
 import { palette, stack, styles, ui } from '../../styles';
@@ -82,9 +82,12 @@ export function DirectMessages({
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <h2 style={sectionHeading}>Conversations</h2>
         {mayStart && (
-          <LinkButton onClick={() => setStarting(true)} style={{ paddingRight: 0 }}>
-            New message
-          </LinkButton>
+          <AddButton
+            onClick={() => setStarting(true)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          >
+            <Icon name="plus" size={14} /> New message
+          </AddButton>
         )}
       </div>
       {conversations.length > 0 ? (
