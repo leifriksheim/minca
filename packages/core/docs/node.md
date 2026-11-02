@@ -341,7 +341,8 @@ node's own choice; how it tells peers what it holds is in
 - Collections listed in `cache.collections` are held from the start and never
   dropped.
 - A query marks the collections it reads (its own and every `include … from`)
-  as used; sync then fetches them. A query's result has `complete: false`
+  as used, and a write the collection it writes in; sync then fetches them. A
+  writer holds its own earlier writes that way, and the rest beside them. A query's result has `complete: false`
   until, for every collection it reads, the node has once been level with a
   node holding the whole space, **and** it lacks nothing a writer's line in
   that collection names
@@ -351,9 +352,7 @@ node's own choice; how it tells peers what it holds is in
   collection is level with a peer.
 - Until the node has once caught up fully with a node holding the whole space,
   it cannot know whether the space names keepers, so it holds only what it uses.
-- The node's own writes are _pending_ until `min(keepers named, max(copies ?? 2,
-cache.copies ?? 0))` of the space's named keepers have them. A collection
-  holding a pending write is never dropped.
+- A collection holding a pending write (below) is never dropped.
 - A collection unused for `cache.unusedAfterDays` (default 30) days is dropped
   when the space opens and every 6 hours while it stays open. It stops being
   held _before_ its versions are removed, so nothing syncs it back meanwhile.
@@ -362,16 +361,31 @@ cache.copies ?? 0))` of the space's named keepers have them. A collection
 - When what it holds changes (whole or part, or a newly used collection), the
   node says hello to every peer.
 
-A keeper confirms a write the way the spec says: by `stored`, or by being
-level with the writer on its collection. Only a peer named in `sys.keepers`
-counts ([spec 05 §9](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md)).
+On every node, holding part of a space or all of it, its own writes in a
+space that names keepers are _pending_ until `min(keepers named, max(copies ??
+2, cache.copies ?? 0))` of them have them; a keeper's own node counts as one.
+A node holding part of the space keeps them in its store, across runs; one
+holding all of it in memory, the latest 4096. A keeper confirms a write the way
+the spec says: by `stored`, or by being level with the writer on its
+collection. Only a peer named in `sys.keepers` counts
+([spec 05 §9](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md)).
+
+`node.spaces.kept(spaceId, waitMs, since?)` waits up to `waitMs` (at most a
+minute) for this node's writes in a space to be kept elsewhere. In a space
+that names keepers, it says `'keepers'` once none of its writes from `since`
+(ms) on, or all of them, is pending. In one that names none, every member's
+node is a copy, so it says `'peer'` once a peer connected now holds all this
+node does: less sure, since that peer may be a device that goes away. Null
+when nobody had, in time. A node that may stop before it syncs again waits on
+it: a tab about to close, a command about to exit, a node a server runs for a
+while (the MCP service's).
 
 This state is kept in the space's own store (`spaces/<spaceId>`):
 
 | Key                    | Value (UTF-8 JSON)                                                                                                                                                                                                                                                                                                                         |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `cache`                | `{ "settled": boolean, "used": { [collection]: ms }, "level": { [collection]: ms }, "missing": { [collection]: [version id…] } }`. `settled`: has synced with a whole-space peer; `used`: when a query last used it; `level`: when it was first level with a whole-space peer; `missing`: what a writer's line there names that isn't here |
-| `pending/<version id>` | `{ "collection": string, "by": [keeper DID…] }`, deleted once `by` reaches the target                                                                                                                                                                                                                                                      |
+| `pending/<version id>` | `{ "collection": string, "by": [keeper DID…], "at": ms }`, deleted once `by` reaches the target                                                                                                                                                                                                                                            |
 
 What a keeper withholds from the middle of a writer's line shows up as
 missing, whichever peer the node was level with. A writer's newest versions
@@ -381,7 +395,7 @@ with to do it.
 The account registry, the contacts space and carry spaces are always held
 whole. Apps connected to an account home use `cache: {}` by default ([the app-side client](#the-app-side-client)).
 
-_Source: `packages/core/src/node/space-holding.ts` (`openSpaceHolding`), `packages/core/src/node/types.ts` (`CacheConfig`). Tests: `packages/core/tests/caches.test.ts`, `packages/core/tests/reconcile.test.ts` ("holding part of a space")._
+_Source: `packages/core/src/node/space-holding.ts` (`openSpaceHolding`, `kept`), `packages/core/src/node/space-writing.ts` (`write`), `packages/core/src/node/types.ts` (`CacheConfig`). Tests: `packages/core/tests/caches.test.ts`, `packages/core/tests/reconcile.test.ts` ("holding part of a space")._
 
 ### Planned: caches that widen and trim
 
@@ -953,6 +967,16 @@ to look for the account registry at before the account says which it uses, so
 an app built with a default host restores an account from its recovery code
 alone. `network.nodes` still adds sockets of its own, to every space.
 
+`network.reach` says where a node may connect, asked of every address it
+found rather than was given: a host or node a record or an invite names, a
+relay a space or an invite names, a place a short link names, a host it asks
+to describe itself. Its own `relays`, `nodes` and `hosts` are taken as given;
+without `reach`, anywhere. Refused, a host is not asked (`hosting` calls fail),
+a node or relay not dialled, a short link's place not asked. It is for a node
+a server runs for someone else, such as the MCP service's for chat apps: what
+that node reads, and the invites it is handed, are the other's to write, and
+must not make the server connect inside its own network.
+
 A device waits 15 seconds for a host to answer any call, and a minute for
 `startBot`. A host that gives no answer, or none in time, is a `HostError`
 with status 0 whose message names the address (`describeHost(url, timeoutMs?)`
@@ -981,7 +1005,7 @@ hour (`evaluate`) holds each to the free line. Past a space's `until`, every
 account's carry space stops carrying it (`skip`, in `createCarryCore`), while
 its own subscription still may. Each change is a line in the host's log.
 
-_Source: `packages/core/src/node/node-carriers.ts` (`carriers`), `packages/core/src/node/node-hosting.ts` (`hosting`), `packages/core/src/node/carrier.ts` (`arrived`, `skip`, `onArrived`), `packages/core/src/node/host.ts` (`evaluate`), `packages/core/src/session/hosting.ts`, `packages/cli/src/host.ts`. Tests: `packages/core/tests/carrier.test.ts`, `packages/core/tests/host-limits.test.ts`, `packages/cli/tests/host.test.ts`._
+_Source: `packages/core/src/node/node-carriers.ts` (`carriers`, `fetchInvite`), `packages/core/src/node/node-hosting.ts` (`hosting`, `describeAt`), `packages/core/src/node/space-peers.ts` (`useNodes`, `meshFor`), `packages/core/src/node/carrier.ts` (`arrived`, `skip`, `onArrived`), `packages/core/src/node/host.ts` (`evaluate`), `packages/core/src/session/hosting.ts`, `packages/cli/src/host.ts`. Tests: `packages/core/tests/carrier.test.ts`, `packages/core/tests/host-limits.test.ts`, `packages/core/tests/reach.test.ts`, `packages/cli/tests/host.test.ts`, `packages/cli/tests/remote-mcp-server.test.ts`, `packages/cli/tests/remote-mcp-offline.test.ts`._
 
 ### A space paying for itself
 

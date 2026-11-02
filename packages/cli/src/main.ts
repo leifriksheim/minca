@@ -44,6 +44,7 @@ import {
   walletFromEnv,
 } from './host-setup.js';
 import { isHostStats, statsLines } from './host-stats.js';
+import { mcpServerFromEnv, startMcpServer } from './remote-mcp/server.js';
 import { CONNECT, connectWaiting, runMcpStdio, runWaitingMcpStdio } from './mcp.js';
 import {
   ACCOUNT_HOME,
@@ -92,6 +93,7 @@ Usage:
   minca run [--port 8787] [--host 127.0.0.1] [--node wss://…/peer] [--no-relays] [--create]
   minca host [--port 8787] [--host 127.0.0.1] [--data DIR] [--free] [--allow did:key:…]
   minca host stats <address> [--json]       what a host carries and takes in, as it shows anyone
+  minca mcp-server [--port 8788] [--host 127.0.0.1]   Minca for chat apps: Claude, ChatGPT, an IDE
   minca carry --data DIR                     one account's spaces, from a folder the desktop app connected
   minca app-node --data DIR                  the desktop app's node; the desktop shell runs it
   minca connect [--account-home home.minca.social] [--name NAME] [--relay wss://…] [--no-configure]
@@ -217,6 +219,7 @@ const COMMANDS = new Map<string, Command>([
   ['carry', carry],
   ['app-node', appNode],
   ['host', host],
+  ['mcp-server', mcpServer],
   ['connect', connect],
   ['bots', bots],
   ['disconnect', disconnect],
@@ -398,6 +401,27 @@ async function hostStats(args: string[]): Promise<number> {
   if (values.json) return print(stats);
   process.stdout.write(`${statsLines(stats).join('\n')}\n`);
   return 0;
+}
+
+/** Minca's MCP service for chat apps, from its environment (`remote-mcp/server.ts`) */
+async function mcpServer(args: string[]): Promise<number> {
+  const { values } = parseArgs({
+    args,
+    options: {
+      port: { type: 'string', default: process.env.PORT ?? '8788' },
+      host: { type: 'string' },
+    },
+  });
+  const settings = mcpServerFromEnv(process.env);
+  const running = await startMcpServer({
+    ...settings,
+    port: Number(values.port),
+    ...(values.host ? { host: values.host } : {}),
+    version: VERSION,
+    log: logLine,
+  });
+  logLine(`mcp-server at ${settings.publicUrl}/mcp, listening on port ${running.port}`);
+  return untilStopped(running);
 }
 
 async function host(args: string[]): Promise<number> {

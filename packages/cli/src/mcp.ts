@@ -52,7 +52,7 @@ export const toolDescription = (action: NodeAction) =>
     : action.description;
 
 /** What a model is told about the node before it gets the tools */
-export function toolInstructions(node: P2PNode, options: McpOptions = {}): string {
+export function toolInstructions(node: Pick<P2PNode, 'did'>, options: McpOptions = {}): string {
   return (
     `You are acting for the identity ${node.did}. Spaces hold signed records in named collections ` +
     '(e.g. "std.event"); start with spaces_list. Writes are signed and synced to every member of the space. ' +
@@ -72,7 +72,8 @@ export function toolInstructions(node: P2PNode, options: McpOptions = {}): strin
   );
 }
 
-function mcpTools(options: McpOptions = {}) {
+/** The node's actions as MCP tools: the same for every transport, stdio or HTTP */
+export function mcpTools(options: McpOptions = {}) {
   return offeredActions(options).map((action) => ({
     name: action.name,
     description: toolDescription(action),

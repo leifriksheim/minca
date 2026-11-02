@@ -17,7 +17,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 test('the default CLI command names the package this repo publishes', async () => {
   const manifest: unknown = JSON.parse(await read('packages/cli/package.json'));
   assert.ok(isRecord(manifest) && typeof manifest.name === 'string');
-  for (const file of ['apps/example/src/components/ConnectAgent.tsx', 'apps/shared/src/CommunitySetup.tsx']) {
+  for (const file of ['apps/shared/src/CommunitySetup.tsx']) {
     const command = /VITE_MINCA_CONNECT \?\? '([^']+)'/.exec(await read(file))?.[1];
     assert.ok(command, `${file} has no default command`);
     assert.equal(command.split(/\s+/)[1], manifest.name, `${file} tells people to run another package`);

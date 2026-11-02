@@ -28,7 +28,8 @@
     "./Feature": "./src/Feature.tsx",
     "./may": "./src/may.ts",
     "./usernames": "./src/usernames.ts",
-    "./UsernamePicker": "./src/UsernamePicker.tsx"
+    "./UsernamePicker": "./src/UsernamePicker.tsx",
+    "./mcp": "./src/mcp.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

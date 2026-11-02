@@ -1010,6 +1010,87 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     account's uses in another collection, and that app can't write its record
     there. Only the account's own keys and apps can; apps should choose names
     that include their collection (02 §4.1). By design.
+  - An MCP service a person connects a chat app through (`minca mcp-server`)
+    is such an app, holding its key inside the app's access token, sealed
+    under a key of its own: on its disk only between the person allowing it
+    and the app collecting the token, twenty minutes at most, and in memory
+    while a node runs. While the app uses it, a node of its holds the spaces
+    the person picked in memory, reads them and writes records there "via
+    agent", as the app's model asks; and whoever holds its sealing key and a
+    token can do the same until the note runs out or the person disconnects
+    it. A write is done once the space's keepers have it (05 §9), or, in a
+    space that names none, once a member's device online then does, which the
+    app is told is less sure, since a peer that holds part of the space, or
+    refused the write, counts too. What outlives the node is only where its
+    key has signed, its last place in each collection, kept for as long as
+    the token lasts: a key that outlives its node must keep that (02 §4.10).
+    One the app was told wasn't done, lost before a keeper has it (the node
+    evicted, the service stopped), leaves a gap in the key's log, so a later
+    disconnect withdraws what it wrote after (03 §6.3), as on any device that
+    lost a write; an idle node waits up to an hour for its keepers first. A call in a space runs
+    only once the node is level with the space's keepers connected then, or
+    any one peer where it names none (a member who connects and says nothing
+    can't hold it up): a
+    node behind would say a record isn't there, and write a first version in
+    a line that has one, ending it (09 §7.5). A space they don't carry fails
+    its own calls only, after waiting for one. Once level, the node is one
+    more device writing in the account's lines, with the gap two devices have
+    (§3.2), and another device's write that only an unreachable always-on node
+    holds can still be followed by a twin. Two processes on one data folder,
+    or one restored from a backup, sign at the same places and fork keys
+    ([#287](https://github.com/leifriksheim/minca/issues/287)). Records count until the key is revoked, not until the
+    note runs out (06 §2.9), so a token outlives nothing the person can't end
+    at their home; the service refuses a token for good once its node sees
+    the revoke, but member keys open what they opened after that, so a call
+    until then may read what synced alongside it
+    ([#165](https://github.com/leifriksheim/minca/issues/165)). The home keeps
+    one connection per origin (06 §2.10): every chat app connected through a
+    service is one entry there, named after the latest, so disconnecting it
+    disconnects them all, and one more allowed, by a sign-in someone else
+    started, shows as nothing new. The reference service takes a key only with
+    the private half that goes with it, since a note travels with every record
+    and is no secret; refuses a note for the whole account, read from the note
+    itself; and reaches the spaces through the always-on nodes and relays
+    the grant's invites and the spaces name only over TLS at public
+    addresses, besides its operator's own (`network.reach`), so a grant's
+    invites and the records its node reads can't make it connect inside its
+    own network, and what a node holds is at most 32 MB, in memory
+    (`checkGranted` and `createSessions` in
+    `packages/cli/src/remote-mcp/sessions.ts`, `publicNode` in
+    `packages/cli/src/remote-mcp/reach.ts`, `boundedMemory` in
+    `packages/cli/src/remote-mcp/memory.ts`;
+    `packages/cli/tests/remote-mcp-server.test.ts`,
+    `packages/cli/tests/remote-mcp-reach.test.ts`,
+    `packages/core/tests/reach.test.ts`); a host that answers with a redirect
+    is refused, not followed. A stranger's own public node or relay, named by
+    their own grant, is reached, as their device would be: so are the STUN
+    and TURN servers such a relay offers, and the addresses a stranger's
+    WebRTC peer offers, which `reach` does not cover, nor a name that
+    resolves elsewhere once the socket opens (DNS rebinding). It shows its
+    consent page for every sign-in, and lets an app register only places a code is safe at:
+    a chat app's own MCP callback exactly, a host its operator names (any page
+    there), an app on this computer over loopback http, or a named app's own
+    scheme, never one that opens a browser at any address (`createOAuth` in
+    `packages/cli/src/remote-mcp/oauth.ts`, `mayRedirect` in
+    `packages/cli/src/remote-mcp/redirects.ts`;
+    `packages/cli/tests/remote-mcp.test.ts`). A sign-in someone else started,
+    and sent the person, can't be allowed from her browser: its consent page
+    answers only the browser that started it. The other way round, someone can
+    finish a sign-in in their own account and send her where it ends: her chat
+    app then acts in their spaces, unless it ties OAuth's `state` to the
+    browser that started it; the service can't tell. What a stranger can make
+    it keep or do is an app's registration, gone after a day unless used;
+    nodes that run while called, each with up to 8 spaces those always-on
+    nodes carry, in memory, and up to an hour after for writes their keepers
+    don't have; each a few bytes of places for a key that wrote, for a
+    month; and, through its own spaces' records, requests to as many public
+    hosts as it names, and sockets to them while its node runs, their names
+    looked up a few at a time, each for two seconds at most, so they hold up
+    only that stranger's calls. Registrations and sign-ins are counted by address, but nodes are
+    not: a stranger with accounts of their own can keep all of them running,
+    and make honest calls wait, then fail
+    ([#33](https://github.com/leifriksheim/minca/issues/33)). None of this is
+    protocol: a dishonest service need not run that code.
 
 _Source: 01 §7.5, §8, §11; 06 §2, §3; 05 §14, §15; 02 §4.1. Tests: `packages/core/tests/live.test.ts` ("a records-only key cannot shed its label by passing its note on"), `packages/core/tests/inbox.test.ts` ("opens only with its inbox…"), `packages/core/tests/record-keys.test.ts` ("a key in another collection"), `packages/core/tests/connect.test.ts` ("an app can only ask for a key it holds, and none the home already uses for something else", "a request with a field it does not know is refused…"), `packages/core/tests/records-only.test.ts`, `packages/core/tests/connect-code.test.ts`, `packages/core/tests/ucan.test.ts`, `packages/core/tests/account-vault.test.ts` ("the account key does not open the registry store's sealed entries", "a wrap from another account does not open as this one", "a passphrase wrap edited to fewer rounds, another salt or another id does not open")._
 

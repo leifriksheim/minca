@@ -58,6 +58,7 @@ export const API = Object.freeze({
     status: 'scoped',
     carried: 'scoped',
     reached: 'scoped',
+    kept: 'scoped',
     authenticator: 'own',
     profiles: 'scoped',
   },

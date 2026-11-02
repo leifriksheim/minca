@@ -255,7 +255,16 @@ export function createNodeCarriers(ctx: NodeContext) {
   async function fetchInvite(bare: string): Promise<Resolved> {
     const link = parseInviteLink(bare);
     const { topic, inviteSecret } = await inviteLinkKeys(link.secret, link.pin);
-    const places = [...new Set([...link.places, ...usableRelays(config.network)])];
+    // Its places are the link's to name: asked only where the node may reach (`network.reach`).
+    const reach = config.network?.reach;
+    const reachable = reach
+      ? (
+          await Promise.all(
+            link.places.map(async (place) => ((await reach(place).catch(() => false)) ? place : null)),
+          )
+        ).filter((place) => place !== null)
+      : link.places;
+    const places = [...new Set([...reachable, ...usableRelays(config.network)])];
     if (places.length === 0)
       throw new Error('That invite names no place to find it, and this app knows none');
     // A slow place can't hold the join up for long: what has come back by then is all there is.

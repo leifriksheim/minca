@@ -695,6 +695,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
     // At most a minute: a wait, not a way to keep a timer for days.
     reached: perSpace((rt, peer: string, waitMs: number) => rt.syncedWith(peer, Math.min(waitMs, 60_000))),
+    kept: perSpace((rt, waitMs: number, since?: number) => rt.kept(Math.min(waitMs, 60_000), since)),
 
     profiles: perSpace((rt) => rt.profiles()),
     access: perSpace((rt) => rt.access()),

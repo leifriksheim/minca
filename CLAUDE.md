@@ -251,6 +251,26 @@ Elsewhere:
   two small dependencies. Never import it from `packages/core` or the apps.
   Other providers need no SDK: Chat Completions is plain `fetch`
   (`packages/cli/src/agent-openai.ts`).
+- `@modelcontextprotocol/server` and `@modelcontextprotocol/node` 2.x, dev
+  dependencies of `packages/cli`, bundled into `minca mcp-server` (`packages/cli/src/remote-mcp/index.ts`):
+  MCP over Streamable HTTP for chat apps, both the 2026-07-28 revision and the
+  2025 one apps still speak, and the resource server's half of MCP's OAuth
+  (protected-resource metadata, bearer challenges). A wire protocol with a long
+  tail, from its own maintainers, used by most MCP servers; the server's only
+  dependency is `zod`. `minca mcp` over stdio still has its own small loop
+  (`packages/cli/src/mcp.ts`), with the same tools (`mcpTools`).
+- `oidc-provider` 9, a dev dependency of `packages/cli`, bundled into `minca
+mcp-server` (`packages/cli/src/remote-mcp/oauth.ts`):
+  the OAuth 2.1 authorization server chat apps sign in through, with dynamic
+  client registration, PKCE, resource indicators and refresh tokens. OAuth is
+  the textbook spec to get subtly wrong; this is panva's certified OpenID
+  provider, released since 2016 and very widely used. It brings `koa`, `jose`
+  and `debug`: more than the bar, accepted because the MCP SDK no longer ships
+  an authorization server and writing one is the risk. Node only, so never
+  `packages/core` or the apps. `jose`, which it brings, also opens the
+  service's sealed tokens (`verify` in `oauth.ts`). Its tests use
+  `oauth4webapi` (panva's client, no dependencies) and
+  `@modelcontextprotocol/client`, as a chat app would.
 - `@tanstack/react-router` in `apps/example` and `apps/site`
   (`apps/example/src/router.tsx`, `apps/site/src/router.tsx`): routing,
   with typed paths and params, redirects and scroll restoration. Released

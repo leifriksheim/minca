@@ -1,0 +1,40 @@
+# `minca mcp-server` as an image: Minca's MCP service for chat apps. Built
+# from the repository root, like the host's image:
+#
+#   docker build -f packages/cli/Dockerfile.mcp .
+#
+# (fly.mcp.toml next to this file does that for Fly.)
+
+FROM node:22-alpine AS build
+WORKDIR /repo
+COPY package.json package-lock.json ./
+COPY packages/core/package.json packages/core/
+COPY packages/relay/package.json packages/relay/
+COPY packages/cli/package.json packages/cli/
+COPY apps/home/package.json apps/home/
+COPY apps/example/package.json apps/example/
+COPY apps/extension/package.json apps/extension/
+# Optional dependencies stay in: node-datachannel's prebuilt binary for this platform is one.
+RUN npm ci --ignore-scripts --workspace @minca/cli
+COPY packages/core packages/core
+COPY packages/relay packages/relay
+COPY packages/cli packages/cli
+RUN npm run bundle -w @minca/cli
+
+# The runtime: Node, the bundle, and its two outside dependencies: `ws`, and
+# node-datachannel (WebRTC, to meet devices through relays) with its binary.
+FROM node:22-alpine
+RUN apk add --no-cache su-exec
+WORKDIR /app
+COPY --from=build /repo/node_modules/ws node_modules/ws
+COPY --from=build /repo/node_modules/node-datachannel node_modules/node-datachannel
+COPY --from=build /repo/node_modules/@node-datachannel node_modules/@node-datachannel
+COPY --from=build /repo/node_modules/detect-libc node_modules/detect-libc
+COPY --from=build /repo/packages/cli/dist/minca.mjs dist/minca.mjs
+
+ENV PORT=8080
+# The token secret, sign-ins under way and each key's places: a volume.
+ENV MINCA_MCP_DATA=/data
+EXPOSE 8080
+
+CMD ["sh", "-c", "mkdir -p \"$MINCA_MCP_DATA\" && chown -R node:node \"$MINCA_MCP_DATA\" && exec su-exec node node dist/minca.mjs mcp-server --host 0.0.0.0"]

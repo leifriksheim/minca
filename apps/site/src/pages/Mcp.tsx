@@ -2,22 +2,21 @@ import { useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { offeredActions, type NodeAction } from '@minca/core';
 import { Shape } from '@minca/app-shared/shapes';
+import { MCP_URL, addToClaude, addToCursor } from '@minca/app-shared/mcp';
 import { type ShapeKind } from '@minca/ui/shapes';
 import { type ShapeColour } from '@minca/ui/tokens';
 import { Band, Code, CopyButton, Page, Tabs } from './Site';
 
 /**
- * Connecting an AI to your spaces over MCP: one `minca connect` command, which
- * opens the account home to allow it, then the agent starts `minca mcp` by
- * itself (packages/cli/README.md, Agents). Laid out as a reference: set up by
- * client, every tool the agent gets, then questions.
+ * Connecting an AI to your spaces over MCP. Most apps connect to Minca's MCP
+ * service by its address (packages/cli/README.md, `minca mcp-server`), in one
+ * click where the app has an install link (`@minca/app-shared/mcp`). On your
+ * own computer, `minca connect` runs `minca mcp` instead. Laid out as a
+ * reference: set up by app, every tool the agent gets, then questions.
  */
 
-/** What people run on the computer their AI runs on */
+/** What people run to keep Minca on their own computer instead */
 const COMMAND = 'npx @minca/cli connect';
-/** What an AI app starts, for those who add Minca by hand */
-const SERVER = ['-y', '@minca/cli@latest', 'mcp'];
-const SERVER_JSON = JSON.stringify({ mcpServers: { minca: { command: 'npx', args: SERVER } } }, null, 2);
 
 /** A chat with a connected agent, as a chat app would show it */
 const CHAT: ReadonlyArray<{ from: 'you' | 'ai'; text: ReactNode }> = [
@@ -50,71 +49,70 @@ function Chat() {
   );
 }
 
-/** Setting Minca up in each AI app: the command does every app it finds, the rest is by hand */
+/** What happens once an app is pointed at the service */
+const SIGN_IN =
+  'Your account home opens. Pick the spaces your AI may use and allow it, and you’re back in the chat.';
+
+/** Setting Minca up in each AI app: a button where the app has an install link, else a line to paste */
 const CLIENTS: ReadonlyArray<{
   id: string;
   name: string;
   shape?: { kind: ShapeKind; colour: ShapeColour };
   how: ReactNode;
+  link?: { href: string; label: string };
   file?: string;
-  code: string;
+  code?: string;
+  then?: ReactNode;
 }> = [
   {
-    id: 'any',
-    name: 'Every app at once',
+    id: 'claude',
+    name: 'Claude',
     shape: { kind: 'sparkle', colour: 'peach' },
-    how: (
-      <>
-        Run this on the computer your AI runs on. Your account home opens so you can allow it, then it adds
-        itself to every AI app it finds there.
-      </>
-    ),
-    code: COMMAND,
+    how: 'Add it once and it’s there on claude.ai, in the desktop app and on your phone.',
+    link: { href: addToClaude(), label: 'Add to Claude ↗' },
+  },
+  {
+    id: 'chatgpt',
+    name: 'ChatGPT',
+    how: 'In Settings, open Apps & Connectors, then Advanced, and turn on Developer mode. Then create a connector and paste this address.',
+    code: MCP_URL,
+  },
+  {
+    id: 'cursor',
+    name: 'Cursor',
+    how: 'Cursor opens and asks you to install it.',
+    link: { href: addToCursor(), label: 'Add to Cursor ↗' },
   },
   {
     id: 'claude-code',
     name: 'Claude Code',
-    how: 'Add it from a terminal.',
-    code: `claude mcp add minca -- npx ${SERVER.join(' ')}`,
+    how: 'Add it from a terminal, then run /mcp in Claude Code to sign in.',
+    code: `claude mcp add --transport http minca ${MCP_URL}`,
   },
   {
     id: 'codex',
     name: 'Codex',
     how: 'Add it from a terminal.',
-    code: `codex mcp add minca -- npx ${SERVER.join(' ')}`,
-  },
-  {
-    id: 'cursor',
-    name: 'Cursor',
-    how: 'Put this in your Cursor MCP settings.',
-    file: '~/.cursor/mcp.json',
-    code: SERVER_JSON,
-  },
-  {
-    id: 'vscode',
-    name: 'VS Code',
-    how: 'Add it from a terminal.',
-    code: `code --add-mcp '${JSON.stringify({ name: 'minca', command: 'npx', args: SERVER })}'`,
-  },
-  {
-    id: 'claude-desktop',
-    name: 'Claude Desktop',
-    how: 'In Settings, open Developer and Edit Config, and put this in the file.',
-    file: 'claude_desktop_config.json',
-    code: SERVER_JSON,
+    code: `codex mcp add minca --url ${MCP_URL}`,
   },
   {
     id: 'gemini',
     name: 'Gemini CLI',
-    how: 'Put this in your Gemini settings.',
-    file: '~/.gemini/settings.json',
-    code: SERVER_JSON,
+    how: 'Add it from a terminal.',
+    code: `gemini mcp add --transport http minca ${MCP_URL}`,
   },
   {
     id: 'other',
     name: 'Other apps',
-    how: 'Most apps that speak MCP take a server in this shape.',
-    code: SERVER_JSON,
+    how: 'Any app that takes a remote MCP server takes this address.',
+    code: MCP_URL,
+  },
+  {
+    id: 'computer',
+    name: 'On your computer',
+    how: 'Rather keep it on your own machine? Run this there. It adds Minca to every AI app it finds, for all your spaces.',
+    code: COMMAND,
+    then: 'Your account home opens so you can allow it, and shows six digits to type into the terminal.',
   },
 ];
 
@@ -127,16 +125,21 @@ function Clients() {
           <div>
             <h3>{client.name}</h3>
             <p>{client.how}</p>
-            {client.id !== 'any' && (
-              <p>
-                Then ask your AI to connect to Minca. It opens your account home for you to allow it, and asks
-                for the six digits shown there.
-              </p>
-            )}
+            <p>{client.then ?? SIGN_IN}</p>
           </div>
-          <Code file={client.file} lang={client.code.startsWith('{') ? 'typescript' : 'shell'} copy>
-            {client.code}
-          </Code>
+          {client.link ? (
+            <div className="actions">
+              <a href={client.link.href} className="btn btn-primary btn-lg" target="_blank" rel="noreferrer">
+                {client.link.label}
+              </a>
+            </div>
+          ) : (
+            client.code && (
+              <Code file={client.file} lang="shell" copy>
+                {client.code}
+              </Code>
+            )
+          )}
         </div>
       )}
     </Tabs>
@@ -239,7 +242,7 @@ function Tools() {
 const QUESTIONS: ReadonlyArray<{ q: string; a: ReactNode }> = [
   {
     q: 'What can my AI see?',
-    a: 'Everything in the spaces you’re in, the way you see it. Your account’s keys stay at your account home.',
+    a: 'Only the spaces you pick when you connect it, the way you see them. Your account’s keys stay at your account home.',
   },
   {
     q: 'What can’t it do?',
@@ -251,24 +254,25 @@ const QUESTIONS: ReadonlyArray<{ q: string; a: ReactNode }> = [
   },
   {
     q: 'How long does it stay connected?',
-    a: (
-      <>
-        30 days. Then run <code>{COMMAND}</code> again.
-      </>
-    ),
+    a: '30 days. Then your AI asks you to sign in again.',
   },
   {
     q: 'How do I disconnect it?',
-    a: (
-      <>
-        From your account home, which stops it everywhere. Or run <code>npx @minca/cli disconnect</code> on
-        that computer.
-      </>
-    ),
+    a: 'From your account home, where it shows as a connection. That stops it everywhere at once.',
   },
   {
     q: 'Which AI apps work?',
-    a: 'Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Zed, Codex, Gemini CLI, and most others that speak MCP.',
+    a: 'Claude, ChatGPT, Cursor, Claude Code, Codex, Gemini CLI, and most others that take a remote MCP server.',
+  },
+  {
+    q: 'Who runs the server my AI talks to?',
+    a: (
+      <>
+        We do, at <code>mcp.minca.social</code>. It holds your spaces in memory while your AI is working and
+        forgets them after ten quiet minutes. Rather keep it on your own computer? Run <code>{COMMAND}</code>{' '}
+        there.
+      </>
+    ),
   },
   {
     q: 'I don’t use a chat app. Can I still use it?',
@@ -281,7 +285,7 @@ const QUESTIONS: ReadonlyArray<{ q: string; a: ReactNode }> = [
   },
   {
     q: 'I run my own account home.',
-    a: 'Type its address when the command asks. Everyone else presses Enter for home.minca.social.',
+    a: 'Type its address when the sign-in asks. Everyone else goes on to home.minca.social.',
   },
   {
     q: 'I’m building something with it.',
@@ -303,19 +307,19 @@ export function Mcp() {
               <div className="kicker-inline">MCP</div>
               <h1>Bring your own AI.</h1>
               <p>
-                Connect Claude, Cursor or any AI that speaks MCP to your spaces. Ask it what’s happening at
+                Connect Claude, ChatGPT or any AI that speaks MCP to your spaces. Ask it what’s happening at
                 the club, or tell it to take the last seat.
               </p>
               <div className="command">
-                <code>{COMMAND}</code>
-                <CopyButton text={COMMAND} />
+                <code>{MCP_URL}</code>
+                <CopyButton text={MCP_URL} />
               </div>
               <div className="actions">
-                <a href="#clients" className="btn btn-primary btn-lg">
-                  Set it up ↘
+                <a href={addToClaude()} className="btn btn-primary btn-lg" target="_blank" rel="noreferrer">
+                  Add to Claude ↗
                 </a>
-                <a href="#tools" className="btn btn-secondary btn-lg">
-                  See the tools ↘
+                <a href="#clients" className="btn btn-secondary btn-lg">
+                  Other AI apps ↘
                 </a>
               </div>
             </div>
@@ -327,7 +331,7 @@ export function Mcp() {
       <Band
         id="clients"
         title="Choose your AI app."
-        intro={<p>The command sets up every app it finds. Or add Minca to one by hand.</p>}
+        intro={<p>One click where your app has a button. Everywhere else, paste the address.</p>}
       >
         <Clients />
       </Band>

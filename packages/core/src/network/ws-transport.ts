@@ -212,6 +212,9 @@ export function createWebSocketTransport(config: WebSocketTransportConfig): Peer
         if (!settled) {
           settled = true;
           reject(error);
+          // A dial that fails before it opens may end here with no close after it (Node's
+          // WebSocket): dialled again all the same, once, whichever of the two comes.
+          scheduleRedial();
         }
       };
 

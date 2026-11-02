@@ -8,8 +8,8 @@
  * An agent that can call these — Claude in Chrome, an extension — can already
  * click through this page and read it, so it gets no key or note of its own:
  * it works as you, in your tab, like someone helping at your keyboard. Nothing
- * to switch on. An agent on your computer instead — Claude Code, Claude
- * Desktop — connects with "Connect an agent" (`ConnectAgent.tsx`) and runs a
+ * to switch on. An agent elsewhere instead — Claude, Cursor, Claude Code —
+ * connects with "Connect an agent" (`ConnectAgent.tsx`) and runs through a
  * node of its own, marked as an agent's.
  *
  * Two things stay, because the agent reads what other people wrote and any of

@@ -53,7 +53,7 @@ npm install -g @minca/cli            # or run it without installing: npx @minca/
 ```
 
 From this repo: `npm install` at the repo root (the CLI is a workspace), then `cd packages/cli && npm run bundle && npm link`, or a
-binary with no Node at all: `bun build.ts --native`.
+binary with no Node at all: `bun build.mjs --native`.
 
 ```bash
 minca init --name Leif --passphrase          # prints your recovery code once
@@ -116,7 +116,7 @@ spaces with nothing pointed at it. `--no-relays` leaves that out, for a node
 that browsers dial; a single-file binary, which carries no WebRTC, always does. It validates everything with the same
 gates as any peer. It is an **anchor, not a host** — uptime, no authority.
 
-For a server, `bun build.ts` makes single-file binaries for this machine,
+For a server, `bun build.mjs` makes single-file binaries for this machine,
 `linux-x64` and `linux-arm64`; `minca-node.service` is a systemd unit.
 
 ## Carrying your spaces from a folder
@@ -287,6 +287,94 @@ image needs no flags. A few dollars a month on a small machine.
 rules): it needs the account unlocked on the server, a host never does.
 
 ## Agents
+
+### From a chat app, with nothing to install
+
+`minca mcp-server` is Minca's MCP service: chat apps connect to it by its
+address alone. Ours is `https://mcp.minca.social/mcp`; [minca.social/mcp](https://minca.social/mcp)
+has one-click links for Claude and Cursor, and the line to paste for the rest
+(`claude mcp add --transport http minca https://mcp.minca.social/mcp`). The
+links are built in `apps/shared/src/mcp.ts`. The app's own model does the
+thinking, on your own plan; the service only runs the tools. VS Code can't
+sign in yet: it registers `https://vscode.dev/redirect`, which the service
+doesn't send codes to (`redirects.ts`).
+
+```bash
+MINCA_MCP_URL=https://mcp.example.com npx @minca/cli mcp-server --port 8788 --host 0.0.0.0
+```
+
+Connecting is the sign-in the app already has. The app finds the service's
+authorization server from the endpoint's `401`, registers itself, and opens
+the consent page, which says which app it is and where it will send you
+back. There you continue to your account home, as with any app, pick the
+spaces it may use (up to 8, never the whole account) and allow it: the home
+signs a records-only note, for 30 days, made out to a key the page made. The
+page hands both to the service, which checks them and seals them into the
+app's access token, under a key only it holds. Then you are back in the app,
+and its tools arrive.
+
+The service keeps nothing per connection: the key and note live in the
+token, and each call opens it and starts a node from what it carries. That
+node holds your spaces in memory while the app uses it (at most 32 MB), and
+reaches them as any device would: through the always-on nodes your invites
+and spaces name, such as your free host, so it works with every device of
+yours offline; and through the relays they meet at (and
+`wss://relay.minca.social`, or `MINCA_RELAYS`), over WebRTC, so with no host
+at all it works while your tab, or a member's device, is open. It follows
+only addresses over TLS on the public internet, never one on the service's
+own network, besides those its operator gives it (`MINCA_NODES`,
+`MINCA_RELAYS`). A call in a space runs once the
+node is level with them there (it waits up to 15 seconds, then says to try
+again): a node behind would miss records, and could start a line of payments
+that already has one. A call that writes is done once the space's keepers
+(06 `sys.keepers`; your hosts, named by your home) have what it wrote;
+otherwise the app is told, and should read it back before writing it again.
+In a space that names no keepers, where every member's device is a copy, a
+write is done once a device of the space online now has it, your open tab or
+a member's, and the app is told it is only that. After 10 minutes without
+a call the node stops, and what it held goes; one waiting for the keepers to
+have its writes waits up to an hour first. At most 32 nodes run at once. So
+while the app is working, whoever runs the service can read those spaces, as
+the chat app's maker can read what its model sees.
+
+The one thing kept for a connection is where its key has signed: its last
+place in each collection, a few bytes, in `MINCA_MCP_DATA`, for as long as
+its token lasts. A key that outlives its node must keep them, or the next
+node signs at a place it used, forking the key (02 §4.10). So run one
+process on a data folder, and don't restore it from a backup while tokens are
+in use: two processes, or a rolled-back folder, sign at the same places.
+
+A token lasts as long as its note, with no refresh token. Disconnecting at
+your account home is what ends it sooner: what the key writes after stops
+counting everywhere, and once the service's node sees the revoke it refuses
+the token for good. Until then, a call may still read what synced alongside
+the revoke. Your home shows the service as one connection,
+whichever apps you connected through it, so disconnecting there
+disconnects them all.
+
+It is OAuth 2.1 with PKCE and dynamic client registration, on
+[`oidc-provider`](https://github.com/panva/node-oidc-provider), tokens as
+encrypted JWTs (`jose`), and MCP over Streamable HTTP on the
+[MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk).
+The tools are the same `NODE_ACTIONS` as `minca mcp`, but for previewing an
+invite, which would have the service dial addresses a caller chose. Every
+sign-in shows the consent page. An app may register only places a code is
+safe at: Claude's and ChatGPT's MCP callbacks exactly, a host in
+`MINCA_MCP_APPS` (any page there), this computer, or a known app's own scheme
+(`cursor:`, `vscode:`), never one that opens a browser at any address. Whether
+a sign-in someone else started, and sent you, could land in their account at
+that app is the app's to check (OAuth's `state`), not the service's. An
+address may register 200 apps a day and start 120 sign-ins an hour, and an
+app nobody connected through goes after a day.
+
+`MINCA_MCP_DATA` is where it keeps its token secret and sign-ins under way
+(default `~/.minca-mcp`): losing the secret signs every app out. `MINCA_MCP_HOME`
+is the account home the consent page suggests, and `MINCA_MCP_APPS` more chat
+apps a sign-in may go back to.
+
+_Source: `packages/cli/src/remote-mcp/` (`index.ts`, `oauth.ts`, `consent.ts`, `consent-script.ts`, `sessions.ts`, `redirects.ts`, `server.ts`). Tests: `packages/cli/tests/remote-mcp.test.ts`, `packages/cli/tests/remote-mcp-server.test.ts`, `packages/cli/tests/remote-mcp-offline.test.ts`, `packages/cli/tests/remote-mcp-keepers.test.ts`, `packages/cli/tests/remote-mcp-failures.test.ts`._
+
+### From this computer
 
 ```bash
 npx @minca/cli connect      # in this repo: npm run minca -- connect

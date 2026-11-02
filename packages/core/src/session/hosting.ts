@@ -603,7 +603,8 @@ const NOT_A_HOST = "That address doesn't answer as a Minca host";
  */
 async function ask(url: string, init: RequestInit = {}, timeoutMs = HOST_TIMEOUT_MS): Promise<Response> {
   try {
-    return await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+    // A host answers at its own address: one that sends the node elsewhere would choose where it connects.
+    return await fetch(url, { redirect: 'error', ...init, signal: AbortSignal.timeout(timeoutMs) });
   } catch (error) {
     let where = url;
     try {
@@ -612,7 +613,16 @@ async function ask(url: string, init: RequestInit = {}, timeoutMs = HOST_TIMEOUT
       // Not an address at all: named as it was given.
     }
     const late = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
-    throw new HostError(0, late ? `${where} took too long to answer` : `Nothing answers at ${where}`);
+    const moved =
+      error instanceof Error && error.cause instanceof Error && /redirect/i.test(error.cause.message);
+    throw new HostError(
+      0,
+      late
+        ? `${where} took too long to answer`
+        : moved
+          ? `${where} sends you elsewhere: use the host at its own address`
+          : `Nothing answers at ${where}`,
+    );
   }
 }
 

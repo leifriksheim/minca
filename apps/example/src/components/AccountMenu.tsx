@@ -127,12 +127,12 @@ export function AccountActions({
         <Item onClick={openHome} hint="Security, devices, backups ↗">
           Account settings
         </Item>
-        <Item onClick={onConnectAgent} hint="Claude Code, Desktop, Cursor">
+        <Item onClick={onConnectAgent} hint="Claude, ChatGPT, Cursor">
           Connect an agent
         </Item>
         <Note faint>
-          An agent in this browser works as you, with nothing to set up. One on your computer connects here,
-          and keeps working with this tab closed.
+          An agent in this browser works as you, with nothing to set up. Claude or another AI app connects
+          here, and keeps working with this tab closed.
         </Note>
       </Section>
 

@@ -402,26 +402,49 @@ async function startWithKey(
   options: StartOptions,
 ): Promise<{ node: P2PNode; stop(): Promise<void> }> {
   if (!options.network) await enableWebRTC();
-  const { relays, ...keys } = nodeOptionsFromGrant(grant, configuredRelays());
-  const base = await createNode({
-    signer: grantSigner(grant),
-    sessionKey: key.keys,
+  const { relays } = nodeOptionsFromGrant(grant, configuredRelays());
+  return startGrantedAgent({
+    grant,
+    keys: key.keys,
     // The spaces in the folder every session shares, one account apart from another; the rest, its key's places in its logs among them, in its slot.
     stores: folderStores(await openFsDirectory(path.join(agentDir(home), 'spaces')), {
       basePath: grant.did.replace(/^did:key:/, ''),
       local: directoryStores(await openFsDirectory(path.join(slot, 'stores'))),
     }),
-    ...keys,
     network: options.network ?? {
       relays,
       hosts: configuredHosts(),
       ...(options.nodes?.length ? { nodes: options.nodes } : {}),
     },
   });
+}
+
+/**
+ * An agent's node under a records-only grant made out to `keys`: a node of
+ * its own following the account, holding every space it was given, acting as
+ * the agent. `minca agent` runs one in a slot; the MCP service runs one for
+ * each session a chat app opens (`remote-mcp/sessions.ts`).
+ */
+export async function startGrantedAgent(params: {
+  readonly grant: Grant;
+  readonly keys: CryptoKeyPair;
+  readonly stores: NodeConfig['stores'];
+  readonly network: NodeConfig['network'];
+}): Promise<{ node: P2PNode; stop(): Promise<void> }> {
+  const { grant, keys: sessionKey } = params;
+  // The network is the caller's: relays, the host's own socket, or a test's hub.
+  const { relays: _relays, ...keys } = nodeOptionsFromGrant(grant);
+  const base = await createNode({
+    signer: grantSigner(grant),
+    sessionKey,
+    stores: params.stores,
+    ...keys,
+    network: params.network,
+  });
   // Spaces granted by name, when the grant wasn't for the whole account.
   await joinGranted(base, grant, () => {});
 
-  const node = await base.asAgent({ keys: key.keys, note: grant.note });
+  const node = await base.asAgent({ keys: sessionKey, note: grant.note });
   const stopHolding = await holdEverySpace(node);
   return {
     node,

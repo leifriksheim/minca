@@ -45,6 +45,13 @@ const SPACE_HOSTS_EVERY_MS = 10 * 60_000;
 export function createNodeHosting(ctx: NodeContext) {
   const { config, provider, registry, runtimes } = ctx;
 
+  /** What a host at an address says about itself, asked only where the node may reach (`network.reach`) */
+  const describeAt = async (url: string): Promise<HostDescription> => {
+    const reach = config.network?.reach;
+    if (reach && !(await reach(url).catch(() => false))) throw new Error(`This node may not reach ${url}`);
+    return describeHost(url);
+  };
+
   // ─── The account's hosts ───────────────────────────────────────────
 
   const hostingKey = (url: string) => hashedKey('hosting', url);
@@ -65,7 +72,7 @@ export function createNodeHosting(ctx: NodeContext) {
 
   /** What the host at a known address says about itself — refused when it's another host now */
   async function describeKnown(hosting: Hosting): Promise<HostDescription> {
-    const description = await describeHost(hosting.url);
+    const description = await describeAt(hosting.url);
     if (description.did !== hosting.host)
       throw new Error("The host at this address has another key now, so it's another host");
     return description;
@@ -212,7 +219,7 @@ export function createNodeHosting(ctx: NodeContext) {
 
   /** A client for a host a space names, checked to be the host it chose */
   async function reachNamedHost(named: NamedHost) {
-    const description = await describeHost(named.url);
+    const description = await describeAt(named.url);
     // A host whose key changed since the space chose it is not the host it chose.
     if (named.did && named.did !== description.did) throw new Error('The host’s key changed');
     return { description, client: createSpaceHostClient(named.url, description.did, provider) };
@@ -254,7 +261,7 @@ export function createNodeHosting(ctx: NodeContext) {
   /** A host's socket address, as its description said: asked once, and again after a failure */
   function describedPeer(url: string): Promise<string | null> {
     const describe = async () => {
-      const description = await describeHost(url);
+      const description = await describeAt(url);
       return pinnedTo(hostPeerAddress(url, description), description.did);
     };
     return cached(describedPeers, url, describe).catch(() => null);
@@ -356,7 +363,7 @@ export function createNodeHosting(ctx: NodeContext) {
       const base = checkAddress(address, 'A host').origin;
       const known = (await hostingRecords()).find((existing) => existing.url === base);
       if (known) return viewHosting(known, true);
-      const description = await describeHost(base);
+      const description = await describeAt(base);
       const peer = hostPeerAddress(base, description);
       const record: Hosting = {
         url: base,
