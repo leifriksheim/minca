@@ -8,15 +8,7 @@
  * What outlives the node is only where its key has signed (`places`): a key
  * that outlives its node must keep that, or the next would fork it.
  */
-import {
-  base64UrlDecode,
-  deriveAccountRegistry,
-  didOf,
-  noteSpaces,
-  type NodeConfig,
-  type P2PNode,
-  type StoreFactory,
-} from '@minca/core';
+import { didOf, noteSpaces, type NodeConfig, type P2PNode, type StoreFactory } from '@minca/core';
 import { checkGrant, usableGrant, type Grant } from '@minca/core/session';
 import { startGrantedAgent } from '../agent.js';
 import { isRecord, messageOf } from '../json.js';
@@ -30,7 +22,7 @@ export interface Granted {
   readonly grant: Grant;
 }
 
-/** Most spaces a grant may name: each comes with an invite, and the token carrying them goes in every request's headers */
+/** Most spaces one connection may be given: each comes with an invite, and the token carrying them goes in every request's headers */
 const MAX_SPACES = 8;
 
 const ECDSA = { name: 'ECDSA', hash: 'SHA-256' } as const;
@@ -59,9 +51,8 @@ function isKeyJwk(value: unknown): value is Granted['key'] {
 /**
  * What a consent page posts, checked: a key pair whose halves belong
  * together (a note is no secret: it travels with every record its key
- * signs), and a records-only note for that key, signed by the account, still
- * running: for the whole account with its account key, or for the spaces it
- * names without one.
+ * signs), and a records-only note for that key, signed by the account, for
+ * some spaces, never the whole account, still running.
  * @throws When it isn't
  */
 export async function checkGranted(key: unknown, grant: unknown): Promise<Granted> {
@@ -75,10 +66,9 @@ export async function checkGranted(key: unknown, grant: unknown): Promise<Grante
   await checkGrant(checked, await didOf(keys.publicKey), { recordsOnly: true });
   if (!usableGrant(checked) || !noteRunning(checked))
     throw new Error('That grant has run out, or is of a version no peer reads');
-  // Read from the note itself: the scope and the key beside it are only the home's word.
-  const whole = noteSpaces(checked.note) === 'all';
-  if (whole !== (checked.scope === 'account') || whole !== (checked.accountKey !== undefined))
-    throw new Error('That grant’s note and its scope don’t agree');
+  // Never the whole account: its key would open every space, and go on opening them after a disconnect.
+  if (noteSpaces(checked.note) === 'all' || checked.accountKey !== undefined || checked.scope !== 'spaces')
+    throw new Error('A chat app here gets the spaces the person picks, not the whole account');
   if (checked.spaces.length > MAX_SPACES) throw new Error(`Pick at most ${MAX_SPACES} spaces for a chat app`);
   return { key, grant: checked };
 }
@@ -96,8 +86,6 @@ const CATCH_UP_MS = 15_000;
 interface Started {
   readonly node: P2PNode;
   readonly memory: BoundedMemory;
-  /** For a grant of the whole account: the account registry, which lists its spaces */
-  readonly registry: string | null;
   /** The spaces it opened, with the calls running in each, the one used last at the end */
   readonly open: Map<string, { busy: number }>;
   /** Spaces being closed: one is opened again only once it has */
@@ -138,54 +126,28 @@ async function closeSpace(started: Started, space: string): Promise<void> {
   if (started.closing.get(space) === closed) started.closing.delete(space);
 }
 
-/** Most spaces a node keeps open at once: each holds sockets and timers, however little it stores */
-const MAX_OPEN = 8;
-
 /**
- * Makes room for `space`: while the node holds more than half its budget, or
- * more than {@link MAX_OPEN} spaces, closes the space used longest ago. Never
- * one a call is using, or one holding a write the keepers don't have yet.
+ * Makes room for `space`: while the node holds more than half its budget,
+ * closes the space used longest ago. Never one a call is using, or one
+ * holding a write the keepers don't have yet.
  */
 async function makeRoom(started: Started, space: string): Promise<void> {
-  const full = () => started.memory.used() > started.memory.budget / 2 || started.open.size > MAX_OPEN;
   for (const [other, one] of [...started.open]) {
-    if (!full()) return;
+    if (started.memory.used() <= started.memory.budget / 2) return;
     if (other === space || one.busy > 0 || (await holdsUnkept(started.node, other))) continue;
     // A call may have started in it meanwhile.
     if (one.busy === 0 && started.open.get(other) === one) await closeSpace(started, other);
   }
 }
 
-/** How long a call waits for a space the account joined meanwhile to reach the list in its registry */
-const LISTED_MS = 5_000;
+/** Whether the grant gives a space: the node holds only the spaces it names */
+const reaches = async (node: P2PNode, space: string) =>
+  (await node.spaces.list()).some((one) => one.id === space);
 
-/** Whether the grant reaches a space: one it names, or for the whole account, one the account is in */
-async function reaches(started: Started, space: string): Promise<boolean> {
-  const deadline = Date.now() + (started.registry ? LISTED_MS : 0);
-  for (;;) {
-    if ((await started.node.spaces.list()).some((one) => one.id === space)) return true;
-    if (Date.now() >= deadline) return false;
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-}
-
-/** What a call in a space the grant doesn't reach is told */
-async function whyNot(started: Started): Promise<string> {
-  if (!started.registry)
-    return (
-      'This space isn’t connected. To use it here, the person connects Minca again from this chat app and ' +
-      'chooses it, or chooses all spaces.'
-    );
-  // The list comes from the account registry, which only the account's devices and hosts hold.
-  const peers = await started.node.spaces.status(started.registry).then(
-    (status) => status.peers.length,
-    () => 0,
-  );
-  return peers > 0
-    ? 'This isn’t one of the person’s spaces: spaces_list shows the ones this connection can use.'
-    : 'The person’s list of spaces can’t be reached right now: none of their devices or hosts that keep it ' +
-        'is online. Opening their account home brings it back.';
-}
+/** What a call in a space the grant doesn't give is told */
+const NOT_CONNECTED =
+  'This space isn’t connected. To use it here, the person connects Minca again from this chat app and ' +
+  'chooses it at their account home.';
 
 /**
  * Waits up to `waitMs` for the node to be level with the space's keepers
@@ -331,16 +293,10 @@ export function createSessions(options: {
       stores: storesFor(given, memory),
       network: await options.network(given.grant),
     });
-    const { accountKey } = given.grant;
-    const registry = accountKey
-      ? (await deriveAccountRegistry(base64UrlDecode(accountKey), given.grant.did)).space.id
-      : null;
     const started: Started = {
       node: agent.node,
       memory,
-      registry,
-      // The spaces it joined from the grant, open already: the first to close when it needs room.
-      open: new Map(given.grant.spaces.map((space) => [space.id, { busy: 0 }])),
+      open: new Map(),
       closing: new Map(),
       revoked: false,
       stop: async () => {
@@ -355,14 +311,14 @@ export function createSessions(options: {
       options.onRevoked?.(id);
       void stop(id);
     });
-    // The account's spaces are listed in its registry: level with it, the list is whole.
-    if (registry) await levelIn(agent.node, registry, CATCH_UP_MS);
+    // Joining opened them: each opens again when a call first uses it.
+    for (const space of given.grant.spaces) await closeSpace(started, space.id);
     return started;
   }
 
   /** Opens a space for a call, closing others for room, and runs `work` once the node is level there */
   async function inSpace<T>(started: Started, space: string, work: () => Promise<T>): Promise<T> {
-    if (!(await reaches(started, space))) throw new Error(await whyNot(started));
+    if (!(await reaches(started.node, space))) throw new Error(NOT_CONNECTED);
     // Nothing awaited between seeing it isn't closing and marking it used, or it could start closing.
     for (let closing = started.closing.get(space); closing; closing = started.closing.get(space))
       await closing;

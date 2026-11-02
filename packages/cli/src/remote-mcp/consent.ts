@@ -2,8 +2,7 @@
  * Where the person allows a chat app: the interaction `oidc-provider` hands
  * over (`oauth.ts`). The page says which app it is and where it will send
  * them back, and connects at their account home like any app does
- * (`consent-script.ts`), for records in all their spaces unless they choose
- * some. Only once the home has signed a records-only note, and the service
+ * (`consent-script.ts`), for records in the spaces they pick there. Only once the home has signed a records-only note, and the service
  * has checked it, does the app get a code. How it looks is `consent-page.ts`.
  *
  * Every sign-in comes here: the service keeps no sign-in in the browser to skip

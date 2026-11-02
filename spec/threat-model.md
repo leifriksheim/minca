@@ -1014,24 +1014,17 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     is such an app, holding its key inside the app's access token, sealed
     under a key of its own: on its disk only between the person allowing it
     and the app collecting the token, twenty minutes at most (and in any
-    snapshot or backup taken meanwhile, unsealed), and in memory
-    while a node runs. Unless the person chooses spaces, its note is for
-    records in the whole account and comes with the account key, so the
-    token opens every space the account is in, those it joins later, its
-    direct messages and its contacts space (a records note still can't write
-    in the account's own spaces). While the app uses it, a node of its opens
-    a space when a call first uses it, holds it in memory, reads it and
-    writes records there "via agent", as the app's model asks, and closes the
-    one used longest ago when it needs room; and whoever holds its sealing
-    key and a token can write the same until the note runs out or the person
-    disconnects it, and read for good: the account key never changes (01
-    §11.1), so with all spaces given, a stolen secret and one token read
-    every private space the account is in or joins later, after a
-    disconnect too, where picked spaces lose only theirs
-    ([#165](https://github.com/leifriksheim/minca/issues/165)). That key also
-    opens the account's own spaces, where a version written by hand stands
-    at a carrier or host that can't tell they are the account's ([#10](https://github.com/leifriksheim/minca/issues/10));
-    the service's tools never write there. A write is done once the space's keepers have it (05 §9), or, in a
+    snapshot or backup taken meanwhile, unsealed), and in memory while a
+    node runs. While the app uses it, a node of its opens a space the person
+    picked when a call first uses it, holds it in memory, reads it and
+    writes records there "via agent", as the app's model asks, and closes
+    the one used longest ago when it needs room; and whoever holds its
+    sealing key and a token can write the same until the note runs out or
+    the person disconnects it, and read those spaces after that too, with
+    the member keys the token carries
+    ([#165](https://github.com/leifriksheim/minca/issues/165)). It never
+    takes a note for the whole account: its account key would open every
+    space the account is in or joins, and its own spaces, for good. A write is done once the space's keepers have it (05 §9), or, in a
     space that names none, once a member's device online then does, which the
     app is told is less sure, since a peer that holds part of the space, or
     refused the write, counts too. What outlives the node is only where its
@@ -1046,13 +1039,11 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     can't hold it up): a
     node behind would say a record isn't there, and write a first version in
     a line that has one, ending it (09 §7.5). A space they don't carry fails
-    its own calls only, after waiting for one. With all spaces given, which
-    spaces a call may use comes from the account registry, which only the
-    account's devices and hosts keep: with none of them online, every call
-    fails and says so. What members write reaches the model as data, and
-    with all spaces given a member of any one of them can ask it to read any
-    other and repeat it where they read; only the model's instructions stand
-    against that, as with a bot (§2). Once level, the node is one
+    its own calls only, after waiting for one. In a space that names no
+    keepers a write counts as kept once a member's device online has it, so
+    a space closed after that and opened again may level with another peer
+    that lacks it, and an update then writes a first version in a line that
+    has one, ending it. Once level, the node is one
     more device writing in the account's lines, with the gap two devices have
     (§3.2), and another device's write that only an unreachable always-on node
     holds can still be followed by a twin. Two processes on one data folder,
@@ -1060,30 +1051,22 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     ([#287](https://github.com/leifriksheim/minca/issues/287)). Records count until the key is revoked, not until the
     note runs out (06 §2.9), so a token outlives nothing the person can't end
     at their home; the service refuses a token for good once its node sees
-    the revoke (in a space it opens, or for the whole account in its
-    registry, which the node always holds), but member keys open what they
-    opened after that, so a call until then may read what synced alongside it
+    the revoke, in a space it has open, but member keys open what they opened after that, so a call
+    until then may read what synced alongside it
     ([#165](https://github.com/leifriksheim/minca/issues/165)). The home keeps
     one connection per origin (06 §2.10): every chat app connected through a
     service is one entry there, named after the latest, so disconnecting it
     disconnects them all, and one more allowed, by a sign-in someone else
-    started, shows as nothing new, nor does an earlier token for all spaces
-    when the latest sign-in chose some. The reference service takes a key only with
+    started, shows as nothing new. The reference service takes a key only with
     the private half that goes with it, since a note travels with every record
-    and is no secret; refuses a grant whose scope or account key disagrees
-    with its note, read from the note itself, and one naming more than 8
-    spaces; answers calls only in the spaces the account's list or the grant
-    names, so never in the account's registry or contacts space; and reaches the spaces through the always-on nodes and relays
+    and is no secret; refuses a note for the whole account, read from the note
+    itself; and reaches the spaces through the always-on nodes and relays
     the grant's invites and the spaces name only over TLS at public
     addresses, besides its operator's own (`network.reach`), so a grant's
     invites and the records its node reads can't make it connect inside its
     own network, and what a node holds is at most 32 MB, in memory, past
-    half of which, or past 8 spaces open, opening a space closes the one
-    used longest ago, but never one holding a write the keepers don't have
-    yet. In a space that names no keepers a write counts as kept once a
-    member's device online has it, so a space closed after that and opened
-    again may level with another peer that lacks it, and an update then
-    writes a first version in a line that has one, ending it (09 §7.5)
+    half of which opening a space closes the one used longest ago, but
+    never one holding a write the keepers don't have yet
     (`checkGranted` and `createSessions` in
     `packages/cli/src/remote-mcp/sessions.ts`, `publicNode` in
     `packages/cli/src/remote-mcp/reach.ts`, `boundedMemory` in
@@ -1109,7 +1092,7 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     app then acts in their spaces, unless it ties OAuth's `state` to the
     browser that started it; the service can't tell. What a stranger can make
     it keep or do is an app's registration, gone after a day unless used;
-    nodes that run while called, each with up to 8 spaces open that those always-on
+    nodes that run while called, each with up to 8 spaces those always-on
     nodes carry, in memory, and up to an hour after for writes their keepers
     don't have; each a few bytes of places for a key that wrote, for a
     month; and, through its own spaces' records, requests to as many public

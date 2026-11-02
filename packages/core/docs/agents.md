@@ -62,8 +62,7 @@ Minca's MCP service (`minca mcp-server`) offers the same tools to chat apps
 over the network: an MCP endpoint at `/mcp`, signed in with OAuth. The
 consent page the app opens is an app like any other to the account home: it
 makes a key in the browser and asks for a note with `connectToHome`, records
-only, for the whole account (`scope: 'account'`) unless the person chooses
-to pick spaces (`scope: 'spaces'`), then hands the key and the note to the
+only, in the spaces the person picks, then hands the key and the note to the
 service, which checks them (`checkGrant(grant, did, { recordsOnly: true })`,
 and that the key's halves belong together) and seals them into the app's
 access token. Each call starts a node from what the token carries

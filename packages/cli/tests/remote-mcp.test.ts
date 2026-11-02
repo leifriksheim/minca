@@ -20,8 +20,7 @@ import { deriveAccountKey } from '../../core/src/identity/account-vault.js';
 import { generateSeed } from '../../core/src/identity/recovery-code.js';
 import { GRANT_VERSION } from '../../core/src/session/connect.js';
 import { noteTerms } from '../../core/src/identity/abilities.js';
-import { base64UrlDecode, base64UrlEncode } from '../../core/src/utils/encoding.js';
-import { deriveAccountRegistry } from '../../core/src/space/account-registry.js';
+import { base64UrlEncode } from '../../core/src/utils/encoding.js';
 import { memoryStores } from '../../core/tests/helpers/memory-stores.js';
 import { createFakeHub, type FakeHub } from '../../core/tests/helpers/fake-transport.js';
 import { hold } from '../../core/tests/helpers/hold.js';
@@ -82,7 +81,7 @@ async function accountHolder(hub: FakeHub) {
       home: 'https://home.test/connect',
     };
   };
-  /** Records in the whole account, with the account key that lists its spaces: what the consent page asks for first */
+  /** Records in the whole account, with the account key that opens every space */
   const wholeAccount = async (audience: string): Promise<Grant> => ({
     ...(await grantFor(audience)),
     note: await signer.delegate({
@@ -359,8 +358,7 @@ describe('a host’s MCP endpoint', () => {
     const host = await aHost(hub);
 
     const app = await anApp(host.resource);
-    // Records in all her spaces, as the consent page asks unless she chooses some.
-    const { tokens, did, key } = await signIn(app, host.resource, (audience) => ada.wholeAccount(audience));
+    const { tokens, did, key } = await signIn(app, host.resource, (audience) => ada.grantFor(audience));
     assert.ok(tokens.access_token);
     assert.equal(tokens.refresh_token, undefined, 'no refresh token: the token lasts as long as its note');
     // The key and note travel in the token: the service keeps neither, nor anything naming them.
@@ -696,22 +694,21 @@ describe('a host’s MCP endpoint', () => {
     assert.equal((await call(one.resource, parts.join('.'))).status, 401, 'one changed on the way');
   });
 
-  test('a sign-in is answered once, for the whole account or some spaces, as its note says', async () => {
+  test('a sign-in is answered once, and never for the whole account', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const ada = await accountHolder(hub);
     const host = await aHost(hub);
     const app = await anApp(host.resource);
     for (const [grantFor, said] of [
-      [ada.wholeNoteLabelledSpaces, 'a whole-account note called something else'],
-      [ada.someSpacesWithAccountKey, 'a note for some spaces with the key that lists them all'],
+      [ada.wholeAccount, 'nor the whole account, whose key opens every space for good'],
+      [ada.wholeNoteLabelledSpaces, 'nor a whole-account note called something else'],
+      [ada.someSpacesWithAccountKey, 'nor a note for some spaces with the key that opens them all'],
     ] as const) {
       const started = await startSignIn(app, host.resource);
       const key = await browserKey();
       const answer = await postFromPage(started, 'allow', { key: key.jwk, grant: await grantFor(key.did) });
       assert.equal(answer.status, 400, said);
     }
-    const whole = await signIn(app, host.resource, (audience) => ada.wholeAccount(audience));
-    assert.ok(whole.tokens.access_token, 'records in the whole account, as the page asks by default');
 
     const started = await startSignIn(app, host.resource);
     const first = await browserKey();
@@ -771,7 +768,6 @@ describe('a host’s MCP endpoint', () => {
     const html = await page.text();
     assert.match(html, /Let Claude use your Minca spaces\?/);
     assert.match(html, /go back to <b>claude\.ai<\/b>/);
-    assert.match(html, /value="all" checked/, 'all spaces unless the person chooses some');
     assert.match(page.headers.get('content-security-policy') ?? '', /script-src 'sha256-[A-Za-z0-9+/=]+'/);
   });
 });
@@ -901,11 +897,11 @@ describe('a session’s node', () => {
     const notes = await ada.node.records.list(space.id, { collection: 'app.note' });
     assert.ok(!notes.some((note) => field(note.body)('text') === 'after'));
   });
-  test('a grant of the whole account reaches every space, ones made later too, opening only those its calls use', async () => {
+  test('a session opens a space when a call first uses it, and closes the one used longest ago for room', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const ada = await accountHolder(hub);
     const big = 'x'.repeat(40_000);
-    const spaces = [];
+    const spaces: Array<{ readonly id: string }> = [];
     for (const name of ['Garden', 'Choir', 'Book club']) {
       const space = await ada.node.spaces.create({ name, visibility: 'private' });
       await ada.node.records.put(space.id, 'app.note', { text: big });
@@ -913,11 +909,11 @@ describe('a session’s node', () => {
       spaces.push(space);
     }
     const [garden, choir, books] = spaces;
-    // Room for the registry and one space, but not two: opening one closes the one used longest ago.
-    const sessions = createSessions({ network: async () => onHub(hub), budget: 140_000 });
+    // Room for one of them, but not two: opening one closes the one used longest ago.
+    const sessions = createSessions({ network: async () => onHub(hub), budget: 100_000 });
     closing.push(() => sessions.close());
     const key = await browserKey();
-    const granted = await checkGranted(key.jwk, await ada.wholeAccount(key.did));
+    const granted = await checkGranted(key.jwk, await ada.grantFor(key.did));
     const read = (space: string) =>
       sessions.use(
         's',
@@ -930,65 +926,14 @@ describe('a session’s node', () => {
 
     assert.equal(await read(garden!.id), 1);
     await until(() => openIn(garden!.id), 5000, 'the node to open the garden');
-    assert.ok(!(await openIn(choir!.id)) && !(await openIn(books!.id)), 'nor any space no call used');
+    await until(
+      async () => !(await openIn(choir!.id)) && !(await openIn(books!.id)),
+      5000,
+      'nor any space no call used',
+    );
     assert.equal(await read(choir!.id), 1);
     await until(async () => !(await openIn(garden!.id)), 5000, 'the garden to close for the choir');
-
-    // A space she makes once it runs is hers too: it reaches it through her registry.
-    const later = await ada.node.spaces.create({ name: 'Made later', visibility: 'private' });
-    await ada.node.records.put(later.id, 'app.note', { text: 'new' });
-    await hold(ada.node, later.id);
-    assert.equal(await read(later.id), 1);
-
-    // One she isn't in is said plainly.
-    const bob = await accountHolder(hub);
-    const his = await bob.node.spaces.create({ name: 'Bob’s', visibility: 'private' });
-    await assert.rejects(read(his.id), /isn’t one of the person’s spaces/);
-    // Nor her account's own spaces: the registry that lists them, and her contacts.
-    const registry = await deriveAccountRegistry(base64UrlDecode(granted.grant.accountKey!), ada.did);
-    await assert.rejects(read(registry.space.id), /isn’t one of the person’s spaces/);
-    const contacts = await ada.node.contacts.space();
-    if (contacts) await assert.rejects(read(contacts), /isn’t one of the person’s spaces/);
-  });
-
-  test('a session keeps at most 8 spaces open, however small: each holds sockets and timers', async () => {
-    const hub = createFakeHub({ latencyMs: 1 });
-    const ada = await accountHolder(hub);
-    const spaces: Array<{ readonly id: string }> = [];
-    for (const name of 'abcdefghijkl'.split('')) {
-      const space = await ada.node.spaces.create({ name, visibility: 'private' });
-      await ada.node.records.put(space.id, 'app.note', { text: 'x' });
-      await hold(ada.node, space.id);
-      spaces.push(space);
-    }
-    const sessions = createSessions({ network: async () => onHub(hub) });
-    closing.push(() => sessions.close());
-    const key = await browserKey();
-    const granted = await checkGranted(key.jwk, await ada.wholeAccount(key.did));
-    for (const space of spaces)
-      await sessions.use('s', granted, space.id, async (node) => node.records.list(space.id, {}));
-    // Found by adversarial review: a stranger's many tiny spaces all stayed open.
-    const openIn = async (space: string) => (await ada.node.spaces.status(space)).peers.includes(key.did);
-    await until(
-      async () => (await Promise.all(spaces.map((space) => openIn(space.id)))).filter(Boolean).length <= 8,
-      5000,
-      'the spaces used longest ago to close',
-    );
-  });
-
-  test('with nothing online that keeps her list of spaces, a call says so rather than that the space isn’t hers', async () => {
-    const hub = createFakeHub({ latencyMs: 1 });
-    const ada = await accountHolder(hub);
-    const space = await ada.node.spaces.create({ name: 'Club', visibility: 'private' });
-    const key = await browserKey();
-    const granted = await checkGranted(key.jwk, await ada.wholeAccount(key.did));
-    // Her home tab closes, and nothing else keeps her registry (found by adversarial review).
-    await ada.node.close();
-    const { sessions } = await someSessions(hub);
-    await assert.rejects(
-      sessions.use('s', granted, space.id, async () => null),
-      /list of spaces can’t be reached right now/,
-    );
+    assert.equal(await read(garden!.id), 1, 'and opened again, it reads the same');
   });
 
   test('a grant of some spaces says a space it doesn’t name isn’t connected, and how to add it', async () => {
@@ -1002,7 +947,7 @@ describe('a session’s node', () => {
     const other = await ada.node.spaces.create({ name: 'Not picked', visibility: 'private' });
     await assert.rejects(
       sessions.use('s', granted, other.id, async () => null),
-      /isn’t connected.*connects Minca again from this chat app and chooses it/,
+      /isn’t connected.*connects Minca again from this chat app and chooses it at their account home/,
     );
   });
 });
