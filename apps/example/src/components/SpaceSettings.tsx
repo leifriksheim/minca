@@ -1,5 +1,8 @@
-import { useState, type ReactNode } from 'react';
-import { SPACE_KEEPERS } from '@minca/core';
+import { useState, type FormEvent, type ReactNode } from 'react';
+import { SPACE_KEEPERS, type SpaceSummary } from '@minca/core';
+import { spaceProfile } from '@minca/core/schemas';
+import { useCan, useNode } from '@minca/react';
+import { useAction } from '@minca/app-shared/action';
 import { useMay } from '@minca/app-shared/may';
 import { AddBotDialog } from '@minca/app-shared/CommunitySetup';
 import { FeatureIcon } from '@minca/app-shared/Feature';
@@ -8,19 +11,27 @@ import { ConnectAgent } from './ConnectAgent';
 import { HOOD, settingsPagesOf, type SpaceScreen } from './SpaceView';
 import { cardText, cardTitle, rowButton, sectionHeading } from './rows';
 import { Icon, type IconName } from './Icon';
-import { palette, stack, ui } from '../styles';
+import { palette, stack, styles, ui } from '../styles';
+import { useSpaceFace } from '../pictures';
+import { shrinkImage } from '../files';
+import { SpaceMark } from './SpaceList';
+import { LinkButton, PrimaryButton } from './Buttons';
 
-/** A space's Settings: its agents, where it is kept, what runs on its own, what is under the hood, and leaving */
-export function SpaceSettings({ space, go }: Pick<SpaceScreen, 'space' | 'go'>) {
+/** A space's Settings: how it presents itself, its agents, where it is kept, what runs on its own, what is under the hood, and leaving */
+export function SpaceSettings({ space, go, mayDefine }: Pick<SpaceScreen, 'space' | 'go' | 'mayDefine'>) {
   const { pairs, forget } = useWorkspace();
   const pair = pairs.has(space.id);
   const [addingBot, setAddingBot] = useState(false);
   const [connecting, setConnecting] = useState(false);
   // A bot runs where the space is kept online, so adding one is for whoever chooses that.
   const mayAddBot = useMay(space.id, SPACE_KEEPERS) && space.writable;
+  // Writing its profile, or adding the collection for it where the space has none yet.
+  const mayPresent = useCan(space.id, 'create', spaceProfile.name) || mayDefine;
 
   return (
     <div style={stack(32)}>
+      {!pair && mayPresent && <GroupProfile space={space} />}
+
       <section aria-label="Agents" style={stack(12)}>
         <h2 style={sectionHeading}>Agents</h2>
         <ol className="rows" style={ui.list}>
@@ -93,6 +104,102 @@ export function SpaceSettings({ space, go }: Pick<SpaceScreen, 'space' | 'go'>) 
       )}
       {connecting && <ConnectAgent onClose={() => setConnecting(false)} />}
     </div>
+  );
+}
+
+/**
+ * How the group presents itself (`std.space-profile`): its picture, the name shown in place of the one
+ * it was founded with, and a line about it. Saving writes your version, the newest, so it is the one shown.
+ */
+function GroupProfile({ space }: { space: SpaceSummary }) {
+  const node = useNode();
+  const face = useSpaceFace(space.id);
+  const [name, setName] = useState(face?.name ?? space.name);
+  const [bio, setBio] = useState(face?.bio ?? '');
+  const [picked, setPicked] = useState<{ file: File; url: string } | null>(null);
+  const { run, busy, error } = useAction();
+  const [saved, setSaved] = useState(false);
+
+  const save = (event: FormEvent) => {
+    event.preventDefault();
+    setSaved(false);
+    void run(async () => {
+      const here = await node.collections.list(space.id);
+      if (!here.some((c) => c.name === spaceProfile.name && c.version !== null))
+        await node.collections.define(space.id, spaceProfile);
+      const image = picked ? await shrinkImage(picked.file) : null;
+      const avatar = image
+        ? await node.records.addFile(space.id, image.bytes, { mime: image.mime })
+        : face?.avatar;
+      await node.records.put(space.id, spaceProfile, {
+        ...(name.trim() ? { name: name.trim() } : {}),
+        ...(bio.trim() ? { bio: bio.trim() } : {}),
+        ...(avatar ? { avatar } : {}),
+      });
+      setPicked(null);
+      setSaved(true);
+    });
+  };
+
+  return (
+    <section aria-label="Group profile" style={stack(12)}>
+      <h2 style={sectionHeading}>Profile</h2>
+      <form onSubmit={save} style={{ ...styles.tile, ...stack(12), padding: 16 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer' }}>
+          {picked ? (
+            <img
+              src={picked.url}
+              alt=""
+              width={64}
+              height={64}
+              style={{ objectFit: 'cover', borderRadius: 16, flexShrink: 0 }}
+            />
+          ) : (
+            <SpaceMark space={space} size={64} />
+          )}
+          <LinkButton type="button" style={{ pointerEvents: 'none', paddingLeft: 0 }}>
+            {face?.avatar || picked ? 'Change picture' : 'Add a picture'}
+          </LinkButton>
+          <input
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              if (file) setPicked({ file, url: URL.createObjectURL(file) });
+            }}
+          />
+        </label>
+        <input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          maxLength={100}
+          placeholder="The group's name"
+          aria-label="The group's name"
+          style={styles.input}
+        />
+        <textarea
+          value={bio}
+          onChange={(event) => setBio(event.target.value)}
+          maxLength={2000}
+          rows={3}
+          placeholder="What the group is about"
+          aria-label="What the group is about"
+          style={styles.textarea}
+        />
+        {error && <p style={styles.error}>{error}</p>}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12 }}>
+          {saved && !busy && <span style={styles.quiet}>Saved</span>}
+          <PrimaryButton
+            type="submit"
+            disabled={busy || !name.trim()}
+            style={{ width: 'auto', padding: '0 20px' }}
+          >
+            {busy ? 'Saving…' : 'Save'}
+          </PrimaryButton>
+        </div>
+      </form>
+    </section>
   );
 }
 

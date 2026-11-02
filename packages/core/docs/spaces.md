@@ -58,7 +58,8 @@ steward: its grants are the constitution's, and changing them takes a
 successor.
 
 `STAFF_COLLECTIONS` are the standard collections only moderators start in a
-community: announcements, badges, awards, pins, labels, channels and hosts.
+community: announcements, badges, awards, pins, labels, channels, hosts and
+the space's own profile (`std.space-profile`).
 Their definitions used to say so with `create` rules; now the template does.
 
 When a space is created with no roles, it gets `solo`. The account's derived
@@ -67,7 +68,7 @@ byte: their ids depend on it
 ([spec 03 §13.1](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)).
 Changing `solo` would change those ids, so it must not change.
 
-_Source: `packages/core/src/space/presets.ts` (`solo`, `team`, `community`, `coop`, `STAFF_COLLECTIONS`), `packages/core/src/space/grants.ts`, `packages/core/src/space/space-manager.ts` (`create`), `packages/core/src/node/node.ts` (`spaces.create`). Tests: `packages/core/tests/space.test.ts`, `packages/core/tests/roles.test.ts` ("definitions", "`community` admins can remove each other by naming a view before the promotion"), `packages/core/tests/constitution.test.ts` ("the templates are well formed", "a co-op: no founders…")._
+_Source: `packages/core/src/space/presets.ts` (`solo`, `team`, `community`, `coop`, `STAFF_COLLECTIONS`), `packages/core/src/space/grants.ts`, `packages/core/src/space/space-manager.ts` (`create`), `packages/core/src/node/node.ts` (`spaces.create`). Tests: `packages/core/tests/space.test.ts`, `packages/core/tests/space-profile.test.ts`, `packages/core/tests/roles.test.ts` ("definitions", "`community` admins can remove each other by naming a view before the promotion"), `packages/core/tests/constitution.test.ts` ("the templates are well formed", "a co-op: no founders…")._
 
 ## The top and founders
 

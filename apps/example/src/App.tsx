@@ -19,7 +19,7 @@ import { SyncLine } from './components/SyncLine';
 import { useRunAutomations } from './automations';
 import { ConnectScreen } from './components/ConnectScreen';
 import { useAccountInAddress } from './account-address';
-import { Pictures, usePictures } from './pictures';
+import { Pictures, SpaceFaces, usePictures, useSpaceFaces } from './pictures';
 import { ContactsView } from './components/ContactsView';
 import { RelayDown } from './components/RelayNotice';
 import { GroupRow, SpaceCount, SpaceDialog, SpaceList } from './components/SpaceList';
@@ -65,7 +65,13 @@ function Workspace() {
   // Kept, so the list of accounts shows this one by its picture once another is in use.
   useRememberPicture(account.did, useAccountPicture());
   const mine = useSpaces();
-  const { spaces, loading, error } = mine;
+  const { loading, error } = mine;
+  // A space's own profile names it, in place of the name it was founded with (`std.space-profile`).
+  const faces = useSpaceFaces(mine.spaces);
+  const spaces = mine.spaces.map((space) => {
+    const name = faces.get(space.id)?.name;
+    return name ? { ...space, name } : space;
+  });
   const navigate = useNavigate();
   const node = useNode();
   const pairs = usePairSpaces();
@@ -143,8 +149,10 @@ function Workspace() {
   return (
     <WorkspaceContext value={workspace}>
       <Pictures value={pictures}>
-        <Outlet />
-        <CallLayer spaces={spaces} onGoTo={(space) => openSpace(space.id)} />
+        <SpaceFaces value={faces}>
+          <Outlet />
+          <CallLayer spaces={spaces} onGoTo={(space) => openSpace(space.id)} />
+        </SpaceFaces>
       </Pictures>
     </WorkspaceContext>
   );

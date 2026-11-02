@@ -42,6 +42,31 @@ export const profile = define({
 });
 export type Profile = BodyOf<typeof profile>;
 
+/**
+ * How the space presents itself, as `std.profile` is how someone does: what
+ * apps show in place of the name its constitution was founded with, and a
+ * picture. One per writer, like `std.profile`; the space's is the newest
+ * version among them. Who may write one is the space's grants, so the
+ * presets leave it to those who keep order (`STAFF_COLLECTIONS`).
+ */
+export const spaceProfile = define({
+  name: 'std.space-profile',
+  title: 'Space profile',
+  description:
+    'How the space presents itself: its name, a line about it and its picture. The newest one counts.',
+  schema: {
+    type: 'object',
+    properties: {
+      name: text(100),
+      bio: text(2000),
+      avatar: blob(),
+      banner: blob(),
+    },
+  },
+  rules: { onePer: ['@author'] },
+});
+export type SpaceProfileRecord = BodyOf<typeof spaceProfile>;
+
 const labelled = <const P extends object, const R extends keyof P>(value: P, required: R) => ({
   type: 'array' as const,
   maxItems: 16,
@@ -135,5 +160,5 @@ export type Status = BodyOf<typeof status>;
 
 /** This file's part of `standardGroups` */
 export const socialGroups = {
-  People: [profile, card, follow, block, mute, status],
+  People: [profile, spaceProfile, card, follow, block, mute, status],
 };
