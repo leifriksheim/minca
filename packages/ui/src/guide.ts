@@ -77,5 +77,5 @@ The page already looks like Minca: buttons are pills (data-variant="primary" for
 "danger" for deleting; data-icon makes one holding a single symbol a circle), inputs, headings and the page are styled, and these classes lay things out: card, row, stack,
 muted, faint, empty, chip (a toggle pill, on with aria-pressed), label, error, ellipsis. Write as little CSS as you can; when you need colours, use the variables: var(--minca-ink),
 --minca-body, --minca-muted, --minca-faint, --minca-page, --minca-card, --minca-sunken, --minca-line, --minca-accent,
---minca-danger, and corners --minca-radius-sm, -md, -lg, -pill. Fonts from URLs never load. The page is centred, 640px at
-most; a screen that needs room (a board, a map) sets :root { --minca-page-width: none } or a width of its own.`;
+--minca-danger, and corners --minca-radius-sm, -md, -lg, -pill. Fonts from URLs never load. The page is centred,
+640px at most; a board or a map sets :root { --minca-page-width: none }.`;
