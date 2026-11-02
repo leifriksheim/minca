@@ -232,7 +232,7 @@ function AppRow({
 }) {
   const about = (
     <>
-      <AppIcon id={app.id} size={36} />
+      <AppIcon app={app} size={36} />
       <span style={{ ...stack(2), flex: 1, minWidth: 0 }}>
         <strong style={{ ...cardTitle, ...ui.ellipsis }}>{app.title}</strong>
         {app.description && <span style={{ ...cardText, ...ui.ellipsis }}>{app.description}</span>}
@@ -254,7 +254,7 @@ function AppRow({
   // One line on every screen: the app, its moves, and the rest behind a menu.
   return (
     <li style={{ ...rowButton, listStyle: 'none', padding: '8px 10px 8px 16px' }}>
-      <AppIcon id={app.id} size={32} />
+      <AppIcon app={app} size={32} />
       <strong style={{ ...cardTitle, ...ui.ellipsis, flex: 1, minWidth: 0 }}>{app.title}</strong>
       <button
         onClick={() => arrange.onMove(-1)}

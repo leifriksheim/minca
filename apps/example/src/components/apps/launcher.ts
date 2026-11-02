@@ -41,6 +41,7 @@ import {
   type AppAutomation,
   type DraftCollection,
 } from '@minca/core/schemas';
+import type { ShapeColour } from '@minca/ui/tokens';
 import { checkScreenNetwork, MAX_SCREEN_BYTES, SCREEN_GUIDE, offLimits } from './screens';
 
 export interface LauncherApp {
@@ -68,6 +69,36 @@ export interface LauncherApp {
   readonly template?: string;
   /** What whoever adds it fills in once for everyone, like an API key; its screen reads them as `minca.settings` */
   readonly settings?: ReadonlyArray<AppSetting>;
+  /** Its icon, drawn for it: without one, a ready-made app has its own shape and any other a round one */
+  readonly icon?: AppIconPath;
+}
+
+/** An icon of an app's own: one path on a 100 × 100 grid, filled with one of the shapes' colours */
+export interface AppIconPath {
+  readonly path: string;
+  readonly colour: ShapeColour;
+}
+
+/** Path data and nothing else: commands, numbers and separators. Drawn as a path's `d`, it can't run or load anything. */
+const PATH_DATA = /^[MmLlHhVvCcSsQqTtAaZzEe0-9.,\s+-]+$/;
+const MAX_ICON_PATH = 4000;
+const ICON_COLOURS = [
+  'cobalt',
+  'coral',
+  'peach',
+  'sage',
+  'lilac',
+  'ink',
+] as const satisfies ReadonlyArray<ShapeColour>;
+
+/** An app's own icon, if it has one that can be drawn: a record from elsewhere may hold anything */
+export function iconOf(body: { readonly icon?: unknown } | null | undefined): AppIconPath | undefined {
+  const icon = body?.icon;
+  if (typeof icon !== 'object' || icon === null || !('path' in icon) || !('colour' in icon)) return undefined;
+  const { path } = icon;
+  const colour = ICON_COLOURS.find((one) => one === icon.colour);
+  const drawable = typeof path === 'string' && path.length <= MAX_ICON_PATH && PATH_DATA.test(path);
+  return drawable && colour ? { path, colour } : undefined;
 }
 
 /** A setting an app asks for, and its value once someone who may add apps has given one */
@@ -106,6 +137,15 @@ export const launcherApp = fragments.typed<LauncherApp>()({
       position: { type: 'string', minLength: 1, maxLength: 200 },
       updates: { type: 'string', minLength: 1, maxLength: 128 },
       template: { type: 'string', minLength: 1, maxLength: 100 },
+      icon: {
+        type: 'object',
+        properties: {
+          // Stored schemas can't hold a pattern: `iconOf` checks it is path data before it is drawn.
+          path: { type: 'string', minLength: 1, maxLength: MAX_ICON_PATH },
+          colour: { enum: ICON_COLOURS },
+        },
+        required: ['path', 'colour'],
+      },
       settings: {
         type: 'array',
         maxItems: 8,
@@ -288,6 +328,8 @@ const LAUNCHER_GUIDE = `To make an app for this space that people open from its 
 4. If it needs something only the space can give, like an API key, add "settings": what to fill in, like
    [{ "key": "giphy", "title": "GIPHY API key", "description": "Free at developers.giphy.com" }]. Leave out the values:
    whoever adds the app fills them in once for everyone, and its screen reads them as minca.settings.
+5. Add an "icon" showing what it is for: { "path": "<SVG path data, 100 × 100 grid>", "colour": "coral" } (or
+   cobalt, peach, sage, lilac, ink). Flat and rounded, details cut out as holes. Keep it when changing the app.
 
 Your screen is not the only way in: anyone in the space can write any record directly, through an agent or another
 app. Ask what a member could do that way. Where the app means nothing unless records keep a rule their shape and
@@ -331,7 +373,7 @@ export async function prepareLauncher(node: P2PNode, spaceId: string): Promise<v
 
 /** An app as it stands once added: its place is the launcher's, and it updates nothing */
 function settled(body: LauncherApp): LauncherApp {
-  const { title, description, collections, shows, notify, screen, network, template, settings } = body;
+  const { title, description, collections, shows, notify, screen, network, template, settings, icon } = body;
   return {
     ...(title !== undefined ? { title } : {}),
     ...(description !== undefined ? { description } : {}),
@@ -342,6 +384,7 @@ function settled(body: LauncherApp): LauncherApp {
     ...(network !== undefined ? { network } : {}),
     ...(template !== undefined ? { template } : {}),
     ...(settings !== undefined ? { settings } : {}),
+    ...(icon !== undefined ? { icon } : {}),
   };
 }
 
@@ -402,7 +445,7 @@ export const outdated = (record: NodeRecord<LauncherApp>, template: Template): b
 /**
  * Brings a space's copy of a ready-made app to the one this app has: defines whatever new collections
  * it uses, then writes it in place of the old, where it was on the launcher, with what was filled in for
- * its settings. Anything someone changed in the space's copy is replaced.
+ * its settings and its icon. Anything else someone changed in the space's copy is replaced.
  */
 export async function updateTemplate(
   node: P2PNode,
@@ -424,6 +467,8 @@ export async function updateTemplate(
       ...template.app,
       ...(was.position !== undefined ? { position: was.position } : {}),
       ...(settings ? { settings } : {}),
+      // An icon the space gave its copy is the space's, as its place is.
+      ...(was.icon !== undefined ? { icon: was.icon } : {}),
     },
     { links: record.links },
   );

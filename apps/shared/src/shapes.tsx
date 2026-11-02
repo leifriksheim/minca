@@ -16,12 +16,15 @@ import { shapeColours, type ShapeColour } from '@minca/ui/tokens';
 /** One shape, in one of the shapes' colours, or in `--c` when no colour is given */
 export function Shape({
   kind,
+  path,
   colour,
   size,
   className,
   style,
 }: {
   kind: ShapeKind;
+  /** A path of its own on the same grid, drawn in place of the kind's: an icon someone made */
+  path?: string | undefined;
   colour?: ShapeColour;
   /** Width and height in pixels; leave it out to size the shape with CSS */
   size?: number;
@@ -37,7 +40,7 @@ export function Shape({
       style={{ display: 'block', flexShrink: 0, overflow: 'visible', ...style }}
       aria-hidden
     >
-      <path d={PATHS[kind]} fill={colour ? shapeColours[colour] : 'var(--c, currentColor)'} />
+      <path d={path ?? PATHS[kind]} fill={colour ? shapeColours[colour] : 'var(--c, currentColor)'} />
     </svg>
   );
 }

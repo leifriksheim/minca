@@ -381,7 +381,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
             {apps.ready.map((app) => (
               <RailItem
                 key={app.id}
-                icon={<AppIcon id={app.id} size={22} />}
+                icon={<AppIcon app={app} size={22} />}
                 label={app.title}
                 unread={unreadOf(unread, app.id)}
                 on={open?.id === app.id}
@@ -429,7 +429,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
               {/* The space on its Overview, the app in an app, and anywhere else, the page's own name. */}
               <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                 {onApps && <SpaceFace space={space} pair={pair} size={26} />}
-                {open && <AppIcon id={open.id} size={26} />}
+                {open && <AppIcon app={open} size={26} />}
                 <h1 style={{ ...styles.appTitle, ...ui.ellipsis, fontSize: 17 }}>{title}</h1>
               </span>
             </span>
@@ -462,7 +462,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
                   </span>
                 </button>
               )}
-              {open && <AppIcon id={open.id} size={28} />}
+              {open && <AppIcon app={open} size={28} />}
               {/* The rail names the space, so here the Overview is named for itself. */}
               <h1 style={{ ...styles.appTitle, ...ui.ellipsis, flex: 1, minWidth: 0, fontSize: 18 }}>
                 {onApps ? 'Overview' : title}
@@ -771,7 +771,7 @@ function AppSwitcher({
                 className="rail-item"
               >
                 <span className="rail-icon">
-                  <AppIcon id={app.id} size={36} />
+                  <AppIcon app={app} size={36} />
                   <span className="rail-count">
                     <Count unread={unreadOf(unread, app.id)} />
                   </span>

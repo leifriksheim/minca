@@ -26,6 +26,7 @@ import {
   checkLauncherApp,
   copyApp,
   EXAMPLE_APP,
+  iconOf,
   launcherApp,
   outdated,
   updateTemplate,
@@ -220,6 +221,35 @@ describe('the launcher', () => {
       'where it was, and still standing: its new collection is defined',
     );
     assert.equal(outdated(updated, now), false);
+  });
+
+  test("an app's own icon is drawn only as path data in a shape colour, and outlives an update of its ready-made app", async () => {
+    const heart = { path: 'M50 88L12 50A20 20 0 0 1 50 22A20 20 0 0 1 88 50Z', colour: 'coral' } as const;
+    assert.deepEqual(iconOf({ icon: heart }), heart);
+    for (const icon of [
+      { path: '<script>alert(1)</script>', colour: 'coral' },
+      { path: 'url(#x)', colour: 'coral' },
+      { path: heart.path, colour: 'red' },
+      { path: `M0 0${'L1 1'.repeat(1001)}`, colour: 'coral' },
+    ])
+      assert.equal(iconOf({ icon }), undefined, JSON.stringify(icon).slice(0, 40));
+
+    const { alice, space } = await setup();
+    await addTemplate(alice.node, space, CHAT, []);
+    const chat = (await launcherOf(alice.node, space)).placed[0]!;
+    await alice.node.records.update<LauncherApp>(space, chat.key, { ...chat.body, icon: heart });
+
+    const now: Template = { ...CHAT, app: { ...CHAT.app, screen: '<p>new</p>' } };
+    const before = (await launcherOf(alice.node, space)).placed[0]!;
+    assert.equal(
+      outdated(before, CHAT),
+      false,
+      'an icon of its own is not a difference from the ready-made one',
+    );
+    await updateTemplate(alice.node, space, before, now);
+    const after = (await launcherOf(alice.node, space)).placed[0]!;
+    assert.equal(after.body?.screen, '<p>new</p>');
+    assert.deepEqual(after.body?.icon, heart);
   });
 
   test('adding a ready-made app copies it into the space once, with its collections and first records', async () => {

@@ -21,7 +21,7 @@ export function OpenWith({
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         {apps.map((app) => (
           <button key={app.id} type="button" data-row onClick={() => onChoose(app)} style={row}>
-            <AppIcon id={app.id} size={28} />
+            <AppIcon app={app} size={28} />
             <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
               <span style={{ fontWeight: 600 }}>{app.title}</span>
               {app.description && <span style={{ ...styles.faint, ...ui.ellipsis }}>{app.description}</span>}
