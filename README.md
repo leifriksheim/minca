@@ -52,14 +52,14 @@ that holds the truth, and no app that can lock their data in.
 
 ## Start here
 
-| I want to…                         | Go to                                                                                                                                     |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| **Use it** with my group           | [app.minca.social](https://app.minca.social) in the browser, or [the desktop app and the Chrome extension](https://minca.social/download) |
-| **Build an app** on it             | [`@minca/core`](#build-an-app) and [its guides](packages/core/docs/README.md)                                                             |
-| **Connect an AI agent** or a bot   | [`@minca/cli`](packages/cli/README.md): `minca connect`, then Claude Code, Cursor or any MCP client reads and writes as you               |
-| **Keep spaces online** on a server | [`minca run`](packages/cli/README.md#the-always-on-node), an always-on node that adds uptime, never authority                             |
-| **Implement the protocol**         | [The spec](spec/README.md): bytes on the wire, what is signed, what every peer checks                                                     |
-| **Contribute**                     | [CONTRIBUTING.md](CONTRIBUTING.md)                                                                                                        |
+| I want to…                         | Go to                                                                                                                                         |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Use it** with my group           | [app.minca.social](https://app.minca.social) in the browser, or [the desktop app and the Chrome extension](https://minca.social/download)     |
+| **Build an app** on it             | [`@minca/core`](#build-an-app) and [its guides](packages/core/docs/README.md)                                                                 |
+| **Connect an AI agent** or a bot   | [minca.social/mcp](https://minca.social/mcp): add `https://mcp.minca.social/mcp` to Claude, ChatGPT or any MCP client, or run `minca connect` |
+| **Keep spaces online** on a server | [`minca run`](packages/cli/README.md#the-always-on-node), an always-on node that adds uptime, never authority                                 |
+| **Implement the protocol**         | [The spec](spec/README.md): bytes on the wire, what is signed, what every peer checks                                                         |
+| **Contribute**                     | [CONTRIBUTING.md](CONTRIBUTING.md)                                                                                                            |
 
 ## Build an app
 

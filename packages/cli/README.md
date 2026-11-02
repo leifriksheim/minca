@@ -291,11 +291,13 @@ rules): it needs the account unlocked on the server, a host never does.
 ### From a chat app, with nothing to install
 
 `minca mcp-server` is Minca's MCP service: chat apps connect to it by its
-address alone, `https://<service>/mcp`. In Claude, add it as a custom
-connector; in ChatGPT, Cursor, VS Code or Claude Code, wherever remote MCP
-servers go (`claude mcp add --transport http minca https://<service>/mcp`).
-The app's own model does the thinking, on your own plan; the service only
-runs the tools.
+address alone. Ours is `https://mcp.minca.social/mcp`; [minca.social/mcp](https://minca.social/mcp)
+has one-click links for Claude and Cursor, and the line to paste for the rest
+(`claude mcp add --transport http minca https://mcp.minca.social/mcp`). The
+links are built in `apps/shared/src/mcp.ts`. The app's own model does the
+thinking, on your own plan; the service only runs the tools. VS Code can't
+sign in yet: it registers `https://vscode.dev/redirect`, which the service
+doesn't send codes to (`redirects.ts`).
 
 ```bash
 MINCA_MCP_URL=https://mcp.example.com npx @minca/cli mcp-server --port 8788 --host 0.0.0.0

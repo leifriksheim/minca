@@ -1,17 +1,17 @@
 import type { ReactNode } from 'react';
 import { Modal } from '@minca/app-shared/Modal';
 import { useCopy } from '@minca/app-shared/action';
+import { MCP_URL, addToClaude } from '@minca/app-shared/mcp';
 import { styles, palette, stack } from '../styles';
 import { PrimaryButton } from './Buttons';
 
-/** What people run: it finds the agents on their computer, and opens their account home to allow it */
-const COMMAND = import.meta.env.VITE_MINCA_CONNECT ?? 'npx @minca/cli connect';
-/** Every way to add Minca to an agent, by hand too, on the site */
+/** Every AI app, step by step, and keeping it on your own computer, on the site */
 const GUIDE = 'https://minca.social/mcp';
 
 /**
- * Connecting an agent on a computer, as the site's MCP page has it: one command to paste, allowed at
- * the account home, and then you just ask. `then` says what to ask for; without it, anything.
+ * Connecting an AI app to Minca's MCP service, as the site's MCP page has it: one click for Claude,
+ * the address for any other app, allowed at the account home, and then you just ask. `then` says
+ * what to ask for; without it, anything.
  */
 export function ConnectAgent({
   onClose,
@@ -26,18 +26,21 @@ export function ConnectAgent({
   return (
     <Modal title={title} onClose={onClose} width={480}>
       <div style={stack(16)}>
-        <p style={stepText}>
-          Paste this in a terminal on your computer. It finds Claude, Cursor and the other AI apps there, and
-          you allow it in your account home.
-        </p>
-        <div style={commandBox}>
-          <code style={commandText}>{COMMAND}</code>
-          <PrimaryButton
-            onClick={() => copy(COMMAND)}
-            style={{ width: 'auto', height: 32, padding: '0 14px', fontSize: 13 }}
-          >
-            {copied ? '✓ Copied' : 'Copy'}
-          </PrimaryButton>
+        <p style={stepText}>Add Minca to Claude, then pick the spaces it may use at your account home.</p>
+        <PrimaryButton onClick={() => window.open(addToClaude(), '_blank', 'noopener')}>
+          Add to Claude ↗
+        </PrimaryButton>
+        <div style={stack(8)}>
+          <p style={stepText}>Another AI app? Give it this address.</p>
+          <div style={commandBox}>
+            <code style={commandText}>{MCP_URL}</code>
+            <PrimaryButton
+              onClick={() => copy(MCP_URL)}
+              style={{ width: 'auto', height: 32, padding: '0 14px', fontSize: 13 }}
+            >
+              {copied ? '✓ Copied' : 'Copy'}
+            </PrimaryButton>
+          </div>
         </div>
         <div style={stack(8)}>
           <strong style={{ fontSize: 15, color: palette.ink.strong }}>Then just ask</strong>
@@ -51,7 +54,7 @@ export function ConnectAgent({
         <p style={{ ...styles.quiet, fontSize: 13 }}>
           It writes as you, marked “via agent”, and can’t add people or change who may do what.{' '}
           <a href={GUIDE} target="_blank" rel="noreferrer" style={{ color: palette.ink.body }}>
-            Other ways to set it up
+            Other apps, step by step
           </a>
         </p>
       </div>
