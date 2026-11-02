@@ -6,10 +6,6 @@ import { MincaProvider } from '@minca/react';
 import { connection } from './minca';
 import { tellDesktop } from './desktop';
 import { router } from './router';
-import { scaleForPhone } from './phone-scale';
-
-// Before anything is laid out: a phone draws the app a little larger, as a page zoom would.
-scaleForPhone();
 
 // Hover, focus and placeholder states, plus the page background — the things
 // inline styles cannot express.

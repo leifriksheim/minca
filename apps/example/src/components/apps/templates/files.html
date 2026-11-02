@@ -7,6 +7,10 @@
   body {
     padding: 0;
   }
+  /* The whole window: the folders beside the files. */
+  :root {
+    --minca-page-width: none;
+  }
   #app {
     height: 100%;
     display: flex;
@@ -658,16 +662,16 @@
             html`<div style="grid-column: 1 / -1">
               ${
                 query
-                  ? html`<${Empty} shape="stack" colour="sage" title="Nothing by that name" />`
+                  ? html`<${Empty} shape="folder" colour="sage" title="Nothing by that name" />`
                   : group
                     ? html`<${Empty}
-                        shape="stack"
+                        shape="folder"
                         colour="sage"
                         title="Nothing in this category yet"
                         text="Drag files onto it, or drop new ones here."
                       />`
                     : html`<${Empty}
-                        shape="stack"
+                        shape="folder"
                         colour="sage"
                         title="No files yet"
                         text="Drop some here, paste them, or share them in a chat."

@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { PersonFace } from './PersonFace';
 import { useNode, useLive, useProfiles, useCan } from '@minca/react';
 import type { NodeCollection, NodeRecord, SpaceSummary } from '@minca/core';
 import { file, reaction, comment, tag } from '@minca/core/schemas';
@@ -26,7 +27,6 @@ import { nameOf, peopleFrom, writerOf } from '../derive/people';
 import { ago } from '@minca/ui/time';
 import { SchemaForm, FieldInput } from './SchemaForm';
 import { Value } from './Value';
-import { Avatar } from '@minca/app-shared/Avatar';
 import { Reactions } from './std/Reactions';
 import { Tags } from './std/Tags';
 import { Comments } from './std/Comments';
@@ -233,7 +233,7 @@ export function RecordPanel({
                     color: palette.ink.muted,
                   }}
                 >
-                  <Avatar did={record.createdBy ?? record.root ?? record.author} size={20} />
+                  <PersonFace did={record.createdBy ?? record.root ?? record.author} size={20} />
                   <span>
                     {onWriter ? (
                       <button
@@ -443,7 +443,7 @@ export function RecordPanel({
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       {records.map((r) => (
                         <button key={r.key} data-row onClick={() => onOpen(r)} style={miniRow}>
-                          <Avatar did={r.root ?? r.author} size={18} />
+                          <PersonFace did={r.root ?? r.author} size={18} />
                           <span style={{ ...ui.ellipsis, flex: 1, minWidth: 0 }}>{labelFor(r)}</span>
                           <span style={styles.faint}>
                             {writerOf(r, people)} · {ago(r.createdAt)}

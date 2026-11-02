@@ -1,3 +1,4 @@
+import { PersonFace } from '../PersonFace';
 import {
   useLayoutEffect,
   type ComponentProps,
@@ -9,7 +10,6 @@ import {
   type RefObject,
   type SyntheticEvent,
 } from 'react';
-import { Avatar } from '@minca/app-shared/Avatar';
 import { nameOf, type People } from '../../derive/people';
 import { palette } from '../../styles';
 import { Person } from '../Person';
@@ -174,7 +174,7 @@ export function MentionList({
             textAlign: 'left',
           }}
         >
-          <Avatar did={person.did} size={20} />
+          <PersonFace did={person.did} size={20} />
           <span style={{ color: palette.ink.strong }}>{nameOf(person.did, people)}</span>
         </button>
       ))}

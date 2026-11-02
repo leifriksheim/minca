@@ -26,7 +26,7 @@ import {
   checkLauncherApp,
   copyApp,
   EXAMPLE_APP,
-  firstApp,
+  iconOf,
   launcherApp,
   outdated,
   updateTemplate,
@@ -223,6 +223,35 @@ describe('the launcher', () => {
     assert.equal(outdated(updated, now), false);
   });
 
+  test("an app's own icon is drawn only as path data in a shape colour, and outlives an update of its ready-made app", async () => {
+    const heart = { path: 'M50 88L12 50A20 20 0 0 1 50 22A20 20 0 0 1 88 50Z', colour: 'coral' } as const;
+    assert.deepEqual(iconOf({ icon: heart }), heart);
+    for (const icon of [
+      { path: '<script>alert(1)</script>', colour: 'coral' },
+      { path: 'url(#x)', colour: 'coral' },
+      { path: heart.path, colour: 'red' },
+      { path: `M0 0${'L1 1'.repeat(1001)}`, colour: 'coral' },
+    ])
+      assert.equal(iconOf({ icon }), undefined, JSON.stringify(icon).slice(0, 40));
+
+    const { alice, space } = await setup();
+    await addTemplate(alice.node, space, CHAT, []);
+    const chat = (await launcherOf(alice.node, space)).placed[0]!;
+    await alice.node.records.update<LauncherApp>(space, chat.key, { ...chat.body, icon: heart });
+
+    const now: Template = { ...CHAT, app: { ...CHAT.app, screen: '<p>new</p>' } };
+    const before = (await launcherOf(alice.node, space)).placed[0]!;
+    assert.equal(
+      outdated(before, CHAT),
+      false,
+      'an icon of its own is not a difference from the ready-made one',
+    );
+    await updateTemplate(alice.node, space, before, now);
+    const after = (await launcherOf(alice.node, space)).placed[0]!;
+    assert.equal(after.body?.screen, '<p>new</p>');
+    assert.deepEqual(after.body?.icon, heart);
+  });
+
   test('adding a ready-made app copies it into the space once, with its collections and first records', async () => {
     const { alice, bob, space } = await setup();
     // The board as it ships, screen and all: what the browser imports with ?raw.
@@ -333,27 +362,6 @@ describe('the launcher', () => {
     const positions = launcher.placed.map((r) => r.body?.position ?? '');
     assert.deepEqual([...positions].sort(), positions, 'every position sorts in the order shown');
     assert.equal(new Set(positions).size, positions.length, 'no two the same');
-  });
-
-  test('a space opens with the first app on its launcher, the same for everyone in it, and moving one changes it', async () => {
-    const { alice, bob, space } = await setup();
-    assert.equal(await firstApp(alice.node, space), undefined, 'with no apps, it opens on its apps');
-    await addTemplate(alice.node, space, CHAT, []);
-    assert.equal((await firstApp(alice.node, space))?.body?.template, 'chat');
-    await alice.node.collections.define(space, trip);
-    await alice.node.records.put(space, launcherApp, { title: 'Carpool', collections: ['carpool.trip'] });
-    assert.equal(
-      (await firstApp(alice.node, space))?.body?.template,
-      'chat',
-      'an app added later goes after it',
-    );
-    const carpool = (await launcherOf(alice.node, space)).placed.find((r) => r.body?.title === 'Carpool')!;
-    await moveApp(alice.node, space, (await launcherOf(alice.node, space)).placed, carpool.key, 0);
-    assert.equal((await firstApp(alice.node, space))?.key, carpool.key);
-    await waitFor(
-      async () => (await firstApp(bob.node, space))?.key === carpool.key,
-      'Bob opens it into Carpool too',
-    );
   });
 
   test('someone without define only proposes', async () => {

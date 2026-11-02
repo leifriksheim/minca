@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { PersonFace } from '../PersonFace';
 import type { DirectMessage, SpaceSummary } from '@minca/core';
 import { useLive, useNode } from '@minca/react';
 import { useAction } from '@minca/app-shared/action';
-import { Avatar } from '@minca/app-shared/Avatar';
 import { Modal } from '@minca/app-shared/Modal';
 import { ago } from '@minca/ui/time';
 import { nameOf, type People } from '../../derive/people';
 import { usePeopleHere } from '../Person';
-import { PrimaryButton, QuietButton } from '../Buttons';
+import { AddButton, PrimaryButton, QuietButton } from '../Buttons';
+import { cardText, cardTitle, rowButton, sectionHeading } from '../rows';
 import { Icon } from '../Icon';
 import { palette, stack, styles, ui } from '../../styles';
 
@@ -68,68 +69,58 @@ export function DirectMessages({
     );
 
   const current = open && (conversations.find((c) => same(c.with, open)) ?? { with: open, messages: [] });
-  return (
-    <div className="chat-shell" data-view={current ? 'room' : 'list'} style={{ flex: 1, minHeight: 0 }}>
-      <nav className="chat-places" aria-label="Conversations">
-        <div className="chat-places-heading" style={heading}>
-          <span>Conversations</span>
-          {space.writable && (reachable?.length ?? 0) > 0 && (
-            <button
-              onClick={() => setStarting(true)}
-              aria-label="New message"
-              title="New message"
-              className="group-button"
-              style={newButton}
-            >
-              <Icon name="plus" size={14} />
-            </button>
-          )}
-        </div>
-        {conversations.map((c) => {
-          const last = c.messages.at(-1);
-          return (
-            <button
-              key={c.with.join(',')}
-              data-nav
-              aria-current={current && same(current.with, c.with) ? 'page' : undefined}
-              onClick={() => setOpen(c.with)}
-              className="side-item"
-              style={place}
-            >
-              <Faces dids={c.with} />
-              <span style={{ ...stack(1), flex: 1, minWidth: 0 }}>
-                <span style={{ ...ui.ellipsis, fontWeight: 600, color: palette.ink.strong }}>
-                  {namesOf(c.with, people)}
-                </span>
-                {last && (
-                  <span style={{ ...ui.ellipsis, fontSize: 12.5, color: palette.ink.muted }}>
-                    {last.text ?? 'Sealed'} · {ago(last.createdAt)}
-                  </span>
-                )}
-              </span>
-            </button>
-          );
-        })}
-        {conversations.length === 0 && (
-          <p className="chat-places-note" style={note}>
-            {(reachable?.length ?? 0) > 0
-              ? 'Nothing yet. Start one with "+".'
-              : 'Nobody else here can be written to yet: each member can once their app has been in the group.'}
-          </p>
-        )}
-      </nav>
-
-      <section
-        className="chat-room"
-        style={{ display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}
-      >
-        {current ? (
-          <Room space={space} people={people} me={me} with={current.with} messages={current.messages} />
-        ) : (
-          <p style={{ ...styles.emptyState, margin: 'auto' }}>Pick a conversation, or start one.</p>
-        )}
+  // One open is the whole screen, one level in; the app's bar names it and Back comes out to the list.
+  if (current)
+    return (
+      <section style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0 }}>
+        <Room space={space} people={people} me={me} with={current.with} messages={current.messages} />
       </section>
-
+    );
+  const mayStart = space.writable && (reachable?.length ?? 0) > 0;
+  return (
+    <div style={listPage}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <h2 style={sectionHeading}>Conversations</h2>
+        {mayStart && (
+          <AddButton
+            onClick={() => setStarting(true)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          >
+            <Icon name="plus" size={14} /> New message
+          </AddButton>
+        )}
+      </div>
+      {conversations.length > 0 ? (
+        <ol aria-label="Conversations" className="rows" style={ui.list}>
+          {conversations.map((c) => {
+            const last = c.messages.at(-1);
+            return (
+              <li key={c.with.join(',')} data-tile style={{ listStyle: 'none' }}>
+                <button onClick={() => setOpen(c.with)} style={rowButton}>
+                  <Faces dids={c.with} />
+                  <span style={{ ...stack(2), flex: 1, minWidth: 0 }}>
+                    <strong style={{ ...cardTitle, ...ui.ellipsis }}>{namesOf(c.with, people)}</strong>
+                    {last && (
+                      <span style={{ ...cardText, ...ui.ellipsis }}>
+                        {last.text ?? 'Sealed'} · {ago(last.createdAt)}
+                      </span>
+                    )}
+                  </span>
+                  <span style={{ display: 'inline-flex', color: palette.ink.faint }}>
+                    <Icon name="chevron" size={14} />
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      ) : (
+        <p style={styles.emptyState}>
+          {mayStart
+            ? 'Nothing yet. Only the people you write to can read what you send.'
+            : 'Nobody else here can be written to yet: each member can once their app has been in the group.'}
+        </p>
+      )}
       {starting && (
         <StartDialog
           reachable={reachable ?? []}
@@ -182,14 +173,14 @@ function conversationsOf(messages: ReadonlyArray<DirectMessage>, me: string): Re
 function Faces({ dids }: { dids: ReadonlyArray<string> }) {
   const [first, second] = dids;
   if (!first) return null;
-  if (!second) return <Avatar did={first} size={28} round />;
+  if (!second) return <PersonFace did={first} size={36} round />;
   return (
-    <span style={{ position: 'relative', width: 28, height: 28, flexShrink: 0 }}>
+    <span style={{ position: 'relative', width: 36, height: 36, flexShrink: 0 }}>
       <span style={{ position: 'absolute', left: 0, top: 0 }}>
-        <Avatar did={first} size={20} round />
+        <PersonFace did={first} size={26} round />
       </span>
       <span style={{ position: 'absolute', right: 0, bottom: 0 }}>
-        <Avatar did={second} size={20} round />
+        <PersonFace did={second} size={26} round />
       </span>
     </span>
   );
@@ -230,7 +221,7 @@ function Room({
 
   return (
     <>
-      <header className="chat-room-title" style={roomTitle}>
+      <header style={roomTitle}>
         <Faces dids={others} />
         <span style={{ ...stack(1), minWidth: 0 }}>
           <strong style={{ ...ui.ellipsis, fontSize: 15, color: palette.ink.strong }}>{names}</strong>
@@ -251,7 +242,7 @@ function Room({
         )}
         {messages.map((m) => (
           <div key={m.key} className="chat-line" tabIndex={0} style={line}>
-            <Avatar did={m.from} size={28} round />
+            <PersonFace did={m.from} size={28} round />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                 <strong style={{ fontSize: 14, color: palette.ink.strong }}>
@@ -363,7 +354,7 @@ function StartDialog({
                 disabled={!picked.includes(p.did) && picked.length >= 16}
                 style={styles.checkbox}
               />
-              <Avatar did={p.did} size={24} round />
+              <PersonFace did={p.did} size={24} round />
               <span style={{ ...ui.ellipsis, color: palette.ink.strong }}>{p.name}</span>
             </label>
           ))}
@@ -380,28 +371,15 @@ function StartDialog({
   );
 }
 
-const heading = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  padding: '10px 4px 6px 10px',
-  fontSize: 12.5,
-  fontWeight: 500,
-  color: palette.ink.muted,
+/** The list, as the space's own lists are: centred, with room around it */
+const listPage = {
+  ...stack(12),
+  width: '100%',
+  maxWidth: 640,
+  margin: '0 auto',
+  padding: '20px 16px 48px',
+  overflowY: 'auto',
 } as const;
-const newButton = {
-  display: 'grid',
-  placeItems: 'center',
-  width: 28,
-  height: 28,
-  padding: 0,
-  border: 'none',
-  borderRadius: palette.radius.md,
-  background: 'none',
-  color: palette.ink.body,
-} as const;
-const place = { width: '100%', height: 52, gap: 10, borderRadius: palette.radius.md } as const;
-const note = { padding: '6px 10px', fontSize: 12.5, lineHeight: 1.45, color: palette.ink.muted } as const;
 const roomTitle = {
   display: 'flex',
   alignItems: 'center',

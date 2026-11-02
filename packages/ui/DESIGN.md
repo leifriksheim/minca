@@ -117,9 +117,10 @@ The look is 70s print, kept clean: flat colour on paper, and room around it.
 
 The shapes are the brand. A space is a grid, and each tool in it is a shape.
 
-- Each ready-made app has its own (`APP_SHAPES`): Chat a scallop, Polls a wave,
-  Decisions a burst, Events a flower, Kanban a checker, Marketplace a leaf,
-  Files a stack, Lists a tick, Bills a coin. Use `shapeFor(id)`; it gives anything else (an app a group
+- Each ready-made app has a shape that says what it is for (`APP_SHAPES`):
+  Chat a speech bubble, Polls bars, Events a calendar, Kanban columns of
+  cards, Marketplace a price tag, Files a folder, Lists a tick, Bills a
+  receipt, and a chat for two a lock. Use `shapeFor(id)`; it gives anything else (an app a group
   made, a space) a round shape picked by its id, so it is always the same one.
 - A shape stands alone, flat, in one colour. No outlines, gradients, shadows or
   icons drawn inside it, except a number or a letter in its middle.

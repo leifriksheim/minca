@@ -13,7 +13,7 @@ import {
 } from '../derive/abilities';
 import { nameOf, peopleFrom, type People } from '../derive/people';
 import { onlineAccounts } from '../derive/network';
-import { PersonAvatar } from './std/PersonAvatar';
+import { PersonFace } from './PersonFace';
 import { RingButton } from './calls/Calls';
 import { styles, palette, variants, hstack, stack, ui } from '../styles';
 import { RowMenu, onlineDot } from './PeopleParts';
@@ -486,7 +486,7 @@ function Members({
       <li key={did} style={memberRow}>
         {/* Online now: a dot on their face, as chat apps mark it. */}
         <span style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
-          <PersonAvatar spaceId={space.id} did={did} size={40} />
+          <PersonFace did={did} size={40} />
           {online.has(did) && <span title="Online now" style={onlineDot} />}
         </span>
         <div style={{ flex: 1, minWidth: 0, ...stack(3) }}>

@@ -1,7 +1,15 @@
 import { matches, type NodeCollection, type NodeRecord, type P2PNode, type SpaceSummary } from '@minca/core';
 import { useAccess, useLive } from '@minca/react';
 import { asRunner, namesTheRunner, notifyOn, type AppAutomation } from '@minca/core/schemas';
-import { addTemplate, firstApp, isDirect, launcherApp, sortLauncher, type LauncherApp } from './launcher';
+import {
+  addTemplate,
+  iconOf,
+  isDirect,
+  launcherApp,
+  sortLauncher,
+  type AppIconPath,
+  type LauncherApp,
+} from './launcher';
 import { TEMPLATES } from './templates';
 
 /**
@@ -16,6 +24,8 @@ export interface AppEntry {
   readonly record: NodeRecord<LauncherApp>;
   readonly title: string;
   readonly description?: string | undefined;
+  /** An icon of its own, if its record has one that can be drawn */
+  readonly icon?: AppIconPath | undefined;
   readonly notify: ReadonlyArray<AppAutomation>;
 }
 
@@ -51,6 +61,7 @@ const entryOf = (record: NodeRecord<LauncherApp>, id = `made:${record.key}`): Ap
   record,
   title: record.body?.title ?? 'An app',
   description: record.body?.description,
+  icon: iconOf(record.body),
   notify: record.body ? madeNotify(record.body) : [],
 });
 
@@ -78,12 +89,6 @@ function entriesOf(placed: ReadonlyArray<NodeRecord<LauncherApp>>): ReadonlyArra
     }
     return entryOf(record);
   });
-}
-
-/** The id of the app a space opens with (`firstApp`), or undefined when it has none */
-export async function landingApp(node: P2PNode, spaceId: string): Promise<string | undefined> {
-  const first = await firstApp(node, spaceId);
-  return first && entriesOf([first])[0]?.id;
 }
 
 const CHAT = TEMPLATES.find(({ app }) => app.template === 'chat')!;

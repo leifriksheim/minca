@@ -7,6 +7,10 @@
   body {
     padding: 0;
   }
+  /* The whole window: a conversation runs edge to edge. */
+  :root {
+    --minca-page-width: none;
+  }
   #app {
     height: 100%;
     display: flex;
@@ -342,7 +346,7 @@
         ${
           messages.length === 0 &&
           html`<${ui.Empty}
-            shape="scallop"
+            shape="bubble"
             colour="cobalt"
             title="No messages yet"
             text="Say hello to everyone here."

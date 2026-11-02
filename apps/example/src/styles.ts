@@ -13,7 +13,7 @@ const navyWash = (percent: number) => `color-mix(in srgb, ${ink.strong} ${percen
 const TABBAR_HEIGHT = 64;
 const TABBAR_GAP = 10;
 /** How wide a space's rail of apps is */
-const RAIL_WIDTH = 80;
+const RAIL_WIDTH = 232;
 
 /**
  * The rules inline styles cannot carry.
@@ -36,8 +36,10 @@ export function injectBaseStyles(): void {
     @media (hover: hover) {
       ${hoverCss}
       .rail-item:not([aria-current]):hover .rail-icon { background: ${surface.line}; }
+      .app-rail .rail-item:not([aria-current]):hover { background: ${surface.line}; }
       .you-button:hover, .you-button[aria-expanded="true"],
       .group-button:hover, .group-button[aria-expanded="true"] { background: ${surface.line} !important; }
+      .quick-action:not(:disabled):hover { background: ${surface.sunken}; }
     }
 
     /* ── Layout that follows the screen ──────────────────────────────────
@@ -52,7 +54,7 @@ export function injectBaseStyles(): void {
 
     .space-shell { display: grid; grid-template-columns: ${RAIL_WIDTH}px minmax(0, 1fr); height: 100vh; height: 100dvh; }
     .app-rail {
-      position: relative; z-index: 15; display: flex; flex-direction: column; min-height: 0; padding: 10px 6px;
+      position: relative; z-index: 15; display: flex; flex-direction: column; min-height: 0; padding: 10px 8px;
       background: ${surface.sunken}; border-right: 1px solid ${surface.rule};
     }
     /* Only the apps scroll, so the menus at the foot can open out past the rail's edge. */
@@ -69,6 +71,10 @@ export function injectBaseStyles(): void {
       color: ${ink.muted}; font-size: 11.5px; font-weight: 500;
     }
     .rail-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* On the rail an app is one row, its shape beside its name, and the open one's row a tile of its own. */
+    .app-rail .rail-item { flex-direction: row; gap: 10px; padding: 4px 8px 4px 4px; font-size: 14px; text-align: left; }
+    .app-rail .rail-icon { width: 32px; height: 32px; flex-shrink: 0; }
+    .app-rail .rail-item[aria-current], .app-rail .rail-item[aria-current] .rail-icon { background: ${surface.line}; }
     /* The open app: a soft square behind its shape alone, a shade darker than what it sits on, and its name in bold. */
     .rail-icon {
       position: relative; display: inline-flex; align-items: center; justify-content: center;
@@ -81,7 +87,8 @@ export function injectBaseStyles(): void {
     .rail-count { position: absolute; top: -2px; right: -4px; pointer-events: none; }
     .rail-count .count { box-shadow: 0 0 0 2px ${surface.sunken}; }
     /* The space itself, first: its face opens its menu. */
-    .rail-top { flex-shrink: 0; display: flex; justify-content: center; padding-bottom: 8px; margin-bottom: 6px; border-bottom: 1px solid ${surface.line}; }
+    .rail-top { flex-shrink: 0; display: flex; padding-bottom: 8px; margin-bottom: 6px; border-bottom: 1px solid ${surface.line}; }
+    .rail-top > div { flex: 1; min-width: 0; }
     /* Every app, from a phone's bar: their shapes in a grid of three, as the rail has them. */
     .app-switch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
     .app-switch > .rail-item { padding: 12px 4px 10px; font-size: 12.5px; gap: 6px; }
@@ -94,12 +101,15 @@ export function injectBaseStyles(): void {
     .rail-glyph { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; color: ${ink.body}; }
     /* You and what's new for you, at the foot; their menus open beside them. */
     .rail-foot {
-      position: relative; flex-shrink: 0; padding-top: 8px; display: flex; flex-direction: column; align-items: center; gap: 8px;
+      position: relative; flex-shrink: 0; padding-top: 8px; display: flex; align-items: center; gap: 4px;
       border-top: 1px solid ${surface.line};
     }
+    /* You, as a row: your picture and your name, what's new for you beside it, as Discord has it. */
+    .rail-foot > :first-child { flex: 1; min-width: 0; }
     .you-button {
-      display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0;
-      border: none; border-radius: ${radius.pill}px; background: none;
+      display: flex; align-items: center; gap: 10px; width: 100%; height: 44px; padding: 0 8px 0 4px;
+      border: none; border-radius: ${radius.md}px; background: none; font-size: 14px; font-weight: 600;
+      color: ${ink.strong}; text-align: left;
     }
     .side-item {
       display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px;
@@ -190,6 +200,18 @@ export function injectBaseStyles(): void {
     .scroll-x { overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
     .scroll-x::-webkit-scrollbar { display: none; }
     .scroll-x > * { flex-shrink: 0; white-space: nowrap; }
+
+    /* The row of a space's own pages atop its Overview: an icon over its name, each an equal share. */
+    .quick-row { display: flex; align-items: center; gap: 4px; }
+    .quick-row > .quick-action { flex: 1 0 64px; max-width: 112px; }
+    /* Centred, yet scrolled from its start when it overflows (justify-content: center would cut it off). */
+    .quick-row > :first-child { margin-left: auto; }
+    .quick-row > :last-child { margin-right: auto; }
+    .quick-action {
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+      padding: 10px 6px; border: none; border-radius: ${radius.md}px; background: none;
+      font: inherit; font-size: 12px; font-weight: 500; color: ${ink.body}; cursor: pointer;
+    }
 
 
     /* A space: its collections down the side, the chosen one beside them. */
@@ -291,14 +313,6 @@ export function injectBaseStyles(): void {
     @keyframes call-ring { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, ${accent.good} 45%, transparent); } 100% { box-shadow: 0 0 0 12px transparent; } }
     @media (prefers-reduced-motion: reduce) { .call-ringing { animation: none; } }
 
-    /* Chat: its channels and conversations down the left, the one open beside them. */
-    .chat-shell { display: grid; grid-template-columns: 208px minmax(0, 1fr); }
-    .chat-places {
-      display: flex; flex-direction: column; min-height: 0; overflow-y: auto;
-      padding: 4px 8px 12px; border-right: 1px solid ${surface.line}; background: ${surface.sunken};
-    }
-    .chat-places [data-nav]:not([aria-current]):hover { background: ${surface.line} !important; }
-
     /* Events: covers in a grid, the next one large, a month to look across (components/apps/Events.tsx). */
     .ev-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
     .ev-hero { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); overflow: hidden; border-radius: ${radius.lg}px !important; }
@@ -377,20 +391,6 @@ export function injectBaseStyles(): void {
       .collection-nav-heading { display: none; }
     }
 
-    /* Between a phone and a laptop, the chat's list becomes a row of tabs
-       above it, as the side column's does. A phone gives each a screen (below). */
-    @media (min-width: 641px) and (max-width: 760px) {
-      .chat-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
-      .chat-places {
-        flex-direction: row; align-items: center; gap: 4px; overflow-x: auto; scrollbar-width: none;
-        padding: 6px 8px; border-right: none; border-bottom: 1px solid ${surface.line};
-      }
-      .chat-places::-webkit-scrollbar { display: none; }
-      .chat-places > * { flex-shrink: 0; width: auto !important; }
-      .chat-places-heading { padding: 0 2px 0 6px !important; }
-      .chat-places-heading > span, .chat-places-note { display: none; }
-    }
-
     @media (max-width: 640px) {
       .page {
         padding: 12px max(16px, env(safe-area-inset-right)) calc(48px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
@@ -433,20 +433,6 @@ export function injectBaseStyles(): void {
       /* What fills the space runs right down to the foot of the screen. */
       .space-content[data-fill], .space-shell[data-app-open] .space-content[data-fill] { padding: 0; }
 
-      /* Chat, the way a phone's messaging apps are: the list of conversations
-         is a screen, and one opens over it with the way back at its top. */
-      .chat-shell { grid-template-columns: minmax(0, 1fr); }
-      .chat-shell[data-view="list"] > .chat-room, .chat-shell[data-view="room"] > .chat-places { display: none !important; }
-      .chat-places { padding: 8px 12px 24px; border-right: none; background: none; }
-      .chat-places [data-nav] { height: 48px !important; padding: 0 12px !important; gap: 10px !important; font-size: 16px !important; }
-      .chat-places-heading { padding: 10px 2px 2px 12px !important; }
-      .chat-places-heading > span { font-size: 13px !important; }
-      .chat-places-heading > button { padding: 10px !important; }
-      .chat-shell[data-view="list"] .chat-places [aria-current] { background: none !important; box-shadow: none !important; font-weight: 400 !important; }
-      .chat-places-note { padding: 4px 12px !important; font-size: 13px !important; }
-      .chat-places-form > input { height: 40px !important; font-size: 16px !important; }
-      .chat-places-form > button { height: 40px !important; }
-      .chat-room-title { min-height: 48px; padding: 8px 14px !important; }
 
       /* A pill floating over the foot of the page, the page showing through it, blurred; the tab you are
          on a softer pill inside it, as chat apps have it now. */
