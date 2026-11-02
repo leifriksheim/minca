@@ -82,10 +82,10 @@ export interface RemoteMcpOptions {
   readonly secret: Uint8Array;
   /** Where the authorization server keeps what it must: apps registered, sign-ins under way */
   readonly store: StorageAdapter;
-  /** A folder of stores for a session's node while it runs */
-  readonly stores: (session: string) => StoreFactory;
-  /** Removes that folder once the node stops */
-  readonly drop: (session: string) => Promise<void>;
+  /** A folder of stores for a session's node while it runs, and where its key (by DID) has signed */
+  readonly stores: (session: string, key: string) => StoreFactory;
+  /** Removes that folder once the node stops with what it wrote held by an always-on node */
+  readonly drop: (session: string, key: string) => Promise<void>;
   /** Who is asking, for counting sign-ins */
   readonly addressOf: (req: IncomingMessage) => string;
   /** How a session's node reaches the spaces it was given: the hosts the service names */
@@ -216,9 +216,9 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
           return { content: [{ type: 'text', text: 'Not signed in.' }], isError: true };
         let said: Awaited<ReturnType<typeof callAction>>;
         try {
-          said = await sessions.use(session, granted, (node) =>
-            callAction(node, name, request.params.arguments ?? {}),
-          );
+          const args = request.params.arguments ?? {};
+          const space = typeof args.space === 'string' ? args.space : undefined;
+          said = await sessions.use(session, granted, space, (node) => callAction(node, name, args));
         } catch (error) {
           return { content: [{ type: 'text', text: messageOf(error) }], isError: true };
         }

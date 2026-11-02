@@ -320,14 +320,15 @@ spaces only through the always-on nodes the service was given
 yours offline, in the spaces those carry, and nowhere a grant or a record
 would send it. It is a full node: it syncs the spaces you picked and keeps a
 copy of them on the service's disk while the app uses it, and answers from
-that. After 10 minutes without a call it stops and the copy is deleted (or,
-after a crash, when the service next starts); the next call syncs them
-again, and answers nothing until it is level with an always-on node in each
-space (a call waits up to 20 seconds, then says to try again): a node that
-answered from what it had so far would miss records, and could start a line
-of payments that already has one. At most 32 run at once. So while the app
-is working, whoever runs the service can read those spaces, as the chat
-app's maker can read what its model sees.
+that. A call in a space runs only once the node is level with an always-on
+node there (it waits up to 15 seconds, then says to try again): a node
+behind would miss records, and could start a line of payments that already
+has one. After 10 minutes without a call the node stops, and its copy is
+deleted once an always-on node holds everything it wrote. Writes one
+doesn't hold yet (the link was down) stay until the token's next call sends
+them, as does whatever a crash left, for at most a month. At most 32 nodes
+run at once. So while the app is working, whoever runs the service can read
+those spaces, as the chat app's maker can read what its model sees.
 
 What stays, for a token that wrote, is where its key has signed: which
 spaces and collections, and how many versions in each. A node started again

@@ -32,7 +32,8 @@ import { isRecord } from '../src/json.js';
 import { onHub, tempDir } from './helpers/nodes.js';
 import { openHome, createAccount, unlock, chooseAccount } from '../src/home.js';
 import { startDaemon } from '../src/daemon.js';
-import { readdir, stat } from 'node:fs/promises';
+import { readdir, stat, writeFile } from 'node:fs/promises';
+import net from 'node:net';
 import path from 'node:path';
 
 /** A JSON object's string field, or a failed test */
@@ -703,4 +704,254 @@ test('a second service on the same folder doesn’t start: it would sign where t
   const first = await startMcpServer(settings);
   closing.push(() => first.close());
   await assert.rejects(startMcpServer(settings), /Another mcp-server/);
+});
+
+/** A TCP proxy to a host: the network between the service and it, which can stall */
+async function stallable(target: number) {
+  let stalled = false;
+  const open = new Set<net.Socket>();
+  const server = net.createServer((client) => {
+    if (stalled) return void client.destroy();
+    const upstream = net.connect(target, '127.0.0.1');
+    for (const socket of [client, upstream]) {
+      open.add(socket);
+      socket.on('close', () => open.delete(socket));
+      socket.on('error', () => {});
+    }
+    client.pipe(upstream);
+    upstream.pipe(client);
+    client.on('close', () => upstream.destroy());
+    upstream.on('close', () => client.destroy());
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  closing.push(() => new Promise<void>((resolve) => server.close(() => resolve())));
+  const address = server.address();
+  assert.ok(address && typeof address === 'object');
+  return {
+    port: address.port,
+    /** Nothing gets through, and no connection is closed: what is sent is in flight */
+    stall() {
+      stalled = true;
+      for (const socket of open) socket.pause();
+    },
+    mend() {
+      stalled = false;
+      for (const socket of open) socket.destroy();
+    },
+  };
+}
+
+test('a write no always-on node got before its node stopped is kept and sent later, so a disconnect withdraws nothing', async () => {
+  const served = await startHost({
+    key: await createP256Provider().generateKeyPair(),
+    stores: memoryStores(),
+    port: 0,
+    free: true,
+  });
+  closing.push(() => served.close());
+  const peer = `ws://127.0.0.1:${served.port}/peer`;
+  const manager = createIdentityManager();
+  const seed = generateSeed();
+  const me = await manager.fromSeed(seed);
+  const signer = createLocalRootSigner(me, manager.getProvider());
+  const accountKey = await deriveAccountKey(seed);
+  const onHost = async () => {
+    const node = await createNode({
+      signer,
+      stores: memoryStores(),
+      accountKey,
+      watchIntervalMs: 0,
+      network: { nodes: [peer] },
+    });
+    closing.push(() => node.close());
+    return node;
+  };
+  const laptop = await onHost();
+  const space = await laptop.spaces.create({ name: 'Club', visibility: 'private' });
+  await laptop.records.put(space.id, 'app.note', { text: 'Soup on Friday' });
+  await laptop.hosting.use(`http://127.0.0.1:${served.port}`);
+  await until(
+    async () => {
+      const reached = (await served.node.spaces()).filter((one) => one.peers > 0).map((one) => one.name);
+      return reached.includes('Account registry') && reached.includes('Club');
+    },
+    15_000,
+    'the host to carry her registry and the space',
+  );
+  const invite = await laptop.spaces.invite(space.id);
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  await laptop.close();
+
+  const link = await stallable(served.port);
+  const port = await freePort();
+  const issuer = `http://127.0.0.1:${port}`;
+  const data = await tempDir('mcp-server-');
+  const service = await startMcpServer({
+    publicUrl: issuer,
+    nodes: [`ws://127.0.0.1:${link.port}/peer`],
+    data,
+    port,
+    version: '0',
+    accountHome: 'https://home.test',
+    idleMs: 1000,
+  });
+  closing.push(() => service.close());
+  let agent = '';
+  const token = await signInWith(issuer, async (audience) => {
+    agent = audience;
+    const expiresAt = Math.floor(Date.now() / 1000) + 3600;
+    return {
+      v: GRANT_VERSION,
+      did: me.did,
+      name: 'Ada',
+      note: await signer.delegate({ audience, expiration: expiresAt, ...noteTerms('/record', [space.id]) }),
+      access: 'write',
+      scope: 'spaces',
+      spaces: [{ id: space.id, name: 'Club', invite }],
+      expiresAt,
+      home: 'https://home.test/connect',
+    };
+  });
+  const read = await callTool(issuer, token, 'records_list', { space: space.id, collection: 'app.note' });
+  assert.ok(read.includes('Soup on Friday'), read);
+
+  // The link to the host stalls just as the chat app writes, and the node idles out before it mends.
+  link.stall();
+  const put = await callTool(issuer, token, 'records_put', {
+    space: space.id,
+    collection: 'app.note',
+    body: { text: 'Bread too' },
+  });
+  assert.match(put, /"isError":false/);
+  await new Promise((resolve) => setTimeout(resolve, 9000));
+  // Removed, its version would be gone while its place is kept: the next write would
+  // follow a gap, and a disconnect withdraws whatever follows one (found by adversarial review).
+  assert.equal((await readdir(path.join(data, 'sessions'))).length, 1, 'its folder was kept');
+  link.mend();
+
+  await until(
+    async () =>
+      (await callTool(issuer, token, 'records_list', { space: space.id, collection: 'app.note' })).includes(
+        'Bread too',
+      ),
+    20_000,
+    'the next node to start from what was kept',
+  );
+  const again = await callTool(issuer, token, 'records_put', {
+    space: space.id,
+    collection: 'app.note',
+    body: { text: 'Cake' },
+  });
+  assert.match(again, /"isError":false/);
+
+  const phone = await onHost();
+  await until(
+    async () => (await phone.spaces.list()).some((one) => one.id === space.id),
+    40_000,
+    'the phone to learn of the space',
+  );
+  const texts = async () =>
+    (await phone.records.list(space.id, { collection: 'app.note' }))
+      .map((record) => (isRecord(record.body) ? record.body.text : null))
+      .sort();
+  await until(async () => (await texts()).includes('Cake'), 40_000, 'the phone to get both writes');
+  assert.deepEqual(await texts(), ['Bread too', 'Cake', 'Soup on Friday']);
+  assert.ok(await phone.revokeKey(agent, { waitMs: 5000 }), 'a peer took the revoke in');
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  assert.deepEqual(await texts(), ['Bread too', 'Cake', 'Soup on Friday'], 'disconnecting withdrew nothing');
+});
+
+test('a space the always-on nodes don’t carry fails its own calls only', async () => {
+  const served = await startHost({
+    key: await createP256Provider().generateKeyPair(),
+    stores: memoryStores(),
+    port: 0,
+    free: true,
+  });
+  closing.push(() => served.close());
+  const peer = `ws://127.0.0.1:${served.port}/peer`;
+  const manager = createIdentityManager();
+  const seed = generateSeed();
+  const me = await manager.fromSeed(seed);
+  const signer = createLocalRootSigner(me, manager.getProvider());
+  const accountKey = await deriveAccountKey(seed);
+  const laptop = await createNode({
+    signer,
+    stores: memoryStores(),
+    accountKey,
+    watchIntervalMs: 0,
+    network: { nodes: [peer] },
+  });
+  closing.push(() => laptop.close());
+  const space = await laptop.spaces.create({ name: 'Club', visibility: 'private' });
+  await laptop.records.put(space.id, 'app.note', { text: 'Soup on Friday' });
+  await laptop.hosting.use(`http://127.0.0.1:${served.port}`);
+  await until(
+    async () => (await served.node.spaces()).some((one) => one.name === 'Club' && one.peers > 0),
+    15_000,
+    'the host to carry the space',
+  );
+  const invite = await laptop.spaces.invite(space.id);
+  await laptop.close();
+  // Another space of hers, on a device that never handed it to the host.
+  const offline = await createNode({ signer, stores: memoryStores(), accountKey, watchIntervalMs: 0 });
+  closing.push(() => offline.close());
+  const other = await offline.spaces.create({ name: 'Elsewhere', visibility: 'private' });
+  const otherInvite = await offline.spaces.invite(other.id);
+
+  const port = await freePort();
+  const issuer = `http://127.0.0.1:${port}`;
+  const service = await startMcpServer({
+    publicUrl: issuer,
+    nodes: [peer],
+    data: await tempDir('mcp-server-'),
+    port,
+    version: '0',
+    accountHome: 'https://home.test',
+  });
+  closing.push(() => service.close());
+  const token = await signInWith(issuer, async (audience) => {
+    const expiresAt = Math.floor(Date.now() / 1000) + 3600;
+    return {
+      v: GRANT_VERSION,
+      did: me.did,
+      name: 'Ada',
+      note: await signer.delegate({
+        audience,
+        expiration: expiresAt,
+        ...noteTerms('/record', [space.id, other.id]),
+      }),
+      access: 'write',
+      scope: 'spaces',
+      spaces: [
+        { id: space.id, name: 'Club', invite },
+        { id: other.id, name: 'Elsewhere', invite: otherInvite },
+      ],
+      expiresAt,
+      home: 'https://home.test/connect',
+    };
+  });
+  const club = await callTool(issuer, token, 'records_list', { space: space.id, collection: 'app.note' });
+  assert.ok(club.includes('Soup on Friday'), club);
+  const elsewhere = await callTool(issuer, token, 'records_put', {
+    space: other.id,
+    collection: 'app.note',
+    body: { text: 'Unseen' },
+  });
+  assert.match(elsewhere, /"isError":true/);
+  assert.match(elsewhere, /can’t be reached/);
+});
+
+test('a service whose last run crashed starts again, though its process id came back the same', async () => {
+  const data = await tempDir('mcp-server-');
+  // What that run left: its lock, naming the id a container gives the process again.
+  await writeFile(path.join(data, 'lock.0'), String(process.pid));
+  const service = await startMcpServer({
+    publicUrl: 'http://127.0.0.1:1',
+    nodes: ['ws://127.0.0.1:9/peer'],
+    data,
+    port: 0,
+    version: '0',
+  });
+  await service.close();
 });

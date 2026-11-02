@@ -1003,22 +1003,27 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     there. Only the account's own keys and apps can; apps should choose names
     that include their collection (02 §4.1). By design.
   - An MCP service a person connects a chat app through (`minca mcp-server`)
-    is such an app, holding its key only inside the app's access token,
-    sealed under a key of its own, so it keeps no key or note between calls.
-    While the app uses it, a node of its holds the spaces the person picked
-    on the service's disk, until it has been idle ten minutes (or the service
-    next starts, after a crash), reads them and writes records there "via
-    agent", as the app's model asks; and whoever holds its sealing key and a
-    token can do the same until the note runs out or the person disconnects
-    it. A node starts from nothing, so it answers no call until it is level
-    with one of those always-on nodes in every space it was given: one that
-    answered sooner would say a record isn't there, and write a first version
-    in a line that has one, ending it (09 §7.5). Where a key that wrote has
-    signed (which spaces and collections, and how much) is kept apart for as
-    long as its token lasts, so a node started again never signs at the same
-    place twice and forks the key. A second service on the same folder
-    refuses to start; one restored from a backup, or a copy given the same
-    sealing key, would fork keys
+    is such an app, holding its key inside the app's access token, sealed
+    under a key of its own: on its disk only between the person allowing it
+    and the app collecting the token, ten minutes at most, and in memory
+    while a node runs. While the app uses it, a node of its holds the spaces
+    the person picked on the service's disk, reads them and writes records
+    there "via agent", as the app's model asks; and whoever holds its sealing
+    key and a token can do the same until the note runs out or the person
+    disconnects it. The node stops after ten idle minutes, and its copy goes
+    once an always-on node holds everything it wrote; what one doesn't yet
+    (the link was down) stays until the token's next call sends it, as does
+    what a crash left, for at most a month. A call in a space runs only once
+    the node is level with one of those always-on nodes there: a node behind
+    would say a record isn't there, and write a first version in a line that
+    has one, ending it (09 §7.5). A space they don't carry fails its own
+    calls only. Once level, the node is one more device writing in the
+    account's lines, with the gap two devices have (§3.2). Where a key that
+    wrote has signed (which spaces and collections, and how much) is kept
+    apart for as long as its token lasts, so a node started again never signs
+    at the same place twice and forks the key. A second service on the same
+    folder refuses to start; one restored from a backup, or a copy given the
+    same sealing key, would fork keys
     ([#287](https://github.com/leifriksheim/minca/issues/287)). Records count until the key is revoked, not until the
     note runs out (06 §2.9), so a token outlives nothing the person can't end
     at their home; the service refuses a token for good once its node sees

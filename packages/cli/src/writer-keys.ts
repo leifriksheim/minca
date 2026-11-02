@@ -37,6 +37,16 @@ function alive(pid: number): boolean {
   }
 }
 
+/** The lock files this process holds now */
+const ours = new Set<string>();
+
+/**
+ * Whether the process a lock file names still holds it. One naming this
+ * process's own id holds it only if this process took it: a container started
+ * again often gets the id its last run had, and that run is gone.
+ */
+const holds = (pid: number, file: string) => (pid === process.pid ? ours.has(file) : alive(pid));
+
 /**
  * Holds a lock for this process, or gives null when another running process
  * holds it. A lock left by a process that is gone is taken over.
@@ -64,7 +74,7 @@ export async function lockHolder(file: string): Promise<number | null> {
   const [top] = await numbers(file);
   if (top === undefined) return null;
   const holder = Number((await readFile(`${file}.${top}`, 'utf8').catch(() => '')).trim());
-  return Number.isSafeInteger(holder) && holder > 0 && alive(holder) ? holder : null;
+  return Number.isSafeInteger(holder) && holder > 0 && holds(holder, `${file}.${top}`) ? holder : null;
 }
 
 /**
@@ -75,7 +85,7 @@ export async function lockHolder(file: string): Promise<number | null> {
 async function free(file: string): Promise<boolean> {
   const text = (await readFile(file, 'utf8').catch(() => '')).trim();
   const holder = Number(text);
-  return text === RELEASED || (Number.isSafeInteger(holder) && holder > 0 && !alive(holder));
+  return text === RELEASED || (Number.isSafeInteger(holder) && holder > 0 && !holds(holder, file));
 }
 
 /** Links a file into place, or creates it there where the disk has no hard links (exFAT, some network mounts) */
@@ -101,7 +111,10 @@ async function putWhole(file: string, text: string, place: (from: string, to: st
 }
 
 /** Lets go of a lock, keeping its number: none is used twice */
-const letGo = (mine: string) => putWhole(mine, RELEASED, rename);
+const letGo = async (mine: string) => {
+  await putWhole(mine, RELEASED, rename);
+  ours.delete(mine);
+};
 
 /**
  * Takes a lock, or says another running process holds it: the path this
@@ -113,7 +126,7 @@ const letGo = (mine: string) => putWhole(mine, RELEASED, rename);
 async function lock(file: string): Promise<string | null> {
   // A minca from before the numbered lock holds the bare file, and reads no other.
   const older = Number((await readFile(file, 'utf8').catch(() => '')).trim());
-  if (Number.isSafeInteger(older) && older > 0 && alive(older)) return null;
+  if (Number.isSafeInteger(older) && older > 0 && holds(older, file)) return null;
   for (let attempt = 0; attempt < 5; attempt += 1) {
     // One look decides: the number this one takes is above the one it saw free.
     const [top = -1] = await numbers(file);
@@ -130,6 +143,7 @@ async function lock(file: string): Promise<string | null> {
       // Those below are free, or stepping back; this one's number stays above them.
       for (const below of await numbers(file))
         if (below < top + 1) await rm(`${file}.${below}`, { force: true });
+      ours.add(mine);
       return mine;
     }
     await rm(mine, { force: true });

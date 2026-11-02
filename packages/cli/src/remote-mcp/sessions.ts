@@ -3,9 +3,10 @@
  * records-only note a person's account home signed travel inside the app's
  * access token, sealed under a key only the service holds (`oauth.ts`). Each
  * call opens them, and the node they start runs while the app is using it,
- * its spaces kept in a folder that goes when it stops. Only where the key has
- * signed in each log outlives the node (`server.ts`): a node that forgot it
- * would sign at a place it signed before, and fork the key.
+ * its spaces kept in a folder that goes when it stops, once an always-on node
+ * holds what it wrote. Where the key has signed in each log outlives the node
+ * (`server.ts`): a node that forgot it would sign at a place it signed
+ * before, and fork the key.
  */
 import { didOf, noteSpaces, type NodeConfig, type P2PNode, type StoreFactory } from '@minca/core';
 import { checkGrant, usableGrant, type Grant } from '@minca/core/session';
@@ -70,6 +71,9 @@ export async function checkGranted(key: unknown, grant: unknown): Promise<Grante
   return { key, grant: checked };
 }
 
+/** The DID of the key a grant is made out to: `checkGranted` checked it is the key's */
+const keyOf = (given: Granted): string => given.grant.note.payload.aud;
+
 /** How long a node stays up after its last call */
 const IDLE_MS = 10 * 60_000;
 /** Nodes running at once: a start past it waits for one to stop */
@@ -77,53 +81,42 @@ const RUNNING = 32;
 /** How long a start waits for room before giving up */
 const ROOM_WAIT_MS = 30_000;
 
-/** How long a call waits for its node to catch up with the always-on nodes before it is told to try again */
-const CATCH_UP_MS = 20_000;
+/** How long a call waits for its node to be level with an always-on node in its space */
+const CATCH_UP_MS = 15_000;
+/** How long a stopping node waits for an always-on node to hold what it wrote */
+const SEND_MS = 5_000;
 
 interface Started {
   readonly node: P2PNode;
-  /** The spaces it was given */
-  readonly spaces: ReadonlyArray<string>;
-  /** Those it has been level with an always-on node in since it started */
-  readonly level: Set<string>;
+  /** The spaces calls have run in: what it wrote, if anything, is in these */
+  readonly used: Set<string>;
   stop(): Promise<void>;
 }
 
 /**
- * Waits until the node has been level with an always-on node in each space it
- * was given: nothing in flight either way. A node starts from an empty folder,
- * and until then it would answer "no such record" for one it hasn't synced
- * yet, and write a first version in a line that has one: a twin, which ends
- * that line for good (09 §7.5: sync before writing to a line). Once level, it
- * stays in sync as any device does.
+ * Waits up to `waitMs` for the node to be level with one of the always-on
+ * nodes in a space: nothing in flight either way, so it holds what they hold
+ * and they hold what it wrote. False when none was, in time.
  */
-async function catchUp(started: Started): Promise<void> {
-  const deadline = Date.now() + CATCH_UP_MS;
-  const levelIn = async (space: string) => {
-    while (!started.level.has(space)) {
-      const left = deadline - Date.now();
-      if (left <= 0) return false;
-      const peers = await started.node.spaces.status(space).then(
-        (status) => status.peers,
-        () => [],
-      );
-      for (const peer of peers) {
-        if (!(await started.node.spaces.reached(space, peer, Math.min(2000, left)).catch(() => false)))
-          continue;
-        started.level.add(space);
-        break;
-      }
-      if (!started.level.has(space)) await new Promise((resolve) => setTimeout(resolve, Math.min(250, left)));
-    }
-    return true;
-  };
-  const all = await Promise.all(started.spaces.map(levelIn));
-  if (!all.every(Boolean))
-    throw new Error('Still fetching these spaces from the always-on nodes. Try again in a moment.');
+async function levelIn(node: P2PNode, space: string, waitMs: number): Promise<boolean> {
+  const deadline = Date.now() + waitMs;
+  for (;;) {
+    const left = deadline - Date.now();
+    if (left <= 0) return false;
+    const peers = await node.spaces.status(space).then(
+      (status) => status.peers,
+      () => [],
+    );
+    for (const peer of peers)
+      if (await node.spaces.reached(space, peer, Math.min(2000, left)).catch(() => false)) return true;
+    await new Promise((resolve) => setTimeout(resolve, Math.min(250, left)));
+  }
 }
 
 interface Running {
   readonly started: Promise<Started>;
+  /** The DID of the key it signs with */
+  readonly key: string;
   timer?: ReturnType<typeof setTimeout>;
   /** Calls running on it now: it isn't stopped under them */
   busy: number;
@@ -133,17 +126,23 @@ export interface Sessions {
   /**
    * Runs `work` on the node for session `id`, started from `granted` if it
    * isn't running. One node per session, ever: two signing with one key
-   * would fork its line.
+   * would fork its line. Work in a space runs only once the node is level
+   * with an always-on node there.
    */
-  use<T>(id: string, granted: Granted, work: (node: P2PNode) => Promise<T>): Promise<T>;
+  use<T>(
+    id: string,
+    granted: Granted,
+    space: string | undefined,
+    work: (node: P2PNode) => Promise<T>,
+  ): Promise<T>;
   close(): Promise<void>;
 }
 
 export function createSessions(options: {
-  /** A folder of stores for a session's node, made when it starts */
-  readonly stores: (id: string) => StoreFactory;
-  /** Removes that folder, once its node has stopped */
-  readonly drop: (id: string) => Promise<void>;
+  /** A folder of stores for a session's node, made when it starts, and where its key (by DID) has signed */
+  readonly stores: (id: string, key: string) => StoreFactory;
+  /** Removes that folder, once its node has stopped with everything it wrote held by an always-on node */
+  readonly drop: (id: string, key: string) => Promise<void>;
   /** How a node reaches the spaces it was given */
   readonly network: () => NodeConfig['network'];
   /** Told once a session's key was revoked in some space: the person disconnected the app */
@@ -166,9 +165,16 @@ export function createSessions(options: {
     running.delete(id);
     clearTimeout(one.timer);
     const stopped = (async () => {
-      await one.started.then((started) => started.stop()).catch(() => {});
+      const started = await one.started.catch(() => null);
+      // What it wrote and no always-on node holds yet stays, for its next start to send:
+      // removed, the place it was signed at would point at nothing, a gap in the key's log.
+      let sent = true;
+      if (started)
+        for (const space of started.used) if (sent) sent = await levelIn(started.node, space, SEND_MS);
+      await started?.stop().catch(() => {});
+      if (!sent) return log('session: stopped with writes no always-on node holds yet: its folder stays');
       await options
-        .drop(id)
+        .drop(id, one.key)
         .catch((error: unknown) => log(`session: could not remove its spaces: ${messageOf(error)}`));
     })();
     stopping.set(id, stopped);
@@ -211,7 +217,7 @@ export function createSessions(options: {
     const agent = await startGrantedAgent({
       grant: given.grant,
       keys,
-      stores: options.stores(id),
+      stores: options.stores(id, keyOf(given)),
       network: { ...options.network(), only: true },
     });
     // Disconnected at the account home: it reads and writes no more, from now on.
@@ -222,8 +228,7 @@ export function createSessions(options: {
     });
     return {
       node: agent.node,
-      spaces: given.grant.spaces?.map((space) => space.id) ?? [],
-      level: new Set(),
+      used: new Set(),
       stop: async () => {
         unsubscribe();
         await agent.stop();
@@ -241,6 +246,7 @@ export function createSessions(options: {
       return one;
     }
     const made: Running = {
+      key: keyOf(given),
       busy: 0,
       started: (async () => {
         await stopping.get(id);
@@ -260,13 +266,22 @@ export function createSessions(options: {
   }
 
   return {
-    async use(id, given, work) {
+    async use(id, given, space, work) {
       if (!noteRunning(given.grant)) throw new Error('This connection has run out. Connect again.');
       const one = nodeOf(id, given);
       one.busy += 1;
       try {
         const started = await one.started;
-        await catchUp(started);
+        // A node starts from nothing: one that answered sooner would say a record isn't
+        // there, and write a first version in a line that has one, which ends it (09 §7.5).
+        // Checked on every call, since a link that drops leaves it behind again.
+        if (space !== undefined) {
+          if (!(await levelIn(started.node, space, CATCH_UP_MS)))
+            throw new Error(
+              'This space can’t be reached through the always-on nodes right now. Try again in a moment.',
+            );
+          started.used.add(space);
+        }
         return await work(started.node);
       } finally {
         one.busy -= 1;
