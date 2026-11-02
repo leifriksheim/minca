@@ -288,6 +288,11 @@ export function createSessions(options: {
   return {
     async use(id, given, space, work) {
       if (!noteRunning(given.grant)) throw new Error('This connection has run out. Connect again.');
+      if (space !== undefined && !given.grant.spaces.some((granted) => granted.id === space))
+        throw new Error(
+          'This space isn’t connected. To use it here, the person connects Minca again from this chat app ' +
+            'and chooses it at their account home.',
+        );
       const one = nodeOf(id, given);
       one.busy += 1;
       try {

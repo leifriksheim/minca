@@ -307,7 +307,8 @@ Connecting is the sign-in the app already has. The app finds the service's
 authorization server from the endpoint's `401`, registers itself, and opens
 the consent page, which says which app it is and where it will send you
 back. There you continue to your account home, as with any app, pick the
-spaces it may use (up to 8, never the whole account) and allow it: the home
+spaces it may use (up to 8, never the whole account, whose key would go on
+opening every space after you disconnect it) and allow it: the home
 signs a records-only note, for 30 days, made out to a key the page made. The
 page hands both to the service, which checks them and seals them into the
 app's access token, under a key only it holds. Then you are back in the app,
@@ -335,7 +336,11 @@ a member's, and the app is told it is only that. After 10 minutes without
 a call the node stops, and what it held goes; one waiting for the keepers to
 have its writes waits up to an hour first. At most 32 nodes run at once. So
 while the app is working, whoever runs the service can read those spaces, as
-the chat app's maker can read what its model sees.
+the chat app's maker can read what its model sees. And whoever holds the
+service's secret and a token can go on reading the spaces you picked after you
+disconnect it: the token carries their keys, as any app's grant does. A call
+in a space you didn't pick says so, and how to add it: connect again and
+choose it.
 
 The one thing kept for a connection is where its key has signed: its last
 place in each collection, a few bytes, in `MINCA_MCP_DATA`, for as long as
@@ -372,7 +377,7 @@ app nobody connected through goes after a day.
 is the account home the consent page suggests, and `MINCA_MCP_APPS` more chat
 apps a sign-in may go back to.
 
-_Source: `packages/cli/src/remote-mcp/` (`index.ts`, `oauth.ts`, `consent.ts`, `consent-script.ts`, `sessions.ts`, `redirects.ts`, `server.ts`). Tests: `packages/cli/tests/remote-mcp.test.ts`, `packages/cli/tests/remote-mcp-server.test.ts`, `packages/cli/tests/remote-mcp-offline.test.ts`, `packages/cli/tests/remote-mcp-keepers.test.ts`, `packages/cli/tests/remote-mcp-failures.test.ts`._
+_Source: `packages/cli/src/remote-mcp/` (`index.ts`, `oauth.ts`, `consent.ts`, `consent-page.ts`, `consent-script.ts`, `sessions.ts`, `redirects.ts`, `server.ts`). Tests: `packages/cli/tests/remote-mcp.test.ts`, `packages/cli/tests/remote-mcp-server.test.ts`, `packages/cli/tests/remote-mcp-offline.test.ts`, `packages/cli/tests/remote-mcp-keepers.test.ts`, `packages/cli/tests/remote-mcp-failures.test.ts`._
 
 ### From this computer
 

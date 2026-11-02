@@ -81,9 +81,14 @@ async function accountHolder(hub: FakeHub) {
       home: 'https://home.test/connect',
     };
   };
-  /** The whole account, key and all, as an app given everything gets */
+  /** Records in the whole account, with the account key that opens every space */
   const wholeAccount = async (audience: string): Promise<Grant> => ({
     ...(await grantFor(audience)),
+    note: await signer.delegate({
+      audience,
+      expiration: Math.floor(Date.now() / 1000) + 3600,
+      ...noteTerms('/record', 'all'),
+    }),
     scope: 'account',
     spaces: [],
     accountKey: base64UrlEncode(accountKey),
@@ -97,7 +102,12 @@ async function accountHolder(hub: FakeHub) {
       expiration: Math.floor(Date.now() / 1000) + 3600,
     }),
   });
-  return { node, did: me.did, grantFor, wholeAccount, wholeNoteLabelledSpaces };
+  /** A note for some spaces, with the key that opens every one: the key is the home's word, the note is signed */
+  const someSpacesWithAccountKey = async (audience: string): Promise<Grant> => ({
+    ...(await grantFor(audience)),
+    accountKey: base64UrlEncode(accountKey),
+  });
+  return { node, did: me.did, grantFor, wholeAccount, wholeNoteLabelledSpaces, someSpacesWithAccountKey };
 }
 
 /** The key the consent page makes in the browser, as it hands it over */
@@ -689,20 +699,16 @@ describe('a host’s MCP endpoint', () => {
     const ada = await accountHolder(hub);
     const host = await aHost(hub);
     const app = await anApp(host.resource);
-    const whole = await startSignIn(app, host.resource);
-    const wholeKey = await browserKey();
-    const everything = await postFromPage(whole, 'allow', {
-      key: wholeKey.jwk,
-      grant: await ada.wholeAccount(wholeKey.did),
-    });
-    assert.equal(everything.status, 400, 'nor the whole account, whose key opens every space');
-    const labelled = await startSignIn(app, host.resource);
-    const labelledKey = await browserKey();
-    const relabelled = await postFromPage(labelled, 'allow', {
-      key: labelledKey.jwk,
-      grant: await ada.wholeNoteLabelledSpaces(labelledKey.did),
-    });
-    assert.equal(relabelled.status, 400, 'nor a whole-account note called something else');
+    for (const [grantFor, said] of [
+      [ada.wholeAccount, 'nor the whole account, whose key opens every space for good'],
+      [ada.wholeNoteLabelledSpaces, 'nor a whole-account note called something else'],
+      [ada.someSpacesWithAccountKey, 'nor a note for some spaces with the key that opens them all'],
+    ] as const) {
+      const started = await startSignIn(app, host.resource);
+      const key = await browserKey();
+      const answer = await postFromPage(started, 'allow', { key: key.jwk, grant: await grantFor(key.did) });
+      assert.equal(answer.status, 400, said);
+    }
 
     const started = await startSignIn(app, host.resource);
     const first = await browserKey();
@@ -760,8 +766,8 @@ describe('a host’s MCP endpoint', () => {
     const started = await startSignIn(app, host.resource);
     const page = await fetch(started.consent, { headers: { cookie: started.jar.header() } });
     const html = await page.text();
-    assert.match(html, /Connect Claude to Minca/);
-    assert.match(html, /go back to claude\.ai/);
+    assert.match(html, /Let Claude use your Minca spaces\?/);
+    assert.match(html, /go back to <b>claude\.ai<\/b>/);
     assert.match(page.headers.get('content-security-policy') ?? '', /script-src 'sha256-[A-Za-z0-9+/=]+'/);
   });
 });
@@ -890,6 +896,20 @@ describe('a session’s node', () => {
     await new Promise((resolve) => setTimeout(resolve, 2000));
     const notes = await ada.node.records.list(space.id, { collection: 'app.note' });
     assert.ok(!notes.some((note) => field(note.body)('text') === 'after'));
+  });
+  test('a grant of some spaces says a space it doesn’t name isn’t connected, and how to add it', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    const picked = await ada.node.spaces.create({ name: 'Picked', visibility: 'private' });
+    await hold(ada.node, picked.id);
+    const { sessions } = await someSessions(hub);
+    const key = await browserKey();
+    const granted = await checkGranted(key.jwk, await ada.grantFor(key.did));
+    const other = await ada.node.spaces.create({ name: 'Not picked', visibility: 'private' });
+    await assert.rejects(
+      sessions.use('s', granted, other.id, async () => null),
+      /isn’t connected.*connects Minca again from this chat app and chooses it at their account home/,
+    );
   });
 });
 

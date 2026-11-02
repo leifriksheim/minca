@@ -1013,12 +1013,15 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
   - An MCP service a person connects a chat app through (`minca mcp-server`)
     is such an app, holding its key inside the app's access token, sealed
     under a key of its own: on its disk only between the person allowing it
-    and the app collecting the token, twenty minutes at most, and in memory
-    while a node runs. While the app uses it, a node of its holds the spaces
-    the person picked in memory, reads them and writes records there "via
+    and the app collecting the token, twenty minutes at most (and in any
+    snapshot or backup taken meanwhile, unsealed), and in memory while a
+    node runs. While the app uses it, a node of its holds the spaces the
+    person picked in memory, reads them and writes records there "via
     agent", as the app's model asks; and whoever holds its sealing key and a
-    token can do the same until the note runs out or the person disconnects
-    it. A write is done once the space's keepers have it (05 §9), or, in a
+    token can write the same until the note runs out or the person
+    disconnects it, and read those spaces after that too, with the member
+    keys the token carries
+    ([#169](https://github.com/leifriksheim/minca/issues/169)). A write is done once the space's keepers have it (05 §9), or, in a
     space that names none, once a member's device online then does, which the
     app is told is less sure, since a peer that holds part of the space, or
     refused the write, counts too. What outlives the node is only where its
@@ -1050,7 +1053,8 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     started, shows as nothing new. The reference service takes a key only with
     the private half that goes with it, since a note travels with every record
     and is no secret; refuses a note for the whole account, read from the note
-    itself; and reaches the spaces through the always-on nodes and relays
+    itself, and any account key, which would open every space the account is
+    in or joins, and its own spaces, for good; and reaches the spaces through the always-on nodes and relays
     the grant's invites and the spaces name only over TLS at public
     addresses, besides its operator's own (`network.reach`), so a grant's
     invites and the records its node reads can't make it connect inside its
@@ -1059,6 +1063,7 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     `packages/cli/src/remote-mcp/sessions.ts`, `publicNode` in
     `packages/cli/src/remote-mcp/reach.ts`, `boundedMemory` in
     `packages/cli/src/remote-mcp/memory.ts`;
+    `packages/cli/tests/remote-mcp.test.ts`,
     `packages/cli/tests/remote-mcp-server.test.ts`,
     `packages/cli/tests/remote-mcp-reach.test.ts`,
     `packages/core/tests/reach.test.ts`); a host that answers with a redirect

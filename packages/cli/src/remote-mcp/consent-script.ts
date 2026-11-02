@@ -3,7 +3,7 @@
  * `consent-bundle.ts`). The page is an app like any other to the account
  * home: it makes a key, opens the home in a popup and asks for a records-only
  * note made out to that key (`connectToHome`), in the spaces the person
- * picks. Then it hands the key and the note to the host, which runs the agent
+ * picks there. Then it hands the key and the note to the host, which runs the agent
  * under them from now on, and goes where the host says: back to the chat app.
  */
 import { didOf } from '@minca/core';
@@ -69,7 +69,7 @@ form.addEventListener('submit', (event) => {
     return;
   }
   busy(true);
-  say('Allow it at your account home, in the window that opened.');
+  say('Allow it in the window that opened.');
   // Made while the popup opens, so the popup still counts as the click's.
   const key = newKey();
   void connectToHome({
