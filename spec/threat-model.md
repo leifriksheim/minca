@@ -1005,7 +1005,7 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
   - An MCP service a person connects a chat app through (`minca mcp-server`)
     is such an app, holding its key inside the app's access token, sealed
     under a key of its own: on its disk only between the person allowing it
-    and the app collecting the token, ten minutes at most, and in memory
+    and the app collecting the token, twenty minutes at most, and in memory
     while a node runs. While the app uses it, a node of its holds the spaces
     the person picked in memory, reads them and writes records there "via
     agent", as the app's model asks; and whoever holds its sealing key and a
@@ -1020,7 +1020,9 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     evicted, the service stopped), leaves a gap in the key's log, so a later
     disconnect withdraws what it wrote after (03 §6.3), as on any device that
     lost a write; an idle node waits up to an hour for its keepers first. A call in a space runs
-    only once the node is level with every always-on node connected there: a
+    only once the node is level with the space's keepers connected then, or
+    any one peer where it names none (a member who connects and says nothing
+    can't hold it up): a
     node behind would say a record isn't there, and write a first version in
     a line that has one, ending it (09 §7.5). A space they don't carry fails
     its own calls only, after waiting for one. Once level, the node is one
@@ -1074,7 +1076,9 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     nodes carry, in memory, and up to an hour after for writes their keepers
     don't have; each a few bytes of places for a key that wrote, for a
     month; and, through its own spaces' records, requests to as many public
-    hosts as it names, and sockets to them while its node runs. Registrations and sign-ins are counted by address, but nodes are
+    hosts as it names, and sockets to them while its node runs, their names
+    looked up a few at a time, each for two seconds at most, so they hold up
+    only that stranger's calls. Registrations and sign-ins are counted by address, but nodes are
     not: a stranger with accounts of their own can keep all of them running,
     and make honest calls wait, then fail
     ([#33](https://github.com/leifriksheim/minca/issues/33)). None of this is

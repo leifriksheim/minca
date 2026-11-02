@@ -71,13 +71,21 @@ async function sweepPlaces(data: string): Promise<void> {
   const before = Date.now() - PLACES_DAYS * 86_400_000;
   for (const entry of await readdir(root).catch(() => [])) {
     const at = path.join(root, entry);
-    const files = await readdir(at, { recursive: true, withFileTypes: true }).catch(() => []);
-    const since = await stat(at).then(
-      (found) => found.mtimeMs,
-      () => 0,
+    const files = (await readdir(at, { recursive: true, withFileTypes: true }).catch(() => [])).filter(
+      (file) => file.isFile(),
     );
+    // When it was last written in: the folder's own time doesn't change with what is under it.
+    const times = await Promise.all(
+      [at, ...files.map((file) => path.join(file.parentPath, file.name))].map((where) =>
+        stat(where).then(
+          (found) => found.mtimeMs,
+          () => 0,
+        ),
+      ),
+    );
+    const since = Math.max(...times);
     // One with nothing in it a day on: a key that only read, its node long stopped.
-    const unused = !files.some((file) => file.isFile()) && since < Date.now() - 86_400_000;
+    const unused = files.length === 0 && since < Date.now() - 86_400_000;
     if (since < before || unused) await rm(at, { recursive: true, force: true });
   }
 }

@@ -98,23 +98,32 @@ async function unkept(started: Started): Promise<boolean> {
 }
 
 /**
- * Waits up to `waitMs` for the node to be level with every always-on node
- * connected in a space, and at least one: nothing in flight either way, so it
- * holds what they hold. False when it wasn't, in time.
+ * Waits up to `waitMs` for the node to be level with the space's keepers
+ * connected now, and at least one: nothing in flight either way, so it holds
+ * what they hold. Only keepers count, the nodes the space names to keep it
+ * whole: any member may connect and never answer. In a space that names
+ * none, any one peer that is level will do. False when it wasn't, in time.
  */
 async function levelIn(node: P2PNode, space: string, waitMs: number): Promise<boolean> {
   const deadline = Date.now() + waitMs;
   for (;;) {
     const left = deadline - Date.now();
     if (left <= 0) return false;
-    const peers = await node.spaces.status(space).then(
-      (status) => status.peers,
-      () => [],
-    );
+    const [peers, keepers] = await Promise.all([
+      node.spaces.status(space).then(
+        (status) => status.peers,
+        () => [],
+      ),
+      node.spaces.access(space).then(
+        (access) => new Set(access.keepers.map((keeper) => keeper.did)),
+        () => new Set<string>(),
+      ),
+    ]);
+    const asked = keepers.size > 0 ? peers.filter((peer) => keepers.has(peer)) : peers;
     const level = await Promise.all(
-      peers.map((peer) => node.spaces.reached(space, peer, Math.min(2000, left)).catch(() => false)),
+      asked.map((peer) => node.spaces.reached(space, peer, Math.min(2000, left)).catch(() => false)),
     );
-    if (level.length > 0 && level.every(Boolean)) return true;
+    if (keepers.size > 0 ? level.length > 0 && level.every(Boolean) : level.some(Boolean)) return true;
     await new Promise((resolve) => setTimeout(resolve, Math.min(250, left)));
   }
 }

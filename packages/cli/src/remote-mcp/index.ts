@@ -242,9 +242,9 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
                   'host: it reaches the others when that device syncs with them. Say so if it matters.',
               };
             throw new Error(
-              'Written, but nobody else has it yet: the space’s always-on nodes, or a member online, if it ' +
-                'names none. It is sent when one is reachable, while this connection is up: read it back ' +
-                'before writing it again.',
+              'Written, but not yet kept elsewhere: the space’s always-on nodes haven’t all confirmed it, or, if ' +
+                'it names none, no member online has it. It is sent when they are reachable, while this ' +
+                'connection is up: read it back before writing it again.',
             );
           });
         } catch (error) {

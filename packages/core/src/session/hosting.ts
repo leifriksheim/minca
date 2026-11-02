@@ -613,7 +613,16 @@ async function ask(url: string, init: RequestInit = {}, timeoutMs = HOST_TIMEOUT
       // Not an address at all: named as it was given.
     }
     const late = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
-    throw new HostError(0, late ? `${where} took too long to answer` : `Nothing answers at ${where}`);
+    const moved =
+      error instanceof Error && error.cause instanceof Error && /redirect/i.test(error.cause.message);
+    throw new HostError(
+      0,
+      late
+        ? `${where} took too long to answer`
+        : moved
+          ? `${where} sends you elsewhere: use the host at its own address`
+          : `Nothing answers at ${where}`,
+    );
   }
 }
 

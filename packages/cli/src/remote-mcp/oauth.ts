@@ -142,7 +142,7 @@ async function sweepExpired(store: StorageAdapter): Promise<void> {
 }
 
 /** How often what has run out is swept */
-const SWEEP_MS = 3600_000;
+const SWEEP_MS = 10 * 60_000;
 /** Longest name an app may register with: the consent page shows it */
 const MAX_CLIENT_NAME = 60;
 
@@ -375,6 +375,8 @@ export async function createOAuth(options: OAuthOptions) {
     await next();
   });
 
+  // What an earlier run left past its time, a key never collected among it, goes at once.
+  await sweepExpired(options.store).catch(() => {});
   const sweeping = setInterval(() => void sweepExpired(options.store).catch(() => {}), SWEEP_MS);
   sweeping.unref();
 

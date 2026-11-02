@@ -22,6 +22,8 @@ test('only addresses over TLS, at public addresses', async () => {
     'wss://[fd00::1]/peer',
     'wss://[fe80::1]/peer',
     'wss://[::ffff:127.0.0.1]/peer',
+    'wss://[64:ff9b::7f00:1]/peer',
+    'wss://[64:ff9b:1::1]/peer',
     'wss://localhost/peer',
     'not an address',
   ])
@@ -30,6 +32,7 @@ test('only addresses over TLS, at public addresses', async () => {
   assert.equal(await publicNode('https://1.1.1.1'), true, 'a host it asks about itself');
   assert.equal(await publicNode('http://1.1.1.1'), false);
   assert.equal(await publicNode('wss://[2606:4700:4700::1111]/peer'), true);
+  assert.equal(await publicNode('wss://[64:ff9b::101:101]/peer'), true, 'DNS64 for a public IPv4 address');
 });
 
 test('a session’s node holds no more than its budget: a stranger’s space can’t grow it without end', async () => {

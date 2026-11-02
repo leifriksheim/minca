@@ -363,7 +363,9 @@ node's own choice; how it tells peers what it holds is in
 
 On every node, holding part of a space or all of it, its own writes in a
 space that names keepers are _pending_ until `min(keepers named, max(copies ??
-2, cache.copies ?? 0))` of them have them. A keeper confirms a write the way
+2, cache.copies ?? 0))` of them have them; a keeper's own node counts as one.
+A node holding part of the space keeps them in its store, across runs; one
+holding all of it in memory, the latest 4096. A keeper confirms a write the way
 the spec says: by `stored`, or by being level with the writer on its
 collection. Only a peer named in `sys.keepers` counts
 ([spec 05 §9](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md)).

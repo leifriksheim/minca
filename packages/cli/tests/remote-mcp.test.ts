@@ -781,6 +781,52 @@ describe('a session’s node', () => {
     return { sessions, starts };
   }
 
+  test('a member who connects and goes silent doesn’t stop the chat app: only the space’s keepers are waited for', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    const space = await ada.node.spaces.create({ name: 'Club', visibility: 'private' });
+    await hold(ada.node, space.id);
+    await ada.node.spaces.setKeepers(space.id, [{ did: ada.node.sessionDid, name: 'Ada’s laptop' }]);
+    const { sessions } = await someSessions(hub);
+    const key = await browserKey();
+    const granted = await checkGranted(key.jwk, await ada.grantFor(key.did));
+    const write = (text: string) =>
+      sessions.use('s', granted, space.id, async (node) => node.records.put(space.id, 'app.note', { text }));
+    await until(async () => (await write('before').catch(() => null)) !== null, 20_000, 'a first call');
+
+    // Mallory, a reader, connects, and says nothing once she has: never level with anyone.
+    const manager = createIdentityManager();
+    const mallory = await createNode({
+      signer: createLocalRootSigner(await manager.fromSeed(generateSeed()), manager.getProvider()),
+      stores: memoryStores(),
+      watchIntervalMs: 0,
+      network: {
+        transports: (spaceId, did) => {
+          const wire = hub.transport(did, spaceId);
+          let since = 0;
+          wire.on('connected', () => {
+            since ||= Date.now();
+          });
+          return [
+            {
+              ...wire,
+              send: (peer: string, data: Uint8Array) => {
+                if (!since || Date.now() - since < 1500) wire.send(peer, data);
+              },
+            },
+          ];
+        },
+      },
+    });
+    closing.push(() => mallory.close());
+    await mallory.spaces.join(await ada.node.spaces.invite(space.id, { write: false }));
+    await hold(mallory, space.id);
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+    await ada.node.records.put(space.id, 'app.note', { text: 'from Ada' });
+    // Waiting on every peer, each call would say the space can't be reached (found by adversarial review).
+    for (let i = 0; i < 3; i++) await write(`after ${i}`);
+  });
+
   test('calls at once for an idle session start one node, never two under one key', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const ada = await accountHolder(hub);

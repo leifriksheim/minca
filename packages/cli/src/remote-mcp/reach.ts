@@ -9,7 +9,7 @@
  * Checked when a session starts, by name: a name that resolves elsewhere
  * when the socket opens (DNS rebinding) is not caught.
  */
-import { lookup } from 'node:dns/promises';
+import { Resolver } from 'node:dns/promises';
 import { BlockList, isIP } from 'node:net';
 
 /** Addresses that aren't the public internet's */
@@ -33,7 +33,6 @@ const NOT_PUBLIC = (() => {
     list.addSubnet(net, prefix, 'ipv4');
   for (const [net, prefix] of [
     ['::', 127],
-    ['64:ff9b::', 96],
     ['64:ff9b:1::', 48],
     ['100::', 64],
     ['2001:db8::', 32],
@@ -46,10 +45,22 @@ const NOT_PUBLIC = (() => {
   return list;
 })();
 
-/** Whether an address is on the public internet; one mapped from IPv4 by the IPv4 it carries */
-function publicAddress(address: string): boolean {
+/** The IPv4 address an IPv6 one carries: mapped (`::ffff:`), or translated by DNS64 (`64:ff9b::/96`) */
+function carried(address: string): string | null {
   const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(address)?.[1];
-  if (mapped) return publicAddress(mapped);
+  if (mapped) return mapped;
+  const translated = /^64:ff9b::(.+)$/i.exec(address)?.[1];
+  if (!translated) return null;
+  if (isIP(translated) === 4) return translated;
+  const [high = '', low = ''] = translated.includes(':') ? translated.split(':') : ['0', translated];
+  const word = (parseInt(high, 16) << 16) | parseInt(low, 16);
+  return [24, 16, 8, 0].map((shift) => (word >>> shift) & 255).join('.');
+}
+
+/** Whether an address is on the public internet; one carrying IPv4 by the IPv4 it carries */
+function publicAddress(address: string): boolean {
+  const inner = carried(address);
+  if (inner) return publicAddress(inner);
   const family = isIP(address);
   if (family === 0) return false;
   return !NOT_PUBLIC.check(address, family === 4 ? 'ipv4' : 'ipv6');
@@ -66,6 +77,27 @@ export async function publicNode(node: string): Promise<boolean> {
   if (url.protocol !== 'wss:' && url.protocol !== 'https:') return false;
   const host = url.hostname.replace(/^\[|\]$/g, '');
   if (isIP(host)) return publicAddress(host);
-  const found = await lookup(host, { all: true }).catch(() => []);
-  return found.length > 0 && found.every(({ address }) => publicAddress(address));
+  const found = await resolved(host);
+  return found.length > 0 && found.every(publicAddress);
+}
+
+/** Looked up off the thread pool everything else uses, briefly, a few at a time: a stranger's names can't stall the service */
+const resolver = new Resolver({ timeout: 2000, tries: 1 });
+const AT_ONCE = 8;
+let looking = 0;
+const queue: Array<() => void> = [];
+
+async function resolved(host: string): Promise<ReadonlyArray<string>> {
+  if (looking >= AT_ONCE) await new Promise<void>((resolve) => queue.push(resolve));
+  looking += 1;
+  try {
+    const [v4, v6] = await Promise.all([
+      resolver.resolve4(host).catch(() => []),
+      resolver.resolve6(host).catch(() => []),
+    ]);
+    return [...v4, ...v6];
+  } finally {
+    looking -= 1;
+    queue.shift()?.();
+  }
 }

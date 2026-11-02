@@ -86,17 +86,23 @@ export function meshFor(
   if (!reach) return mesh;
   // Relays a space or an invite names, found rather than given: each asked of the node's `reach` first.
   const given = new Set(network.relays);
+  /** Each room's latest ask: only its answer counts */
+  const asked = new Map<string, number>();
   return Object.freeze({
     ...mesh,
-    useRelays: (room: string, relays: ReadonlyArray<string>) =>
+    useRelays: (room: string, relays: ReadonlyArray<string>) => {
+      const ask = (asked.get(room) ?? 0) + 1;
+      asked.set(room, ask);
       void Promise.all(
         relays.map((url) => (given.has(url) ? Promise.resolve(true) : reach(url).catch(() => false))),
-      ).then((ok) =>
-        mesh.useRelays(
-          room,
-          relays.filter((_, i) => ok[i]),
-        ),
-      ),
+      ).then((ok) => {
+        if (asked.get(room) === ask)
+          mesh.useRelays(
+            room,
+            relays.filter((_, i) => ok[i]),
+          );
+      });
+    },
   });
 }
 
@@ -575,6 +581,9 @@ export async function openPeers(deps: PeersDeps) {
   }
   for (const network of networks) listen(network);
 
+  /** How many times `useNodes` asked `reach` */
+  let nodesAsked = 0;
+
   /** Holds sockets to these always-on nodes, closing those to any held before and not now */
   function holdNodes(nodes: ReadonlyArray<string>): void {
     const wanted = new Set(nodes);
@@ -671,8 +680,10 @@ export async function openPeers(deps: PeersDeps) {
       // Found, not given: each asked of the node's `reach` first.
       const { reach } = net;
       if (!reach) return holdNodes(named);
+      // Only the latest answer counts: an earlier one arriving after it would put back what it took away.
+      const asked = ++nodesAsked;
       void Promise.all(named.map((node) => reach(node).catch(() => false))).then((ok) => {
-        if (!deps.isClosed()) holdNodes(named.filter((_, i) => ok[i]));
+        if (!deps.isClosed() && asked === nodesAsked) holdNodes(named.filter((_, i) => ok[i]));
       });
     },
 

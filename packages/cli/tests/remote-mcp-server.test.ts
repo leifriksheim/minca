@@ -840,7 +840,7 @@ test('a write the keepers haven’t confirmed is not said to be written', async 
     body: { text: 'Bread too' },
   });
   assert.match(put, /"isError":true/);
-  assert.match(put, /nobody else has it yet/);
+  assert.match(put, /not yet kept elsewhere/);
   // Once the link is back, the host's word on it comes back too, and every write after is
   // confirmed, not reported lost for the life of the node (found by adversarial review).
   link.mend();
@@ -969,7 +969,7 @@ test('with two always-on keepers, a payment one of them missed isn’t done unti
     body: { amount: 5, balance: -15 },
   });
   assert.match(paid, /"isError":true/, paid);
-  assert.match(paid, /nobody else has it yet/);
+  assert.match(paid, /not yet kept elsewhere/);
   // Its node waits for them, idle or not, rather than lose what they don't have.
   link2.mend();
   await until(
@@ -988,7 +988,7 @@ test('with two always-on keepers, a payment one of them missed isn’t done unti
     key: line,
     body: { amount: 1, balance: -16 },
   });
-  assert.match(again, /"isError":false|nobody else has it yet/, again);
+  assert.match(again, /"isError":false|not yet kept elsewhere/, again);
 
   link1.mend();
   const phone = await onHosts();
