@@ -69,7 +69,9 @@ describe('std.space-profile', () => {
     await hold(other.node, space);
     await settle(800);
     assert.equal((await profileOf(admin, space))?.name, 'The Club');
-    assert.ok(!(await admin.records.history(space, key)).some((v) => v.body?.name === 'Hijacked'));
+    assert.ok(
+      !(await admin.records.history<SpaceProfileRecord>(space, key)).some((v) => v.body?.name === 'Hijacked'),
+    );
   });
 
   test("a writer's clock decides nothing: a later edit stands over a profile dated far ahead", async () => {
