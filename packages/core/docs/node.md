@@ -1005,7 +1005,7 @@ hour (`evaluate`) holds each to the free line. Past a space's `until`, every
 account's carry space stops carrying it (`skip`, in `createCarryCore`), while
 its own subscription still may. Each change is a line in the host's log.
 
-_Source: `packages/core/src/node/node-carriers.ts` (`carriers`, `fetchInvite`), `packages/core/src/node/node-hosting.ts` (`hosting`, `describeAt`), `packages/core/src/node/space-peers.ts` (`useNodes`, `meshFor`), `packages/core/src/node/carrier.ts` (`arrived`, `skip`, `onArrived`), `packages/core/src/node/host.ts` (`evaluate`), `packages/core/src/session/hosting.ts`, `packages/cli/src/host.ts`. Tests: `packages/core/tests/carrier.test.ts`, `packages/core/tests/host-limits.test.ts`, `packages/core/tests/reach.test.ts`, `packages/cli/tests/host.test.ts`, `packages/cli/tests/remote-mcp-server.test.ts`._
+_Source: `packages/core/src/node/node-carriers.ts` (`carriers`, `fetchInvite`), `packages/core/src/node/node-hosting.ts` (`hosting`, `describeAt`), `packages/core/src/node/space-peers.ts` (`useNodes`, `meshFor`), `packages/core/src/node/carrier.ts` (`arrived`, `skip`, `onArrived`), `packages/core/src/node/host.ts` (`evaluate`), `packages/core/src/session/hosting.ts`, `packages/cli/src/host.ts`. Tests: `packages/core/tests/carrier.test.ts`, `packages/core/tests/host-limits.test.ts`, `packages/core/tests/reach.test.ts`, `packages/cli/tests/host.test.ts`, `packages/cli/tests/remote-mcp-server.test.ts`, `packages/cli/tests/remote-mcp-offline.test.ts`._
 
 ### A space paying for itself
 

@@ -372,7 +372,7 @@ app nobody connected through goes after a day.
 is the account home the consent page suggests, and `MINCA_MCP_APPS` more chat
 apps a sign-in may go back to.
 
-_Source: `packages/cli/src/remote-mcp/` (`index.ts`, `oauth.ts`, `consent.ts`, `consent-script.ts`, `sessions.ts`, `redirects.ts`, `server.ts`). Tests: `packages/cli/tests/remote-mcp.test.ts`, `packages/cli/tests/remote-mcp-server.test.ts`._
+_Source: `packages/cli/src/remote-mcp/` (`index.ts`, `oauth.ts`, `consent.ts`, `consent-script.ts`, `sessions.ts`, `redirects.ts`, `server.ts`). Tests: `packages/cli/tests/remote-mcp.test.ts`, `packages/cli/tests/remote-mcp-server.test.ts`, `packages/cli/tests/remote-mcp-offline.test.ts`, `packages/cli/tests/remote-mcp-keepers.test.ts`, `packages/cli/tests/remote-mcp-failures.test.ts`._
 
 ### From this computer
 
