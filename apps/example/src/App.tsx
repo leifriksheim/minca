@@ -19,6 +19,7 @@ import { SyncLine } from './components/SyncLine';
 import { useRunAutomations } from './automations';
 import { ConnectScreen } from './components/ConnectScreen';
 import { useAccountInAddress } from './account-address';
+import { Pictures, SpaceFaces, usePictures, useSpaceFaces } from './pictures';
 import { ContactsView } from './components/ContactsView';
 import { RelayDown } from './components/RelayNotice';
 import { GroupRow, SpaceCount, SpaceDialog, SpaceList } from './components/SpaceList';
@@ -30,7 +31,7 @@ import { CallLayer } from './components/calls/Calls';
 import { NewSheet } from './components/NewSheet';
 import { AddButton, PrimaryButton } from './components/Buttons';
 import { Icon } from './components/Icon';
-import { addChat, landingApp } from './components/apps/entries';
+import { addChat } from './components/apps/entries';
 
 import { takeBack } from './contacts';
 import { styles, palette, hstack, stack, ui } from './styles';
@@ -64,19 +65,19 @@ function Workspace() {
   // Kept, so the list of accounts shows this one by its picture once another is in use.
   useRememberPicture(account.did, useAccountPicture());
   const mine = useSpaces();
-  const { spaces, loading, error } = mine;
+  const { loading, error } = mine;
+  // A space's own profile names it, in place of the name it was founded with (`std.space-profile`).
+  const pairs = usePairSpaces();
+  const faces = useSpaceFaces(mine.spaces.filter((space) => !pairs.has(space.id)));
+  const spaces = mine.spaces.map((space) => {
+    const name = faces.get(space.id)?.name;
+    return name ? { ...space, name } : space;
+  });
   const navigate = useNavigate();
   const node = useNode();
-  const pairs = usePairSpaces();
-  // Into the app the space opens with, the first on its launcher; a space with none opens on its apps.
-  const openSpace = (id: string) =>
-    void landingApp(node, id)
-      .catch(() => undefined)
-      .then((appId) =>
-        appId
-          ? navigate({ to: '/spaces/$spaceId/apps/$appId', params: { spaceId: id, appId } })
-          : navigate({ to: '/spaces/$spaceId', params: { spaceId: id } }),
-      );
+  const pictures = usePictures(spaces);
+  // A space opens on its Overview: its apps, who is in it and what is new.
+  const openSpace = (id: string) => void navigate({ to: '/spaces/$spaceId', params: { spaceId: id } });
   const joinLink = (link: string) => mine.join(inviteFromLink(link));
   // A new group starts with Chat, with any contacts it was made for invited, and opens in it to add people.
   const create = async (params: NewSpace, invite: ReadonlyArray<string> = []) => {
@@ -147,8 +148,12 @@ function Workspace() {
 
   return (
     <WorkspaceContext value={workspace}>
-      <Outlet />
-      <CallLayer spaces={spaces} onGoTo={(space) => openSpace(space.id)} />
+      <Pictures value={pictures}>
+        <SpaceFaces value={faces}>
+          <Outlet />
+          <CallLayer spaces={spaces} onGoTo={(space) => openSpace(space.id)} />
+        </SpaceFaces>
+      </Pictures>
     </WorkspaceContext>
   );
 }

@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { PersonFace } from './PersonFace';
 import { useNode, useLive, useProfiles, useCan, useAccount } from '@minca/react';
 import type { Filter, NodeCollection, NodeRecord, Query, QueryRecord, SpaceSummary } from '@minca/core';
 import { reaction, comment, tag } from '@minca/core/schemas';
@@ -29,7 +30,6 @@ import { ago } from '@minca/ui/time';
 import { SchemaForm } from './SchemaForm';
 import { CollectionEditor, useMayRedefine } from './CollectionDesigner';
 import { Value } from './Value';
-import { Avatar } from '@minca/app-shared/Avatar';
 import { reactionSummary } from './std/Reactions';
 import { chip, tagLabel } from './std/Tags';
 import { styles, palette, ui, hstack, stack } from '../styles';
@@ -690,7 +690,7 @@ function Signals({ record, people }: { record: QueryRecord; people: People }) {
         style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
         title={nameOf(record.createdBy ?? record.root, people)}
       >
-        <Avatar did={record.createdBy ?? record.root ?? record.author} size={18} />
+        <PersonFace did={record.createdBy ?? record.root ?? record.author} size={18} />
         {ago(record.createdAt)}
       </span>
     </div>

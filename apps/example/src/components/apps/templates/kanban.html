@@ -1,5 +1,9 @@
 <!-- Kanban: std.task and std.column as a board, like a small Trello. Moving a card rewrites only its in link (to its column) and position: by dragging with a mouse, or from the card itself. A card opens one level in (minca.go), so the app's bar names it and its Back comes back out. A card's checklist is tasks whose parent is the card; they stay off the board. -->
 <style>
+  /* The whole window: a board scrolls sideways through its columns. */
+  :root {
+    --minca-page-width: none;
+  }
   body {
     padding: 0;
   }
@@ -460,8 +464,8 @@
       const opened = tasks.find((t) => t.key === view);
       if (!opened)
         return html`<${Empty}
-          shape="checker"
-          colour="lilac"
+          shape="columns"
+          colour="cobalt"
           title="This card isn't here"
           text="It may have been deleted."
         />`;
@@ -480,8 +484,8 @@
 
     if (cols.length === 0 && cards.length === 0)
       return html`<${Empty}
-        shape="checker"
-        colour="lilac"
+        shape="columns"
+        colour="cobalt"
         title="No board yet"
         text="Columns for each stage of the work, and cards that move along them."
       >

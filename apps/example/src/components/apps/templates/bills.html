@@ -4,8 +4,6 @@
     display: flex;
     flex-direction: column;
     gap: 20px;
-    max-width: 640px;
-    margin: 0 auto;
     padding-bottom: 48px;
   }
   .rows {
@@ -500,7 +498,7 @@
     const open = view && tabs.find((t) => t.key === view);
     if (view && !open)
       return html`<div class="wrap">
-        <${Empty} shape="coin" colour="lilac" title="This tab isn't here any more" />
+        <${Empty} shape="receipt" colour="lilac" title="This tab isn't here any more" />
       </div>`;
     if (open) return html`<${Tab} key=${open.key} ...${shared} tab=${open} ...${on(open.key)} />`;
     return html`<${Tabs} tabs=${tabs} on=${on} go=${go} />`;
@@ -538,7 +536,7 @@
         sorted.length === 0 &&
         !anyEarlier &&
         html`<${Empty}
-          shape="coin"
+          shape="receipt"
           colour="lilac"
           title="No tabs yet"
           text="Start one for a trip, the flat or a dinner, then add what each of you pays."
@@ -674,7 +672,7 @@
       ${
         entries.length === 0
           ? html`<${Empty}
-              shape="coin"
+              shape="receipt"
               colour="lilac"
               title="Nothing on this tab yet"
               text="Add what someone paid, and it splits itself between whoever it was for."

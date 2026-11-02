@@ -4,7 +4,7 @@ import { useNode } from '@minca/react';
 import { styles, palette } from '../styles';
 import { isBot, nameOf, type People } from '../derive/people';
 import { NOT_CARRIED, takeBack, useContacts, useStanding, withChat } from '../contacts';
-import { PersonAvatar } from './std/PersonAvatar';
+import { PersonFace } from './PersonFace';
 import { Modal } from '@minca/app-shared/Modal';
 import { useAction, useCopy } from '@minca/app-shared/action';
 import { Loading } from './Loading';
@@ -110,7 +110,7 @@ function PersonCard({ did, scope, onClose }: { did: string; scope: PersonScope; 
   return (
     <Modal title={name} onClose={onClose}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-        <PersonAvatar spaceId={space.id} did={did} size={48} />
+        <PersonFace did={did} size={48} />
         <div style={{ minWidth: 0 }}>
           <p style={styles.quiet}>
             {did === me ? 'You' : profile ? `In ${space.name}` : `No profile in ${space.name}`}

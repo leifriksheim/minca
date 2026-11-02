@@ -10,6 +10,8 @@ import type { ShapeColour } from '@minca/ui/tokens';
 import { styles, palette, stack, ui } from '../styles';
 import { useSpaceUnread } from '../seen';
 import { Loading } from './Loading';
+import { useSpaceFace } from '../pictures';
+import { useFileUrl } from '../files';
 import { Count } from './apps/AppIcon';
 import { Options, type Option } from './Options';
 import { LinkButton, PrimaryButton } from './Buttons';
@@ -27,7 +29,20 @@ const LIGHT: ReadonlySet<ShapeColour> = new Set(['peach', 'lilac']);
  * the space's sidebar and every alert, with the first letter of its name in the middle.
  */
 export function SpaceMark({ space, size = 40 }: { space: Pick<SpaceSummary, 'id' | 'name'>; size?: number }) {
+  // The picture the space's own profile gives it, when it has one.
+  const avatar = useSpaceFace(space.id)?.avatar;
+  const picture = useFileUrl(space.id, avatar);
   const shape = markFor(space.id);
+  if (picture)
+    return (
+      <img
+        src={picture}
+        alt=""
+        width={size}
+        height={size}
+        style={{ width: size, height: size, flexShrink: 0, objectFit: 'cover', borderRadius: size / 4 }}
+      />
+    );
   const letter = [...space.name.trim()][0]?.toUpperCase() ?? '·';
   const navy = LIGHT.has(shape.colour);
   return (

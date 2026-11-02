@@ -1,29 +1,23 @@
 <!-- Polls: std.poll and std.vote. One vote per person per poll, so voting again changes it. -->
 <style>
-  .badge {
-    margin-left: auto;
-  }
-  #app {
-    max-width: 640px;
+  .top {
+    display: flex;
+    justify-content: flex-end;
   }
   .poll {
-    gap: 12px;
-    padding: 16px;
-  }
-  .poll header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    color: var(--minca-faint);
+    gap: 14px;
+    padding: 18px;
   }
   .title {
     min-height: 0;
     padding: 0;
     border: none;
     background: none;
-    font-size: 16px;
-    font-weight: 600;
+    font-family: var(--minca-display);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--minca-ink);
     justify-content: flex-start;
     text-align: left;
     word-break: break-word;
@@ -32,12 +26,23 @@
     background: none;
     text-decoration: underline;
   }
+  .asked {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: -8px;
+    font-size: 12.5px;
+    color: var(--minca-faint);
+  }
+  .asked .badge {
+    margin-left: auto;
+  }
   .option {
     position: relative;
     overflow: hidden;
     justify-content: flex-start;
     gap: 10px;
-    height: 40px;
+    height: 44px;
     border-radius: var(--minca-radius-md);
     border-color: var(--minca-line);
     font-size: 14px;
@@ -49,7 +54,12 @@
   }
   .option[aria-pressed='true'] {
     border-color: var(--minca-ink);
-    font-weight: 500;
+    font-weight: 600;
+  }
+  /* A closed poll's choice, or a tie for it */
+  .option[data-won] {
+    border-color: var(--minca-accent);
+    font-weight: 600;
   }
   .option .fill {
     position: absolute;
@@ -57,13 +67,14 @@
     background: var(--minca-sunken);
     transition: width 0.3s ease;
   }
-  .option[aria-pressed='true'] .fill {
+  .option[aria-pressed='true'] .fill,
+  .option[data-won] .fill {
     background: var(--minca-accent-soft);
   }
   .option .radio {
     position: relative;
-    width: 14px;
-    height: 14px;
+    width: 16px;
+    height: 16px;
     flex-shrink: 0;
     border-radius: 50%;
     border: 1.5px solid var(--minca-line-strong);
@@ -71,7 +82,7 @@
   .option[aria-pressed='true'] .radio {
     border-color: var(--minca-ink);
     background: var(--minca-ink);
-    box-shadow: inset 0 0 0 2px var(--minca-card);
+    box-shadow: inset 0 0 0 2.5px var(--minca-card);
   }
   .option .label {
     position: relative;
@@ -82,20 +93,31 @@
     white-space: nowrap;
     text-align: left;
   }
-  .option .count {
+  /* Who picked it, as a few overlapping faces, and its share */
+  .option .faces {
     position: relative;
-    font-size: 12px;
+    display: flex;
+  }
+  .option .faces > * + * {
+    margin-left: -6px;
+  }
+  .option .share {
+    position: relative;
+    min-width: 34px;
+    font-size: 12.5px;
     color: var(--minca-muted);
+    text-align: right;
     font-variant-numeric: tabular-nums;
   }
   footer.row {
     flex-wrap: wrap;
-    font-size: 12px;
+    font-size: 12.5px;
     color: var(--minca-faint);
   }
   footer button {
     min-height: 28px;
-    font-size: 12px;
+    padding: 0 10px;
+    font-size: 12.5px;
   }
 </style>
 <script>
@@ -110,6 +132,8 @@
     useMarked,
     usePeople,
     Person,
+    Avatar,
+    Modal,
     Empty,
     ago,
   } = ui;
@@ -126,35 +150,26 @@
     // A poll opened from elsewhere, like one shared in a chat: scrolled to and lit up a moment.
     const marked = useMarked();
     if (!polls || !votes) return null;
-    const newest = [...polls].reverse();
-    return html`<div class="stack" style="gap: 16px">
-      ${
-        mayAsk &&
-        (asking
-          ? html`<${Ask}
-              onCancel=${() => setAsking(false)}
-              onAsk=${async (question, options) => {
-                await minca.put(POLL, { question, options });
-                setAsking(false);
-              }}
-            />`
-          : polls.length > 0 &&
-            html`<button
-              data-variant="primary"
-              style="align-self: flex-start"
-              onClick=${() => setAsking(true)}
-            >
-              New poll
-            </button>`)
-      }
-      ${
-        polls.length === 0 &&
-        !asking &&
-        html`<${Empty} shape="wave" colour="coral" title="No polls yet" text="Ask the group something, and see what everyone picks.">
+    // Open ones first, the newest on top; closed ones after, the newest first too.
+    const shown = [...polls].reverse().sort((a, b) => Number(!!a.body.closed) - Number(!!b.body.closed));
+    const ask =
+      asking &&
+      html`<${Modal} title="New poll" onClose=${() => setAsking(false)} width=${480}>
+        <${Ask}
+          onCancel=${() => setAsking(false)}
+          onAsk=${async (question, options) => {
+            await minca.put(POLL, { question, options });
+            setAsking(false);
+          }}
+        />
+      </${Modal}>`;
+    if (polls.length === 0)
+      return html`<${Empty} shape="bars" colour="coral" title="No polls yet" text="Ask the group something, and see what everyone picks.">
           ${mayAsk && html`<button data-variant="primary" onClick=${() => setAsking(true)}>New poll</button>`}
-        </${Empty}>`
-      }
-      ${newest.map(
+        </${Empty}>${ask}`;
+    return html`<div class="stack" style="gap: 16px">
+      ${mayAsk && html`<div class="top"><button data-variant="primary" onClick=${() => setAsking(true)}>+ New poll</button></div>`}
+      ${shown.map(
         (poll) =>
           html`<${Poll}
             key=${poll.key}
@@ -164,6 +179,7 @@
             marked=${poll.key === marked}
           />`,
       )}
+      ${ask}
     </div>`;
   }
 
@@ -175,6 +191,8 @@
     const votes = all.filter((v) => v.body.choice < options.length);
     const mine = votes.find((v) => v.createdBy === me);
     const open = mayVote && !closed;
+    const counts = options.map((_, i) => votes.filter((v) => v.body.choice === i).length);
+    const most = Math.max(0, ...counts);
     const vote = (choice) =>
       mine && mine.body.choice === choice
         ? minca.remove(mine.key)
@@ -184,15 +202,16 @@
             { links: [{ rel: 'about', to: poll.key }] },
           );
     return html`<article class="card stack poll" data-key=${poll.key} data-marked=${marked}>
-      <header>
-        <${Person} did=${poll.createdBy} size=${18} />
-        <span>asked · ${ago(poll.createdAt)}</span>
-        ${closed && html`<span class="badge">Closed</span>`}
-      </header>
       <button class="title" title="Open this poll" onClick=${() => minca.open({ record: poll.key })}>
         ${question}
       </button>
-      <div class="stack" role="group" aria-label="Options" style="gap: 6px">
+      <div class="asked">
+        <span>Asked by</span>
+        <${Person} did=${poll.createdBy} size=${16} />
+        <span>· ${ago(poll.createdAt)}</span>
+        ${closed && html`<span class="badge">Closed</span>`}
+      </div>
+      <div class="stack" role="group" aria-label="Options" style="gap: 8px">
         ${options.map((option, i) => {
           const these = votes.filter((v) => v.body.choice === i);
           const share = votes.length ? these.length / votes.length : 0;
@@ -201,28 +220,38 @@
             key=${i}
             disabled=${!open}
             aria-pressed=${mine?.body.choice === i}
+            data-won=${closed && most > 0 && counts[i] === most ? '' : undefined}
             title=${these.map((v) => nameOf(v.createdBy)).join(', ') || undefined}
             onClick=${() => vote(i)}
           >
             <span class="fill" style=${{ width: `${share * 100}%` }}></span>
             <span class="radio"></span>
             <span class="label">${option}</span>
-            <span class="count">${these.length} · ${Math.round(share * 100)}%</span>
+            ${
+              these.length > 0 &&
+              html`<span class="faces">
+                  ${these.slice(0, 3).map((v) => html`<${Avatar} key=${v.key} did=${v.createdBy} size=${20} round />`)}
+                </span>
+                <span class="share">${Math.round(share * 100)}%</span>`
+            }
           </button>`;
         })}
       </div>
       <footer class="row">
         <span>
-          ${votes.length} ${votes.length === 1 ? 'vote' : 'votes'}
-          ${open && (mine ? ' · click your choice again to take it back' : ' · pick one')}
+          ${votes.length === 0 ? 'No votes yet' : `${votes.length} ${votes.length === 1 ? 'vote' : 'votes'}`}
+          ${open && mine && ' · tap your choice again to take it back'}
         </span>
         ${
           poll.mine &&
-          html`<span class="row" style="margin-left: auto; gap: 6px">
-            <button onClick=${() => minca.update(poll.key, { ...poll.body, closed: !closed })}>
+          html`<span class="row" style="margin-left: auto; gap: 2px">
+            <button
+              data-variant="ghost"
+              onClick=${() => minca.update(poll.key, { ...poll.body, closed: !closed })}
+            >
               ${closed ? 'Reopen' : 'Close poll'}
             </button>
-            <button data-variant="danger" onClick=${() => minca.remove(poll.key)}>Delete</button>
+            <button data-variant="ghost" onClick=${() => minca.remove(poll.key)}>Delete</button>
           </span>`
         }
       </footer>
@@ -241,8 +270,7 @@
     const unique = new Set(filled).size === filled.length;
     const ready = question.trim() && filled.length >= 2 && unique;
     return html`<form
-      class="card stack"
-      style="padding: 16px"
+      class="stack"
       onSubmit=${(event) => {
         event.preventDefault();
         if (!ready) return;

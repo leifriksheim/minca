@@ -13,6 +13,9 @@ body {
   background: var(--minca-page); color: var(--minca-body);
   font: 14px/1.5 var(--minca-font); padding: 16px;
 }
+/* What a screen draws in: centred, as wide as reads well. A screen that needs room sets
+   --minca-page-width, to a width or to none for all of it. */
+#app { max-width: var(--minca-page-width, 640px); margin: 0 auto; }
 h1, h2, h3, h4 { margin: 0; color: var(--minca-ink); font-family: var(--minca-display); font-weight: 700; letter-spacing: -0.04em; line-height: 1.2; }
 h1 { font-size: 24px; } h2 { font-size: 18px; } h3 { font-size: 15px; } h4 { font-size: 13px; }
 p { margin: 0; }

@@ -3,6 +3,8 @@ import { useConnection } from '@minca/react';
 import { Wordmark } from '@minca/app-shared/Wordmark';
 import { styles, palette } from '../styles';
 import { LinkButton, PrimaryButton } from './Buttons';
+import { Intro } from './Intro';
+import { useRemembered } from '../kept';
 
 /** Before the app is connected: one button that opens the account home, where the person signs in */
 export function ConnectScreen() {
@@ -12,6 +14,18 @@ export function ConnectScreen() {
   const waiting = state.status === 'connecting' || state.status === 'starting';
   const home = new URL(state.home).host;
   const others = state.accounts.filter((other) => other.did !== state.grant?.did);
+  // The intro shows once on this device, before the first connect; skipping it counts.
+  const [introSeen, setIntroSeen] = useRemembered('minca:intro');
+  const [intro, setIntro] = useState(introSeen === null && !state.grant && state.accounts.length === 0);
+  if (intro)
+    return (
+      <Intro
+        onDone={() => {
+          setIntroSeen('seen');
+          setIntro(false);
+        }}
+      />
+    );
 
   return (
     <div className="page">
@@ -43,6 +57,7 @@ export function ConnectScreen() {
               <LinkButton onClick={() => setOwn('')} style={{ paddingLeft: 0 }}>
                 Use your own home
               </LinkButton>
+              <LinkButton onClick={() => setIntro(true)}>What’s Minca?</LinkButton>
               {/* Another account connected here works now, without the home. */}
               {state.status !== 'starting' &&
                 others.map((other) => (

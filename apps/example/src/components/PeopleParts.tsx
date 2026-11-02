@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { PersonFace } from './PersonFace';
 import type { SpaceInviteView } from '@minca/core';
 import { useNode } from '@minca/react';
 import { Avatar } from '@minca/app-shared/Avatar';
@@ -45,7 +46,7 @@ export function PersonRow({
   const who = (
     <>
       <span style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
-        <Avatar did={face} size={40} round />
+        <PersonFace did={face} size={40} round />
         {online && <span title="Online now" style={onlineDot} />}
       </span>
       <div style={{ flex: 1, minWidth: 0 }}>

@@ -82,7 +82,10 @@ reference implementation, or any implementation, honestly.
     spelling, exact fields), and a note is one token signed by the account's
     root key, so a chain of tokens is refused (01 §7.1, §7.5).
   - It can't change anything a space's constitution says, its name and
-    founders included, without changing the space's id (03 §1.2). A space it
+    founders included, without changing the space's id (03 §1.2). The name
+    an app shows a member once they are in is another matter: a record,
+    `std.space-profile`, that those granted it rewrite; only an invite shows
+    the founding name. A space it
     makes whose constitution says it succeeds another is a copy, not a
     successor, unless a succeed that stands in that space names it (03 §2.7).
     It can found a space naming anyone as a founder; that space gives them
@@ -525,7 +528,12 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     unique in a space, not a collection, so it can also write first at a
     shared key of collection X from a collection Y it may write (one with
     a `onePer` without `@author`), and X's record for those parts can't be
-    written (02 §4.1).
+    written (02 §4.1). A space keeps the grants it was founded with, so in a
+    `community` or `coop` founded before a collection joined the presets'
+    `STAFF_COLLECTIONS`, a member may still write it: at `std.space-profile`'s
+    shared key a member can start a chain that outranks staff and edit it
+    back after each staff edit, until an admin redefines the member role
+    (`packages/core/docs/standard-library.md`). Accepted: no migrations before v1.
   - Granted `/collection/define`, it can write a rival first definition of a collection
     that names a point before the real one's, or a rival and its own delete
     of it, so that no one first defined it and, unless the rivals are the

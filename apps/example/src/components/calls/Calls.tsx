@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { PersonFace } from '../PersonFace';
 import { createPortal } from 'react-dom';
 import type { SpaceSummary } from '@minca/core';
 import type { CallAround, CallPeer, CurrentCall, IncomingCall } from '@minca/calls';
 import { useCalls } from '@minca/calls/react';
 import { useAccount, useProfiles } from '@minca/react';
 import { nameOf, peopleFrom } from '../../derive/people';
-import { Avatar } from '@minca/app-shared/Avatar';
 import { Icon, type ICONS } from '../Icon';
 import { styles, palette, hstack } from '../../styles';
 import { ask } from '@minca/app-shared/Ask';
@@ -263,7 +263,7 @@ function Tile({
       {stream && <Video stream={stream} mirror={self} hidden={!showVideo} />}
       {!showVideo && (
         <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-          <Avatar did={did} size={40} />
+          <PersonFace did={did} size={40} />
         </span>
       )}
       <figcaption className="call-name">
@@ -359,7 +359,7 @@ function Ringing({
       aria-labelledby={`ring-${ring.id}`}
     >
       <span className="call-ringing">
-        <Avatar did={ring.from} size={72} />
+        <PersonFace did={ring.from} size={72} />
       </span>
       <div>
         <p id={`ring-${ring.id}`} style={styles.modalTitle}>
@@ -474,8 +474,8 @@ const whoCanJoin = (space: SpaceSummary) =>
     ? 'Anyone who joins this space with a role can join the call'
     : 'Only people in this space can join';
 
-/** "Start a call", or "Join call · 3" when one is going on: in the space's sidebar, beside who is here on a phone, or on its own */
-export function CallButton({ space, place = 'button' }: { space: SpaceSummary; place?: 'button' | 'chip' }) {
+/** Starts a call in the space, or joins the one going, with sound only or with the camera on: in the row atop its Overview (`quick-action`) */
+export function CallButton({ space, video = false }: { space: SpaceSummary; video?: boolean }) {
   const { state, calls } = useCalls();
   const [busy, setBusy] = useState(false);
   if (!calls || !space.writable) return null;
@@ -484,80 +484,19 @@ export function CallButton({ space, place = 'button' }: { space: SpaceSummary; p
   const startHere = async () => {
     if (!(await mayLeaveFor(state.current, going ? 'join this one' : 'start one here'))) return;
     setBusy(true);
-    void calls.start(space.id).finally(() => setBusy(false));
+    void calls.start(space.id, { video }).finally(() => setBusy(false));
   };
-  const label = here ? 'In the call' : going ? `Join call · ${going.people.length}` : 'Start a call';
-  const live = here || going !== undefined;
-  if (place === 'chip')
-    return (
-      <button
-        type="button"
-        onClick={() => void startHere()}
-        disabled={busy || here}
-        title={whoCanJoin(space)}
-        style={{
-          ...styles.badge,
-          borderColor: palette.surface.lineStrong,
-          flexShrink: 0,
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-          font: 'inherit',
-          fontSize: 12,
-          cursor: here ? 'default' : 'pointer',
-          ...(here ? { color: palette.accent.good, borderColor: palette.accent.good } : {}),
-          ...(going && !here
-            ? {
-                background: palette.accent.good,
-                borderColor: palette.accent.good,
-                color: palette.surface.card,
-                fontWeight: 600,
-              }
-            : {}),
-        }}
-      >
-        <Icon name="phone" size={12} /> {live ? label : 'Call'}
-      </button>
-    );
-  if (here) {
-    return (
-      <span
-        style={{
-          ...styles.badge,
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-          color: palette.accent.good,
-          border: `1px solid ${palette.accent.good}`,
-        }}
-      >
-        <Icon name="phone" size={12} /> In the call
-      </span>
-    );
-  }
   return (
     <button
       onClick={() => void startHere()}
-      disabled={busy}
-      data-variant={going ? 'primary' : 'quiet'}
-      style={{
-        ...styles.smallButton,
-        height: 28,
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 6,
-        ...(going
-          ? {
-              background: palette.accent.good,
-              border: `1px solid ${palette.accent.good}`,
-              color: palette.surface.card,
-            }
-          : {}),
-      }}
-      title={whoCanJoin(space)}
+      disabled={busy || here}
+      title={going ? `Join the call · ${going.people.length}` : whoCanJoin(space)}
+      className="quick-action"
+      // Green while a call is going here, so joining it is plain.
+      style={here || going ? { color: palette.accent.good } : undefined}
     >
-      <Icon name="phone" size={12} />
-      {going ? `Join call · ${going.people.length}` : <span className="call-label">Start a call</span>}
+      <Icon name={video ? 'camera' : 'phone'} size={20} />
+      {video ? 'Video' : 'Voice'}
     </button>
   );
 }

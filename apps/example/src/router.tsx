@@ -14,6 +14,7 @@ import { OpenApp, SpaceLayout, useSpaceScreen, type SpaceScreen } from './compon
 import { AppsView } from './components/apps/AppsView';
 import { NewApp } from './components/apps/NewApp';
 import { RolesView } from './components/RolesView';
+import { SpaceSettings } from './components/SpaceSettings';
 import { InviteView } from './components/InviteView';
 import { HostingView } from './components/HostingView';
 import { AutomationsView } from './components/automations/AutomationsView';
@@ -127,6 +128,11 @@ const invite = createRoute({
   path: 'invite',
   component: page((s) => <InviteView {...s} />),
 });
+const settings = createRoute({
+  getParentRoute: inSpace,
+  path: 'settings',
+  component: page((s) => <SpaceSettings {...s} />),
+});
 const hosting = createRoute({
   getParentRoute: inSpace,
   path: 'hosting',
@@ -202,6 +208,7 @@ const routeTree = root.addChildren([
     members,
     roles,
     invite,
+    settings,
     hosting,
     automations,
     data,

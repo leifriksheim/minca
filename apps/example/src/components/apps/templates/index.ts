@@ -160,7 +160,7 @@ export const TEMPLATES: ReadonlyArray<Template> = [
       template: 'events',
       title: 'Events',
       description: "Concerts, meetups, parties: what's on, who's going, and a place to talk about each one.",
-      collections: [event.name, rsvp.name, comment.name],
+      collections: [event.name, rsvp.name, comment.name, file.name],
       shows: [event.name],
       notify: [
         notifyOn('New event', event.name),
@@ -169,7 +169,7 @@ export const TEMPLATES: ReadonlyArray<Template> = [
       ],
       screen: events,
     },
-    needs: [event, rsvp, comment],
+    needs: [event, rsvp, comment, file],
   },
   {
     app: {
