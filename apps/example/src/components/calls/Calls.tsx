@@ -475,7 +475,13 @@ const whoCanJoin = (space: SpaceSummary) =>
     : 'Only people in this space can join';
 
 /** "Start a call", or "Join call · 3" when one is going on: in the space's sidebar, beside who is here on a phone, or on its own */
-export function CallButton({ space, place = 'button' }: { space: SpaceSummary; place?: 'button' | 'chip' }) {
+export function CallButton({
+  space,
+  place = 'button',
+}: {
+  space: SpaceSummary;
+  place?: 'button' | 'chip' | 'tile';
+}) {
   const { state, calls } = useCalls();
   const [busy, setBusy] = useState(false);
   if (!calls || !space.writable) return null;
@@ -488,6 +494,20 @@ export function CallButton({ space, place = 'button' }: { space: SpaceSummary; p
   };
   const label = here ? 'In the call' : going ? `Join call · ${going.people.length}` : 'Start a call';
   const live = here || going !== undefined;
+  // In the row atop a space's Overview (`quick-action`), beside its other pages.
+  if (place === 'tile')
+    return (
+      <button
+        onClick={() => void startHere()}
+        disabled={busy || here}
+        title={whoCanJoin(space)}
+        className="quick-action"
+        style={live ? { color: palette.accent.good } : undefined}
+      >
+        <Icon name="phone" size={20} />
+        {live ? label : 'Call'}
+      </button>
+    );
   if (place === 'chip')
     return (
       <button

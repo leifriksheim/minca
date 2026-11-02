@@ -75,11 +75,16 @@ export const HOOD = [
 /** Where the seen store keeps when the Overview, and the proposals on it, were last looked at; no app has this id */
 const PROPOSALS = ':proposals';
 
-/** What belongs to the space rather than to one app, in sidebar order */
+/** What belongs to the space rather than to one app: the row atop its Overview, and its menu */
 const SECTIONS = [
   { to: '/spaces/$spaceId/members', label: 'Members', icon: 'people' },
   { to: '/spaces/$spaceId/roles', label: 'Roles', icon: 'shield' },
   { to: '/spaces/$spaceId/invite', label: 'Invite', icon: 'invite' },
+  { to: '/spaces/$spaceId/settings', label: 'Settings', icon: 'settings' },
+] as const satisfies ReadonlyArray<{ to: SpacePath; label: string; icon: IconName }>;
+
+/** What a space's Settings lead to */
+export const SETTINGS = [
   { to: '/spaces/$spaceId/hosting', label: 'Hosting', icon: 'cloud' },
   { to: '/spaces/$spaceId/automations', label: 'Automations', icon: 'bolt' },
 ] as const satisfies ReadonlyArray<{ to: SpacePath; label: string; icon: IconName }>;
@@ -91,7 +96,7 @@ const FOR_GROUPS: ReadonlySet<string> = new Set([
   '/spaces/$spaceId/invite',
 ]);
 
-/** A space's own sections, as its menu and its Overview list them: a space for two has nobody to invite */
+/** A space's own sections: a space for two has nobody to invite */
 export const sectionsOf = (pair: boolean) =>
   SECTIONS.filter((section) => !pair || !FOR_GROUPS.has(section.to));
 
@@ -308,8 +313,9 @@ function SpaceView({ space }: { space: SpaceSummary }) {
   const title =
     (inView ? viewTitle : undefined) ??
     open?.title ??
-    [...SECTIONS, ...HOOD, { to: '/spaces/$spaceId/new', label: 'Add app' }].find((part) => part.to === leaf)
-      ?.label ??
+    [...SECTIONS, ...SETTINGS, ...HOOD, { to: '/spaces/$spaceId/new', label: 'Add app' }].find(
+      (part) => part.to === leaf,
+    )?.label ??
     name;
 
   const screen: SpaceScreen = {
@@ -461,7 +467,8 @@ function SpaceView({ space }: { space: SpaceSummary }) {
                         onOpen={() => go('/spaces/$spaceId/members')}
                       />
                     )}
-                    <CallButton space={space} place="chip" />
+                    {/* A space for two has Call in the row under this. */}
+                    {!pair && <CallButton space={space} place="chip" />}
                   </div>
                 </div>
               )}

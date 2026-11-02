@@ -38,6 +38,7 @@ export function injectBaseStyles(): void {
       .rail-item:not([aria-current]):hover .rail-icon { background: ${surface.line}; }
       .you-button:hover, .you-button[aria-expanded="true"],
       .group-button:hover, .group-button[aria-expanded="true"] { background: ${surface.line} !important; }
+      .quick-action:not(:disabled):hover { background: ${surface.sunken}; }
     }
 
     /* ── Layout that follows the screen ──────────────────────────────────
@@ -190,6 +191,15 @@ export function injectBaseStyles(): void {
     .scroll-x { overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
     .scroll-x::-webkit-scrollbar { display: none; }
     .scroll-x > * { flex-shrink: 0; white-space: nowrap; }
+
+    /* The row of a space's own pages atop its Overview: an icon over its name, each an equal share. */
+    .quick-row { display: flex; align-items: center; gap: 4px; }
+    .quick-row > .quick-action { flex: 1 0 76px; max-width: 112px; }
+    .quick-action {
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+      padding: 10px 6px; border: none; border-radius: ${radius.md}px; background: none;
+      font: inherit; font-size: 12px; font-weight: 500; color: ${ink.body}; cursor: pointer;
+    }
 
 
     /* A space: its collections down the side, the chosen one beside them. */

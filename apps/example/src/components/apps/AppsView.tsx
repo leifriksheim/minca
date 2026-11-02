@@ -1,14 +1,10 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { message, useAction } from '@minca/app-shared/action';
 import type { NodeCollection, SpaceSummary } from '@minca/core';
 import { useNode } from '@minca/react';
 import { useWorkspace } from '../../workspace';
-import { SPACE_KEEPERS } from '@minca/core';
-import { useMay } from '@minca/app-shared/may';
-import { AddBotDialog } from '@minca/app-shared/CommunitySetup';
-import { FeatureIcon } from '@minca/app-shared/Feature';
-import { ConnectAgent } from '../ConnectAgent';
-import { HOOD, sectionsOf, type SpaceScreen } from '../SpaceView';
+import { sectionsOf, type SpaceScreen } from '../SpaceView';
+import { CallButton } from '../calls/Calls';
 import { RowMenu } from '../PeopleParts';
 import type { AppEntry, useSpaceApps } from './entries';
 import { AppIcon, Count } from './AppIcon';
@@ -18,12 +14,13 @@ import { TEMPLATES } from './templates';
 import { AppSettings } from './AppSettings';
 import { Icon } from '../Icon';
 import { unreadOf, type Unread } from '../../seen';
-import { styles, palette, variants, hstack, stack, ui } from '../../styles';
-import { PrimaryButton } from '../Buttons';
+import { styles, palette, hstack, stack, ui } from '../../styles';
+import { LinkButton, PrimaryButton } from '../Buttons';
 import { confirmThen } from '../../confirm';
 
 /**
- * A space's apps like a phone's home screen: those added, then proposals.
+ * A space's Overview: a row of its own pages, then its apps like a phone's home screen, those added and then
+ * proposals.
  * Ready-made ones to add are under New app (`NewApp`). Someone who may add collections can arrange them: move
  * them, or take them off. Taking one off keeps everything it holds. Arranging is also where an app is copied
  * to another of your spaces, and where an app that asks for settings, like an API key, has them filled in.
@@ -50,15 +47,12 @@ export function AppsView({
   const node = useNode();
   const [arranging, setArranging] = useState(false);
   const arrange = useAction();
-  const { spaces, pairs, forget } = useWorkspace();
+  const { spaces, pairs } = useWorkspace();
+  const pair = pairs.has(space.id);
   // Groups of yours to propose an app in: not this one, nor a space for two.
   const others = spaces.filter((other) => other.id !== space.id && other.writable && !pairs.has(other.id));
   const [copied, setCopied] = useState<string | null>(null);
-  const [addingBot, setAddingBot] = useState(false);
-  const [connecting, setConnecting] = useState(false);
   const [setting, setSetting] = useState<AppEntry | null>(null);
-  // A bot runs where the space is kept online, so adding one is for whoever chooses that.
-  const mayAddBot = useMay(space.id, SPACE_KEEPERS) && space.writable;
   const copy = (app: AppEntry, to: SpaceSummary) => {
     setCopied(null);
     copyApp(node, space.id, app.record, to.id).then(
@@ -93,25 +87,30 @@ export function AppsView({
     );
 
   return (
-    <div style={stack(36)}>
-      <section aria-label="Apps in this space" style={stack(14)}>
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
-          <div>
-            <h2 style={{ ...styles.appTitle, fontSize: 20 }}>Apps</h2>
-            <p style={{ ...styles.quiet, marginTop: 2 }}>
-              What you use together here. Everything they save stays in the space.
-            </p>
-          </div>
+    <div style={stack(28)}>
+      {/* The space's own pages, a tap away; a space for two has a call and its settings. */}
+      <nav aria-label={pair ? 'This chat' : 'This group'} className="quick-row scroll-x">
+        {pair && <CallButton space={space} place="tile" />}
+        {sectionsOf(pair).map((section) => (
+          <button key={section.to} onClick={() => go(section.to)} className="quick-action">
+            <Icon name={section.icon} size={20} />
+            {section.label}
+          </button>
+        ))}
+      </nav>
+
+      <section aria-label="Apps in this space" style={stack(12)}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <h2 style={sectionHeading}>Apps</h2>
           <div style={{ ...hstack(8), flexShrink: 0 }}>
             {mayDefine && apps.ready.length > 0 && (
-              <button
+              <LinkButton
                 onClick={() => setArranging((was) => !was)}
                 aria-pressed={arranging}
-                data-variant={arranging ? 'primary' : 'quiet'}
-                style={{ ...(arranging ? styles.button : variants.quiet), ...inlineButton }}
+                style={{ paddingRight: 0 }}
               >
                 {arranging ? 'Done' : 'Arrange'}
-              </button>
+              </LinkButton>
             )}
             {space.writable && !arranging && (
               <PrimaryButton onClick={onCreate} className="hide-on-phone" style={{ ...inlineButton }}>
@@ -195,118 +194,8 @@ export function AppsView({
         onAdded={(key) => onOpenApp(`made:${key}`)}
       />
 
-      <section aria-label="Agents" style={stack(14)}>
-        <div>
-          <h2 style={{ ...styles.appTitle, fontSize: 20 }}>Agents</h2>
-          <p style={{ ...styles.quiet, marginTop: 2 }}>AI that works in {space.name} with you.</p>
-        </div>
-        <ol className="rows" style={ui.list}>
-          {mayAddBot && (
-            <OverviewRow
-              icon={<FeatureIcon kind="bot" size={36} />}
-              title="Add a community bot"
-              detail="Everyone here can mention it. It answers, sums up threads and posts reminders."
-              onClick={() => setAddingBot(true)}
-            />
-          )}
-          <OverviewRow
-            icon={<FeatureIcon kind="online" size={36} />}
-            title="Connect your own agent"
-            detail="Claude, Cursor or another AI of yours, working here as you."
-            onClick={() => setConnecting(true)}
-          />
-        </ol>
-      </section>
-
-      <section aria-label="Group" style={stack(14)}>
-        <h2 style={{ ...styles.appTitle, fontSize: 20 }}>{pairs.has(space.id) ? 'Chat' : 'Group'}</h2>
-        <ol className="rows" style={ui.list}>
-          {sectionsOf(pairs.has(space.id)).map((section) => (
-            <OverviewRow
-              key={section.to}
-              icon={
-                <span style={sectionIcon}>
-                  <Icon name={section.icon} size={18} />
-                </span>
-              }
-              title={section.label}
-              onClick={() => go(section.to)}
-            />
-          ))}
-          <li data-tile style={{ listStyle: 'none' }}>
-            <button onClick={() => forget(space.id)} style={{ ...rowButton, color: palette.accent.danger }}>
-              <span style={{ ...sectionIcon, color: palette.accent.danger }}>
-                <Icon name="arrowLeft" size={18} />
-              </span>
-              <strong style={{ ...cardTitle, color: palette.accent.danger }}>
-                {pairs.has(space.id) ? 'Leave this chat' : 'Leave group'}
-              </strong>
-            </button>
-          </li>
-        </ol>
-      </section>
-
-      {/* The views for the curious: what the space holds and how it travels. */}
-      <section aria-label="Under the hood" style={stack(14)}>
-        <h2 style={{ ...styles.appTitle, fontSize: 20 }}>Under the hood</h2>
-        <ol className="rows" style={ui.list}>
-          {HOOD.map((view) => (
-            <OverviewRow
-              key={view.id}
-              icon={
-                <span style={sectionIcon}>
-                  <Icon name={view.icon} size={18} />
-                </span>
-              }
-              title={view.label}
-              onClick={() => go(view.to)}
-            />
-          ))}
-        </ol>
-      </section>
-
-      {addingBot && (
-        <AddBotDialog
-          spaceId={space.id}
-          writable={space.writable}
-          onAutomations={() => {
-            setAddingBot(false);
-            go('/spaces/$spaceId/automations');
-          }}
-          onClose={() => setAddingBot(false)}
-        />
-      )}
-      {connecting && <ConnectAgent onClose={() => setConnecting(false)} />}
       {setting && <AppSettings space={space} record={setting.record} onClose={() => setSetting(null)} />}
     </div>
-  );
-}
-
-/** A row of the Overview that leads somewhere: its icon, what it is, a line on it, and the way there */
-function OverviewRow({
-  icon,
-  title,
-  detail,
-  onClick,
-}: {
-  icon: ReactNode;
-  title: string;
-  detail?: string;
-  onClick: () => void;
-}) {
-  return (
-    <li data-tile style={{ listStyle: 'none' }}>
-      <button onClick={onClick} style={rowButton}>
-        {icon}
-        <span style={{ ...stack(2), flex: 1, minWidth: 0 }}>
-          <strong style={cardTitle}>{title}</strong>
-          {detail && <span style={cardText}>{detail}</span>}
-        </span>
-        <span style={{ display: 'inline-flex', color: palette.ink.faint }}>
-          <Icon name="chevron" size={14} />
-        </span>
-      </button>
-    </li>
   );
 }
 
@@ -389,7 +278,7 @@ function AppRow({
   );
 }
 
-const rowButton = {
+export const rowButton = {
   width: '100%',
   display: 'flex',
   alignItems: 'center',
@@ -415,19 +304,6 @@ const slot = {
   borderRadius: palette.radius.md,
   color: palette.ink.muted,
 } as const;
-// As tall as a finger needs (`pointer: coarse` raises buttons to 40), and as wide, so they stay round.
-/** A section's line icon, on the same tile an app's shape takes */
-const sectionIcon = {
-  width: 36,
-  height: 36,
-  flexShrink: 0,
-  display: 'grid',
-  placeItems: 'center',
-  borderRadius: palette.radius.md,
-  background: palette.surface.sunken,
-  color: palette.ink.body,
-} as const;
-
 /** A word above the apps that some of them have a newer version, and the button that brings them up to date */
 const updateNote = {
   display: 'flex',
@@ -440,9 +316,11 @@ const updateNote = {
   fontSize: 14,
 } as const;
 
+/** A section's title: smaller on a phone */
+export const sectionHeading = { ...styles.appTitle, fontSize: 'clamp(16px, 4vw, 20px)' };
 const roundButton = { ...styles.smallButton, width: 36, height: 36 } as const;
-const cardTitle = { fontSize: 15, fontWeight: 600, color: palette.ink.strong };
-const cardText = { fontSize: 13, lineHeight: 1.45, color: palette.ink.muted };
+export const cardTitle = { fontSize: 15, fontWeight: 600, color: palette.ink.strong };
+export const cardText = { fontSize: 13, lineHeight: 1.45, color: palette.ink.muted };
 const inlineButton = {
   width: 'auto',
   height: 36,
