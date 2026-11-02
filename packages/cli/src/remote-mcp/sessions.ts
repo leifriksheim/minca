@@ -98,7 +98,7 @@ interface Started {
 interface OpenSpace {
   /** Calls running in it now */
   busy: number;
-  /** Whether it holds a write of a call's that nobody else had, when last asked */
+  /** In a space that names no keepers: whether it holds a write no peer had, when last asked */
   wrote: boolean;
 }
 
@@ -111,12 +111,12 @@ const UNKEPT_MS = 60 * 60_000;
  * counts as pending, and its copy may be the only one, so any write there does.
  */
 async function holdsUnkept(node: P2PNode, space: string, one: OpenSpace): Promise<boolean> {
-  if (!one.wrote) return false;
   const [status, access] = await Promise.all([
     node.spaces.status(space).catch(() => null),
     node.spaces.access(space).catch(() => null),
   ]);
-  return Boolean(status?.pending) || access?.keepers.length === 0;
+  if (status?.pending) return true;
+  return access?.keepers.length === 0 && one.wrote;
 }
 
 /** Whether a node wrote something a space's keepers don't have yet: stopped, it would be lost */
@@ -359,12 +359,11 @@ export function createSessions(options: {
         throw new Error(
           'This space can’t be reached through the always-on nodes right now. Try again in a moment.',
         );
-      const since = Date.now();
       try {
         return await work();
       } finally {
         // Kept by nobody, its copy here is the only one: it isn't closed for room, nor the node stopped early.
-        if (writes) one.wrote = (await started.node.spaces.kept(space, 0, since).catch(() => null)) === null;
+        if (writes) one.wrote = (await started.node.spaces.kept(space, 0).catch(() => null)) === null;
       }
     } finally {
       one.busy -= 1;

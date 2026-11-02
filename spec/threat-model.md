@@ -1048,7 +1048,7 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     ([#287](https://github.com/leifriksheim/minca/issues/287)). Records count until the key is revoked, not until the
     note runs out (06 §2.9), so a token outlives nothing the person can't end
     at their home; the service refuses a token for good once its node sees
-    the revoke, in a space it has open, but member keys open what they opened after that, so a call
+    the revoke, in any space a call opens, but member keys open what they opened after that, so a call
     until then may read what synced alongside it
     ([#165](https://github.com/leifriksheim/minca/issues/165)). The home keeps
     one connection per origin (06 §2.10): every chat app connected through a
