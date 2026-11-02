@@ -1039,11 +1039,7 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     can't hold it up): a
     node behind would say a record isn't there, and write a first version in
     a line that has one, ending it (09 §7.5). A space they don't carry fails
-    its own calls only, after waiting for one. In a space that names no
-    keepers a write counts as kept once a member's device online has it, so
-    a space closed after that and opened again may level with another peer
-    that lacks it, and an update then writes a first version in a line that
-    has one, ending it. Once level, the node is one
+    its own calls only, after waiting for one. Once level, the node is one
     more device writing in the account's lines, with the gap two devices have
     (§3.2), and another device's write that only an unreachable always-on node
     holds can still be followed by a twin. Two processes on one data folder,
@@ -1066,11 +1062,13 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     invites and the records its node reads can't make it connect inside its
     own network, and what a node holds is at most 32 MB, in memory, past
     half of which opening a space closes the one used longest ago, but
-    never one holding a write the keepers don't have yet
+    never one holding a write the keepers don't have yet, nor, in a space
+    that names none, one it wrote in
     (`checkGranted` and `createSessions` in
     `packages/cli/src/remote-mcp/sessions.ts`, `publicNode` in
     `packages/cli/src/remote-mcp/reach.ts`, `boundedMemory` in
     `packages/cli/src/remote-mcp/memory.ts`;
+    `packages/cli/tests/remote-mcp.test.ts`,
     `packages/cli/tests/remote-mcp-server.test.ts`,
     `packages/cli/tests/remote-mcp-reach.test.ts`,
     `packages/core/tests/reach.test.ts`); a host that answers with a redirect

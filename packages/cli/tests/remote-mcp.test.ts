@@ -23,7 +23,7 @@ import { noteTerms } from '../../core/src/identity/abilities.js';
 import { base64UrlEncode } from '../../core/src/utils/encoding.js';
 import { memoryStores } from '../../core/tests/helpers/memory-stores.js';
 import { createFakeHub, type FakeHub } from '../../core/tests/helpers/fake-transport.js';
-import { hold } from '../../core/tests/helpers/hold.js';
+import { hold, letGo } from '../../core/tests/helpers/hold.js';
 import { until } from '../../core/tests/helpers/until.js';
 import { createRemoteMcp, type RemoteMcp } from '../src/remote-mcp/index.js';
 import { checkGranted, createSessions } from '../src/remote-mcp/sessions.js';
@@ -934,6 +934,50 @@ describe('a session’s node', () => {
     assert.equal(await read(choir!.id), 1);
     await until(async () => !(await openIn(garden!.id)), 5000, 'the garden to close for the choir');
     assert.equal(await read(garden!.id), 1, 'and opened again, it reads the same');
+  });
+
+  test('a space that names no keepers isn’t closed for room while the write in it may be the only copy', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    const big = 'x'.repeat(40_000);
+    const spaces: Array<{ readonly id: string }> = [];
+    for (const [name, text] of [
+      ['Garden', big],
+      ['Choir', 'small'],
+    ] as const) {
+      const space = await ada.node.spaces.create({ name, visibility: 'private' });
+      await ada.node.records.put(space.id, 'app.note', { text });
+      await hold(ada.node, space.id);
+      spaces.push(space);
+    }
+    const [garden, choir] = spaces;
+    const sessions = createSessions({ network: async () => onHub(hub), budget: 100_000 });
+    closing.push(() => sessions.close());
+    const key = await browserKey();
+    const granted = await checkGranted(key.jwk, await ada.grantFor(key.did));
+    await sessions.use(
+      's',
+      granted,
+      garden!.id,
+      async (node) => {
+        // Her laptop, the one peer, goes offline: nobody has what the agent writes now.
+        await letGo(ada.node, garden!.id);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        await node.records.put(garden!.id, 'app.note', { text: 'Bread too' });
+      },
+      true,
+    );
+    // A call in another space wants the room (found by adversarial review: the write went with the garden).
+    await sessions.use('s', granted, choir!.id, async () => null);
+    await hold(ada.node, garden!.id);
+    await until(
+      async () =>
+        (await ada.node.records.list(garden!.id, { collection: 'app.note' })).some(
+          (record) => field(record.body)('text') === 'Bread too',
+        ),
+      8000,
+      'her laptop, back, to get what the agent wrote',
+    );
   });
 
   test('a grant of some spaces says a space it doesn’t name isn’t connected, and how to add it', async () => {

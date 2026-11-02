@@ -86,8 +86,8 @@ const CATCH_UP_MS = 15_000;
 interface Started {
   readonly node: P2PNode;
   readonly memory: BoundedMemory;
-  /** The spaces it opened, with the calls running in each, the one used last at the end */
-  readonly open: Map<string, { busy: number }>;
+  /** The spaces it opened, the one used last at the end */
+  readonly open: Map<string, OpenSpace>;
   /** Spaces being closed: one is opened again only once it has */
   readonly closing: Map<string, Promise<void>>;
   /** Whether the person disconnected it: nothing more is answered */
@@ -95,17 +95,33 @@ interface Started {
   stop(): Promise<void>;
 }
 
+interface OpenSpace {
+  /** Calls running in it now */
+  busy: number;
+  /** Whether a call wrote in it */
+  wrote: boolean;
+}
+
 /** How long an idle node stays up for its writes the space's keepers don't have yet */
 const UNKEPT_MS = 60 * 60_000;
 
-/** Whether a space holds something this node wrote that the keepers don't have yet: closed, it would be lost */
-async function holdsUnkept(node: P2PNode, space: string): Promise<boolean> {
-  return Boolean((await node.spaces.status(space).catch(() => null))?.pending);
+/**
+ * Whether a space holds something this node wrote that the keepers don't have
+ * yet: closed, it would be lost. In a space that names no keepers nothing
+ * counts as pending, and its copy may be the only one, so any write there does.
+ */
+async function holdsUnkept(node: P2PNode, space: string, one: OpenSpace): Promise<boolean> {
+  if (!one.wrote) return false;
+  const [status, access] = await Promise.all([
+    node.spaces.status(space).catch(() => null),
+    node.spaces.access(space).catch(() => null),
+  ]);
+  return Boolean(status?.pending) || access?.keepers.length === 0;
 }
 
 /** Whether a node wrote something a space's keepers don't have yet: stopped, it would be lost */
 async function unkept(started: Started): Promise<boolean> {
-  for (const space of started.open.keys()) if (await holdsUnkept(started.node, space)) return true;
+  for (const [space, one] of started.open) if (await holdsUnkept(started.node, space, one)) return true;
   return false;
 }
 
@@ -134,7 +150,7 @@ async function closeSpace(started: Started, space: string): Promise<void> {
 async function makeRoom(started: Started, space: string): Promise<void> {
   for (const [other, one] of [...started.open]) {
     if (started.memory.used() <= started.memory.budget / 2) return;
-    if (other === space || one.busy > 0 || (await holdsUnkept(started.node, other))) continue;
+    if (other === space || one.busy > 0 || (await holdsUnkept(started.node, other, one))) continue;
     // A call may have started in it meanwhile.
     if (one.busy === 0 && started.open.get(other) === one) await closeSpace(started, other);
   }
@@ -194,13 +210,15 @@ export interface Sessions {
    * Runs `work` on the node for session `id`, started from `granted` if it
    * isn't running. One node per session, ever: two signing with one key
    * would fork its line. Work in a space runs only once the node is level
-   * with the always-on nodes there.
+   * with the always-on nodes there. `writes` says the work may write there,
+   * so the space isn't closed for room while its copy may be the only one.
    */
   use<T>(
     id: string,
     granted: Granted,
     space: string | undefined,
     work: (node: P2PNode) => Promise<T>,
+    writes?: boolean,
   ): Promise<T>;
   close(): Promise<void>;
 }
@@ -317,12 +335,18 @@ export function createSessions(options: {
   }
 
   /** Opens a space for a call, closing others for room, and runs `work` once the node is level there */
-  async function inSpace<T>(started: Started, space: string, work: () => Promise<T>): Promise<T> {
+  async function inSpace<T>(
+    started: Started,
+    space: string,
+    writes: boolean,
+    work: () => Promise<T>,
+  ): Promise<T> {
     if (!(await reaches(started.node, space))) throw new Error(NOT_CONNECTED);
     // Nothing awaited between seeing it isn't closing and marking it used, or it could start closing.
     for (let closing = started.closing.get(space); closing; closing = started.closing.get(space))
       await closing;
-    const one = started.open.get(space) ?? { busy: 0 };
+    const one = started.open.get(space) ?? { busy: 0, wrote: false };
+    one.wrote ||= writes;
     // Used now: last in line to be closed.
     started.open.delete(space);
     started.open.set(space, one);
@@ -372,7 +396,7 @@ export function createSessions(options: {
   }
 
   return {
-    async use(id, given, space, work) {
+    async use(id, given, space, work, writes = false) {
       if (!noteRunning(given.grant)) throw new Error('This connection has run out. Connect again.');
       const one = nodeOf(id, given);
       one.busy += 1;
@@ -382,7 +406,7 @@ export function createSessions(options: {
           if (started.revoked) throw new Error('This connection was disconnected. Connect again.');
           return work(started.node);
         };
-        return await (space === undefined ? answer() : inSpace(started, space, answer));
+        return await (space === undefined ? answer() : inSpace(started, space, writes, answer));
       } finally {
         one.busy -= 1;
         one.used = Date.now();
