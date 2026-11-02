@@ -170,11 +170,22 @@ async function reaches(started: Started, space: string): Promise<boolean> {
 }
 
 /** What a call in a space the grant doesn't reach is told */
-const notConnected = (whole: boolean) =>
-  whole
+async function whyNot(started: Started): Promise<string> {
+  if (!started.registry)
+    return (
+      'This space isn’t connected. To use it here, the person connects Minca again from this chat app and ' +
+      'chooses it, or chooses all spaces.'
+    );
+  // The list comes from the account registry, which only the account's devices and hosts hold.
+  const peers = await started.node.spaces.status(started.registry).then(
+    (status) => status.peers.length,
+    () => 0,
+  );
+  return peers > 0
     ? 'This isn’t one of the person’s spaces: spaces_list shows the ones this connection can use.'
-    : 'This space isn’t connected. To use it here, the person connects Minca again from this chat app and ' +
-      'chooses it, or chooses all spaces.';
+    : 'The person’s list of spaces can’t be reached right now: none of their devices or hosts that keep it ' +
+        'is online. Opening their account home brings it back.';
+}
 
 /**
  * Waits up to `waitMs` for the node to be level with the space's keepers
@@ -351,7 +362,7 @@ export function createSessions(options: {
 
   /** Opens a space for a call, closing others for room, and runs `work` once the node is level there */
   async function inSpace<T>(started: Started, space: string, work: () => Promise<T>): Promise<T> {
-    if (!(await reaches(started, space))) throw new Error(notConnected(started.registry !== null));
+    if (!(await reaches(started, space))) throw new Error(await whyNot(started));
     // Nothing awaited between seeing it isn't closing and marking it used, or it could start closing.
     for (let closing = started.closing.get(space); closing; closing = started.closing.get(space))
       await closing;

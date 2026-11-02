@@ -20,7 +20,8 @@ import { deriveAccountKey } from '../../core/src/identity/account-vault.js';
 import { generateSeed } from '../../core/src/identity/recovery-code.js';
 import { GRANT_VERSION } from '../../core/src/session/connect.js';
 import { noteTerms } from '../../core/src/identity/abilities.js';
-import { base64UrlEncode } from '../../core/src/utils/encoding.js';
+import { base64UrlDecode, base64UrlEncode } from '../../core/src/utils/encoding.js';
+import { deriveAccountRegistry } from '../../core/src/space/account-registry.js';
 import { memoryStores } from '../../core/tests/helpers/memory-stores.js';
 import { createFakeHub, type FakeHub } from '../../core/tests/helpers/fake-transport.js';
 import { hold } from '../../core/tests/helpers/hold.js';
@@ -943,6 +944,11 @@ describe('a session’s node', () => {
     const bob = await accountHolder(hub);
     const his = await bob.node.spaces.create({ name: 'Bob’s', visibility: 'private' });
     await assert.rejects(read(his.id), /isn’t one of the person’s spaces/);
+    // Nor her account's own spaces: the registry that lists them, and her contacts.
+    const registry = await deriveAccountRegistry(base64UrlDecode(granted.grant.accountKey!), ada.did);
+    await assert.rejects(read(registry.space.id), /isn’t one of the person’s spaces/);
+    const contacts = await ada.node.contacts.space();
+    if (contacts) await assert.rejects(read(contacts), /isn’t one of the person’s spaces/);
   });
 
   test('a session keeps at most 8 spaces open, however small: each holds sockets and timers', async () => {
@@ -967,6 +973,21 @@ describe('a session’s node', () => {
       async () => (await Promise.all(spaces.map((space) => openIn(space.id)))).filter(Boolean).length <= 8,
       5000,
       'the spaces used longest ago to close',
+    );
+  });
+
+  test('with nothing online that keeps her list of spaces, a call says so rather than that the space isn’t hers', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    const space = await ada.node.spaces.create({ name: 'Club', visibility: 'private' });
+    const key = await browserKey();
+    const granted = await checkGranted(key.jwk, await ada.wholeAccount(key.did));
+    // Her home tab closes, and nothing else keeps her registry (found by adversarial review).
+    await ada.node.close();
+    const { sessions } = await someSessions(hub);
+    await assert.rejects(
+      sessions.use('s', granted, space.id, async () => null),
+      /list of spaces can’t be reached right now/,
     );
   });
 

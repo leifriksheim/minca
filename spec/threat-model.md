@@ -1013,7 +1013,8 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
   - An MCP service a person connects a chat app through (`minca mcp-server`)
     is such an app, holding its key inside the app's access token, sealed
     under a key of its own: on its disk only between the person allowing it
-    and the app collecting the token, twenty minutes at most, and in memory
+    and the app collecting the token, twenty minutes at most (and in any
+    snapshot or backup taken meanwhile, unsealed), and in memory
     while a node runs. Unless the person chooses spaces, its note is for
     records in the whole account and comes with the account key, so the
     token opens every space the account is in, those it joins later, its
@@ -1045,7 +1046,13 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     can't hold it up): a
     node behind would say a record isn't there, and write a first version in
     a line that has one, ending it (09 §7.5). A space they don't carry fails
-    its own calls only, after waiting for one. Once level, the node is one
+    its own calls only, after waiting for one. With all spaces given, which
+    spaces a call may use comes from the account registry, which only the
+    account's devices and hosts keep: with none of them online, every call
+    fails and says so. What members write reaches the model as data, and
+    with all spaces given a member of any one of them can ask it to read any
+    other and repeat it where they read; only the model's instructions stand
+    against that, as with a bot (§2). Once level, the node is one
     more device writing in the account's lines, with the gap two devices have
     (§3.2), and another device's write that only an unreachable always-on node
     holds can still be followed by a twin. Two processes on one data folder,
