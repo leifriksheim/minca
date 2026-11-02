@@ -75,8 +75,8 @@ const SETTINGS: ReadonlyArray<SpaceGrant> = [
 
 /**
  * Collections of the standard library only those who keep order in a
- * community start: announcements, badges and awards, pins, labels, channels
- * and the space's hosts.
+ * community start: announcements, badges and awards, pins, labels, channels,
+ * the space's hosts and how it presents itself.
  */
 export const STAFF_COLLECTIONS: ReadonlyArray<string> = Object.freeze([
   'std.announcement',
@@ -86,6 +86,7 @@ export const STAFF_COLLECTIONS: ReadonlyArray<string> = Object.freeze([
   'std.label',
   'std.channel',
   'std.host',
+  'std.space-profile',
 ]);
 
 /** Just the founder. Invites are view-only: there is no role to give. */

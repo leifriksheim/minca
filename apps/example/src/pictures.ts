@@ -7,6 +7,8 @@
 import { createContext, useContext } from 'react';
 import { useWatched } from '@minca/react';
 import type { FileRef, SpaceSummary } from '@minca/core';
+import { spaceProfile, type SpaceProfileRecord } from '@minca/core/schemas';
+import { fileRefOf } from './derive/kinds';
 
 /** Where someone's picture is: the space with their newest profile, and its picture there, if any */
 export interface PictureAt {
@@ -42,3 +44,47 @@ export function usePictures(spaces: ReadonlyArray<SpaceSummary>): ReadonlyMap<st
   );
   return found ?? NONE;
 }
+
+/** How a space presents itself (`std.space-profile`): the name and picture it shows, when it says */
+export interface SpaceFace {
+  readonly name?: string | undefined;
+  readonly bio?: string | undefined;
+  readonly avatar?: FileRef | undefined;
+}
+
+const NO_FACES: ReadonlyMap<string, SpaceFace> = new Map();
+
+/**
+ * Each space's `std.space-profile`, by space: the one record at the key the space's own id gives it, so
+ * one naming another space is never read. Not a space for two, which is named for whom it is with.
+ */
+export function useSpaceFaces(spaces: ReadonlyArray<SpaceSummary>): ReadonlyMap<string, SpaceFace> {
+  const ids = spaces.map((space) => space.id);
+  const found = useWatched(
+    async (node) => {
+      const faces = new Map<string, SpaceFace>();
+      for (const space of ids) {
+        const key = await node.records.onePerKey(space, spaceProfile.name, { space }).catch(() => null);
+        const body = key
+          ? (await node.records.get<SpaceProfileRecord>(space, key).catch(() => null))?.body
+          : null;
+        if (body)
+          faces.set(space, {
+            name: body.name?.trim() || undefined,
+            bio: body.bio,
+            avatar: fileRefOf(body.avatar) ?? undefined,
+          });
+      }
+      return faces;
+    },
+    [ids.join(',')],
+    { when: (event) => event.type === 'records' || event.type === 'spaces', settle: 500 },
+  );
+  return found ?? NO_FACES;
+}
+
+/** The faces, for every page under `App` */
+export const SpaceFaces = createContext<ReadonlyMap<string, SpaceFace>>(NO_FACES);
+
+/** How a space presents itself, by its id */
+export const useSpaceFace = (spaceId: string): SpaceFace | undefined => useContext(SpaceFaces).get(spaceId);
