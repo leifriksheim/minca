@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import type { ContactView, SpaceSummary } from '@minca/core';
-import { useAsync, useNode } from '@minca/react';
+import { useAsync, useNode, useWatched } from '@minca/react';
+import { spaceInvite, type SpaceInviteRecord } from '@minca/core/schemas';
 import { Modal } from '@minca/app-shared/Modal';
 import { message, useCopy } from '@minca/app-shared/action';
 import { createInviteLink } from '../spaces';
@@ -388,6 +389,7 @@ export function ContactPicker({
   const lookup = useUsernameLookup(query);
 
   const candidates = (contacts ?? []).filter((c) => !c.blocked && c.space && !members.has(c.did));
+  const invited = useInvitedTo(space.id, candidates);
   const q = query.trim().toLowerCase().replace(/^@/, '');
   const shown = q
     ? candidates.filter((c) => c.name.toLowerCase().includes(q) || c.username?.includes(q))
@@ -480,13 +482,18 @@ export function ContactPicker({
               face={contact.did}
               name={contact.name}
               detail={contact.username ? <Handle username={contact.username} /> : 'Contact'}
-              onOpen={() => toggle(contact.did)}
+              {...(invited.has(contact.did) ? {} : { onOpen: () => toggle(contact.did) })}
             >
-              <Tick
-                checked={picked.has(contact.did)}
-                onChange={() => toggle(contact.did)}
-                label={contact.name}
-              />
+              {/* Invited already: it waits in your space for two until they join. */}
+              {invited.has(contact.did) ? (
+                <span style={{ fontSize: 13, color: ink.muted }}>Invited</span>
+              ) : (
+                <Tick
+                  checked={picked.has(contact.did)}
+                  onChange={() => toggle(contact.did)}
+                  label={contact.name}
+                />
+              )}
             </PersonRow>
           ))}
         </ul>
@@ -534,6 +541,31 @@ export function ContactPicker({
     </div>
   );
 }
+
+/**
+ * The contacts with an invite of yours to this space waiting: a `std.space-invite` you left in your space
+ * for two with them (`contacts.invite`). It goes once they join, and then they are members.
+ */
+function useInvitedTo(spaceId: string, contacts: ReadonlyArray<ContactView>): ReadonlySet<string> {
+  const pairs = contacts.flatMap((c) => (c.space ? [{ did: c.did, space: c.space }] : []));
+  const found = useWatched(
+    async (node) => {
+      const invited = new Set<string>();
+      for (const { did, space } of pairs) {
+        const records = await node.records
+          .list<SpaceInviteRecord>(space, { collection: spaceInvite.name })
+          .catch(() => []);
+        if (records.some((r) => r.root === node.did && r.body?.space === spaceId)) invited.add(did);
+      }
+      return invited;
+    },
+    [spaceId, pairs.map((p) => p.space).join(',')],
+    { when: (event) => event.type === 'records' && pairs.some((p) => p.space === event.space) },
+  );
+  return found ?? NOBODY;
+}
+
+const NOBODY: ReadonlySet<string> = new Set();
 
 function Tick({ checked, onChange, label }: { checked: boolean; onChange: () => void; label?: string }) {
   return (
