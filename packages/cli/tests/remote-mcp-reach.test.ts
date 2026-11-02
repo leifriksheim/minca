@@ -36,17 +36,13 @@ test('only addresses over TLS, at public addresses', async () => {
 });
 
 test('a session’s node holds no more than its budget: a stranger’s space can’t grow it without end', async () => {
-  const memory = boundedMemory(10_000);
-  const one = await memory.stores('spaces/a');
-  const two = await memory.stores('spaces/b');
+  const stores = boundedMemory(10_000);
+  const one = await stores('spaces/a');
+  const two = await stores('spaces/b');
   await one.put('x', new Uint8Array(6000));
   // Every store of the session counts toward it.
   await assert.rejects(two.put('y', new Uint8Array(6000)), /holds more than/);
   // What goes makes room again.
   await one.delete('x');
   await two.put('y', new Uint8Array(6000));
-  // So does a space closed for good: opened again, it starts empty.
-  memory.drop('spaces/b');
-  assert.equal(memory.used(), 0);
-  assert.equal(await (await memory.stores('spaces/b')).get('y'), null);
 });

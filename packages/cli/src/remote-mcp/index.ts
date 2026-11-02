@@ -226,33 +226,27 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
           const args = request.params.arguments ?? {};
           const space = typeof args.space === 'string' ? args.space : undefined;
           const writes = !NODE_ACTIONS.find((action) => action.name === name)?.readOnly;
-          said = await sessions.use(
-            session,
-            granted,
-            space,
-            async (node) => {
-              if (!writes || space === undefined) return callAction(node, name, args);
-              // What the node holds goes when it stops: a write is done once it is kept elsewhere.
-              const since = Date.now();
-              const done = await callAction(node, name, args);
-              if (done.isError) return done;
-              const by = await node.spaces.kept(space, KEPT_MS, since);
-              if (by === 'keepers') return done;
-              if (by === 'peer')
-                return {
-                  ...done,
-                  text:
-                    `${done.text}\n\nKept by a device of this space that is online now, not by an always-on ` +
-                    'host: it reaches the others when that device syncs with them. Say so if it matters.',
-                };
-              throw new Error(
-                'Written, but not yet kept elsewhere: the space’s always-on nodes haven’t all confirmed it, or, if ' +
-                  'it names none, no member online has it. It is sent when they are reachable, while this ' +
-                  'connection is up: read it back before writing it again.',
-              );
-            },
-            writes,
-          );
+          said = await sessions.use(session, granted, space, async (node) => {
+            if (!writes || space === undefined) return callAction(node, name, args);
+            // What the node holds goes when it stops: a write is done once it is kept elsewhere.
+            const since = Date.now();
+            const done = await callAction(node, name, args);
+            if (done.isError) return done;
+            const by = await node.spaces.kept(space, KEPT_MS, since);
+            if (by === 'keepers') return done;
+            if (by === 'peer')
+              return {
+                ...done,
+                text:
+                  `${done.text}\n\nKept by a device of this space that is online now, not by an always-on ` +
+                  'host: it reaches the others when that device syncs with them. Say so if it matters.',
+              };
+            throw new Error(
+              'Written, but not yet kept elsewhere: the space’s always-on nodes haven’t all confirmed it, or, if ' +
+                'it names none, no member online has it. It is sent when they are reachable, while this ' +
+                'connection is up: read it back before writing it again.',
+            );
+          });
         } catch (error) {
           return { content: [{ type: 'text', text: messageOf(error) }], isError: true };
         }

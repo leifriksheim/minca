@@ -3,17 +3,16 @@
  * records-only note a person's account home signed travel inside the app's
  * access token, sealed under a key only the service holds (`oauth.ts`). Each
  * call opens them, and the node they start runs while the app is using it,
- * holding the spaces its calls use in memory, the one used longest ago closed
- * when it needs the room. A write is done once the space's keepers have it.
- * What outlives the node is only where its key has signed (`places`): a key
- * that outlives its node must keep that, or the next would fork it.
+ * holding its spaces in memory. A write is done once the space's keepers have
+ * it. What outlives the node is only where its key has signed (`places`): a
+ * key that outlives its node must keep that, or the next would fork it.
  */
 import { didOf, noteSpaces, type NodeConfig, type P2PNode, type StoreFactory } from '@minca/core';
 import { checkGrant, usableGrant, type Grant } from '@minca/core/session';
 import { startGrantedAgent } from '../agent.js';
 import { isRecord, messageOf } from '../json.js';
 import { importKeyJwk } from '../writer-keys.js';
-import { boundedMemory, type BoundedMemory } from './memory.js';
+import { boundedMemory } from './memory.js';
 
 /** What a token carries: a key, and the note made out to it */
 export interface Granted {
@@ -22,7 +21,7 @@ export interface Granted {
   readonly grant: Grant;
 }
 
-/** Most spaces one connection may be given: each comes with an invite, and the token carrying them goes in every request's headers */
+/** Most spaces one connection may be given: each is synced while it runs */
 const MAX_SPACES = 8;
 
 const ECDSA = { name: 'ECDSA', hash: 'SHA-256' } as const;
@@ -66,7 +65,6 @@ export async function checkGranted(key: unknown, grant: unknown): Promise<Grante
   await checkGrant(checked, await didOf(keys.publicKey), { recordsOnly: true });
   if (!usableGrant(checked) || !noteRunning(checked))
     throw new Error('That grant has run out, or is of a version no peer reads');
-  // Never the whole account: its key would open every space, and go on opening them after a disconnect.
   if (noteSpaces(checked.note) === 'all' || checked.accountKey !== undefined || checked.scope !== 'spaces')
     throw new Error('A chat app here gets the spaces the person picks, not the whole account');
   if (checked.spaces.length > MAX_SPACES) throw new Error(`Pick at most ${MAX_SPACES} spaces for a chat app`);
@@ -82,88 +80,22 @@ const ROOM_WAIT_MS = 30_000;
 
 /** How long a call waits for its node to be level with an always-on node in its space */
 const CATCH_UP_MS = 15_000;
-
 interface Started {
   readonly node: P2PNode;
-  readonly memory: BoundedMemory;
-  /** The spaces it opened, the one used last at the end */
-  readonly open: Map<string, OpenSpace>;
-  /** Spaces being closed: one is opened again only once it has */
-  readonly closing: Map<string, Promise<void>>;
-  /** Whether the person disconnected it: nothing more is answered */
-  revoked: boolean;
+  /** The spaces it was given */
+  readonly spaces: ReadonlyArray<string>;
   stop(): Promise<void>;
-}
-
-interface OpenSpace {
-  /** Calls running in it now */
-  busy: number;
-  /** In a space that names no keepers: whether it holds a write no peer had, when last asked */
-  wrote: boolean;
 }
 
 /** How long an idle node stays up for its writes the space's keepers don't have yet */
 const UNKEPT_MS = 60 * 60_000;
 
-/**
- * Whether a space holds something this node wrote that the keepers don't have
- * yet: closed, it would be lost. In a space that names no keepers nothing
- * counts as pending, and its copy may be the only one, so any write there does.
- */
-async function holdsUnkept(node: P2PNode, space: string, one: OpenSpace): Promise<boolean> {
-  const [status, access] = await Promise.all([
-    node.spaces.status(space).catch(() => null),
-    node.spaces.access(space).catch(() => null),
-  ]);
-  if (status?.pending) return true;
-  return access?.keepers.length === 0 && one.wrote;
-}
-
 /** Whether a node wrote something a space's keepers don't have yet: stopped, it would be lost */
 async function unkept(started: Started): Promise<boolean> {
-  for (const [space, one] of started.open) if (await holdsUnkept(started.node, space, one)) return true;
+  for (const space of started.spaces)
+    if ((await started.node.spaces.status(space).catch(() => null))?.pending) return true;
   return false;
 }
-
-/** Where a space's copy is kept (`openSpaceRuntime` in `packages/core/src/node/space-runtime.ts`) */
-const spaceStore = (space: string) => `spaces/${space}`;
-
-/** Closes a space and forgets its copy: opened again, it syncs from the keepers */
-async function closeSpace(started: Started, space: string): Promise<void> {
-  started.open.delete(space);
-  const closed = (async () => {
-    // Held and let go, it closes: the node keeps nobody else's hold on a session's spaces.
-    const release = await started.node.spaces.hold(space);
-    await release();
-    started.memory.drop(spaceStore(space));
-  })().catch(() => {});
-  started.closing.set(space, closed);
-  await closed;
-  if (started.closing.get(space) === closed) started.closing.delete(space);
-}
-
-/**
- * Makes room for `space`: while the node holds more than half its budget,
- * closes the space used longest ago. Never one a call is using, or one
- * holding a write the keepers don't have yet.
- */
-async function makeRoom(started: Started, space: string): Promise<void> {
-  for (const [other, one] of [...started.open]) {
-    if (started.memory.used() <= started.memory.budget / 2) return;
-    if (other === space || one.busy > 0 || (await holdsUnkept(started.node, other, one))) continue;
-    // A call may have started in it meanwhile.
-    if (one.busy === 0 && started.open.get(other) === one) await closeSpace(started, other);
-  }
-}
-
-/** Whether the grant gives a space: the node holds only the spaces it names */
-const reaches = async (node: P2PNode, space: string) =>
-  (await node.spaces.list()).some((one) => one.id === space);
-
-/** What a call in a space the grant doesn't give is told */
-const NOT_CONNECTED =
-  'This space isn’t connected. To use it here, the person connects Minca again from this chat app and ' +
-  'chooses it at their account home.';
 
 /**
  * Waits up to `waitMs` for the node to be level with the space's keepers
@@ -210,15 +142,13 @@ export interface Sessions {
    * Runs `work` on the node for session `id`, started from `granted` if it
    * isn't running. One node per session, ever: two signing with one key
    * would fork its line. Work in a space runs only once the node is level
-   * with the always-on nodes there. `writes` says the work may write there,
-   * so the space isn't closed for room while its copy may be the only one.
+   * with the always-on nodes there.
    */
   use<T>(
     id: string,
     granted: Granted,
     space: string | undefined,
     work: (node: P2PNode) => Promise<T>,
-    writes?: boolean,
   ): Promise<T>;
   close(): Promise<void>;
 }
@@ -293,81 +223,37 @@ export function createSessions(options: {
   };
 
   /** What a session's node holds in memory, but for its key's places, which last */
-  function storesFor(given: Granted, memory: BoundedMemory): StoreFactory {
+  function storesFor(given: Granted): StoreFactory {
+    const memory = boundedMemory(options.budget);
     const places = options.places?.(given.grant.note.payload.aud);
-    return (where, storeOptions) =>
-      (where === 'writers' && places ? places : memory.stores)(where, storeOptions);
+    return (where, storeOptions) => (where === 'writers' && places ? places : memory)(where, storeOptions);
   }
 
   async function start(id: string, given: Granted): Promise<Started> {
     const keys = await importKeyJwk(given.key);
     if (!keys) throw new Error('The key could not be read');
-    const memory = boundedMemory(options.budget);
     // Reaching only what it was given: what it reads, and the invites in its grant, are the account's to write.
     const agent = await startGrantedAgent({
       grant: given.grant,
       keys,
       // In memory: what it holds is the always-on nodes', and goes when it stops.
-      stores: storesFor(given, memory),
+      stores: storesFor(given),
       network: await options.network(given.grant),
     });
-    const started: Started = {
+    // Disconnected at the account home: it reads and writes no more, from now on.
+    const unsubscribe = agent.node.subscribe((event) => {
+      if (event.type !== 'revoked') return;
+      options.onRevoked?.(id);
+      void stop(id);
+    });
+    return {
       node: agent.node,
-      memory,
-      open: new Map(),
-      closing: new Map(),
-      revoked: false,
+      spaces: given.grant.spaces?.map((space) => space.id) ?? [],
       stop: async () => {
         unsubscribe();
         await agent.stop();
       },
     };
-    // Disconnected at the account home: it reads and writes no more, from now on.
-    const unsubscribe = agent.node.subscribe((event) => {
-      if (event.type !== 'revoked') return;
-      started.revoked = true;
-      options.onRevoked?.(id);
-      void stop(id);
-    });
-    // Joining opened them: each opens again when a call first uses it.
-    for (const space of given.grant.spaces) await closeSpace(started, space.id);
-    return started;
-  }
-
-  /** Opens a space for a call, closing others for room, and runs `work` once the node is level there */
-  async function inSpace<T>(
-    started: Started,
-    space: string,
-    writes: boolean,
-    work: () => Promise<T>,
-  ): Promise<T> {
-    if (!(await reaches(started.node, space))) throw new Error(NOT_CONNECTED);
-    // Nothing awaited between seeing it isn't closing and marking it used, or it could start closing.
-    for (let closing = started.closing.get(space); closing; closing = started.closing.get(space))
-      await closing;
-    const one = started.open.get(space) ?? { busy: 0, wrote: false };
-    // Used now: last in line to be closed.
-    started.open.delete(space);
-    started.open.set(space, one);
-    one.busy += 1;
-    try {
-      await makeRoom(started, space);
-      // A node starts from nothing: one that answered sooner would say a record isn't
-      // there, and write a first version in a line that has one, which ends it (09 §7.5).
-      // Checked on every call, since a link that drops leaves it behind again.
-      if (!(await levelIn(started.node, space, CATCH_UP_MS)))
-        throw new Error(
-          'This space can’t be reached through the always-on nodes right now. Try again in a moment.',
-        );
-      try {
-        return await work();
-      } finally {
-        // Kept by nobody, its copy here is the only one: it isn't closed for room, nor the node stopped early.
-        if (writes) one.wrote = (await started.node.spaces.kept(space, 0).catch(() => null)) === null;
-      }
-    } finally {
-      one.busy -= 1;
-    }
   }
 
   /** The session's node: running, or started now and marked running before anything is awaited */
@@ -400,17 +286,25 @@ export function createSessions(options: {
   }
 
   return {
-    async use(id, given, space, work, writes = false) {
+    async use(id, given, space, work) {
       if (!noteRunning(given.grant)) throw new Error('This connection has run out. Connect again.');
+      if (space !== undefined && !given.grant.spaces.some((granted) => granted.id === space))
+        throw new Error(
+          'This space isn’t connected. To use it here, the person connects Minca again from this chat app ' +
+            'and chooses it at their account home.',
+        );
       const one = nodeOf(id, given);
       one.busy += 1;
       try {
         const started = await one.started;
-        const answer = () => {
-          if (started.revoked) throw new Error('This connection was disconnected. Connect again.');
-          return work(started.node);
-        };
-        return await (space === undefined ? answer() : inSpace(started, space, writes, answer));
+        // A node starts from nothing: one that answered sooner would say a record isn't
+        // there, and write a first version in a line that has one, which ends it (09 §7.5).
+        // Checked on every call, since a link that drops leaves it behind again.
+        if (space !== undefined && !(await levelIn(started.node, space, CATCH_UP_MS)))
+          throw new Error(
+            'This space can’t be reached through the always-on nodes right now. Try again in a moment.',
+          );
+        return await work(started.node);
       } finally {
         one.busy -= 1;
         one.used = Date.now();

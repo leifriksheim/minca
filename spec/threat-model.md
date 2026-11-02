@@ -1015,13 +1015,12 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     under a key of its own: on its disk only between the person allowing it
     and the app collecting the token, twenty minutes at most (and in any
     snapshot or backup taken meanwhile, unsealed), and in memory while a
-    node runs. While the app uses it, a node of its opens a space the person
-    picked when a call first uses it, holds it in memory, reads it and
-    writes records there "via agent", as the app's model asks, and closes
-    the one used longest ago when it needs room; and whoever holds its
-    sealing key and a token can write the same until the note runs out or
-    the person disconnects it, and read those spaces after that too, with
-    the member keys the token carries
+    node runs. While the app uses it, a node of its holds the spaces the
+    person picked in memory, reads them and writes records there "via
+    agent", as the app's model asks; and whoever holds its sealing key and a
+    token can write the same until the note runs out or the person
+    disconnects it, and read those spaces after that too, with the member
+    keys the token carries
     ([#165](https://github.com/leifriksheim/minca/issues/165)). It never
     takes a note for the whole account: its account key would open every
     space the account is in or joins, and its own spaces, for good. A write is done once the space's keepers have it (05 §9), or, in a
@@ -1033,11 +1032,10 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     One the app was told wasn't done, lost before a keeper has it (the node
     evicted, the service stopped), leaves a gap in the key's log, so a later
     disconnect withdraws what it wrote after (03 §6.3), as on any device that
-    lost a write; an idle node waits up to an hour for its keepers first, or, in a space that names none, for any peer to have its write. A call in a space runs
+    lost a write; an idle node waits up to an hour for its keepers first. A call in a space runs
     only once the node is level with the space's keepers connected then, or
     any one peer where it names none (a member who connects and says nothing
-    can't hold it up; so a space closed for room and opened again starts
-    from nothing and waits again): a
+    can't hold it up): a
     node behind would say a record isn't there, and write a first version in
     a line that has one, ending it (09 §7.5). A space they don't carry fails
     its own calls only, after waiting for one. Once level, the node is one
@@ -1048,7 +1046,7 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     ([#287](https://github.com/leifriksheim/minca/issues/287)). Records count until the key is revoked, not until the
     note runs out (06 §2.9), so a token outlives nothing the person can't end
     at their home; the service refuses a token for good once its node sees
-    the revoke, in any space a call opens, but member keys open what they opened after that, so a call
+    the revoke, but member keys open what they opened after that, so a call
     until then may read what synced alongside it
     ([#165](https://github.com/leifriksheim/minca/issues/165)). The home keeps
     one connection per origin (06 §2.10): every chat app connected through a
@@ -1061,15 +1059,11 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     the grant's invites and the spaces name only over TLS at public
     addresses, besides its operator's own (`network.reach`), so a grant's
     invites and the records its node reads can't make it connect inside its
-    own network, and what a node holds is at most 32 MB, in memory, past
-    half of which opening a space closes the one used longest ago, but
-    never one holding a write the keepers don't have yet, nor, in a space
-    that names none, one holding a write no peer had
+    own network, and what a node holds is at most 32 MB, in memory
     (`checkGranted` and `createSessions` in
     `packages/cli/src/remote-mcp/sessions.ts`, `publicNode` in
     `packages/cli/src/remote-mcp/reach.ts`, `boundedMemory` in
     `packages/cli/src/remote-mcp/memory.ts`;
-    `packages/cli/tests/remote-mcp.test.ts`,
     `packages/cli/tests/remote-mcp-server.test.ts`,
     `packages/cli/tests/remote-mcp-reach.test.ts`,
     `packages/core/tests/reach.test.ts`); a host that answers with a redirect
