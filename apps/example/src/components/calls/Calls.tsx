@@ -474,8 +474,8 @@ const whoCanJoin = (space: SpaceSummary) =>
     ? 'Anyone who joins this space with a role can join the call'
     : 'Only people in this space can join';
 
-/** Starts a call in the space, or joins the one going: in the row atop its Overview (`quick-action`) */
-export function CallButton({ space }: { space: SpaceSummary }) {
+/** Starts a call in the space, or joins the one going, with sound only or with the camera on: in the row atop its Overview (`quick-action`) */
+export function CallButton({ space, video = false }: { space: SpaceSummary; video?: boolean }) {
   const { state, calls } = useCalls();
   const [busy, setBusy] = useState(false);
   if (!calls || !space.writable) return null;
@@ -484,18 +484,19 @@ export function CallButton({ space }: { space: SpaceSummary }) {
   const startHere = async () => {
     if (!(await mayLeaveFor(state.current, going ? 'join this one' : 'start one here'))) return;
     setBusy(true);
-    void calls.start(space.id).finally(() => setBusy(false));
+    void calls.start(space.id, { video }).finally(() => setBusy(false));
   };
   return (
     <button
       onClick={() => void startHere()}
       disabled={busy || here}
-      title={whoCanJoin(space)}
+      title={going ? `Join the call · ${going.people.length}` : whoCanJoin(space)}
       className="quick-action"
+      // Green while a call is going here, so joining it is plain.
       style={here || going ? { color: palette.accent.good } : undefined}
     >
-      <Icon name="phone" size={20} />
-      {here ? 'In the call' : going ? `Join · ${going.people.length}` : 'Call'}
+      <Icon name={video ? 'camera' : 'phone'} size={20} />
+      {video ? 'Video' : 'Audio'}
     </button>
   );
 }
