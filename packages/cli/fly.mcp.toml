@@ -1,0 +1,45 @@
+# Minca's MCP service on Fly: `minca mcp-server`, for Claude, ChatGPT and other
+# remote-MCP chat apps. Change `app` and MINCA_MCP_URL, then, from the
+# repository root:
+#
+#   fly launch --no-deploy --copy-config --config packages/cli/fly.mcp.toml --name my-mcp
+#   fly volumes create mcp_data --size 1 --region ams --config packages/cli/fly.mcp.toml
+#   fly certs add mcp.example.com --config packages/cli/fly.mcp.toml
+#   fly deploy . --config packages/cli/fly.mcp.toml
+#
+# Every token names MINCA_MCP_URL, so apps must connect through that address.
+
+app = "minca-mcp"
+primary_region = "ams"
+# Idle nodes with writes the keepers don't have yet get a moment to hand them over.
+kill_timeout = 30
+
+[build]
+  dockerfile = "Dockerfile.mcp"
+
+[env]
+  MINCA_MCP_URL = "https://mcp.minca.social"
+  MINCA_MCP_HOME = "https://home.minca.social"
+
+# The token secret (lose it and every app is signed out) and each key's
+# places, which must never roll back: a key would sign at a place it used.
+[mounts]
+  source = "mcp_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Its nodes live in memory: stopping the machine drops them.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.http_options]
+    idle_timeout = 900
+
+# One machine only: two processes on the same places would fork keys.
+# Don't `fly scale count` past 1. Up to 32 nodes of 32 MB each run at once.
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"
