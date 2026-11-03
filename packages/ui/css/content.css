@@ -177,6 +177,73 @@ figure {
   }
 }
 
+/* A list inside a card or a dialog is part of it: rows divided by lines, no box of its own */
+:is(article, dialog) :is(ul, ol)[role='list'] {
+  border: none;
+  border-radius: 0;
+  background: none;
+
+  & > li {
+    padding-inline: 0;
+  }
+}
+
+/* Rows and columns of data: a header row, rows divided by lines */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  & :is(th, td) {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--color-divider);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  & th {
+    color: var(--color-text-muted);
+    font-size: var(--text-small);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+}
+
+/* Text kept as written: code, a query, a long value */
+pre {
+  margin: 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  border-radius: var(--radius);
+  background: var(--color-sunken);
+  font: 12px / 1.5 var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Something folded away: its summary opens it */
+details > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space);
+  list-style: none;
+  cursor: pointer;
+
+  &::-webkit-details-marker {
+    display: none;
+  }
+
+  &::after {
+    content: '›';
+    color: var(--color-text-muted);
+    transition: transform 0.15s ease;
+  }
+}
+
+details[open] > summary::after {
+  transform: rotate(90deg);
+}
+
 /* A short label: a count, a status, a category */
 .tag {
   display: inline-flex;
@@ -200,7 +267,17 @@ aside {
   color: var(--color-text);
 }
 
-/* State, on a tag or a notice */
+/* State: the text of anything, and the ground of a tag or a notice */
+[data-tone='good'] {
+  color: var(--color-good);
+}
+[data-tone='warn'] {
+  color: var(--color-warn);
+}
+[data-tone='danger'] {
+  color: var(--color-danger);
+}
+
 :is(.tag, aside) {
   &[data-tone='good'] {
     background: var(--color-good-soft);
@@ -264,7 +341,7 @@ meter {
     margin-bottom: var(--space);
   }
 
-  & > p {
+  & > p:not([role]) {
     max-width: 300px;
     color: var(--color-text-muted);
   }

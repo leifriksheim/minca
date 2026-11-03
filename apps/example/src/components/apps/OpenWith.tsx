@@ -1,5 +1,4 @@
 import { Modal } from '@minca/app-shared/Modal';
-import { palette, styles, ui } from '../../styles';
 import { AppIcon } from './AppIcon';
 import type { AppEntry } from './entries';
 
@@ -18,30 +17,19 @@ export function OpenWith({
 }) {
   return (
     <Modal title="Open with" onClose={onClose}>
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <ul role="list">
         {apps.map((app) => (
-          <button key={app.id} type="button" data-row onClick={() => onChoose(app)} style={row}>
-            <AppIcon app={app} size={28} />
-            <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-              <span style={{ fontWeight: 600 }}>{app.title}</span>
-              {app.description && <span style={{ ...styles.faint, ...ui.ellipsis }}>{app.description}</span>}
-            </span>
-          </button>
+          <li key={app.id}>
+            <button type="button" data-intent="open" className="row" onClick={() => onChoose(app)}>
+              <AppIcon app={app} size={28} />
+              <span className="stack" data-gap="tight">
+                <strong>{app.title}</strong>
+                {app.description && <small className="truncate">{app.description}</small>}
+              </span>
+            </button>
+          </li>
         ))}
-      </div>
+      </ul>
     </Modal>
   );
 }
-
-const row = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 12,
-  padding: '10px 8px',
-  border: 'none',
-  borderRadius: palette.radius.md,
-  background: 'none',
-  textAlign: 'left' as const,
-  fontSize: 14,
-  width: '100%',
-};

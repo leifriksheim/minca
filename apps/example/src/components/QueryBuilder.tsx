@@ -1,11 +1,9 @@
-import type { CSSProperties } from 'react';
 import type { Query } from '@minca/core';
 import type { Clause, ClauseField } from '../derive/conditions';
 import type { Sort } from '../derive/filters';
 import type { People } from '../derive/people';
 import { ClauseList } from './automations/parts';
-import { styles, palette, hstack, stack } from '../styles';
-import { QuietButton } from './Buttons';
+import styles from './QueryBuilder.module.css';
 
 export const PAGE_SIZES = [10, 25, 50, 100] as const;
 
@@ -42,9 +40,9 @@ export function QueryBuilder({
   ];
 
   return (
-    <div style={stack(8)}>
-      <div style={{ ...hstack(8), alignItems: 'flex-start', flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: 260 }}>
+    <div className="stack">
+      <div className="row">
+        <div className={styles.clauses}>
           <ClauseList
             fields={fields}
             clauses={clauses}
@@ -56,17 +54,13 @@ export function QueryBuilder({
           />
         </div>
         {clauses.length > 0 && (
-          <QuietButton onClick={() => onClauses([])} style={{ height: 30, color: palette.ink.muted }}>
+          <button data-intent="quiet" onClick={() => onClauses([])}>
             Clear filters
-          </QuietButton>
+          </button>
         )}
-        <label style={labelStyle}>
+        <label className="row">
           Sort by
-          <select
-            value={sort.field}
-            onChange={(e) => onSort({ ...sort, field: e.target.value })}
-            style={select}
-          >
+          <select value={sort.field} onChange={(e) => onSort({ ...sort, field: e.target.value })}>
             {sortable.map((f) => (
               <option key={f.name} value={f.name}>
                 {f.label}
@@ -77,15 +71,14 @@ export function QueryBuilder({
             value={sort.direction}
             onChange={(e) => onSort({ ...sort, direction: e.target.value === 'asc' ? 'asc' : 'desc' })}
             aria-label="Direction"
-            style={select}
           >
             <option value="desc">{directionLabel(sortable, sort.field, 'desc')}</option>
             <option value="asc">{directionLabel(sortable, sort.field, 'asc')}</option>
           </select>
         </label>
-        <label style={labelStyle}>
+        <label className="row">
           Per page
-          <select value={pageSize} onChange={(e) => onPageSize(Number(e.target.value))} style={select}>
+          <select value={pageSize} onChange={(e) => onPageSize(Number(e.target.value))}>
             {PAGE_SIZES.map((n) => (
               <option key={n} value={n}>
                 {n}
@@ -96,21 +89,10 @@ export function QueryBuilder({
       </div>
 
       <details>
-        <summary style={{ ...styles.faint, cursor: 'pointer' }}>As a query</summary>
-        <pre
-          style={{
-            margin: '6px 0 0',
-            padding: '10px 12px',
-            fontFamily: palette.mono,
-            fontSize: 12,
-            lineHeight: 1.6,
-            overflowX: 'auto',
-            borderRadius: palette.radius.md,
-            background: palette.surface.sunken,
-          }}
-        >
-          {JSON.stringify(query, null, 2)}
-        </pre>
+        <summary>
+          <small>As a query</small>
+        </summary>
+        <pre>{JSON.stringify(query, null, 2)}</pre>
       </details>
     </div>
   );
@@ -131,12 +113,3 @@ function directionLabel(fields: ReadonlyArray<ClauseField>, name: string, direct
       return asc ? 'Low → high' : 'High → low';
   }
 }
-
-const select: CSSProperties = { ...styles.input, height: 30, fontSize: 13, width: 'auto', padding: '0 8px' };
-const labelStyle: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 6,
-  fontSize: 13,
-  color: palette.ink.muted,
-};

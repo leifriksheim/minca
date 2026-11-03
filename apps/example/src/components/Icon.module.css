@@ -1,0 +1,4 @@
+/* Its size, whatever the row it is in leaves */
+.icon {
+  flex-shrink: 0;
+}

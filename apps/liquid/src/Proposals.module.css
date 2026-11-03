@@ -1,0 +1,186 @@
+/* Topics to filter by, in one line that scrolls across */
+.scroll {
+  display: flex;
+  gap: var(--space-tight);
+  overflow-x: auto;
+  scrollbar-width: none;
+
+  & > * {
+    flex-shrink: 0;
+  }
+}
+
+/* A proposal in the list: its support beside it, the whole card opens it */
+.card {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 14px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+
+  & h2 {
+    overflow-wrap: anywhere;
+  }
+
+  & :global(.shape) {
+    transition: transform 0.5s cubic-bezier(0.3, 1.6, 0.5, 1);
+  }
+
+  @media (hover: hover) {
+    &:hover {
+      background: var(--color-sunken);
+    }
+
+    &:hover :global(.shape) {
+      transform: rotate(18deg) scale(1.06);
+    }
+  }
+
+  @media (max-width: 640px) {
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 12px;
+  }
+}
+
+.numbers {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+
+  & b {
+    color: var(--choice);
+    font-weight: 600;
+  }
+}
+
+/* An answer's colour, as a dot */
+.dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--choice);
+}
+
+/* An answer, in its colour */
+.choice {
+  margin-inline-start: auto;
+  color: var(--choice);
+  font-weight: 600;
+}
+
+.back {
+  align-self: flex-start;
+}
+
+/* A proposal, and its count beside it; one column on a phone */
+.two {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 20px;
+  align-items: start;
+
+  @media (max-width: 760px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.side {
+  position: sticky;
+  top: var(--space-loose);
+
+  @media (max-width: 760px) {
+    position: static;
+  }
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+
+  & h1 {
+    overflow-wrap: anywhere;
+  }
+}
+
+.body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The three answers side by side, sharing navy rules */
+.votes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-surface);
+
+  & > button {
+    flex-direction: column;
+    gap: var(--space-tight);
+    height: 76px;
+    border: none;
+    border-radius: 0;
+    font-size: var(--text-body);
+    font-weight: 600;
+
+    & + button {
+      border-left: 1px solid var(--color-outline);
+    }
+
+    &[aria-pressed='true'],
+    &[aria-pressed='true']:hover:not(:disabled) {
+      background: var(--choice);
+      color: var(--color-on-action);
+      opacity: 1;
+
+      & .dot {
+        background: var(--color-surface);
+      }
+    }
+
+    & small {
+      color: inherit;
+      opacity: 0.75;
+    }
+
+    @media (max-width: 640px) {
+      height: 64px;
+    }
+  }
+}
+
+/* The count of each answer, big, in its colour */
+.counts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space);
+
+  & > div {
+    display: flex;
+    flex-direction: column;
+  }
+
+  & strong {
+    color: var(--choice);
+    font: 700 26px / 1.2 var(--font-display);
+    letter-spacing: -0.04em;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.voters {
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.number {
+  flex: 0 0 72px;
+}
+
+.actions {
+  justify-content: flex-end;
+}

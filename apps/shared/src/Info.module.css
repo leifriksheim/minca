@@ -1,0 +1,33 @@
+/* A small circled "i" in the text it explains, and what it opens floating under it */
+.info {
+  position: relative;
+
+  & > button {
+    width: 16px;
+    min-height: 16px;
+    margin-left: 6px;
+    padding: 0;
+    vertical-align: text-bottom;
+    font-size: 10px;
+  }
+
+  & > [role='note'] {
+    position: absolute;
+    z-index: 30;
+    top: 22px;
+    left: 0;
+    width: 260px;
+    padding: 12px 14px;
+    border: 1px solid var(--color-outline);
+    border-radius: var(--radius);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-float);
+
+    /* Anchored near an edge it could run off a phone: pinned to the bottom, it always fits. */
+    @media (max-width: 640px) {
+      position: fixed;
+      inset: auto 16px calc(16px + env(safe-area-inset-bottom));
+      width: auto;
+    }
+  }
+}

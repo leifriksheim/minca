@@ -1,0 +1,14 @@
+/* A dot that breathes while waiting for the host */
+.pulse {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-good);
+  animation: breathe 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes breathe {
+  from {
+    opacity: 0;
+  }
+}

@@ -1,0 +1,31 @@
+/* A line to paste, on a dark row: words light, flags dimmed, addresses and the prompt green */
+.terminal {
+  --flag: color-mix(in srgb, var(--color-page) 55%, var(--color-text-strong));
+  --address: color-mix(in srgb, var(--color-good) 45%, var(--color-good-soft));
+
+  display: flex;
+  align-items: center;
+  padding: 6px 6px 6px 18px;
+  border-radius: var(--radius);
+  background: var(--color-text-strong);
+
+  & code {
+    flex: 1;
+    padding: 10px 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    color: var(--color-sunken);
+    white-space: nowrap;
+  }
+
+  & [data-kind='flag'],
+  & button {
+    color: var(--flag);
+  }
+
+  & [data-kind='address'],
+  & [data-kind='prompt'],
+  & button[aria-label='Copied'] {
+    color: var(--address);
+  }
+}

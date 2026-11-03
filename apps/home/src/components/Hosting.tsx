@@ -19,7 +19,6 @@ import {
 import { ChipIn, RemindMe, dollars } from '@minca/app-shared/Payment';
 import { Benefit, FeatureIcon, StatusPill, shortDate, timeLeft, type Tone } from '@minca/app-shared/Feature';
 import { message, useAction } from '@minca/app-shared/action';
-import { styles, palette, hstack, stack } from '../styles';
 
 const DAY = 86_400;
 /** A balance is worth topping up this long before it runs out */
@@ -55,12 +54,12 @@ export function Hosting({ node }: { node: P2PNode }) {
   const again = () => act('again', load);
 
   return (
-    <section id="hosting" className="surface" style={{ ...styles.settingsSection, gap: 16 }}>
+    <article id="hosting" className="stack" data-gap="loose">
       {hosts === null && !error ? (
         <Loader label="Asking your host" showLabel />
       ) : hosts?.length ? (
         <>
-          <h2 style={styles.sectionHeading}>Always online</h2>
+          <h2>Always online</h2>
           {hosts.map((host) => (
             <HostRow
               key={host.url}
@@ -78,7 +77,7 @@ export function Hosting({ node }: { node: P2PNode }) {
         <Offer offer={offer} onTurnOn={() => setDialog({ url: null })} />
       )}
 
-      {error && <p style={styles.dangerText}>{error}</p>}
+      {error && <p role="alert">{error}</p>}
 
       {dialog && (
         <HostingDialog
@@ -101,31 +100,31 @@ export function Hosting({ node }: { node: P2PNode }) {
           }}
         />
       )}
-    </section>
+    </article>
   );
 }
 
 /** Off: what it gives, the price, and one button */
 function Offer({ offer, onTurnOn }: { offer: HostDescription | null; onTurnOn: () => void }) {
   return (
-    <div style={stack(16)}>
-      <div style={{ ...hstack(14), alignItems: 'center' }}>
+    <div className="stack" data-gap="loose">
+      <div className="row" data-gap="loose">
         <FeatureIcon kind="online" size={44} />
-        <div style={{ flex: 1 }}>
-          <h2 style={styles.sectionHeading}>Keep your spaces online</h2>
-          <p style={{ ...styles.quiet, marginTop: 2 }}>
-            {offer ? `${offer.name} · ${hostTerms(offer)}` : 'With a host you choose'}
-          </p>
+        <div>
+          <h2>Keep your spaces online</h2>
+          <small>{offer ? `${offer.name} · ${hostTerms(offer)}` : 'With a host you choose'}</small>
         </div>
       </div>
-      <ul style={{ listStyle: 'none', ...stack(10) }}>
+      <ul role="list">
         <Benefit glyph="clock">Reachable when all your devices are off</Benefit>
         <Benefit glyph="restore">Everything back on a new device, from your recovery code alone</Benefit>
         <Benefit glyph="shield">Encrypted end to end: the host keeps it and can't read it</Benefit>
       </ul>
-      <button onClick={onTurnOn} data-variant="primary" style={styles.addButton}>
-        Turn on
-      </button>
+      <div>
+        <button onClick={onTurnOn} data-intent="primary">
+          Turn on
+        </button>
+      </div>
     </div>
   );
 }
@@ -156,52 +155,28 @@ function HostRow({
       ? Math.min(1, status.bytes / status.quota)
       : null;
   return (
-    <div style={stack(12)}>
-      <div style={{ ...hstack(14), alignItems: 'center', flexWrap: 'wrap' }}>
+    <div className="stack">
+      <div className="row" data-gap="loose">
         <HostStatusRow size={40} name={host.name} pill={state} line={state.line}>
           {!host.live && (
-            <button
-              onClick={onAgain}
-              disabled={busy !== null}
-              data-variant="quiet"
-              style={styles.smallButton}
-            >
+            <button onClick={onAgain} disabled={busy !== null}>
               {busy === 'again' ? 'Asking…' : 'Try again'}
             </button>
           )}
           {host.fund && (
-            <button
-              onClick={onAddTime}
-              data-variant={needsPaying(host) ? 'primary' : 'quiet'}
-              style={needsPaying(host) ? styles.darkSmall : styles.smallButton}
-            >
+            <button onClick={onAddTime} data-intent={needsPaying(host) ? 'primary' : undefined}>
               {status?.plan === 'free' ? 'More room' : 'Add money'}
             </button>
           )}
-          <button onClick={onStop} disabled={busy !== null} data-variant="danger" style={styles.smallButton}>
+          <button onClick={onStop} disabled={busy !== null} data-intent="danger">
             Stop
           </button>
         </HostStatusRow>
       </div>
       {room !== null && status?.bytes !== undefined && status.quota !== undefined && (
-        <div style={stack(6)}>
-          <div
-            style={{
-              height: 4,
-              borderRadius: palette.radius.pill,
-              background: palette.surface.sunken,
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                width: `${Math.max(room * 100, 1)}%`,
-                height: '100%',
-                background: room >= 1 ? palette.accent.danger : palette.accent.base,
-              }}
-            />
-          </div>
-          <p style={styles.faint}>
+        <div className="stack" data-gap="tight">
+          <progress value={Math.max(room, 0.01)} />
+          <small>
             {size(status.bytes)} of {size(status.quota)} used
             {status.full
               ? stillFree(status.full)
@@ -210,13 +185,13 @@ function HostRow({
               : room >= 1
                 ? ' · a new space waits until there is room'
                 : ''}
-          </p>
+          </small>
         </div>
       )}
       {room === null && status?.bytes !== undefined && status.daily !== undefined && status.daily > 0 && (
-        <p style={styles.faint}>
+        <small>
           {size(status.bytes)} kept · about {dollars(status.daily * 30)} a month as they are now
-        </p>
+        </small>
       )}
       {status?.over && status.over.length > 0 && (
         <OverSpaces node={node} host={host.name} over={status.over} />
@@ -237,28 +212,18 @@ function OverSpaces({ node, host, over }: { node: P2PNode; host: string; over: R
   const spaces = useAsync(() => node.spaces.list(), [node]);
   const names = new Map(spaces.status === 'done' ? spaces.value.map((space) => [space.id, space.name]) : []);
   return (
-    <ul style={styles.todoList}>
+    <ul role="list">
       {over.map((one) => (
-        <li
-          key={one.space}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            padding: '10px 12px',
-            borderRadius: palette.radius.md,
-            border: `1px solid ${palette.surface.line}`,
-          }}
-        >
+        <li key={one.space} className="row">
           <StatusPill tone={stillFree(one) ? 'warn' : 'bad'}>
             {stillFree(one) ? `Free until ${shortDate(one.until)}` : 'Needs a fund'}
           </StatusPill>
-          <span style={{ flex: 1, fontSize: 13, color: palette.ink.muted }}>
+          <small>
             {names.get(one.space) ?? 'A community you’re in'} has outgrown free hosting.{' '}
             {stillFree(one)
               ? `Start a fund in it to keep it at ${host} after that.`
               : `Its own fund keeps it at ${host} now; it stays on members' devices either way.`}
-          </span>
+          </small>
         </li>
       ))}
     </ul>
@@ -299,16 +264,16 @@ function HostingDialog({
 
   return (
     <Modal title="Keep your spaces online" onClose={onClose} width={460}>
-      <div style={stack(18)}>
-        <div style={{ ...hstack(14), alignItems: 'center' }}>
+      <div className="stack" data-gap="loose">
+        <div className="row" data-gap="loose">
           <FeatureIcon kind="online" size={44} />
           <div>
-            <p style={styles.sectionHeading}>{host ? host.name : 'Always online'}</p>
-            <p style={styles.quiet}>
+            <h3>{host ? host.name : 'Always online'}</h3>
+            <small>
               {host
                 ? `$${host.fund?.perGb ?? ''} a GB a month, from what you add`
                 : 'Your spaces, reachable around the clock'}
-            </p>
+            </small>
           </div>
         </div>
 
@@ -335,14 +300,10 @@ function HostingDialog({
             addressLabel="Continue"
           />
         )}
-        {problem && (
-          <p role="alert" style={styles.dangerText}>
-            {problem}
-          </p>
-        )}
-        <p style={{ ...styles.faint, lineHeight: 1.5, textAlign: 'center' }}>
+        {problem && <p role="alert">{problem}</p>}
+        <small>
           The host sees which spaces exist, how big they are and when they change, never what's in them.
-        </p>
+        </small>
       </div>
     </Modal>
   );
@@ -353,34 +314,26 @@ function StopDialog({ node, host, onClose }: { node: P2PNode; host: HostingView;
   const { run, busy, error } = useAction();
   const status = host.status;
   const stop = () => void run(() => node.hosting.stop(host.url).then(onClose));
-  const said = { fontSize: 14, color: palette.ink.body, lineHeight: 1.5 };
   return (
     <Modal title={`Stop using ${host.name}?`} onClose={onClose} width={460}>
-      <div style={stack(12)}>
-        <p style={said}>
+      <div className="stack">
+        <p>
           {host.name} forgets your spaces. They stay on your devices, and are reachable only while one of them
           is online.
         </p>
         {host.fund?.recurring && host.fund.manage && (
-          <p style={said}>
+          <p>
             A card that adds every month keeps adding until it is stopped.{' '}
-            <a
-              href={host.fund.manage}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: palette.ink.strong }}
-            >
+            <a href={host.fund.manage} target="_blank" rel="noopener noreferrer">
               Stop it at the payment provider
             </a>
           </p>
         )}
         {status && (status.balance ?? 0) > 0 && (
-          <p style={said}>The {dollars(status.balance ?? 0)} left isn't paid back.</p>
+          <p>The {dollars(status.balance ?? 0)} left isn't paid back.</p>
         )}
         {!host.live && (
-          <p style={said}>
-            {host.name} isn't answering right now, so it may be a while before it drops what it has.
-          </p>
+          <p>{host.name} isn't answering right now, so it may be a while before it drops what it has.</p>
         )}
         <StopFooter name={host.name} busy={busy} error={error} onKeep={onClose} onStop={stop} />
       </div>
@@ -404,36 +357,13 @@ export function HostingDue() {
   return due.map((host) => {
     const state = standing(host);
     return (
-      <div
-        key={host.url}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          marginBottom: 16,
-          padding: '10px 12px 10px 14px',
-          // A row inside the section: the row corner, a hairline.
-          borderRadius: palette.radius.md,
-          border: `1px solid ${palette.surface.line}`,
-          background: palette.surface.card,
-        }}
-      >
+      <aside key={host.url} className="row">
         <StatusPill tone={state.tone}>{state.pill}</StatusPill>
-        <span style={{ flex: 1, fontSize: 13, color: palette.ink.muted }}>
-          Your spaces at {host.name}. They stay on your devices either way.
-        </span>
-        <a
-          href="#hosting"
-          style={{
-            ...styles.smallButton,
-            display: 'inline-flex',
-            alignItems: 'center',
-            textDecoration: 'none',
-          }}
-        >
+        <small>Your spaces at {host.name}. They stay on your devices either way.</small>
+        <a href="#hosting" data-intent>
           Add money
         </a>
-      </div>
+      </aside>
     );
   });
 }

@@ -1,6 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { Shape } from './shapes';
-import { palette, hstack } from './styles';
 
 /** Line glyphs on a 16-unit grid, drawn with the current colour, like the example's icons */
 const GLYPHS = {
@@ -33,7 +32,7 @@ export function Glyph({ name, size = 16, style }: { name: GlyphName; size?: numb
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden
-      style={{ flexShrink: 0, ...style }}
+      style={style}
     >
       <path d={GLYPHS[name]} />
     </svg>
@@ -52,34 +51,17 @@ export function FeatureIcon({ kind, size = 40 }: { kind: keyof typeof FEATURES; 
 }
 
 export type Tone = 'good' | 'warn' | 'bad' | 'neutral';
-const { accent, ink, surface } = palette;
-const TONES: Record<Tone, { dot: string; text: string; background: string }> = {
-  good: { dot: accent.good, text: accent.good, background: accent.goodSoft },
-  warn: { dot: accent.warn, text: accent.warn, background: accent.warnSoft },
-  bad: { dot: accent.danger, text: accent.danger, background: accent.dangerSoft },
-  neutral: { dot: ink.faint, text: ink.muted, background: surface.sunken },
+const TONES: Record<Tone, 'good' | 'warn' | 'danger' | undefined> = {
+  good: 'good',
+  warn: 'warn',
+  bad: 'danger',
+  neutral: undefined,
 };
 
-/** A short state, as a coloured pill with a dot: Online, Runs out in 5 days, Needs payment */
+/** A short state, as a tag in its tone: Online, Runs out in 5 days, Needs payment */
 export function StatusPill({ tone, children }: { tone: Tone; children: ReactNode }) {
-  const colors = TONES[tone];
   return (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 6,
-        height: 22,
-        padding: '0 8px',
-        borderRadius: 999,
-        fontSize: 12,
-        fontWeight: 500,
-        color: colors.text,
-        background: colors.background,
-        whiteSpace: 'nowrap',
-      }}
-    >
-      <span style={{ width: 6, height: 6, borderRadius: 3, background: colors.dot }} />
+    <span className="tag" data-tone={TONES[tone]}>
       {children}
     </span>
   );
@@ -88,24 +70,9 @@ export function StatusPill({ tone, children }: { tone: Tone; children: ReactNode
 /** A benefit in a list: a small check and one short line */
 export function Benefit({ glyph = 'check', children }: { glyph?: GlyphName; children: ReactNode }) {
   return (
-    <li style={{ ...hstack(10), alignItems: 'flex-start', fontSize: 14, color: palette.ink.body }}>
-      <span
-        style={{
-          width: 20,
-          height: 20,
-          borderRadius: 10,
-          flexShrink: 0,
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: palette.surface.sunken,
-          color: palette.ink.strong,
-          marginTop: 0,
-        }}
-      >
-        <Glyph name={glyph} size={12} style={{ strokeWidth: 1.8 }} />
-      </span>
-      <span style={{ lineHeight: 1.45 }}>{children}</span>
+    <li className="row">
+      <Glyph name={glyph} />
+      <p>{children}</p>
     </li>
   );
 }

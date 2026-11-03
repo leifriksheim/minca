@@ -11,11 +11,6 @@ import { fileRefOf } from '../derive/kinds';
 import { isObject } from '../derive/schema-ui';
 import { useSpaceHere } from './Person';
 import { FileValue } from './KindValue';
-import { styles, hstack } from '../styles';
-import { LinkButton } from './Buttons';
-
-export const labelStyle = { display: 'flex', flexDirection: 'column' as const, gap: 4, fontSize: 13 };
-const row = { ...hstack(8), alignItems: 'center', flexWrap: 'wrap' as const };
 
 /** What a timed value starts at when "all day" is turned off */
 const MORNING = '09:00';
@@ -52,15 +47,14 @@ export function WhenInput({
     onChange(next.allDay ? next.day : rfc3339(fromInputs(next.day, next.clock)));
   };
   return (
-    <div style={labelStyle}>
-      {label}
-      <div style={row}>
+    <fieldset>
+      <legend>{label}</legend>
+      <div className="row">
         <input
           type="date"
           aria-label="Day"
           value={day}
           onChange={(e) => write({ ...typed, day: e.target.value })}
-          style={{ ...styles.input, width: 'auto' }}
         />
         {!allDay && (
           <input
@@ -69,10 +63,9 @@ export function WhenInput({
             value={clock}
             disabled={!day}
             onChange={(e) => write({ ...typed, clock: e.target.value || MORNING })}
-            style={{ ...styles.input, width: 'auto' }}
           />
         )}
-        <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+        <label>
           <input
             type="checkbox"
             checked={allDay}
@@ -81,7 +74,7 @@ export function WhenInput({
           All day
         </label>
       </div>
-    </div>
+    </fieldset>
   );
 }
 
@@ -107,16 +100,15 @@ export function MoneyInput({
         : undefined,
     );
   return (
-    <div style={labelStyle}>
-      {label}
-      <div style={row}>
+    <fieldset>
+      <legend>{label}</legend>
+      <div className="row">
         <input
           inputMode="decimal"
           aria-label="Amount"
           placeholder="12.50"
           value={amount}
           onChange={(e) => write(e.target.value, currency)}
-          style={{ ...styles.input, flex: 1 }}
         />
         <input
           aria-label="Currency"
@@ -125,7 +117,6 @@ export function MoneyInput({
           maxLength={3}
           value={currency}
           onChange={(e) => write(amount, e.target.value)}
-          style={{ ...styles.input, width: 96 }}
         />
         <datalist id="currencies">
           {CURRENCIES.map((code) => (
@@ -133,7 +124,7 @@ export function MoneyInput({
           ))}
         </datalist>
       </div>
-    </div>
+    </fieldset>
   );
 }
 
@@ -176,10 +167,10 @@ export function FileInput({
   };
 
   return (
-    <div style={labelStyle}>
-      {label}
+    <fieldset>
+      {label && <legend>{label}</legend>}
       {ref && <FileValue value={ref} alt={alt} />}
-      <div style={row}>
+      <div className="row">
         <input
           ref={input}
           type="file"
@@ -188,19 +179,13 @@ export function FileInput({
           accept={picture ? 'image/*' : undefined}
           onChange={(e) => void add(e.target.files)}
         />
-        <button
-          type="button"
-          data-variant="ghost"
-          style={styles.smallButton}
-          disabled={busy || !space}
-          onClick={() => input.current?.click()}
-        >
+        <button type="button" disabled={busy || !space} onClick={() => input.current?.click()}>
           {busy ? 'Adding…' : ref ? 'Replace' : picture ? 'Add a picture' : 'Add a file'}
         </button>
         {ref && (
-          <LinkButton type="button" onClick={() => onChange(undefined)}>
+          <button type="button" data-intent="quiet" onClick={() => onChange(undefined)}>
             Remove
-          </LinkButton>
+          </button>
         )}
       </div>
       {current && ref && (
@@ -209,11 +194,10 @@ export function FileInput({
           placeholder="What it shows, for people who can't see it"
           value={alt}
           onChange={(e) => onChange({ ...current, alt: e.target.value || undefined })}
-          style={styles.input}
         />
       )}
-      {error && <p style={styles.error}>{error}</p>}
-    </div>
+      {error && <p role="alert">{error}</p>}
+    </fieldset>
   );
 }
 
@@ -232,8 +216,8 @@ export function FileListInput({
   const items: ReadonlyArray<unknown> = Array.isArray(value) ? value : [];
   const write = (next: ReadonlyArray<unknown>) => onChange(next.length ? next : undefined);
   return (
-    <div style={labelStyle}>
-      {label}
+    <fieldset>
+      <legend>{label}</legend>
       {items.map((item, index) => (
         <FileInput
           key={index}
@@ -255,6 +239,6 @@ export function FileListInput({
         value={undefined}
         onChange={(next) => write([...items, next])}
       />
-    </div>
+    </fieldset>
   );
 }

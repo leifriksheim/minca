@@ -1,0 +1,8 @@
+.wordmark {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--color-text-strong);
+  font: 800 18px var(--font-display);
+  letter-spacing: -0.05em;
+}

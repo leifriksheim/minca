@@ -1,0 +1,26 @@
+/* A face, with a dot on its corner while they are online */
+.face {
+  position: relative;
+  display: inline-flex;
+}
+
+.online {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--color-good);
+  box-shadow: 0 0 0 2px var(--color-surface);
+}
+
+/* A row's menu, under its button at the end */
+.anchor {
+  position: relative;
+
+  & > menu {
+    top: calc(100% + 4px);
+    right: 0;
+  }
+}

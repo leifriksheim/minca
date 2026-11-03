@@ -7,7 +7,7 @@ import { SignIn } from './components/SignIn';
 import { HostingDue } from './components/Hosting';
 import { Wordmark } from '@minca/app-shared/Wordmark';
 import { TABS, useTab } from './tabs';
-import { styles } from './styles';
+import styles from './App.module.css';
 
 /** The account home: sign in, then the account and everything about it, a tab at a time. */
 export function App() {
@@ -16,46 +16,38 @@ export function App() {
 
   if (state?.stage !== 'ready') {
     return (
-      <div className="page">
-        <div style={styles.card}>
-          <Wordmark />
-          <AccountHint />
-          <SignIn />
-        </div>
-      </div>
+      <main className={styles.signIn}>
+        <Wordmark />
+        <AccountHint />
+        <SignIn />
+      </main>
     );
   }
 
   return (
-    <div className="home">
-      <header className="home-nav">
-        <div className="home-nav-bar">
-          <span className="home-brand">
-            <Wordmark compact />
-            <span className="home-brand-label">Account</span>
+    <>
+      <header className={styles.nav}>
+        <div className={`row ${styles.bar}`}>
+          <span className="row">
+            <Wordmark />
+            <h2>Account</h2>
           </span>
           <AccountSwitcher />
         </div>
-        <nav className="home-tabs" role="tablist" aria-label="Account">
+        <nav role="tablist" aria-label="Account">
           {TABS.map((each) => (
-            <button
-              key={each.id}
-              role="tab"
-              aria-selected={tab === each.id}
-              onClick={() => openTab(each.id)}
-              className="home-tab"
-            >
+            <button key={each.id} role="tab" aria-selected={tab === each.id} onClick={() => openTab(each.id)}>
               {each.label}
             </button>
           ))}
         </nav>
       </header>
-      <main className="home-main" role="tabpanel" aria-label={TABS.find((each) => each.id === tab)?.label}>
+      <main className={styles.main} role="tabpanel" aria-label={TABS.find((each) => each.id === tab)?.label}>
         <AccountHint />
         <AccountNotices />
         <HostingDue />
         <Settings tab={tab} openTab={openTab} />
       </main>
-    </div>
+    </>
   );
 }

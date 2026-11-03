@@ -143,7 +143,14 @@ function Nav({ page }: { page: PageName }) {
           <a href={APP} {...EXTERNAL} className="btn btn-primary nav-open">
             Open Minca
           </a>
-          <button type="button" className="nav-toggle" popoverTarget={MENU} aria-label="Menu">
+          <button
+            type="button"
+            className="nav-toggle"
+            data-intent="quiet"
+            data-icon
+            popoverTarget={MENU}
+            aria-label="Menu"
+          >
             <MenuMark />
           </button>
         </div>
@@ -160,7 +167,7 @@ function Footer() {
           <Mark size={18} />
           Many hands, one minca.
         </span>
-        <span style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+        <span className="footer-links">
           <Link to="/">Communities</Link>
           <Link to="/developers">Developers</Link>
           <Link to="/protocol">Protocol</Link>

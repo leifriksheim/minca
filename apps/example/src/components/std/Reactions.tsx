@@ -4,7 +4,7 @@ import type { NodeRecord, SpaceSummary } from '@minca/core';
 import { reaction } from '@minca/core/schemas';
 import { bodyOf } from '../../derive/schema-ui';
 import { respondingTo } from '../../derive/people';
-import { palette, styles } from '../../styles';
+import styles from './Reactions.module.css';
 
 const QUICK = ['👍', '❤️', '🎉', '😂', '👀', '🙏'];
 
@@ -44,10 +44,7 @@ export function Reactions({
   };
 
   return (
-    <div
-      style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', position: 'relative' }}
-      aria-label="Reactions"
-    >
+    <div className={`row ${styles.reactions}`} data-gap="tight" aria-label="Reactions">
       {[...byEmoji].map(([emoji, list]) => {
         const mine = list.some((r) => r.root === rootDid);
         return (
@@ -57,76 +54,35 @@ export function Reactions({
             disabled={!space.writable}
             aria-pressed={mine}
             aria-label={`${emoji} ${list.length}${mine ? ', yours' : ''}`}
-            style={{
-              ...pill,
-              borderColor: mine ? palette.ink.strong : palette.surface.line,
-              backgroundColor: mine ? palette.surface.sunken : palette.surface.card,
-            }}
           >
             <span>{emoji}</span>
-            <span style={{ fontSize: 12, color: palette.ink.muted }}>{list.length}</span>
+            {list.length}
           </button>
         );
       })}
       {space.writable && (
-        <button
-          onClick={() => setPicking((was) => !was)}
-          aria-label="Add a reaction"
-          style={{ ...pill, color: palette.ink.muted }}
-        >
+        <button data-intent="quiet" onClick={() => setPicking((was) => !was)} aria-label="Add a reaction">
           ☺︎+
         </button>
       )}
       {picking && (
-        <div
-          role="menu"
-          style={{
-            position: 'absolute',
-            top: 34,
-            left: 0,
-            zIndex: 5,
-            ...styles.float,
-            display: 'flex',
-            gap: 2,
-            padding: 4,
-          }}
-        >
+        <menu role="menu" className={styles.picker}>
           {QUICK.map((emoji) => (
             <button
               key={emoji}
               role="menuitem"
+              data-icon
               onClick={() => toggle(emoji)}
               aria-label={`React ${emoji}`}
-              style={{
-                border: 'none',
-                background: 'none',
-                fontSize: 18,
-                padding: '4px 8px',
-                borderRadius: palette.radius.pill,
-              }}
             >
               {emoji}
             </button>
           ))}
-        </div>
+        </menu>
       )}
     </div>
   );
 }
-
-const pill = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 6,
-  height: 28,
-  padding: '0 10px',
-  borderRadius: palette.radius.pill,
-  borderWidth: 1,
-  borderStyle: 'solid',
-  borderColor: palette.surface.line,
-  backgroundColor: palette.surface.card,
-  fontSize: 14,
-};
 
 /** 👍 3 · ❤️ 1 — a record's reactions in a few characters, for a list row */
 export function reactionSummary(reactions: ReadonlyArray<NodeRecord> | number | undefined): string {

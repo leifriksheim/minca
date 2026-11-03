@@ -1,3 +1,5 @@
+import css from './Icon.module.css';
+
 /** Line icons on a 16px grid, drawn in the text colour around them */
 export const ICONS = {
   lock: 'M4.5 7V5a3.5 3.5 0 0 1 7 0v2M3 7h10v7H3z',
@@ -70,7 +72,7 @@ export function Icon({ name, size = 16 }: { name: Glyph; size?: number }) {
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden
-      style={{ flexShrink: 0 }}
+      className={css.icon}
     >
       <path d={typeof name === 'string' ? ICONS[name] : name.path} />
     </svg>

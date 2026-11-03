@@ -1,0 +1,42 @@
+/* Signed out: a narrow column on the page, as a sign-in is */
+.signIn {
+  max-width: 420px;
+  padding-top: 120px;
+}
+
+/* A floating pill bar, sticky, the tabs under it; on a phone the tabs fill the width */
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  flex-direction: column;
+  padding: 12px 16px;
+  background: linear-gradient(var(--color-page) 78%, transparent);
+
+  & > [role='tablist'] {
+    align-self: center;
+
+    @media (max-width: 640px) {
+      align-self: stretch;
+
+      & > button {
+        flex: 1;
+      }
+    }
+  }
+}
+
+.bar {
+  justify-content: space-between;
+  width: 100%;
+  max-width: 880px;
+  height: 56px;
+  padding: 0 8px 0 20px;
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-control);
+}
+
+.main {
+  max-width: 760px;
+  gap: var(--space-loose);
+}

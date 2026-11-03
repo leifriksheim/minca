@@ -1,0 +1,28 @@
+.long {
+  white-space: pre-wrap;
+}
+
+/* One grid per object, so its values line up; nested data spans both columns */
+.fields {
+  display: grid;
+  grid-template-columns: fit-content(45%) minmax(0, 1fr);
+  gap: var(--space-tight) 12px;
+  align-items: baseline;
+  overflow-wrap: anywhere;
+}
+
+.fold {
+  grid-column: 1 / -1;
+}
+
+/* Each level of nesting, and each item of a list, set apart by a rule on its left */
+.inner {
+  min-width: 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--color-divider);
+}
+
+.text {
+  max-height: 280px;
+  overflow-y: auto;
+}

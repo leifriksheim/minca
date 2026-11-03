@@ -1,0 +1,45 @@
+/* A topic, whom it is trusted to, and the buttons to change it; wrapping under each other on a phone */
+.trust {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px;
+
+  & > :nth-child(2) {
+    flex: 1;
+    min-width: 200px;
+  }
+}
+
+.topic {
+  flex-shrink: 0;
+  width: 150px;
+}
+
+/* People and parties to pick from: a face beside a name, the one trusted now set back */
+.picks {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 340px;
+  overflow-y: auto;
+
+  & > button {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    padding: 10px;
+    border-color: transparent;
+
+    &:hover:not(:disabled),
+    &[aria-current='true'] {
+      border-color: var(--color-outline);
+      background: var(--color-sunken);
+    }
+
+    & > span {
+      flex: 1;
+      min-width: 0;
+    }
+  }
+}

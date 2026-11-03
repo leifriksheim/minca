@@ -7,9 +7,7 @@ import { useAppNotifications } from '../notifications';
 import { useSpaceName, useWorkspace } from '../workspace';
 import { Activity, Builder, Settings } from './Bell';
 import { SpaceMark } from './SpaceList';
-import { AddButton, QuietButton } from './Buttons';
 import { Icon } from './Icon';
-import { palette, stack, styles, ui } from '../styles';
 
 /**
  * What your notifications matched lately, at `/activity`; looking is reading them. With none on,
@@ -32,25 +30,20 @@ export function ActivityPage() {
   const off = setup.on === 0 && items.length === 0;
 
   return (
-    <>
-      <header style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-        <h1 style={{ ...styles.appTitle, flex: 1 }}>Activity</h1>
+    <section>
+      <header>
+        <h1>Activity</h1>
         {!off && (
-          <QuietButton
-            onClick={() => setManaging(true)}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-          >
+          <button data-intent="quiet" onClick={() => setManaging(true)}>
             <Icon name="bellOn" size={14} /> Manage
-          </QuietButton>
+          </button>
         )}
       </header>
 
       {off ? (
         <TurnOn setup={setup} />
       ) : (
-        <div style={{ ...ui.list, paddingTop: 6 }}>
-          <Activity items={items} spaces={spaces} off={setup.on === 0} onOpenSpace={openSpace} />
-        </div>
+        <Activity items={items} spaces={spaces} off={setup.on === 0} onOpenSpace={openSpace} />
       )}
 
       {managing && (
@@ -66,59 +59,53 @@ export function ActivityPage() {
       )}
       {picking && (
         <Modal title="Which space?" onClose={() => setPicking(false)}>
-          <div style={stack(1)}>
+          <ul role="list">
             {spaces.map((space) => (
-              <button
-                key={space.id}
-                data-menu-item
-                className="side-item"
-                style={{ height: 44, fontSize: 15, color: palette.ink.strong }}
-                onClick={() => {
-                  setPicking(false);
-                  setBuilding(space);
-                }}
-              >
-                <SpaceMark space={space} size={28} />
-                <span style={ui.ellipsis}>{nameOf(space.id) ?? space.name}</span>
-              </button>
+              <li key={space.id}>
+                <button
+                  data-intent="open"
+                  className="row"
+                  onClick={() => {
+                    setPicking(false);
+                    setBuilding(space);
+                  }}
+                >
+                  <SpaceMark space={space} size={28} />
+                  <strong className="truncate">{nameOf(space.id) ?? space.name}</strong>
+                </button>
+              </li>
             ))}
-          </div>
+          </ul>
         </Modal>
       )}
       {building && <Builder space={building} onClose={() => setBuilding(null)} />}
-    </>
+    </section>
   );
 }
 
 /** Nothing on yet: what you'd hear about, and the one step that turns it on in this browser */
 function TurnOn({ setup }: { setup: ReturnType<typeof useAppNotifications> }) {
   return (
-    <div style={{ ...styles.emptyState, ...stack(10), alignItems: 'center' }}>
-      <span style={{ color: palette.ink.strong, display: 'inline-flex' }}>
-        <Icon name="bell" size={28} />
-      </span>
-      <strong style={{ color: palette.ink.strong, fontSize: 15 }}>Hear about what's new</strong>
-      <span>Messages, polls and contact requests, in every space, while this app is open.</span>
+    <div className="empty">
+      <Icon name="bell" size={28} />
+      <strong>Hear about what's new</strong>
+      <p>Messages, polls and contact requests, in every space, while this app is open.</p>
       {setup.permission === 'denied' ? (
-        <span style={{ color: palette.accent.danger }}>
+        <p role="alert">
           Notifications are blocked for this site. Allow them from the icon left of the address, then come
           back here.
-        </span>
+        </p>
       ) : setup.permission === 'default' ? (
         // Its own step: a browser prompt opened with the home's window easily goes unseen behind it.
-        <AddButton onClick={setup.allow} style={{ marginTop: 6, height: 40, alignSelf: 'center' }}>
+        <button data-intent="primary" onClick={setup.allow}>
           Allow notifications
-        </AddButton>
+        </button>
       ) : (
-        <AddButton
-          onClick={setup.turnOn}
-          disabled={setup.asking}
-          style={{ marginTop: 6, height: 40, alignSelf: 'center' }}
-        >
+        <button data-intent="primary" onClick={setup.turnOn} disabled={setup.asking}>
           {setup.asking ? 'Answer in your account home…' : 'Turn on notifications'}
-        </AddButton>
+        </button>
       )}
-      {setup.error && <span style={{ color: palette.accent.danger }}>{setup.error}</span>}
+      {setup.error && <p role="alert">{setup.error}</p>}
     </div>
   );
 }

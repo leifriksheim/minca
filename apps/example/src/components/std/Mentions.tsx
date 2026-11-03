@@ -5,18 +5,13 @@ import {
   useRef,
   useState,
   type ChangeEvent,
-  type CSSProperties,
   type KeyboardEvent,
   type RefObject,
   type SyntheticEvent,
 } from 'react';
 import { nameOf, type People } from '../../derive/people';
-import { palette } from '../../styles';
 import { Person } from '../Person';
-
-/** How a mention stands out, in a message and in the box it is written in */
-const MENTION_BG = palette.accent.soft;
-const MENTION_INK = palette.accent.base;
+import styles from './Mentions.module.css';
 
 /** A run of text, and whom it mentions when it is an "@Name" */
 interface Segment {
@@ -140,17 +135,15 @@ export function MentionList({
   choice,
   people,
   onPick,
-  style,
 }: {
   suggestions: ReadonlyArray<{ readonly did: string }>;
   choice: number;
   people: People;
   onPick: (did: string) => void;
-  style?: CSSProperties;
 }) {
   if (!suggestions.length) return null;
   return (
-    <div role="listbox" aria-label="Mention someone" style={style}>
+    <div role="listbox" aria-label="Mention someone">
       {suggestions.map((person, i) => (
         <button
           key={person.did}
@@ -160,22 +153,11 @@ export function MentionList({
           // Keep the cursor in the box.
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => onPick(person.did)}
-          data-menu-item
-          style={{
-            width: '100%',
-            display: 'flex',
-            gap: 10,
-            alignItems: 'center',
-            padding: '8px 12px',
-            border: 'none',
-            background: i === choice ? palette.surface.sunken : palette.surface.card,
-            font: 'inherit',
-            fontSize: 13,
-            textAlign: 'left',
-          }}
+          data-intent="open"
+          className={`row ${styles.option}`}
         >
           <PersonFace did={person.did} size={20} />
-          <span style={{ color: palette.ink.strong }}>{nameOf(person.did, people)}</span>
+          {nameOf(person.did, people)}
         </button>
       ))}
     </div>
@@ -196,19 +178,9 @@ export function MentionText({
   const named = mentions.map((did) => ({ did, name: nameOf(did, people) }));
   return splitMentions(text, named).map((segment, i) =>
     segment.did ? (
-      <Person
-        key={i}
-        did={segment.did}
-        label={segment.text}
-        style={{
-          color: MENTION_INK,
-          background: MENTION_BG,
-          borderRadius: palette.radius.sm,
-          padding: '0 2px',
-          fontWeight: 500,
-          textDecoration: 'none',
-        }}
-      />
+      <mark key={i}>
+        <Person did={segment.did} label={segment.text} />
+      </mark>
     ) : (
       segment.text
     ),
@@ -223,7 +195,6 @@ export function MentionText({
 export function MentionField({
   marked,
   input,
-  style,
   ...props
 }: Omit<ComponentProps<'input'>, 'ref'> & {
   marked: ReadonlyArray<Segment>;
@@ -235,57 +206,11 @@ export function MentionField({
   };
   useLayoutEffect(follow);
   return (
-    <div
-      style={{
-        position: 'relative',
-        flex: 1,
-        minWidth: 0,
-        borderRadius: palette.radius.lg,
-        background: palette.surface.card,
-      }}
-    >
-      <div
-        ref={under}
-        aria-hidden
-        className="mention-layer"
-        style={{
-          position: 'absolute',
-          inset: 0,
-          padding: '0 12px',
-          border: '1px solid transparent',
-          fontSize: 14,
-          lineHeight: '38px',
-          whiteSpace: 'pre',
-          overflow: 'hidden',
-          color: 'transparent',
-          pointerEvents: 'none',
-        }}
-      >
-        {marked.map((segment, i) =>
-          segment.did ? (
-            <mark
-              key={i}
-              style={{
-                color: 'transparent',
-                background: MENTION_BG,
-                borderRadius: palette.radius.sm,
-                boxShadow: `0 0 0 2px ${MENTION_BG}`,
-              }}
-            >
-              {segment.text}
-            </mark>
-          ) : (
-            segment.text
-          ),
-        )}
+    <div className={styles.field}>
+      <div ref={under} aria-hidden className={styles.under}>
+        {marked.map((segment, i) => (segment.did ? <mark key={i}>{segment.text}</mark> : segment.text))}
       </div>
-      <input
-        {...props}
-        ref={input}
-        onScroll={follow}
-        className="mention-layer"
-        style={{ ...style, position: 'relative', width: '100%', backgroundColor: 'transparent' }}
-      />
+      <input {...props} ref={input} onScroll={follow} className={styles.input} />
     </div>
   );
 }

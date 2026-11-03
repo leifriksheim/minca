@@ -16,9 +16,8 @@ import { AccountActions, openAccountHome } from './AccountMenu';
 import { usePopover } from './usePopover';
 import { shrinkImage } from '../files';
 import { ConnectAgent } from './ConnectAgent';
-import { LinkButton } from './Buttons';
 import { Icon } from './Icon';
-import { palette, styles, ui } from '../styles';
+import styles from './ProfilePage.module.css';
 
 /**
  * You, at `/profile`: how others see you (your picture, name and username) is changed here, in the
@@ -34,10 +33,10 @@ export function ProfilePage() {
   const [connecting, setConnecting] = useState(false);
 
   return (
-    <>
-      <h1 style={{ ...styles.appTitle, marginBottom: 20 }}>Profile</h1>
-      <div style={ui.list}>
-        <div style={face}>
+    <section>
+      <h1>Profile</h1>
+      <ul role="list">
+        <li className="empty">
           <PictureButton name={me.name} />
           <input
             value={me.name}
@@ -48,23 +47,21 @@ export function ProfilePage() {
             }}
             maxLength={200}
             aria-label="Your name"
-            className="name-input"
-            style={nameInput}
           />
           {username ? (
-            <span style={{ fontSize: 14, color: palette.ink.muted }}>@{shortUsername(username)}</span>
+            <small>@{shortUsername(username)}</small>
           ) : (
             found.status === 'done' && (
-              <LinkButton onClick={() => openAccountHome(state.home, account.did)}>
+              <button data-intent="quiet" onClick={() => openAccountHome(state.home, account.did)}>
                 Pick a username
-              </LinkButton>
+              </button>
             )
           )}
-        </div>
+        </li>
         <AccountActions onConnectAgent={() => setConnecting(true)} />
-      </div>
+      </ul>
       {connecting && <ConnectAgent onClose={() => setConnecting(false)} />}
-    </>
+    </section>
   );
 }
 
@@ -78,45 +75,44 @@ function PictureButton({ name }: { name: string }) {
   const { open, setOpen, close, root } = usePopover();
   const label = picture ? 'Change or remove your picture' : 'Add a picture';
   return (
-    <div ref={root} style={{ position: 'relative', marginBottom: 8, ...stackCentre }}>
+    <div ref={root} className={styles.picture}>
       <button
         onClick={() => (picture ? setOpen((was) => !was) : choose())}
         aria-label={label}
         title={label}
         aria-haspopup={picture ? 'menu' : undefined}
         aria-expanded={picture ? open : undefined}
-        style={pictureButton}
       >
         <Avatar did={account.did} size={88} round src={picture} />
-        <span aria-hidden style={badge}>
+        <span aria-hidden>
           <Icon name={picture ? 'pencil' : 'plus'} size={14} />
         </span>
       </button>
       {open && (
-        <div role="menu" style={menu}>
+        <menu role="menu">
           {(
             [
               ['Change picture', choose, false],
               ['Remove picture', remove, true],
             ] as const
           ).map(([text, act, danger]) => (
-            <button
-              key={text}
-              role="menuitem"
-              data-menu-item
-              onClick={() => {
-                close();
-                act();
-              }}
-              style={{ ...menuItem, color: danger ? palette.accent.danger : palette.ink.body }}
-            >
-              {text}
-            </button>
+            <li key={text}>
+              <button
+                role="menuitem"
+                data-intent={danger ? 'danger' : undefined}
+                onClick={() => {
+                  close();
+                  act();
+                }}
+              >
+                {text}
+              </button>
+            </li>
           ))}
-        </div>
+        </menu>
       )}
       {picker}
-      {problem && <p style={{ ...styles.error, marginTop: 8, textAlign: 'center' }}>{problem}</p>}
+      {problem && <p role="alert">{problem}</p>}
     </div>
   );
 }
@@ -172,69 +168,3 @@ function usePicture(name: string) {
     picker,
   };
 }
-
-const stackCentre = { display: 'flex', flexDirection: 'column', alignItems: 'center' } as const;
-
-const menu = {
-  position: 'absolute',
-  top: 'calc(100% + 6px)',
-  zIndex: 20,
-  width: 200,
-  padding: 6,
-  ...styles.float,
-  animation: 'minca-fade .1s ease',
-} as const;
-
-const menuItem = {
-  width: '100%',
-  height: 36,
-  padding: '0 10px',
-  border: 'none',
-  borderRadius: palette.radius.md,
-  background: 'none',
-  textAlign: 'left',
-  fontSize: 14,
-} as const;
-
-const face = {
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  gap: 6,
-  padding: '28px 16px 20px',
-} as const;
-
-const pictureButton = {
-  position: 'relative',
-  padding: 0,
-  border: 'none',
-  borderRadius: palette.radius.pill,
-  background: 'none',
-} as const;
-
-const badge = {
-  position: 'absolute',
-  right: 0,
-  bottom: 0,
-  width: 28,
-  height: 28,
-  display: 'grid',
-  placeItems: 'center',
-  borderRadius: palette.radius.pill,
-  background: palette.accent.base,
-  color: palette.surface.card,
-  boxShadow: `0 0 0 3px ${palette.surface.card}`,
-} as const;
-
-/** Your name, edited where it is shown: it reads as a heading until it is tapped */
-const nameInput = {
-  ...styles.appTitle,
-  width: '100%',
-  maxWidth: 320,
-  fontSize: 22,
-  textAlign: 'center',
-  padding: '4px 10px',
-  border: '1px solid transparent',
-  borderRadius: palette.radius.md,
-  background: 'none',
-} as const;

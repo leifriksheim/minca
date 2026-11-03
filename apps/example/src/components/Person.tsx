@@ -1,15 +1,13 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import type { ContactView, SpaceSummary } from '@minca/core';
 import { useNode } from '@minca/react';
-import { styles, palette } from '../styles';
 import { isBot, nameOf, type People } from '../derive/people';
 import { NOT_CARRIED, takeBack, useContacts, useStanding, withChat } from '../contacts';
 import { PersonFace } from './PersonFace';
 import { Modal } from '@minca/app-shared/Modal';
 import { useAction, useCopy } from '@minca/app-shared/action';
-import { Loading } from './Loading';
+import { Loader } from '@minca/app-shared/Loader';
 import { ask } from '@minca/app-shared/Ask';
-import { AddButton, LinkButton, QuietButton } from './Buttons';
 
 /** What a name in a space needs to open its card: the space, who is in it, and where a space for two opens */
 interface PersonScope {
@@ -43,19 +41,17 @@ export function usePeopleHere(): { readonly people: People; readonly me: string 
 export function Person({
   did,
   label,
-  style,
 }: {
   did: string | null | undefined;
   /** Shown instead of their name, like the "@Name" of a mention */
   label?: string;
-  style?: React.CSSProperties;
 }) {
   const scope = useContext(Scope);
   const [open, setOpen] = useState(false);
   const people = scope?.people ?? new Map();
   // A bot says so in its profile; shown with its name wherever it appears.
   const name = label ?? (isBot(did, people) ? `${nameOf(did, people)} · bot` : nameOf(did, people));
-  if (!scope || !did) return <span style={style}>{name}</span>;
+  if (!scope || !did) return <span>{name}</span>;
   return (
     <>
       <button
@@ -66,18 +62,7 @@ export function Person({
           setOpen(true);
         }}
         title={did}
-        style={{
-          background: 'none',
-          border: 'none',
-          padding: 0,
-          font: 'inherit',
-          color: 'inherit',
-          cursor: 'pointer',
-          textDecoration: 'underline',
-          textDecorationColor: palette.surface.line,
-          textUnderlineOffset: 3,
-          ...style,
-        }}
+        data-intent="inline"
       >
         {name}
       </button>
@@ -109,43 +94,49 @@ function PersonCard({ did, scope, onClose }: { did: string; scope: PersonScope; 
 
   return (
     <Modal title={name} onClose={onClose}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+      <div className="row">
         <PersonFace did={did} size={48} />
-        <div style={{ minWidth: 0 }}>
-          <p style={styles.quiet}>
+        <div className="stack truncate" data-gap="tight">
+          <small>
             {did === me ? 'You' : profile ? `In ${space.name}` : `No profile in ${space.name}`}
             {role && ` · ${role.toLowerCase()}`}
-          </p>
-          <p style={{ ...styles.todoMeta, fontFamily: 'ui-monospace, monospace', wordBreak: 'break-all' }}>
-            {did}{' '}
-            <LinkButton type="button" onClick={() => copy(did)} style={{ padding: '0 4px', fontSize: 12 }}>
+          </small>
+          <span className="row" data-gap="tight">
+            <small className="truncate" title={did}>
+              {did}
+            </small>
+            <button type="button" data-intent="inline" onClick={() => copy(did)}>
               {copied ? 'Copied' : 'Copy'}
-            </LinkButton>
-          </p>
+            </button>
+          </span>
         </div>
       </div>
       {did === me ? null : asked ? (
         <>
-          <p style={styles.hint}>
+          <p>
             Asked. {name} is on your contacts now, and will see your request here in {space.name}. Once they
             accept, the two of you share a private space.
           </p>
-          {!asked.carried && <p style={styles.hint}>{NOT_CARRIED}</p>}
-          <AddButton onClick={onClose}>Done</AddButton>
+          {!asked.carried && <p>{NOT_CARRIED}</p>}
+          <button data-intent="primary" onClick={onClose}>
+            Done
+          </button>
         </>
       ) : contacts === undefined ? (
-        <Loading label="Loading your contacts" style={styles.hint} />
+        <small>
+          <Loader label="Loading your contacts" showLabel />
+        </small>
       ) : contact?.blocked ? (
-        <p style={styles.hint}>You blocked {name}. Unblock them from Contacts to hear from them again.</p>
+        <p>You blocked {name}. Unblock them from Contacts to hear from them again.</p>
       ) : contact ? (
         <Standing contact={contact} name={name} scope={scope} onClose={onClose} />
       ) : !profile?.contactKey ? (
-        <p style={styles.hint}>
+        <p>
           {name} can't be added as a contact yet: the app they use here wasn't given their contacts, so there
           is no key to seal a request to.
         </p>
       ) : !space.writable ? (
-        <p style={styles.hint}>
+        <p>
           You can only read {space.name}, so you can't leave a request for {name} here.
         </p>
       ) : (
@@ -176,33 +167,40 @@ function Standing({
   const { space, me, openSpace } = scope;
   const called = contact.name !== name && contact.name !== contact.did ? ` as ${contact.name}` : '';
 
-  if (standing === undefined) return <Loading label="Loading" style={styles.hint} />;
+  if (standing === undefined)
+    return (
+      <small>
+        <Loader label="Loading" showLabel />
+      </small>
+    );
   if (standing === 'gone') {
     return (
       <>
-        <p style={styles.hint}>
+        <p>
           You left your space for two with {name}, so they are on your list{called} but you no longer share
           anything. Remove them to ask again.
         </p>
-        {error && <p style={styles.bad}>{error}</p>}
-        <AddButton
+        {error && <p role="alert">{error}</p>}
+        <button
+          data-intent="primary"
           disabled={busy}
           onClick={() => void act(() => takeBack(node, [space.id], me, contact.did))}
         >
           {busy ? 'Removing…' : 'Remove, and ask again'}
-        </AddButton>
+        </button>
       </>
     );
   }
   if (standing === 'waiting') {
     return (
       <>
-        <p style={styles.hint}>
+        <p>
           You asked {name}. Waiting for them to accept; they see your request in {space.name} and on their
           Contacts screen.
         </p>
-        {error && <p style={styles.bad}>{error}</p>}
-        <QuietButton
+        {error && <p role="alert">{error}</p>}
+        <button
+          data-intent="quiet"
           disabled={busy}
           onClick={() =>
             void ask('Your space for two is left and the request here is deleted.', {
@@ -214,22 +212,23 @@ function Standing({
           }
         >
           {busy ? 'Taking back…' : 'Take back'}
-        </QuietButton>
+        </button>
       </>
     );
   }
   return (
     <>
-      <p style={styles.hint}>In your contacts{called}.</p>
+      <p>In your contacts{called}.</p>
       {contact.space && openSpace && (
-        <AddButton
+        <button
+          data-intent="primary"
           onClick={() => {
             onClose();
             openSpace(contact.space!);
           }}
         >
           Open your space for two
-        </AddButton>
+        </button>
       )}
     </>
   );
@@ -262,31 +261,24 @@ function AskContact({
     });
   return (
     <form
-      style={styles.form}
+      className="stack"
       onSubmit={(event) => {
         event.preventDefault();
         void ask();
       }}
     >
-      <p style={{ ...styles.todoMeta, marginTop: 0 }}>
+      <small>
         Adding {name} makes a private space for the two of you and leaves its invite here, sealed so only they
         can open it. Others in {space.name} see that you asked, not what you wrote.
-      </p>
-      <label style={{ ...styles.fieldLabel, marginTop: 8 }} htmlFor="ask-note">
+      </small>
+      <label>
         A note (optional)
+        <textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={2000} rows={3} />
       </label>
-      <textarea
-        id="ask-note"
-        value={note}
-        onChange={(event) => setNote(event.target.value)}
-        maxLength={2000}
-        rows={3}
-        style={styles.textarea}
-      />
-      {error && <p style={styles.bad}>{error}</p>}
-      <AddButton type="submit" disabled={asking} style={{ marginTop: 12 }}>
+      {error && <p role="alert">{error}</p>}
+      <button data-intent="primary" type="submit" disabled={asking}>
         {asking ? 'Asking…' : 'Add as a contact'}
-      </AddButton>
+      </button>
     </form>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useState } from 'react';
 import { useAction } from '@minca/app-shared/action';
 import { MEMBER_REMOVE, ROLE_ASSIGN, ROLE_DEFINE, ROLE_UNASSIGN } from '@minca/core';
 import type { SpaceGrant as Grant, SpaceSummary } from '@minca/core';
@@ -15,11 +15,9 @@ import { nameOf, peopleFrom, type People } from '../derive/people';
 import { onlineAccounts } from '../derive/network';
 import { PersonFace } from './PersonFace';
 import { RingButton } from './calls/Calls';
-import { styles, palette, variants, hstack, stack, ui } from '../styles';
-import { RowMenu, onlineDot } from './PeopleParts';
+import { RowMenu } from './PeopleParts';
 import { Person } from './Person';
-import { Loading } from './Loading';
-import { AddButton, QuietButton } from './Buttons';
+import { Loader } from '@minca/app-shared/Loader';
 import { confirmThen } from '../confirm';
 
 /** Who holds what in the space, as the node reports it */
@@ -113,11 +111,15 @@ export function RolesView({
   const status = useSpaceStatus(space.id);
   const online = status ? onlineAccounts(status, account.did) : new Set([account.did]);
   if (!access)
-    return <Loading label="Loading who's who" style={{ fontSize: 13, color: palette.ink.faint }} />;
+    return (
+      <small>
+        <Loader label="Loading who's who" showLabel />
+      </small>
+    );
   // Everyone sees the roles; only whoever may make or change one gets the buttons that do.
   if (show === 'roles') return <Roles space={space} access={access} powers={powers} />;
   return (
-    <div style={stack(28)}>
+    <div className="stack" data-gap="loose">
       <Members
         space={space}
         access={access}
@@ -147,15 +149,14 @@ const titleOf = (role: { readonly name: string; readonly title?: string }) => ro
 function WhatYouCanDo({ access }: { access: SpaceAccess }) {
   const { summary, lines } = abilitiesOf(access);
   return (
-    <section style={section} aria-label="What you can do">
-      <h2 style={{ ...styles.appTitle, fontSize: 20 }}>What you can do</h2>
-      <p style={{ fontSize: 14, color: palette.ink.body }}>{summary}</p>
+    <section aria-label="What you can do">
+      <h2>What you can do</h2>
+      <p>{summary}</p>
       {lines.length > 0 && (
-        <ul style={list}>
+        <ul role="list">
           {lines.map((line) => (
-            <li key={line} style={item}>
-              <span style={{ color: palette.accent.good }}>✓</span>{' '}
-              <span style={{ color: palette.ink.strong }}>{capital(line)}</span>
+            <li key={line}>
+              <span data-tone="good">✓</span> {capital(line)}
             </li>
           ))}
         </ul>
@@ -177,66 +178,69 @@ function Roles({ space, access, powers }: { space: SpaceSummary; access: SpaceAc
   const holders = (name: string) => access.members.filter((m) => m.roles.includes(name)).length;
 
   return (
-    <section style={section} aria-label="Roles">
-      <Heading title="Roles">
-        <QuietButton
+    <section aria-label="Roles">
+      <header>
+        <h2>Roles</h2>
+        <button
           onClick={() => setEditing({ kind: 'new' })}
           disabled={!powers.defineNew || editing?.kind === 'new'}
           title={powers.defineNew ? undefined : 'Defining roles takes a grant of /role/define'}
         >
           New role
-        </QuietButton>
-      </Heading>
-      <p style={{ ...styles.quiet, lineHeight: 1.5 }}>
-        A role is what it grants. Whoever defines a role can give it only what they may do themselves.
-      </p>
+        </button>
+      </header>
+      <p>A role is what it grants. Whoever defines a role can give it only what they may do themselves.</p>
 
       {editing?.kind === 'new' && (
         <RoleEditor space={space} existing={null} roles={roles} onDone={() => setEditing(null)} />
       )}
 
-      <ul style={{ ...list, gap: 8 }}>
+      <ul role="list">
         {roles.map((role) => {
           const may = powers.define.has(role.name);
           const count = holders(role.name);
           const open = editing?.kind === 'edit' && editing.name === role.name;
           const { grants, rivals } = grantsOf(role);
           return (
-            <li key={role.name} style={card}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                <div style={{ flex: 1, minWidth: 0, ...stack(6) }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-                    <strong style={{ color: palette.ink.strong, fontSize: 15 }}>{titleOf(role)}</strong>
-                    {access.mine.includes(role.name) && <span style={styles.badge}>yours</span>}
-                    <span style={styles.faint}>
+            <li key={role.name}>
+              <div className="row" data-spread>
+                <div className="stack" data-gap="tight">
+                  <div className="row">
+                    <strong>{titleOf(role)}</strong>
+                    {access.mine.includes(role.name) && (
+                      <span className="tag" data-hue="1">
+                        yours
+                      </span>
+                    )}
+                    <small>
                       <code>{role.name}</code> · {count} {count === 1 ? 'person' : 'people'}
-                    </span>
+                    </small>
                   </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  <div className="row" data-gap="tight">
                     {grants.length === 0 ? (
-                      <span style={styles.faint}>Grants nothing</span>
+                      <small>Grants nothing</small>
                     ) : (
                       grantLines(grants).map((line) => (
-                        <span key={line} style={chip}>
+                        <span key={line} className="tag">
                           {line}
                         </span>
                       ))
                     )}
                   </div>
                   {rivals && (
-                    <span style={styles.faint}>
+                    <small>
                       Defined twice apart: it grants only what both definitions share, until someone defines
                       it again.
-                    </span>
+                    </small>
                   )}
                 </div>
-                <QuietButton
+                <button
                   onClick={() => setEditing(open ? null : { kind: 'edit', name: role.name })}
                   disabled={!may}
                   title={may ? undefined : 'Defining this role takes a grant of /role/define for it'}
                 >
                   {open ? 'Close' : 'Edit'}
-                </QuietButton>
+                </button>
               </div>
               {open && (
                 <RoleEditor space={space} existing={role} roles={roles} onDone={() => setEditing(null)} />
@@ -310,79 +314,58 @@ function RoleEditor({
     });
 
   return (
-    <div
-      style={{
-        ...stack(16),
-        marginTop: existing ? 14 : 0,
-        padding: 16,
-        borderRadius: palette.radius.md,
-        background: palette.surface.sunken,
-      }}
-    >
-      {!existing && <strong style={{ color: palette.ink.strong }}>New role</strong>}
+    <aside className="stack" data-gap="loose">
+      {!existing && <strong>New role</strong>}
       <label>
-        <p style={styles.fieldLabel}>Title</p>
+        Title
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Reviewer"
           maxLength={80}
-          style={styles.input}
           autoFocus={!existing}
         />
-        <p style={{ ...styles.faint, marginTop: 4 }}>
+        <small>
           {existing ? 'Its key stays ' : 'Its key will be '}
           <code>{name || '…'}</code>
-        </p>
+        </small>
       </label>
 
-      <fieldset style={{ border: 'none', padding: 0, margin: 0, ...stack(6) }}>
-        <legend style={{ ...styles.fieldLabel, padding: 0 }}>What it grants</legend>
+      <fieldset>
+        <legend>What it grants</legend>
         {GRANT_CHOICES.map((c) => (
-          <label key={c.key} style={{ ...styles.checkboxRow, alignItems: 'flex-start' }}>
+          <label key={c.key}>
             <input
               type="checkbox"
               checked={chosen.has(c.key)}
               onChange={(e) => toggle(c.key, e.target.checked)}
-              style={styles.checkbox}
             />
-            <span style={{ color: palette.ink.strong, fontSize: 13 }}>{c.label}</span>
+            {c.label}
           </label>
         ))}
         {start.other.length > 0 && (
-          <label style={{ ...styles.checkboxRow, alignItems: 'flex-start' }}>
-            <input
-              type="checkbox"
-              checked={keepOther}
-              onChange={(e) => setKeepOther(e.target.checked)}
-              style={styles.checkbox}
-            />
-            <span style={{ color: palette.ink.muted, fontSize: 12 }}>
-              Keep its other grants: {grantLines(start.other).join('; ')}
-            </span>
+          <label>
+            <input type="checkbox" checked={keepOther} onChange={(e) => setKeepOther(e.target.checked)} />
+            <small>Keep its other grants: {grantLines(start.other).join('; ')}</small>
           </label>
         )}
       </fieldset>
-      <p style={styles.faint}>
+      <small>
         A grant counts only as far as you may do it yourself. Narrowing a role keeps what its holders already
         wrote.
-      </p>
+      </small>
 
-      {problem && <p style={styles.quiet}>{problem}</p>}
-      {error && <p style={styles.error}>{plainError(error)}</p>}
-      <div style={hstack(8)}>
-        <AddButton onClick={() => void save()} disabled={!!problem || saving} style={{ height: 34 }}>
+      {problem && <small>{problem}</small>}
+      {error && <p role="alert">{plainError(error)}</p>}
+      <div className="row">
+        <button data-intent="primary" onClick={() => void save()} disabled={!!problem || saving}>
           {saving ? 'Saving…' : existing ? 'Save role' : 'Create role'}
-        </AddButton>
-        <button
-          onClick={onDone}
-          data-variant="quiet"
-          style={{ ...variants.quiet, width: 'auto', height: 34 }}
-        >
+        </button>
+        <button data-intent="quiet" onClick={onDone}>
           Cancel
         </button>
       </div>
-    </div>
+    </aside>
   );
 }
 
@@ -483,26 +466,29 @@ function Members({
     const menu = actions(member);
     const labels = [...(member.founder ? ['Founder'] : []), ...member.roles.map(roleTitle)];
     return (
-      <li key={did} style={memberRow}>
-        {/* Online now: a dot on their face, as chat apps mark it. */}
-        <span style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
-          <PersonFace did={did} size={40} />
-          {online.has(did) && <span title="Online now" style={onlineDot} />}
-        </span>
-        <div style={{ flex: 1, minWidth: 0, ...stack(3) }}>
-          <span style={{ fontSize: 15, fontWeight: 600, color: palette.ink.strong }}>
+      <li key={did} className="row">
+        <PersonFace did={did} size={40} />
+        <div className="stack truncate" data-gap="tight">
+          <strong>
             <Person did={did} />
-            {self && <span style={{ color: palette.ink.faint, fontWeight: 400 }}> · you</span>}
-          </span>
-          <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {self && <small> · you</small>}
+            {/* Online now, as chat apps mark it */}
+            {online.has(did) && (
+              <small data-tone="good" title="Online now">
+                {' '}
+                ●
+              </small>
+            )}
+          </strong>
+          <span className="row" data-gap="tight">
             {labels.length > 0 ? (
               labels.map((label) => (
-                <span key={label} style={chip}>
+                <span key={label} className="tag">
                   {label}
                 </span>
               ))
             ) : (
-              <span style={styles.faint}>No role</span>
+              <small>No role</small>
             )}
           </span>
         </div>
@@ -513,86 +499,43 @@ function Members({
   };
 
   return (
-    <section style={section} aria-label="Members">
-      <Heading title={`Members · ${access.members.length}`}>
-        <AddButton onClick={onInvite} style={{ height: 36 }}>
+    <section aria-label="Members">
+      <header>
+        <h2>Members · {access.members.length}</h2>
+        <button data-intent="primary" onClick={onInvite}>
           Invite people
-        </AddButton>
-      </Heading>
-      {error && <p style={styles.error}>{plainError(error)}</p>}
-      <ul className="rows" style={ui.list}>
-        {access.members.map(row)}
-      </ul>
+        </button>
+      </header>
+      {error && <p role="alert">{plainError(error)}</p>}
+      <ul role="list">{access.members.map(row)}</ul>
 
       {followers.length > 0 && (
         <>
-          <p style={{ ...styles.fieldLabel, marginTop: 12 }}>Following, with no role</p>
-          <ul className="rows" style={ui.list}>
-            {followers.map((did) => row({ did, founder: false, roles: [] }))}
-          </ul>
+          <h3>Following, with no role</h3>
+          <ul role="list">{followers.map((did) => row({ did, founder: false, roles: [] }))}</ul>
         </>
       )}
 
       {access.headless && (
-        <p style={{ ...styles.quiet, lineHeight: 1.5 }}>
+        <p>
           No one can change roles here any more. Members keep what their roles allow; to change more, move to
           a successor space.
         </p>
       )}
       {access.successors.length > 0 && (
-        <div>
+        <>
           {/* In no order: which to follow is each member's choice. */}
-          <p style={styles.fieldLabel}>Named as successors</p>
-          <ul style={{ ...list, gap: 0 }}>
+          <h3>Named as successors</h3>
+          <ul role="list">
             {access.successors.map((next) => (
-              <li key={next.space} style={{ ...styles.row, padding: '8px 4px', fontSize: 13 }}>
-                <span style={{ flex: 1, color: palette.ink.body }}>
-                  …{next.space.slice(-8)}
-                  <span style={{ color: palette.ink.faint }}>
-                    {' '}
-                    · named by {next.by.map((did) => nameOf(did, people)).join(', ')}
-                  </span>
-                </span>
+              <li key={next.space}>
+                …{next.space.slice(-8)}
+                <small> · named by {next.by.map((did) => nameOf(did, people)).join(', ')}</small>
               </li>
             ))}
           </ul>
-        </div>
+        </>
       )}
     </section>
   );
 }
-
-const memberRow: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 12,
-  padding: '12px 14px',
-  listStyle: 'none',
-};
-
-/** A section's title, and what can be done to it on the right */
-function Heading({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 12,
-        flexWrap: 'wrap',
-      }}
-    >
-      <h2 style={{ ...styles.appTitle, fontSize: 20 }}>{title}</h2>
-      {children}
-    </div>
-  );
-}
-
-const section: CSSProperties = stack(12);
-const list: CSSProperties = { listStyle: 'none', ...stack(4) };
-const item: CSSProperties = { fontSize: 13, lineHeight: 1.6 };
-const card: CSSProperties = {
-  padding: 14,
-  ...styles.tile,
-};
-const chip: CSSProperties = { ...styles.badge, color: palette.ink.body, background: palette.surface.sunken };

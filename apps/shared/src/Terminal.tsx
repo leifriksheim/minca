@@ -1,12 +1,10 @@
 import type { CSSProperties } from 'react';
-import { ink, mono, radius } from '@minca/ui/tokens';
 import { useCopy } from './action';
+import styles from './Terminal.module.css';
 
 /** On the dark box: words, flags dimmed, addresses and the prompt green */
-const COLOURS = { word: '#dfe4f2', flag: '#8b93b3', address: '#7fd8a6' } as const;
-
-const colourOf = (word: string) =>
-  word.startsWith('--') ? COLOURS.flag : /^https?:\/\//.test(word) ? COLOURS.address : COLOURS.word;
+const kindOf = (word: string) =>
+  word.startsWith('--') ? 'flag' : /^https?:\/\//.test(word) ? 'address' : undefined;
 
 /**
  * A line to paste, on one dark row with a copy icon at its end: a command gets a `$` before it, an
@@ -16,11 +14,11 @@ export function Terminal({ text, style }: { text: string; style?: CSSProperties 
   const { copied, copy } = useCopy();
   const command = !/^https?:\/\//.test(text);
   return (
-    <div style={{ ...box, ...style }}>
-      <code style={line}>
-        {command && <span style={{ color: COLOURS.address, userSelect: 'none' }}>$ </span>}
+    <div className={styles.terminal} style={style}>
+      <code>
+        {command && <span data-kind="prompt">$ </span>}
         {text.split(' ').map((word, i) => (
-          <span key={i} style={{ color: colourOf(word) }}>
+          <span key={i} data-kind={kindOf(word)}>
             {i > 0 && ' '}
             {word}
           </span>
@@ -31,7 +29,8 @@ export function Terminal({ text, style }: { text: string; style?: CSSProperties 
         onClick={() => copy(text)}
         aria-label={copied ? 'Copied' : 'Copy'}
         title={copied ? 'Copied' : 'Copy'}
-        style={button}
+        data-intent="quiet"
+        data-icon
       >
         {copied ? <Check /> : <Copy />}
       </button>
@@ -60,44 +59,10 @@ const Check = () => (
     height="18"
     viewBox="0 0 24 24"
     fill="none"
-    stroke={COLOURS.address}
+    stroke="currentColor"
     strokeWidth="2.2"
     aria-hidden
   >
     <path d="m5 12.5 4.5 4.5L19 7.5" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
-
-const box: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 12,
-  padding: '6px 6px 6px 18px',
-  borderRadius: radius.md,
-  background: ink.strong,
-};
-const line: CSSProperties = {
-  flex: 1,
-  minWidth: 0,
-  padding: '10px 0',
-  overflowX: 'auto',
-  whiteSpace: 'nowrap',
-  scrollbarWidth: 'none',
-  background: 'none',
-  fontFamily: mono,
-  fontSize: 14,
-  lineHeight: 1.5,
-};
-const button: CSSProperties = {
-  flex: '0 0 auto',
-  display: 'grid',
-  placeItems: 'center',
-  width: 36,
-  height: 36,
-  padding: 0,
-  border: 'none',
-  borderRadius: radius.sm,
-  background: 'none',
-  color: COLOURS.flag,
-  cursor: 'pointer',
-};

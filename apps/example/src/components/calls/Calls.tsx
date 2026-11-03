@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { PersonFace } from '../PersonFace';
 import { createPortal } from 'react-dom';
 import type { SpaceSummary } from '@minca/core';
@@ -7,10 +7,9 @@ import { useCalls } from '@minca/calls/react';
 import { useAccount, useProfiles } from '@minca/react';
 import { nameOf, peopleFrom } from '../../derive/people';
 import { Icon, type ICONS } from '../Icon';
-import { styles, palette, hstack } from '../../styles';
 import { ask } from '@minca/app-shared/Ask';
 import { useNow } from '../NetworkView';
-import { QuietButton } from '../Buttons';
+import styles from './Calls.module.css';
 
 /** Calls, drawn once above every space, so moving between spaces never touches one. */
 export function CallLayer({
@@ -31,7 +30,7 @@ export function CallLayer({
   return (
     <>
       {state.ringing.length > 0 && (
-        <div className="call-overlay">
+        <div className={styles.overlay}>
           {state.ringing.map((ring, i) => (
             <Ringing
               key={ring.id}
@@ -43,7 +42,7 @@ export function CallLayer({
           ))}
         </div>
       )}
-      <div className="call-stack" aria-live="polite">
+      <div className={styles.stack} aria-live="polite">
         {state.rejoin && !state.current && (
           <Rejoin call={state.rejoin} spaceName={spaceNamed(state.rejoin.space)} />
         )}
@@ -86,64 +85,38 @@ function CallPanel({
   const act = (fn: () => Promise<void> | void) => () => void Promise.resolve(fn()).catch(() => {});
 
   const outgoing = call.outgoing && (
-    <p style={{ fontSize: 13, color: stage ? palette.surface.lineStrong : palette.ink.muted }}>
+    <small>
       {call.outgoing.state === 'ringing'
         ? `Ringing ${nameOf(call.outgoing.to, people)}…`
         : call.outgoing.state === 'declined'
           ? `${nameOf(call.outgoing.to, people)} can't talk right now.`
           : `${nameOf(call.outgoing.to, people)} didn't answer.`}
-    </p>
+    </small>
   );
 
   const tiles = <Tiles call={call} people={people} large={stage || pip.window !== null} />;
 
   return (
-    <section
-      aria-label={`Call in ${spaceName}`}
-      className={stage ? 'call-panel call-stage' : 'call-panel'}
-      data-theme={stage ? 'dark' : undefined}
-    >
-      <header style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: palette.radius.pill,
-            background: palette.accent.good,
-            flexShrink: 0,
-          }}
-        />
-        <button
-          onClick={onGoTo}
-          data-variant="ghost"
-          style={{ ...linkish, color: stage ? palette.surface.card : palette.ink.strong }}
-          title="Go to this space"
-        >
-          {spaceName}
-        </button>
-        <span
-          style={{
-            fontSize: 12,
-            color: stage ? palette.ink.faint : palette.ink.faint,
-            fontVariantNumeric: 'tabular-nums',
-          }}
-        >
-          {elapsed}
+    <article aria-label={`Call in ${spaceName}`} className={styles.panel} data-stage={stage || undefined}>
+      <header>
+        <span>
+          <small data-tone="good">●</small>{' '}
+          <button onClick={onGoTo} data-intent="inline" title="Go to this space">
+            {spaceName}
+          </button>{' '}
+          <small>{elapsed}</small>
         </span>
-        <span style={{ flex: 1 }} />
         {pip.supported && (
           <RoundButton
             icon="pip"
             label={pip.window ? 'Back from picture-in-picture' : 'Picture-in-picture'}
             on={pip.window !== null}
-            dark={stage}
             onClick={pip.toggle}
           />
         )}
         <RoundButton
           icon={stage ? 'shrink' : 'expand'}
           label={stage ? 'Make smaller' : 'Make bigger'}
-          dark={stage}
           onClick={() => setStage(!stage)}
         />
       </header>
@@ -154,34 +127,28 @@ function CallPanel({
       )}
 
       {outgoing}
-      {call.problem && <p style={styles.dangerText}>{call.problem}</p>}
+      {call.problem && <p role="alert">{call.problem}</p>}
 
       {pip.window ? (
         <>
-          <p style={{ fontSize: 13, color: stage ? palette.surface.lineStrong : palette.ink.muted }}>
-            Showing in picture-in-picture.
-          </p>
-          {createPortal(<div className="call-pip">{tiles}</div>, pip.window.document.body)}
+          <small>Showing in picture-in-picture.</small>
+          {createPortal(<div className={styles.pip}>{tiles}</div>, pip.window.document.body)}
         </>
       ) : (
         tiles
       )}
 
-      <footer style={{ ...hstack(8), justifyContent: 'center', flexWrap: 'wrap' }}>
+      <footer>
         <RoundButton
           icon={call.muted ? 'micOff' : 'mic'}
           label={call.muted ? 'Unmute' : 'Mute'}
           on={call.muted}
-          dark={stage}
-          big
           onClick={() => calls?.setMuted(!call.muted)}
         />
         <RoundButton
           icon={call.camera && !call.sharing ? 'camera' : 'cameraOff'}
           label={call.camera ? 'Turn camera off' : 'Turn camera on'}
           on={!call.camera}
-          dark={stage}
-          big
           onClick={act(() => calls?.setCamera(!call.camera || call.sharing))}
         />
         {canShare && (
@@ -189,14 +156,12 @@ function CallPanel({
             icon="screen"
             label={call.sharing ? 'Stop sharing' : 'Share your screen'}
             on={call.sharing}
-            dark={stage}
-            big
             onClick={act(() => (call.sharing ? calls?.stopSharing() : calls?.shareScreen()))}
           />
         )}
-        <RoundButton icon="hangUp" label="Leave the call" danger big onClick={act(() => calls?.leave())} />
+        <RoundButton icon="hangUp" label="Leave the call" danger onClick={act(() => calls?.leave())} />
       </footer>
-    </section>
+    </article>
   );
 }
 
@@ -212,7 +177,7 @@ function Tiles({
   const { did: me } = useAccount();
   const others = call.people;
   return (
-    <div className="call-tiles" data-count={Math.min(others.length + 1, 6)} data-large={large || undefined}>
+    <div className={styles.tiles} data-count={Math.min(others.length + 1, 6)} data-large={large || undefined}>
       {others.map((person) => (
         <Tile
           key={person.peer}
@@ -225,9 +190,7 @@ function Tiles({
         />
       ))}
       <Tile name="You" did={me} stream={call.local} camera={call.camera} muted={call.muted} self />
-      {others.length === 0 && !call.outgoing && (
-        <p style={{ ...styles.quiet, alignSelf: 'center' }}>Nobody else here yet.</p>
-      )}
+      {others.length === 0 && !call.outgoing && <small>Nobody else here yet.</small>}
     </div>
   );
 }
@@ -258,18 +221,18 @@ function Tile({
 }) {
   const showVideo = camera && !!stream?.getVideoTracks().length;
   return (
-    <figure className="call-tile">
+    <figure className={styles.tile}>
       {/* Picture only: voices play in the panel (Voice). */}
       {stream && <Video stream={stream} mirror={self} hidden={!showVideo} />}
       {!showVideo && (
-        <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+        <span>
           <PersonFace did={did} size={40} />
         </span>
       )}
-      <figcaption className="call-name">
+      <figcaption className="tag">
         {muted && <Icon name="micOff" size={12} />}
         {name}
-        {note && <span style={{ opacity: 0.7 }}> · {note}</span>}
+        {note && ` · ${note}`}
       </figcaption>
     </figure>
   );
@@ -281,21 +244,15 @@ function Video({ stream, mirror, hidden }: { stream: MediaStream; mirror: boolea
     const video = ref.current;
     if (video && video.srcObject !== stream) video.srcObject = stream;
   }, [stream]);
+  // Hidden by opacity, not display, so the picture keeps playing and shows the moment a camera turns on.
   return (
     <video
       ref={ref}
       autoPlay
       playsInline
       muted
-      style={{
-        position: 'absolute',
-        inset: 0,
-        width: '100%',
-        height: '100%',
-        objectFit: 'cover',
-        transform: mirror ? 'scaleX(-1)' : undefined,
-        opacity: hidden ? 0 : 1,
-      }}
+      data-mirror={mirror || undefined}
+      data-off={hidden || undefined}
     />
   );
 }
@@ -352,22 +309,20 @@ function Ringing({
     void calls.answer(ring.id, { video }).catch(() => setBusy(false));
   };
   return (
-    <div
-      className="call-card call-incoming"
+    <article
+      className={styles.incoming}
       role="alertdialog"
       aria-modal="true"
       aria-labelledby={`ring-${ring.id}`}
     >
-      <span className="call-ringing">
+      <span className={styles.ringing}>
         <PersonFace did={ring.from} size={72} />
       </span>
       <div>
-        <p id={`ring-${ring.id}`} style={styles.modalTitle}>
-          {name}
-        </p>
-        <p style={{ fontSize: 14, color: palette.ink.muted }}>is calling you · {spaceName}</p>
+        <h2 id={`ring-${ring.id}`}>{name}</h2>
+        <small>is calling you · {spaceName}</small>
       </div>
-      <div style={{ ...hstack(24), justifyContent: 'center' }}>
+      <div className="row" data-gap="loose">
         <Choice
           icon="hangUp"
           label="Decline"
@@ -391,7 +346,7 @@ function Ringing({
           onClick={() => void answer(true)}
         />
       </div>
-    </div>
+    </article>
   );
 }
 
@@ -411,25 +366,14 @@ function Choice({
   autoFocus?: boolean;
   onClick: () => void;
 }) {
-  const color = tone === 'good' ? palette.accent.good : palette.accent.danger;
   return (
-    <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, fontSize: 13 }}>
+    <label>
       <button
         onClick={onClick}
         disabled={disabled}
         autoFocus={autoFocus}
-        style={{
-          width: 52,
-          height: 52,
-          borderRadius: palette.radius.pill,
-          padding: 0,
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: color,
-          border: `1px solid ${color}`,
-          color: palette.surface.card,
-        }}
+        data-icon
+        data-intent={tone === 'good' ? 'primary' : 'danger'}
       >
         <Icon name={icon} size={20} />
       </button>
@@ -441,29 +385,20 @@ function Choice({
 function Rejoin({ call, spaceName }: { call: CallAround; spaceName: string }) {
   const { calls } = useCalls();
   return (
-    <div className="call-card">
-      <p style={{ color: palette.ink.strong }}>
+    <article className={styles.card}>
+      <p>
         You were in a call in <strong>{spaceName}</strong>. It's still going on.
       </p>
-      <div style={hstack(8)}>
-        <QuietButton onClick={() => calls?.forgetRejoin()} style={{ flex: 1 }}>
-          Dismiss
-        </QuietButton>
+      <div className="row">
+        <button onClick={() => calls?.forgetRejoin()}>Dismiss</button>
         <button
+          data-intent="primary"
           onClick={() => void calls?.start(call.space, { call: call.id }).catch(() => {})}
-          data-variant="primary"
-          style={{
-            ...styles.smallButton,
-            flex: 1,
-            background: palette.accent.base,
-            color: palette.surface.card,
-            border: `1px solid ${palette.accent.base}`,
-          }}
         >
           Rejoin
         </button>
       </div>
-    </div>
+    </article>
   );
 }
 
@@ -474,7 +409,7 @@ const whoCanJoin = (space: SpaceSummary) =>
     ? 'Anyone who joins this space with a role can join the call'
     : 'Only people in this space can join';
 
-/** Starts a call in the space, or joins the one going, with sound only or with the camera on: in the row atop its Overview (`quick-action`) */
+/** Starts a call in the space, or joins the one going, with sound only or with the camera on: in the row atop its Overview, which draws it */
 export function CallButton({ space, video = false }: { space: SpaceSummary; video?: boolean }) {
   const { state, calls } = useCalls();
   const [busy, setBusy] = useState(false);
@@ -491,9 +426,8 @@ export function CallButton({ space, video = false }: { space: SpaceSummary; vide
       onClick={() => void startHere()}
       disabled={busy || here}
       title={going ? `Join the call · ${going.people.length}` : whoCanJoin(space)}
-      className="quick-action"
       // Green while a call is going here, so joining it is plain.
-      style={here || going ? { color: palette.accent.good } : undefined}
+      className={here || going ? styles.going : undefined}
     >
       <Icon name={video ? 'camera' : 'phone'} size={20} />
       {video ? 'Video' : 'Voice'}
@@ -508,7 +442,7 @@ export function RingButton({ space, did, name }: { space: SpaceSummary; did: str
   const ringing = state.current?.outgoing?.to === did && state.current.outgoing.state === 'ringing';
   const withThem = state.current?.people.some((p) => p.account === did);
   return (
-    <QuietButton
+    <button
       onClick={() =>
         void mayLeaveFor(state.current?.space === space.id ? null : state.current, `call ${name}`).then(
           (go) => {
@@ -525,11 +459,11 @@ export function RingButton({ space, did, name }: { space: SpaceSummary; did: str
             ? `Ringing ${name}…`
             : `Call ${name}. It rings wherever they have this space open.`
       }
-      data-round
-      style={{ width: 34, height: 34, color: ringing || withThem ? palette.accent.good : undefined }}
+      data-icon
+      className={ringing || withThem ? styles.going : undefined}
     >
       <Icon name="phone" size={14} />
-    </QuietButton>
+    </button>
   );
 }
 
@@ -541,64 +475,26 @@ function RoundButton({
   onClick,
   on = false,
   danger = false,
-  dark = false,
-  big = false,
 }: {
   icon: keyof typeof ICONS;
   label: string;
   onClick: () => void;
   on?: boolean;
   danger?: boolean;
-  dark?: boolean;
-  big?: boolean;
 }) {
-  const size = big ? 40 : 28;
-  const style: CSSProperties = {
-    width: size,
-    height: size,
-    borderRadius: palette.radius.pill,
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    border: `1px solid ${danger ? palette.accent.danger : dark ? palette.ink.body : palette.surface.rule}`,
-    background: danger
-      ? palette.accent.danger
-      : on
-        ? dark
-          ? palette.surface.card
-          : palette.ink.strong
-        : dark
-          ? palette.ink.body
-          : palette.surface.card,
-    color: danger
-      ? palette.surface.card
-      : on
-        ? dark
-          ? palette.ink.strong
-          : palette.surface.card
-        : dark
-          ? palette.surface.page
-          : palette.ink.body,
-    padding: 0,
-    flexShrink: 0,
-  };
   return (
-    <button onClick={onClick} aria-label={label} title={label} aria-pressed={on || undefined} style={style}>
-      <Icon name={icon} size={big ? 18 : 14} />
+    <button
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      aria-pressed={on || undefined}
+      data-icon
+      data-intent={danger ? 'danger' : undefined}
+    >
+      <Icon name={icon} size={18} />
     </button>
   );
 }
-
-const linkish: CSSProperties = {
-  border: 'none',
-  background: 'none',
-  padding: 0,
-  fontSize: 14,
-  fontWeight: 600,
-  cursor: 'pointer',
-  minHeight: 0,
-  textAlign: 'left',
-};
 
 function useElapsed(since: number): string {
   const now = useNow();
@@ -629,8 +525,7 @@ function usePictureInPicture(): { supported: boolean; window: Window | null; tog
       .then((opened) => {
         for (const sheet of document.querySelectorAll('style, link[rel="stylesheet"]'))
           opened.document.head.appendChild(sheet.cloneNode(true));
-        opened.document.body.style.margin = '0';
-        opened.document.body.style.background = palette.ink.strong;
+        opened.document.body.className = styles.pipBody ?? '';
         opened.addEventListener('pagehide', () => setPip(null));
         setPip(opened);
       })

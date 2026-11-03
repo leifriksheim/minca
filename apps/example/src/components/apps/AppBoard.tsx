@@ -17,9 +17,7 @@ import {
 } from '../../derive/schema-ui';
 import { nameOf, peopleFrom, writerOf, type People } from '../../derive/people';
 import { ago } from '@minca/ui/time';
-import { styles, palette, ui, stack } from '../../styles';
-import { Loading } from '../Loading';
-import { LinkButton, QuietButton } from '../Buttons';
+import { Loader } from '@minca/app-shared/Loader';
 
 /**
  * An added app drawn from its definitions alone: unlinked records are the list, what links to them
@@ -59,28 +57,33 @@ export function AppBoard({
     );
   const main = held.filter((c) => !pointsIntoApp(c));
 
-  if (!records) return <Loading label="Opening" style={styles.emptyState} />;
+  if (!records)
+    return (
+      <p className="empty">
+        <Loader label="Opening" showLabel />
+      </p>
+    );
   const byName = new Map(held.map((c, i) => [c.name, records[i] ?? []]));
 
   return (
-    <div style={stack(28)}>
+    <div className="stack" data-gap="loose">
       {main.map((parent) => (
-        <section key={parent.name} aria-label={collectionLabel(parent)} style={stack(10)}>
+        <section key={parent.name} aria-label={collectionLabel(parent)}>
           <AddForm space={space} collection={parent} label={`Add ${noun(parent)}`} />
           {(byName.get(parent.name) ?? []).length === 0 && (
-            <div style={{ ...styles.emptyState, padding: '24px 16px' }}>No {noun(parent)} yet.</div>
+            <div className="empty">
+              <p>No {noun(parent)} yet.</p>
+            </div>
           )}
           {(byName.get(parent.name) ?? []).map((record) => (
-            <article key={record.key} style={card}>
-              <header
-                style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}
-              >
-                <button onClick={() => onOpen(record)} data-variant="ghost" style={cardTitle}>
+            <article key={record.key}>
+              <header>
+                <button type="button" data-intent="inline" onClick={() => onOpen(record)}>
                   {recordLabel(record, parent.schema)}
                 </button>
-                <span style={{ ...styles.faint, whiteSpace: 'nowrap' }}>
+                <small>
                   {writerOf(record, people)} · {ago(record.createdAt)}
-                </span>
+                </small>
               </header>
               <Meta collection={parent} record={record} />
               {childrenOf(parent).map(({ child, rel }) => (
@@ -122,18 +125,16 @@ function Meta({ collection, record }: { collection: NodeCollection; record: Node
   );
   if (fields.length === 0) return null;
   return (
-    <div
-      style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px', fontSize: 13, color: palette.ink.muted }}
-    >
+    <small className="row">
       {fields.map((f) => (
         <span key={f.name}>
           {f.label}{' '}
-          <span style={{ color: palette.ink.strong }}>
+          <strong>
             <Value field={f} value={body[f.name]} compact />
-          </span>
+          </strong>
         </span>
       ))}
-    </div>
+    </small>
   );
 }
 
@@ -174,48 +175,36 @@ function Children({
           : node.records.put(space.id, child.name, { [picker.name]: value }, { links }),
       );
     return (
-      <div style={stack(6)}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+      <div className="stack">
+        <div className="row" data-gap="tight">
           {choices.map((choice) => {
             const count = records.filter((r) => bodyOf(r)[picker.name] === choice.value).length;
-            const on = chosen === choice.value;
             return (
               <button
+                type="button"
                 key={String(choice.value)}
                 onClick={() => void pick(choice.value)}
                 disabled={busy}
-                aria-pressed={on}
-                data-variant={on ? 'primary' : 'quiet'}
-                style={{
-                  ...styles.smallButton,
-                  height: 30,
-                  gap: 8,
-                  ...(on
-                    ? {
-                        background: palette.accent.base,
-                        color: palette.surface.card,
-                        borderColor: palette.accent.base,
-                      }
-                    : {}),
-                }}
+                aria-pressed={chosen === choice.value}
               >
-                {choice.label} <span style={{ opacity: 0.7 }}>{count}</span>
+                {choice.label} {count}
               </button>
             );
           })}
         </div>
         {mine && (
-          <span style={styles.faint}>
+          <small>
             You picked — pick again to change{' '}
-            <LinkButton
+            <button
+              type="button"
+              data-intent="inline"
               onClick={() => void run(() => node.records.delete(space.id, mine.key))}
-              style={{ padding: 0, fontSize: 12 }}
             >
               or take it back
-            </LinkButton>
-          </span>
+            </button>
+          </small>
         )}
-        {error && <p style={styles.error}>{error}</p>}
+        {error && <p role="alert">{error}</p>}
       </div>
     );
   }
@@ -223,46 +212,46 @@ function Children({
   const nothingToFill = fields.every((f) => !f.required);
   const label = noun(child);
   return (
-    <div style={{ ...stack(6), paddingTop: 8, borderTop: `1px solid ${palette.surface.line}` }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 12, color: palette.ink.muted }}>
+    <div className="stack">
+      <hr />
+      <div className="row" data-spread>
+        <small>
           {records.length} {records.length === 1 ? label : `${label}s`}
-        </span>
+        </small>
         {onePerMe && nothingToFill ? (
           mine ? (
-            <QuietButton
+            <button
+              type="button"
+              data-intent="quiet"
               onClick={() => void run(() => node.records.delete(space.id, mine.key))}
               disabled={busy}
-              style={{ height: 28 }}
             >
               Remove your {label}
-            </QuietButton>
+            </button>
           ) : (
             <button
+              type="button"
+              data-intent="primary"
               onClick={() => void run(() => node.records.put(space.id, child.name, {}, { links }))}
               disabled={busy}
-              data-variant="primary"
-              style={{ ...styles.darkSmall, height: 28 }}
             >
               Add your {label}
             </button>
           )
         ) : (
-          <AddForm space={space} collection={child} label={`Add ${label}`} links={links} compact />
+          <AddForm space={space} collection={child} label={`Add ${label}`} links={links} />
         )}
       </div>
       {records.length > 0 && (
-        <ul style={{ listStyle: 'none', display: 'flex', flexWrap: 'wrap', gap: 6, margin: 0, padding: 0 }}>
+        <div className="row">
           {records.map((r) => (
-            <li key={r.key}>
-              <button onClick={() => onOpen(r)} data-variant="ghost" style={chip}>
-                {said(r, child) ? `${nameOf(r.createdBy, people)}: ${said(r, child)}` : writerOf(r, people)}
-              </button>
-            </li>
+            <button type="button" data-intent="inline" key={r.key} onClick={() => onOpen(r)}>
+              {said(r, child) ? `${nameOf(r.createdBy, people)}: ${said(r, child)}` : writerOf(r, people)}
+            </button>
           ))}
-        </ul>
+        </div>
       )}
-      {error && <p style={styles.error}>{error}</p>}
+      {error && <p role="alert">{error}</p>}
     </div>
   );
 }
@@ -273,28 +262,23 @@ function AddForm({
   collection,
   label,
   links,
-  compact = false,
 }: {
   space: SpaceSummary;
   collection: NodeCollection;
   label: string;
   links?: ReadonlyArray<{ rel: string; to: string }>;
-  compact?: boolean;
 }) {
   const node = useNode();
   const [open, setOpen] = useState(false);
   if (!open) {
     return (
-      <QuietButton
-        onClick={() => setOpen(true)}
-        style={{ height: compact ? 28 : 32, alignSelf: compact ? 'auto' : 'flex-start' }}
-      >
+      <button type="button" data-intent="quiet" onClick={() => setOpen(true)}>
         {label}
-      </QuietButton>
+      </button>
     );
   }
   return (
-    <div style={{ ...card, gap: 8, width: compact ? '100%' : undefined }}>
+    <article>
       <SchemaForm
         schema={collection.schema}
         submitLabel={label}
@@ -304,33 +288,6 @@ function AddForm({
         }}
         onCancel={() => setOpen(false)}
       />
-    </div>
+    </article>
   );
 }
-
-const card = {
-  ...styles.tile,
-  display: 'flex',
-  flexDirection: 'column' as const,
-  gap: 10,
-  padding: 14,
-};
-const cardTitle = {
-  border: 'none',
-  background: 'none',
-  padding: 0,
-  font: 'inherit',
-  fontSize: 15,
-  fontWeight: 600,
-  color: palette.ink.strong,
-  textAlign: 'left' as const,
-  cursor: 'pointer',
-};
-const chip = {
-  ...ui.chip,
-  height: 'auto',
-  padding: '3px 10px',
-  background: palette.surface.sunken,
-  fontSize: 12,
-  fontWeight: 400,
-};

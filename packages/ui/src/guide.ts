@@ -18,11 +18,11 @@ export const UI_GUIDE = `Before the screen's own scripts run, window.ui holds Pr
   render(html\`<\${App} />\`);
 
 ui has:
-  render(tree, element?)            draws it; without an element, into one of its own at the end of the page, once the page is ready
+  render(tree, element?)            draws it; without an element, into its own at the page's end, once the page is ready
   html, h, Fragment, and the hooks useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, useReducer
   useRecords(collection, where?)    its records, oldest first, redrawn whenever the space changes; null until here
-  useCan(action, target)            whether the person looking may "create" in a collection, or "edit" or "delete" a record
-    (by its key); false until known
+  useCan(action, target)            whether the person looking may "create" in a collection, or "edit" or "delete" a record (by key);
+    false until known
   usePeople()                       [{ did, name }], kept current
   useName(did)                      their name here, "You" for the person looking
   useFile(key, ref)                 a picture the record \`key\` refers to, as a URL for <img>; null until here
@@ -38,18 +38,18 @@ ui has:
   useBlob(key, ref)                 the whole file, as a URL for <img>, <video> or <audio>; null until here
   <\${Avatar} did size? round? />   someone's face: their picture, or the shape their account gives. Always use it for a person
   <\${Person} did size? name? face? />   face and name (face={false}: the name alone); a click opens their card in the app
-  <\${Comments} about=\${record} />   the comments on a record and a box to add one, with @mentions and "/" to share something from
-    the space (needs "std.comment" in collections)
-  <\${Attachments} about=\${key} />   the files attached to a record (std.file about it): pictures, videos and sound that play, others saved
+  <\${Comments} about=\${record} />   a record's comments and a box to add one, with @mentions and "/" to share
+    (needs "std.comment" in collections)
+  <\${Attachments} about=\${key} />   a record's files (std.file about it): pictures, videos and sound play, others save
   attach(about, files)              keeps Files (from a drop, a paste or <input type=file>) as std.file records about a record,
     or about nothing when about is null; → the records written
   <\${Playable} record />          a std.file that is a video or a sound, playing where it is; fetched once it comes into view
-  useSeen(ref)                      whether the element in ref has come into view: load something large only then
+  useSeen(ref)                      whether ref's element has come into view: load large things only then
   sizeOf(bytes)                     "812 KB", "3.1 MB"
   <\${Record} record=\${r} onOpen? />  any record as one line, as every app shows it; a click opens it where it belongs, or calls
     onOpen. For records other apps own, as a shared one: minca.get(key, { link: 'shares' }), with
     onOpen=\${() => minca.open({ record: key, link: 'shares' })}
-  useShare()                        sharing into what you send, as chat and comments do: share.pick() asks the person to choose a
+  useShare()                        sharing into what you send, as chat and comments do: share.pick() asks the person for a
     record (a "/" button), onChange=\${(next) => setDraft(share.typed(draft, next))} does the same for "/"
     typed into an empty box; put share.links on what you send, then share.clear(). <\${Sharing} share />
     is the one waiting; <\${Shared} from=\${record} /> what a record shares
@@ -68,8 +68,8 @@ ui has:
   <\${NearButton} near onChange />  "Within 5 km of …", from useNear(): [near, setNear], remembered on this device
   placeLabel(place), distanceText(near, place), inReach(near, place), nearWhere(near)   for showing and finding places nearby
   <\${MapLink} place />             "Open map", at OpenStreetMap
-  positionBetween(before?, after?)  a "position" text that sorts between two others (either may be missing), for ordering by hand
-  ago(iso)                          "just now", "5m", "3h", "2d", then a date: how the app shows when something happened
+  positionBetween(before?, after?)  a "position" sorting between two (either may be missing), for ordering by hand
+  ago(iso)                          "just now", "5m", "3h", "2d", then a date, as the app shows times
   when                              dates as std.event keeps them: shortWhen, longWhen, horizon, isOn, dayKey, icsOf, …
 
 To show a record the way the app does, with its comments, attachments and history, call minca.open({ record: key }).
@@ -77,18 +77,19 @@ To show a record the way the app does, with its comments, attachments and histor
 Write plain HTML from this list, no CSS, <style> or style="": say what a thing is for, never how it looks.
   <main> the column (data-wide: full width; data-fill: the window's height, its first child scrolling over a box to write in);
     <header> title + actions; <section> a group under an h2
-  h1 h2 h3 p a strong code; <small> meta and hints; <mark>; <s> done; class="truncate" one line, cut short
-  <button> data-intent="primary" (the one main action) | "quiet" (toolbars, rows) | "danger" | "open" (a task, a row);
-    data-icon (icon only, give aria-label); aria-pressed (a toggle or filter);
+  h1 h2 h3 p a strong code; <small> meta and hints; <mark>; <s> done; class="truncate" one line, cut short, taking a row's room
+  <button> data-intent="primary" (the one main action) | "quiet" (toolbars, rows) | "danger" | "open" (a task, a row;
+    .row lays it across) | "inline" (a word in a sentence); data-icon (icon only, aria-label); aria-pressed (on/off);
+    <a data-intent> a link drawn as a button;
     <div role="tablist"> of buttons, one aria-selected="true"
   <label>Name <input></label>; <fieldset><legend>; input textarea select (in a row, a field takes the room left);
     <input type="checkbox" role="switch">; <p role="alert"> an error
   <article> one thing; <ul role="list"> of <li> (a data-intent="open" button in one is the row's text);
     class="grid" tiles; class="lanes" columns scrolled across (a board); class="tag" a label or count; <aside> a notice;
-    <progress> <meter>; <figure> a picture (Cover draws one; a photo covers it, tags sit on top);
+    <progress> <meter> <table> <pre> <details><summary>; <figure> a picture (Cover draws one; a photo covers it, tags sit on top);
     <div aria-roledescription="carousel"> pictures swiped through; <div role="grid"> of role="gridcell" a month
   <div data-actions> buttons shown when what holds them is pointed at; aria-grabbed="true" dragged; <hr data-drop> lands here
   class="row" | "stack", data-gap="tight" | "loose", data-spread (row: first at the start, the rest at the end)
-  data-tone="good|warn|danger" on a tag or aside; data-hue="1"…"5" a category's colour: a tint on a tag or article, var(--hue)
-Nothing else exists. Only a game or drawing styles itself, in <main data-wide>, with var(--color-text), var(--color-surface),
-var(--color-action), var(--hue). Fonts from URLs never load.`;
+  data-tone="good|warn|danger" colours text, and a tag's or aside's ground; data-hue="1"…"5" a category's colour: a tint on a tag or article, var(--hue)
+Nothing else exists. Only a game or drawing styles itself, in <main data-wide>, on var(--color-*) and var(--hue).
+Fonts from URLs never load.`;

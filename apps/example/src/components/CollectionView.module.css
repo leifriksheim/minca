@@ -1,0 +1,24 @@
+/* The title, and the tools beside it, or under it when a long description needs the room */
+.head {
+  flex-wrap: wrap;
+  align-items: flex-end;
+
+  & > :first-child {
+    flex-basis: auto;
+  }
+}
+
+.search {
+  flex: 0 1 180px;
+}
+
+.start {
+  align-self: flex-start;
+}
+
+@media (max-width: 640px) {
+  .tools,
+  .search {
+    flex: 1 1 100%;
+  }
+}

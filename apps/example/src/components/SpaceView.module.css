@@ -1,0 +1,268 @@
+/*
+ * A space, laid out like a chat app: its apps down a rail, and what is open beside it, each the
+ * height of the window and scrolling on its own. A phone has no rail: Back and the apps sit in the bar.
+ */
+.shell {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  height: 100dvh;
+
+  @media (max-width: 640px) {
+    display: block;
+    height: auto;
+
+    /* An open app is the whole screen, pinned rather than 100dvh tall, so a page the keyboard shrinks
+       shrinks the app too and its field stays above the keyboard. */
+    &[data-app-open] {
+      position: fixed;
+      inset: 0;
+    }
+  }
+}
+
+.rail {
+  position: relative;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: var(--space);
+  border-right: 1px solid var(--color-outline);
+  background: var(--color-sunken);
+  view-transition-name: app-rail;
+
+  /* The desktop app's window has no title bar: room for its buttons. */
+  :root[data-desktop] & {
+    padding-top: 44px;
+  }
+}
+
+/* The space at the top, you at the foot; only the apps between scroll, so their menus open out past it. */
+.top {
+  padding-bottom: var(--space);
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.apps {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding-top: var(--space);
+}
+
+.foot {
+  padding-top: var(--space);
+  border-top: 1px solid var(--color-divider);
+}
+
+/* An app on the rail: its shape beside its name, the open one on a tile of its own. */
+.item {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 0;
+  padding: var(--space-tight) var(--space) var(--space-tight) var(--space-tight);
+  border: none;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--color-text-muted);
+  font-size: var(--text-body);
+
+  &:is(:hover, [aria-current], [aria-expanded='true']) {
+    background: var(--color-divider);
+  }
+
+  &[aria-current] {
+    color: var(--color-text-strong);
+    font-weight: 600;
+  }
+}
+
+.icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+}
+
+/* Where the next app goes: an empty tile, dashed */
+.slot {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1.5px dashed var(--color-field);
+  border-radius: var(--radius-small);
+}
+
+/* What's new, on an icon's corner */
+.corner {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  pointer-events: none;
+}
+
+/* What is open, under its bar */
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+
+  @media (max-width: 640px) {
+    min-height: 100dvh;
+    padding-bottom: env(safe-area-inset-bottom);
+
+    .shell[data-app-open] & {
+      height: 100%;
+      min-height: 0;
+    }
+  }
+}
+
+.bar {
+  height: 60px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--color-outline);
+  background: var(--color-page);
+  view-transition-name: space-bar;
+
+  & > * {
+    flex: none;
+  }
+
+  & h1 {
+    flex: 1;
+    font-size: var(--text-heading-2);
+  }
+
+  /* On a phone the bar and the page are one, with no rule between. */
+  @media (max-width: 640px) {
+    position: sticky;
+    top: 0;
+    z-index: 8;
+    height: auto;
+    min-height: 56px;
+    padding: env(safe-area-inset-top) max(12px, env(safe-area-inset-right)) 0
+      max(12px, env(safe-area-inset-left));
+    border-bottom: none;
+
+    .shell[data-app-open] & {
+      position: static;
+    }
+  }
+}
+
+/* Only on a phone, or only on a wide screen */
+.phone {
+  @media (min-width: 641px) {
+    display: none;
+  }
+}
+
+.wide {
+  @media (max-width: 640px) {
+    display: none;
+  }
+}
+
+.content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 28px 32px 64px;
+
+  @media (max-width: 640px) {
+    flex: 1 0 auto;
+    overflow: visible;
+    padding: var(--space-loose) max(16px, env(safe-area-inset-right)) 24px
+      max(16px, env(safe-area-inset-left));
+
+    .shell[data-app-open] & {
+      overflow-y: auto;
+    }
+  }
+
+  /* An app that is a conversation, or a screen of its own, gets every pixel, edge to edge. */
+  &[data-fill] {
+    display: flex;
+    overflow: hidden;
+    padding: 0;
+
+    & > main {
+      flex: 1;
+      max-width: none;
+    }
+  }
+
+  & > main {
+    max-width: 1040px;
+    padding: 0;
+
+    &[data-wide] {
+      max-width: none;
+    }
+  }
+}
+
+/* The space's menu, beside its face; the phone's apps, under the bar's button */
+.anchor {
+  position: relative;
+}
+
+.menu {
+  top: 0;
+  left: calc(100% + 8px);
+  width: 300px;
+  max-height: min(560px, calc(100dvh - 90px));
+  overflow-y: auto;
+
+  & > li:not(:has(button)) {
+    padding: var(--space);
+  }
+
+  & [aria-current] {
+    background: var(--color-sunken);
+    font-weight: 600;
+  }
+}
+
+/* Every app as the rail has them, their shapes in a grid of three with each name under it; on a phone,
+   spanning the screen under the bar so it can't run off an edge. */
+.drop {
+  top: calc(100% + 6px);
+  right: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 300px;
+  padding: 12px;
+
+  & .item {
+    flex-direction: column;
+    padding: 12px var(--space-tight) 10px;
+    font-size: var(--text-small);
+
+    &[aria-current] {
+      background: var(--color-sunken);
+    }
+  }
+
+  & .icon {
+    width: 54px;
+    height: 54px;
+  }
+
+  & .slot {
+    width: 36px;
+    height: 36px;
+  }
+
+  @media (max-width: 640px) {
+    position: fixed;
+    top: calc(64px + env(safe-area-inset-top));
+    left: max(12px, env(safe-area-inset-left));
+    right: max(12px, env(safe-area-inset-right));
+    width: auto;
+  }
+}

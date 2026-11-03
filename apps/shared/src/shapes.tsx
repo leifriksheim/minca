@@ -2,6 +2,7 @@ import { useEffect, useRef, type CSSProperties } from 'react';
 import { ROUND, radial, type RoundKind } from '@minca/ui/round';
 import { PATHS, type ShapeKind } from '@minca/ui/shapes';
 import { shapeColours, type ShapeColour } from '@minca/ui/tokens';
+import styles from './shapes.module.css';
 
 /**
  * Minca's shapes in React: their paths are `@minca/ui/shapes`. The round ones
@@ -33,11 +34,11 @@ export function Shape({
 }) {
   return (
     <svg
-      className={className ? `shape ${className}` : 'shape'}
+      className={`shape ${styles.shape} ${className ?? ''}`}
       viewBox="0 0 100 100"
       width={size}
       height={size}
-      style={{ display: 'block', flexShrink: 0, overflow: 'visible', ...style }}
+      style={style}
       aria-hidden
     >
       <path d={path ?? PATHS[kind]} fill={colour ? shapeColours[colour] : 'var(--c, currentColor)'} />
@@ -107,14 +108,13 @@ export function Morph({
 
   return (
     <svg
-      className={className ? `shape morph ${className}` : 'shape morph'}
+      className={`shape morph ${styles.shape} ${className ?? ''}`}
       viewBox="0 0 100 100"
       width={size}
       height={size}
-      style={{ display: 'block', flexShrink: 0, overflow: 'visible' }}
       aria-hidden
     >
-      <path ref={path} style={{ transition: `fill ${MELT_MS}ms ease` }} />
+      <path ref={path} />
     </svg>
   );
 }

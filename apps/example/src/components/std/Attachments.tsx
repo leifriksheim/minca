@@ -7,8 +7,7 @@ import { fileRefOf } from '../../derive/kinds';
 import { fitImage } from '@minca/ui/image';
 import { sizeOf } from '@minca/ui/size';
 import { saveFile, useFileUrl } from '../../files';
-import { palette, styles, stack } from '../../styles';
-import { QuietButton } from '../Buttons';
+import styles from './Attachments.module.css';
 import { useAction } from '@minca/app-shared/action';
 
 /** The file an attachment names, when its body holds one */
@@ -60,15 +59,10 @@ export function Attachments({
   };
 
   return (
-    <section aria-label="Attachments" style={stack(10)}>
-      <h3 style={styles.sectionTitle}>
-        Attachments{' '}
-        {attachments.length > 0 && (
-          <span style={{ color: palette.ink.faint, fontWeight: 400 }}>{attachments.length}</span>
-        )}
-      </h3>
+    <section aria-label="Attachments" data-gap="tight">
+      <h3>Attachments {attachments.length > 0 && <small>{attachments.length}</small>}</h3>
       {sorted.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        <div className="row">
           {sorted.map((record) => (
             <AttachmentView key={record.key} space={space} record={record} />
           ))}
@@ -83,12 +77,12 @@ export function Attachments({
             hidden
             onChange={(event) => void attach(event.target.files)}
           />
-          <QuietButton onClick={() => input.current?.click()} disabled={busy}>
+          <button onClick={() => input.current?.click()} disabled={busy}>
             {busy ? 'Attaching…' : 'Attach files'}
-          </QuietButton>
+          </button>
         </div>
       )}
-      {error && <p style={{ margin: 0, fontSize: 13, color: palette.ink.muted }}>{error}</p>}
+      {error && <small>{error}</small>}
     </section>
   );
 }
@@ -116,38 +110,23 @@ function AttachmentView({ space, record }: { space: SpaceSummary; record: NodeRe
   if (picture)
     return (
       <button
+        data-intent="open"
         onClick={() => void save()}
         title={`${name} — click to save`}
-        style={{ ...tile, width: 160, height: 120, padding: 0, overflow: 'hidden' }}
+        className={styles.picture}
       >
-        {url ? (
-          <img src={url} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-        ) : (
-          <span style={styles.faint}>Loading…</span>
-        )}
+        <figure>{url ? <img src={url} alt={name} /> : <small>Loading…</small>}</figure>
       </button>
     );
   return (
     <button
+      data-intent="open"
       onClick={() => void save()}
       disabled={!file || saving}
       title={file ? 'Save' : 'This file is kept elsewhere'}
-      style={{ ...tile, padding: '8px 12px', gap: 2, alignItems: 'flex-start', flexDirection: 'column' }}
     >
-      <span style={{ fontSize: 13, fontWeight: 500, color: palette.ink.strong }}>{name}</span>
-      <span style={styles.faint}>
-        {saving ? 'Fetching…' : file ? sizeOf(Number(body.size ?? file.size)) : 'No bytes here'}
-      </span>
+      <strong>{name}</strong>
+      <small>{saving ? 'Fetching…' : file ? sizeOf(Number(body.size ?? file.size)) : 'No bytes here'}</small>
     </button>
   );
 }
-
-const tile = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  borderRadius: palette.radius.md,
-  border: `1px solid ${palette.surface.line}`,
-  background: palette.surface.card,
-  maxWidth: 260,
-} as const;

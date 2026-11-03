@@ -1,13 +1,12 @@
 import type { NodeCollection, NodeRecord, SpaceSummary } from '@minca/core';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { collectionLabel } from '../derive/schema-ui';
 import { namespaceOf } from '../derive/filters';
 import { CollectionView } from './CollectionView';
 import { CollectionsOverview, namespaceLabel } from './CollectionsOverview';
 import { Library } from './Library';
 import { CollectionEditor } from './CollectionDesigner';
-import { styles, palette, stack } from '../styles';
-import { AddButton } from './Buttons';
+import styles from './DataView.module.css';
 
 /** Where the Data view is: which collection, and which record is open beside it */
 export interface Place {
@@ -63,18 +62,15 @@ export function DataView({
   const current = collections.find((c) => c.name === selected) ?? null;
 
   return (
-    <div className="space-layout">
-      <aside className="space-side">
+    <div className={styles.layout}>
+      <div className={`stack ${styles.side}`} data-gap="loose">
         {namespaces.length > 1 && (
-          <label style={stack(6)}>
-            <span className="collection-nav-heading" style={sideHeading}>
-              Namespace
-            </span>
+          <label>
+            <span className={styles.heading}>Namespace</span>
             <select
               value={namespace ?? ALL}
               onChange={(e) => setNamespace(e.target.value === ALL ? null : e.target.value)}
               aria-label="Namespace"
-              style={{ ...styles.input, height: 34, fontSize: 13 }}
             >
               <option value={ALL}>All namespaces</option>
               {namespaces.map((ns) => (
@@ -85,67 +81,62 @@ export function DataView({
             </select>
           </label>
         )}
-        <nav aria-label="Collections" className="collection-nav">
-          <span className="collection-nav-heading" style={sideHeading}>
-            In this space
-          </span>
+        <nav aria-label="Collections" className={`stack ${styles.nav}`} data-gap="tight">
+          <small className={styles.heading}>In this space</small>
           {ordered.length > 0 && (
             <button
+              data-intent="quiet"
+              className="row"
+              data-spread
               onClick={() => onPlace({ collection: ALL, key: null })}
               aria-current={selected === ALL ? 'page' : undefined}
-              data-nav
-              style={{ ...navItem, ...(selected === ALL ? navItemOn : {}) }}
             >
               <span>All collections</span>
-              <span style={styles.faint}>{shown.length}</span>
+              <small>{shown.length}</small>
             </button>
           )}
           {groups.map((g) => (
-            <div key={g.ns} style={{ display: 'contents' }}>
-              {groups.length > 1 && (
-                <span className="collection-nav-heading" style={groupHeading}>
-                  {namespaceLabel(g.ns)}
-                </span>
-              )}
+            <Fragment key={g.ns}>
+              {groups.length > 1 && <small className={styles.heading}>{namespaceLabel(g.ns)}</small>}
               {g.members.map((c) => (
                 <button
                   key={c.name}
+                  data-intent="quiet"
+                  className="row"
+                  data-spread
                   onClick={() => onPlace({ collection: c.name, key: null })}
                   aria-current={selected === c.name ? 'page' : undefined}
                   title={c.name}
-                  data-nav
-                  style={{ ...navItem, ...(selected === c.name ? navItemOn : {}) }}
                 >
                   <span>{collectionLabel(c)}</span>
-                  <span style={styles.faint}>{c.records}</span>
+                  <small>{c.records}</small>
                 </button>
               ))}
-            </div>
+            </Fragment>
           ))}
-          {ordered.length === 0 && (
-            <span style={{ fontSize: 13, color: palette.ink.faint, padding: '6px 10px' }}>Nothing yet</span>
-          )}
+          {ordered.length === 0 && <small>Nothing yet</small>}
           {space.writable && (
             <button
+              data-intent="quiet"
               onClick={() => onPlace({ collection: NEW, key: null })}
               aria-current={selected === NEW ? 'page' : undefined}
-              data-nav
-              style={{ ...navItem, color: palette.ink.muted, ...(selected === NEW ? navItemOn : {}) }}
             >
               + New collection
             </button>
           )}
         </nav>
-      </aside>
+      </div>
 
-      <main style={{ minWidth: 0 }}>
+      <div className="stack">
         {selected === NEW ? (
-          <section style={stack(8)}>
-            <h2 style={{ ...styles.appTitle, fontSize: 22 }}>New collection</h2>
-            <p style={styles.quiet}>
-              Give it a name and some fields. Everything else — forms, lists, boards — is worked out from
-              this.
-            </p>
+          <section>
+            <div className="stack" data-gap="tight">
+              <h2>New collection</h2>
+              <small>
+                Give it a name and some fields. Everything else — forms, lists, boards — is worked out from
+                this.
+              </small>
+            </div>
             <CollectionEditor
               space={space}
               collection={null}
@@ -174,27 +165,15 @@ export function DataView({
             onOpen={onOpen}
           />
         ) : (
-          <div
-            style={{
-              ...styles.emptyState,
-              padding: '64px 24px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
-              alignItems: 'center',
-            }}
-          >
-            <strong style={{ color: palette.ink.strong, fontSize: 15 }}>This space is empty</strong>
-            <span>
+          <div className="empty">
+            <strong>This space is empty</strong>
+            <p>
               Define a collection — or ask an agent: this page offers the space's operations as WebMCP tools.
-            </span>
+            </p>
             {space.writable && (
-              <AddButton
-                onClick={() => onPlace({ collection: NEW, key: null })}
-                style={{ alignSelf: 'center' }}
-              >
+              <button data-intent="primary" onClick={() => onPlace({ collection: NEW, key: null })}>
                 New collection
-              </AddButton>
+              </button>
             )}
           </div>
         )}
@@ -206,35 +185,7 @@ export function DataView({
             onAdded={(name) => onPlace({ collection: name, key: null })}
           />
         )}
-      </main>
+      </div>
     </div>
   );
 }
-
-const sideHeading = {
-  fontSize: 12.5,
-  fontWeight: 500,
-  color: palette.ink.muted,
-  padding: '0 10px 6px',
-};
-const groupHeading = {
-  fontSize: 11,
-  color: palette.ink.faint,
-  padding: '12px 10px 4px',
-  fontFamily: palette.mono,
-};
-const navItem = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  gap: 8,
-  height: 34,
-  padding: '0 10px',
-  border: 'none',
-  borderRadius: palette.radius.pill,
-  background: 'none',
-  color: palette.ink.body,
-  fontSize: 14,
-  textAlign: 'left' as const,
-};
-const navItemOn = { background: palette.surface.sunken, color: palette.ink.strong, fontWeight: 500 };

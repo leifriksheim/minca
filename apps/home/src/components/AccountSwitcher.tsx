@@ -4,9 +4,7 @@ import { Avatar } from '@minca/app-shared/Avatar';
 import { rememberedPicture, useRememberPicture } from '@minca/app-shared/rememberedPictures';
 import { useDismiss } from '@minca/app-shared/useDismiss';
 import { useCopy } from '@minca/app-shared/action';
-import { palette, styles, hstack } from '../styles';
-
-const { ink, surface, radius } = palette;
+import styles from './AccountSwitcher.module.css';
 
 /**
  * Who is signed in, to rename or copy the ID of, and the other accounts this
@@ -51,30 +49,19 @@ export function AccountSwitcher() {
   };
 
   return (
-    <div ref={root} style={{ position: 'relative' }}>
+    <div ref={root} className={styles.switcher}>
       <button
         onClick={() => setOpen((was) => !was)}
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label={`Account: ${session.account.name}`}
-        data-variant="quiet"
-        style={{
-          ...styles.smallButton,
-          display: 'inline-flex',
-          alignItems: 'center',
-          height: 40,
-          padding: '0 14px 0 4px',
-          gap: 8,
-        }}
       >
         <Avatar did={session.did} size={30} round src={picture} />
-        <span className="switcher-name">{session.account.name}</span>
+        <span>{session.account.name}</span>
       </button>
       {open && (
-        <div role="menu" style={menu}>
-          <div
-            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: 20 }}
-          >
+        <div role="menu">
+          <div className={`stack ${styles.me}`}>
             <Avatar did={session.did} size={64} round src={picture} />
             {renaming ? (
               <form
@@ -82,100 +69,83 @@ export function AccountSwitcher() {
                   event.preventDefault();
                   void auth.rename(draft).then((ok) => ok && setRenaming(false));
                 }}
-                style={{ ...hstack(6), width: '100%', marginTop: 4 }}
+                className="row"
               >
                 <input
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
                   autoFocus
                   aria-label="Account name"
-                  style={{ ...styles.input, height: 34 }}
                 />
-                <button
-                  type="submit"
-                  disabled={!draft.trim() || state.busy}
-                  data-variant="primary"
-                  style={{ ...styles.darkSmall, height: 34 }}
-                >
+                <button type="submit" disabled={!draft.trim() || state.busy} data-intent="primary">
                   Save
                 </button>
               </form>
             ) : (
-              <p style={{ fontFamily: palette.display, fontSize: 21, fontWeight: 700, color: ink.strong }}>
-                {session.account.name}
-              </p>
+              <h2>{session.account.name}</h2>
             )}
-            <p style={{ fontSize: 12, color: ink.faint, fontFamily: palette.mono }}>
-              {named(session.account.name) > 1
-                ? shortId(session.did)
-                : `${session.did.slice(0, 14)}…${session.did.slice(-4)}`}
-            </p>
-            <div style={{ ...hstack(6), marginTop: 4 }}>
+            <small>
+              <code>
+                {named(session.account.name) > 1
+                  ? shortId(session.did)
+                  : `${session.did.slice(0, 14)}…${session.did.slice(-4)}`}
+              </code>
+            </small>
+            <div className="row">
               {!renaming && (
                 <button
                   onClick={() => {
                     setDraft(session.account.name);
                     setRenaming(true);
                   }}
-                  data-variant="quiet"
-                  style={styles.smallButton}
                 >
                   Rename
                 </button>
               )}
-              <button onClick={() => copy(session.did)} data-variant="quiet" style={styles.smallButton}>
-                {copied ? 'Copied' : 'Copy ID'}
-              </button>
+              <button onClick={() => copy(session.did)}>{copied ? 'Copied' : 'Copy ID'}</button>
             </div>
           </div>
           {others.length > 0 && (
-            <div style={{ borderTop: `1px solid ${surface.line}`, padding: 6 }}>
+            <div className={styles.items}>
               {others.map((account) => (
                 <button
                   key={account.id}
+                  data-intent="quiet"
                   role="menuitem"
                   onClick={() => void switchTo(account.id)}
                   disabled={state.busy}
-                  style={item}
-                  className="menu-item"
                 >
                   <Avatar did={account.did} size={28} round src={rememberedPicture(account.did)} />
-                  <span style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
-                    <span style={{ display: 'block', fontWeight: 500, color: ink.strong }}>
-                      {account.name}
-                    </span>
-                    <span style={{ display: 'block', fontSize: 12, color: ink.faint }}>
-                      {named(account.name) > 1 ? `Switch · ${shortId(account.did)}` : 'Switch'}
-                    </span>
+                  <span className="stack" data-gap="tight">
+                    <strong>{account.name}</strong>
+                    <small>{named(account.name) > 1 ? `Switch · ${shortId(account.did)}` : 'Switch'}</small>
                   </span>
                 </button>
               ))}
             </div>
           )}
-          <div style={{ borderTop: `1px solid ${surface.line}`, padding: 6 }}>
+          <div className={styles.items}>
             <button
               role="menuitem"
+              data-intent="quiet"
               onClick={() => void addAccount()}
               disabled={state.busy}
-              style={item}
-              className="menu-item"
             >
-              <span style={plus} aria-hidden="true">
+              <span className={styles.plus} aria-hidden="true">
                 +
               </span>
               Add another account
             </button>
             <button
               role="menuitem"
+              data-intent="quiet"
               onClick={() => {
                 setOpen(false);
                 void auth.signOut();
               }}
               disabled={state.busy}
-              style={item}
-              className="menu-item"
             >
-              <span style={{ width: 28 }} aria-hidden="true" />
+              <span className={styles.plus} aria-hidden="true" />
               Sign out
             </button>
           </div>
@@ -184,39 +154,3 @@ export function AccountSwitcher() {
     </div>
   );
 }
-
-const menu = {
-  ...styles.float,
-  position: 'absolute',
-  right: 0,
-  top: 'calc(100% + 8px)',
-  width: 300,
-  maxWidth: 'calc(100vw - 32px)',
-  zIndex: 20,
-  overflow: 'hidden',
-} as const;
-
-const item = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 12,
-  width: '100%',
-  padding: '8px 10px',
-  border: 'none',
-  borderRadius: radius.md,
-  background: 'transparent',
-  fontSize: 14,
-  color: ink.body,
-} as const;
-
-const plus = {
-  width: 28,
-  height: 28,
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  borderRadius: radius.pill,
-  border: `1px solid ${surface.rule}`,
-  color: ink.strong,
-  fontSize: 16,
-} as const;

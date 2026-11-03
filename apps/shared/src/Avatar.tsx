@@ -1,4 +1,5 @@
 import { avatarFit, avatarRadius, avatarShape } from '@minca/ui/avatar';
+import styles from './Avatar.module.css';
 
 /**
  * A visual fingerprint for an account.
@@ -33,13 +34,8 @@ export function Avatar({
         width={size}
         height={size}
         alt="Account avatar"
-        style={{
-          borderRadius: avatarRadius(size, round),
-          objectFit: 'cover',
-          flexShrink: 0,
-          display: 'block',
-          background: ground,
-        }}
+        className={styles.avatar}
+        style={{ borderRadius: avatarRadius(size, round), background: ground }}
       />
     );
 
@@ -50,7 +46,8 @@ export function Avatar({
       viewBox="0 0 100 100"
       role="img"
       aria-label="Account avatar"
-      style={{ borderRadius: avatarRadius(size, round), background: ground, flexShrink: 0, display: 'block' }}
+      className={styles.avatar}
+      style={{ borderRadius: avatarRadius(size, round), background: ground }}
     >
       <path d={d} fill={fill} transform={avatarFit(round)} />
     </svg>

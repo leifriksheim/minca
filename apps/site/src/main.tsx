@@ -1,6 +1,6 @@
 import { createRoot } from 'react-dom/client';
 import { RouterProvider } from '@tanstack/react-router';
-import { baseCss } from '@minca/app-shared/styles';
+import '@minca/ui/minca.css';
 import { APP } from './pages/Site';
 import { router } from './router';
 
@@ -10,11 +10,6 @@ import { router } from './router';
 const { pathname, hash } = globalThis.location;
 const appLink = /^\/app(\/|$)/.test(pathname) || /[#&](invite|door)=/.test(hash);
 if (appLink) globalThis.location.replace(`${APP}/${hash}`);
-
-// The design system's tokens and base rules; the pages' own styles are in pages/site.css.
-const style = globalThis.document.createElement('style');
-style.textContent = baseCss;
-globalThis.document.head.append(style);
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Root element not found');

@@ -310,7 +310,9 @@ export function Mcp() {
                 Connect Claude, ChatGPT or any AI that speaks MCP to your spaces. Ask it what’s happening at
                 the club, or tell it to take the last seat.
               </p>
-              <Terminal text={MCP_URL} style={{ maxWidth: 440, marginBottom: 24 }} />
+              <div className="mcp-url">
+                <Terminal text={MCP_URL} />
+              </div>
               <div className="actions">
                 <a href={addToClaude()} className="btn btn-primary btn-lg" target="_blank" rel="noreferrer">
                   Add to Claude ↗

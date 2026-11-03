@@ -1,0 +1,89 @@
+/* Parties side by side in one rounded frame, sharing navy rules: each card draws its right and
+   bottom rule, and the frame clips the ones along its own edge. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-frame);
+  background: var(--color-surface);
+
+  & > article {
+    margin: 0 -1px -1px 0;
+    border: none;
+    border-right: 1px solid var(--color-outline);
+    border-bottom: 1px solid var(--color-outline);
+    border-radius: 0;
+    padding: 18px;
+    gap: 12px;
+  }
+}
+
+/* A party's mark, its name and numbers, and Edit */
+.head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  & > div {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+  }
+}
+
+/* What it stands for, cut to three lines */
+.platform {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.foot {
+  margin-top: auto;
+}
+
+.requests {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-divider);
+}
+
+/* At the end of its row */
+.end {
+  margin-inline-start: auto;
+}
+
+.name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  & > label {
+    flex: 1;
+  }
+}
+
+.colours {
+  & > [aria-checked='true'] {
+    border-color: var(--color-outline);
+  }
+
+  & svg {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+.actions {
+  justify-content: flex-end;
+
+  & > [data-intent='danger'] {
+    margin-inline-end: auto;
+  }
+}

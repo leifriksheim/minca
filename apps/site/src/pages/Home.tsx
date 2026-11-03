@@ -347,7 +347,7 @@ export function Home() {
       <section className="cta">
         <div className="wrap">
           <div className="cta-panel">
-            <Loader decorative size={34} style={{ marginBottom: 28 }} />
+            <Loader decorative size={34} />
             <h2>Call your people.</h2>
             <p className="cta-minka">
               <i>Minka</i> is the Quechua word for work done together. When something would help everyone,

@@ -2,16 +2,17 @@ import { useState } from 'react';
 import { Shape } from '@minca/app-shared/shapes';
 import { Wordmark } from '@minca/app-shared/Wordmark';
 import type { RoundKind } from '@minca/ui/round';
-import { shapeGrounds } from '@minca/ui/tokens';
-import { styles, palette } from '../styles';
-import { LinkButton, PrimaryButton } from './Buttons';
+import css from './ConnectScreen.module.css';
+
+/** Each shape colour's place among the system's hues, for the tile it sits on */
+const HUES = { cobalt: 1, coral: 2, peach: 3, sage: 4 } as const;
 
 /** What Minca does differently from the apps people know, a card at a time */
 const CARDS: ReadonlyArray<{
   title: string;
   body: string;
   kind: RoundKind;
-  colour: keyof typeof shapeGrounds;
+  colour: keyof typeof HUES;
 }> = [
   {
     title: 'Hi, this is Minca.',
@@ -47,67 +48,37 @@ export function Intro({ onDone }: { onDone: () => void }) {
   const last = at === CARDS.length - 1;
 
   return (
-    <div className="page">
-      <div style={styles.card}>
-        <div
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}
-        >
-          <Wordmark compact />
-          {/* Hidden on the last card, where the main button already goes on */}
-          <LinkButton onClick={onDone} style={{ paddingRight: 0, visibility: last ? 'hidden' : undefined }}>
-            Skip
-          </LinkButton>
-        </div>
+    <main className={css.screen}>
+      <header>
+        <Wordmark compact />
+        {/* Not on the last card, where the main button goes on */}
+        <button data-intent="quiet" onClick={onDone} hidden={last}>
+          Skip
+        </button>
+      </header>
 
-        {/* A colour tile with its shape off the corner, as on the site */}
-        <div
-          aria-hidden
-          style={{
-            position: 'relative',
-            height: 180,
-            borderRadius: palette.radius.lg,
-            background: shapeGrounds[card.colour],
-            overflow: 'hidden',
-            marginBottom: 28,
-          }}
-        >
-          <Shape
-            kind={card.kind}
-            colour={card.colour}
-            size={220}
-            style={{ position: 'absolute', right: -50, bottom: -60 }}
-          />
-          <Shape kind="sparkle" colour="ink" size={28} style={{ position: 'absolute', left: 28, top: 28 }} />
-        </div>
+      <div aria-hidden className={css.tile} data-hue={HUES[card.colour]}>
+        <Shape kind={card.kind} colour={card.colour} size={220} />
+        <Shape kind="sparkle" colour="ink" size={28} />
+      </div>
 
-        <h1 style={styles.title}>{card.title}</h1>
-        <p style={{ ...styles.subtitle, minHeight: 90 }}>{card.body}</p>
-
-        <PrimaryButton onClick={() => (last ? onDone() : setAt(at + 1))}>
+      <section>
+        <h1>{card.title}</h1>
+        <p className={css.body}>{card.body}</p>
+        <button data-intent="primary" onClick={() => (last ? onDone() : setAt(at + 1))}>
           {last ? 'Let’s go' : 'Next'}
-        </PrimaryButton>
-
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 20 }}>
+        </button>
+        <div className={css.dots}>
           {CARDS.map((each, i) => (
             <button
               key={each.title}
               onClick={() => setAt(i)}
               aria-label={`Card ${i + 1} of ${CARDS.length}`}
               aria-current={i === at ? 'step' : undefined}
-              style={{
-                width: i === at ? 20 : 8,
-                height: 8,
-                padding: 0,
-                border: 'none',
-                borderRadius: palette.radius.pill,
-                background: i === at ? palette.ink.strong : palette.surface.lineStrong,
-                cursor: 'pointer',
-                transition: 'width 200ms ease',
-              }}
             />
           ))}
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }

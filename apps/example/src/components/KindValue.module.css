@@ -1,0 +1,14 @@
+.url {
+  word-break: break-all;
+}
+
+.picture {
+  max-width: 240px;
+  max-height: 240px;
+  border-radius: var(--radius);
+
+  &[data-compact] {
+    max-width: 32px;
+    max-height: 32px;
+  }
+}

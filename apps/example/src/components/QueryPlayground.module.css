@@ -1,0 +1,58 @@
+/* The query beside what it found; under it when there is no room */
+.columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: var(--space-loose);
+  align-items: start;
+}
+
+.column {
+  min-width: 0;
+}
+
+/* Results from the last query that worked, while this one doesn't */
+.stale {
+  opacity: 0.5;
+}
+
+/* JSON, coloured by sugar-high: values stand out, punctuation fades back, the rest is the text's colour */
+.code {
+  --sh-string: var(--color-good);
+  --sh-sign: var(--color-text-muted);
+
+  padding: 12px 14px;
+  border: 1px solid var(--color-outline);
+  font: 12.5px / 1.65 var(--font-mono);
+  white-space: pre;
+}
+
+.highlighted {
+  max-height: 520px;
+}
+
+/* The editor: a see-through textarea over the highlighted copy of its text, kept scrolled together.
+   Both change size together, or the caret drifts off the text. */
+.editor {
+  position: relative;
+}
+
+.under {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-color: transparent;
+}
+
+.input {
+  position: relative;
+  min-height: 320px;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--color-text-strong);
+}
+
+@media (pointer: coarse) {
+  .code {
+    font-size: 16px;
+  }
+}

@@ -1,11 +1,51 @@
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { Shape } from '@minca/app-shared/shapes';
-import { shapeFor } from '@minca/ui/shapes';
+import { shapeFor, type ShapeKind } from '@minca/ui/shapes';
+import { SHAPE_CYCLE, type ShapeColour } from '@minca/ui/tokens';
 import type { Choice, PartyRule } from './schema';
 import type { Assembly, PartyFull, TopicView } from './model';
 import { PARTY_SHARE, type Step, type Tally } from './tally';
-import { markOf, onShape, palette, partyMarkOf, tone } from './styles';
+import styles from './ui.module.css';
+
+/** The hue each shape colour is stored as, when a party picks one */
+export const SHADE_HUES: Readonly<Record<ShapeColour, number>> = {
+  cobalt: 230,
+  coral: 10,
+  peach: 38,
+  sage: 150,
+  lilac: 300,
+  paper: 40,
+  ink: 225,
+};
+
+/** The shape colour nearest a stored hue: records keep their hue, the screen draws it from the shapes' colours */
+export function colourOf(hue: number): ShapeColour {
+  const distance = (c: ShapeColour) => {
+    const d = (((hue - SHADE_HUES[c]) % 360) + 360) % 360;
+    return Math.min(d, 360 - d);
+  };
+  return SHAPE_CYCLE.reduce<ShapeColour>((best, c) => (distance(c) < distance(best) ? c : best), 'cobalt');
+}
+
+/** How a topic is drawn: a shape picked by its name, in the colour nearest its hue */
+const markOf = (name: string, hue: number): { kind: ShapeKind; colour: ShapeColour } => ({
+  kind: shapeFor(name).kind,
+  colour: colourOf(hue),
+});
+
+/** The round shapes full enough to carry a letter in their middle */
+const FULL: readonly ShapeKind[] = ['scallop', 'clover', 'squircle', 'burst', 'flower'];
+
+/** A party's mark: like {@link markOf}, but always a shape its initial can sit on */
+export const partyMarkOf = (name: string, hue: number): { kind: ShapeKind; colour: ShapeColour } => {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
+  return { kind: FULL[Math.abs(hash) % FULL.length] ?? 'scallop', colour: colourOf(hue) };
+};
+
+/** The shape colours light enough to take navy text; paper goes on the rest */
+const LIGHT: ReadonlySet<ShapeColour> = new Set(['peach', 'lilac', 'paper']);
 
 export const CHOICE_LABEL: Readonly<Record<Choice, string>> = {
   for: 'For',
@@ -48,7 +88,7 @@ function TopicMark({ topic, size = 11 }: { topic: { name: string; hue: number };
 
 export function TopicChip({ topic }: { topic: TopicView }) {
   return (
-    <span className="lq-chip">
+    <span className="tag">
       <TopicMark topic={topic} />
       {topic.name}
     </span>
@@ -69,8 +109,6 @@ export function TopicPicker<T extends { name: string; hue: number }>({
     <button
       key={'key' in t && typeof t.key === 'string' ? t.key : t.name}
       type="button"
-      className="lq-chip"
-      data-filter
       aria-pressed={on(t)}
       onClick={() => onToggle(t)}
     >
@@ -86,38 +124,19 @@ export function PartyMark({ party, size = 28 }: { party: Pick<PartyFull, 'name' 
   return (
     <span
       aria-hidden
-      style={{
-        position: 'relative',
-        width: size,
-        height: size,
-        flexShrink: 0,
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
+      className={styles.mark}
+      data-light={LIGHT.has(mark.colour) || undefined}
+      style={{ '--size': `${size}px` }}
     >
-      <Shape {...mark} size={size} style={{ position: 'absolute', inset: 0 }} />
-      {size >= 24 && (
-        <span
-          style={{
-            position: 'relative',
-            fontFamily: palette.display,
-            fontSize: size * 0.42,
-            fontWeight: 700,
-            letterSpacing: '-0.02em',
-            color: onShape(mark.colour),
-          }}
-        >
-          {party.name.trim().charAt(0).toUpperCase() || '?'}
-        </span>
-      )}
+      <Shape {...mark} size={size} />
+      {size >= 24 && <span>{party.name.trim().charAt(0).toUpperCase() || '?'}</span>}
     </span>
   );
 }
 
 export function PartyChip({ party }: { party: PartyFull }) {
   return (
-    <span className="lq-chip">
+    <span className="tag">
       <PartyMark party={party} size={13} />
       {party.name}
     </span>
@@ -137,12 +156,21 @@ export function Who({
   children?: ReactNode;
 }) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+    <span className={styles.who}>
       <Avatar did={did} size={size} />
-      <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {did === a.me ? 'You' : a.name(did)}
-      </span>
+      <span className="truncate">{did === a.me ? 'You' : a.name(did)}</span>
       {children}
+    </span>
+  );
+}
+
+/** A few faces, overlapping */
+export function Faces({ dids }: { dids: ReadonlyArray<string> }) {
+  return (
+    <span className={styles.faces}>
+      {dids.map((did) => (
+        <Avatar key={did} did={did} size={22} />
+      ))}
     </span>
   );
 }
@@ -151,19 +179,19 @@ export function Who({
 function StepView({ step, a }: { step: Step; a: Assembly }) {
   if (step.kind === 'person') return <Who did={step.did} a={a} size={18} />;
   const party = a.partyOf(step.key);
-  return party ? <PartyChip party={party} /> : <span className="lq-faint">a party that’s gone</span>;
+  return party ? <PartyChip party={party} /> : <small>a party that’s gone</small>;
 }
 
 /** Where a vote went: You → Ada → Greens */
 export function PathView({ path, a, from }: { path: ReadonlyArray<Step>; a: Assembly; from: string }) {
   return (
-    <span className="lq-path">
+    <span className={styles.path}>
       <Who did={from} a={a} size={18} />
       {path.map((step, i) => (
-        <span key={i} style={{ display: 'contents' }}>
-          <span className="lq-path-arrow">→</span>
+        <Fragment key={i}>
+          <small>→</small>
           <StepView step={step} a={a} />
-        </span>
+        </Fragment>
       ))}
     </span>
   );
@@ -175,14 +203,14 @@ export function Meter({ tally, size }: { tally: Tally; size?: 'lg' }) {
   const pct = (n: number) => `${(n / all) * 100}%`;
   return (
     <div
-      className="lq-meter"
+      className={styles.meter}
       data-size={size}
       role="img"
       aria-label={`${tally.for} for, ${tally.against} against, ${tally.abstain} abstaining, ${tally.uncast} not cast`}
     >
-      <span style={{ width: pct(tally.for), background: tone.for }} />
-      <span style={{ width: pct(tally.against), background: tone.against }} />
-      <span style={{ width: pct(tally.abstain), background: tone.abstain }} />
+      <span data-choice="for" style={{ width: pct(tally.for) }} />
+      <span data-choice="against" style={{ width: pct(tally.against) }} />
+      <span data-choice="abstain" style={{ width: pct(tally.abstain) }} />
     </div>
   );
 }
@@ -200,7 +228,7 @@ export function Upvote({
 }) {
   return (
     <button
-      className="lq-upvote"
+      className={styles.upvote}
       aria-pressed={pressed}
       disabled={disabled}
       aria-label={pressed ? 'Take back your support' : 'Support: help it get seen'}
@@ -219,20 +247,14 @@ export function Upvote({
 }
 
 export function Problem({ children }: { children: ReactNode }) {
-  return children ? (
-    <p role="alert" style={{ fontSize: 13, color: tone.against, lineHeight: 1.5 }}>
-      {children}
-    </p>
-  ) : null;
+  return children ? <p role="alert">{children}</p> : null;
 }
 
 export function Empty({ title, children }: { title: string; children?: ReactNode }) {
   return (
-    <div className="lq-empty lq-fade">
+    <div className="empty">
       <Shape {...shapeFor(title)} size={40} />
-      <p className="lq-display" style={{ fontSize: 18 }}>
-        {title}
-      </p>
+      <h3>{title}</h3>
       {children}
     </div>
   );

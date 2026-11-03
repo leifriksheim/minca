@@ -1,0 +1,4 @@
+/* One part of a tab: a card, its buttons as wide as their words */
+.section > button {
+  align-self: flex-start;
+}

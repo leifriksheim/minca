@@ -25,7 +25,7 @@ import { PairPhone } from './PairPhone';
 import { ConfirmItsYou } from './ConfirmItsYou';
 import { Hosting } from './Hosting';
 import { Notifications } from './Notifications';
-import { styles, palette, hstack, stack } from '../styles';
+import styles from './Settings.module.css';
 import type { TabId } from '../tabs';
 
 /**
@@ -118,12 +118,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
     });
 
   const disconnectButton = (id: string, onClick: () => void) => (
-    <button
-      onClick={onClick}
-      disabled={disconnecting !== null}
-      data-variant="quiet"
-      style={styles.smallButton}
-    >
+    <button onClick={onClick} disabled={disconnecting !== null}>
       {disconnecting === id ? 'Disconnecting…' : 'Disconnect'}
     </button>
   );
@@ -140,8 +135,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
       title={
         onlyWayIn ? `${other} first — otherwise you would need your recovery code to get back in.` : undefined
       }
-      data-variant="danger"
-      style={dangerButton}
+      data-intent="danger"
     >
       Remove
     </button>
@@ -165,16 +159,14 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
             keepers={carriers?.length ?? 0}
             openTab={openTab}
           />
-          <div style={{ marginTop: 16 }}>
-            <Username />
-          </div>
+          <Username />
         </>
       )}
       {tab === 'security' && (
         <>
           <PageHead title="Security" line="How you get into your account, and how you get it back." />
           <Section title="Signing in" description="How you open your account here every day.">
-            <ul className="rows" style={styles.list}>
+            <ul role="list">
               {hasPasskey ? (
                 <Row label="Passkey" detail="Signs you in on this device">
                   {removeButton('passkey', 'Set a password')}
@@ -184,8 +176,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
                   <button
                     onClick={() => guarded('add a passkey', () => void auth.addPasskey())}
                     disabled={state.busy}
-                    data-variant="primary"
-                    style={styles.darkSmall}
+                    data-intent="primary"
                   >
                     {state.busy ? 'Waiting…' : 'Set up a passkey'}
                   </button>
@@ -199,8 +190,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
                   <button
                     onClick={() => guarded('change the password', () => setChangingPassword(true))}
                     disabled={state.busy}
-                    data-variant={hasPassword ? 'quiet' : 'primary'}
-                    style={hasPassword ? styles.smallButton : styles.darkSmall}
+                    data-intent={hasPassword ? undefined : 'primary'}
                   >
                     {hasPassword ? 'Change' : 'Set a password'}
                   </button>
@@ -230,7 +220,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
                 onCancel={() => setChangingPassword(false)}
               />
             )}
-            {changingPassword && state.error && <p style={styles.error}>{state.error.message}</p>}
+            {changingPassword && state.error && <p role="alert">{state.error.message}</p>}
             {waiting && (
               <ConfirmItsYou
                 why={waiting.why}
@@ -249,27 +239,26 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
             title="Stay signed in"
             description="Skip unlocking when you come back. After this long without using it, you'll be asked again."
           >
-            <div role="radiogroup" aria-label="Stay signed in" style={segmented}>
+            <div role="tablist" aria-label="Stay signed in">
               {STAY_SIGNED_IN_CHOICES.map((choice) => (
                 <button
                   key={choice.value}
-                  role="radio"
-                  aria-checked={stay === choice.value}
+                  role="tab"
+                  aria-selected={stay === choice.value}
                   onClick={() => void choose(choice.value)}
-                  style={stay === choice.value ? segmentOn : segment}
                 >
                   {choice.label}
                 </button>
               ))}
             </div>
-            <p style={styles.errorHint}>
+            <small>
               {stay === 'never'
                 ? 'This device asks to unlock every time.'
                 : until
                   ? `Signed in on this device until ${until.toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}, or longer if you keep using it.`
                   : 'Applies from your next unlock.'}{' '}
               Anyone who can use this browser can open your account while you're signed in.
-            </p>
+            </small>
           </Section>
 
           <Section
@@ -295,11 +284,9 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
             title="Connected apps"
             description="Each one got a note, signed by your account, saying what it may use and until when. None of them has your password."
           >
-            {connections.length === 0 && elsewhere.length === 0 && (
-              <p style={styles.errorHint}>No apps yet.</p>
-            )}
+            {connections.length === 0 && elsewhere.length === 0 && <small>No apps yet.</small>}
             {(connections.length > 0 || elsewhere.length > 0) && (
-              <ul className="rows" style={styles.list}>
+              <ul role="list">
                 {connections.map((app) => (
                   <AppRow
                     key={connectionKey(app)}
@@ -330,27 +317,22 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
                 ))}
               </ul>
             )}
-            {disconnectError && <p style={styles.error}>{disconnectError}</p>}
-            {notYet && <p style={styles.errorHint}>{notYet}</p>}
+            {disconnectError && <p role="alert">{disconnectError}</p>}
+            {notYet && <small>{notYet}</small>}
             {anyAway && (
-              <p style={styles.errorHint}>
+              <small>
                 An extension that is not online either has Chrome closed, or is keeping a different account
                 online now — open it to see which.
-              </p>
+              </small>
             )}
             {connections.length > 0 && (
-              <p style={styles.errorHint}>
+              <small>
                 Disconnecting signs the app out the next time it comes online. It keeps what it could already
                 read.
-              </p>
+              </small>
             )}
             {connections.filter((app) => app.access !== 'carry').length > 1 && (
-              <button
-                onClick={disconnectAll}
-                disabled={disconnecting !== null}
-                data-variant="quiet"
-                style={{ ...styles.smallButton, alignSelf: 'flex-start' }}
-              >
+              <button onClick={disconnectAll} disabled={disconnecting !== null}>
                 {disconnecting === 'all' ? 'Disconnecting…' : 'Something wrong? Disconnect every app'}
               </button>
             )}
@@ -439,20 +421,16 @@ function Overview({
     },
   ];
   return (
-    <ul className="rows" aria-label="Your account" style={styles.list}>
+    <ul role="list" aria-label="Your account">
       {rows.map((row) => (
-        <li key={row.title} data-tile style={{ listStyle: 'none' }}>
-          <button onClick={() => openTab(row.tab)} style={overviewRow}>
+        <li key={row.title}>
+          <button onClick={() => openTab(row.tab)} data-intent="open" className="row">
             <Shape kind={row.kind} colour={row.colour} size={36} />
-            <span style={{ ...stack(2), flex: 1, minWidth: 0 }}>
-              <strong style={{ fontSize: 15, fontWeight: 600, color: palette.ink.strong }}>
-                {row.title}
-              </strong>
-              <span style={{ fontSize: 13, color: row.warn ? palette.accent.warn : palette.ink.muted }}>
-                {row.line}
-              </span>
+            <span className="stack truncate" data-gap="tight">
+              <strong>{row.title}</strong>
+              <small data-tone={row.warn ? 'warn' : undefined}>{row.line}</small>
             </span>
-            <svg width={14} height={14} viewBox="0 0 16 16" aria-hidden style={{ color: palette.ink.faint }}>
+            <svg width={14} height={14} viewBox="0 0 16 16" aria-hidden>
               <path
                 d="M6 4l4 4-4 4"
                 fill="none"
@@ -467,18 +445,6 @@ function Overview({
     </ul>
   );
 }
-
-const overviewRow = {
-  width: '100%',
-  display: 'flex',
-  alignItems: 'center',
-  gap: 14,
-  padding: '14px 16px',
-  border: 'none',
-  borderRadius: 'inherit',
-  background: 'none',
-  textAlign: 'left',
-} as const;
 
 /** How much this site keeps in the browser, and whether the browser may clear it to make room */
 function useBrowserStorage(): { used: number | null; persisted: boolean | null } {
@@ -534,10 +500,10 @@ function Copies({
       title="Your copies"
       description="Every device and app you use keeps its own copy of your spaces, and they sync with each other. More than one copy is what keeps them safe."
     >
-      <ul className="rows" style={styles.list}>
+      <ul role="list">
         <Row label={here}>
           {folderAvailable && (
-            <button onClick={onChooseFolder} disabled={busy} data-variant="quiet" style={styles.smallButton}>
+            <button onClick={onChooseFolder} disabled={busy}>
               {inFolder ? 'Change folder' : 'Keep in a folder'}
             </button>
           )}
@@ -549,16 +515,16 @@ function Copies({
           <Row key={host.space} label={host.name} detail="Host" />
         ))}
       </ul>
-      <p style={styles.errorHint}>
+      <small>
         {inFolder
           ? 'This page writes to the folder only while it is open. Give the Minca extension the same folder and it keeps it up to date while Chrome is open; then the folder is a whole copy of your account, which you can open with your password on any computer.'
           : 'A folder keeps your account and its data on your computer, where clearing the browser can’t reach it. Put it in iCloud or Dropbox to back it up.'}
-      </p>
+      </small>
       {alone && (
-        <p style={styles.errorHint}>
+        <small>
           Nothing keeps a copy while your pages are closed. Your recovery code brings back your account, but
           your private spaces come back only from another copy: add your phone below, or the Minca extension.
-        </p>
+        </small>
       )}
     </Section>
   );
@@ -583,29 +549,19 @@ function SignOut() {
   if (!asking || apps.length === 0)
     return (
       <div>
-        <button
-          onClick={() => (apps.length === 0 ? signOut() : setAsking(true))}
-          disabled={busy}
-          data-variant="quiet"
-          style={styles.smallButton}
-        >
+        <button onClick={() => (apps.length === 0 ? signOut() : setAsking(true))} disabled={busy}>
           {busy ? 'Signing out…' : 'Sign out'}
         </button>
-        {error && <p style={styles.error}>{error}</p>}
+        {error && <p role="alert">{error}</p>}
       </div>
     );
   return (
-    <div>
-      <label data-choice style={{ ...styles.choice, alignItems: 'flex-start' }}>
-        <input
-          type="checkbox"
-          checked={disconnect}
-          onChange={() => setDisconnect((was) => !was)}
-          style={{ ...styles.checkbox, marginTop: 2 }}
-        />
-        <span style={{ flex: 1 }}>
+    <div className="stack" data-gap="loose">
+      <label>
+        <input type="checkbox" checked={disconnect} onChange={() => setDisconnect((was) => !was)} />
+        <span className="stack" data-gap="tight">
           Also disconnect {apps.length === 1 ? 'the app' : `the ${apps.length} apps`} connected here
-          <span style={{ ...styles.errorHint, display: 'block', marginTop: 4 }}>
+          <small>
             {apps.map((app) => app.name ?? new URL(app.origin).host).join(', ')}.{' '}
             {disconnect
               ? `They stop working, with the automations they suggested, and ask you to connect again${
@@ -614,28 +570,18 @@ function SignOut() {
                     : ''
                 }. If none of your devices or apps is reachable now, they hear of it when you next sign in here.`
               : 'They keep working until you disconnect them, signed out here or not.'}
-          </span>
+          </small>
         </span>
       </label>
-      <div style={{ ...hstack(8), marginTop: 12 }}>
-        <button
-          onClick={() => signOut({ disconnect })}
-          disabled={busy}
-          data-variant="primary"
-          style={styles.darkSmall}
-        >
+      <div className="row">
+        <button onClick={() => signOut({ disconnect })} disabled={busy} data-intent="primary">
           {busy ? 'Signing out…' : 'Sign out'}
         </button>
-        <button
-          onClick={() => setAsking(false)}
-          disabled={busy}
-          data-variant="quiet"
-          style={styles.smallButton}
-        >
+        <button onClick={() => setAsking(false)} disabled={busy}>
           Cancel
         </button>
       </div>
-      {error && <p style={styles.error}>{error}</p>}
+      {error && <p role="alert">{error}</p>}
     </div>
   );
 }
@@ -643,10 +589,10 @@ function SignOut() {
 /** A tab's title and what it is for */
 function PageHead({ title, line }: { title: string; line: string }) {
   return (
-    <header className="home-page-head">
+    <div className="stack">
       <h1>{title}</h1>
       <p>{line}</p>
-    </header>
+    </div>
   );
 }
 
@@ -672,7 +618,7 @@ function PasswordForm({
         setMismatch(password !== again);
         if (password === again) void onSave(password);
       }}
-      style={styles.form}
+      className="stack"
     >
       <input
         type="text"
@@ -681,7 +627,6 @@ function PasswordForm({
         value={accountCredentialName(account)}
         readOnly
         aria-label="Account"
-        style={styles.input}
       />
       <input
         type="password"
@@ -693,7 +638,6 @@ function PasswordForm({
         autoFocus
         aria-label="New password"
         aria-describedby="password-strength"
-        style={styles.input}
       />
       <Strength password={password} />
       <input
@@ -704,20 +648,13 @@ function PasswordForm({
         value={again}
         onChange={(event) => setAgain(event.target.value)}
         aria-label="Confirm password"
-        style={styles.input}
       />
-      {mismatch && <p style={styles.error}>Those two do not match.</p>}
-      <div style={hstack(8)}>
-        <button type="submit" disabled={busy || !password} data-variant="primary" style={styles.darkSmall}>
+      {mismatch && <p role="alert">Those two do not match.</p>}
+      <div className="row">
+        <button type="submit" disabled={busy || !password} data-intent="primary">
           {busy ? 'Saving…' : 'Save password'}
         </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={busy}
-          data-variant="quiet"
-          style={styles.smallButton}
-        >
+        <button type="button" onClick={onCancel} disabled={busy}>
           Cancel
         </button>
       </div>
@@ -750,35 +687,13 @@ function RecoveryCode({ reveal, name, did }: { reveal: () => string | null; name
     >
       {code ? (
         <>
-          <code
-            style={{
-              display: 'block',
-              padding: 12,
-              borderRadius: palette.radius.md,
-              background: palette.surface.sunken,
-              border: `1px solid ${palette.surface.line}`,
-              color: palette.ink.strong,
-              fontSize: 15,
-              letterSpacing: '0.04em',
-              textAlign: 'center',
-              wordBreak: 'break-all',
-              userSelect: 'all',
-            }}
-          >
-            {code}
-          </code>
-          <div style={hstack(8)}>
-            <button onClick={() => copy(code)} data-variant="quiet" style={styles.smallButton}>
-              {copied ? 'Copied' : 'Copy'}
-            </button>
-            <button onClick={download} data-variant="quiet" style={styles.smallButton}>
-              Download
-            </button>
-            <button onClick={() => setCode(null)} data-variant="quiet" style={styles.smallButton}>
-              Hide
-            </button>
+          <pre>{code}</pre>
+          <div className="row">
+            <button onClick={() => copy(code)}>{copied ? 'Copied' : 'Copy'}</button>
+            <button onClick={download}>Download</button>
+            <button onClick={() => setCode(null)}>Hide</button>
           </div>
-          <p style={styles.errorHint}>Anyone who sees this can open your account.</p>
+          <small>Anyone who sees this can open your account.</small>
         </>
       ) : asking ? (
         <ConfirmItsYou
@@ -798,8 +713,6 @@ function RecoveryCode({ reveal, name, did }: { reveal: () => string | null; name
               if (now) setCode(now);
               else setAsking(true);
             }}
-            data-variant="quiet"
-            style={styles.smallButton}
           >
             Show recovery code
           </button>
@@ -853,13 +766,6 @@ function openable(app: Connection): string | undefined {
   return /^https?:$/.test(new URL(app.origin).protocol) ? app.origin : undefined;
 }
 
-const openLink = {
-  ...styles.darkSmall,
-  display: 'inline-flex',
-  alignItems: 'center',
-  textDecoration: 'none',
-} as const;
-
 /** One app in the list: its shape, its name, a quiet line about it, the way back to it, and what to do */
 function AppRow({
   mark,
@@ -876,15 +782,15 @@ function AppRow({
   children: ReactNode;
 }) {
   return (
-    <li style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', flexWrap: 'wrap' }}>
+    <li className="row">
       <Shape {...shapeFor(mark)} size={32} />
-      <span style={{ ...stack(2), flex: '1 1 200px', minWidth: 0 }}>
-        <strong style={{ fontSize: 15, fontWeight: 600, color: palette.ink.strong }}>{title}</strong>
-        <span style={{ fontSize: 13, lineHeight: 1.45, color: palette.ink.muted }}>{detail.join(' · ')}</span>
+      <span className="stack" data-gap="tight">
+        <strong>{title}</strong>
+        <small>{detail.join(' · ')}</small>
       </span>
-      <span style={hstack(8)}>
+      <span className="row">
         {open && (
-          <a href={open} target="_blank" rel="noopener" data-variant="primary" style={openLink}>
+          <a href={open} target="_blank" rel="noopener" data-intent="primary">
             Open
           </a>
         )}
@@ -904,13 +810,13 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="surface" style={styles.settingsSection}>
-      <div>
-        <h2 style={styles.sectionHeading}>{title}</h2>
-        <p style={styles.sectionText}>{description}</p>
+    <article className={styles.section}>
+      <div className="stack" data-gap="tight">
+        <h2>{title}</h2>
+        <small>{description}</small>
       </div>
       {children}
-    </section>
+    </article>
   );
 }
 
@@ -936,19 +842,11 @@ function Username() {
   return (
     <Section title="Your username" description="How people find and add you, in every Minca app.">
       {found.status === 'loading' ? null : username && !changing ? (
-        <div style={stack(10)}>
-          <strong style={usernameStyle}>{shortUsername(username)}</strong>
-          <span style={{ ...hstack(6), flexWrap: 'wrap' }}>
-            <button
-              onClick={() => copy(shortUsername(username))}
-              data-variant="quiet"
-              style={styles.smallButton}
-            >
-              {copied ? 'Copied' : 'Copy'}
-            </button>
-            <button onClick={() => setChanging(true)} data-variant="quiet" style={styles.smallButton}>
-              Change
-            </button>
+        <div className="stack">
+          <h2>{shortUsername(username)}</h2>
+          <span className="row">
+            <button onClick={() => copy(shortUsername(username))}>{copied ? 'Copied' : 'Copy'}</button>
+            <button onClick={() => setChanging(true)}>Change</button>
             <button
               onClick={() =>
                 void run(async () => {
@@ -961,8 +859,7 @@ function Username() {
                   done();
                 })
               }
-              data-variant="danger"
-              style={dangerButton}
+              data-intent="danger"
             >
               Give it up
             </button>
@@ -971,46 +868,29 @@ function Username() {
       ) : (
         <UsernamePicker current={username} suggestion={suggestion} onClaimed={done}>
           {username && (
-            <button
-              type="button"
-              onClick={() => setChanging(false)}
-              data-variant="ghost"
-              style={styles.linkButton}
-            >
+            <button type="button" onClick={() => setChanging(false)} data-intent="quiet">
               Cancel
             </button>
           )}
         </UsernamePicker>
       )}
-      {error && <p style={styles.error}>{error}</p>}
+      {error && <p role="alert">{error}</p>}
     </Section>
   );
 }
 
-const usernameStyle = {
-  fontFamily: palette.display,
-  fontSize: 24,
-  fontWeight: 700,
-  letterSpacing: '-0.04em',
-  color: palette.ink.strong,
-  overflowWrap: 'anywhere',
-} as const;
-
 /** A line in a section's list: what it is on the left, what you can do about it on the right */
 function Row({ label, detail, children }: { label: string; detail?: string; children?: ReactNode }) {
   return (
-    <li style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', flexWrap: 'wrap' }}>
-      <span style={{ ...stack(2), flex: '1 1 200px', minWidth: 0 }}>
-        <strong style={{ fontSize: 15, fontWeight: 600, color: palette.ink.strong }}>{label}</strong>
-        {detail && <span style={{ fontSize: 13, color: palette.ink.muted }}>{detail}</span>}
+    <li className="row" data-spread>
+      <span className="stack" data-gap="tight">
+        <strong>{label}</strong>
+        {detail && <small>{detail}</small>}
       </span>
-      {children && <span style={hstack(8)}>{children}</span>}
+      {children && <span className="row">{children}</span>}
     </li>
   );
 }
-
-/** A button that takes something away: red, as every one on these pages is */
-const dangerButton = { ...styles.smallButton, color: palette.accent.danger } as const;
 
 /**
  * Taking the account out of this browser, as on a computer you are leaving. It
@@ -1050,18 +930,12 @@ function RemoveAccount({ alone, apps, openApps }: { alone: boolean; apps: number
     >
       {apps > 0 ? (
         <>
-          <p style={styles.errorHint}>
+          <small>
             {apps === 1
               ? 'Disconnect your app first. Only this browser can, so once your account is gone from it, the app would keep its access.'
               : `Disconnect your ${apps} apps first. Only this browser can, so once your account is gone from it, they would keep their access.`}
-          </p>
-          <button
-            onClick={openApps}
-            data-variant="quiet"
-            style={{ ...styles.smallButton, alignSelf: 'flex-start' }}
-          >
-            Go to Apps
-          </button>
+          </small>
+          <button onClick={openApps}>Go to Apps</button>
         </>
       ) : proving ? (
         <ConfirmItsYou
@@ -1073,64 +947,29 @@ function RemoveAccount({ alone, apps, openApps }: { alone: boolean; apps: number
           onCancel={() => setProving(false)}
         />
       ) : (
-        <button
-          onClick={() => void start()}
-          disabled={state.busy}
-          data-variant="danger"
-          style={{ ...dangerButton, alignSelf: 'flex-start' }}
-        >
+        <button onClick={() => void start()} disabled={state.busy} data-intent="danger">
           Remove from this browser
         </button>
       )}
-      {refused && <p style={styles.error}>{refused}</p>}
+      {refused && <p role="alert">{refused}</p>}
     </Section>
   );
 }
-
-// The shared segmented control, as wide as its choices rather than the section.
-const segmented = {
-  ...styles.segmented,
-  display: 'inline-flex',
-  alignSelf: 'flex-start',
-  flexWrap: 'wrap',
-} as const;
-const segment = { ...styles.segment, flex: 'none' } as const;
-const segmentOn = { ...styles.segmentActive, flex: 'none' } as const;
 
 /** How strong a new password is, as it is typed: a warning, never a refusal */
 function Strength({ password }: { password: string }) {
   const check = passwordStrength(password);
   const filled = password ? { weak: 1, fair: 2, strong: 3 }[check.strength] : 0;
-  const colour = { weak: palette.accent.danger, fair: palette.accent.warn, strong: palette.accent.good }[
-    check.strength
-  ];
   return (
-    <div style={stack(6)}>
-      <div aria-hidden style={hstack(4)}>
-        {[1, 2, 3].map((step) => (
-          <span
-            key={step}
-            style={{
-              flex: 1,
-              height: 4,
-              borderRadius: 2,
-              background: step <= filled ? colour : palette.surface.line,
-              transition: 'background-color .15s ease',
-            }}
-          />
-        ))}
-      </div>
-      <p
+    <div className="stack">
+      <meter aria-hidden min={0} max={3} low={1.5} high={2.5} optimum={3} value={filled} />
+      <small
         id="password-strength"
         aria-live="polite"
-        style={{
-          ...styles.errorHint,
-          marginTop: 0,
-          color: password && check.strength === 'weak' ? palette.accent.danger : styles.errorHint.color,
-        }}
+        data-tone={password && check.strength === 'weak' ? 'danger' : undefined}
       >
         {check.hint || 'Any password works. Let your password manager make a strong one.'}
-      </p>
+      </small>
     </div>
   );
 }

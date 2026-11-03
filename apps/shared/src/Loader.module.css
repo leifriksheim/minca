@@ -1,0 +1,26 @@
+.loader {
+  display: inline-flex;
+  align-items: center;
+
+  & svg {
+    animation: hop 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes hop {
+  30% {
+    transform: translateY(-36%) rotate(20deg);
+  }
+  60% {
+    transform: none;
+  }
+}
+
+/* Read by screen readers, hidden from the eye */
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}

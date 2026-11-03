@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { styles, palette, hstack, stack } from './styles';
 import { message } from './action';
 
 /**
@@ -101,9 +100,9 @@ export function HostAddressForm({
         event.preventDefault();
         void submit();
       }}
-      style={stack(8)}
+      className="stack"
     >
-      <div style={hstack(8)}>
+      <div className="row">
         <input
           value={address}
           onChange={(event) => {
@@ -118,34 +117,20 @@ export function HostAddressForm({
           autoCorrect="off"
           spellCheck={false}
           inputMode="url"
-          style={{ ...styles.input, flex: 1, minWidth: 0 }}
         />
-        <button
-          type="submit"
-          disabled={asking !== null || !address.trim()}
-          data-variant="primary"
-          style={styles.addButton}
-        >
+        <button type="submit" disabled={asking !== null || !address.trim()} data-intent="primary">
           {asking ? 'Asking…' : label}
         </button>
       </div>
       {asking && (
-        <p role="status" style={styles.quiet}>
-          Asking {asking}…{' '}
-          <button
-            type="button"
-            onClick={cancel}
-            style={{ ...styles.linkButton, padding: 0, color: palette.ink.strong }}
-          >
+        <p role="status" className="row">
+          <small>Asking {asking}…</small>
+          <button type="button" onClick={cancel} data-intent="quiet">
             Cancel
           </button>
         </p>
       )}
-      {problem && (
-        <p role="alert" style={styles.dangerText}>
-          {problem}
-        </p>
-      )}
+      {problem && <p role="alert">{problem}</p>}
     </form>
   );
 }

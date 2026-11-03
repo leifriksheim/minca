@@ -1,8 +1,7 @@
-import type { CSSProperties } from 'react';
 import type { NodeCollection } from '@minca/core';
 import { collectionLabel, fieldsOf } from '../derive/schema-ui';
 import { namespaceOf } from '../derive/filters';
-import { styles, palette, ui, stack } from '../styles';
+import table from './table.module.css';
 
 /** How a namespace reads in a list: its name, or a word for having none */
 export const namespaceLabel = (namespace: string) => namespace || 'No namespace';
@@ -19,35 +18,28 @@ export function CollectionsOverview({
 }) {
   const total = collections.reduce((sum, c) => sum + c.records, 0);
   return (
-    <section aria-label="All collections" style={{ ...stack(16), minWidth: 0 }}>
-      <header>
-        <h2 style={{ ...styles.appTitle, fontSize: 22 }}>
-          {namespace === null ? 'All collections' : namespaceLabel(namespace)}
-        </h2>
-        <p style={{ ...styles.quiet, marginTop: 4 }}>
+    <section aria-label="All collections">
+      <div className="stack" data-gap="tight">
+        <h2>{namespace === null ? 'All collections' : namespaceLabel(namespace)}</h2>
+        <small>
           {collections.length} collection{collections.length === 1 ? '' : 's'}, {total} record
           {total === 1 ? '' : 's'}
-        </p>
-      </header>
+        </small>
+      </div>
       {collections.length === 0 ? (
-        <p style={styles.emptyState}>No collections here.</p>
+        <p className="empty">No collections here.</p>
       ) : (
-        <div
-          style={{
-            ...styles.tile,
-            overflowX: 'auto',
-          }}
-        >
-          <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 14 }}>
+        <div className={table.table}>
+          <table>
             <thead>
               <tr>
-                <th style={ui.th}>Collection</th>
-                <th style={ui.th}>Namespace</th>
-                <th style={ui.th}>Fields</th>
-                <th style={{ ...ui.th, textAlign: 'right' }}>Records</th>
+                <th>Collection</th>
+                <th>Namespace</th>
+                <th>Fields</th>
+                <th>Records</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className={table.opens}>
               {collections.map((c) => (
                 <tr
                   key={c.name}
@@ -57,24 +49,19 @@ export function CollectionsOverview({
                     if (e.key === 'Enter') onOpen(c.name);
                   }}
                   aria-label={`Open ${collectionLabel(c)}`}
-                  style={{ cursor: 'pointer' }}
                 >
-                  <td style={td}>
-                    <div style={stack(2)}>
-                      <span style={{ fontWeight: 500, color: palette.ink.strong }}>{collectionLabel(c)}</span>
-                      <code style={styles.faint}>{c.name}</code>
-                      {c.description && (
-                        <span style={{ fontSize: 12, color: palette.ink.muted, whiteSpace: 'normal' }}>
-                          {c.description}
-                        </span>
-                      )}
+                  <td>
+                    <div className="stack" data-gap="tight">
+                      <strong>{collectionLabel(c)}</strong>
+                      <small>
+                        <code>{c.name}</code>
+                      </small>
+                      {c.description && <small>{c.description}</small>}
                     </div>
                   </td>
-                  <td style={{ ...td, color: palette.ink.muted }}>{namespaceLabel(namespaceOf(c.name))}</td>
-                  <td style={{ ...td, color: palette.ink.muted }}>
-                    {c.schema ? fieldsOf(c.schema).length : 'Not defined'}
-                  </td>
-                  <td style={{ ...td, textAlign: 'right' }}>{c.records}</td>
+                  <td>{namespaceLabel(namespaceOf(c.name))}</td>
+                  <td>{c.schema ? fieldsOf(c.schema).length : 'Not defined'}</td>
+                  <td>{c.records}</td>
                 </tr>
               ))}
             </tbody>
@@ -84,5 +71,3 @@ export function CollectionsOverview({
     </section>
   );
 }
-
-const td: CSSProperties = { ...ui.td, verticalAlign: 'top', whiteSpace: 'nowrap' };

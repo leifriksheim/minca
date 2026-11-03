@@ -49,9 +49,7 @@ import {
   type Within,
 } from '../../automations';
 import { usePeopleHere } from '../Person';
-import { styles, palette, hstack, stack } from '../../styles';
-import { ClauseList, Pill, PlacePill, Sentence, Step, ValueInput, card, chip, previewBox } from './parts';
-import { PrimaryButton, QuietButton } from '../Buttons';
+import { ClauseList, Pill, PlacePill, Sentence, Step, ValueInput } from './parts';
 
 /** In the schedule picker, a time of one's own */
 const OTHER = 'other';
@@ -223,14 +221,14 @@ export function AutomationBuilder({
         onClose={onClose}
         width={680}
       >
-        <p style={{ fontSize: 14, color: palette.ink.muted, lineHeight: 1.5, marginTop: -6 }}>
+        <p>
           Something happens in {space.name}, or the time comes, and something is done about it — as you, or by
           a bot you name.
         </p>
 
-        <div style={card}>
+        <article>
           <Step label="When">
-            <div style={hstack(6)}>
+            <div className="row" data-gap="tight">
               {[
                 { value: false, label: 'Something happens' },
                 { value: true, label: 'At set times' },
@@ -245,14 +243,6 @@ export function AutomationBuilder({
                     if (choice.value && (then.kind === 'set' || then.kind === 'notify'))
                       setThen({ kind: 'ask', text: '' });
                     if (choice.value && then.kind === 'add') setThen(addAction(then.collection, then.text));
-                  }}
-                  data-variant="quiet"
-                  style={{
-                    ...chip,
-                    color: timed === choice.value ? palette.ink.strong : palette.ink.muted,
-                    fontWeight: timed === choice.value ? 600 : 400,
-                    borderColor: timed === choice.value ? palette.ink.strong : palette.surface.line,
-                    boxShadow: timed === choice.value ? `0 0 0 1px ${palette.ink.strong}` : 'none',
                   }}
                 >
                   {choice.label}
@@ -276,23 +266,21 @@ export function AutomationBuilder({
                   />
                 </Sentence>
                 {ownTime && (
-                  <label style={stack(4)}>
+                  <label>
                     <input
                       aria-label="Minute hour day month weekday"
                       value={every}
                       onChange={(e) => setEvery(e.target.value)}
                       placeholder="30 7 * * 1-5"
-                      style={{ ...styles.input, fontFamily: palette.mono }}
                     />
-                    <span
-                      style={{
-                        fontSize: 12,
-                        color: everyProblem ? palette.accent.danger : palette.ink.faint,
-                      }}
-                    >
-                      {everyProblem ??
-                        'Minute, hour, day, month, weekday, in the runner’s local time: 30 7 * * 1-5 is weekdays at 7:30.'}
-                    </span>
+                    {everyProblem ? (
+                      <span role="alert">{everyProblem}</span>
+                    ) : (
+                      <small>
+                        Minute, hour, day, month, weekday, in the runner’s local time: 30 7 * * 1-5 is
+                        weekdays at 7:30.
+                      </small>
+                    )}
                   </label>
                 )}
               </>
@@ -343,7 +331,6 @@ export function AutomationBuilder({
                       <span>has</span>
                       <Pill
                         label="How many"
-                        strong={false}
                         value={count.op}
                         options={COUNT_OPS.map((o) => ({ value: o.op, label: o.label }))}
                         onChange={(op) => setCount({ ...count, op })}
@@ -356,7 +343,6 @@ export function AutomationBuilder({
                         onChange={(e) =>
                           setCount({ ...count, value: e.target.value === '' ? NaN : Number(e.target.value) })
                         }
-                        style={numberBox}
                       />
                       <Pill
                         label="Of what"
@@ -374,18 +360,18 @@ export function AutomationBuilder({
                         type="button"
                         onClick={() => setCount(null)}
                         aria-label="Stop counting"
-                        data-variant="ghost"
-                        style={styles.rowAction}
+                        data-intent="quiet"
+                        data-icon
                       >
                         ✕
                       </button>
                     </>
                   ) : (
-                    <span style={{ color: palette.ink.muted }}>is added or changed</span>
+                    <span>is added or changed</span>
                   )}
                 </Sentence>
                 {!count && countable.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  <div className="row" data-gap="tight">
                     {countable.slice(0, 3).map((a) => (
                       <button
                         key={`${a.collection.name} ${a.rel}`}
@@ -393,8 +379,6 @@ export function AutomationBuilder({
                         onClick={() =>
                           setCount({ collection: a.collection.name, rel: a.rel, op: 'atLeast', value: 10 })
                         }
-                        data-variant="quiet"
-                        style={chip}
                       >
                         + gets a number of {noun(collections, a.collection.name, true)}
                       </button>
@@ -402,20 +386,16 @@ export function AutomationBuilder({
                   </div>
                 )}
                 {count && countFields.length > 0 && (
-                  <details open={!!count.clauses?.length}>
-                    <summary style={styles.quiet}>
-                      Count only some {noun(collections, count.collection, true)}
-                    </summary>
-                    <div style={{ marginTop: 8 }}>
-                      <ClauseList
-                        fields={countFields}
-                        clauses={count.clauses ?? []}
-                        onChange={(next) => setCount({ ...count, clauses: next })}
-                        people={people}
-                        me={did}
-                        suggest={false}
-                      />
-                    </div>
+                  <details open={!!count.clauses?.length} className="stack">
+                    <summary>Count only some {noun(collections, count.collection, true)}</summary>
+                    <ClauseList
+                      fields={countFields}
+                      clauses={count.clauses ?? []}
+                      onChange={(next) => setCount({ ...count, clauses: next })}
+                      people={people}
+                      me={did}
+                      suggest={false}
+                    />
                   </details>
                 )}
               </>
@@ -436,13 +416,7 @@ export function AutomationBuilder({
           )}
 
           <Step label="Then">
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
-                gap: 6,
-              }}
-            >
+            <div className="stack" data-gap="tight">
               {ACTIONS.map((action) => {
                 const untimed = timed && (action.kind === 'set' || action.kind === 'notify');
                 const unusable =
@@ -451,10 +425,8 @@ export function AutomationBuilder({
                   (action.kind === 'add' && targets.length === 0);
                 const on = then.kind === action.kind;
                 return (
-                  <button
+                  <label
                     key={action.kind}
-                    type="button"
-                    disabled={unusable}
                     title={
                       !unusable
                         ? action.hint
@@ -464,19 +436,19 @@ export function AutomationBuilder({
                             ? 'Nothing in this space can be added from a line of text'
                             : 'Nothing here it could change'
                     }
-                    aria-pressed={on}
-                    onClick={() => setThen(startAction(action.kind, settable, targets, then))}
-                    style={{
-                      ...tile,
-                      borderColor: on ? palette.surface.rule : palette.surface.line,
-                      boxShadow: on ? `0 0 0 1px ${palette.surface.rule}` : 'none',
-                    }}
                   >
-                    <strong style={{ fontSize: 13, color: palette.ink.strong }}>{action.label}</strong>
-                    <span style={{ fontSize: 12, color: palette.ink.muted, lineHeight: 1.35 }}>
+                    <input
+                      type="radio"
+                      name="then"
+                      checked={on}
+                      disabled={unusable}
+                      onChange={() => setThen(startAction(action.kind, settable, targets, then))}
+                    />
+                    <strong>{action.label}</strong>
+                    <small>
                       {timed && action.kind === 'add' ? 'A record in any collection here' : action.hint}
-                    </span>
-                  </button>
+                    </small>
+                  </label>
                 );
               })}
             </div>
@@ -492,10 +464,10 @@ export function AutomationBuilder({
               me={did}
             />
             {then.kind === 'set' && onlyTheirs && chosen && (
-              <p style={{ fontSize: 12.5, color: palette.ink.muted }}>
+              <small>
                 Only whoever made a {collectionLabel(chosen).toLowerCase()} can change it, so this works on
                 the ones you made.
-              </p>
+              </small>
             )}
             {agentDoes && (
               <Sentence>
@@ -509,7 +481,7 @@ export function AutomationBuilder({
                   ]}
                   onChange={setBy}
                 />
-                <span style={{ color: palette.ink.muted }}>
+                <span>
                   {by
                     ? 'as itself, while it runs'
                     : 'as you, while minca agent runs on one of your computers'}
@@ -517,13 +489,13 @@ export function AutomationBuilder({
               </Sentence>
             )}
             {agentDoes && !has(profile.name) && (
-              <p style={{ fontSize: 12.5, color: palette.ink.muted }}>
+              <small>
                 A bot run with <code>minca agent --bot</code> shows up here once {space.name} keeps profiles,
                 where it says it is one.{' '}
                 {space.writable && mayDefine ? (
                   <button
                     type="button"
-                    style={styles.linkButton}
+                    data-intent="inline"
                     onClick={() => void run(() => node.collections.define(space.id, profile))}
                   >
                     Turn on profiles
@@ -531,47 +503,47 @@ export function AutomationBuilder({
                 ) : (
                   'Someone who may add collections can turn them on.'
                 )}
-              </p>
+              </small>
             )}
             {agentDoes && bots.length === 0 && has(profile.name) && (
-              <p style={{ fontSize: 12.5, color: palette.ink.muted }}>
+              <small>
                 No bots in {space.name} yet.{' '}
                 {space.writable && mayManage ? (
-                  <button type="button" style={styles.linkButton} onClick={() => setAddingBot(true)}>
+                  <button type="button" data-intent="inline" onClick={() => setAddingBot(true)}>
                     Add a bot
                   </button>
                 ) : (
                   'Someone who manages it can add one, under Hosting, or run one with minca agent --bot.'
                 )}
-              </p>
+              </small>
             )}
             {agentDoes && by && !mayInstruct && (
-              <p style={{ fontSize: 12.5, color: palette.accent.danger }}>
+              <p role="alert">
                 {botName} only runs the rules of people who may instruct it here, and you may not. Someone who
                 manages {space.name} can let your role, or make this rule themselves.
               </p>
             )}
           </Step>
-        </div>
+        </article>
 
         {timed ? (
-          <div style={previewBox}>
-            <span style={{ color: palette.ink.strong, fontWeight: 500 }}>{sentence}</span>
-            <span style={{ color: palette.ink.muted }}>
+          <aside className="stack" data-gap="tight">
+            <strong>{sentence}</strong>
+            <small>
               {by ? `${botName} does it` : 'Your agent does it'} at those times, in its local time, while it
               runs. This app doesn’t run automations at set times.
-            </span>
-          </div>
+            </small>
+          </aside>
         ) : (
           chosen && (
-            <div style={previewBox}>
-              <span style={{ color: palette.ink.strong, fontWeight: 500 }}>{sentence}</span>
+            <aside className="stack" data-gap="tight">
+              <strong>{sentence}</strong>
               {preview === null ? (
                 <Loader label="Looking at what's here" showLabel />
               ) : preview.length === 0 ? (
-                <span style={{ color: palette.ink.muted }}>Nothing here matches yet.</span>
+                <small>Nothing here matches yet.</small>
               ) : (
-                <span style={{ color: palette.ink.muted }}>
+                <small>
                   Right now {preview.length === 1 ? 'one matches' : `${preview.length} match`}:{' '}
                   {preview
                     .slice(0, 3)
@@ -581,43 +553,32 @@ export function AutomationBuilder({
                     )
                     .join(', ')}
                   {preview.length > 3 ? '…' : ''}. It acts only on what changes from now on.
-                </span>
+                </small>
               )}
-            </div>
+            </aside>
           )
         )}
 
-        <label style={stack(6)}>
-          <span style={styles.fieldLabel}>Name</span>
-          <input
-            value={shownName}
-            maxLength={120}
-            onChange={(e) => setName(e.target.value)}
-            style={styles.input}
-          />
+        <label>
+          Name
+          <input value={shownName} maxLength={120} onChange={(e) => setName(e.target.value)} />
         </label>
 
-        <p style={{ fontSize: 12.5, color: palette.ink.faint, lineHeight: 1.5 }}>
+        <small>
           {agentDoes
             ? by
               ? `${botName} runs it, as itself.`
               : 'Your agent runs it, as you, while minca agent runs on one of your computers.'
             : 'It runs on your devices while this app is open on one of them.'}{' '}
           Everyone in {space.name} can see the rule and what it did.
-        </p>
-        {error && <p style={{ ...styles.error, fontSize: 13 }}>{error}</p>}
+        </small>
+        {error && <p role="alert">{error}</p>}
 
-        <div style={{ ...hstack(8), justifyContent: 'flex-end' }}>
-          <QuietButton onClick={onClose} style={{ height: 40 }}>
-            Cancel
-          </QuietButton>
-          <PrimaryButton
-            onClick={() => void save()}
-            disabled={(!chosen && !timed) || busy}
-            style={{ width: 'auto' }}
-          >
+        <div className="row">
+          <button onClick={onClose}>Cancel</button>
+          <button data-intent="primary" onClick={() => void save()} disabled={(!chosen && !timed) || busy}>
             {busy ? 'Saving…' : editing ? 'Save automation' : 'Turn on automation'}
-          </PrimaryButton>
+          </button>
         </div>
       </Modal>
       {addingBot && (
@@ -700,7 +661,7 @@ function ActionDetail({
     onChange({ ...then, text: `${then.text}${then.text.endsWith(' ') || !then.text ? '' : ' '}${token}` });
   const target = then.kind === 'add' ? targets.find((t) => t.collection.name === then.collection) : undefined;
   return (
-    <div style={stack(6)}>
+    <div className="stack">
       {then.kind === 'add' && (
         <Sentence>
           <span>Add a</span>
@@ -719,7 +680,6 @@ function ActionDetail({
           {target && target.links.length > 0 && (
             <Pill
               label="Linked"
-              strong={false}
               value={linkToIt(then) ?? ''}
               options={[
                 ...target.links.map((rel) => ({ value: rel, label: `about it (${rel})` })),
@@ -729,9 +689,7 @@ function ActionDetail({
             />
           )}
           {target === undefined && (
-            <span style={{ color: palette.ink.muted }}>
-              ({noun(collections, then.collection, true)} can’t be added here)
-            </span>
+            <span>({noun(collections, then.collection, true)} can’t be added here)</span>
           )}
         </Sentence>
       )}
@@ -741,16 +699,15 @@ function ActionDetail({
         onChange={(e) => onChange({ ...then, text: e.target.value })}
         placeholder="What it says"
         maxLength={500}
-        style={styles.input}
       />
       {about && (
-        <div style={{ ...hstack(6), alignItems: 'center', fontSize: 12, color: palette.ink.faint }}>
-          Insert
-          <button type="button" onClick={() => insert('{title}')} data-variant="quiet" style={token}>
+        <div className="row" data-gap="tight">
+          <small>Insert</small>
+          <button type="button" onClick={() => insert('{title}')} className="tag">
             its name
           </button>
           {counting && (
-            <button type="button" onClick={() => insert('{count}')} data-variant="quiet" style={token}>
+            <button type="button" onClick={() => insert('{count}')} className="tag">
               the count
             </button>
           )}
@@ -759,30 +716,6 @@ function ActionDetail({
     </div>
   );
 }
-
-const numberBox = {
-  width: 72,
-  height: 32,
-  padding: '0 12px',
-  borderRadius: palette.radius.pill,
-  border: `1px solid ${palette.surface.lineStrong}`,
-  fontSize: 14,
-  fontWeight: 600,
-} as const;
-
-const tile = {
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'flex-start',
-  gap: 2,
-  padding: '10px 12px',
-  borderRadius: palette.radius.md,
-  border: `1px solid ${palette.surface.line}`,
-  background: palette.surface.card,
-  textAlign: 'left',
-} as const;
-
-const token = { ...styles.smallButton, height: 24, padding: '0 8px', fontSize: 12 } as const;
 
 /** The value once it has stopped changing for `ms` */
 function useSettled<T>(value: T, ms: number): T {

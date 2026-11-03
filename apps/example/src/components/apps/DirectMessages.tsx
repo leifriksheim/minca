@@ -7,10 +7,9 @@ import { Modal } from '@minca/app-shared/Modal';
 import { ago } from '@minca/ui/time';
 import { nameOf, type People } from '../../derive/people';
 import { usePeopleHere } from '../Person';
-import { AddButton, PrimaryButton, QuietButton } from '../Buttons';
-import { cardText, cardTitle, rowButton, sectionHeading } from '../rows';
 import { Icon } from '../Icon';
-import { palette, stack, styles, ui } from '../../styles';
+import styles from './DirectMessages.module.css';
+import made from './MadeApps.module.css';
 
 /**
  * Direct messages in a group (`std.direct`, `packages/core/docs/direct-messages.md`): text for one or
@@ -62,64 +61,63 @@ export function DirectMessages({
 
   if (!sealable)
     return (
-      <p style={{ ...styles.emptyState, margin: 'auto', maxWidth: 360 }}>
-        Direct messages are sealed to each member's key, and members share those only in a private group. This
-        one is public.
-      </p>
+      <div className="empty">
+        <p>
+          Direct messages are sealed to each member's key, and members share those only in a private group.
+          This one is public.
+        </p>
+      </div>
     );
 
   const current = open && (conversations.find((c) => same(c.with, open)) ?? { with: open, messages: [] });
   // One open is the whole screen, one level in; the app's bar names it and Back comes out to the list.
   if (current)
     return (
-      <section style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0 }}>
+      <section className={made.app}>
         <Room space={space} people={people} me={me} with={current.with} messages={current.messages} />
       </section>
     );
   const mayStart = space.writable && (reachable?.length ?? 0) > 0;
   return (
-    <div style={listPage}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <h2 style={sectionHeading}>Conversations</h2>
+    <div className={`stack ${styles.list}`}>
+      <header>
+        <h2>Conversations</h2>
         {mayStart && (
-          <AddButton
-            onClick={() => setStarting(true)}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-          >
+          <button type="button" data-intent="primary" onClick={() => setStarting(true)}>
             <Icon name="plus" size={14} /> New message
-          </AddButton>
+          </button>
         )}
-      </div>
+      </header>
       {conversations.length > 0 ? (
-        <ol aria-label="Conversations" className="rows" style={ui.list}>
+        <ol role="list" aria-label="Conversations">
           {conversations.map((c) => {
             const last = c.messages.at(-1);
             return (
-              <li key={c.with.join(',')} data-tile style={{ listStyle: 'none' }}>
-                <button onClick={() => setOpen(c.with)} style={rowButton}>
+              <li key={c.with.join(',')}>
+                <button type="button" data-intent="open" className="row" onClick={() => setOpen(c.with)}>
                   <Faces dids={c.with} />
-                  <span style={{ ...stack(2), flex: 1, minWidth: 0 }}>
-                    <strong style={{ ...cardTitle, ...ui.ellipsis }}>{namesOf(c.with, people)}</strong>
+                  <span className="stack truncate" data-gap="tight">
+                    <strong className="truncate">{namesOf(c.with, people)}</strong>
                     {last && (
-                      <span style={{ ...cardText, ...ui.ellipsis }}>
+                      <small className="truncate">
                         {last.text ?? 'Sealed'} · {ago(last.createdAt)}
-                      </span>
+                      </small>
                     )}
                   </span>
-                  <span style={{ display: 'inline-flex', color: palette.ink.faint }}>
-                    <Icon name="chevron" size={14} />
-                  </span>
+                  <Icon name="chevron" size={14} />
                 </button>
               </li>
             );
           })}
         </ol>
       ) : (
-        <p style={styles.emptyState}>
-          {mayStart
-            ? 'Nothing yet. Only the people you write to can read what you send.'
-            : 'Nobody else here can be written to yet: each member can once their app has been in the group.'}
-        </p>
+        <div className="empty">
+          <p>
+            {mayStart
+              ? 'Nothing yet. Only the people you write to can read what you send.'
+              : 'Nobody else here can be written to yet: each member can once their app has been in the group.'}
+          </p>
+        </div>
       )}
       {starting && (
         <StartDialog
@@ -175,13 +173,9 @@ function Faces({ dids }: { dids: ReadonlyArray<string> }) {
   if (!first) return null;
   if (!second) return <PersonFace did={first} size={36} round />;
   return (
-    <span style={{ position: 'relative', width: 36, height: 36, flexShrink: 0 }}>
-      <span style={{ position: 'absolute', left: 0, top: 0 }}>
-        <PersonFace did={first} size={26} round />
-      </span>
-      <span style={{ position: 'absolute', right: 0, bottom: 0 }}>
-        <PersonFace did={second} size={26} round />
-      </span>
+    <span className={styles.faces}>
+      <PersonFace did={first} size={26} round />
+      <PersonFace did={second} size={26} round />
     </span>
   );
 }
@@ -221,84 +215,66 @@ function Room({
 
   return (
     <>
-      <header style={roomTitle}>
+      <header className={`row ${styles.title}`}>
         <Faces dids={others} />
-        <span style={{ ...stack(1), minWidth: 0 }}>
-          <strong style={{ ...ui.ellipsis, fontSize: 15, color: palette.ink.strong }}>{names}</strong>
-          <span style={{ fontSize: 12.5, color: palette.ink.muted }}>
+        <span className="stack truncate" data-gap="tight">
+          <strong className="truncate">{names}</strong>
+          <small>
             <Icon name="lock" size={11} /> Sealed for the people in this conversation
-          </span>
+          </small>
         </span>
       </header>
 
-      <div
-        ref={scroller}
-        style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 16px', ...stack(10) }}
-      >
+      <div ref={scroller} className={`stack ${styles.messages}`}>
         {messages.length === 0 && (
-          <p style={{ ...styles.quiet, margin: 'auto', maxWidth: 320, textAlign: 'center' }}>
-            Sealed for {names} and you. Others in {space.name} see that you wrote, not what.
-          </p>
+          <div className="empty">
+            <p>
+              Sealed for {names} and you. Others in {space.name} see that you wrote, not what.
+            </p>
+          </div>
         )}
         {messages.map((m) => (
-          <div key={m.key} className="chat-line" tabIndex={0} style={line}>
+          <div key={m.key} tabIndex={0} className={`row ${styles.line}`}>
             <PersonFace did={m.from} size={28} round />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                <strong style={{ fontSize: 14, color: palette.ink.strong }}>
-                  {m.from === me ? 'You' : nameOf(m.from, people)}
-                </strong>
-                <span style={{ fontSize: 12, color: palette.ink.faint }}>
+            <div>
+              <div className="row">
+                <strong>{m.from === me ? 'You' : nameOf(m.from, people)}</strong>
+                <small>
                   {ago(m.createdAt)}
                   {m.recordsOnly ? ' · via agent' : ''}
-                </span>
+                </small>
               </div>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: 14.5,
-                  lineHeight: 1.45,
-                  whiteSpace: 'pre-wrap',
-                  overflowWrap: 'anywhere',
-                  color: m.text === null ? palette.ink.faint : palette.ink.body,
-                  fontStyle: m.text === null ? 'italic' : undefined,
-                }}
-              >
-                {m.text ?? "This device can't open this message."}
-              </p>
+              <p>{m.text ?? "This device can't open this message."}</p>
             </div>
             {m.from === me && space.writable && (
-              <QuietButton
-                data-row-action
-                onClick={() => void run(() => node.records.delete(space.id, m.key))}
-                aria-label="Take back this message"
-                style={{ height: 28, padding: '0 10px', fontSize: 12.5 }}
-              >
-                Delete
-              </QuietButton>
+              <div data-actions>
+                <button
+                  type="button"
+                  data-intent="quiet"
+                  onClick={() => void run(() => node.records.delete(space.id, m.key))}
+                  aria-label="Take back this message"
+                >
+                  Delete
+                </button>
+              </div>
             )}
           </div>
         ))}
       </div>
 
-      {error && <p style={{ ...styles.error, padding: '0 16px' }}>{error}</p>}
+      {error && <p role="alert">{error}</p>}
       {space.writable && (
-        <form onSubmit={send} style={composer}>
+        <form onSubmit={send} className={`row ${styles.composer}`}>
           <input
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             placeholder={`Message ${names}`}
             aria-label="Write a direct message"
             maxLength={10000}
-            style={{ ...styles.input, flex: 1, margin: 0 }}
           />
-          <PrimaryButton
-            type="submit"
-            disabled={busy || !draft.trim()}
-            style={{ width: 'auto', padding: '0 16px' }}
-          >
+          <button type="submit" data-intent="primary" disabled={busy || !draft.trim()}>
             Send
-          </PrimaryButton>
+          </button>
         </form>
       )}
     </>
@@ -332,7 +308,8 @@ function StartDialog({
           event.preventDefault();
           if (picked.length) onStart([...picked].sort());
         }}
-        style={stack(12)}
+        className="stack"
+        data-gap="loose"
       >
         {reachable.length > 6 && (
           <input
@@ -340,63 +317,29 @@ function StartDialog({
             onChange={(event) => setFind(event.target.value)}
             placeholder="Find someone"
             aria-label="Find someone"
-            style={styles.input}
           />
         )}
-        <div role="group" aria-label="People" style={{ ...stack(2), maxHeight: 320, overflowY: 'auto' }}>
+        <div role="group" aria-label="People" className={`stack ${styles.people}`}>
           {found.map((p) => (
-            <label key={p.did} data-nav className="side-item" style={{ cursor: 'pointer', height: 40 }}>
+            <label key={p.did}>
               <input
                 type="checkbox"
                 checked={picked.includes(p.did)}
                 onChange={() => toggle(p.did)}
                 // 16 at most, as std.direct allows
                 disabled={!picked.includes(p.did) && picked.length >= 16}
-                style={styles.checkbox}
               />
               <PersonFace did={p.did} size={24} round />
-              <span style={{ ...ui.ellipsis, color: palette.ink.strong }}>{p.name}</span>
+              <strong className="truncate">{p.name}</strong>
             </label>
           ))}
-          {found.length === 0 && <p style={styles.quiet}>Nobody by that name.</p>}
+          {found.length === 0 && <small>Nobody by that name.</small>}
         </div>
-        <p style={styles.quiet}>
-          Sealed for the people you pick. Others in the group see that you wrote, not what.
-        </p>
-        <PrimaryButton type="submit" disabled={picked.length === 0}>
+        <small>Sealed for the people you pick. Others in the group see that you wrote, not what.</small>
+        <button type="submit" data-intent="primary" disabled={picked.length === 0}>
           Write to {picked.length === 0 ? '…' : namesOf(picked, people)}
-        </PrimaryButton>
+        </button>
       </form>
     </Modal>
   );
 }
-
-/** The list, as the space's own lists are: centred, with room around it */
-const listPage = {
-  ...stack(12),
-  width: '100%',
-  maxWidth: 640,
-  margin: '0 auto',
-  padding: '20px 16px 48px',
-  overflowY: 'auto',
-} as const;
-const roomTitle = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 10,
-  padding: '10px 16px',
-  borderBottom: `1px solid ${palette.surface.line}`,
-} as const;
-const line = {
-  display: 'flex',
-  alignItems: 'flex-start',
-  gap: 10,
-  padding: '4px 6px',
-  borderRadius: palette.radius.md,
-} as const;
-const composer = {
-  display: 'flex',
-  gap: 8,
-  padding: '10px 16px calc(10px + env(safe-area-inset-bottom))',
-  borderTop: `1px solid ${palette.surface.line}`,
-} as const;

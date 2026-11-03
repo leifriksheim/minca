@@ -148,7 +148,7 @@ export function Extension() {
             </div>
           ))}
         </div>
-        <div className="split" style={{ marginTop: 72 }}>
+        <div className="split">
           <div>
             <h3 className="split-title">Updating?</h3>
           </div>

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { AuthError, Place, PodContents } from '@minca/core/session';
 import { Modal } from '@minca/app-shared/Modal';
-import { styles, palette, hstack, stack } from '../styles';
 
 /**
  * Asked after picking a pod while signed in, before anything changes.
@@ -46,13 +45,13 @@ export function PodChoice({
   if (!contents.account) {
     return (
       <Modal title={`Move to “${podName}”?`} onClose={onCancel}>
-        <p style={text}>
+        <p>
           Your account and all its spaces will be copied into this pod, and Minca will keep your data there
           from now on.
           {others}
         </p>
-        <p style={note}>Nothing is deleted. The copy {here} stays until you remove it.</p>
-        {error && <p style={styles.error}>{error.message}</p>}
+        <small>Nothing is deleted. The copy {here} stays until you remove it.</small>
+        {error && <p role="alert">{error.message}</p>}
         <Actions
           loading={loading}
           confirm="Move to pod"
@@ -66,10 +65,10 @@ export function PodChoice({
 
   return (
     <Modal title={`“${podName}” already has your account`} onClose={onCancel}>
-      <p style={text}>
+      <p>
         What should happen to the data {here}?{others}
       </p>
-      <div role="radiogroup" aria-label="What to do with your data" style={stack(8)}>
+      <ul role="list" aria-label="What to do with your data">
         <Choice
           checked={how === 'combine'}
           onSelect={() => setHow('combine')}
@@ -83,8 +82,8 @@ export function PodChoice({
           title="Use the pod as it is"
           description={`Switch to the pod's copy and bring nothing over. Anything only ${here} stays behind.`}
         />
-      </div>
-      {error && <p style={styles.error}>{error.message}</p>}
+      </ul>
+      {error && <p role="alert">{error.message}</p>}
       <Actions
         loading={loading}
         confirm="Continue"
@@ -110,52 +109,18 @@ function Choice({
   recommended?: boolean;
 }) {
   return (
-    <button
-      role="radio"
-      aria-checked={checked}
-      onClick={onSelect}
-      style={{
-        ...hstack(12),
-        alignItems: 'flex-start',
-        textAlign: 'left',
-        padding: 14,
-        // A card to pick, at the surface corner: the navy rule once it is the one picked.
-        borderRadius: palette.radius.lg,
-        border: `1px solid ${checked ? palette.surface.rule : palette.surface.line}`,
-        background: palette.surface.card,
-        width: '100%',
-      }}
-    >
-      <span
-        aria-hidden
-        style={{
-          width: 16,
-          height: 16,
-          marginTop: 2,
-          flexShrink: 0,
-          borderRadius: palette.radius.pill,
-          border: `1px solid ${checked ? palette.accent.base : palette.surface.lineStrong}`,
-          boxShadow: checked ? `inset 0 0 0 4px ${palette.surface.card}` : 'none',
-          background: checked ? palette.accent.base : palette.surface.card,
-        }}
-      />
-      <span style={stack(4)}>
-        <span
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            fontWeight: 500,
-            fontSize: 14,
-            color: palette.ink.strong,
-          }}
-        >
-          {title}
-          {recommended && <span style={{ ...styles.badge, fontSize: 11 }}>Recommended</span>}
+    <li>
+      <label>
+        <input type="radio" name="pod-choice" checked={checked} onChange={onSelect} />
+        <span className="stack" data-gap="tight">
+          <strong className="row">
+            {title}
+            {recommended && <span className="tag">Recommended</span>}
+          </strong>
+          <small>{description}</small>
         </span>
-        <span style={{ fontSize: 13, lineHeight: 1.5, color: palette.ink.muted }}>{description}</span>
-      </span>
-    </button>
+      </label>
+    </li>
   );
 }
 
@@ -173,26 +138,13 @@ function Actions({
   onCancel: () => void;
 }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
-      <button
-        onClick={onCancel}
-        disabled={loading}
-        data-variant="quiet"
-        style={{ ...styles.smallButton, height: 36 }}
-      >
+    <div className="row" data-spread>
+      <button onClick={onCancel} disabled={loading}>
         Cancel
       </button>
-      <button
-        onClick={onConfirm}
-        disabled={loading}
-        data-variant="primary"
-        style={{ ...styles.addButton, height: 36 }}
-      >
+      <button onClick={onConfirm} disabled={loading} data-intent="primary">
         {loading ? busy : confirm}
       </button>
     </div>
   );
 }
-
-const text = { fontSize: 14, lineHeight: 1.6, color: palette.ink.body };
-const note = { fontSize: 13, lineHeight: 1.5, color: palette.ink.muted };

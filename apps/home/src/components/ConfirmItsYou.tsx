@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useAuth } from '@minca/react';
-import { palette, styles, hstack, stack } from '../styles';
 
 /**
  * Proof that the person at this screen is the account's owner, before
@@ -34,17 +33,14 @@ export function ConfirmItsYou({
   };
 
   return (
-    <div style={{ ...styles.note, ...stack(10) }}>
-      <p style={{ fontSize: 14, fontWeight: 600, color: palette.ink.strong }}>Confirm it’s you to {why}.</p>
+    <aside className="stack">
+      <strong>Confirm it’s you to {why}.</strong>
       {hasPasskey && !byCode && (
-        <button
-          onClick={() => void confirm({ passkey: true })}
-          disabled={state.busy}
-          data-variant="primary"
-          style={{ ...styles.darkSmall, alignSelf: 'flex-start' }}
-        >
-          {state.busy ? 'Waiting…' : 'Use your passkey'}
-        </button>
+        <div>
+          <button onClick={() => void confirm({ passkey: true })} disabled={state.busy} data-intent="primary">
+            {state.busy ? 'Waiting…' : 'Use your passkey'}
+          </button>
+        </div>
       )}
       {(hasPassword || byCode) && (
         <form
@@ -52,7 +48,7 @@ export function ConfirmItsYou({
             event.preventDefault();
             if (answer) void confirm(byCode ? { code: answer.trim() } : { password: answer });
           }}
-          style={hstack(6)}
+          className="row"
         >
           <input
             type={byCode ? 'text' : 'password'}
@@ -62,20 +58,18 @@ export function ConfirmItsYou({
             autoComplete={byCode ? 'off' : 'current-password'}
             spellCheck={false}
             aria-label={byCode ? 'Recovery code' : 'Password'}
-            style={{ ...styles.input, height: 36 }}
           />
           <button
             type="submit"
             disabled={!answer || state.busy}
-            data-variant={hasPasskey && !byCode ? 'quiet' : 'primary'}
-            style={hasPasskey && !byCode ? styles.smallButton : styles.darkSmall}
+            data-intent={hasPasskey && !byCode ? undefined : 'primary'}
           >
             Confirm
           </button>
         </form>
       )}
-      {wrong && <p style={styles.error}>{wrong}</p>}
-      <div style={hstack(12)}>
+      {wrong && <p role="alert">{wrong}</p>}
+      <div className="row">
         {(hasPasskey || hasPassword) && (
           <button
             onClick={() => {
@@ -83,16 +77,15 @@ export function ConfirmItsYou({
               setAnswer('');
               setWrong(null);
             }}
-            data-variant="ghost"
-            style={styles.linkButton}
+            data-intent="quiet"
           >
             {byCode ? 'Use your passkey or password' : 'Use your recovery code instead'}
           </button>
         )}
-        <button onClick={onCancel} data-variant="ghost" style={styles.linkButton}>
+        <button onClick={onCancel} data-intent="quiet">
           Cancel
         </button>
       </div>
-    </div>
+    </aside>
   );
 }

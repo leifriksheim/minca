@@ -1,0 +1,37 @@
+/* Data arriving: a light running along the top of the screen while records come in, fading as they stop */
+.line {
+  position: fixed;
+  z-index: 30;
+  inset: env(safe-area-inset-top) 0 auto;
+  height: 2px;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+
+  &[data-on] {
+    opacity: 0.55;
+    transition-duration: 0.15s;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 -40%;
+    width: 40%;
+    background: linear-gradient(90deg, transparent, var(--color-action), transparent);
+    animation: run 1.1s ease-in-out infinite;
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+      left: 0;
+      width: 100%;
+    }
+  }
+}
+
+@keyframes run {
+  to {
+    left: 100%;
+  }
+}

@@ -14,10 +14,9 @@ import { TEMPLATES } from './templates';
 import { AppSettings } from './AppSettings';
 import { Icon } from '../Icon';
 import { unreadOf, type Unread } from '../../seen';
-import { styles, palette, stack, ui } from '../../styles';
-import { LinkButton, PrimaryButton } from '../Buttons';
 import { confirmThen } from '../../confirm';
-import { cardText, cardTitle, rowButton, sectionHeading } from '../rows';
+import styles from './AppsView.module.css';
+import marks from '../InvitePeople.module.css';
 
 /**
  * A space's Overview: a row of its own pages, then its apps like a phone's home screen, those added and then
@@ -88,45 +87,41 @@ export function AppsView({
     );
 
   return (
-    <div style={stack(28)}>
+    <>
       {/* Who is here, a call, and the rest of the space, a tap away. */}
-      <nav aria-label={pair ? 'This chat' : 'This group'} className="quick-row scroll-x">
+      <nav aria-label={pair ? 'This chat' : 'This group'} className={styles.quick}>
         {!pair && PEOPLE_PAGES.map((page) => <QuickPage key={page.to} page={page} go={go} />)}
         <CallButton space={space} />
         <CallButton space={space} video />
         <QuickPage page={SETTINGS_PAGE} go={go} />
       </nav>
 
-      <section aria-label="Apps in this space" style={stack(12)}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <h2 style={sectionHeading}>Apps</h2>
+      <section aria-label="Apps in this space">
+        <header>
+          <h2>Apps</h2>
           {mayDefine && apps.ready.length > 0 && (
-            <LinkButton
-              onClick={() => setArranging((was) => !was)}
-              aria-pressed={arranging}
-              style={{ paddingRight: 0 }}
-            >
+            <button type="button" data-intent="quiet" onClick={() => setArranging((was) => !was)}>
               {arranging ? 'Done' : 'Arrange'}
-            </LinkButton>
+            </button>
           )}
-        </div>
+        </header>
 
         {stale.length > 0 && !arranging && (
-          <div style={updateNote}>
-            <span style={{ flex: 1, minWidth: 0 }}>
+          <aside className="row" data-spread>
+            <span>
               {stale.length === 1
                 ? `A new version of ${stale[0]!.app.title} is ready.`
                 : `New versions of ${stale.map(({ app }) => app.title).join(', ')} are ready.`}
             </span>
-            <PrimaryButton onClick={update} disabled={arrange.busy} style={inlineButton}>
+            <button type="button" data-intent="primary" onClick={update} disabled={arrange.busy}>
               {arrange.busy ? 'Updating…' : 'Update'}
-            </PrimaryButton>
-          </div>
+            </button>
+          </aside>
         )}
 
         {/* One list, arranging or not: arranging only swaps each row's arrow for its moves. */}
         {apps.ready.length > 0 || space.writable ? (
-          <ol aria-label={arranging ? 'Arrange apps' : 'Apps'} className="rows" style={ui.list}>
+          <ol role="list" aria-label={arranging ? 'Arrange apps' : 'Apps'}>
             {apps.ready.map((app, at) => (
               <AppRow
                 key={app.id}
@@ -156,24 +151,24 @@ export function AppsView({
               />
             ))}
             {space.writable && !arranging && (
-              <li data-tile style={{ listStyle: 'none' }}>
-                <button onClick={onCreate} style={rowButton}>
-                  <span style={slot} aria-hidden>
+              <li>
+                <button type="button" data-intent="open" className="row" onClick={onCreate}>
+                  <span className={marks.mark} aria-hidden>
                     <Icon name="plus" size={16} />
                   </span>
-                  <span style={{ ...stack(2), flex: 1, minWidth: 0 }}>
-                    <strong style={{ ...cardTitle, color: palette.ink.body }}>Add app</strong>
-                    <span style={cardText}>A ready-made one, or one an agent builds for you</span>
+                  <span className="stack truncate" data-gap="tight">
+                    <strong>Add app</strong>
+                    <small>A ready-made one, or one an agent builds for you</small>
                   </span>
                 </button>
               </li>
             )}
           </ol>
         ) : (
-          <p style={styles.quiet}>No apps here yet.</p>
+          <small>No apps here yet.</small>
         )}
-        {arrange.error && <p style={styles.error}>{arrange.error}</p>}
-        {copied && arranging && <p style={styles.quiet}>{copied}</p>}
+        {arrange.error && <p role="alert">{arrange.error}</p>}
+        {copied && arranging && <small>{copied}</small>}
       </section>
 
       <Proposals
@@ -186,7 +181,7 @@ export function AppsView({
       />
 
       {setting && <AppSettings space={space} record={setting.record} onClose={() => setSetting(null)} />}
-    </div>
+    </>
   );
 }
 
@@ -199,7 +194,7 @@ function QuickPage({
   go: SpaceScreen['go'];
 }) {
   return (
-    <button onClick={() => go(page.to)} className="quick-action">
+    <button type="button" onClick={() => go(page.to)}>
       <Icon name={page.icon} size={20} />
       {page.label}
     </button>
@@ -233,89 +228,50 @@ function AppRow({
   const about = (
     <>
       <AppIcon app={app} size={36} />
-      <span style={{ ...stack(2), flex: 1, minWidth: 0 }}>
-        <strong style={{ ...cardTitle, ...ui.ellipsis }}>{app.title}</strong>
-        {app.description && <span style={{ ...cardText, ...ui.ellipsis }}>{app.description}</span>}
+      <span className="stack truncate" data-gap="tight">
+        <strong className="truncate">{app.title}</strong>
+        {app.description && <small className="truncate">{app.description}</small>}
       </span>
     </>
   );
   if (!arrange)
     return (
-      <li data-tile style={{ listStyle: 'none' }}>
-        <button onClick={onOpen} style={rowButton}>
+      <li>
+        <button type="button" data-intent="open" className="row" onClick={onOpen}>
           {about}
           <Count unread={unread} />
-          <span style={{ display: 'inline-flex', color: palette.ink.faint }}>
-            <Icon name="chevron" size={14} />
-          </span>
+          <Icon name="chevron" size={14} />
         </button>
       </li>
     );
   // One line on every screen: the app, its moves, and the rest behind a menu.
   return (
-    <li style={{ ...rowButton, listStyle: 'none', padding: '8px 10px 8px 16px' }}>
+    <li className="row">
       <AppIcon app={app} size={32} />
-      <strong style={{ ...cardTitle, ...ui.ellipsis, flex: 1, minWidth: 0 }}>{app.title}</strong>
+      <strong className="truncate">{app.title}</strong>
       <button
+        type="button"
+        data-intent="quiet"
+        data-icon
+        className={styles.up}
         onClick={() => arrange.onMove(-1)}
         disabled={arrange.busy || arrange.first}
         aria-label={`Move ${app.title} up`}
-        data-variant="quiet"
-        data-round
-        style={roundButton}
       >
-        <span style={{ display: 'inline-flex', transform: 'rotate(-90deg)' }}>
-          <Icon name="chevron" size={14} />
-        </span>
+        <Icon name="chevron" size={14} />
       </button>
       <button
+        type="button"
+        data-intent="quiet"
+        data-icon
+        className={styles.down}
         onClick={() => arrange.onMove(1)}
         disabled={arrange.busy || arrange.last}
         aria-label={`Move ${app.title} down`}
-        data-variant="quiet"
-        data-round
-        style={roundButton}
       >
-        <span style={{ display: 'inline-flex', transform: 'rotate(90deg)' }}>
-          <Icon name="chevron" size={14} />
-        </span>
+        <Icon name="chevron" size={14} />
       </button>
       <RowMenu label={`More for ${app.title}`} items={arrange.menu} />
     </li>
   );
 }
-
-/** Where the next app goes: an empty tile, dashed */
-const slot = {
-  width: 36,
-  height: 36,
-  flexShrink: 0,
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  border: `1.5px dashed ${palette.surface.lineStrong}`,
-  borderRadius: palette.radius.md,
-  color: palette.ink.muted,
-} as const;
-/** A word above the apps that some of them have a newer version, and the button that brings them up to date */
-const updateNote = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 12,
-  padding: '10px 10px 10px 16px',
-  borderRadius: palette.radius.lg,
-  background: palette.accent.soft,
-  color: palette.ink.strong,
-  fontSize: 14,
-} as const;
-
-const roundButton = { ...styles.smallButton, width: 36, height: 36 } as const;
-const inlineButton = {
-  width: 'auto',
-  height: 36,
-  padding: '0 14px',
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 6,
-  flexShrink: 0,
-} as const;
