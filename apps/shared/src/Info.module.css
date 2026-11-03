@@ -8,7 +8,7 @@
     margin-left: 6px;
     padding: 0;
     vertical-align: text-bottom;
-    font-size: 10px;
+    font-size: 0.625rem;
   }
 
   & > [role='note'] {

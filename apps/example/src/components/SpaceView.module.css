@@ -45,6 +45,9 @@
 
 .apps {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   overflow-y: auto;
   scrollbar-width: none;
   padding-top: var(--space);

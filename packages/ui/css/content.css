@@ -192,7 +192,7 @@ figure {
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: var(--text-small);
 
   & :is(th, td) {
     padding: 8px 12px;
@@ -216,7 +216,7 @@ pre {
   overflow-x: auto;
   border-radius: var(--radius);
   background: var(--color-sunken);
-  font: 12px / 1.5 var(--font-mono);
+  font: var(--text-small) / 1.5 var(--font-mono);
   white-space: pre-wrap;
   word-break: break-word;
 }

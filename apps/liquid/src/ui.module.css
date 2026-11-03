@@ -62,7 +62,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: var(--text-small);
 }
 
 /* For, against and abstain along one bar */

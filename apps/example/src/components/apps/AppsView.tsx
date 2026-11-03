@@ -16,7 +16,6 @@ import { Icon } from '../Icon';
 import { unreadOf, type Unread } from '../../seen';
 import { confirmThen } from '../../confirm';
 import styles from './AppsView.module.css';
-import marks from '../InvitePeople.module.css';
 
 /**
  * A space's Overview: a row of its own pages, then its apps like a phone's home screen, those added and then
@@ -153,7 +152,7 @@ export function AppsView({
             {space.writable && !arranging && (
               <li>
                 <button type="button" data-intent="open" className="row" onClick={onCreate}>
-                  <span className={marks.mark} aria-hidden>
+                  <span className={styles.slot} aria-hidden>
                     <Icon name="plus" size={16} />
                   </span>
                   <span className="stack truncate" data-gap="tight">

@@ -14,7 +14,7 @@ a[data-intent] {
   border-radius: var(--radius-control);
   background: var(--color-surface);
   color: var(--color-text-strong);
-  font: 500 13px / 1.2 var(--font-body);
+  font: 500 0.875rem / 1.2 var(--font-body);
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
@@ -93,8 +93,8 @@ a[data-intent] {
     border-color: var(--color-divider);
     border-radius: var(--radius);
     color: var(--color-text);
-    font-weight: 400;
-    line-height: 1.5;
+    /* What it holds reads as body text, not as a button's label */
+    font: 400 var(--text-body) / 1.5 var(--font-body);
     text-align: left;
     white-space: normal;
     overflow-wrap: anywhere;
@@ -117,7 +117,7 @@ a[data-intent] {
     flex-shrink: 0;
     width: var(--control-height);
     padding: 0;
-    font-size: 20px;
+    font-size: 1.25rem;
     font-weight: 400;
     line-height: 1;
 
@@ -266,14 +266,14 @@ input[type='checkbox'][role='switch'] {
   input,
   textarea,
   select {
-    font-size: max(16px, 1em);
+    font-size: max(1rem, 1em);
   }
 }
 
 /* What went wrong with a form */
 [role='alert'] {
   color: var(--color-danger);
-  font-size: 13px;
+  font-size: var(--text-small);
 }
 
 /* Tabs: buttons in a tablist, the chosen one aria-selected */

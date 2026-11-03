@@ -47,7 +47,7 @@ small {
   gap: var(--space);
   margin-bottom: 24px;
   color: var(--color-text-strong);
-  font: 700 22px var(--font-display);
+  font: 700 1.375rem var(--font-display);
   letter-spacing: -0.04em;
 }
 .mark svg {
@@ -67,7 +67,7 @@ small {
 }
 .popup .mark {
   margin-bottom: 0;
-  font-size: 19px;
+  font-size: 1.1875rem;
 }
 .popup .mark svg {
   width: 22px;
@@ -130,7 +130,7 @@ section + section {
   gap: 12px;
   padding: 6px 0;
   border-top: 1px solid var(--color-divider);
-  font-size: 13px;
+  font-size: var(--text-small);
 }
 .spaces .name {
   overflow: hidden;

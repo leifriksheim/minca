@@ -74,6 +74,11 @@ for a value computed from data, said so on its line.
 - **Bricolage Grotesque** (`--font-display`) for page titles, section headings, dialog
   titles and the wordmark: weight 700, tight tracking (`-0.04em`).
 - **Geist** (`--font-body`) for everything else, **Geist Mono** (`--font-mono`) for code and ids.
+- **Five sizes**: `--text-small` for meta and hints, `--text-body`, and
+  `--text-heading-3` to `--text-heading-1`. Text takes one of them, never a
+  size of its own; only a glyph, a badge or a page's display type picks one.
+- **Sizes are rem**, type and space alike, so text grows with the reader's own
+  setting. Lines, corners and shadows stay in pixels.
 - Every web page links the Google Fonts stylesheet for all three in its `index.html`.
   The extension bundles its own copies instead (`apps/extension/static/fonts/`),
   so it never calls Google when the popup opens.

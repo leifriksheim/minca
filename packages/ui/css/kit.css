@@ -25,7 +25,7 @@
   width: 18px;
   min-height: 18px;
   margin-inline-end: -4px;
-  font-size: 10px;
+  font-size: 0.625rem;
 }
 
 /* Something the menus and suggestions float from */
@@ -84,7 +84,7 @@
   & button[data-icon] {
     width: 28px;
     min-height: 28px;
-    font-size: 18px;
+    font-size: 1.125rem;
   }
 }
 
@@ -141,7 +141,7 @@
     padding: 6px 12px;
     border-top: 1px solid var(--color-divider);
     color: var(--color-text-muted);
-    font-size: 11px;
+    font-size: 0.6875rem;
   }
 }
 
@@ -176,7 +176,7 @@
     border: none;
     border-radius: var(--radius-small);
     background: none;
-    font-size: 18px;
+    font-size: 1.125rem;
   }
 }
 

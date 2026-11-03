@@ -166,7 +166,7 @@
 
   & strong {
     color: var(--choice);
-    font: 700 26px / 1.2 var(--font-display);
+    font: 700 1.625rem / 1.2 var(--font-display);
     letter-spacing: -0.04em;
     font-variant-numeric: tabular-nums;
   }

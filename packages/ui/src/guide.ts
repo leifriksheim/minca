@@ -69,7 +69,7 @@ ui has:
   placeLabel(place), distanceText(near, place), inReach(near, place), nearWhere(near)   for showing and finding places nearby
   <\${MapLink} place />             "Open map", at OpenStreetMap
   positionBetween(before?, after?)  a "position" sorting between two (either may be missing), for ordering by hand
-  ago(iso)                          "just now", "5m", "3h", "2d", then a date, as the app shows times
+  ago(iso)                          "just now", "5m", "2d", then a date
   when                              dates as std.event keeps them: shortWhen, longWhen, horizon, isOn, dayKey, icsOf, …
 
 To show a record the way the app does, with its comments, attachments and history, call minca.open({ record: key }).
@@ -91,5 +91,5 @@ Write plain HTML from this list, no CSS, <style> or style="": say what a thing i
   <div data-actions> buttons shown when what holds them is pointed at; aria-grabbed="true" dragged; <hr data-drop> lands here
   class="row" | "stack", data-gap="tight" | "loose", data-spread (row: first at the start, the rest at the end)
   data-tone="good|warn|danger" colours text, and a tag's or aside's ground; data-hue="1"…"5" a category's colour: a tint on a tag or article, var(--hue)
-Nothing else exists. Only a game or drawing styles itself, in <main data-wide>, on var(--color-*) and var(--hue).
+Nothing else exists. Only a game or drawing styles itself, in <main data-wide>, with var(--color-*, --text-*, --space-*, --hue), sizes in rem.
 Fonts from URLs never load.`;

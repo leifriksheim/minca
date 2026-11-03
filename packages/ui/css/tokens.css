@@ -65,17 +65,17 @@
   --color-hue-5: var(--lilac);
 
   /* Space: between things that belong together, the usual, between groups, between sections. */
-  --space-tight: 4px;
-  --space: 8px;
-  --space-loose: 16px;
-  --space-section: 32px;
+  --space-tight: 0.25rem;
+  --space: 0.5rem;
+  --space-loose: 1rem;
+  --space-section: 2rem;
 
   /* Type: supporting text, body, and three headings. */
-  --text-small: 12px;
-  --text-body: 14px;
-  --text-heading-3: 15px;
-  --text-heading-2: 18px;
-  --text-heading-1: 24px;
+  --text-small: 0.8125rem;
+  --text-body: 0.9375rem;
+  --text-heading-3: 1rem;
+  --text-heading-2: 1.25rem;
+  --text-heading-1: 1.75rem;
   --font-body: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-display: 'Bricolage Grotesque', 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -86,8 +86,8 @@
   --radius: 10px;
   --radius-surface: 16px;
   --radius-frame: 28px;
-  --control-height: 36px;
-  --reading-width: 640px;
+  --control-height: 2.5rem;
+  --reading-width: 40rem;
 
   /* Only what floats over the page casts a shadow. */
   --shadow-float: 0 1px 2px rgb(19 33 74 / 0.06), 0 16px 40px -12px rgb(19 33 74 / 0.22);

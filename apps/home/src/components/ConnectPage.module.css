@@ -7,6 +7,6 @@
 /* The six digits a program needs, in two groups */
 .check {
   display: block;
-  font: 600 28px var(--font-mono);
+  font: 600 1.75rem var(--font-mono);
   letter-spacing: 0.12em;
 }
