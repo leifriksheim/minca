@@ -34,7 +34,7 @@ import {
   placeLabel,
   useNear,
 } from './places';
-import { Cover, Empty, Shape } from './shapes';
+import { Cover, Empty, Icon, Shape } from './shapes';
 
 /**
  * Preact's `render`, except that with nowhere to draw it draws into an
@@ -107,6 +107,7 @@ Object.defineProperty(globalThis, 'ui', {
     Sharing,
     Shared,
     Shape,
+    Icon,
     Empty,
     Cover,
     PlaceField,

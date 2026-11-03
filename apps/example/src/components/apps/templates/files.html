@@ -13,6 +13,7 @@
     useBlob,
     useShown,
   } = ui;
+  const { Icon } = ui;
   const { useSeen, Avatar, Person, Empty, Modal, attach, sizeOf, ago } = ui;
   const FILE = 'std.file';
   const LIST = 'std.list';
@@ -356,7 +357,7 @@
               aria-label="New category"
               onClick=${() => setNaming('')}
             >
-              +
+              <${Icon} name="plus" />
             </button>`
           }
         </nav>
@@ -541,9 +542,7 @@
           aria-label="Previous"
           disabled=${!hasPrevious}
           onClick=${() => onStep(-1)}
-        >
-          ←
-        </button>
+        ><${Icon} name="arrowLeft" /></button>
         <button
           type="button"
           data-intent="ghost"
@@ -551,9 +550,7 @@
           aria-label="Next"
           disabled=${!hasNext}
           onClick=${() => onStep(1)}
-        >
-          →
-        </button>
+        ><${Icon} name="arrow" /></button>
       </div>
       ${
         kind === 'picture' && (whole || picture)

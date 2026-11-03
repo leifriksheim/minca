@@ -35,7 +35,7 @@ import type { PairWith } from '../contacts';
 import { AccountMenu } from './AccountMenu';
 import { usePopover } from './usePopover';
 import css from './SpaceView.module.css';
-import { Icon, type IconName } from './Icon';
+import { Icon, type IconName } from '@minca/app-shared/Icon';
 import { SyncLine } from './SyncLine';
 import { RelayDown } from './RelayNotice';
 import { homeTab, Notices, useWorkspace } from '../workspace';

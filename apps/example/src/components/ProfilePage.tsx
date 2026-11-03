@@ -16,7 +16,7 @@ import { AccountActions, openAccountHome } from './AccountMenu';
 import { usePopover } from './usePopover';
 import { shrinkImage } from '../files';
 import { ConnectAgent } from './ConnectAgent';
-import { Icon } from './Icon';
+import { Icon } from '@minca/app-shared/Icon';
 import styles from './ProfilePage.module.css';
 
 /**

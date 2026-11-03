@@ -9,7 +9,7 @@ import { FeatureIcon } from '@minca/app-shared/Feature';
 import { useWorkspace } from '../workspace';
 import { ConnectAgent } from './ConnectAgent';
 import { HOOD, settingsPagesOf, type SpaceScreen } from './SpaceView';
-import { Icon, type IconName } from './Icon';
+import { Icon, type IconName } from '@minca/app-shared/Icon';
 import { useSpaceFace } from '../pictures';
 import { shrinkImage } from '../files';
 import { SpaceMark } from './SpaceList';

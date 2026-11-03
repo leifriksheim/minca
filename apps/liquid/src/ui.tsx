@@ -7,6 +7,7 @@ import type { Choice, PartyRule } from './schema';
 import type { Assembly, PartyFull, TopicView } from './model';
 import { PARTY_SHARE, type Step, type Tally } from './tally';
 import styles from './ui.module.css';
+import { Icon } from '@minca/app-shared/Icon';
 
 /** The hue each shape colour is stored as, when a party picks one */
 export const SHADE_HUES: Readonly<Record<ShapeColour, number>> = {
@@ -242,9 +243,7 @@ export function Upvote({
         onToggle();
       }}
     >
-      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
-        <path d="M7 2.5 12 9H2z" fill="currentColor" />
-      </svg>
+      <Icon name="up" size={14} />
       {count}
     </button>
   );

@@ -1,6 +1,7 @@
 <!-- Chat: std.message as one room, with "@" mentions, replies, emoji reactions (std.reaction), files (std.file) dropped anywhere on it, pasted or picked, GIFs from GIPHY once the space has a key, and anything in the space shared with "+" or "/". -->
 <script>
   const { html, render, useState, useEffect, useRef, useRecords, useCan, usePeople, useShown, useShare } = ui;
+  const { Icon } = ui;
   const { Person, MentionInput, MentionText, mentionsIn, Attachments, attach, usePresence } = ui;
   const { Shared, Sharing, recordTitle, AddMenu, EmojiPicker, Reactions, react, Modal, Empty } = ui;
   const MESSAGE = 'std.message';
@@ -248,7 +249,7 @@
       ${has('std.reaction') && html`<${Reactions} about=${message} />`}
       <div data-actions>
         ${!editing && has('std.reaction') && html`<${EmojiPicker} label="React" onPick=${(emoji) => react(message, emoji).catch(() => {})} />`}
-        ${!editing && onReply && html`<button data-intent="ghost" data-icon title="Reply" aria-label="Reply" onClick=${onReply}>↩</button>`}
+        ${!editing && onReply && html`<button data-intent="ghost" data-icon title="Reply" aria-label="Reply" onClick=${onReply}><${Icon} name="reply" /></button>`}
         ${
           !editing &&
           message.mine &&
@@ -262,7 +263,7 @@
                 onEdit(true);
               }}
             >
-              ✎
+              <${Icon} name="pencil" />
             </button>
             <button
               data-intent="ghost"
@@ -289,7 +290,7 @@
         aria-label=${`Don't attach ${file.name}`}
         onClick=${onRemove}
       >
-        ✕
+        <${Icon} name="close" />
       </button>
     </span>`;
   }
@@ -544,7 +545,7 @@
           ${giphyKey && html`<${GifPicker} onPick=${send} disabled=${busy} />`}
           <${EmojiPicker} onPick=${(emoji) => type(draft + emoji)} />
           <button type="submit" data-intent="primary" data-icon aria-label="Send" disabled=${busy || !ready}>
-            ↑
+            <${Icon} name="send" />
           </button>
         </div>
       </div>

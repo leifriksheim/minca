@@ -18,7 +18,8 @@ import {
   useOffer,
 } from './HostOffer';
 import { ChipIn, RemindMe, dollars, lastsFor, perReply } from './Payment';
-import { Benefit, FeatureIcon, Glyph, shortDate, timeLeft, type Tone } from './Feature';
+import { Icon } from './Icon';
+import { Benefit, FeatureIcon, shortDate, timeLeft, type Tone } from './Feature';
 import { useAction } from './action';
 
 /** A GB as hosts count it, 10⁹ bytes: a community's fund pays for one at least */
@@ -542,7 +543,7 @@ function FundPaysFor({
     <li key={key} className="row" data-spread>
       <span className="stack" data-gap="tight">
         <span className="row" data-gap="tight">
-          <Glyph name="check" />
+          <Icon name="check" />
           {label}
         </span>
         {note && <small>{note}</small>}

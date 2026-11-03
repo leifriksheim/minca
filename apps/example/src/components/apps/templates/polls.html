@@ -16,6 +16,7 @@
     Empty,
     ago,
   } = ui;
+  const { Icon } = ui;
   const POLL = 'std.poll';
   const VOTE = 'std.vote';
   const me = minca.me.did;
@@ -190,7 +191,14 @@
             />`,
         )}
       </fieldset>
-      ${options.length < 10 && html`<div class="row"><button type="button" data-intent="ghost" onClick=${() => setOptions([...options, ''])}>+ Add option</button></div>`}
+      ${
+        options.length < 10 &&
+        html`<div class="row">
+          <button type="button" data-intent="ghost" onClick=${() => setOptions([...options, ''])}>
+            <${Icon} name="plus" /> Add option
+          </button>
+        </div>`
+      }
       ${!unique && html`<p role="alert">Two options are the same.</p>`}
       <div class="row" data-spread>
         <button type="button" data-intent="ghost" onClick=${onCancel}>Cancel</button>

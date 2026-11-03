@@ -7,7 +7,7 @@ import { message, useCopy } from '@minca/app-shared/action';
 import { createInviteLink } from '../spaces';
 import { invitableRoles, useContacts } from '../contacts';
 import { shortUsername, useUsernameLookup } from '@minca/app-shared/usernames';
-import { Icon } from './Icon';
+import { Icon } from '@minca/app-shared/Icon';
 import { AddDialog, Handle, PersonRow } from './PeopleParts';
 import { usePopover } from './usePopover';
 import { SpaceDialog, SpaceMark } from './SpaceList';

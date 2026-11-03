@@ -1,6 +1,7 @@
 import type { ComponentChildren } from 'preact';
 import { useLayoutEffect, useRef } from 'preact/hooks';
 import { html } from './html';
+import { Icon } from './shapes';
 
 /**
  * A dialog over the screen: a title, a close button, and whatever is in it.
@@ -44,7 +45,9 @@ export function Modal({
   >
     <header>
       <h2>${title}</h2>
-      <button type="button" data-intent="ghost" data-icon aria-label="Close" onClick=${onClose}>✕</button>
+      <button type="button" data-intent="ghost" data-icon aria-label="Close" onClick=${onClose}>
+        <${Icon} name="close" />
+      </button>
     </header>
     ${children}
   </dialog>`;

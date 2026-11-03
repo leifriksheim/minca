@@ -7,7 +7,7 @@ import { useAppNotifications } from '../notifications';
 import { useSpaceName, useWorkspace } from '../workspace';
 import { Activity, Builder, Settings } from './Bell';
 import { SpaceMark } from './SpaceList';
-import { Icon } from './Icon';
+import { Icon } from '@minca/app-shared/Icon';
 
 /**
  * What your notifications matched lately, at `/activity`; looking is reading them. With none on,

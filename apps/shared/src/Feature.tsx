@@ -1,42 +1,6 @@
 import type { ReactNode } from 'react';
 import { Shape } from './shapes';
-
-/** Line glyphs on a 16-unit grid, drawn with the current colour, like the example's icons */
-const GLYPHS = {
-  cloud: 'M4.5 12.5h7a3 3 0 0 0 .4-6A4 4 0 0 0 4.3 6 3.25 3.25 0 0 0 4.5 12.5Z',
-  sparkle: 'M8 1.5 9.4 6.6 14.5 8 9.4 9.4 8 14.5 6.6 9.4 1.5 8 6.6 6.6Z',
-  check: 'M3.5 8.5 6.5 11.5 12.5 4.5',
-  card: 'M1.5 3.5h13v9h-13zM1.5 6.5h13M4 10h3',
-  wallet: 'M2 4.5h11.5v8H2zM2 4.5l8-2.5v2.5M10.5 8.5h1',
-  lock: 'M4.5 7V5a3.5 3.5 0 0 1 7 0v2M3 7h10v7H3z',
-  shield: 'M8 1.5 13.5 3.5v4c0 3.2-2.3 5.8-5.5 7-3.2-1.2-5.5-3.8-5.5-7v-4Z',
-  restore: 'M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 2.5v2.5H5',
-  users:
-    'M6 7.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5ZM1.5 13.5c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4M11 7.5a2 2 0 1 0 0-4M12.5 9.7c1.2.5 2 1.6 2 3.3',
-  chat: 'M2.5 2.5h11V11H7l-3.5 3v-3h-1z',
-  clock: 'M8 1.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13ZM8 4.5V8l2.5 1.5',
-  close: 'M4 4l8 8M12 4l-8 8',
-  arrow: 'M3 8h10M9 4l4 4-4 4',
-} as const;
-export type GlyphName = keyof typeof GLYPHS;
-
-export function Glyph({ name, size = 16 }: { name: GlyphName; size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.4}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d={GLYPHS[name]} />
-    </svg>
-  );
-}
+import { Icon, type IconName } from './Icon';
 
 /** The two things a host sells, each with its own shape */
 const FEATURES = {
@@ -67,10 +31,10 @@ export function StatusPill({ tone, children }: { tone: Tone; children: ReactNode
 }
 
 /** A benefit in a list: a small check and one short line */
-export function Benefit({ glyph = 'check', children }: { glyph?: GlyphName; children: ReactNode }) {
+export function Benefit({ glyph = 'check', children }: { glyph?: IconName; children: ReactNode }) {
   return (
     <li className="row">
-      <Glyph name={glyph} />
+      <Icon name={glyph} />
       <p>{children}</p>
     </li>
   );

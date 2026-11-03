@@ -24,7 +24,7 @@ import { Modal } from '@minca/app-shared/Modal';
 import { message, useAction, useCopy } from '@minca/app-shared/action';
 import { Loader } from '@minca/app-shared/Loader';
 import { confirmThen } from '../confirm';
-import { Icon } from './Icon';
+import { Icon } from '@minca/app-shared/Icon';
 import { AddDialog, Handle, Notice, PersonRow, RowMenu, SpaceInvites } from './PeopleParts';
 import { SpaceCount } from './SpaceList';
 import { RingButton } from './calls/Calls';

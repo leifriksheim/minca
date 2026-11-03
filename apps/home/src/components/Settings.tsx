@@ -27,6 +27,7 @@ import { Hosting } from './Hosting';
 import { Notifications } from './Notifications';
 import styles from './Settings.module.css';
 import type { TabId } from '../tabs';
+import { Icon } from '@minca/app-shared/Icon';
 
 /**
  * The account, as its home shows it: who you are, which apps may use it, how
@@ -430,15 +431,7 @@ function Overview({
               <strong>{row.title}</strong>
               <small data-tone={row.warn ? 'warn' : undefined}>{row.line}</small>
             </span>
-            <svg width={14} height={14} viewBox="0 0 16 16" aria-hidden>
-              <path
-                d="M6 4l4 4-4 4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.6}
-                strokeLinecap="round"
-              />
-            </svg>
+            <Icon name="chevron" />
           </button>
         </li>
       ))}

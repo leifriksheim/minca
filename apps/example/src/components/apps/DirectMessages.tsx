@@ -8,7 +8,7 @@ import { Shape } from '@minca/app-shared/shapes';
 import { ago } from '@minca/ui/time';
 import { nameOf, type People } from '../../derive/people';
 import { usePeopleHere } from '../Person';
-import { Icon } from '../Icon';
+import { Icon } from '@minca/app-shared/Icon';
 import styles from './DirectMessages.module.css';
 import made from './MadeApps.module.css';
 

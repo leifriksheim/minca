@@ -11,7 +11,7 @@ import {
 } from '@minca/core/schemas';
 import { ideas, ruleWords, type PickedRule } from '../../automations';
 import { Person, usePeopleHere } from '../Person';
-import { Icon } from '../Icon';
+import { Icon } from '@minca/app-shared/Icon';
 import { AutomationBuilder } from './AutomationBuilder';
 import { SpaceBots } from '@minca/app-shared/CommunitySetup';
 import { useAction } from '@minca/app-shared/action';

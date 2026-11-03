@@ -4,7 +4,8 @@ import { useCollections, useNode } from '@minca/react';
 import { useAssignable, useMay } from './may';
 import { activity, INSTRUCT, profile } from '@minca/core/schemas';
 import { Modal } from './Modal';
-import { Benefit, FeatureIcon, Glyph, StatusPill } from './Feature';
+import { Icon } from './Icon';
+import { Benefit, FeatureIcon, StatusPill } from './Feature';
 import { KeepOnline, onlineHost, useSpaceHosts } from './SpaceHosting';
 import { BotConnectors, BotInstructions } from './BotConnectors';
 import { message, useAction } from './action';
@@ -132,7 +133,7 @@ export function AddBotDialog({
             </button>
             {problem && <p role="alert">{problem}</p>}
             <small className="row" data-gap="tight">
-              <Glyph name="lock" size={12} />
+              <Icon name="lock" size={12} />
               <p>
                 {host.fund
                   ? `Its AI use comes from the community fund${model ? `: ${model.name}` : ''}${host.fund.botTypical ? `, ${perReply(host.fund.botTypical)}` : ''}, up to $${cap ?? '1'} a day. `

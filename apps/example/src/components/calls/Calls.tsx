@@ -6,7 +6,7 @@ import type { CallAround, CallPeer, CurrentCall, IncomingCall } from '@minca/cal
 import { useCalls } from '@minca/calls/react';
 import { useAccount, useProfiles } from '@minca/react';
 import { nameOf, peopleFrom } from '../../derive/people';
-import { Icon, type ICONS } from '../Icon';
+import { Icon, type IconName } from '@minca/app-shared/Icon';
 import { ask } from '@minca/app-shared/Ask';
 import { useNow } from '../NetworkView';
 import styles from './Calls.module.css';
@@ -359,7 +359,7 @@ function Choice({
   autoFocus = false,
   onClick,
 }: {
-  icon: keyof typeof ICONS;
+  icon: IconName;
   label: string;
   tone: 'good' | 'danger';
   disabled: boolean;
@@ -477,7 +477,7 @@ function RoundButton({
   on = false,
   danger = false,
 }: {
-  icon: keyof typeof ICONS;
+  icon: IconName;
   label: string;
   onClick: () => void;
   on?: boolean;

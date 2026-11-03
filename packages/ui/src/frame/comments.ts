@@ -16,6 +16,7 @@ import { AddMenu, EmojiPicker } from './menus';
 import { Avatar, Person } from './people';
 import { recordTitle } from './record';
 import { Shared, Sharing, useShare } from './share';
+import { Icon } from './shapes';
 
 const COMMENT = 'std.comment';
 const FILE = 'std.file';
@@ -109,7 +110,7 @@ export function Comments({ about }: { about: Pick<ScreenRecord, 'key' | 'created
                     aria-label=${`Don't attach ${file.name}`}
                     onClick=${() => setFiles(files.filter((_, j) => j !== i))}
                   >
-                    ✕
+                    <${Icon} name="close" />
                   </button>
                 </span>`,
             )}
@@ -135,7 +136,7 @@ export function Comments({ about }: { about: Pick<ScreenRecord, 'key' | 'created
               aria-label="Send"
               disabled=${!draft.trim() && !share.sharing && files.length === 0}
             >
-              ↑
+              <${Icon} name="send" />
             </button>
           </div>
         </div>

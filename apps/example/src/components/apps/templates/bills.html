@@ -16,6 +16,7 @@
     Person,
     Empty,
   } = ui;
+  const { Icon } = ui;
   const { Comments, Modal } = ui;
   const EXPENSE = 'std.expense';
   const SETTLEMENT = 'std.settlement';
@@ -891,7 +892,7 @@
       >
         <div class="row">
           <${Avatar} did=${from} size=${48} round />
-          <span aria-hidden="true">→</span>
+          <${Icon} name="arrow" />
           ${to && html`<${Avatar} did=${to} size=${48} round />`}
         </div>
         <div class="grid">

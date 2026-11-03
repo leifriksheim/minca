@@ -1,7 +1,7 @@
 import type { ShapeKind } from '@minca/ui/shapes';
 import type { ShapeColour } from '@minca/ui/tokens';
 import { Shape } from '@minca/app-shared/shapes';
-import { Icon } from './Icon';
+import { Icon } from '@minca/app-shared/Icon';
 import styles from './Options.module.css';
 
 /** One thing to pick: its shape, its name and a line on what it means */

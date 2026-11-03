@@ -29,7 +29,7 @@ import { ago } from '@minca/ui/time';
 import { byRecent, useLastActive } from './recent';
 import { CallLayer } from './components/calls/Calls';
 import { NewSheet } from './components/NewSheet';
-import { Icon } from './components/Icon';
+import { Icon } from '@minca/app-shared/Icon';
 import { addChat } from './components/apps/entries';
 
 import { takeBack } from './contacts';

@@ -7,6 +7,7 @@
     "./minca.css": "./css/minca.css",
     "./tokens": "./src/tokens.ts",
     "./shapes": "./src/shapes.ts",
+    "./icons": "./src/icons.ts",
     "./avatar": "./src/avatar.ts",
     "./hash": "./src/hash.ts",
     "./round": "./src/round.ts",

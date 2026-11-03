@@ -13,6 +13,7 @@
     Empty,
     positionBetween,
   } = ui;
+  const { Icon } = ui;
   const LIST = 'std.list';
   const ITEM = 'std.list-item';
   /** The kinds of std.list this app shows: other apps keep lists too, like the categories of files */
@@ -213,7 +214,7 @@
                     minca.remove(item.key);
                   }}
                 >
-                  ×
+                  <${Icon} name="close" />
                 </button>`
         }
       </label>

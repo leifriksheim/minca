@@ -8,6 +8,7 @@
     "./relay": "./src/relay.ts",
     "./Avatar": "./src/Avatar.tsx",
     "./Info": "./src/Info.tsx",
+    "./Icon": "./src/Icon.tsx",
     "./TopBar": "./src/TopBar.tsx",
     "./SpaceHosting": "./src/SpaceHosting.tsx",
     "./HostAddress": "./src/HostAddress.tsx",

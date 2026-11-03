@@ -6,7 +6,7 @@ import type { useSpaceApps } from './entries';
 import { AppIcon } from './AppIcon';
 import { addTemplate, DIRECT } from './launcher';
 import { useWorkspace } from '../../workspace';
-import { Icon } from '../Icon';
+import { Icon } from '@minca/app-shared/Icon';
 import marks from '../InvitePeople.module.css';
 
 /**

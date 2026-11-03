@@ -25,6 +25,7 @@ apps and the site import it, and the kit writes it into every app's screen.
 | `css/overlay.css`  | `dialog`, `menu`                                                                                        |
 | `css/kit.css`      | The kit's own parts, which only its components use                                                      |
 | `src/shapes.ts`    | The shapes' paths, and which shape each app and space has                                               |
+| `src/icons.ts`     | Action icons, Lucide's drawings copied in: what a button does, never what Minca or an app is            |
 | `src/round.ts`     | The round shapes as formulas, for the shapes, the avatar and the morph                                  |
 | `src/avatar.ts`    | An account's avatar, two round shapes blended by its DID                                                |
 | `src/frame/`       | The kit an app's screen draws with: Preact, people's faces, comments, places                            |

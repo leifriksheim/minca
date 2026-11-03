@@ -10,7 +10,7 @@ import { shapeFor } from '@minca/ui/shapes';
 import { ago } from '@minca/ui/time';
 import { NOT_CARRIED, useSpaceInvites, withChat } from '../contacts';
 import { shortUsername } from '@minca/app-shared/usernames';
-import { Icon } from './Icon';
+import { Icon } from '@minca/app-shared/Icon';
 import { usePopover } from './usePopover';
 import styles from './PeopleParts.module.css';
 

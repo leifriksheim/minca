@@ -12,7 +12,7 @@ import { Proposals } from './MadeApps';
 import { copyApp, moveApp, outdated, removeApp, updateTemplate } from './launcher';
 import { TEMPLATES } from './templates';
 import { AppSettings } from './AppSettings';
-import { Icon } from '../Icon';
+import { Icon } from '@minca/app-shared/Icon';
 import { unreadOf, type Unread } from '../../seen';
 import { confirmThen } from '../../confirm';
 import styles from './AppsView.module.css';

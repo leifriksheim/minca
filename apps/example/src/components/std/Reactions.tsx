@@ -4,6 +4,7 @@ import type { NodeRecord, SpaceSummary } from '@minca/core';
 import { reaction } from '@minca/core/schemas';
 import { bodyOf } from '../../derive/schema-ui';
 import { respondingTo } from '../../derive/people';
+import { Icon } from '@minca/app-shared/Icon';
 import styles from './Reactions.module.css';
 
 const QUICK = ['👍', '❤️', '🎉', '😂', '👀', '🙏'];
@@ -61,8 +62,13 @@ export function Reactions({
         );
       })}
       {space.writable && (
-        <button data-intent="ghost" onClick={() => setPicking((was) => !was)} aria-label="Add a reaction">
-          ☺︎+
+        <button
+          data-intent="ghost"
+          data-icon
+          onClick={() => setPicking((was) => !was)}
+          aria-label="Add a reaction"
+        >
+          <Icon name="react" />
         </button>
       )}
       {picking && (

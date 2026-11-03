@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { useRecords, usePeople } from './hooks';
 import { html } from './html';
+import { Icon } from './shapes';
 
 const REACTION = 'std.reaction';
 
@@ -106,7 +107,7 @@ export function AddMenu({
       aria-expanded=${open}
       onClick=${() => setOpen(!open)}
     >
-      +
+      <${Icon} name="plus" />
     </button>
     ${
       open &&
@@ -154,7 +155,7 @@ const GRID = { width: 280, height: 220 };
 export function EmojiPicker({
   onPick,
   label = 'Add an emoji',
-  icon = '🙂',
+  icon,
 }: {
   onPick: (emoji: string) => void;
   label?: string;
@@ -180,7 +181,7 @@ export function EmojiPicker({
       aria-expanded=${open}
       onClick=${toggle}
     >
-      ${icon}
+      ${icon ?? html`<${Icon} name="smile" />`}
     </button>
     ${
       open &&

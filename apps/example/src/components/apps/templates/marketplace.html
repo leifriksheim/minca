@@ -20,6 +20,7 @@
     Modal,
     Empty,
   } = ui;
+  const { Icon } = ui;
   const {
     Cover,
     PlaceField,
@@ -743,7 +744,7 @@
               html`<${Cover} key=${photo.id} seed=${photo.id} colour="peach" size=${40}>
                 <${PickImage} photo=${photo} listingKey=${listingKey} />
                 <span class="tag">${photo.busy ? 'Adding…' : i === 0 ? 'Cover' : i + 1}</span>
-                <button type="button" data-icon aria-label="Remove photo" onClick=${() => change(photo.id, null)}>×</button>
+                <button type="button" data-icon aria-label="Remove photo" onClick=${() => change(photo.id, null)}><${Icon} name="close" /></button>
               </${Cover}>`,
           )}
         </div>`

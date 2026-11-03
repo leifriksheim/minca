@@ -6,7 +6,7 @@ import { markRead, useAlerts, useTabDot } from '../alerts';
 import { useAppNotifications, useOwnAutomations } from '../notifications';
 import { ago } from '@minca/ui/time';
 import { SpaceMark } from './SpaceList';
-import { Icon } from './Icon';
+import { Icon } from '@minca/app-shared/Icon';
 import { WatchBuilder } from './automations/WatchBuilder';
 import { useSpaceName } from '../workspace';
 import styles from './Bell.module.css';

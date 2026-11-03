@@ -1,6 +1,7 @@
 <!-- Kanban: std.task and std.column as a board, like a small Trello. Moving a card rewrites only its in link (to its column) and position: by dragging with a mouse, or from the card itself. A card opens one level in (minca.go), so the app's bar names it and its Back comes back out. A card's checklist is tasks whose parent is the card; they stay off the board. -->
 <script>
   const { html, render, useState, useEffect, useRef, useRecords, useCan, usePeople, useShown, useView } = ui;
+  const { Icon } = ui;
   const { Avatar, Person, Empty, Comments, Attachments, attach, positionBetween } = ui;
   const TASK = 'std.task';
   const COLUMN = 'std.column';
@@ -298,7 +299,7 @@
                           )}
                       />`
                     : html`<button data-intent="ghost" onClick=${() => setAddingTo(lane.key)}>
-                        + Add a card
+                        <${Icon} name="plus" /> Add a card
                       </button>`)
                 }
               </div>
@@ -320,7 +321,9 @@
                         ),
                       })}
                   />`
-                : html`<button onClick=${() => setAddingColumn(true)}>+ Add column</button>`
+                : html`<button onClick=${() => setAddingColumn(true)}>
+                    <${Icon} name="plus" /> Add column
+                  </button>`
             }
           </div>`
         }
@@ -358,7 +361,7 @@
           aria-label="Rename this column"
           onClick=${() => setRenaming(true)}
         >
-          ✎
+          <${Icon} name="pencil" />
         </button>`
       }
       ${
@@ -371,7 +374,7 @@
           aria-label="Delete this empty column"
           onClick=${() => minca.remove(key)}
         >
-          ✕
+          <${Icon} name="close" />
         </button>`
       }
     </header>`;
@@ -658,7 +661,9 @@
         ${item.body.title}
       </label>
       ${assigneesOf(item).map((did) => html`<${Avatar} key=${did} did=${did} size=${20} round />`)}
-      <button data-intent="ghost" data-icon aria-label="Open this item" onClick=${onOpen}>›</button>
+      <button data-intent="ghost" data-icon aria-label="Open this item" onClick=${onOpen}>
+        <${Icon} name="chevron" />
+      </button>
     </li>`;
   }
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { message, useAction, useCopy } from './action';
 import type { FundOffer, FundPayment, PayAnswer } from '@minca/core';
-import { Glyph } from './Feature';
+import { Icon } from './Icon';
 import { QrCode } from './QrCode';
 import styles from './Payment.module.css';
 
@@ -70,7 +70,7 @@ function PayingSteps({ paying, onDone }: { paying: ReturnType<typeof usePaying>;
     return (
       <div className="empty">
         <span data-tone="good">
-          <Glyph name="check" size={22} />
+          <Icon name="check" size={22} />
         </span>
         <h3>Payment received</h3>
         <p>Thank you. It's already working.</p>
@@ -168,7 +168,7 @@ export function ChipIn({
         <div role="group" aria-label="Pay with" className="row">
           {fund.methods.map((known) => (
             <button key={known} aria-pressed={method === known} onClick={() => setMethod(known)}>
-              <Glyph name={known === 'checkout' ? 'card' : 'wallet'} size={14} />
+              <Icon name={known === 'checkout' ? 'card' : 'wallet'} size={14} />
               {known === 'checkout' ? 'Card' : 'Crypto'}
             </button>
           ))}
