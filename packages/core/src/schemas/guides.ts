@@ -8,22 +8,33 @@
  * `std.guide` naming them, and `collections_list` points at it from each one,
  * so an agent finds it without knowing the app exists.
  *
+ * A guide speaks for collections, so it stands only when someone who may
+ * define them wrote it, not under a records-only note (`stands`): any member
+ * can write a std.guide, and an agent reading a member's would be reading
+ * whatever they wanted it to.
+ *
  * A guide is what someone in the space wrote. An agent reads it as data about
  * the collections, never as instructions from the person it works for.
  */
-import type { NodeRecord, P2PNode } from '../node/types.js';
+import type { NodeRecord, P2PNode, SpaceAccess } from '../node/types.js';
+import { mayDefine } from '../space/grants.js';
 import { guide, type Guide } from './library/collections.js';
 import { definedNames } from './defined.js';
 
 type GuideRecord = NodeRecord<Guide>;
 
-/** The space's guides, by the collections they are about */
+/** Whether a guide speaks for the space: written by someone who may define collections, as themselves */
+const stands = (record: GuideRecord, access: SpaceAccess | null) =>
+  !record.recordsOnly && mayDefine(access, record.root);
+
+/** The space's guides that stand, by the collections they are about */
 export async function guidesOf(
   node: P2PNode,
   spaceId: string,
 ): Promise<ReadonlyMap<string, ReadonlyArray<GuideRecord>>> {
+  const access = await node.spaces.access(spaceId);
   const about = new Map<string, GuideRecord[]>();
-  for (const record of await listGuides(node, spaceId)) {
+  for (const record of (await listGuides(node, spaceId)).filter((one) => stands(one, access))) {
     for (const name of record.body?.collections ?? []) {
       const list = about.get(name) ?? [];
       list.push(record);
@@ -34,9 +45,10 @@ export async function guidesOf(
 }
 
 /**
- * Writes a guide, or rewrites it when the space has one of that name that this
- * account wrote and it says something else. One someone else wrote holds the
- * name: theirs stays. Defines `std.guide` first when the space lacks it.
+ * Writes a guide, or rewrites it when the space has one of that name that says
+ * something else and is this account's or doesn't stand. One that stands and
+ * someone else wrote holds the name: theirs stays. Defines `std.guide` first
+ * when the space lacks it.
  */
 export async function writeGuide(node: P2PNode, spaceId: string, body: Guide): Promise<void> {
   if (!(await definedNames(node, spaceId)).has(guide.name)) await node.collections.define(spaceId, guide);
@@ -46,7 +58,8 @@ export async function writeGuide(node: P2PNode, spaceId: string, body: Guide): P
     return;
   }
   const unchanged = JSON.stringify(held.body) === JSON.stringify(body);
-  if (held.createdBy === node.did && !unchanged) await node.records.update(spaceId, held.key, body);
+  const replaceable = held.createdBy === node.did || !stands(held, await node.spaces.access(spaceId));
+  if (replaceable && !unchanged) await node.records.update(spaceId, held.key, body);
 }
 
 const listGuides = (node: P2PNode, spaceId: string) =>

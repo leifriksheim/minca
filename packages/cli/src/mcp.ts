@@ -47,11 +47,15 @@ export interface McpOptions {
 
 /**
  * Minca's mark, for a client to show beside the server: a transparent PNG, since
- * favicon services draw the site's SVG onto white, which shows as a white square
- * on a dark client.
+ * favicon services draw the site's SVG onto white, a white square on a dark
+ * client. Inline, so showing it asks nothing of any server.
  */
 export const MINCA_ICONS = [
-  { src: 'https://minca.social/favicon.png', mimeType: 'image/png', sizes: ['192x192'] },
+  {
+    src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAACJklEQVR42u1XQUoDQRDMD/YRPiC+QEQQJEgWBEUDGggeAutVj+YDQhI/EMhBEBQPuSkYDwFPkpNe9wlBfEC7RTaYbHp6ZncTFdIFBWF3pqdqprt3UigoFAqFQqFQKFYba5sfXkQ/YjNiP2IYkRIM43fNeKz3H4RXIz4wYl2JudW/2O1GxFEO4UmO4pjessX7hvRYFBHbX9aud5YoPMnOwk4jFj90XXxje0CVUo/a+60Z4hnepTAxzG0iClB0yXWIu6tc0md9jygoicQYjMUcx9oo5tn5kU34e+3UKtpEzHUwMkp9Era0Wd96o8fj88zCk0QsxFxYOkkFu7vz5JQqaYmYiC0VdppW+aviU5jwXVInzCz+okzUPiS6rxE914kGwZj4jWd4hzHZTYRiKsVfQzbnRfEQ1T35EWwjxgpGsJZQEw3JANt1xIK9OpjdbVdiDuYKhW3qStLFjG2Vovi0wpMUTAgttsoZYG+Vxj6/CPEWE1jbdIvlitd995G/Qtp8vQT02gvo5nZM/MYzMZ0MNSGcgmdtnfjkswaEgoXgo+uAys2zGeIZ3omFzawFDdaWGv9LmhvEdh7slEFEqzsvPEmMMZpgTgEaDAaa0wb63K2S3X30csPO28RPaDwJxGbWNNxi+9MGQuf8xweJyXkubUzEWLYmENu9DsJpA3MDcIdnDTDFiyJ1FT8h5rDFzKwJLZzGbAZypo81jbIYUCgUCoVCoVhRfAM9m3YlWA2dBQAAAABJRU5ErkJggg==',
+    mimeType: 'image/png',
+    sizes: ['48x48'],
+  },
 ];
 
 /** An action's description as a tool, with a warning when its result grants access */

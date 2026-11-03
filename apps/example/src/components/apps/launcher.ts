@@ -20,8 +20,7 @@
  */
 import {
   checkAppAutomation,
-  COLLECTION_DEFINE,
-  grantFits,
+  mayDefine,
   type DefineCollection,
   type NodeCollection,
   type NodeRecord,
@@ -221,25 +220,6 @@ export function checkLauncherApp(body: LauncherApp): string | null {
       return `notify[${index}]: ${entry.when.query.collection} is not one of its collections`;
   }
   return null;
-}
-
-/**
- * Whether an account may define collections here, as its roles' grants say
- * now: a founder, or a role every current definition of which grants
- * `/collection/define`. For showing, not judging: each definition's grants
- * also count only as far as its author could give them, which the node checks.
- */
-function mayDefine(access: SpaceAccess | null | undefined, did: string | null): boolean {
-  const member = access?.members.find((m) => m.did === did);
-  if (!member) return false;
-  if (member.founder) return true;
-  return member.roles.some((name) => {
-    const definitions = access?.roles.find((r) => r.name === name)?.definitions ?? [];
-    return (
-      definitions.length > 0 &&
-      definitions.every((d) => d.grants.some((g) => grantFits(g, COLLECTION_DEFINE, { collection: '' })))
-    );
-  });
 }
 
 /**

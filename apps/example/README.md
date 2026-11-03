@@ -144,7 +144,7 @@ To give the dev node a space, create an invite link in the app and:
 
 ```bash
 npm run minca -- spaces join --invite '<link>'
-npm run minca -- records list --space <id>
+npm run minca -- records query --space <id> --collection <name>
 ```
 
 Close every browser holding the space, open the link somewhere else, and the

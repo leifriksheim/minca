@@ -344,7 +344,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'spaces_access',
-    title: 'What I may do in a space',
+    title: 'Who may do what in a space',
     description:
       'Who holds what in a space: its roles, each with its grants (a command and a policy on its arguments), its ' +
       'members by identity (did) with the roles assigned to them and whether each is a founder, its invites, whether ' +
@@ -356,7 +356,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'spaces_assign',
-    title: 'Give someone a role',
+    title: 'Give or take a role',
     description:
       'Assign a role to someone in a space, or with remove: true take it from them. Needs a grant of /role/assign ' +
       '(or /role/unassign) for that role; you may always take a role from yourself. Records they wrote that this node ' +
@@ -416,7 +416,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'spaces_succeed',
-    title: 'Take over a space',
+    title: 'Name a successor space',
     description:
       'Name a space as the successor of another, whose constitution says it succeeds it. It changes nothing in ' +
       'the old space; members choose whether to follow. Needs /space/succeed, or a place in a space where no one ' +

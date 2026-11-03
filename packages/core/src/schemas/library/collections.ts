@@ -67,7 +67,8 @@ export const blueprint = typed<Blueprint>()({
 
 /**
  * How some of the space's collections are meant to be used, for whoever
- * writes to them next. One of each name: whoever writes it first holds it.
+ * writes to them next. One of each name; only one someone who may define
+ * collections wrote stands (`guidesOf` in `packages/core/src/schemas/guides.ts`).
  */
 export const guide = define({
   name: 'std.guide',

@@ -18,6 +18,7 @@ import { isJson, policyOutcome, policyProblem, policyReads } from '../identity/p
 import { canonicalize } from '../schema/version.js';
 import { isRecord } from '../utils/guards.js';
 import type { SpaceGrant, SpaceRole } from '../types.js';
+import type { SpaceAccess } from '../node/types.js';
 
 // ─── Commands (spec 03 §2.2) ──────────────────────────────────────────
 
@@ -207,4 +208,23 @@ export function grantFits(grant: Grant, cmd: string, args: unknown, opaque = fal
   if (!commandCovers(grant.cmd, cmd)) return false;
   const outcome = policyOutcome(grant.pol, args);
   return outcome === true || (opaque && outcome === null && policyReads(grant.pol, 'body'));
+}
+
+/**
+ * Whether an account may define collections here, as its roles' grants say
+ * now: a founder, or a role every current definition of which grants
+ * `/collection/define`. For showing, not judging: each definition's grants
+ * also count only as far as its author could give them, which the node checks.
+ */
+export function mayDefine(access: SpaceAccess | null | undefined, did: string | null): boolean {
+  const member = access?.members.find((m) => m.did === did);
+  if (!member) return false;
+  if (member.founder) return true;
+  return member.roles.some((name) => {
+    const definitions = access?.roles.find((r) => r.name === name)?.definitions ?? [];
+    return (
+      definitions.length > 0 &&
+      definitions.every((d) => d.grants.some((g) => grantFits(g, COLLECTION_DEFINE, { collection: '' })))
+    );
+  });
 }
