@@ -61,7 +61,9 @@ a[data-intent] {
     background: none;
     color: var(--color-text-muted);
 
-    &:hover:not(:disabled) {
+    /* The page you're on looks as a hover does */
+    &:hover:not(:disabled),
+    &[aria-current='page'] {
       background: var(--color-sunken);
       color: var(--color-text-strong);
     }
@@ -288,7 +290,7 @@ input[type='checkbox'][role='switch'] {
   font-size: var(--text-small);
 }
 
-/* Tabs: buttons in a tablist, the chosen one aria-selected */
+/* Pages to pick between: one outlined pill, the chosen one filled, as a hover is */
 [role='tablist'] {
   display: flex;
   gap: 2px;
@@ -297,25 +299,19 @@ input[type='checkbox'][role='switch'] {
   padding: 4px;
   overflow-x: auto;
   scrollbar-width: none;
+  border: 1px solid var(--color-outline);
   border-radius: var(--radius-control);
-  background: var(--color-sunken);
+  background: var(--color-surface);
 
   & > button {
-    min-height: 30px;
+    min-height: 32px;
     border-color: transparent;
     background: none;
     color: var(--color-text-muted);
 
-    &:hover:not(:disabled) {
-      background: none;
-      color: var(--color-text-strong);
-    }
-
-    /* The chosen one stays as it is under the pointer */
-    &[aria-selected='true'],
-    &[aria-selected='true']:hover:not(:disabled) {
-      border-color: var(--color-outline);
-      background: var(--color-surface);
+    &:hover:not(:disabled),
+    &[aria-selected='true'] {
+      background: var(--color-sunken);
       color: var(--color-text-strong);
     }
   }

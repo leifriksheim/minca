@@ -12,11 +12,6 @@
 
   & > a {
     position: relative;
-
-    &[aria-current] {
-      background: var(--color-sunken);
-      color: var(--color-text-strong);
-    }
   }
 
   /* The page shows through it, blurred, under the page's bars (z-index 8) */

@@ -131,22 +131,21 @@
   background: none;
   color: inherit;
 }
-/* Plain words that turn cobalt on hover; only the button is a pill */
+/* Pages, as tabs are everywhere: the one you're on filled, as a hover is */
 .site .nav-links a:not(.btn) {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 8px 12px;
+  padding: 8px 14px;
+  border-radius: var(--radius-control);
   font-size: var(--text-body);
   font-weight: 500;
   text-decoration: none;
-  color: var(--color-text);
-  transition: color 0.15s ease;
+  color: var(--color-text-muted);
+  transition: background-color 0.15s ease;
 }
-.site .nav-links a:not(.btn):hover {
-  color: var(--color-action);
-}
-.site .nav-links a[aria-current='page'] {
+.site .nav-links a:not(.btn):is(:hover, [aria-current='page']) {
+  background: var(--color-sunken);
   color: var(--color-text-strong);
 }
 .site .nav-links svg {
