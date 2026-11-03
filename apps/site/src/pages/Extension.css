@@ -1,0 +1,137 @@
+/* The extension's page (Extension.tsx): the popup drawn, and how it works */
+
+.site .tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.site .tile-num {
+  font-family: var(--font-display);
+  font-size: 3.5rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  color: var(--color-text-strong);
+}
+
+.site .tiles .tile {
+  min-height: 280px;
+}
+
+.site .tiles .tile-art {
+  right: -40px;
+  bottom: -40px;
+  width: 160px;
+  height: 160px;
+}
+
+.site .tiles .tile h3 {
+  margin-top: 20px;
+  font-size: 1.375rem;
+  letter-spacing: -0.03em;
+}
+
+.site .tiles .tile p {
+  margin-top: 8px;
+  max-width: 260px;
+  font-size: var(--text-body);
+  color: var(--color-text);
+}
+
+.site .tiles .tile code {
+  font-size: var(--text-small);
+  padding: 1px 6px;
+  border-radius: var(--radius-small);
+  background: var(--color-surface);
+}
+
+/* What to do after the steps, well clear of them */
+.site .tiles + .split {
+  margin-top: 72px;
+}
+
+.site .toolbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-surface);
+  background: var(--color-surface);
+  box-shadow: 0 24px 48px -24px color-mix(in srgb, var(--color-text-strong) 35%, transparent);
+}
+
+.site .toolbar-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.site .toolbar-dots i {
+  width: 11px;
+  height: 11px;
+  border-radius: var(--radius-control);
+  background: var(--color-field);
+}
+
+.site .toolbar-url {
+  flex: 1;
+  padding: 6px 14px;
+  border-radius: var(--radius-control);
+  background: var(--color-sunken);
+  font-size: var(--text-body);
+  color: var(--color-text-muted);
+}
+
+/* Minca's icon, with the dot that says it's keeping your spaces online */
+.site .toolbar-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--color-sunken);
+}
+
+/* The extension's popup, open under its icon */
+.site .popup {
+  position: absolute;
+  right: 0;
+  top: 82px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-surface);
+  background: var(--color-surface);
+  box-shadow: 0 24px 48px -24px color-mix(in srgb, var(--color-text-strong) 35%, transparent);
+  font-size: var(--text-body);
+  font-weight: 500;
+  color: var(--color-text-strong);
+}
+
+.site .popup .toolbar-badge {
+  position: static;
+  border: 0;
+}
+
+.site .toolbar-badge {
+  position: absolute;
+  right: 5px;
+  bottom: 7px;
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--color-surface);
+  border-radius: var(--radius-control);
+  background: var(--color-good);
+}
+
+.site .split-title {
+  margin-bottom: 16px;
+  font-size: clamp(1.875rem, 3.8vw, 2.75rem);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.045em;
+}

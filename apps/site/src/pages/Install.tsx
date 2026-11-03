@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { Link, useRouterState } from '@tanstack/react-router';
 import { APP, EXTERNAL, Page } from './Site';
 import { DOWNLOADS } from './downloads';
+import './Install.css';
 
 /**
  * Where every download link lands: the file starts downloading, and the page

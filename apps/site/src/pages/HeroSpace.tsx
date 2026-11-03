@@ -5,6 +5,7 @@ import { Shape } from '@minca/app-shared/shapes';
 import { APP_SHAPES, type ShapeKind } from '@minca/ui/shapes';
 import type { ShapeColour } from '@minca/ui/tokens';
 import { EventHead, Face } from './demos';
+import './HeroSpace.css';
 
 /**
  * The front page's hero: many hands making one small app, inside Minca as it

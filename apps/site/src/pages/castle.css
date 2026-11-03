@@ -1,0 +1,43 @@
+/* The AI in the middle, and the AI outside the castle (castle.tsx) */
+
+.site .castle-line,
+.site .castle-wire {
+  fill: none;
+  stroke: var(--color-text-strong);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.site .castle-wire {
+  stroke-opacity: 0.25;
+}
+
+.site .castle-dot {
+  fill: var(--color-text-strong);
+}
+
+.site .castle-stone rect {
+  fill: var(--color-surface);
+  stroke: var(--color-text-strong);
+  stroke-width: 2;
+}
+
+.site .castle-gate {
+  fill: var(--color-text-strong);
+}
+
+.site .castle-water {
+  fill: color-mix(in srgb, var(--color-hue-1) 35%, var(--color-page));
+}
+
+.site .castle-bridge {
+  fill: var(--color-hue-3);
+  stroke: var(--color-text-strong);
+  stroke-width: 2;
+}
+
+.site .castle-chain {
+  stroke: var(--color-text-strong);
+  stroke-width: 2;
+  stroke-dasharray: 3 3;
+}

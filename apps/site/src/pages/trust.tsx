@@ -4,6 +4,7 @@ import type { ShapeKind } from '@minca/ui/shapes';
 import type { ShapeColour } from '@minca/ui/tokens';
 import { Face } from './demos';
 import { Tabs } from './Site';
+import './trust.css';
 
 /**
  * The front page's two pictures of trust: a message locked on one device,

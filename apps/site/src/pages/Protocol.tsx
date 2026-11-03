@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Band, EXTERNAL, GITHUB, Page, Points, SPEC } from './Site';
+import './Protocol.css';
 
 /**
  * How it works, for people who want the design before the code: one section

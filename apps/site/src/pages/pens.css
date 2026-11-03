@@ -1,0 +1,23 @@
+/* Pens the billionaires guard, and a tower groups share (pens.tsx) */
+
+.site .pens-line {
+  stroke: var(--color-text-strong);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.site .pens-picket {
+  fill: var(--color-surface);
+  stroke: var(--color-text-strong);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.site .pens-brick {
+  font-family: var(--font-display);
+  font-size: var(--text-body);
+  font-weight: 600;
+  fill: var(--color-text-strong);
+  text-anchor: middle;
+  dominant-baseline: central;
+}

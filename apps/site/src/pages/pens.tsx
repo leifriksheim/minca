@@ -1,5 +1,6 @@
 import { useEffect, useRef, type RefObject } from 'react';
 import { shapeColours, type ShapeColour } from '@minca/ui/tokens';
+import './pens.css';
 
 /**
  * Companies start over, groups build on each other. Each tech billionaire

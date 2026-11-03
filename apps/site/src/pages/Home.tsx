@@ -12,6 +12,7 @@ import { type ShapeKind } from '@minca/ui/shapes';
 import type { ShapeColour } from '@minca/ui/tokens';
 import { usePlatform } from './downloads';
 import { downloadLink } from './Install';
+import './Home.css';
 
 /**
  * The front page, for community builders who are tired of billionaires

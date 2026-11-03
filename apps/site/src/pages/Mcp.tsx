@@ -7,6 +7,7 @@ import { AppLogo, type AppLogoName } from '@minca/app-shared/AppLogo';
 import { Terminal } from '@minca/app-shared/Terminal';
 import { type ShapeKind } from '@minca/ui/shapes';
 import { Band, Page, Tabs } from './Site';
+import './Mcp.css';
 
 /**
  * Connecting an AI to your spaces over MCP. Most apps connect to Minca's MCP

@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import { RouterProvider } from '@tanstack/react-router';
 import '@minca/ui/minca.css';
+import './pages/site.css';
 import { APP } from './pages/Site';
 import { router } from './router';
 

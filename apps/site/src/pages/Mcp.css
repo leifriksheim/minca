@@ -1,0 +1,136 @@
+/* The MCP page (Mcp.tsx): the AI apps, the chat drawn, and the tools */
+
+/* The extension page opens on its tile, under the nav */
+.site .mcp-url {
+  max-width: 440px;
+  margin-bottom: 24px;
+}
+
+.site .chat-mock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-frame);
+  background: var(--color-surface);
+  font-size: var(--text-body);
+  line-height: 1.45;
+}
+
+.site .chat-line {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: var(--radius-surface);
+  color: var(--color-text-strong);
+}
+
+.site .chat-via {
+  display: block;
+  margin-top: 6px;
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+
+.site .client-then {
+  font-size: var(--text-body);
+  color: var(--color-text-muted);
+}
+
+/* The tools, a group to a row: its shape, name and count, then each tool on a ruled line */
+.site .tool-groups > * + * {
+  margin-top: 56px;
+  padding-top: 56px;
+  border-top: 1px solid var(--color-divider);
+}
+
+.site .tool-group-head .shape {
+  width: 44px;
+  height: 44px;
+  margin-bottom: 16px;
+}
+
+.site .tool-group-head h3 {
+  font-size: 1.5rem;
+}
+
+.site .tool-group-head h3 span {
+  margin-left: 4px;
+  font-size: var(--text-body);
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.site .tool-group-head p {
+  color: var(--color-text-muted);
+}
+
+.site .tool-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.site .tool-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+/* Not the split's bulleted list */
+.site .split .tool-list li {
+  margin: 0;
+  padding-left: 0;
+}
+
+.site .split .tool-list li::before {
+  content: none;
+}
+
+.site .split .tool-list li:first-child {
+  padding-top: 0;
+}
+
+.site .tool-list code {
+  justify-self: start;
+}
+
+.site .tool-list p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.site .tool-kind {
+  padding: 2px 10px;
+  border-radius: var(--radius-control);
+  font-size: var(--text-small);
+  font-weight: 500;
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+}
+
+.site .chat-you {
+  align-self: flex-end;
+  background: var(--color-action);
+  color: var(--color-on-action);
+}
+
+.site .chat-ai {
+  align-self: flex-start;
+  background: var(--color-sunken);
+}
+
+.site .tool-writes {
+  color: var(--color-text-strong);
+  background: var(--color-action-soft);
+  border-color: transparent;
+}
+
+.site .tool-changes {
+  color: var(--color-text-strong);
+  background: color-mix(in srgb, var(--color-hue-2) 22%, transparent);
+  border-color: transparent;
+}

@@ -5,6 +5,7 @@ import { Shape } from '@minca/app-shared/shapes';
 import { type ShapeKind } from '@minca/ui/shapes';
 import { Band, ChromeMark, EXTERNAL, GITHUB, Marked, Page } from './Site';
 import { downloadLink } from './Install';
+import './Extension.css';
 
 /**
  * The Chrome extension (`apps/extension`), and how to install it by hand until

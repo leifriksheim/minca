@@ -1,0 +1,372 @@
+/* A message locked on the way, and hosting (trust.tsx) */
+
+/* Grid paper: faint ruled squares, fading out at the edges */
+.site .paper-grid {
+  background-color: var(--color-page);
+  background-image:
+    linear-gradient(var(--color-divider) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-divider) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: -1px -1px;
+}
+
+/* A frame: anything that stands on the page, edged with the navy rule */
+.site .frame {
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-frame);
+  background: var(--color-page);
+  overflow: hidden;
+}
+
+/* One quiet question under the hosting tabs */
+.site .hosting-how {
+  margin-top: 56px;
+}
+
+.site .hosting-how summary {
+  padding: 16px 0;
+  font-size: 1rem;
+}
+
+.site .hosting-how details p {
+  max-width: 640px;
+  font-size: var(--text-body);
+  color: var(--color-text-muted);
+}
+
+.site .hosting-how details p + p {
+  margin-top: -8px;
+}
+
+.site .split .frame {
+  background-color: var(--color-page);
+  background-image:
+    linear-gradient(var(--color-divider) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-divider) 1px, transparent 1px);
+  background-size: 24px 24px;
+  display: grid;
+  place-items: center;
+  padding: 56px 32px;
+}
+
+.site .sealed-bubble {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-surface);
+  background: var(--color-surface);
+}
+
+.site .sealed-bubble.is-theirs {
+  background: var(--color-action-soft);
+}
+
+.site .sealed-bubble p {
+  font-size: var(--text-body);
+  line-height: 1.4;
+  color: var(--color-text-strong);
+}
+
+.site .sealed-way {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.site .sealed-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding-bottom: 14px;
+  font-size: 0.71875rem;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+}
+
+.site .sealed-lock {
+  width: 22px;
+  height: 22px;
+  color: var(--color-text-strong);
+}
+
+.site .sealed-middle {
+  position: relative;
+}
+
+.site .sealed-noise {
+  display: block;
+  min-height: 70px;
+  padding: 12px 14px;
+  overflow: hidden;
+  border: 1px dashed var(--color-field);
+  border-radius: var(--radius-surface);
+  background: var(--color-sunken);
+  font-size: var(--text-small);
+  line-height: 1.5;
+  word-break: break-all;
+  color: var(--color-text-muted);
+}
+
+/* The message on its way, a dot crossing under the noise */
+.site .sealed-dot {
+  position: absolute;
+  bottom: -14px;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-control);
+  background: var(--color-action);
+  animation: carry 2.6s ease-in-out infinite;
+}
+
+.site .split-even {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
+}
+
+.site .hosting-head,
+.site .hosting-host {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.site .hosting-head > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  letter-spacing: -0.03em;
+  color: var(--color-text-strong);
+}
+
+.site .hosting-online {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: var(--radius-control);
+  background: var(--color-good-soft);
+  font-size: var(--text-small);
+  font-weight: 500;
+  color: var(--color-good);
+}
+
+.site .hosting-online::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-control);
+  background: currentColor;
+}
+
+.site .hosting-host {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--color-divider);
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+
+.site .hosting-host b {
+  font-weight: 600;
+  color: var(--color-text-strong);
+}
+
+.site .hosting-host .kept {
+  flex: none;
+  font-size: var(--text-small);
+}
+
+.site .hosting-fund {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.site .hosting-sum {
+  font-family: var(--font-display);
+  font-size: 2.75rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  color: var(--color-text-strong);
+}
+
+.site .hosting-fund b {
+  display: block;
+  font-weight: 600;
+  color: var(--color-text-strong);
+}
+
+.site .hosting-fund small {
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+
+.site .hosting-meter {
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--radius-control);
+  background: var(--color-sunken);
+}
+
+.site .hosting-meter span {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-control);
+  background: var(--color-hue-4);
+}
+
+.site .hosting-used > span {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+
+.site .hosting-used b {
+  font-weight: 600;
+  color: var(--color-text-strong);
+}
+
+.site .hosting-used small {
+  font-size: var(--text-small);
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+/* The group's fund, waiting below the free line for when it is needed */
+.site .hosting-ready {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-divider);
+}
+
+.site .hosting-ready > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+
+.site .hosting-ready b {
+  display: block;
+  font-weight: 600;
+  color: var(--color-text-strong);
+}
+
+.site .hosting-ready small {
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+
+.site .hosting-faces {
+  display: flex;
+}
+
+.site .hosting-faces .app-face + .app-face {
+  margin-left: -6px;
+}
+
+.site .hosting-chip-in {
+  min-height: 34px;
+  padding: 0 14px;
+  font-size: var(--text-small);
+}
+
+/* One person's spaces: each a row with its shape and size */
+.site .split .hosting-spaces {
+  margin: 0;
+  font-size: var(--text-body);
+}
+
+.site .split .hosting-spaces li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 9px 0;
+  border-top: 1px solid var(--color-divider);
+}
+
+.site .split .hosting-spaces li::before,
+.site .split .hosting-free li::before {
+  content: none;
+}
+
+.site .hosting-spaces li > span {
+  flex: 1;
+  color: var(--color-text-strong);
+}
+
+.site .hosting-spaces small {
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+
+/* What is free, each line marked with the tick */
+.site .split .hosting-free {
+  margin: 18px 0 20px;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--color-text-strong);
+}
+
+.site .split .hosting-free li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 0;
+}
+
+.site .split .hosting-free .shape {
+  flex: none;
+}
+
+.site .hosting-own {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.site .split .hosting-own .install {
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .site .split-even {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  /* The hosting card keeps its width */
+  .site .split .frame {
+    padding: 20px 12px;
+  }
+}
+
+@keyframes carry {
+  from {
+    left: 0;
+    opacity: 0;
+  }
+  15%,
+  85% {
+    opacity: 1;
+  }
+  to {
+    left: calc(100% - 8px);
+    opacity: 0;
+  }
+}

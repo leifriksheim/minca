@@ -4,6 +4,7 @@ import { APP, ChromeMark, DownloadMark, EXTERNAL, Page } from './Site';
 import { RELEASES, usePlatform } from './downloads';
 import { downloadLink } from './Install';
 import { BrowserMock } from './Extension';
+import './Download.css';
 
 /**
  * Every way to get Minca: the desktop app, the browser, and the Chrome
