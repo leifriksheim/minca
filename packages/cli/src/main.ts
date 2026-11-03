@@ -89,7 +89,7 @@ Usage:
   minca whoami
   minca spaces  list | create | invite | join | leave | status   [--flags]
   minca spaces  access | assign | remove_member | step_down | succeed
-  minca records list | get | put | update | delete               [--flags]
+  minca records query | get | put | update | delete               [--flags]
   minca run [--port 8787] [--host 127.0.0.1] [--node wss://…/peer] [--no-relays] [--create]
   minca host [--port 8787] [--host 127.0.0.1] [--data DIR] [--free] [--allow did:key:…]
   minca host stats <address> [--json]       what a host carries and takes in, as it shows anyone

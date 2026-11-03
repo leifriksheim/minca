@@ -44,7 +44,7 @@ import {
 import type { Grant } from '@minca/core/session';
 import { createSessions, type Granted } from './sessions.js';
 import { isRecord, messageOf } from '../json.js';
-import { mcpTools, toolInstructions } from '../mcp.js';
+import { MINCA_ICONS, mcpTools, toolInstructions } from '../mcp.js';
 import { createConsent } from './consent.js';
 import { createOAuth, MCP_SCOPE } from './oauth.js';
 import { mayRedirect } from './redirects.js';
@@ -203,7 +203,7 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- checked by checkGranted in oauth.verify
       const granted = (authInfo?.extra?.granted ?? null) as Granted | null;
       const server = new Server(
-        { name: 'minca', version: options.version },
+        { name: 'minca', version: options.version, icons: MINCA_ICONS },
         {
           capabilities: { tools: {} },
           // Who it acts for, from the grant: said without starting the agent.

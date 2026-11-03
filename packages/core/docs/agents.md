@@ -130,7 +130,7 @@ _Source: `packages/core/src/session/connect-code.ts`, `packages/cli/src/agent.ts
 ## Tools an agent gets
 
 `node_info`, `spaces_list`, `spaces_status`, `spaces_preview_invite`, `spaces_access`, `spaces_profiles`,
-`collections_list`, `records_query`, `records_list`, `records_get`,
+`collections_list`, `records_query`, `records_get`,
 `records_linked`, `records_history`, `records_can`, `records_put`,
 `records_update`, `records_delete`, `activity_set` (what it is doing, for
 people to see), and for new collections: `collections_standard`,

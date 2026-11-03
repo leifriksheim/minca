@@ -128,6 +128,12 @@ export async function startMcpServer(
     ...(options.log ? { log: options.log } : {}),
   });
   const http = createServer((req, res) => {
+    // Clients that show a server's site icon look here: Minca's is on its site.
+    if (req.url === '/favicon.ico') {
+      res.writeHead(301, { location: 'https://minca.social/favicon.ico' });
+      res.end();
+      return;
+    }
     if (req.url === '/health') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ ok: true }));

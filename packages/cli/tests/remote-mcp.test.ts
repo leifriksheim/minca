@@ -414,7 +414,7 @@ describe('a host’s MCP endpoint', () => {
       async () =>
         textOf(
           await client.callTool({
-            name: 'records_list',
+            name: 'records_query',
             arguments: { space: space.id, collection: 'app.note' },
           }),
         ).includes('Soup on Friday'),

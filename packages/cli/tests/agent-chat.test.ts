@@ -126,7 +126,7 @@ describe('minca agent', () => {
     for (let i = 0; i < 40; i++)
       await node.records.put(space.id, 'app.club.note', { text: 'x'.repeat(2000) });
     const model = scripted(
-      call({ name: 'records_list', input: { space: space.id, collection: 'app.club.note' } }),
+      call({ name: 'records_query', input: { space: space.id, collection: 'app.club.note' } }),
       say('Too many.'),
     );
     const chat = createAgentChat({

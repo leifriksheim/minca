@@ -447,8 +447,8 @@ describe('MCP', () => {
     );
     assert.ok(Array.isArray(tools));
     assert.equal(tools.length, NODE_ACTIONS.length);
-    const recordsList: unknown = tools.find((tool: unknown) => at(tool, 'name') === 'records_list');
-    assert.equal(at(recordsList, 'annotations', 'readOnlyHint'), true);
+    const query: unknown = tools.find((tool: unknown) => at(tool, 'name') === 'records_query');
+    assert.equal(at(query, 'annotations', 'readOnlyHint'), true);
 
     const call = async (name: string, args: unknown) =>
       at(
@@ -722,8 +722,10 @@ describe('the minca command', () => {
     const space = at(created, 'id');
     assert.ok(typeof space === 'string');
     await minca('records', 'put', '--space', space, '--collection', 'app.note', '--body', '{"text":"hi"}');
-    const listed: unknown = JSON.parse((await minca('records', 'list', '--space', space)).stdout);
-    assert.equal(at(listed, 0, 'body', 'text'), 'hi');
+    const listed: unknown = JSON.parse(
+      (await minca('records', 'query', '--space', space, '--collection', 'app.note')).stdout,
+    );
+    assert.equal(at(listed, 'records', 0, 'body', 'text'), 'hi');
 
     await assert.rejects(minca('records', 'put', '--space', space, '--nonsense', 'x'), /has no --nonsense/);
   });
@@ -831,9 +833,10 @@ describe('the minca command', () => {
     );
 
     // Something that can't be undone still runs without asking, as it always has: the agent or script said so.
-    const listed: unknown = JSON.parse((await minca('records', 'list', '--space', space)).stdout);
-    assert.ok(Array.isArray(listed));
-    const key = at(listed, 0, 'key');
+    const listed: unknown = JSON.parse(
+      (await minca('records', 'query', '--space', space, '--collection', 'std.automation')).stdout,
+    );
+    const key = at(listed, 'records', 0, 'key');
     assert.ok(typeof key === 'string');
     await minca('records', 'delete', '--space', space, '--key', key);
   });
