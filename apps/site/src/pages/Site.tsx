@@ -135,6 +135,10 @@ function Nav({ page }: { page: PageName }) {
               {link.label}
             </Link>
           ))}
+          <a href={GITHUB} {...EXTERNAL} className="nav-menu-only">
+            <GitHubMark />
+            GitHub
+          </a>
         </nav>
         <div className="nav-end">
           <a href={GITHUB} {...EXTERNAL} className="nav-icon" aria-label="GitHub">
