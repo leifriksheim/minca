@@ -177,7 +177,9 @@
 
     const mine = lists.filter((l) => l.body && (KINDS.includes(l.body.kind) || l.body.kind === undefined));
     const itemsOf = (key) => items.filter((i) => i.body && inList(i) === key).sort(byPosition);
-    const open = view && mine.find((l) => l.key === view);
+    // Any list once opened, though only its own kinds are listed: one of a kind no app here shows
+    // opens here from elsewhere too.
+    const open = view && lists.find((l) => l.key === view && l.body);
     if (view && !open)
       return html`<div class="wrap">
         <${Empty} shape="tick" colour="peach" title="This list is gone" text="Someone deleted it." />

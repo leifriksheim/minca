@@ -418,14 +418,18 @@
     const [error, setError] = useState(null);
     const [naming, setNaming] = useState(null);
     const picker = useRef(null);
-    // A file opened from elsewhere, like one in a chat: shown in the viewer, among all files.
+    // A file opened from elsewhere, like one in a chat: shown in the viewer, among all files. A
+    // category, an album or a folder opens as itself, once the lists have arrived.
     const asked = useShown();
+    const handled = useRef(null);
     useEffect(() => {
-      if (!asked) return;
-      setView({ kind: 'all' });
+      if (!asked || handled.current === asked || !lists) return;
+      handled.current = asked;
       setQuery('');
-      setOpened(asked.key);
-    }, [asked]);
+      const group = lists.some((list) => list.key === asked.key);
+      setView(group ? { kind: 'group', key: asked.key } : { kind: 'all' });
+      setOpened(group ? null : asked.key);
+    }, [asked, lists]);
 
     const all = files ?? [];
     const keys = useMemo(() => new Set(all.map((f) => f.key)), [files]);

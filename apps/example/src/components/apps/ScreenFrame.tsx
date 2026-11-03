@@ -4,6 +4,7 @@ import { useAccount, useLive, useNode } from '@minca/react';
 import { Modal } from '@minca/app-shared/Modal';
 import ui from 'virtual:minca-ui';
 import { placeAt, searchPlaces, whereAmI } from '@minca/app-shared/places';
+import { showsRecord } from './launcher';
 import { createScreenBridge, offLimits, screenDocument, type ScreenBridge, type ScreenHost } from './screens';
 import { PersonCardHere } from '../Person';
 import { RecordFinder } from '../RecordFinder';
@@ -99,7 +100,7 @@ export function ScreenFrame({
     let current = true;
     void node.records.get(spaceId, shown).then((record) => {
       if (!current) return;
-      if (!record || !showing.split('|').includes(record.collection)) return void handed.current?.();
+      if (!record || showsRecord(showing.split('|'), record) === 0) return void handed.current?.();
       if (live.current) {
         live.current.show(shown);
         handed.current?.();
