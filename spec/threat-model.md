@@ -595,9 +595,13 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     down…").
   - A member who may write `std.guide` can put text in front of other
     people's agents: `collections_list` points at every guide about a
-    collection, whoever wrote it, and one of each name stands, so the first
-    to write a name holds it. Agents are told to read a guide as data, not
-    instructions, and that is the only thing in the way. Showing only guides
+    collection, whoever wrote it, and the tools tell agents to read a guide
+    before writing there and go by it. A guide's name is a shared key, so,
+    as at any shared key, a member can start a chain of their own there and
+    replace a guide an app already wrote, and `writeGuide` leaves it, so the
+    app can't restore it. An agent so steered holds a records note, and can
+    replace guides in turn. The only check is the note marking what a tool
+    returns as data from others, not instructions. Showing only guides
     from members who may define collections needs a check the node itself
     makes, not one read off the grants, and guides keyed per author
     (`guidesOf`, `writeGuide` in `packages/core/src/schemas/guides.ts`;
