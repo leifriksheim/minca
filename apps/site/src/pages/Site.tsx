@@ -1,3 +1,4 @@
+import { TopBar } from '@minca/app-shared/TopBar';
 import {
   useEffect,
   useId,
@@ -124,7 +125,7 @@ function Nav({ page }: { page: PageName }) {
   };
   return (
     <header className="nav">
-      <div className="wrap">
+      <TopBar className="nav-bar">
         <Link to="/" className="brand">
           <Mark />
           minca
@@ -140,7 +141,7 @@ function Nav({ page }: { page: PageName }) {
           <a href={GITHUB} {...EXTERNAL} className="nav-icon" aria-label="GitHub">
             <GitHubMark />
           </a>
-          <a href={APP} {...EXTERNAL} className="btn btn-primary nav-open">
+          <a href={APP} {...EXTERNAL} data-intent="primary" className="nav-open">
             Open Minca
           </a>
           <button
@@ -154,7 +155,7 @@ function Nav({ page }: { page: PageName }) {
             <MenuMark />
           </button>
         </div>
-      </div>
+      </TopBar>
     </header>
   );
 }
@@ -639,10 +640,10 @@ export function Developers() {
               <span>$</span>
               <code>npm install @minca/core</code>
             </span>
-            <a href={DOCS} className="btn btn-secondary" {...EXTERNAL}>
+            <a href={DOCS} data-intent="secondary" {...EXTERNAL}>
               Read the docs
             </a>
-            <Link to="/protocol" className="btn btn-secondary">
+            <Link to="/protocol" data-intent="secondary">
               For supernerds
             </Link>
           </div>
@@ -760,10 +761,10 @@ export function Developers() {
           <h2>Build your first app.</h2>
           <p>Connect to your users' accounts, open a space, read and write. One short guide.</p>
           <div className="actions">
-            <a href={`${DOCS}/building-an-app.md`} className="btn btn-primary" {...EXTERNAL}>
+            <a href={`${DOCS}/building-an-app.md`} data-intent="primary" {...EXTERNAL}>
               Read the guide
             </a>
-            <Link to="/protocol" className="btn btn-secondary">
+            <Link to="/protocol" data-intent="secondary">
               How it works
             </Link>
           </div>

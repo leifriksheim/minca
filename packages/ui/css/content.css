@@ -201,7 +201,8 @@ table {
     vertical-align: top;
   }
 
-  & th {
+  /* A column's name; a row's name reads as the row does */
+  & thead th {
     color: var(--color-text-muted);
     font-size: var(--text-small);
     font-weight: 600;

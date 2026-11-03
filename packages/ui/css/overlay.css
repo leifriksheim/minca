@@ -39,7 +39,9 @@ menu {
   background: var(--color-surface);
   box-shadow: var(--shadow-float);
 
-  & button {
+  /* Its items, rows to press; buttons deeper in, in a form or a card, stay buttons */
+  & > button,
+  & > li > button {
     justify-content: flex-start;
     width: 100%;
     border: none;

@@ -27,16 +27,12 @@ export function Download() {
           <p>Your people, your plans, one click away.</p>
           <div className="actions">
             {ownDownload ? (
-              <Link {...downloadLink(ownDownload.kind)} className="btn btn-primary btn-lg">
+              <Link {...downloadLink(ownDownload.kind)} data-intent="primary">
                 <DownloadMark />
                 {ownDownload.label}
               </Link>
             ) : null}
-            <a
-              href={APP}
-              {...EXTERNAL}
-              className={`btn btn-lg ${ownDownload ? 'btn-secondary' : 'btn-primary'}`}
-            >
+            <a href={APP} {...EXTERNAL} data-intent={ownDownload ? 'secondary' : 'primary'}>
               Open in your browser
             </a>
           </div>
@@ -50,7 +46,7 @@ export function Download() {
               <Shape kind="flower" className="tile-art" />
               <h2>Mac</h2>
               <p>Apple silicon · macOS 14+</p>
-              <Link {...downloadLink('mac')} className="btn btn-primary">
+              <Link {...downloadLink('mac')} data-intent="primary">
                 Download
               </Link>
             </div>
@@ -60,7 +56,7 @@ export function Download() {
                 Windows <span className="tag">Preview</span>
               </h2>
               <p>64-bit</p>
-              <Link {...downloadLink('windows')} className="btn btn-primary">
+              <Link {...downloadLink('windows')} data-intent="primary">
                 Download
               </Link>
             </div>
@@ -79,7 +75,7 @@ export function Download() {
               <h2>Your spaces keep syncing.</h2>
               <p>Your spaces stay in sync while Chrome is open, even with Minca closed.</p>
               <div className="actions">
-                <Link {...downloadLink('chrome')} className="btn btn-primary">
+                <Link {...downloadLink('chrome')} data-intent="primary">
                   <ChromeMark />
                   Get the extension
                 </Link>

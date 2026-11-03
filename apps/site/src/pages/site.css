@@ -17,7 +17,7 @@
   line-height: 1.6;
   letter-spacing: -0.01em;
 }
-.site a {
+.site a:not([data-intent]) {
   color: inherit;
 }
 /* Headings set their own size; between them, text keeps the page's line */
@@ -68,9 +68,6 @@
 .site .shape {
   overflow: visible;
 }
-.site .morph {
-  transition: fill 0.9s ease;
-}
 
 /* Grid paper: faint ruled squares, fading out at the edges */
 .site .paper-grid {
@@ -90,17 +87,11 @@
   z-index: 10;
   padding: 12px 16px 0;
 }
-.site .nav .wrap {
-  /* The brand left, the links in the middle, GitHub and Open Minca right */
+/* The brand left, the links in the middle, GitHub and Open Minca right */
+.site .nav-bar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  max-width: 880px;
-  height: 56px;
-  padding: 0 8px 0 20px;
-  border: 1px solid var(--color-outline);
-  border-radius: var(--radius-control);
-  background: var(--color-page);
 }
 .site .brand {
   justify-self: start;
@@ -132,7 +123,7 @@
   color: inherit;
 }
 /* Pages, as tabs are everywhere: the one you're on filled, as a hover is */
-.site .nav-links a:not(.btn) {
+.site .nav-links a:not([data-intent]) {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -144,7 +135,7 @@
   color: var(--color-text-muted);
   transition: background-color 0.15s ease;
 }
-.site .nav-links a:not(.btn):is(:hover, [aria-current='page']) {
+.site .nav-links a:not([data-intent]):is(:hover, [aria-current='page']) {
   background: var(--color-sunken);
   color: var(--color-text-strong);
 }
@@ -205,48 +196,8 @@
   }
 }
 
-/* ─── Buttons: pills that change colour, and nothing else ─────────── */
+/* ─── Buttons are the system's (data-intent); a row of them ─── */
 
-.site .btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 40px;
-  padding: 0 18px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-control);
-  font-size: var(--text-body);
-  font-weight: 500;
-  text-decoration: none;
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    background-color 0.15s ease,
-    border-color 0.15s ease,
-    color 0.15s ease;
-}
-.site .btn-primary {
-  background: var(--color-action);
-  border-color: var(--color-action);
-  color: var(--color-on-action);
-}
-.site .btn-primary:hover {
-  background: var(--color-text-strong);
-  border-color: var(--color-text-strong);
-}
-.site .btn-secondary {
-  background: var(--color-page);
-  border-color: var(--color-outline);
-  color: var(--color-text-strong);
-}
-.site .btn-secondary:hover {
-  background: var(--color-sunken);
-}
-.site .btn-lg {
-  height: 50px;
-  padding: 0 26px;
-  font-size: 1rem;
-}
 .site .actions {
   display: flex;
   gap: 12px;
@@ -487,10 +438,10 @@
 .site .chrome-mark {
   flex: none;
 }
-.site .btn .download-mark {
+.site [data-intent] .download-mark {
   margin-right: 10px;
 }
-.site .btn .chrome-mark {
+.site [data-intent] .chrome-mark {
   margin-right: 8px;
 }
 .site .kicker-inline .chrome-mark {
@@ -547,7 +498,7 @@
   margin-top: 10px;
   color: var(--color-text-muted);
 }
-.site .platform .btn {
+.site .platform [data-intent] {
   margin-top: 32px;
 }
 /* The hero says enough: the tiles and the extension sit close under it */
@@ -735,25 +686,11 @@
   border-bottom: 1px solid var(--color-divider);
 }
 .site .faq summary {
-  display: flex;
   justify-content: space-between;
-  gap: 16px;
   padding: 20px 0;
   font-size: 1.125rem;
   font-weight: 500;
   color: var(--color-text-strong);
-  list-style: none;
-  cursor: pointer;
-}
-.site .faq summary::-webkit-details-marker {
-  display: none;
-}
-.site .faq summary::after {
-  content: '+';
-  color: var(--color-text-muted);
-}
-.site .faq details[open] summary::after {
-  content: '\2212';
 }
 .site .faq details p {
   margin: 0 0 20px;
@@ -1018,23 +955,6 @@
 /* Tabs: pill buttons in a row */
 .site .walk-step + .tabs {
   margin-top: 56px;
-}
-/* The system's tabs, set as pills on a line rather than in a track */
-.site .tabs {
-  gap: 4px;
-  padding: 0 0 12px;
-  border-bottom: 1px solid var(--color-divider);
-  border-radius: 0;
-  background: none;
-}
-.site .tabs [role='tab'] {
-  flex: none;
-  padding: 8px 14px;
-  font-size: var(--text-body);
-  line-height: inherit;
-}
-.site .tabs [role='tab']:hover {
-  background: var(--color-sunken);
 }
 .site .tab-panel {
   padding-top: 32px;
@@ -1393,64 +1313,16 @@
   background: var(--color-surface);
 }
 .site .table {
-  width: 100%;
   min-width: 760px;
-  border-collapse: collapse;
   font-size: var(--text-body);
 }
-.site .table th,
-.site .table td {
-  padding: 14px 16px;
-  text-align: left;
-  vertical-align: top;
-  border-bottom: 1px solid var(--color-divider);
-}
-.site .table tbody tr:last-child th,
-.site .table tbody tr:last-child td {
+.site .table tbody tr:last-child :is(th, td) {
   border-bottom: none;
 }
-.site .table thead th {
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  color: var(--color-text-strong);
-}
-.site .table tbody th {
-  width: 180px;
-  font-weight: 500;
-  color: var(--color-text-strong);
-}
-.site .table td {
-  color: var(--color-text-muted);
-}
-.site .table td:first-of-type {
+.site .table :is(th:first-child, td:first-of-type) {
   color: var(--color-text-strong);
 }
 
-/* Protocol page: the pieces, drawn like the front page's mock-ups */
-.site .mock {
-  display: grid;
-  place-items: center;
-  padding: 32px 24px;
-  border: 1px solid var(--color-outline);
-  border-radius: var(--radius-surface);
-  font-size: var(--text-small);
-}
-.site .mock > * {
-  width: 100%;
-  max-width: 380px;
-}
-.site .mock b {
-  font-weight: 600;
-  color: var(--color-text-strong);
-}
-.site .chip {
-  padding: 2px 8px;
-  border: 1px solid var(--color-divider);
-  border-radius: var(--radius-control);
-  background: var(--color-sunken);
-  font-size: 0.6875rem;
-  color: var(--color-text);
-}
 /* The protocol page's contents, set like a paper's: numbered parts, a dotted
    leader, and the standards each part stands on */
 .site .toc {
@@ -2142,48 +2014,6 @@
   }
 }
 
-/* A segmented control: pills in a sunken track */
-.site .toggle {
-  display: flex;
-  gap: 2px;
-  width: fit-content;
-  padding: 4px;
-  border-radius: var(--radius-control);
-  background: var(--color-sunken);
-}
-.site .toggle button {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 36px;
-  padding: 0 16px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-control);
-  background: none;
-  font: inherit;
-  font-size: var(--text-body);
-  font-weight: 500;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  transition:
-    color 0.15s ease,
-    background-color 0.15s ease,
-    border-color 0.15s ease;
-}
-.site .toggle button:hover {
-  color: var(--color-text-strong);
-}
-.site .toggle button[aria-pressed='true'] {
-  border-color: var(--color-outline);
-  background: var(--color-surface);
-  color: var(--color-text-strong);
-}
-.site .toggle button {
-  height: 30px;
-  padding: 0 14px;
-  font-size: var(--text-small);
-}
-
 .site .kept {
   padding: 2px 10px;
   border-radius: var(--radius-control);
@@ -2663,7 +2493,7 @@
   margin-left: -6px;
 }
 .site .hosting-chip-in {
-  height: 34px;
+  min-height: 34px;
   padding: 0 14px;
   font-size: var(--text-small);
 }
@@ -2877,9 +2707,6 @@
   .site .nav {
     padding: 8px 8px 0;
   }
-  .site .nav .wrap {
-    padding: 0 6px 0 16px;
-  }
   .site .hero {
     padding: 80px 0 64px;
   }
@@ -2979,7 +2806,7 @@
     background: var(--color-page);
     animation: nav-menu-in 0.15s ease;
   }
-  .site .nav-links:popover-open a:not(.btn) {
+  .site .nav-links:popover-open a:not([data-intent]) {
     min-height: 48px;
     padding: 0 16px;
     border-radius: var(--radius-control);
@@ -3003,10 +2830,6 @@
     width: 116px;
     background: var(--color-surface);
     box-shadow: inset -1px 0 0 var(--color-divider);
-  }
-  .site .table th,
-  .site .table td {
-    padding: 12px 14px;
   }
   /* Footer links far enough apart for a thumb */
   .site footer a {

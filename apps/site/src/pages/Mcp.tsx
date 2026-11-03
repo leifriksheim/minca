@@ -133,7 +133,7 @@ function Clients() {
           <h3>{client.name}</h3>
           <p>{client.how}</p>
           {client.link ? (
-            <a href={client.link.href} className="btn btn-primary btn-lg" target="_blank" rel="noreferrer">
+            <a href={client.link.href} data-intent="primary" target="_blank" rel="noreferrer">
               {client.link.label}
             </a>
           ) : (
@@ -314,10 +314,10 @@ export function Mcp() {
                 <Terminal text={MCP_URL} />
               </div>
               <div className="actions">
-                <a href={addToClaude()} className="btn btn-primary btn-lg" target="_blank" rel="noreferrer">
+                <a href={addToClaude()} data-intent="primary" target="_blank" rel="noreferrer">
                   Add to Claude ↗
                 </a>
-                <a href="#clients" className="btn btn-secondary btn-lg">
+                <a href="#clients" data-intent="secondary">
                   Other AI apps ↘
                 </a>
               </div>

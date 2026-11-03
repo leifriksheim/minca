@@ -538,10 +538,10 @@ export function Protocol() {
             with no server in the middle.
           </p>
           <div className="actions">
-            <a href={SPEC} {...EXTERNAL} className="btn btn-primary">
+            <a href={SPEC} {...EXTERNAL} data-intent="primary">
               Read the spec
             </a>
-            <Link to="/developers" className="btn btn-secondary">
+            <Link to="/developers" data-intent="secondary">
               Build with it
             </Link>
           </div>
@@ -598,10 +598,10 @@ export function Protocol() {
             each rule.
           </p>
           <div className="actions">
-            <a href={SPEC} {...EXTERNAL} className="btn btn-primary">
+            <a href={SPEC} {...EXTERNAL} data-intent="primary">
               Read the spec
             </a>
-            <Link to="/developers" className="btn btn-secondary">
+            <Link to="/developers" data-intent="secondary">
               For developers
             </Link>
           </div>

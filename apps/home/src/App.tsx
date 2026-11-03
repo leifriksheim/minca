@@ -1,3 +1,4 @@
+import { TopBar } from '@minca/app-shared/TopBar';
 import { useMinca } from '@minca/react';
 import { AccountHint } from './components/AccountHint';
 import { AccountNotices } from './components/AccountNotices';
@@ -27,13 +28,13 @@ export function App() {
   return (
     <>
       <header className={styles.nav}>
-        <div className={`row ${styles.bar}`}>
+        <TopBar className={`row ${styles.bar}`}>
           <span className="row">
             <Wordmark />
             <span className={styles.label}>Account</span>
           </span>
           <AccountSwitcher />
-        </div>
+        </TopBar>
         <nav role="tablist" aria-label="Account">
           {TABS.map((each) => (
             <button key={each.id} role="tab" aria-selected={tab === each.id} onClick={() => openTab(each.id)}>

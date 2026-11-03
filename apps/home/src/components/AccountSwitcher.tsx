@@ -61,8 +61,8 @@ export function AccountSwitcher() {
         <span>{session.account.name}</span>
       </button>
       {open && (
-        <div role="menu">
-          <div className={`stack ${styles.me}`}>
+        <menu role="menu">
+          <li className={`stack ${styles.me}`}>
             <Avatar did={session.did} size={64} round src={picture} />
             {renaming ? (
               <form
@@ -105,9 +105,9 @@ export function AccountSwitcher() {
               )}
               <button onClick={() => copy(session.did)}>{copied ? 'Copied' : 'Copy ID'}</button>
             </div>
-          </div>
+          </li>
           {others.length > 0 && (
-            <div className={styles.items}>
+            <li className={styles.items}>
               {others.map((account) => (
                 <button
                   key={account.id}
@@ -123,9 +123,9 @@ export function AccountSwitcher() {
                   </span>
                 </button>
               ))}
-            </div>
+            </li>
           )}
-          <div className={styles.items}>
+          <li className={styles.items}>
             <button
               role="menuitem"
               data-intent="ghost"
@@ -149,8 +149,8 @@ export function AccountSwitcher() {
               <span className={styles.plus} aria-hidden="true" />
               Sign out
             </button>
-          </div>
-        </div>
+          </li>
+        </menu>
       )}
     </div>
   );

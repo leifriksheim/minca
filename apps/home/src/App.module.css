@@ -29,12 +29,6 @@
 .bar {
   flex: none;
   justify-content: space-between;
-  width: 100%;
-  max-width: 880px;
-  height: 56px;
-  padding: 0 8px 0 20px;
-  border: 1px solid var(--color-outline);
-  border-radius: var(--radius-control);
 }
 
 /* What this is, after the wordmark: grey, set off by a hairline; a phone has no room for it */

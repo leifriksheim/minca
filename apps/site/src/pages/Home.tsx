@@ -116,10 +116,10 @@ function HeroActions() {
   if (platform === 'mobile') {
     return (
       <div className="actions">
-        <a href={APP} className="btn btn-primary btn-lg">
+        <a href={APP} data-intent="primary">
           Start a minca
         </a>
-        <a href="#why" className="btn btn-secondary btn-lg">
+        <a href="#why" data-intent="secondary">
           Why this matters
         </a>
       </div>
@@ -130,12 +130,12 @@ function HeroActions() {
     <>
       <div className="actions">
         {desktop ? (
-          <Link {...downloadLink(desktop)} className="btn btn-primary btn-lg">
+          <Link {...downloadLink(desktop)} data-intent="primary">
             <DownloadMark />
             {desktop === 'mac' ? 'Download for Mac' : 'Download for Windows'}
           </Link>
         ) : null}
-        <a href={APP} {...EXTERNAL} className={`btn btn-lg ${desktop ? 'btn-secondary' : 'btn-primary'}`}>
+        <a href={APP} {...EXTERNAL} data-intent={desktop ? 'secondary' : 'primary'}>
           Open Minca in your browser
         </a>
       </div>

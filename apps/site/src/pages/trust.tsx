@@ -163,7 +163,9 @@ const GROUP_CARD = (
         <b>$6 in the fund</b>
         <small>Ready for when you grow</small>
       </span>
-      <span className="btn btn-secondary hosting-chip-in">Chip in</span>
+      <button type="button" tabIndex={-1} className="hosting-chip-in">
+        Chip in
+      </button>
     </div>
   </div>
 );

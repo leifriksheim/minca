@@ -31,18 +31,6 @@
 }
 
 /* A row: a label, and a quieter line at its end */
-.item {
-  justify-content: flex-start;
-  width: 100%;
-  border: none;
-  background: none;
-  font-weight: 400;
-
-  &:hover:not(:disabled) {
-    background: var(--color-sunken);
-  }
-
-  & > small {
-    margin-left: auto;
-  }
+.item > small {
+  margin-left: auto;
 }
