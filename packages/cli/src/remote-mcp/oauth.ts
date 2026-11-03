@@ -16,8 +16,7 @@
  * the note, and disconnecting at the account home, which drops what it
  * opens, is what ends it sooner.
  *
- * The sealed grant is the grant's own fields only (`checkGranted`), a few
- * kilobytes a space, and goes when its note runs out. What else it keeps
+ * The sealed grant goes when its note runs out. What else it keeps
  * (registered apps, codes, sign-ins under way) is small, runs out, and holds
  * no key.
  */

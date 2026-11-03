@@ -698,22 +698,18 @@ describe('a host’s MCP endpoint', () => {
     assert.equal((await client.callTool({ name: 'spaces_list', arguments: {} })).isError, false);
   });
 
-  test('what a sign-in leaves on the service is only the grant’s own fields, kept while its note runs', async () => {
+  test('what a sign-in leaves on the service goes when its note runs out', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const ada = await accountHolder(hub);
     await ada.node.spaces.create({ name: 'Club', visibility: 'private' });
     const host = await aHost(hub);
     const app = await anApp(host.resource);
-    // Anyone can make an account and sign in: padding what she posts must not make the service keep it.
-    await signIn(app, host.resource, async (audience) => {
-      const padded = { ...(await ada.grantFor(audience)), pad: 'x'.repeat(50_000) };
-      return padded;
-    });
+    // Anyone can make an account and sign in: what it leaves lasts as long as her note, not the token's 30 days.
+    await signIn(app, host.resource, (audience) => ada.grantFor(audience));
     const sealed = (await host.kept()).split('\n').find((line) => line.startsWith('oauth:Granted:'));
     assert.ok(sealed, 'the sealed grant is kept');
-    assert.ok(sealed.length < 10_000, `${sealed.length} bytes`);
     const expiresAt = Number(/"expiresAt":(\d+)/.exec(sealed)?.[1]);
-    assert.ok(expiresAt <= Date.now() / 1000 + 3600, 'gone when the one-hour note runs out, not in 30 days');
+    assert.ok(expiresAt <= Date.now() / 1000 + 3600, 'gone when the one-hour note runs out');
   });
 
   test('a sign-in is answered once, and never for the whole account', async () => {

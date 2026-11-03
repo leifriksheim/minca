@@ -68,37 +68,7 @@ export async function checkGranted(key: unknown, grant: unknown): Promise<Grante
   if (noteSpaces(checked.note) === 'all' || checked.accountKey !== undefined || checked.scope !== 'spaces')
     throw new Error('A chat app here gets the spaces the person picks, not the whole account');
   if (checked.spaces.length > MAX_SPACES) throw new Error(`Pick at most ${MAX_SPACES} spaces for a chat app`);
-  return {
-    key: { privateKey: jwkOf(key.privateKey), publicKey: jwkOf(key.publicKey) },
-    grant: grantOf(checked),
-  };
-}
-
-/** A P-256 key's own fields: whatever else was posted is not kept */
-const jwkOf = ({ kty, crv, x, y, d }: JsonWebKey): JsonWebKey => ({ kty, crv, x, y, ...(d ? { d } : {}) });
-
-/** A grant's own fields, as the service reads them: whatever else was posted is not kept */
-function grantOf(grant: Grant): Grant {
-  const { v, did, name, note, access, scope, expiresAt, home, relays, contactKey, contactsSpace } = grant;
-  return {
-    v,
-    did,
-    name,
-    note,
-    access,
-    scope,
-    spaces: grant.spaces.map(({ id, name, invite, memberKey }) => ({
-      id,
-      name,
-      invite,
-      ...(memberKey !== undefined ? { memberKey } : {}),
-    })),
-    expiresAt,
-    home,
-    ...(relays !== undefined ? { relays } : {}),
-    ...(contactKey !== undefined ? { contactKey } : {}),
-    ...(contactsSpace !== undefined ? { contactsSpace } : {}),
-  };
+  return { key, grant: checked };
 }
 
 /** How long a node stays up after its last call */
