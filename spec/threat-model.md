@@ -1082,6 +1082,8 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     app then acts in their spaces, unless it ties OAuth's `state` to the
     browser that started it; the service can't tell. What a stranger can make
     it keep or do is an app's registration, gone after a day unless used;
+    each sign-in's sealed grant, its own fields only, a few kilobytes a
+    space, until its note runs out, at most a month;
     nodes that run while called, each with up to 8 spaces those always-on
     nodes carry, in memory, and up to an hour after for writes their keepers
     don't have; each a few bytes of places for a key that wrote, for a

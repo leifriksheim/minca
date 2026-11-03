@@ -316,7 +316,9 @@ and its tools arrive.
 
 The service keeps little per connection: the key and note, sealed, which
 neither its disk nor a token opens alone (the token stays small however many
-spaces you pick), and each call opens them and starts a node from them. That
+spaces you pick), and each call opens them and starts a node from them. So
+its data folder holds what opens every connection with its token: lose it and
+every chat app connects again. That
 node holds your spaces in memory while the app uses it (at most 32 MB), and
 reaches them as any device would: through the always-on nodes your invites
 and spaces name, such as your free host, so it works with every device of

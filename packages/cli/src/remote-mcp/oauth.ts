@@ -16,8 +16,10 @@
  * the note, and disconnecting at the account home, which drops what it
  * opens, is what ends it sooner.
  *
- * What else it keeps (registered apps, codes, sign-ins under way) is small,
- * runs out, and holds no key.
+ * The sealed grant is the grant's own fields only (`checkGranted`), a few
+ * kilobytes a space, and goes when its note runs out. What else it keeps
+ * (registered apps, codes, sign-ins under way) is small, runs out, and holds
+ * no key.
  */
 import Provider, { errors, type Adapter, type AdapterPayload, type Configuration } from 'oidc-provider';
 import type { IncomingMessage } from 'node:http';
@@ -321,11 +323,12 @@ export async function createOAuth(options: OAuthOptions) {
       const granted = await pending.take(token.accountId);
       if (!granted) throw new errors.InvalidGrant('what was allowed has run out; connect again');
       const key = globalThis.crypto.getRandomValues(new Uint8Array(32));
+      // Kept only while its note runs: the token is no use after.
       await options.store.put(
         `${GRANTED}${token.jti}`,
         encode({
           payload: { sealed: await seal(key, token.jti, granted) },
-          expiresAt: now() + ACCESS_TOKEN_SECONDS,
+          expiresAt: Math.min(granted.grant.note.payload.exp ?? 0, now() + ACCESS_TOKEN_SECONDS),
         }),
       );
       return { minca: base64url(key) };
@@ -335,7 +338,7 @@ export async function createOAuth(options: OAuthOptions) {
       // Any app may register itself; the person sees its name and where it sends them back before allowing it.
       // No token to manage a registration with afterwards: this service offers none of that.
       registration: { enabled: true, issueRegistrationAccessToken: false },
-      // A sealed token is the service's to read, not to remember: there is nothing here to revoke.
+      // A token ends when its key is revoked in a space, at the account home: nothing for an app to revoke here.
       revocation: { enabled: false },
       userinfo: { enabled: false },
       rpInitiatedLogout: { enabled: false },
