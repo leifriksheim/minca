@@ -35,6 +35,7 @@ export function Avatar({
         height={size}
         alt="Account avatar"
         className={styles.avatar}
+        // eslint-disable-next-line react/forbid-dom-props -- the corner and ground come from the account
         style={{ borderRadius: avatarRadius(size, round), background: ground }}
       />
     );
@@ -47,6 +48,7 @@ export function Avatar({
       role="img"
       aria-label="Account avatar"
       className={styles.avatar}
+      // eslint-disable-next-line react/forbid-dom-props -- the corner and ground come from the account
       style={{ borderRadius: avatarRadius(size, round), background: ground }}
     >
       <path d={d} fill={fill} transform={avatarFit(round)} />

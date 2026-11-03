@@ -126,6 +126,7 @@ export function PartyMark({ party, size = 28 }: { party: Pick<PartyFull, 'name' 
       aria-hidden
       className={styles.mark}
       data-light={LIGHT.has(mark.colour) || undefined}
+      // eslint-disable-next-line react/forbid-dom-props -- its size, from the props
       style={{ '--size': `${size}px` }}
     >
       <Shape {...mark} size={size} />
@@ -208,8 +209,11 @@ export function Meter({ tally, size }: { tally: Tally; size?: 'lg' }) {
       role="img"
       aria-label={`${tally.for} for, ${tally.against} against, ${tally.abstain} abstaining, ${tally.uncast} not cast`}
     >
+      {/* eslint-disable-next-line react/forbid-dom-props -- each share of the tally */}
       <span data-choice="for" style={{ width: pct(tally.for) }} />
+      {/* eslint-disable-next-line react/forbid-dom-props -- each share of the tally */}
       <span data-choice="against" style={{ width: pct(tally.against) }} />
+      {/* eslint-disable-next-line react/forbid-dom-props -- each share of the tally */}
       <span data-choice="abstain" style={{ width: pct(tally.abstain) }} />
     </div>
   );

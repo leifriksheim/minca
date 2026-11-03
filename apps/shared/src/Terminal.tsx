@@ -1,4 +1,3 @@
-import type { CSSProperties } from 'react';
 import { useCopy } from './action';
 import styles from './Terminal.module.css';
 
@@ -10,11 +9,11 @@ const kindOf = (word: string) =>
  * A line to paste, on one dark row with a copy icon at its end: a command gets a `$` before it, an
  * address goes as it is. The site's MCP page and the apps' "Connect an agent" both use it.
  */
-export function Terminal({ text, style }: { text: string; style?: CSSProperties }) {
+export function Terminal({ text }: { text: string }) {
   const { copied, copy } = useCopy();
   const command = !/^https?:\/\//.test(text);
   return (
-    <div className={styles.terminal} style={style}>
+    <div className={styles.terminal}>
       <code>
         {command && <span data-kind="prompt">$ </span>}
         {text.split(' ').map((word, i) => (

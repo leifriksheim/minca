@@ -1,4 +1,3 @@
-import type { CSSProperties } from 'react';
 import { type ShapeKind } from '@minca/ui/shapes';
 import { Shape } from './shapes';
 import type { ShapeColour } from '@minca/ui/tokens';
@@ -26,7 +25,6 @@ export function Loader({
   label = 'Loading',
   showLabel = false,
   decorative = false,
-  style,
 }: {
   /** Each shape's width and height in pixels */
   size?: number;
@@ -36,27 +34,20 @@ export function Loader({
   showLabel?: boolean;
   /** Just the shapes, as ornament: no status for screen readers */
   decorative?: boolean;
-  style?: CSSProperties;
 }) {
   return (
     <span
       className={styles.loader}
       role={decorative ? undefined : 'status'}
       aria-hidden={decorative || undefined}
+      // eslint-disable-next-line react/forbid-dom-props -- the spacing scales with the shapes' size
       style={{
         gap: Math.round(size * 0.3),
         paddingTop: Math.round(size * 0.4),
-        ...style,
       }}
     >
-      {HANDS.map((hand, i) => (
-        <Shape
-          key={hand.kind}
-          kind={hand.kind}
-          colour={hand.colour}
-          size={size}
-          style={{ animationDelay: `${i * 0.12}s` }}
-        />
+      {HANDS.map((hand) => (
+        <Shape key={hand.kind} kind={hand.kind} colour={hand.colour} size={size} />
       ))}
       {decorative ? null : showLabel ? (
         <small>{label}…</small>

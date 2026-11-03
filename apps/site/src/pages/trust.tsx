@@ -134,6 +134,7 @@ function Used({ label, used, of, share }: { label: string; used: string; of: str
         </b>
       </span>
       <div className="hosting-meter">
+        {/* eslint-disable-next-line react/forbid-dom-props -- the share of the fund used */}
         <span style={{ width: `${share * 100}%` }} />
       </div>
     </div>

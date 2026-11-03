@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Shape } from './shapes';
 
 /** Line glyphs on a 16-unit grid, drawn with the current colour, like the example's icons */
@@ -20,7 +20,7 @@ const GLYPHS = {
 } as const;
 export type GlyphName = keyof typeof GLYPHS;
 
-export function Glyph({ name, size = 16, style }: { name: GlyphName; size?: number; style?: CSSProperties }) {
+export function Glyph({ name, size = 16 }: { name: GlyphName; size?: number }) {
   return (
     <svg
       width={size}
@@ -32,7 +32,6 @@ export function Glyph({ name, size = 16, style }: { name: GlyphName; size?: numb
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden
-      style={style}
     >
       <path d={GLYPHS[name]} />
     </svg>

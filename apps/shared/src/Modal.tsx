@@ -47,6 +47,7 @@ export function Modal({
       ref={box}
       aria-label={title}
       className={styles.modal}
+      // eslint-disable-next-line react/forbid-dom-props -- the width a caller asks for
       style={width ? { maxWidth: width } : undefined}
       onClick={beside}
       onCancel={(event) => {

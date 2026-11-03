@@ -29,8 +29,11 @@ apps and the site import it, and the kit writes it into every app's screen.
 | `src/avatar.ts`    | An account's avatar, two round shapes blended by its DID                                                |
 | `src/frame/`       | The kit an app's screen draws with: Preact, people's faces, comments, places                            |
 
-`src/tokens.ts` and `apps/shared/src/styles.ts` are the old way, inline styles
-from values, and go as the apps move onto `css/`.
+`src/tokens.ts` holds only the colours JavaScript draws with itself (shapes,
+avatars, the extension's badge), the same values as `css/tokens.css`. React
+components the apps share are in `apps/shared`; each one's own layout is a CSS
+module beside it, on the tokens. Inline styles are refused by the linter except
+for a value computed from data, said so on its line.
 
 ## The rules
 
@@ -68,31 +71,32 @@ from values, and go as the apps move onto `css/`.
 
 ## Type
 
-- **Bricolage Grotesque** (`display`) for page titles, section headings, dialog
+- **Bricolage Grotesque** (`--font-display`) for page titles, section headings, dialog
   titles and the wordmark: weight 700, tight tracking (`-0.04em`).
-- **Geist** (`font`) for everything else, **Geist Mono** (`mono`) for code and ids.
-- `FONTS_HREF` is the stylesheet that loads all three; every web page links it.
+- **Geist** (`--font-body`) for everything else, **Geist Mono** (`--font-mono`) for code and ids.
+- Every web page links the Google Fonts stylesheet for all three in its `index.html`.
   The extension bundles its own copies instead (`apps/extension/static/fonts/`),
   so it never calls Google when the popup opens.
 
 ## Shape and line
 
-- **Every corner is round, on one scale** (`radius`): `sm` for tags and code
-  chips, `md` for rows, inputs and cards inside a surface, `lg` for surfaces
-  (cards, panels, menus, dialogs), `xl` for the big frames on a page. Nothing
+- **Every corner is round, on one scale**: `--radius-small` for marks and
+  code chips, `--radius` for rows, fields and things inside a surface,
+  `--radius-surface` for surfaces (cards, lists, menus, dialogs),
+  `--radius-frame` for the big frames on a page. Nothing
   is square, and nothing picks a size off the scale.
 - **Things you press are pills**: buttons, tabs, toggles, tags, the nav.
-  Fields to type or choose in (inputs, selects, text boxes) take the `md`
-  corner, like a row.
-- **One line for edges.** The navy rule (`surface.rule`), one pixel, draws the
+  Fields to type or choose in (inputs, selects, text boxes) take a row's
+  corner (`--radius`).
+- **One line for edges.** The navy rule (`--color-outline`), one pixel, draws the
   edge of anything that stands on the page: a card, a frame, the nav, a
-  secondary button, the footer. **Hairlines** (`surface.line`) only separate
+  secondary button, the footer. **Hairlines** (`--color-divider`) only separate
   things _inside_ a surface, like rows in a list.
 - **Ruled grids** set things side by side: cells share navy rules, with no
   gaps, inside one rounded frame. A cell may carry a small italic number
   (`01`, `v2`).
 - **Shadows are soft and rare.** Only what floats over the page (a menu, a
-  dialog, a popover) has one (`shadow.float`, `shadow.small`). Nothing blurs
+  dialog, a popover) has one (`--shadow-float`). Nothing blurs
   what is behind it.
 
 ## Colour tiles
@@ -103,8 +107,8 @@ tile: one shape colour mixed into the paper, the navy rule round it, the `xl`
 corner, and that colour's shape, big, half off one corner, turning a little
 on hover.
 
-- The ground is the colour at `--minca-tint-tile` (28%) for a tile, or
-  `--minca-tint-panel` (14%) for a wide panel with words to read on it.
+- The ground is the colour mixed into the paper at 28% for a tile, or 14%
+  for a wide panel with words to read on it (`article[data-hue]` is the latter).
 - Text on a tile is navy, as on the page. Never white, and never on solid
   colour: the front page's panel used to be cobalt, and is a tile now.
 - One shape per tile, the same colour as its ground. Tiles side by side take
@@ -116,7 +120,7 @@ on hover.
 
 The look is 70s print, kept clean: flat colour on paper, and room around it.
 
-- **Grid paper**: a faint `surface.line` grid behind a hero or a frame, fading
+- **Grid paper**: a faint `--color-divider` grid behind a hero or a frame, fading
   out at its edges. Never behind text that has to be read at length.
 - **The rainbow**: the mark's four bands, as big arcs rising from the edge of
   a panel. Once per page.

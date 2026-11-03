@@ -833,6 +833,7 @@ export function GraphView({
           <article
             className={styles.tooltip}
             // Beside the dot pointed at, kept inside the map
+            // eslint-disable-next-line react/forbid-dom-props -- the tooltip sits where the pointer is
             style={{
               left: clamp(view.x + hoverAt.x * k + 14, 8, Math.max(8, size.w - 240)),
               top: clamp(view.y + hoverAt.y * k + 14, 8, size.h - 70),

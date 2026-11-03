@@ -40,6 +40,7 @@ export function SpaceMark({ space, size = 40 }: { space: Pick<SpaceSummary, 'id'
       aria-hidden
       className={styles.mark}
       data-light={LIGHT.has(shape.colour) || undefined}
+      // eslint-disable-next-line react/forbid-dom-props -- the letter scales with the mark's size
       style={{ fontSize: size }}
     >
       <Shape {...shape} size={size} />

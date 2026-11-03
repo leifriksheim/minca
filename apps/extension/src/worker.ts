@@ -8,7 +8,7 @@
  * updated, when any page asks, and on a one-minute alarm in case Chrome closed
  * it for any reason.
  */
-import { accent, ink } from '@minca/ui/tokens';
+import { state } from '@minca/ui/tokens';
 import type { CarrierStatus, WorkerMessage } from './shared';
 
 const OFFSCREEN = 'offscreen.html';
@@ -39,22 +39,22 @@ async function ensureOffscreen(): Promise<void> {
 function showBadge(status: CarrierStatus): void {
   const podNeedsYou = status.pod.state === 'not-picked' || status.pod.state === 'needs-permission';
   let text = '';
-  let color: string = ink.strong;
+  let color: string = state.ink;
   let title = 'Minca';
   if (status.state === 'not-connected') {
     title = status.removed ? 'Minca — disconnected by your account' : 'Minca — not connected yet';
   } else if (status.state === 'error') {
     text = '!';
-    color = accent.danger;
+    color = state.danger;
     title = `Minca — ${status.error ?? 'something went wrong'}`;
   } else if (podNeedsYou) {
     text = '!';
-    color = accent.warn;
+    color = state.warn;
     title = 'Minca — your pod needs a click to keep syncing';
   } else if (status.state === 'running') {
     // A small green mark: carrying.
     text = ' ';
-    color = accent.good;
+    color = state.good;
     const carried = status.spaces.filter((space) => !space.carry).length;
     title = `Minca — keeping ${carried} space${carried === 1 ? '' : 's'} online`;
   }
