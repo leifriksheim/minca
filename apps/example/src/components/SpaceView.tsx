@@ -26,6 +26,7 @@ import { OpenWith } from './apps/OpenWith';
 import { AppIcon, Count } from './apps/AppIcon';
 import { CreateApp } from './apps/CreateApp';
 import { MadeAppScreen } from './apps/MadeApps';
+import { showsRecord } from './apps/launcher';
 import { Bell } from './Bell';
 import { fills, useSpaceApps, type AppEntry } from './apps/entries';
 import { NEW } from './DataView';
@@ -272,12 +273,15 @@ function SpaceView({ space }: { space: SpaceSummary }) {
       replace: !tapped,
     });
   };
-  // In Data, a record opens in its own collection. Elsewhere it opens in the app that shows its
-  // collection, so a message opens in the chat: the open one if it does, else the only one, else
-  // the person picks one. With none, or when that app asks (`here`) to open one of its own,
-  // beside what is open.
-  const showing = (collection: string) =>
-    apps.ready.filter((app) => app.record.body?.shows?.includes(collection) === true);
+  // In Data, a record opens in its own collection. Elsewhere it opens in the app that shows it,
+  // so a message opens in the chat: the open one if it does, else the only one, else the person
+  // picks one. Apps naming its kind come first (`showsRecord`), so a Bills tab opens in Bills, not
+  // Lists. With none, or when that app asks (`here`) to open one of its own, beside what is open.
+  const showing = (r: NodeRecord) => {
+    const named = apps.ready.map((app) => ({ app, closeness: showsRecord(app.record.body?.shows, r) }));
+    const closest = Math.max(0, ...named.map((one) => one.closeness));
+    return closest === 0 ? [] : named.filter((one) => one.closeness === closest).map((one) => one.app);
+  };
   const openIn = (r: NodeRecord, app: AppEntry) =>
     void navigate({
       to: '/spaces/$spaceId/apps/$appId',
@@ -291,7 +295,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
         params,
         search: { collection: r.collection, record: r.key },
       });
-    const can = here ? [] : showing(r.collection);
+    const can = here ? [] : showing(r);
     const app = can.find((one) => one.id === open?.id) ?? (can.length === 1 ? can[0] : undefined);
     if (app) return openIn(r, app);
     if (can.length > 1) return setChoosing(r);
@@ -534,13 +538,13 @@ function SpaceView({ space }: { space: SpaceSummary }) {
           collections={collections}
           onOpen={openRecord}
           onClose={closeRecord}
-          onOpenWith={(r) => (showing(r.collection).length > 1 ? () => setChoosing(r) : undefined)}
+          onOpenWith={(r) => (showing(r).length > 1 ? () => setChoosing(r) : undefined)}
         />
       )}
 
       {choosing && (
         <OpenWith
-          apps={showing(choosing.collection)}
+          apps={showing(choosing)}
           onClose={() => setChoosing(null)}
           onChoose={(app) => {
             setChoosing(null);
@@ -589,7 +593,7 @@ export function OpenApp({ app }: { app: AppEntry }) {
       space={space}
       record={app.record}
       collections={collections}
-      onOpen={(r) => openRecord(r, app.record.body?.shows?.includes(r.collection))}
+      onOpen={(r) => openRecord(r, showsRecord(app.record.body?.shows, r) > 0)}
       shown={shown}
       onShown={clearShown}
       view={view}

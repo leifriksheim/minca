@@ -241,7 +241,14 @@ function Proposal({
           {body?.shows?.length ? (
             // What opens here is what it learns the person opens, from anywhere in the space.
             <p style={{ ...styles.quiet, lineHeight: 1.5 }}>
-              {body.shows.map((name) => collections.find((c) => c.name === name)?.title ?? name).join(', ')}{' '}
+              {body.shows
+                .map((name) => {
+                  // `std.list:tab`: the lists of one kind
+                  const [shown = name, kind] = name.split(':');
+                  const title = collections.find((c) => c.name === shown)?.title ?? shown;
+                  return kind ? `${title} (${kind})` : title;
+                })
+                .join(', ')}{' '}
               opened anywhere in {space.name} can open here.
             </p>
           ) : null}

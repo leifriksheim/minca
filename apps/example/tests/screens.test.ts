@@ -24,7 +24,7 @@ import {
   poll,
   useSchemas as addSchemas,
 } from '@minca/core/schemas';
-import { checkLauncherApp } from '../src/components/apps/launcher';
+import { checkLauncherApp, showsRecord } from '../src/components/apps/launcher';
 import { setup, waitFor } from './helpers';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -745,6 +745,25 @@ describe('a record opened from elsewhere', () => {
       checkLauncherApp({ ...app, shows: ['std.file'] }) ?? '',
       /std\.file is not one of its collections/,
     );
+    const bills = { title: 'Bills', collections: ['std.expense', 'std.list'], shows: ['std.list:tab'] };
+    assert.equal(checkLauncherApp(bills), null, 'a kind of a collection it has');
+    assert.match(
+      checkLauncherApp({ ...bills, collections: ['std.expense'] }) ?? '',
+      /std\.list:tab is not one of its collections/,
+    );
+  });
+
+  test('a record opens in the apps that name it most closely: its kind, then its collection', () => {
+    const tab = { collection: 'std.list', body: { title: 'Norway', kind: 'tab' } };
+    const checklist = { collection: 'std.list', body: { title: 'Packing', kind: 'checklist' } };
+    const bills = ['std.expense', 'std.list:tab'];
+    const lists = ['std.list'];
+    assert.equal(showsRecord(bills, tab), 2);
+    assert.equal(showsRecord(lists, tab), 1, 'Lists could show it, but Bills names its kind');
+    assert.equal(showsRecord(bills, checklist), 0, 'Bills names only its tabs');
+    assert.equal(showsRecord(lists, checklist), 1);
+    assert.equal(showsRecord(bills, { collection: 'std.list', body: { title: 'No kind' } }), 0);
+    assert.equal(showsRecord(undefined, tab), 0);
   });
 });
 

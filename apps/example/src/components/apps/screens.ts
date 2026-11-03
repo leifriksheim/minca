@@ -134,7 +134,7 @@ Inside it, window.minca is:
   await minca.open({ record: key, link: 'about' })   opens what that record links to with that role, of any collection:
                                     the message a file was shared on, say
   minca.shown()                     the key of the record this app was last asked to show, or null; minca.onShow(callback)
-                                    calls back with each new one: a record of a collection in "shows", opened from anywhere
+                                    calls back with each new one: a record "shows" names, opened from anywhere
   await minca.file(key, ref)        a picture one of these records refers to ({ hash, mime, … } in its body), as a data: URL,
                                     made smaller when it is large; null if it isn't a picture or can't be shown
   await minca.blob(key, ref)        the whole file one of these records refers to, as a Blob of its type: for video, audio,

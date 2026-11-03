@@ -83,7 +83,7 @@ export const TEMPLATES: ReadonlyArray<Template> = [
       description:
         'Every file shared in the space, from chats and boards alike: by kind, size and name, and in categories of your own.',
       collections: [file.name, list.name, listItem.name],
-      shows: [file.name],
+      shows: [file.name, `${list.name}:category`, `${list.name}:folder`, `${list.name}:album`],
       screen: files,
     },
     needs: [file, list, listItem],
@@ -131,7 +131,7 @@ export const TEMPLATES: ReadonlyArray<Template> = [
       description:
         'Split what you spend together, on a tab for each trip, flat or dinner, and settle up in as few payments as can be.',
       collections: [expense.name, settlement.name, comment.name, list.name, listItem.name],
-      shows: [expense.name],
+      shows: [expense.name, `${list.name}:tab`],
       notify: [
         notifyOn('Expenses I owe a part of', expense.name, { owedBy: { $contains: '$me' } }),
         notifyOn('Paid back to me', settlement.name, { to: '$me' }),
