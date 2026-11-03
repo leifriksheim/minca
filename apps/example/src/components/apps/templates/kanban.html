@@ -416,7 +416,7 @@
             ${notes && html`<span title="Has a description">≡</span>`}
             ${checklist.length > 0 && html`<span title="Checklist">☑ ${done}/${checklist.length}</span>`}
             ${comments > 0 && html`<span title="Comments">💬 ${comments}</span>`}
-            ${files > 0 && html`<span title="Attachments">📎 ${files}</span>`}
+            ${files > 0 && html`<span class="row" data-gap="tight" title="Attachments"><${Icon} name="attach" size=${14} /> ${files}</span>`}
           </small>
           ${
             faces.length > 0 &&

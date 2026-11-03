@@ -3,8 +3,9 @@
  * vocabulary. Screens use the components, never these classes.
  */
 
-/* A person: face and name, a click opens their card */
-.person {
+/* A person: face and name, a click opens their card. button.person, so the base button's hover (a
+   background) can't outrank this one's (an underline). */
+button.person {
   gap: 6px;
   min-height: 0;
   padding: 0;

@@ -13,6 +13,7 @@ import { useBlob, useFile, useRecords } from './hooks';
 import { html } from './html';
 import { Modal } from './modal';
 import type { ScreenRecord } from './minca';
+import { Icon } from './shapes';
 
 const FILE = 'std.file';
 
@@ -129,7 +130,7 @@ function Attachment({ record }: { record: ScreenRecord<AttachmentBody> }) {
         <//>`
       }`;
   return html`<button type="button" class="attachment" title="Save it" onClick=${save}>
-    <span aria-hidden="true">📎</span>
+    <${Icon} name="attach" size=${16} />
     <span class="truncate">${name}</span>
     <small>${sizeOf(size)}</small>
   </button>`;
