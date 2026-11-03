@@ -221,7 +221,7 @@
     </li>`;
   }
 
-  /** A row to type something new into: Enter adds it, and with `keep` the field stays for the next */
+  /** A row to type something new into: Enter adds it (no button, so the row never changes size), and with `keep` the field stays for the next */
   function AddRow({ placeholder, onAdd, keep, initial = '', onCancel }) {
     const [text, setText] = useState(initial);
     const [busy, setBusy] = useState(false);
@@ -254,7 +254,6 @@
         onInput=${(e) => setText(e.currentTarget.value)}
         onKeyDown=${(e) => e.key === 'Escape' && onCancel?.()}
       />
-      ${text.trim() && html`<button type="submit" data-intent="primary" disabled=${busy}>${keep ? 'Add' : 'Save'}</button>`}
     </form>`;
   }
 
