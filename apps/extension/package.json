@@ -14,8 +14,8 @@
     "@minca/ui": "*"
   },
   "devDependencies": {
-    "@types/chrome": "^0.3.5",
-    "esbuild": "^0.28.0",
+    "@types/chrome": "^0.3.6",
+    "esbuild": "^0.28.2",
     "typescript": "^7.0.2"
   }
 }

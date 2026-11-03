@@ -16,10 +16,10 @@
     "@minca/core": "*",
     "@minca/react": "*",
     "@minca/ui": "*",
-    "@tanstack/react-router": "^1.170.44",
+    "@tanstack/react-router": "^1.170.46",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "sugar-high": "^2.4.1"
+    "sugar-high": "^2.6.4"
   },
   "devDependencies": {
     "@mcp-b/webmcp-types": "^4.0.0",
