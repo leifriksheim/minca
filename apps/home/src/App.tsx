@@ -30,7 +30,7 @@ export function App() {
         <div className={`row ${styles.bar}`}>
           <span className="row">
             <Wordmark />
-            <h2>Account</h2>
+            <span className={styles.label}>Account</span>
           </span>
           <AccountSwitcher />
         </div>
