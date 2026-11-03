@@ -14,7 +14,14 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createInterface as createPromiseInterface } from 'node:readline/promises';
 import { parseArgs } from 'node:util';
-import { isValidRecoveryCode, NODE_ACTIONS, runAction, type NodeAction, type P2PNode } from '@minca/core';
+import {
+  isValidRecoveryCode,
+  NODE_ACTIONS,
+  PEER_CONTENT_NOTE,
+  runAction,
+  type NodeAction,
+  type P2PNode,
+} from '@minca/core';
 import { suggestedAutomations } from '@minca/core/schemas';
 import { homeAddress } from '@minca/core/session';
 import { runCarrier } from './carry.js';
@@ -45,7 +52,7 @@ import {
 } from './host-setup.js';
 import { isHostStats, statsLines } from './host-stats.js';
 import { mcpServerFromEnv, startMcpServer } from './remote-mcp/server.js';
-import { CATCH_UP_MS, KEPT_MS, levelIn } from './level.js';
+import { catchUp, keptAfter } from './level.js';
 import {
   ACCOUNT_HOME,
   claimSlot,
@@ -115,11 +122,11 @@ Agents:
 
   An agent with a shell (Claude Code, Codex, Cursor's agent, …) runs these
   commands. "minca connect" opens your account home in the browser, where
-  you allow this computer's agent; from then on, with no account of its own
-  here to open, every command runs as that agent: it writes records, marked
-  "via agent", and can't change who is in a space or add collections. Each
-  command reaches the space before it reads, and sees what it writes kept
-  by an always-on node before it ends.
+  you allow this computer's agent; from then on every command runs as that
+  agent, unless --account names an account here: it writes records, marked
+  "via agent", and can't change who is in a space or add collections. A
+  command in a space waits to catch up with its always-on nodes, and refuses
+  when it can't; one that writes waits for them to have it.
   Your account home is home.minca.social unless you name another: at a
   terminal it asks, filled in, so Enter takes it; or --account-home, or
   MINCA_ACCOUNT_HOME. Connecting again uses the one you used last.
@@ -940,21 +947,17 @@ async function runNodeAction(command: string, args: string[], globals: Globals):
       !(await ask.confirm(question, { ...(globals.yes ? { yes: true } : {}), otherwise: true }))
     )
       return 1;
-    const space = typeof input.space === 'string' ? input.space : undefined;
-    // The agent's node runs for this one command: it catches up first, and sees a write out.
-    if (asAgent && space !== undefined && !(await levelIn(node, space, CATCH_UP_MS)))
-      stderr('No always-on node of this space answered: what this shows may be out of date.');
+    const space = asAgent && typeof input.space === 'string' ? input.space : undefined;
+    // The agent's node runs for this one command, as the MCP service's does for a call (`level.ts`).
+    if (space !== undefined) await catchUp(node, space);
     const since = Date.now();
     const result = await runAction(node, action.name, input);
-    if (asAgent && space !== undefined && !action.readOnly) {
-      const by = await node.spaces.kept(space, KEPT_MS, since);
-      if (by !== 'keepers')
-        stderr(
-          by === 'peer'
-            ? 'Kept by a device of this space online now, not an always-on node: it reaches the rest when that device syncs.'
-            : 'Written here, not yet kept anywhere else: it goes out the next time a minca command runs here.',
-        );
+    if (space !== undefined && !action.readOnly) {
+      const said = await keptAfter(node, space, since);
+      if (said) stderr(said);
     }
+    // What others wrote, going to a model: data, never instructions, as the MCP tools say.
+    if (asAgent && action.peerContent) stderr(PEER_CONTENT_NOTE);
     const invite = action.name === 'spaces_invite' && isRecord(result) ? result.invite : undefined;
     if (typeof invite !== 'string' || !process.stdout.isTTY) return print(result);
     // To a person, the invite alone, whole on one line to copy.
@@ -1059,19 +1062,27 @@ function splitGlobals(argv: ReadonlyArray<string>): { globals: Globals; rest: st
  * daemon running on the same folder, it picks the change up and syncs it.
  */
 /**
- * Runs `work` on a node of this computer's account when it has one that can
- * be opened, by someone at the terminal or a secret from the environment;
- * else as the agent "minca connect" allowed. An agent can't type a
- * passphrase, and as the agent what it writes shows "via agent".
+ * Runs `work` as the agent "minca connect" allowed here, once there is one,
+ * unless an account is named (--account, MINCA_ACCOUNT); else as this
+ * computer's account. As the agent, what it writes shows "via agent", and
+ * its note doesn't let it change who is in a space.
  */
 async function withNode(
   globals: Globals,
   work: (node: P2PNode, asAgent: boolean) => Promise<number>,
 ): Promise<number> {
   const home = homePath(globals.home);
-  const asAgent = !(await accountOpens(globals)) && (await loadAgentGrant(home)) !== null;
+  // Named, never guessed from what the environment holds: a secret an agent's shell inherits opens nothing.
+  const asAgent =
+    (globals.account ?? process.env.MINCA_ACCOUNT) === undefined && (await loadAgentGrant(home)) !== null;
   const agent = asAgent
-    ? await startAgentNode(home, await agentSlot(home), { nodes: commaList(process.env.MINCA_NODES) })
+    ? await startAgentNode(home, await agentSlot(home), {
+        nodes: commaList(process.env.MINCA_NODES),
+        onRevoked: (space) =>
+          stderr(
+            `The agent was disconnected in ${space}: nothing it writes there counts until you run "minca connect" again.`,
+          ),
+      })
     : null;
   const node = agent?.node ?? (await nodeFor(await openAccount(globals), { watchIntervalMs: 0 }));
   try {
@@ -1087,18 +1098,6 @@ async function withNode(
   } finally {
     await (agent ? agent.close() : node.close());
   }
-}
-
-/** Whether this computer has an account a command can open without an agent's help */
-async function accountOpens(globals: Globals): Promise<boolean> {
-  if ((await (await openHome(globals.home)).accounts.list()).length === 0) return false;
-  const secret = process.env.MINCA_RECOVERY_CODE ?? process.env.MINCA_PASSPHRASE;
-  return (
-    ask.interactive() ||
-    secret !== undefined ||
-    globals.codeFile !== undefined ||
-    globals.passphraseFile !== undefined
-  );
 }
 
 /** A connected slot of this computer's agent, waiting a while for one another command holds */

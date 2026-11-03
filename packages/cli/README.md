@@ -399,10 +399,9 @@ nothing in the note marks it as an agent except that it grants records only.
 `--name` changes what you see ("Agent on leifs-macbook"), and `--relay` adds
 one your account home uses (`$MINCA_RELAYS` sets the defaults).
 
-From then on, every `minca` command on this computer runs as the agent when
-there is no account of its own here to open: none, or none it could unlock
-without asking someone at the terminal or a secret from the environment. So
-an agent with a shell (Claude Code, Codex, Cursor's agent) uses Minca by
+From then on, every `minca` command on this computer runs as the agent,
+unless `--account` (or `MINCA_ACCOUNT`) names an account here: never by
+what secret the environment happens to hold. So an agent with a shell (Claude Code, Codex, Cursor's agent) uses Minca by
 running `minca` commands; tell it to start with `minca help`. Nothing is
 added to its settings. What it writes is marked as written under a
 records-only note, which the example app shows as "via agent", and its note
@@ -410,12 +409,18 @@ doesn't let it make, join or leave spaces, invite, change roles or define
 collections: it proposes collections with `minca collections propose`, and
 you add them.
 
-Each command runs a node of the agent's for as long as it takes. One that
-names a space first waits up to 15 seconds to hold what an always-on node of
-that space holds, so it reads what is there; one that writes then waits up to
-10 seconds for the space's always-on nodes to have it, and says so on stderr
-when they don't. What it wrote stays here and goes out the next time a
-command runs. The commands share one copy of your spaces in
+Each command runs a node of the agent's for as long as it takes, under the
+same rule as the MCP service. One that names a space first waits up to 15
+seconds to hold what an always-on node of that space holds, and refuses when
+it can't: a node behind could write over what it hasn't seen. One that
+writes then waits up to 10 seconds for the space's always-on nodes to have
+it, and fails, saying to read it back before writing again, when nobody
+does. What it returns from other people is marked as data on stderr, never
+instructions.
+
+An agent's shell that also holds this computer's account passphrase or
+recovery code can name `--account` and act as the account: keep those out
+of an agent's environment. The commands share one copy of your spaces in
 `~/.minca/agent/spaces`, so each starts from what the last synced, and each
 signs with a key of its own while it runs, so two at once never undo each
 other's writes.

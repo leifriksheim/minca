@@ -142,19 +142,19 @@ the grant's keys when present and relays = the grant's ∪ `$MINCA_RELAYS`
 `node-datachannel`; it joins any granted spaces it lacks (`joinGranted`);
 wraps the node with `asAgent`; and holds every space.
 
-A `minca` command runs as the agent when this computer has no account it can
-open: none at all, or none it could unlock without asking someone at a
-terminal or reading a secret from the environment. An agent can't type a
-passphrase, and what it writes shows "via agent". Its node runs for that one
-command, so a command naming a space first waits up to 15 s to hold what an
-always-on node there holds (`levelIn`), and one that writes then waits up to
-10 s for the space's keepers to have it (`spaces.kept`), saying so on stderr
-when they don't: what it wrote stays in the slot's stores and goes out the
-next time a command runs.
+Once the agent is connected here, a `minca` command runs as it unless
+`--account` or `$MINCA_ACCOUNT` names an account: never by which secrets the
+environment holds, which an agent's shell may inherit. What it writes shows
+"via agent". Its node runs for that one command, under the MCP service's
+rule (`catchUp`, `keptAfter`): a command naming a space waits up to 15 s to
+hold what an always-on node there holds and refuses when it can't, and one
+that writes waits up to 10 s for the space's keepers to have it and fails
+when nobody does. A `peerContent` result comes with `PEER_CONTENT_NOTE` on
+stderr.
 
 A running `minca agent` watches its slot's `grant.json`, and looks every 30 s
 as well. When `minca connect` writes a new key and grant there that check
 out, it closes its node and starts one under them, keeping the slot, so it
 needs no restart.
 
-_Source: `packages/cli/src/agent.ts` (`claimSlot`, `connectAgent`, `reconnectAgent`, `startAgentNode`, `reloadOnConnect`), `packages/cli/src/writer-keys.ts` (`holdLock`), `packages/cli/src/level.ts` (`levelIn`), `packages/cli/src/main.ts` (`withNode`, `agentSlot`). Tests: `packages/core/tests/records-only.test.ts` ("an agent running a node of its own"), `packages/cli/tests/cli-agent.test.ts` (all), `packages/cli/tests/agent-reconnect.test.ts` (all), `packages/cli/tests/agent-slot-lock.test.ts` (all), `packages/cli/tests/writer-keys.test.ts` ("a lock number is never used twice, so one taker that stalled can’t hold it beside another")._
+_Source: `packages/cli/src/agent.ts` (`claimSlot`, `connectAgent`, `reconnectAgent`, `startAgentNode`, `reloadOnConnect`), `packages/cli/src/writer-keys.ts` (`holdLock`), `packages/cli/src/level.ts` (`catchUp`, `keptAfter`), `packages/cli/src/main.ts` (`withNode`, `agentSlot`). Tests: `packages/core/tests/records-only.test.ts` ("an agent running a node of its own"), `packages/cli/tests/cli-agent.test.ts` (all), `packages/cli/tests/agent-reconnect.test.ts` (all), `packages/cli/tests/agent-slot-lock.test.ts` (all), `packages/cli/tests/writer-keys.test.ts` ("a lock number is never used twice, so one taker that stalled can’t hold it beside another")._

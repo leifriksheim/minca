@@ -10,7 +10,7 @@
 import { didOf, noteSpaces, type NodeConfig, type P2PNode, type StoreFactory } from '@minca/core';
 import { checkGrant, usableGrant, type Grant } from '@minca/core/session';
 import { startGrantedAgent } from '../agent.js';
-import { CATCH_UP_MS, levelIn } from '../level.js';
+import { catchUp } from '../level.js';
 import { isRecord, messageOf } from '../json.js';
 import { importKeyJwk } from '../writer-keys.js';
 import { boundedMemory } from './memory.js';
@@ -263,10 +263,7 @@ export function createSessions(options: {
         // A node starts from nothing: one that answered sooner would say a record isn't
         // there, and write a first version in a line that has one, which ends it (09 §7.5).
         // Checked on every call, since a link that drops leaves it behind again.
-        if (space !== undefined && !(await levelIn(started.node, space, CATCH_UP_MS)))
-          throw new Error(
-            'This space can’t be reached through the always-on nodes right now. Try again in a moment.',
-          );
+        if (space !== undefined) await catchUp(started.node, space);
         return await work(started.node);
       } finally {
         one.busy -= 1;

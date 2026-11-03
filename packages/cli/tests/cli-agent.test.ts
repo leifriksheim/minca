@@ -1,7 +1,8 @@
 /**
- * The minca command as this computer's agent: with no account here to open,
- * a command runs as the agent `minca connect` allowed, so an agent's shell
- * uses Minca with the records-only note, never the account's passphrase.
+ * The minca command as this computer's agent: once `minca connect` has
+ * allowed one, a command runs as it unless an account is named, so an agent's
+ * shell uses Minca with the records-only note, whatever secret it inherits.
+ * Like the MCP service, it refuses a space it can't catch up with.
  */
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -63,15 +64,21 @@ describe('the minca command, as the connected agent', () => {
           }) satisfies Grant,
       }),
     );
+    // An account of its own here too, and its passphrase in the environment, as the README once suggested.
+    await createAccount(await openHome(home), { name: 'Local', passphrase: 'pw' });
     const peer = `ws://127.0.0.1:${daemon.port}`;
-    // No passphrase: nothing here could open an account, as in an agent's shell.
-    env = { ...process.env, MINCA_HOME: home, MINCA_NODES: `${peer}/peer`, MINCA_RELAYS: peer };
-    delete env.MINCA_PASSPHRASE;
-    delete env.MINCA_RECOVERY_CODE;
+    env = {
+      ...process.env,
+      MINCA_HOME: home,
+      MINCA_PASSPHRASE: 'pw',
+      MINCA_NODES: `${peer}/peer`,
+      MINCA_RELAYS: peer,
+    };
   });
 
+  let closed = false;
   after(async () => {
-    await daemon.close();
+    if (!closed) await daemon.close();
   });
 
   const minca = (...args: string[]) =>
@@ -84,7 +91,11 @@ describe('the minca command, as the connected agent', () => {
     await minca('records', 'put', '--space', space, '--collection', 'app.note', '--body', '{"text":"milk"}');
     const kept = await daemon.node.records.query(space, { collection: 'app.note' });
     const [note] = kept.records;
-    assert.equal(note?.root, daemon.node.did, "it counts as Ada's");
+    assert.equal(
+      note?.root,
+      daemon.node.did,
+      "it counts as Ada's, not the account here whose passphrase it had",
+    );
     assert.equal(note?.recordsOnly, true, 'written under the records-only note');
 
     const read: unknown = JSON.parse(
@@ -97,6 +108,15 @@ describe('the minca command, as the connected agent', () => {
     await assert.rejects(
       minca('spaces', 'assign', '--space', space, '--did', daemon.node.did, '--role', 'editor'),
       /An agent can't change who is in a space/,
+    );
+  });
+
+  test('refuses a space it can’t catch up with, rather than write behind', async () => {
+    await daemon.close();
+    closed = true;
+    await assert.rejects(
+      minca('records', 'put', '--space', space, '--collection', 'app.note', '--body', '{"text":"late"}'),
+      /can’t be reached through the always-on nodes/,
     );
   });
 });

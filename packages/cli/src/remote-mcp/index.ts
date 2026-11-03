@@ -45,7 +45,7 @@ import type { Grant } from '@minca/core/session';
 import { createSessions, type Granted } from './sessions.js';
 import { isRecord, messageOf } from '../json.js';
 import { MINCA_ICONS, mcpTools, toolInstructions } from '../mcp.js';
-import { KEPT_MS } from '../level.js';
+import { keptAfter } from '../level.js';
 import { createConsent } from './consent.js';
 import { createOAuth, MCP_SCOPE } from './oauth.js';
 import { mayRedirect } from './redirects.js';
@@ -231,20 +231,8 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
             const since = Date.now();
             const done = await callAction(node, name, args);
             if (done.isError) return done;
-            const by = await node.spaces.kept(space, KEPT_MS, since);
-            if (by === 'keepers') return done;
-            if (by === 'peer')
-              return {
-                ...done,
-                text:
-                  `${done.text}\n\nKept by a device of this space that is online now, not by an always-on ` +
-                  'host: it reaches the others when that device syncs with them. Say so if it matters.',
-              };
-            throw new Error(
-              'Written, but not yet kept elsewhere: the space’s always-on nodes haven’t all confirmed it, or, if ' +
-                'it names none, no member online has it. It is sent when they are reachable, while this ' +
-                'connection is up: read it back before writing it again.',
-            );
+            const said = await keptAfter(node, space, since);
+            return said ? { ...done, text: `${done.text}\n\n${said}` } : done;
           });
         } catch (error) {
           return { content: [{ type: 'text', text: messageOf(error) }], isError: true };
