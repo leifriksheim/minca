@@ -281,96 +281,85 @@
         }
       </header>
       <section>
-        <nav class="stack" aria-label="Files">
-          <div class="row" data-gap="tight">
-            <${Place}
-              on=${view.kind === 'all'}
-              label="🗂 All files"
-              count=${all.length}
-              onClick=${() => setView({ kind: 'all' })}
-            />
-            ${KINDS.map(([type, name, icon]) => {
-              const count = all.filter((f) => kindOf(f.body.mime)[0] === type).length;
-              return (
-                count > 0 &&
-                html`<${Place}
-                  key=${type}
-                  on=${view.kind === 'type' && view.type === type}
-                  label=${`${icon} ${name}`}
-                  count=${count}
-                  onClick=${() => setView({ kind: 'type', type })}
-                />`
-              );
-            })}
-          </div>
-          <div class="row" data-gap="tight">
-            <small>Categories</small>
-            ${groups.length === 0 && naming === null && html`<small>· none yet</small>`}
-            ${groups.map(
-              (list) =>
-                html`<${Place}
-                  key=${list.key}
-                  on=${view.kind === 'group' && view.key === list.key}
-                  label=${list.body.title}
-                  hue=${hueOf(list.key)}
-                  count=${counts.get(list.key)}
-                  onClick=${() => setView({ kind: 'group', key: list.key })}
-                  onFile=${mayGroup && ((key) => putIn(key, list.key))}
-                  onError=${setError}
-                />`,
-            )}
-            ${
-              naming !== null &&
-              html`<form
-                onSubmit=${(event) => {
-                  event.preventDefault();
-                  const title = naming.trim().slice(0, 200);
-                  setNaming(null);
-                  if (title) makeGroup(title);
-                }}
-              >
-                <${Focused}
-                  value=${naming}
-                  placeholder="Name it"
-                  aria-label="Category name"
-                  onInput=${(event) => setNaming(event.currentTarget.value)}
-                  onBlur=${(event) => !event.currentTarget.value.trim() && setNaming(null)}
-                />
-              </form>`
-            }
-            ${
-              mayMake &&
-              naming === null &&
-              html`<button
-                type="button"
-                data-intent="ghost"
-                data-icon
-                title="New category"
-                aria-label="New category"
-                onClick=${() => setNaming('')}
-              >
-                +
-              </button>`
-            }
-          </div>
-        </nav>
         <div class="row">
-          <label>
-            Search
-            <input
-              type="search"
-              placeholder="By name"
-              value=${query}
-              onInput=${(event) => setQuery(event.currentTarget.value)}
-            />
-          </label>
-          <label>
-            Sort
-            <select value=${sort} onChange=${(event) => setSort(event.currentTarget.value)}>
-              ${Object.entries(SORTS).map(([key, [name]]) => html`<option value=${key}>${name}</option>`)}
-            </select>
-          </label>
+          <input
+            type="search"
+            placeholder="Search files"
+            aria-label="Search files"
+            value=${query}
+            onInput=${(event) => setQuery(event.currentTarget.value)}
+          />
+          <select aria-label="Sort" value=${sort} onChange=${(event) => setSort(event.currentTarget.value)}>
+            ${Object.entries(SORTS).map(([key, [name]]) => html`<option value=${key}>${name}</option>`)}
+          </select>
         </div>
+        <nav class="row" data-gap="tight" aria-label="Files">
+          <${Place}
+            on=${view.kind === 'all'}
+            label="🗂 All files"
+            count=${all.length}
+            onClick=${() => setView({ kind: 'all' })}
+          />
+          ${KINDS.map(([type, name, icon]) => {
+            const count = all.filter((f) => kindOf(f.body.mime)[0] === type).length;
+            return (
+              count > 0 &&
+              html`<${Place}
+                key=${type}
+                on=${view.kind === 'type' && view.type === type}
+                label=${`${icon} ${name}`}
+                count=${count}
+                onClick=${() => setView({ kind: 'type', type })}
+              />`
+            );
+          })}
+          ${groups.map(
+            (list) =>
+              html`<${Place}
+                key=${list.key}
+                on=${view.kind === 'group' && view.key === list.key}
+                label=${list.body.title}
+                hue=${hueOf(list.key)}
+                count=${counts.get(list.key)}
+                onClick=${() => setView({ kind: 'group', key: list.key })}
+                onFile=${mayGroup && ((key) => putIn(key, list.key))}
+                onError=${setError}
+              />`,
+          )}
+          ${
+            naming !== null &&
+            html`<form
+              onSubmit=${(event) => {
+                event.preventDefault();
+                const title = naming.trim().slice(0, 200);
+                setNaming(null);
+                if (title) makeGroup(title);
+              }}
+            >
+              <${Focused}
+                value=${naming}
+                placeholder="Name it"
+                aria-label="Category name"
+                onInput=${(event) => setNaming(event.currentTarget.value)}
+                onBlur=${(event) => !event.currentTarget.value.trim() && setNaming(null)}
+              />
+            </form>`
+          }
+          ${
+            mayMake &&
+            naming === null &&
+            html`<button
+              type="button"
+              data-intent="ghost"
+              data-icon
+              title="New category"
+              aria-label="New category"
+              onClick=${() => setNaming('')}
+            >
+              +
+            </button>`
+          }
+        </nav>
         ${error && html`<p role="alert">${error}</p>`}
         ${dropping && html`<aside>Drop files to add them${group ? ` to “${group.body.title}”` : ''}</aside>`}
         ${

@@ -56,11 +56,15 @@ section {
   align-items: center;
   gap: var(--space);
 
-  /* A field takes the room the buttons beside it leave */
-  & > :is(input, select) {
+  /* A field to type in takes the room the buttons beside it leave; a select is as wide as its choices */
+  & > input {
     flex: 1 1 12ch;
     width: auto;
     min-width: 0;
+  }
+
+  & > select {
+    width: auto;
   }
 
   /* A sentence or a block of lines beside a mark takes the room left, and wraps */
@@ -111,9 +115,17 @@ section {
   overscroll-behavior-x: contain;
   scroll-snap-type: x proximity;
 
+  /* Each column a ground of its own, set back from the page, that its cards stand on */
   & > * {
     flex: 0 0 280px;
+    padding: var(--space);
+    border-radius: var(--radius-surface);
+    background: var(--color-sunken);
     scroll-snap-align: start;
+  }
+
+  & .tag:not([data-tone], [data-hue]) {
+    background: var(--color-surface);
   }
 
   @media (max-width: 640px) {
