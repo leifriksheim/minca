@@ -187,6 +187,10 @@ Plain functions and frozen data, no class hierarchies. Isomorphic: browsers,
 Node and Bun via `globalThis`, native Web APIs first. Comments and docs are
 short plain sentences that say why; match the prose around you.
 
+Fix a bug by changing the design that allowed it, the way an experienced
+engineer would. A fix that adds state or a branch for the one case that broke
+is a patch, not a fix; it usually means the design is wrong.
+
 ## Dependencies
 
 Use a library when the problem is hard, already solved, and easy to get
