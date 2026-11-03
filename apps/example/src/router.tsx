@@ -235,6 +235,8 @@ declare module '@tanstack/react-router' {
     viewTitle?: string;
     /** The page of history the app's screen started at, before its first step into itself */
     viewBase?: number;
+    /** The page of history before the first record was opened beside, where closing it goes back to */
+    recordBase?: number;
   }
 }
 

@@ -188,6 +188,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
   const viewTitle = useRouterState({ select: (state) => state.location.state.viewTitle });
   const viewBase = useRouterState({ select: (state) => state.location.state.viewBase });
   const historyAt = useRouterState({ select: (state) => state.location.state.__TSR_index });
+  const recordBase = useRouterState({ select: (state) => state.location.state.recordBase });
   const onApps = leaf === APPS_ROUTE;
   const onApp = leaf === APP_ROUTE;
   const hood = HOOD.find((h) => h.to === leaf);
@@ -295,11 +296,24 @@ function SpaceView({ space }: { space: SpaceSummary }) {
     const app = can.find((one) => one.id === open?.id) ?? (can.length === 1 ? can[0] : undefined);
     if (app) return openIn(r, app);
     if (can.length > 1) return setChoosing(r);
-    void navigate({ to: '.', search: (was) => ({ ...was, record: r.key }) });
+    void navigate({
+      to: '.',
+      search: (was) => ({ ...was, record: r.key }),
+      state: (was) => ({
+        viewTitle: was.viewTitle,
+        viewBase: was.viewBase,
+        recordBase: record ? recordBase : historyAt,
+      }),
+    });
   };
   const clearShown = () =>
     void navigate({ to: '.', search: (was) => ({ ...was, at: undefined }), replace: true });
-  const closeRecord = () => void navigate({ to: '.', search: (was) => ({ ...was, record: undefined }) });
+  // Closing undoes the opening, back past every record opened from the panel, so Back doesn't bring it
+  // back. One opened by a link, with no page of history before it here, closes in place.
+  const closeRecord = () => {
+    if (recordBase !== undefined && recordBase < historyAt) return router.history.go(recordBase - historyAt);
+    void navigate({ to: '.', search: (was) => ({ ...was, record: undefined }), replace: true });
+  };
 
   useLookingAt(space.id, open?.id, open ? unreadOf(unread, open.id).count : 0);
 
