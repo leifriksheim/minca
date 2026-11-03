@@ -205,9 +205,10 @@ space gave it.
 **Opening a record where it belongs.** A `launcher.app` may name, among its
 `collections`, the ones it `shows`: the ones whose records it is the place
 to open (`shows: ["std.message"]` for a chat). An entry may name a kind of
-one too, `std.list:tab`, for the records whose `kind` is `tab`: lists are
-folders, albums and tabs as well as checklists, and each belongs in a
-different app. Whatever asks the example app to open a record, a screen's
+one too, `collection:kind`, for the records of that collection whose `kind`
+field holds it: `std.list:tab` for Bills' tabs, `std.work:book` for a
+reading app, or a `kind` in an app's own collection. Lists are folders,
+albums and tabs as well as checklists, and each belongs in a different app. Whatever asks the example app to open a record, a screen's
 `open` or a link beside a record, goes to the app that shows it, those
 naming its kind before those naming only its collection: the one open, if
 it does, else the only one, else the one the person picks when asked. So
