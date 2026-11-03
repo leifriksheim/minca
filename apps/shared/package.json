@@ -29,7 +29,9 @@
     "./may": "./src/may.ts",
     "./usernames": "./src/usernames.ts",
     "./UsernamePicker": "./src/UsernamePicker.tsx",
-    "./mcp": "./src/mcp.ts"
+    "./mcp": "./src/mcp.ts",
+    "./Terminal": "./src/Terminal.tsx",
+    "./AppLogo": "./src/AppLogo.tsx"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

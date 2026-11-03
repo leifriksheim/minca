@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Modal } from '@minca/app-shared/Modal';
-import { useCopy } from '@minca/app-shared/action';
 import { MCP_URL, addToClaude } from '@minca/app-shared/mcp';
+import { Terminal } from '@minca/app-shared/Terminal';
 import { styles, palette, stack } from '../styles';
 import { PrimaryButton } from './Buttons';
 
@@ -22,7 +22,6 @@ export function ConnectAgent({
   title?: string;
   then?: ReactNode;
 }) {
-  const { copied, copy } = useCopy();
   return (
     <Modal title={title} onClose={onClose} width={480}>
       <div style={stack(16)}>
@@ -32,15 +31,7 @@ export function ConnectAgent({
         </PrimaryButton>
         <div style={stack(8)}>
           <p style={stepText}>Another AI app? Give it this address.</p>
-          <div style={commandBox}>
-            <code style={commandText}>{MCP_URL}</code>
-            <PrimaryButton
-              onClick={() => copy(MCP_URL)}
-              style={{ width: 'auto', height: 32, padding: '0 14px', fontSize: 13 }}
-            >
-              {copied ? '✓ Copied' : 'Copy'}
-            </PrimaryButton>
-          </div>
+          <Terminal text={MCP_URL} />
         </div>
         <div style={stack(8)}>
           <strong style={{ fontSize: 15, color: palette.ink.strong }}>Then just ask</strong>
@@ -63,21 +54,3 @@ export function ConnectAgent({
 }
 
 export const stepText = { fontSize: 14, lineHeight: 1.55, color: palette.ink.body } as const;
-
-const commandBox = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 10,
-  padding: '8px 8px 8px 14px',
-  borderRadius: palette.radius.md,
-  background: palette.surface.sunken,
-  fontFamily: palette.mono,
-} as const;
-const commandText = {
-  flex: 1,
-  minWidth: 0,
-  overflowWrap: 'anywhere',
-  fontSize: 12.5,
-  lineHeight: 1.5,
-  color: palette.ink.strong,
-} as const;

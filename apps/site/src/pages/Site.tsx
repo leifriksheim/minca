@@ -283,40 +283,22 @@ function markCalls<P extends ReturnType<typeof parse>>(parsed: P): P {
 }
 
 /** A button that copies `text`, and says so for a moment */
-export function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  const copy = () =>
-    void navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  return (
-    <button type="button" className="copy" onClick={copy}>
-      {copied ? 'Copied' : 'Copy'}
-    </button>
-  );
-}
-
-export function Code({
+function Code({
   file,
   lang = 'typescript',
-  copy,
   children,
 }: {
   file?: string;
   lang?: keyof typeof LANGUAGES;
-  /** A copy button in the bar, for something to paste */
-  copy?: boolean;
   children: string;
 }) {
   // Our own code snippets, not user input — safe to render as HTML.
   const html = render(markCalls(parse(children.trim(), LANGUAGES[lang])));
   return (
     <div className="code">
-      {(file || copy) && (
+      {file && (
         <div className="bar">
           <span>{file}</span>
-          {copy && <CopyButton text={children.trim()} />}
         </div>
       )}
       <pre>
@@ -454,6 +436,7 @@ export function Tabs<
     readonly id: string;
     readonly name: string;
     readonly shape?: { readonly kind: ShapeKind; readonly colour: ShapeColour };
+    readonly icon?: ReactNode;
   },
 >({
   label,
@@ -497,7 +480,8 @@ export function Tabs<
             onClick={() => onSelect(item.id)}
             onKeyDown={(event) => onKey(event, i)}
           >
-            {item.shape && <Shape kind={item.shape.kind} colour={item.shape.colour} size={18} />}
+            {item.icon ??
+              (item.shape && <Shape kind={item.shape.kind} colour={item.shape.colour} size={18} />)}
             {item.name}
           </button>
         ))}
