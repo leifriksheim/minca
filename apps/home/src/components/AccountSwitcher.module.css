@@ -4,6 +4,7 @@
 
   & > button {
     padding-left: 3px;
+    color: var(--color-text-strong);
   }
 
   & > [role='menu'] {

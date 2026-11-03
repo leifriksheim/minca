@@ -55,6 +55,7 @@ export function AccountSwitcher() {
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label={`Account: ${session.account.name}`}
+        data-intent="ghost"
       >
         <Avatar did={session.did} size={30} round src={picture} />
         <span>{session.account.name}</span>
