@@ -285,7 +285,6 @@ export {
   SPACE_SUCCEED,
   checkFoundingRoles,
   grantFits,
-  mayDefine,
 } from './space/grants.js';
 export type { FoundingRole } from './space/grants.js';
 export { displayName } from './space/names.js';

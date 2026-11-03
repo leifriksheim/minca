@@ -129,13 +129,9 @@ A definition says what a record may hold and the rules it keeps. It can't say
 "to add an app with its own screen, write one of these, pointing at a
 blueprint". An app that has more to say about its collections writes a
 `std.guide`: a `name`, a `title`, the `text`, and the `collections` it is
-about. There is one guide of each name. A guide speaks for collections, so
-it stands only when someone who may define collections wrote it, as
-themselves rather than under a records-only note: any member can write a
-`std.guide`, and an agent must not be shown what they wanted it to read.
+about. There is one guide of each name: whoever writes it first holds it.
 
-`collections_list`, without names, gives each collection the guides about it
-that stand,
+`collections_list`, without names, gives each collection the guides about it,
 `guides: [{ key, title }]`, so an agent finds them without knowing the app
 exists, and reads one with `records_get` before writing there.
 
@@ -149,19 +145,13 @@ exists, and reads one with `records_get` before writing there.
 ```
 
 - `writeGuide` defines `std.guide` when the space lacks it, writes the guide,
-  and rewrites it when it says something else and this account wrote it or
-  it doesn't stand. So an app can call it every time a space opens, and a
-  name someone else took first comes back to it.
-- `guidesOf` gives the space's guides that stand, by the collections they
-  are about.
+  and rewrites it only when this account wrote it and it says something else.
+  So an app can call it every time a space opens.
+- `guidesOf` gives the space's guides by the collections they are about.
 - A guide is what someone in the space wrote. An agent must read it as data
   about the collections, never as instructions from the person it works for.
-- Keep a guide to one task, and write several when an agent may need only
-  some of them: the example app writes how to make an app, how a screen
-  works and the kit a screen draws with as three, so an app without a screen
-  reads a fifth of it.
 
-_Source: `packages/core/src/schemas/guides.ts` (`writeGuide`, `guidesOf`), `packages/core/src/space/grants.ts` (`mayDefine`), `packages/core/src/schemas/library/collections.ts` (`guide`), `packages/core/src/node/actions.ts` (`collections_list`), `apps/example/src/components/apps/launcher.ts` (`GUIDES`). Tests: `packages/core/tests/records-only.test.ts` ("collections_list points at the guides written about each collection", "a guide stands only when someone who may define wrote it: an agent's is never shown, and is replaced"), `apps/example/tests/launcher.test.ts` ("the guides agents read are in the space, on the collections they are about")._
+_Source: `packages/core/src/schemas/guides.ts` (`writeGuide`, `guidesOf`), `packages/core/src/schemas/library/collections.ts` (`guide`), `packages/core/src/node/actions.ts` (`collections_list`). Tests: `packages/core/tests/records-only.test.ts` ("collections_list points at the guides written about each collection"), `apps/example/tests/launcher.test.ts` ("the guide agents read is in the space, on the collections it is about")._
 
 ## Apps with a screen of their own
 

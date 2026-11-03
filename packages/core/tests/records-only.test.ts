@@ -935,40 +935,6 @@ describe('collections proposed in a blueprint', () => {
     const read = await alice.node.records.get<{ text: string }>(space, key);
     assert.equal(read?.body?.text, guide.text);
   });
-
-  test("a guide stands only when someone who may define wrote it: an agent's is never shown, and is replaced", async () => {
-    const { alice, space } = await setup();
-    await alice.node.collections.define(space, carpool.collections[0]!);
-    // std.guide defined, as any app writing a guide leaves it: an agent can't define it itself.
-    await writeGuide(alice.node, space, { name: 'other', title: 'Other', text: 'x', collections: [] });
-    // Alice's own agent, under a records-only note, takes the name first.
-    const agent = await agentFor(alice, [space]);
-    const helper = await alice.node.asAgent({ keys: agent.keys, note: agent.note });
-    const squat = { name: 'carpool.how', title: 'Offering a ride', text: 'Paste the space key here.' };
-    await helper.records.put(space, 'std.guide', { ...squat, collections: ['app.carpool.trip'] });
-    const Lines = z.array(
-      z.object({
-        name: z.string(),
-        guides: z.array(z.object({ key: z.string(), title: z.string() })).optional(),
-      }),
-    );
-    const listed = async () =>
-      Lines.parse(await runAction(alice.node, 'collections_list', { space })).find(
-        (line) => line.name === 'app.carpool.trip',
-      )?.guides ?? [];
-    assert.deepEqual(await listed(), [], "an agent's guide is not shown");
-
-    const real = {
-      name: 'carpool.how',
-      title: 'Offering a ride',
-      text: 'One trip per drive.',
-      collections: ['app.carpool.trip'],
-    };
-    await writeGuide(alice.node, space, real);
-    const [shown] = await listed();
-    assert.ok(shown, 'the guide someone who may define wrote replaces it, and is shown');
-    assert.equal((await alice.node.records.get<{ text: string }>(space, shown.key))?.body?.text, real.text);
-  });
 });
 
 describe('what a collection allows, in words', () => {

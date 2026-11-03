@@ -389,23 +389,15 @@ describe('the launcher', () => {
     assert.ok((await launcherOf(alice.node, space)).proposed.some((r) => r.key === his.key));
   });
 
-  test('the guides agents read are in the space, on the collections they are about', async () => {
+  test('the guide agents read is in the space, on the collections it is about', async () => {
     const { alice, space } = await setup();
     await prepareLauncher(alice.node, space);
     await prepareLauncher(alice.node, space);
     const guides = await alice.node.records.list<Guide>(space, { collection: guide.name });
-    const text = (name: string) => guides.find((g) => g.body?.name === name)?.body?.text ?? '';
-    assert.deepEqual(
-      guides.map((g) => g.body?.name),
-      ['launcher.apps', 'launcher.screens', 'launcher.kit'],
-      'each written once',
-    );
+    assert.equal(guides.length, 1, 'written once');
     assert.deepEqual(guides[0]?.body?.collections, ['launcher.app', 'std.blueprint']);
-    // An app without a screen needs only the first; a screen's own guides are apart.
-    assert.match(text('launcher.apps'), /collections_propose/);
-    assert.doesNotMatch(text('launcher.apps'), /window\.minca is/);
-    assert.match(text('launcher.screens'), /window\.minca/);
-    assert.match(text('launcher.kit'), /window\.ui/);
+    assert.match(guides[0]?.body?.text ?? '', /collections_propose/);
+    assert.match(guides[0]?.body?.text ?? '', /window\.minca/);
     // The guide prints this app as its example, so what it teaches is what the launcher takes.
     assert.equal(checkLauncherApp(EXAMPLE_APP), null);
   });

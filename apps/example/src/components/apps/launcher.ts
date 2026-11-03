@@ -16,11 +16,12 @@
  * their records stay, and adding it again picks them up.
  *
  * This is the example app's own convention, not the library's. Agents learn it
- * from the guides it writes in the space (`std.guide`, `GUIDES`).
+ * from the guide it writes in the space (`std.guide`, `LAUNCHER_GUIDE`).
  */
 import {
   checkAppAutomation,
-  mayDefine,
+  COLLECTION_DEFINE,
+  grantFits,
   type DefineCollection,
   type NodeCollection,
   type NodeRecord,
@@ -41,7 +42,6 @@ import {
   type DraftCollection,
 } from '@minca/core/schemas';
 import type { ShapeColour } from '@minca/ui/tokens';
-import { UI_GUIDE } from '@minca/ui/guide';
 import { checkScreenNetwork, MAX_SCREEN_BYTES, SCREEN_GUIDE, offLimits } from './screens';
 
 export interface LauncherApp {
@@ -223,6 +223,25 @@ export function checkLauncherApp(body: LauncherApp): string | null {
 }
 
 /**
+ * Whether an account may define collections here, as its roles' grants say
+ * now: a founder, or a role every current definition of which grants
+ * `/collection/define`. For showing, not judging: each definition's grants
+ * also count only as far as its author could give them, which the node checks.
+ */
+function mayDefine(access: SpaceAccess | null | undefined, did: string | null): boolean {
+  const member = access?.members.find((m) => m.did === did);
+  if (!member) return false;
+  if (member.founder) return true;
+  return member.roles.some((name) => {
+    const definitions = access?.roles.find((r) => r.name === name)?.definitions ?? [];
+    return (
+      definitions.length > 0 &&
+      definitions.every((d) => d.grants.some((g) => grantFits(g, COLLECTION_DEFINE, { collection: '' })))
+    );
+  });
+}
+
+/**
  * Whether a launcher record's current version stands for the space: written
  * by someone whose role may define collections, with a key whose note let
  * them. A records-only write (an agent's), or an edit by anyone else, makes it a proposal again.
@@ -350,37 +369,13 @@ names keep the values the app has.
 Removing an app deletes its launcher.app record; its records stay. A made app may not show launcher.app,
 std.blueprint, std.guide or sys.* collections.
 
-A screen has two guides of its own on launcher.app: how it works, and the kit it draws with. Read them only for an
-app with a screen.`;
+How a screen works:
 
-/**
- * The guides agents read before making an app, each its own record so an
- * agent reads only what it needs: an app without a screen needs the first alone.
- */
-const GUIDES = [
-  {
-    name: 'launcher.apps',
-    title: 'Making an app for this space',
-    text: LAUNCHER_GUIDE,
-    collections: [launcherApp.name, blueprint.name],
-  },
-  {
-    name: 'launcher.screens',
-    title: "How an app's screen works",
-    text: SCREEN_GUIDE,
-    collections: [launcherApp.name],
-  },
-  {
-    name: 'launcher.kit',
-    title: 'The kit a screen draws with',
-    text: UI_GUIDE,
-    collections: [launcherApp.name],
-  },
-];
+${SCREEN_GUIDE}`;
 
 /**
  * Makes the space ready for apps: defines `launcher.app` and `std.blueprint`
- * when it lacks them, and writes the guides agents read. Only for someone who
+ * when it lacks them, and writes the guide agents read. Only for someone who
  * may define collections; for anyone else it does nothing.
  */
 export async function prepareLauncher(node: P2PNode, spaceId: string): Promise<void> {
@@ -388,7 +383,12 @@ export async function prepareLauncher(node: P2PNode, spaceId: string): Promise<v
   const here = defined(await node.collections.list(spaceId));
   for (const definition of [launcherApp, blueprint])
     if (!here.has(definition.name)) await node.collections.define(spaceId, definition);
-  for (const one of GUIDES) await writeGuide(node, spaceId, one);
+  await writeGuide(node, spaceId, {
+    name: 'launcher.apps',
+    title: 'Making an app for this space',
+    text: LAUNCHER_GUIDE,
+    collections: [launcherApp.name, blueprint.name],
+  });
 }
 
 /** An app as it stands once added: its place is the launcher's, and it updates nothing */

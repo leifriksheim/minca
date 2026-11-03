@@ -25,6 +25,7 @@ import {
 } from '@minca/core';
 import type { FoundPlace } from '@minca/app-shared/places';
 import { accent, radius } from '@minca/ui/tokens';
+import { UI_GUIDE } from '@minca/ui/guide';
 import { shrinkImage } from '../../files';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -95,7 +96,7 @@ interface ScreenRecord {
   readonly viaAgent: boolean;
 }
 
-/** How to write a screen, for an agent: one of the guides the launcher writes in the space (`launcher.ts`) */
+/** How to write a screen, for an agent: part of the guide the launcher writes in the space (`launcher.ts`) */
 export const SCREEN_GUIDE = `A screen is one HTML document (scripts and styles inline, at most 48 KB) put on an app's launcher.app record as "screen".
 When the app is added, the app shows it instead of plain lists. It runs sealed: no network (no fetch, no
 images from URLs, no fonts from URLs), no storage, no popups, and no alert, confirm or prompt (show messages in the page).
@@ -170,7 +171,9 @@ A link to a record that hasn't reached this device yet is refused until it has.
 Draw everything from minca.list(...) and redraw on minca.onChange — other people's moves arrive that way.
 Two people can write at once: design collections so that clashes resolve by the rules (onePer, each person changing only their own records), not by the screen.
 Anyone can also write records without your screen, and a record whose collection changed keeps its old shape: check a body has what you read before reading it.
-No other libraries can be loaded: window.ui, the kit every screen draws with, is in its own guide on launcher.app.`;
+No other libraries can be loaded.
+
+${UI_GUIDE}`;
 
 /** The script put in front of a screen's document: `window.minca`, over the port the host page kept for it */
 export const SCREEN_CLIENT = `(() => {

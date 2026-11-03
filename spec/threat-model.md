@@ -593,6 +593,16 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     the key. Members keep what their roles allow, and the way on is a
     successor (03 §2.1, §2.7; `constitution.test.ts`, "the last founder steps
     down…").
+  - A member who may write `std.guide` can put text in front of other
+    people's agents: `collections_list` points at every guide about a
+    collection, whoever wrote it, and one of each name stands, so the first
+    to write a name holds it. Agents are told to read a guide as data, not
+    instructions, and that is the only thing in the way. Showing only guides
+    from members who may define collections needs a check the node itself
+    makes, not one read off the grants, and guides keyed per author
+    (`guidesOf`, `writeGuide` in `packages/core/src/schemas/guides.ts`;
+    `collections_list` in `packages/core/src/node/actions.ts`). Not
+    protocol: a layer the library and its apps keep.
 - **By design.**
   - Whoever may define roles is trusted to. A definer can write power into a
     role it keeps, or nest it in a role it defines, and keep it after losing
