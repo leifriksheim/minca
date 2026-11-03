@@ -57,8 +57,8 @@ ui has:
   <\${EmojiPicker} onPick />        a 🙂 button with a grid of emoji; put the one picked in the text, or react with it
   <\${Reactions} about=\${record} adding? />   emoji reactions on a record (std.reaction), yours toggled; react(record, emoji) adds one
     (needs "std.reaction" in collections)
-  For a message box, put AddMenu and EmojiPicker inside the field, as Comments does: <div class="composer"> holding
-  <\${AddMenu} />, the input, and <div class="composer-end"><\${EmojiPicker} /></div>
+  A message box is one field, as in Comments: <div class="composer"> holding <\${AddMenu} />, the input, and
+  <div class="composer-end"><\${EmojiPicker} /> and send (primary, data-icon, ↑)</div>
   <\${Modal} title onClose width?>…</\${Modal}>   a dialog over the screen, the only way to draw one
   <\${Empty} shape? colour? title text?>…</\${Empty}>   an empty app: a shape, a title, a line on what goes here,
     and the button that starts it inside

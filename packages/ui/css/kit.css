@@ -55,42 +55,42 @@
   word-break: break-word;
 }
 
-/* A message box with "+" at the start and 🙂 at the end, as chat apps have */
+/* A message box as chat apps have it: one field, "+" at its start, then the words, then 🙂 and send */
 .composer {
-  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-tight);
   flex: 1;
   min-width: 0;
+  padding: var(--space-tight);
+  border: 1px solid var(--color-field);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  transition: border-color 0.15s ease;
 
-  & textarea {
-    padding-inline: 40px;
+  &:focus-within {
+    border-color: var(--color-action);
   }
 
-  &[data-gifs] textarea {
-    padding-right: 76px;
-  }
-
-  & > .anchor,
-  & > .composer-end {
-    position: absolute;
-    z-index: 6;
-    top: 50%;
-    transform: translateY(-50%);
-  }
-
-  & > .anchor {
-    left: 4px;
+  /* The field is the box around them, so what is typed in has none of its own */
+  & :is(input, textarea) {
+    min-height: 32px;
+    padding: 4px 6px;
+    border: none;
+    background: none;
+    outline: none;
   }
 
   & button[data-icon] {
-    width: 28px;
-    min-height: 28px;
+    width: 32px;
+    min-height: 32px;
     font-size: 1.125rem;
   }
 }
 
 .composer-end {
-  right: 4px;
   display: flex;
+  gap: 2px;
 }
 
 /* A box that grows with its lines (MentionInput), one to start, never dragged to a size */

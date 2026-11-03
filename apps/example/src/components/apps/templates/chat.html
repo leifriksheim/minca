@@ -532,27 +532,21 @@
           `${typists.map((did) => nameIn(people, did)).join(', ')} ${typists.length === 1 ? 'is' : 'are'} typing…`
         }
       </small>
-      <div class="row">
-        <div
-          class="composer"
-          data-gifs=${giphyKey ? '' : undefined}
-          onKeyDown=${(event) => event.key === 'Escape' && replying && onReplied()}
-        >
-          <${AddMenu} onShare=${() => share.pick()} onFiles=${add} />
-          <${MentionInput}
-            value=${draft}
-            onChange=${(next) => type(share.typed(draft, next))}
-            placeholder=${replying ? `Reply to ${nameIn(people, replying.createdBy)}…` : 'Message…'}
-            aria-label="Message"
-          />
-          <div class="composer-end">
-            ${giphyKey && html`<${GifPicker} onPick=${send} disabled=${busy} />`}
-            <${EmojiPicker} onPick=${(emoji) => type(draft + emoji)} />
-          </div>
+      <div class="composer" onKeyDown=${(event) => event.key === 'Escape' && replying && onReplied()}>
+        <${AddMenu} onShare=${() => share.pick()} onFiles=${add} />
+        <${MentionInput}
+          value=${draft}
+          onChange=${(next) => type(share.typed(draft, next))}
+          placeholder=${replying ? `Reply to ${nameIn(people, replying.createdBy)}…` : 'Message…'}
+          aria-label="Message"
+        />
+        <div class="composer-end">
+          ${giphyKey && html`<${GifPicker} onPick=${send} disabled=${busy} />`}
+          <${EmojiPicker} onPick=${(emoji) => type(draft + emoji)} />
+          <button type="submit" data-intent="primary" data-icon aria-label="Send" disabled=${busy || !ready}>
+            ↑
+          </button>
         </div>
-        <button type="submit" data-intent="primary" disabled=${busy || !ready}>
-          ${busy ? 'Sending…' : 'Send'}
-        </button>
       </div>
       ${(error || share.error) && html`<p role="alert">${error || share.error}</p>`}
     </form>`;

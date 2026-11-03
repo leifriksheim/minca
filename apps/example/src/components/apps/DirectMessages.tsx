@@ -4,6 +4,7 @@ import type { DirectMessage, SpaceSummary } from '@minca/core';
 import { useLive, useNode } from '@minca/react';
 import { useAction } from '@minca/app-shared/action';
 import { Modal } from '@minca/app-shared/Modal';
+import { Shape } from '@minca/app-shared/shapes';
 import { ago } from '@minca/ui/time';
 import { nameOf, type People } from '../../derive/people';
 import { usePeopleHere } from '../Person';
@@ -112,9 +113,11 @@ export function DirectMessages({
         </ol>
       ) : (
         <div className="empty">
+          <Shape kind="lock" colour="coral" size={48} />
+          <strong>No conversations yet</strong>
           <p>
             {mayStart
-              ? 'Nothing yet. Only the people you write to can read what you send.'
+              ? 'Only the people you write to can read what you send.'
               : 'Nobody else here can be written to yet: each member can once their app has been in the group.'}
           </p>
         </div>
@@ -264,17 +267,25 @@ function Room({
 
       {error && <p role="alert">{error}</p>}
       {space.writable && (
-        <form onSubmit={send} className={`row ${styles.composer}`}>
-          <input
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder={`Message ${names}`}
-            aria-label="Write a direct message"
-            maxLength={10000}
-          />
-          <button type="submit" data-intent="primary" disabled={busy || !draft.trim()}>
-            Send
-          </button>
+        <form onSubmit={send} className={styles.composer}>
+          <div className="composer">
+            <input
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              placeholder={`Message ${names}`}
+              aria-label="Write a direct message"
+              maxLength={10000}
+            />
+            <button
+              type="submit"
+              data-intent="primary"
+              data-icon
+              aria-label="Send"
+              disabled={busy || !draft.trim()}
+            >
+              ↑
+            </button>
+          </div>
         </form>
       )}
     </>

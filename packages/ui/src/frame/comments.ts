@@ -115,29 +115,29 @@ export function Comments({ about }: { about: Pick<ScreenRecord, 'key' | 'created
             )}
           </div>`
         }
-        <div class="row">
-          <div class="composer">
-            <${AddMenu}
-              onShare=${() => void share.pick()}
-              onFiles=${mayAttach ? (picked: File[]) => setFiles([...files, ...picked]) : null}
-            />
-            <${MentionInput}
-              value=${draft}
-              onChange=${(next: string) => setDraft(share.typed(draft, next))}
-              placeholder="Write a comment…"
-              aria-label="Write a comment"
-            />
-            <div class="composer-end">
-              <${EmojiPicker} onPick=${(emoji: string) => setDraft(draft + emoji)} />
-            </div>
+        <div class="composer">
+          <${AddMenu}
+            onShare=${() => void share.pick()}
+            onFiles=${mayAttach ? (picked: File[]) => setFiles([...files, ...picked]) : null}
+          />
+          <${MentionInput}
+            value=${draft}
+            onChange=${(next: string) => setDraft(share.typed(draft, next))}
+            placeholder="Write a comment…"
+            aria-label="Write a comment"
+          />
+          <div class="composer-end">
+            <${EmojiPicker} onPick=${(emoji: string) => setDraft(draft + emoji)} />
+            <button
+              type="submit"
+              data-intent="primary"
+              data-icon
+              aria-label="Send"
+              disabled=${!draft.trim() && !share.sharing && files.length === 0}
+            >
+              ↑
+            </button>
           </div>
-          <button
-            type="submit"
-            data-intent="primary"
-            disabled=${!draft.trim() && !share.sharing && files.length === 0}
-          >
-            Send
-          </button>
         </div>
       </form>`
     }
