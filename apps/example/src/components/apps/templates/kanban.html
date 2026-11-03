@@ -307,25 +307,23 @@
         )}
         ${
           mayAddColumn &&
-          html`<div>
-            ${
-              addingColumn
-                ? html`<${OneLine}
-                    placeholder="Column name"
-                    onDone=${() => setAddingColumn(false)}
-                    onSubmit=${(name) =>
-                      minca.put(COLUMN, {
-                        name,
-                        position: positionBetween(
-                          [...cols].reverse().find((c) => c.body.position)?.body.position,
-                        ),
-                      })}
-                  />`
-                : html`<button onClick=${() => setAddingColumn(true)}>
-                    <${Icon} name="plus" /> Add column
-                  </button>`
-            }
-          </div>`
+          (addingColumn
+            ? html`<div>
+                <${OneLine}
+                  placeholder="Column name"
+                  onDone=${() => setAddingColumn(false)}
+                  onSubmit=${(name) =>
+                    minca.put(COLUMN, {
+                      name,
+                      position: positionBetween(
+                        [...cols].reverse().find((c) => c.body.position)?.body.position,
+                      ),
+                    })}
+                />
+              </div>`
+            : html`<button data-intent="subtle" onClick=${() => setAddingColumn(true)}>
+                <${Icon} name="plus" /> Add column
+              </button>`)
         }
       </div>
     </main>`;

@@ -128,6 +128,17 @@ section {
     background: var(--color-surface);
   }
 
+  /* A lane's own buttons (add a card, add a column) start at the left, as its cards do, and a hover on
+     its ground goes one shade darker */
+  & > button,
+  & button[data-intent='ghost']:not([data-icon]) {
+    justify-content: flex-start;
+  }
+
+  & button[data-intent='ghost']:hover:not(:disabled) {
+    background: var(--color-divider);
+  }
+
   @media (max-width: 640px) {
     scroll-snap-type: x mandatory;
 
