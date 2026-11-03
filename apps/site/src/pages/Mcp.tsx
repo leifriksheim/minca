@@ -3,9 +3,10 @@ import { Link } from '@tanstack/react-router';
 import { offeredActions, type NodeAction } from '@minca/core';
 import { Shape } from '@minca/app-shared/shapes';
 import { MCP_URL, addToClaude, addToCursor } from '@minca/app-shared/mcp';
+import { AppLogo, type AppLogoName } from '@minca/app-shared/AppLogo';
+import { Terminal } from '@minca/app-shared/Terminal';
 import { type ShapeKind } from '@minca/ui/shapes';
-import { type ShapeColour } from '@minca/ui/tokens';
-import { Band, Code, CopyButton, Page, Tabs } from './Site';
+import { Band, Page, Tabs } from './Site';
 
 /**
  * Connecting an AI to your spaces over MCP. Most apps connect to Minca's MCP
@@ -57,59 +58,65 @@ const SIGN_IN =
 const CLIENTS: ReadonlyArray<{
   id: string;
   name: string;
-  shape?: { kind: ShapeKind; colour: ShapeColour };
+  logo: AppLogoName;
   how: ReactNode;
   link?: { href: string; label: string };
-  file?: string;
   code?: string;
   then?: ReactNode;
 }> = [
   {
     id: 'claude',
     name: 'Claude',
-    shape: { kind: 'sparkle', colour: 'peach' },
+    logo: 'claude',
     how: 'Add it once and it’s there on claude.ai, in the desktop app and on your phone.',
     link: { href: addToClaude(), label: 'Add to Claude ↗' },
   },
   {
     id: 'chatgpt',
     name: 'ChatGPT',
+    logo: 'openai',
     how: 'In Settings, open Apps & Connectors, then Advanced, and turn on Developer mode. Then create a connector and paste this address.',
     code: MCP_URL,
   },
   {
     id: 'cursor',
     name: 'Cursor',
+    logo: 'cursor',
     how: 'Cursor opens and asks you to install it.',
     link: { href: addToCursor(), label: 'Add to Cursor ↗' },
   },
   {
     id: 'claude-code',
     name: 'Claude Code',
+    logo: 'claude',
     how: 'Add it from a terminal, then run /mcp in Claude Code to sign in.',
     code: `claude mcp add --transport http minca ${MCP_URL}`,
   },
   {
     id: 'codex',
     name: 'Codex',
+    logo: 'openai',
     how: 'Add it from a terminal.',
     code: `codex mcp add minca --url ${MCP_URL}`,
   },
   {
     id: 'gemini',
     name: 'Gemini CLI',
+    logo: 'gemini',
     how: 'Add it from a terminal.',
     code: `gemini mcp add --transport http minca ${MCP_URL}`,
   },
   {
     id: 'other',
     name: 'Other apps',
+    logo: 'mcp',
     how: 'Any app that takes a remote MCP server takes this address.',
     code: MCP_URL,
   },
   {
     id: 'computer',
     name: 'On your computer',
+    logo: 'terminal',
     how: 'Rather keep it on your own machine? Run this there. It adds Minca to every AI app it finds, for all your spaces.',
     code: COMMAND,
     then: 'Your account home opens so you can allow it, and shows six digits to type into the terminal.',
@@ -118,28 +125,21 @@ const CLIENTS: ReadonlyArray<{
 
 function Clients() {
   const [selected, setSelected] = useState(CLIENTS[0]?.id ?? '');
+  const tabs = CLIENTS.map((client) => ({ ...client, icon: <AppLogo name={client.logo} size={18} /> }));
   return (
-    <Tabs label="AI apps" items={CLIENTS} selected={selected} onSelect={setSelected}>
+    <Tabs label="AI apps" items={tabs} selected={selected} onSelect={setSelected}>
       {(client) => (
-        <div className="concept">
-          <div>
-            <h3>{client.name}</h3>
-            <p>{client.how}</p>
-            <p>{client.then ?? SIGN_IN}</p>
-          </div>
+        <div className="client">
+          <h3>{client.name}</h3>
+          <p>{client.how}</p>
           {client.link ? (
-            <div className="actions">
-              <a href={client.link.href} className="btn btn-primary btn-lg" target="_blank" rel="noreferrer">
-                {client.link.label}
-              </a>
-            </div>
+            <a href={client.link.href} className="btn btn-primary btn-lg" target="_blank" rel="noreferrer">
+              {client.link.label}
+            </a>
           ) : (
-            client.code && (
-              <Code file={client.file} lang="shell" copy>
-                {client.code}
-              </Code>
-            )
+            client.code && <Terminal text={client.code} />
           )}
+          <p className="client-then">{client.then ?? SIGN_IN}</p>
         </div>
       )}
     </Tabs>
@@ -310,10 +310,7 @@ export function Mcp() {
                 Connect Claude, ChatGPT or any AI that speaks MCP to your spaces. Ask it what’s happening at
                 the club, or tell it to take the last seat.
               </p>
-              <div className="command">
-                <code>{MCP_URL}</code>
-                <CopyButton text={MCP_URL} />
-              </div>
+              <Terminal text={MCP_URL} style={{ maxWidth: 440, marginBottom: 24 }} />
               <div className="actions">
                 <a href={addToClaude()} className="btn btn-primary btn-lg" target="_blank" rel="noreferrer">
                   Add to Claude ↗
