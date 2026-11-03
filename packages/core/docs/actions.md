@@ -142,9 +142,11 @@ the grant's keys when present and relays = the grant's ∪ `$MINCA_RELAYS`
 `node-datachannel`; it joins any granted spaces it lacks (`joinGranted`);
 wraps the node with `asAgent`; and holds every space.
 
-Once the agent is connected here, a `minca` command runs as it unless
-`--account` or `$MINCA_ACCOUNT` names an account: never by which secrets the
-environment holds, which an agent's shell may inherit. What it writes shows
+Once the agent is connected here, a `minca` command on spaces or records
+runs as it unless `--account` or `$MINCA_ACCOUNT` names an account (an empty
+one names none), whatever secrets the environment holds. Commands that open
+the account itself (`run`, `agent --bot`) still unlock it from the
+environment. What it writes shows
 "via agent". Its node runs for that one command, under the MCP service's
 rule (`catchUp`, `keptAfter`): a command naming a space waits up to 15 s to
 hold what an always-on node there holds and refuses when it can't, and one

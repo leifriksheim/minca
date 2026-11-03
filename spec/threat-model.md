@@ -1111,14 +1111,15 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     and make honest calls wait, then fail
     ([#33](https://github.com/leifriksheim/minca/issues/33)). None of this is
     protocol: a dishonest service need not run that code.
-  - The CLI on a computer `minca connect` set up is such a program too: each
-    command an agent's shell runs is a node of the agent's for that command,
-    under the MCP service's rule above, so it refuses a space it can't catch
-    up with rather than write behind, and a write fails until a keeper or
-    member has it. It acts as the agent unless an account is named, never by
-    which secrets the environment holds; but a shell that holds the
-    account's passphrase or recovery code can name it, and is then the
-    account, whatever the note says (`withNode` in
+  - The CLI on a computer `minca connect` set up is such a program too: a
+    `minca spaces …` or `minca records …` command an agent's shell runs is
+    a node of the agent's for that command, under the MCP service's rule
+    above, so it refuses a space it can't catch up with rather than write
+    behind, and a write fails until a keeper or member has it. Those act as
+    the agent unless an account is named. The commands that open the account
+    itself (`minca run`, `minca agent --bot`, `minca init --existing`) unlock
+    it with whatever passphrase or recovery code the environment holds, so a
+    shell that holds one is the account, whatever the note says (`withNode` in
     `packages/cli/src/main.ts`, `packages/cli/src/level.ts`;
     `packages/cli/tests/cli-agent.test.ts`). By design: keep the account's
     secrets out of an agent's environment.

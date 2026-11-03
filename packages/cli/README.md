@@ -399,9 +399,9 @@ nothing in the note marks it as an agent except that it grants records only.
 `--name` changes what you see ("Agent on leifs-macbook"), and `--relay` adds
 one your account home uses (`$MINCA_RELAYS` sets the defaults).
 
-From then on, every `minca` command on this computer runs as the agent,
-unless `--account` (or `MINCA_ACCOUNT`) names an account here: never by
-what secret the environment happens to hold. So an agent with a shell (Claude Code, Codex, Cursor's agent) uses Minca by
+From then on, every `minca spaces …` and `minca records …` command on this
+computer runs as the agent, unless `--account` (or `MINCA_ACCOUNT`) names an
+account here. So an agent with a shell (Claude Code, Codex, Cursor's agent) uses Minca by
 running `minca` commands; tell it to start with `minca help`. Nothing is
 added to its settings. What it writes is marked as written under a
 records-only note, which the example app shows as "via agent", and its note

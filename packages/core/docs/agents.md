@@ -39,7 +39,8 @@ It makes a key for this computer's agent and opens the person's account home
 in the browser, where they sign in, or make an account, and allow it. The
 home then shows six digits, which the person types into the terminal: the
 agent keeps its note only once they match. From then on every `minca`
-command on that computer runs as the agent unless an account is named
+command on spaces or records on that computer runs as the agent unless an
+account is named
 (`--account`): an agent with a shell (Claude Code, Codex, Cursor's agent)
 uses Minca through the CLI, and what it writes shows "via agent". Each
 command catches up with the space's always-on nodes before it acts, and

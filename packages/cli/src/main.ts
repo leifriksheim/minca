@@ -122,8 +122,8 @@ Agents:
 
   An agent with a shell (Claude Code, Codex, Cursor's agent, …) runs these
   commands. "minca connect" opens your account home in the browser, where
-  you allow this computer's agent; from then on every command runs as that
-  agent, unless --account names an account here: it writes records, marked
+  you allow this computer's agent; from then on every spaces and records
+  command runs as that agent, unless --account names an account here: it writes records, marked
   "via agent", and can't change who is in a space or add collections. A
   command in a space waits to catch up with its always-on nodes, and refuses
   when it can't; one that writes waits for them to have it.
@@ -1058,13 +1058,10 @@ function splitGlobals(argv: ReadonlyArray<string>): { globals: Globals; rest: st
 }
 
 /**
- * Runs something against the unlocked account's folder, offline. With a
- * daemon running on the same folder, it picks the change up and syncs it.
- */
-/**
- * Runs `work` as the agent "minca connect" allowed here, once there is one,
- * unless an account is named (--account, MINCA_ACCOUNT); else as this
- * computer's account. As the agent, what it writes shows "via agent", and
+ * Runs a command on spaces or records as the agent "minca connect" allowed
+ * here, once there is one, unless an account is named (--account,
+ * MINCA_ACCOUNT, empty counting as none, as `chooseAccount` reads it); else
+ * as this computer's account. As the agent, what it writes shows "via agent", and
  * its note doesn't let it change who is in a space.
  */
 async function withNode(
@@ -1073,8 +1070,8 @@ async function withNode(
 ): Promise<number> {
   const home = homePath(globals.home);
   // Named, never guessed from what the environment holds: a secret an agent's shell inherits opens nothing.
-  const asAgent =
-    (globals.account ?? process.env.MINCA_ACCOUNT) === undefined && (await loadAgentGrant(home)) !== null;
+  const named = Boolean(globals.account || process.env.MINCA_ACCOUNT);
+  const asAgent = !named && (await loadAgentGrant(home)) !== null;
   const agent = asAgent
     ? await startAgentNode(home, await agentSlot(home), {
         nodes: commaList(process.env.MINCA_NODES),
@@ -1109,7 +1106,7 @@ async function agentSlot(home: string): Promise<Slot> {
     await slot.release();
     if (Date.now() > until)
       throw new Error(
-        'Every connected session of this computer\'s agent is busy. Try again, or run "minca connect" for another.',
+        'No session of this computer\'s agent is free to use: its connection may have run out, or others hold every one. Run "minca connect" again, or try again in a moment.',
       );
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
