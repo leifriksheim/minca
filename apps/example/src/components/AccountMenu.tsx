@@ -146,7 +146,12 @@ export function AccountActions({
       <Section>
         {others.map((other) => (
           <div key={other.did} className="row">
-            <button role="menuitem" onClick={() => switchTo(other.did)} className={`${styles.item} truncate`}>
+            <button
+              role="menuitem"
+              data-intent="ghost"
+              onClick={() => switchTo(other.did)}
+              className={`${styles.item} truncate`}
+            >
               <Avatar did={other.did} size={24} round src={rememberedPicture(other.did)} />
               <span className="truncate">{other.name}</span>
             </button>
@@ -193,7 +198,7 @@ function Section({ children }: { children: ReactNode }) {
 /** One row of the menu: a label, and optionally a quieter line on the right */
 function Item({ children, hint, onClick }: { children: ReactNode; hint?: string; onClick: () => void }) {
   return (
-    <button role="menuitem" onClick={onClick} className={styles.item}>
+    <button role="menuitem" data-intent="ghost" onClick={onClick} className={styles.item}>
       <span>{children}</span>
       {hint && <small className="truncate">{hint}</small>}
     </button>
