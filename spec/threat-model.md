@@ -1011,10 +1011,13 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     there. Only the account's own keys and apps can; apps should choose names
     that include their collection (02 §4.1). By design.
   - An MCP service a person connects a chat app through (`minca mcp-server`)
-    is such an app, holding its key inside the app's access token, sealed
-    under a key of its own: on its disk only between the person allowing it
-    and the app collecting the token, twenty minutes at most, and in memory
-    while a node runs. While the app uses it, a node of its holds the spaces
+    is such an app. It keeps its key and note on its disk sealed under a key
+    only the app's access token carries, itself sealed under a key of the
+    service's own, so neither the disk nor a token alone opens them; unsealed
+    only between the person allowing it and the app collecting the token,
+    twenty minutes at most, and in memory while a node runs. A disconnect the
+    service sees drops the sealed copy, and with it the token; losing its
+    data folder ends every connection. While the app uses it, a node of its holds the spaces
     the person picked in memory, reads them and writes records there "via
     agent", as the app's model asks; and whoever holds its sealing key and a
     token can do the same until the note runs out or the person disconnects
@@ -1080,6 +1083,8 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     app then acts in their spaces, unless it ties OAuth's `state` to the
     browser that started it; the service can't tell. What a stranger can make
     it keep or do is an app's registration, gone after a day unless used;
+    each sign-in's sealed grant, up to the 64 KB a consent post may be,
+    until its note runs out, at most a month;
     nodes that run while called, each with up to 8 spaces those always-on
     nodes carry, in memory, and up to an hour after for writes their keepers
     don't have; each a few bytes of places for a key that wrote, for a

@@ -309,12 +309,16 @@ the consent page, which says which app it is and where it will send you
 back. There you continue to your account home, as with any app, pick the
 spaces it may use (up to 8, never the whole account) and allow it: the home
 signs a records-only note, for 30 days, made out to a key the page made. The
-page hands both to the service, which checks them and seals them into the
-app's access token, under a key only it holds. Then you are back in the app,
+page hands both to the service, which checks them and keeps them sealed
+under a key only the app's access token carries, itself sealed under a key
+only the service holds. Then you are back in the app,
 and its tools arrive.
 
-The service keeps nothing per connection: the key and note live in the
-token, and each call opens it and starts a node from what it carries. That
+The service keeps little per connection: the key and note, sealed, which
+neither its disk nor a token opens alone (the token stays small however many
+spaces you pick), and each call opens them and starts a node from them. So
+its data folder holds what opens every connection with its token: lose it and
+every chat app connects again. That
 node holds your spaces in memory while the app uses it (at most 32 MB), and
 reaches them as any device would: through the always-on nodes your invites
 and spaces name, such as your free host, so it works with every device of

@@ -1,7 +1,7 @@
 /**
  * What a chat app acts with, and the node it acts through. The key and the
- * records-only note a person's account home signed travel inside the app's
- * access token, sealed under a key only the service holds (`oauth.ts`). Each
+ * records-only note a person's account home signed are kept by the service,
+ * sealed under a key only the app's access token carries (`oauth.ts`). Each
  * call opens them, and the node they start runs while the app is using it,
  * holding its spaces in memory. A write is done once the space's keepers have
  * it. What outlives the node is only where its key has signed (`places`): a
@@ -14,7 +14,7 @@ import { isRecord, messageOf } from '../json.js';
 import { importKeyJwk } from '../writer-keys.js';
 import { boundedMemory } from './memory.js';
 
-/** What a token carries: a key, and the note made out to it */
+/** What a token opens: a key, and the note made out to it */
 export interface Granted {
   /** The key the note is made out to, as JWK */
   readonly key: { readonly privateKey: JsonWebKey; readonly publicKey: JsonWebKey };
