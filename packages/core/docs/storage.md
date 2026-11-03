@@ -175,7 +175,7 @@ change and on close.
   `writer-keys/`; a slot left in the home from before is not read, nor
   `writers/`, where a minca from before the numbered lock keeps its keys, so
   the two never sign with one key. `minca agent`
-  and `minca mcp` keep each session's key and stores together in a slot of
+  and the commands an agent runs keep each session's key and stores together in a slot of
   `<home>/agent`, beside the data folder the sessions share
   ([actions](actions.md#the-agent-on-a-computer)).
 - **Elsewhere** it must be given: `folderStores` refuses to start without

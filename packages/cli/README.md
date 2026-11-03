@@ -4,7 +4,7 @@ One program, three jobs:
 
 - **Manage your spaces** — every command the Node API has, as `minca spaces …` and `minca records …`
 - **Run an always-on node** — `minca run` keeps every space syncing, serves sockets browsers dial into, and is a relay too
-- **Connect an agent** — `minca connect`, allowed at your account home, then Claude Code, Claude Desktop, Cursor, VS Code or another MCP client starts `minca mcp` by itself, or `minca agent` runs it on its own
+- **Connect an agent** — `minca connect`, allowed at your account home, then an agent with a shell (Claude Code, Codex, Cursor's agent) runs `minca` commands as it, or `minca agent` runs it on its own. A chat app connects to `https://mcp.minca.social/mcp` instead
 
 It uses the same data folder layout a browser does. Point `--home` at the folder
 you picked in Chrome and the CLI, the daemon and the browser all share one
@@ -360,7 +360,7 @@ It is OAuth 2.1 with PKCE and dynamic client registration, on
 [`oidc-provider`](https://github.com/panva/node-oidc-provider), tokens as
 encrypted JWTs (`jose`), and MCP over Streamable HTTP on the
 [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk).
-The tools are the same `NODE_ACTIONS` as `minca mcp`, but for previewing an
+The tools are the same `NODE_ACTIONS` as the CLI's, but for previewing an
 invite, which would have the service dial addresses a caller chose. Every
 sign-in shows the consent page. An app may register only places a code is
 safe at: Claude's and ChatGPT's MCP callbacks exactly, a host in
@@ -395,46 +395,40 @@ once they match. The two meet on a
 channel only that code opens (introduced by a relay, sealed end to end), and
 the home signs a records-only note (`/record`) for every space in your
 account, for 30 days. The agent is a program connected by code, not a kind of account:
-nothing in the note marks it as an agent except that it grants records only. Then it adds `minca` to Claude Code (`claude mcp add`) and every other
-agent [add-mcp](https://github.com/neon-solutions/add-mcp) knows — Claude
-Desktop, Cursor, VS Code, Windsurf, Zed, Codex, Gemini CLI and more — where
-it finds them. `--no-configure` prints the config instead,
+nothing in the note marks it as an agent except that it grants records only.
 `--name` changes what you see ("Agent on leifs-macbook"), and `--relay` adds
 one your account home uses (`$MINCA_RELAYS` sets the defaults).
 
-An agent given `minca mcp` by hand, before connecting, gets one tool until
-it is: `agent_connect`, which opens your usual account home the same way. It
-gives the model the link only when no browser opened, and takes no home of
-the model's choosing. The AI asks you for the six digits the page shows, and
-gives them to `agent_connect`. Once you allow it there, every tool arrives without a
-restart.
+From then on, every `minca spaces …` and `minca records …` command on this
+computer runs as the agent, unless `--account` (or `MINCA_ACCOUNT`) names an
+account here. So an agent with a shell (Claude Code, Codex, Cursor's agent) uses Minca by
+running `minca` commands; tell it to start with `minca help`. Nothing is
+added to its settings. What it writes is marked as written under a
+records-only note, which the example app shows as "via agent", and its note
+doesn't let it make, join or leave spaces, invite, change roles or define
+collections: it proposes collections with `minca collections propose`, and
+you add them.
 
-From then on the agent starts `minca mcp` itself. It's a node of its own: it
-follows your account's list of spaces, meets your other devices over WebRTC,
-and keeps working with every tab closed. What it writes is marked as written
-under a records-only note, which the example app shows as "via agent". It
-isn't offered what needs a person (making, joining or leaving spaces, invites,
-roles, defining collections), and its note doesn't let it: it proposes
-collections with `collections_propose`, and you add them. Connected from
-npx, the agent starts `npx -y @minca/cli@latest mcp`, so restarting it picks
-up a new release. `minca disconnect`
-forgets it on this computer and takes `minca` out of the agents connecting
-added it to (an entry you added by hand stays); disconnecting it in your
-account home stops its note working everywhere.
+Each command runs a node of the agent's for as long as it takes, under the
+same rule as the MCP service. One that names a space first waits up to 15
+seconds to hold what an always-on node of that space holds, and refuses when
+it can't: a node behind could write over what it hasn't seen. One that
+writes then waits up to 10 seconds for the space's always-on nodes to have
+it, and fails, saying to read it back before writing again, when nobody
+does. What it returns from other people is marked as data on stderr, never
+instructions.
 
-To connect it again, after a disconnect or when its time runs out, run
-`minca connect` again. Each connect makes a new key, since a
-revoked key never writes again, and a `minca mcp` already running takes the
-new connection up by itself, so the agent's session needs no restart. Until
-then, a tool that fails says the agent was disconnected.
+An agent's shell that also holds this computer's account passphrase or
+recovery code can name `--account` and act as the account: keep those out
+of an agent's environment. The commands share one copy of your spaces in
+`~/.minca/agent/spaces`, so each starts from what the last synced, and each
+signs with a key of its own while it runs, so two at once never undo each
+other's writes.
 
-Several sessions can use Minca at once, in Claude Code, Claude Desktop and
-Cursor alike. Each signs with a key of its own, since two signing with one
-would undo what it writes. The first time more sessions run at once than are
-connected, the new one asks you to allow it at your account home, the same
-way as connecting, and keeps that connection for next time. They all share
-one copy of your spaces in `~/.minca/agent/spaces`, so a new session starts
-from what the others synced.
+`minca disconnect` forgets it on this computer; disconnecting it in your
+account home stops its note working everywhere. To connect it again, after a
+disconnect or when its time runs out, run `minca connect` again. Each connect
+makes a new key, since a revoked key never writes again.
 
 ### The agent on its own
 
@@ -448,14 +442,14 @@ npx @minca/cli connect          # once
 npx @minca/cli agent             # in this repo: npm run minca -- agent
 ```
 
-It has the tools `minca mcp` serves an agent, and the same limits. Anything
+It has the tools a chat app gets, and the same limits. Anything
 that deletes or overwrites asks you first (and is refused when input is piped).
 Every model call is priced; after each answer it shows what it cost, and once
 today's spend reaches `--daily-cap` (dollars, default 2) it starts no more calls
 until tomorrow. `--model` picks the model (default `claude-opus-5-5`, or
 `$MINCA_AGENT_MODEL`); it must be one whose price it knows.
 
-`minca agent` runs beside any `minca mcp` sessions, each with a key of its
+`minca agent` runs beside any commands an agent runs, each with a key of its
 own (above). With two `minca agent` running, the first runs your automations
 and the second only chats, so none runs twice.
 

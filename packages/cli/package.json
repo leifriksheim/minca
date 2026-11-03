@@ -42,7 +42,6 @@
     "@modelcontextprotocol/server": "^2.4.0",
     "@types/node": "^26.6.5",
     "@types/oidc-provider": "^9.13.1",
-    "add-mcp": "2.4.1",
     "esbuild": "^0.28.2",
     "jose": "^6.2.15",
     "oauth4webapi": "^3.8.8",
