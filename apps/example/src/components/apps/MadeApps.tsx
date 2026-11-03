@@ -180,12 +180,12 @@ function Proposal({
           </p>
         </div>
         {mine && (
-          <button type="button" data-intent="quiet" onClick={remove} disabled={busy}>
+          <button type="button" data-intent="ghost" onClick={remove} disabled={busy}>
             Withdraw
           </button>
         )}
         {mayDefine && !mine && (
-          <button type="button" data-intent="quiet" onClick={remove} disabled={busy}>
+          <button type="button" data-intent="ghost" onClick={remove} disabled={busy}>
             Decline
           </button>
         )}

@@ -20,14 +20,8 @@
     max-width: 112px;
     height: auto;
     padding: 10px 6px;
-    border: none;
     border-radius: var(--radius);
-    background: none;
     font-size: var(--text-small);
-
-    &:hover:not(:disabled) {
-      background: var(--color-divider);
-    }
   }
 }
 

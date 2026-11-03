@@ -183,7 +183,7 @@ export function FileInput({
           {busy ? 'Adding…' : ref ? 'Replace' : picture ? 'Add a picture' : 'Add a file'}
         </button>
         {ref && (
-          <button type="button" data-intent="quiet" onClick={() => onChange(undefined)}>
+          <button type="button" data-intent="ghost" onClick={() => onChange(undefined)}>
             Remove
           </button>
         )}

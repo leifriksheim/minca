@@ -34,7 +34,7 @@ export function ActivityPage() {
       <header>
         <h1>Activity</h1>
         {!off && (
-          <button data-intent="quiet" onClick={() => setManaging(true)}>
+          <button data-intent="ghost" onClick={() => setManaging(true)}>
             <Icon name="bellOn" size={14} /> Manage
           </button>
         )}

@@ -94,7 +94,7 @@ export function LinkPicker({
       )}
       {error && <p role="alert">{error}</p>}
       <div className="row">
-        <button type="button" data-intent="quiet" onClick={onDone}>
+        <button type="button" data-intent="ghost" onClick={onDone}>
           Cancel
         </button>
       </div>

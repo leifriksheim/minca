@@ -93,7 +93,7 @@ export function AutomationsView({
             Nobody sees when a bot or agent is working on something here, so its answers arrive unannounced.
           </span>
           {shows.turnOn ? (
-            <button type="button" data-intent="quiet" onClick={() => shows.turnOn && act(shows.turnOn)}>
+            <button type="button" data-intent="ghost" onClick={() => shows.turnOn && act(shows.turnOn)}>
               Show it
             </button>
           ) : (

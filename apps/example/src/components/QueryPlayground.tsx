@@ -295,12 +295,12 @@ export function QueryPlayground({
           {parsed?.ok && (result?.cursor || parsed.query.cursor) && (
             <div className="row">
               {parsed.query.cursor && (
-                <button data-intent="quiet" onClick={() => setCursor(null)}>
+                <button data-intent="ghost" onClick={() => setCursor(null)}>
                   Back to the first page
                 </button>
               )}
               {result?.cursor && (
-                <button data-intent="quiet" onClick={() => setCursor(result.cursor)}>
+                <button data-intent="ghost" onClick={() => setCursor(result.cursor)}>
                   Next page →
                 </button>
               )}

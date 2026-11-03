@@ -165,7 +165,7 @@ export function AddPeople({
             )}
           </small>
         </span>
-        <button data-intent="quiet" onClick={() => void copyLink()} disabled={making}>
+        <button data-intent="ghost" onClick={() => void copyLink()} disabled={making}>
           {making ? 'Making…' : copied ? 'Copied' : 'Copy'}
         </button>
       </div>
@@ -405,7 +405,7 @@ export function ContactPicker({
               {invited.has(contact.did) ? (
                 <>
                   <small>Invited</small>
-                  <button data-intent="quiet" onClick={() => void takeBack(contact)} disabled={sending}>
+                  <button data-intent="ghost" onClick={() => void takeBack(contact)} disabled={sending}>
                     Take back
                   </button>
                 </>

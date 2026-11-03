@@ -155,7 +155,7 @@ export function AccountActions({
               onClick={() => void removeAccount(other)}
               aria-label={`Remove ${other.name} from this app`}
               title={`Remove ${other.name} from this app`}
-              data-intent="quiet"
+              data-intent="ghost"
               data-icon
             >
               ×

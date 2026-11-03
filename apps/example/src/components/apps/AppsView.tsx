@@ -99,7 +99,7 @@ export function AppsView({
         <header>
           <h2>Apps</h2>
           {mayDefine && apps.ready.length > 0 && (
-            <button type="button" data-intent="quiet" onClick={() => setArranging((was) => !was)}>
+            <button type="button" data-intent="ghost" onClick={() => setArranging((was) => !was)}>
               {arranging ? 'Done' : 'Arrange'}
             </button>
           )}
@@ -193,7 +193,7 @@ function QuickPage({
   go: SpaceScreen['go'];
 }) {
   return (
-    <button type="button" onClick={() => go(page.to)}>
+    <button type="button" data-intent="ghost" onClick={() => go(page.to)}>
       <Icon name={page.icon} size={20} />
       {page.label}
     </button>
@@ -250,7 +250,7 @@ function AppRow({
       <strong className="truncate">{app.title}</strong>
       <button
         type="button"
-        data-intent="quiet"
+        data-intent="ghost"
         data-icon
         className={styles.up}
         onClick={() => arrange.onMove(-1)}
@@ -261,7 +261,7 @@ function AppRow({
       </button>
       <button
         type="button"
-        data-intent="quiet"
+        data-intent="ghost"
         data-icon
         className={styles.down}
         onClick={() => arrange.onMove(1)}

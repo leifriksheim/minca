@@ -1,5 +1,5 @@
 /*
- * Buttons and fields. A button says what it is for with data-intent; nothing
+ * Buttons and fields. A button says how much it asks for with data-intent; nothing
  * else changes how it looks, and every control is the same height.
  */
 button,
@@ -43,8 +43,20 @@ a[data-intent] {
     }
   }
 
-  /* An action that sits back: in a toolbar, on a row, beside a field */
-  &[data-intent='quiet'] {
+  /* With no data-intent, a button is secondary: outlined, for what isn't the main action. */
+
+  /* A soft fill and no line: back, close, a page's own tools */
+  &[data-intent='subtle'] {
+    border-color: transparent;
+    background: var(--color-sunken);
+
+    &:hover:not(:disabled) {
+      background: var(--color-divider);
+    }
+  }
+
+  /* Nothing until pointed at: in a toolbar, on a row, beside a field */
+  &[data-intent='ghost'] {
     border-color: transparent;
     background: none;
     color: var(--color-text-muted);

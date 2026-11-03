@@ -360,7 +360,7 @@ export function AutomationBuilder({
                         type="button"
                         onClick={() => setCount(null)}
                         aria-label="Stop counting"
-                        data-intent="quiet"
+                        data-intent="ghost"
                         data-icon
                       >
                         ✕

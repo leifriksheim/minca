@@ -28,7 +28,7 @@ export function Terminal({ text }: { text: string }) {
         onClick={() => copy(text)}
         aria-label={copied ? 'Copied' : 'Copy'}
         title={copied ? 'Copied' : 'Copy'}
-        data-intent="quiet"
+        data-intent="ghost"
         data-icon
       >
         {copied ? <Check /> : <Copy />}

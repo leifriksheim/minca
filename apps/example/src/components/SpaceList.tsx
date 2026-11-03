@@ -235,7 +235,7 @@ export function SpaceDialog({
           <button data-intent="primary" type="submit" disabled={!invite.trim()}>
             Join
           </button>
-          <button data-intent="quiet" type="button" onClick={() => setMode('new')}>
+          <button data-intent="ghost" type="button" onClick={() => setMode('new')}>
             Make a new group instead
           </button>
         </form>
@@ -277,11 +277,11 @@ export function SpaceDialog({
 
         <div className="row">
           {step === 'name' ? (
-            <button data-intent="quiet" type="button" onClick={() => setMode('join')}>
+            <button data-intent="ghost" type="button" onClick={() => setMode('join')}>
               Have an invite link?
             </button>
           ) : (
-            <button data-intent="quiet" type="button" onClick={back}>
+            <button data-intent="ghost" type="button" onClick={back}>
               Back
             </button>
           )}

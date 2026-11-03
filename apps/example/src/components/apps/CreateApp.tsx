@@ -105,7 +105,7 @@ function AskForApp({
       )}
 
       {onBuildByHand && (
-        <button type="button" data-intent="quiet" onClick={onBuildByHand}>
+        <button type="button" data-intent="ghost" onClick={onBuildByHand}>
           Or build one by hand
         </button>
       )}

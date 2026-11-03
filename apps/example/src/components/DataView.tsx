@@ -85,7 +85,7 @@ export function DataView({
           <small className={styles.heading}>In this space</small>
           {ordered.length > 0 && (
             <button
-              data-intent="quiet"
+              data-intent="ghost"
               className="row"
               data-spread
               onClick={() => onPlace({ collection: ALL, key: null })}
@@ -101,7 +101,7 @@ export function DataView({
               {g.members.map((c) => (
                 <button
                   key={c.name}
-                  data-intent="quiet"
+                  data-intent="ghost"
                   className="row"
                   data-spread
                   onClick={() => onPlace({ collection: c.name, key: null })}
@@ -117,7 +117,7 @@ export function DataView({
           {ordered.length === 0 && <small>Nothing yet</small>}
           {space.writable && (
             <button
-              data-intent="quiet"
+              data-intent="ghost"
               onClick={() => onPlace({ collection: NEW, key: null })}
               aria-current={selected === NEW ? 'page' : undefined}
             >

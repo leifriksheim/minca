@@ -87,7 +87,7 @@
       <header>
         <h3>${question}</h3>
         ${closed && html`<span class="tag">Closed</span>`}
-        <button data-intent="quiet" onClick=${() => minca.open({ record: poll.key })}>Open</button>
+        <button data-intent="ghost" onClick=${() => minca.open({ record: poll.key })}>Open</button>
       </header>
       <small class="row" data-gap="tight">
         Asked by <${Person} did=${poll.createdBy} size=${16} /> · ${ago(poll.createdAt)}
@@ -135,7 +135,7 @@
           poll.mine &&
           html`<span class="row" data-gap="tight">
             <button
-              data-intent="quiet"
+              data-intent="ghost"
               onClick=${() => minca.update(poll.key, { ...poll.body, closed: !closed })}
             >
               ${closed ? 'Reopen' : 'Close poll'}
@@ -190,10 +190,10 @@
             />`,
         )}
       </fieldset>
-      ${options.length < 10 && html`<div class="row"><button type="button" data-intent="quiet" onClick=${() => setOptions([...options, ''])}>+ Add option</button></div>`}
+      ${options.length < 10 && html`<div class="row"><button type="button" data-intent="ghost" onClick=${() => setOptions([...options, ''])}>+ Add option</button></div>`}
       ${!unique && html`<p role="alert">Two options are the same.</p>`}
       <div class="row" data-spread>
-        <button type="button" data-intent="quiet" onClick=${onCancel}>Cancel</button>
+        <button type="button" data-intent="ghost" onClick=${onCancel}>Cancel</button>
         <button type="submit" data-intent="primary" disabled=${!ready || busy}>
           ${busy ? 'Asking…' : 'Ask'}
         </button>

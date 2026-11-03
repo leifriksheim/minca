@@ -268,7 +268,7 @@ function ProposalPage({
 
   return (
     <div className="stack" data-gap="loose">
-      <button className={styles.back} data-intent="quiet" onClick={onBack}>
+      <button className={styles.back} data-intent="ghost" onClick={onBack}>
         ← All proposals
       </button>
       <div className={styles.two}>
@@ -313,7 +313,7 @@ function ProposalPage({
             stays reached on every device.
           </p>
           <div className={`row ${styles.actions}`}>
-            <button data-intent="quiet" onClick={() => setConfirming(null)}>
+            <button data-intent="ghost" onClick={() => setConfirming(null)}>
               Cancel
             </button>
             <button data-intent="primary" disabled={action.busy} onClick={() => cast(confirming)}>
@@ -730,7 +730,7 @@ function Compose({
             </legend>
             <button
               type="button"
-              data-intent="quiet"
+              data-intent="ghost"
               onClick={() => {
                 setLeft(new Set());
                 setAdded(new Set());
@@ -740,7 +740,7 @@ function Compose({
             </button>
             <button
               type="button"
-              data-intent="quiet"
+              data-intent="ghost"
               onClick={() => {
                 setLeft(new Set(people));
                 setAdded(new Set());
@@ -810,7 +810,7 @@ function Compose({
 
         <Problem>{problem ?? action.error}</Problem>
         <div className={`row ${styles.actions}`}>
-          <button type="button" data-intent="quiet" onClick={onClose}>
+          <button type="button" data-intent="ghost" onClick={onClose}>
             Cancel
           </button>
           <button data-intent="primary" disabled={!title.trim() || action.busy || problem !== null}>

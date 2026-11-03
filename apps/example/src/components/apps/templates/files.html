@@ -254,7 +254,7 @@
         </div>
         ${
           group?.mine &&
-          html`<button type="button" data-intent="quiet" onClick=${() => dropGroup(group)}>
+          html`<button type="button" data-intent="ghost" onClick=${() => dropGroup(group)}>
             Remove category
           </button>`
         }
@@ -343,7 +343,7 @@
               naming === null &&
               html`<button
                 type="button"
-                data-intent="quiet"
+                data-intent="ghost"
                 data-icon
                 title="New category"
                 aria-label="New category"
@@ -547,7 +547,7 @@
         </span>
         <button
           type="button"
-          data-intent="quiet"
+          data-intent="ghost"
           data-icon
           aria-label="Previous"
           disabled=${!hasPrevious}
@@ -557,7 +557,7 @@
         </button>
         <button
           type="button"
-          data-intent="quiet"
+          data-intent="ghost"
           data-icon
           aria-label="Next"
           disabled=${!hasNext}
@@ -611,8 +611,8 @@
           file.mine &&
           (sure
             ? html`<button type="button" data-intent="danger" onClick=${onDelete}>Delete for everyone</button>
-                <button type="button" data-intent="quiet" onClick=${() => setSure(false)}>Keep</button>`
-            : html`<button type="button" data-intent="quiet" onClick=${() => setSure(true)}>Delete</button>`)
+                <button type="button" data-intent="ghost" onClick=${() => setSure(false)}>Keep</button>`
+            : html`<button type="button" data-intent="ghost" onClick=${() => setSure(true)}>Delete</button>`)
         }
       </div>
     </${Modal}>`;

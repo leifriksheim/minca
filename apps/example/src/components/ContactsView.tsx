@@ -137,7 +137,7 @@ export function ContactsView({
                 <button data-intent="primary" onClick={() => void act(() => node.inbox.accept(knock.id))}>
                   Accept
                 </button>
-                <button data-intent="quiet" onClick={() => void act(() => node.inbox.dismiss(knock.id))}>
+                <button data-intent="ghost" onClick={() => void act(() => node.inbox.dismiss(knock.id))}>
                   Not now
                 </button>
                 <RowMenu
@@ -259,7 +259,7 @@ export function ContactsView({
                 name={contact.name === contact.did ? nameOf(contact.did, nobody) : contact.name}
               >
                 <button
-                  data-intent="quiet"
+                  data-intent="ghost"
                   onClick={() => void act(() => node.contacts.remove(contact.did))}
                   title="They can ask or knock again"
                 >
@@ -324,7 +324,7 @@ function FindPeople({
           spellCheck={false}
         />
         {query && (
-          <button data-intent="quiet" data-icon onClick={() => setQuery('')} aria-label="Clear">
+          <button data-intent="ghost" data-icon onClick={() => setQuery('')} aria-label="Clear">
             ×
           </button>
         )}
@@ -343,7 +343,7 @@ function FindPeople({
             }
           >
             {known?.space ? (
-              <button data-intent="quiet" onClick={() => onOpen(known.space!)}>
+              <button data-intent="ghost" onClick={() => onOpen(known.space!)}>
                 Open
               </button>
             ) : !yours && !waiting ? (
@@ -463,7 +463,7 @@ function ContactRow({
         {/* Messaging them is a tap on the row too, which isn't plain to see: a button says so. */}
         {joined && (
           <button
-            data-intent="quiet"
+            data-intent="ghost"
             data-icon
             onClick={() => onOpen(contact.space!)}
             aria-label={`Message ${contact.name}`}
@@ -602,21 +602,21 @@ function Inbox({
       </small>
       <div className="row">
         {inbox ? (
-          <button data-intent="quiet" onClick={() => copy(inboxLink(inbox.code))}>
+          <button data-intent="ghost" onClick={() => copy(inboxLink(inbox.code))}>
             {copied ? 'Copied' : 'Copy inbox link'}
           </button>
         ) : (
-          <button data-intent="quiet" onClick={() => void act(() => node.inbox.open())}>
+          <button data-intent="ghost" onClick={() => void act(() => node.inbox.open())}>
             Open your inbox
           </button>
         )}
-        <button data-intent="quiet" onClick={() => setKnocking(true)}>
+        <button data-intent="ghost" onClick={() => setKnocking(true)}>
           Use a link or code
         </button>
         {inbox && (
           <>
             <button
-              data-intent="quiet"
+              data-intent="ghost"
               onClick={() => void act(() => node.inbox.clear())}
               title="Clear every knock waiting, for an inbox someone is flooding"
             >

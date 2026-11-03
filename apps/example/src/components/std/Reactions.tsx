@@ -61,7 +61,7 @@ export function Reactions({
         );
       })}
       {space.writable && (
-        <button data-intent="quiet" onClick={() => setPicking((was) => !was)} aria-label="Add a reaction">
+        <button data-intent="ghost" onClick={() => setPicking((was) => !was)} aria-label="Add a reaction">
           ☺︎+
         </button>
       )}

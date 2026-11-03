@@ -248,12 +248,12 @@
       ${has('std.reaction') && html`<${Reactions} about=${message} />`}
       <div data-actions>
         ${!editing && has('std.reaction') && html`<${EmojiPicker} label="React" onPick=${(emoji) => react(message, emoji).catch(() => {})} />`}
-        ${!editing && onReply && html`<button data-intent="quiet" data-icon title="Reply" aria-label="Reply" onClick=${onReply}>↩</button>`}
+        ${!editing && onReply && html`<button data-intent="ghost" data-icon title="Reply" aria-label="Reply" onClick=${onReply}>↩</button>`}
         ${
           !editing &&
           message.mine &&
           html`<button
-              data-intent="quiet"
+              data-intent="ghost"
               data-icon
               title="Edit"
               aria-label="Edit"
@@ -265,7 +265,7 @@
               ✎
             </button>
             <button
-              data-intent="quiet"
+              data-intent="ghost"
               data-icon
               title="Delete"
               aria-label="Delete"
@@ -284,7 +284,7 @@
       <span class="truncate">${file.name}</span>
       <button
         type="button"
-        data-intent="quiet"
+        data-intent="ghost"
         data-icon
         aria-label=${`Don't attach ${file.name}`}
         onClick=${onRemove}
@@ -346,7 +346,7 @@
     return html`<div ref=${box}>
       <button
         type="button"
-        data-intent="quiet"
+        data-intent="ghost"
         data-icon
         title="Send a GIF"
         aria-label="Send a GIF"

@@ -125,7 +125,7 @@ export function HostAddressForm({
       {asking && (
         <p role="status" className="row">
           <small>Asking {asking}…</small>
-          <button type="button" onClick={cancel} data-intent="quiet">
+          <button type="button" onClick={cancel} data-intent="ghost">
             Cancel
           </button>
         </p>

@@ -423,6 +423,7 @@ export function CallButton({ space, video = false }: { space: SpaceSummary; vide
   };
   return (
     <button
+      data-intent="ghost"
       onClick={() => void startHere()}
       disabled={busy || here}
       title={going ? `Join the call · ${going.people.length}` : whoCanJoin(space)}

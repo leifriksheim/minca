@@ -402,6 +402,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
             {/* Back for everywhere a step in from the apps; a phone, with no rail, has it everywhere. */}
             <button
               data-icon
+              data-intent="subtle"
               className={!onApps && (!onApp || inView) ? undefined : css.phone}
               onClick={goBack}
               aria-label={onApps ? 'Home' : 'Back'}
@@ -409,23 +410,25 @@ function SpaceView({ space }: { space: SpaceSummary }) {
             >
               <Icon name="back" />
             </button>
-            {onApps && (
-              <span className={css.phone}>
-                <SpaceFace space={space} pair={pair} size={28} />
-              </span>
-            )}
-            {open && <AppIcon app={open} size={28} />}
-            {/* The rail names the space, so there the Overview is named for itself. */}
-            <h1 className="truncate">
-              {onApps ? (
-                <>
-                  <span className={css.phone}>{name}</span>
-                  <span className={css.wide}>Overview</span>
-                </>
-              ) : (
-                title
+            <div className={`row ${css.title}`}>
+              {onApps && (
+                <span className={css.phone}>
+                  <SpaceFace space={space} pair={pair} size={28} />
+                </span>
               )}
-            </h1>
+              {open && <AppIcon app={open} size={28} />}
+              {/* The rail names the space, so there the Overview is named for itself. */}
+              <h1 className="truncate">
+                {onApps ? (
+                  <>
+                    <span className={css.phone}>{name}</span>
+                    <span className={css.wide}>Overview</span>
+                  </>
+                ) : (
+                  title
+                )}
+              </h1>
+            </div>
             {/* The Overview lists the apps already. */}
             {!onApps && (
               <AppSwitcher
@@ -691,6 +694,7 @@ function AppSwitcher({
     <div ref={root} className={`${css.anchor} ${css.phone}`}>
       <button
         data-icon
+        data-intent="subtle"
         onClick={() => setOpen((was) => !was)}
         aria-expanded={shown}
         aria-haspopup="menu"

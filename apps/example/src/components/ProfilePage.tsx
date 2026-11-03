@@ -52,7 +52,7 @@ export function ProfilePage() {
             <small>@{shortUsername(username)}</small>
           ) : (
             found.status === 'done' && (
-              <button data-intent="quiet" onClick={() => openAccountHome(state.home, account.did)}>
+              <button data-intent="ghost" onClick={() => openAccountHome(state.home, account.did)}>
                 Pick a username
               </button>
             )

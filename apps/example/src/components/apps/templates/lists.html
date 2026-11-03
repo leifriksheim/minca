@@ -137,7 +137,7 @@
         html`<section>
           <header>
             <h2>Done <span class="tag">${done.length}</span></h2>
-            ${mayAdd && html`<button data-intent="quiet" onClick=${() => Promise.allSettled(done.map((i) => minca.remove(i.key)))}>Clear</button>`}
+            ${mayAdd && html`<button data-intent="ghost" onClick=${() => Promise.allSettled(done.map((i) => minca.remove(i.key)))}>Clear</button>`}
           </header>
           <ul role="list" aria-label="Done">
             ${done.map((item) => html`<${Item} key=${item.key} item=${item} />`)}
@@ -145,13 +145,13 @@
         </section>`
       }
       <div class="row" data-gap="tight">
-        ${mayRename && !renaming && html`<button data-intent="quiet" onClick=${() => setRenaming(true)}>Rename</button>`}
+        ${mayRename && !renaming && html`<button data-intent="ghost" onClick=${() => setRenaming(true)}>Rename</button>`}
         ${
           mayDelete &&
           (deleting
             ? html`<button data-intent="danger" onClick=${removeList}>Delete for everyone</button>
-                <button data-intent="quiet" onClick=${() => setDeleting(false)}>Keep it</button>`
-            : html`<button data-intent="quiet" onClick=${() => setDeleting(true)}>Delete list</button>`)
+                <button data-intent="ghost" onClick=${() => setDeleting(false)}>Keep it</button>`
+            : html`<button data-intent="ghost" onClick=${() => setDeleting(true)}>Delete list</button>`)
         }
       </div>
     </main>`;
@@ -204,7 +204,7 @@
                   }}
                 />
                 <button
-                  data-intent="quiet"
+                  data-intent="ghost"
                   data-icon
                   aria-label="Delete item"
                   onPointerDown=${(e) => e.preventDefault()}

@@ -510,7 +510,7 @@ export function KeepOnline({
 
       {problem && <p role="alert">{problem}</p>}
       {host && mayChoose && !stopping && !settling && (
-        <button onClick={() => setStopping(true)} data-intent="quiet">
+        <button onClick={() => setStopping(true)} data-intent="ghost">
           Stop using {host.name}
         </button>
       )}

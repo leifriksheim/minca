@@ -68,7 +68,7 @@ function AssemblyBody({ space, a }: { space: SpaceSummary; a: Assembly }) {
           </TabButton>
         </nav>
         {a.mayModerate && (
-          <button className={styles.wide} data-intent="quiet" onClick={() => setTopics(true)}>
+          <button className={styles.wide} data-intent="ghost" onClick={() => setTopics(true)}>
             Topics
           </button>
         )}
@@ -151,7 +151,7 @@ function Topics({ a, onClose }: { a: Assembly; onClose: () => void }) {
             <li key={t.key} className="row" data-spread>
               <TopicChip topic={t} />
               <button
-                data-intent="quiet"
+                data-intent="ghost"
                 disabled={action.busy}
                 title={
                   inUse(t.key) ? 'Proposals or delegations use it: they would lose their topic' : undefined

@@ -60,7 +60,7 @@ export function Tags({
             />
           </form>
         ) : (
-          <button data-intent="quiet" onClick={() => setAdding(true)}>
+          <button data-intent="ghost" onClick={() => setAdding(true)}>
             + Tag
           </button>
         ))}

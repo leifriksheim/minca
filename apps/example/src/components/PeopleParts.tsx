@@ -85,7 +85,7 @@ export function RowMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((was) => !was)}
-        data-intent="quiet"
+        data-intent="ghost"
         data-icon
       >
         <Icon name="menu" size={14} />
@@ -248,7 +248,7 @@ export function Notice({ text, onDismiss }: { text: string; onDismiss: () => voi
   return (
     <aside role="status" data-tone="good" className="row" data-spread>
       <span>{text}</span>
-      <button data-intent="quiet" onClick={onDismiss}>
+      <button data-intent="ghost" onClick={onDismiss}>
         OK
       </button>
     </aside>

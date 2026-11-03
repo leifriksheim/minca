@@ -44,7 +44,7 @@ export function Modal({
   >
     <header>
       <h2>${title}</h2>
-      <button type="button" data-intent="quiet" data-icon aria-label="Close" onClick=${onClose}>✕</button>
+      <button type="button" data-intent="ghost" data-icon aria-label="Close" onClick=${onClose}>✕</button>
     </header>
     ${children}
   </dialog>`;

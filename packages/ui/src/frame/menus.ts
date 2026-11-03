@@ -100,7 +100,7 @@ export function AddMenu({
   return html`<div class="anchor" ref=${box}>
     <button
       type="button"
-      data-intent="quiet"
+      data-intent="ghost"
       data-icon
       aria-label="Attach or share"
       aria-expanded=${open}
@@ -173,7 +173,7 @@ export function EmojiPicker({
   return html`<div class="anchor" ref=${box}>
     <button
       type="button"
-      data-intent="quiet"
+      data-intent="ghost"
       data-icon
       aria-label=${label}
       title=${label}

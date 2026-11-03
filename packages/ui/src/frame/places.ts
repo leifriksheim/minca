@@ -128,7 +128,7 @@ export function MapLink({ place }: { place: Place | undefined }) {
   const { lat, lon } = place;
   return html`<button
     type="button"
-    data-intent="quiet"
+    data-intent="ghost"
     onClick=${() => minca.link(`https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}`)}
   >
     Open map

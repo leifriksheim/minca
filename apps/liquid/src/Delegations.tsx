@@ -128,7 +128,7 @@ function TrustRow({
           <button onClick={onPick}>{mine ? 'Change' : 'Trust someone'}</button>
           {mine && (
             <button
-              data-intent="quiet"
+              data-intent="ghost"
               disabled={action.busy}
               onClick={() => void action.run(() => node.records.delete(a.spaceId, mine.key))}
             >

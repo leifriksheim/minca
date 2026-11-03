@@ -128,7 +128,7 @@ function MakeLink({
           </p>
           <pre>{link}</pre>
           <div className="row">
-            <button data-intent="quiet" onClick={() => copy(link)}>
+            <button data-intent="ghost" onClick={() => copy(link)}>
               {copied ? 'Copied' : 'Copy link'}
             </button>
             <button data-intent="primary" onClick={onClose}>
@@ -191,7 +191,7 @@ function OpenLinks({
               </span>
               {link && <CopyButton text={link} />}
               <button
-                data-intent="quiet"
+                data-intent="ghost"
                 onClick={() => close(invite.key)}
                 disabled={!mayClose}
                 title={mayClose ? undefined : 'Closing it takes a grant of /role/assign for its role'}
@@ -211,7 +211,7 @@ function OpenLinks({
 function CopyButton({ text }: { text: string }) {
   const { copied, copy } = useCopy();
   return (
-    <button data-intent="quiet" onClick={() => copy(text)}>
+    <button data-intent="ghost" onClick={() => copy(text)}>
       {copied ? 'Copied' : 'Copy link'}
     </button>
   );

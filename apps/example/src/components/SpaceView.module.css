@@ -136,12 +136,13 @@
   }
 
   & h1 {
-    flex: 1;
     font-size: var(--text-heading-2);
   }
 
-  /* On a phone the bar and the page are one, with no rule between. */
+  /* On a phone the bar and the page are one, with no rule between, and the name sits in the middle. */
   @media (max-width: 640px) {
+    display: grid;
+    grid-template-columns: 1fr minmax(0, auto) 1fr;
     position: sticky;
     top: 0;
     z-index: 8;
@@ -153,6 +154,22 @@
 
     .shell[data-app-open] & {
       position: static;
+    }
+  }
+}
+
+/* What is open: its face and name, taking the bar's room; in the middle on a phone */
+.bar > .title {
+  flex: 1;
+  flex-wrap: nowrap;
+  min-width: 0;
+
+  @media (max-width: 640px) {
+    grid-column: 2;
+    justify-content: center;
+
+    & + * {
+      justify-self: end;
     }
   }
 }

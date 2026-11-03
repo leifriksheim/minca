@@ -54,7 +54,7 @@ export function QueryBuilder({
           />
         </div>
         {clauses.length > 0 && (
-          <button data-intent="quiet" onClick={() => onClauses([])}>
+          <button data-intent="ghost" onClick={() => onClauses([])}>
             Clear filters
           </button>
         )}

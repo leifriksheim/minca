@@ -122,7 +122,7 @@ export function Activity({
       <div className="empty">
         <p>Nothing yet. What your notifications match shows up here, while this app is open.</p>
         {off && onSettings && (
-          <button data-intent="quiet" onClick={onSettings}>
+          <button data-intent="ghost" onClick={onSettings}>
             Turn notifications on →
           </button>
         )}
@@ -255,7 +255,7 @@ function Action({
   quiet?: boolean;
 }) {
   return (
-    <button data-intent={quiet ? 'quiet' : 'open'} onClick={onClick} disabled={disabled}>
+    <button data-intent={quiet ? 'ghost' : 'open'} onClick={onClick} disabled={disabled}>
       <span className="stack" data-gap="tight">
         <strong>{title}</strong>
         {hint && <small>{hint}</small>}

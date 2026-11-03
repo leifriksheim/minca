@@ -110,7 +110,7 @@ export function AccountSwitcher() {
               {others.map((account) => (
                 <button
                   key={account.id}
-                  data-intent="quiet"
+                  data-intent="ghost"
                   role="menuitem"
                   onClick={() => void switchTo(account.id)}
                   disabled={state.busy}
@@ -127,7 +127,7 @@ export function AccountSwitcher() {
           <div className={styles.items}>
             <button
               role="menuitem"
-              data-intent="quiet"
+              data-intent="ghost"
               onClick={() => void addAccount()}
               disabled={state.busy}
             >
@@ -138,7 +138,7 @@ export function AccountSwitcher() {
             </button>
             <button
               role="menuitem"
-              data-intent="quiet"
+              data-intent="ghost"
               onClick={() => {
                 setOpen(false);
                 void auth.signOut();

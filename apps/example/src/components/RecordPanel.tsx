@@ -185,7 +185,7 @@ export function RecordPanel({
             </span>
           </div>
           {openWith && <button onClick={openWith}>Open with…</button>}
-          <button onClick={onClose} aria-label="Close" data-intent="quiet" data-icon>
+          <button onClick={onClose} aria-label="Close" data-intent="ghost" data-icon>
             ✕
           </button>
         </header>
@@ -301,7 +301,7 @@ export function RecordPanel({
                                 onClick={() => void unlink(i)}
                                 aria-label={`Remove ${humanize(rel).toLowerCase()} link`}
                                 title="Remove this link"
-                                data-intent="quiet"
+                                data-intent="ghost"
                                 data-icon
                               >
                                 ✕
@@ -311,7 +311,7 @@ export function RecordPanel({
                         ))}
                         {editable && declared && linking !== rel && (
                           <button
-                            data-intent="quiet"
+                            data-intent="ghost"
                             onClick={() => setLinking(rel)}
                             title={declared.description}
                           >
@@ -584,7 +584,7 @@ function FieldEditor({
         <button data-intent="primary" onClick={() => void onSave(draft).then(() => setEditing(false))}>
           Save
         </button>
-        <button data-intent="quiet" onClick={() => setEditing(false)}>
+        <button data-intent="ghost" onClick={() => setEditing(false)}>
           Cancel
         </button>
       </div>

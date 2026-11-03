@@ -19,16 +19,16 @@ export function TabBar() {
   const onHome = path === '/' || path.startsWith('/groups') || path.startsWith('/people');
   return (
     <nav className={css.bar} aria-label="Minca">
-      <Link data-intent="quiet" to="/" aria-current={onHome ? 'page' : undefined}>
+      <Link data-intent="ghost" to="/" aria-current={onHome ? 'page' : undefined}>
         <Icon name="home" size={20} />
         Home
       </Link>
-      <Link data-intent="quiet" to="/activity">
+      <Link data-intent="ghost" to="/activity">
         <Icon name="bell" size={20} />
         {unread > 0 && <span className={css.dot} aria-label={`${unread} new`} />}
         Activity
       </Link>
-      <Link data-intent="quiet" to="/profile">
+      <Link data-intent="ghost" to="/profile">
         <Avatar did={account.did} size={20} round src={picture} />
         Profile
       </Link>

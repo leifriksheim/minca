@@ -466,13 +466,13 @@
       ${
         tab &&
         html`<div class="row">
-          ${mayRename && !renaming && html`<button data-intent="quiet" onClick=${() => setRenaming(true)}>Rename</button>`}
+          ${mayRename && !renaming && html`<button data-intent="ghost" onClick=${() => setRenaming(true)}>Rename</button>`}
           ${
             mayDelete &&
             (deleting
               ? html`<button data-intent="danger" onClick=${removeTab}>Delete tab and what's on it</button>
-                  <button data-intent="quiet" onClick=${() => setDeleting(false)}>Keep it</button>`
-              : html`<button data-intent="quiet" onClick=${() => setDeleting(true)}>Delete tab</button>`)
+                  <button data-intent="ghost" onClick=${() => setDeleting(false)}>Keep it</button>`
+              : html`<button data-intent="ghost" onClick=${() => setDeleting(true)}>Delete tab</button>`)
           }
         </div>`
       }
@@ -828,7 +828,7 @@
         ${error && html`<p role="alert">${error}</p>`}
         ${!error && problem && total ? html`<small>${problem}</small>` : null}
         <div class="row" data-spread>
-          <button type="button" data-intent="quiet" onClick=${onClose}>Cancel</button>
+          <button type="button" data-intent="ghost" onClick=${onClose}>Cancel</button>
           <button type="submit" data-intent="primary" disabled=${busy}>${busy ? 'Saving…' : 'Save'}</button>
         </div>
       </form>
@@ -911,7 +911,7 @@
         <${Money} currency=${currency} currencies=${currencies} onCurrency=${setCurrency} amount=${amount} onAmount=${setAmount} />
         ${error && html`<p role="alert">${error}</p>`}
         <div class="row" data-spread>
-          <button type="button" data-intent="quiet" onClick=${onClose}>Cancel</button>
+          <button type="button" data-intent="ghost" onClick=${onClose}>Cancel</button>
           <button type="submit" data-intent="primary">Record payment</button>
         </div>
       </form>

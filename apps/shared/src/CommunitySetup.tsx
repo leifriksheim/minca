@@ -143,7 +143,7 @@ export function AddBotDialog({
                   : '.'}
               </p>
             </small>
-            <button onClick={() => setView('yourself')} data-intent="quiet">
+            <button onClick={() => setView('yourself')} data-intent="ghost">
               Run it on your own computer instead
             </button>
           </>
@@ -165,7 +165,7 @@ export function AddBotDialog({
                         .define(spaceId, profile)
                         .catch((error: unknown) => setProblem(message(error)))
                     }
-                    data-intent="quiet"
+                    data-intent="ghost"
                   >
                     Turn on profiles
                   </button>
@@ -183,7 +183,7 @@ export function AddBotDialog({
                 Done
               </button>
             )}
-            <button onClick={() => setView('add')} data-intent="quiet">
+            <button onClick={() => setView('add')} data-intent="ghost">
               Add another bot
             </button>
           </>
@@ -192,7 +192,7 @@ export function AddBotDialog({
         {view === 'yourself' && (
           <>
             <RunItYourself spaceId={spaceId} name={called} role={chosen} />
-            <button onClick={() => setView('add')} data-intent="quiet">
+            <button onClick={() => setView('add')} data-intent="ghost">
               Let the community's host run it instead
             </button>
           </>

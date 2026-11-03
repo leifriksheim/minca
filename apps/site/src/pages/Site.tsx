@@ -146,7 +146,7 @@ function Nav({ page }: { page: PageName }) {
           <button
             type="button"
             className="nav-toggle"
-            data-intent="quiet"
+            data-intent="ghost"
             data-icon
             popoverTarget={MENU}
             aria-label="Menu"

@@ -239,7 +239,7 @@ function Waiting({ title, detail, onBack }: { title: string; detail: string; onB
       <Pulse />
       <h3>{title}</h3>
       <p>{detail}</p>
-      <button onClick={onBack} data-intent="quiet">
+      <button onClick={onBack} data-intent="ghost">
         Choose another way to pay
       </button>
     </div>
@@ -264,7 +264,7 @@ export function RemindMe({ remind }: { remind: (email: string) => Promise<void> 
   if (asked) return <small>Check your inbox for a link to confirm.</small>;
   if (!open)
     return (
-      <button onClick={() => setOpen(true)} data-intent="quiet">
+      <button onClick={() => setOpen(true)} data-intent="ghost">
         Email me before it runs out
       </button>
     );
@@ -357,7 +357,7 @@ function PaymentRequest({ request, onBack }: { request: Request; onBack: () => v
         </small>
       </p>
       {problem && <p role="alert">{problem}</p>}
-      <button onClick={onBack} data-intent="quiet">
+      <button onClick={onBack} data-intent="ghost">
         Choose another way to pay
       </button>
     </div>

@@ -42,7 +42,7 @@ for a value computed from data, said so on its line.
   HTML has no element for the role: `.row`, `.stack`, `.grid`, `.tag`,
   `.empty`, `.lanes`, `.truncate`.
 - **Intent, never appearance.** Variants say why a thing is there:
-  `data-intent="primary|quiet|danger|open"`, `data-tone="good|warn|danger"`,
+  `data-intent="primary|subtle|ghost|danger|inline|open"` (none is secondary), `data-tone="good|warn|danger"`,
   `data-hue="1"`…`"5"`, `data-gap="tight|loose"`. Nothing names a colour or a
   size, so a redesign changes `css/` and no markup.
 - **No knobs.** One control height, three gaps, the headings' sizes and no

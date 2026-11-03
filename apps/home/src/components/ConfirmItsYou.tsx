@@ -77,12 +77,12 @@ export function ConfirmItsYou({
               setAnswer('');
               setWrong(null);
             }}
-            data-intent="quiet"
+            data-intent="ghost"
           >
             {byCode ? 'Use your passkey or password' : 'Use your recovery code instead'}
           </button>
         )}
-        <button onClick={onCancel} data-intent="quiet">
+        <button onClick={onCancel} data-intent="ghost">
           Cancel
         </button>
       </div>

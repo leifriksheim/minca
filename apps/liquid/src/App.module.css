@@ -7,7 +7,7 @@
     align-self: stretch;
   }
 
-  & > button[data-intent='quiet'] {
+  & > button[data-intent='ghost'] {
     align-self: flex-start;
   }
 }

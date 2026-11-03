@@ -95,7 +95,7 @@ export function Notifications({ node }: { node: P2PNode }) {
                   disabled={busy !== null}
                   aria-label={`Remove ${sub.name}`}
                   title="Remove"
-                  data-intent="quiet"
+                  data-intent="ghost"
                   data-icon
                 >
                   ×

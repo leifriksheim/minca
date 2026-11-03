@@ -722,7 +722,7 @@ function WhichAccount({ label, busy, onSwitch }: { label: string; busy: boolean;
         <strong>{session.account.name}</strong>
         <small>{label}</small>
       </div>
-      <button onClick={onSwitch ?? chooseAgain} disabled={busy} data-intent="quiet">
+      <button onClick={onSwitch ?? chooseAgain} disabled={busy} data-intent="ghost">
         Use another account
       </button>
     </div>

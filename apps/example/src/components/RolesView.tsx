@@ -361,7 +361,7 @@ function RoleEditor({
         <button data-intent="primary" onClick={() => void save()} disabled={!!problem || saving}>
           {saving ? 'Saving…' : existing ? 'Save role' : 'Create role'}
         </button>
-        <button data-intent="quiet" onClick={onDone}>
+        <button data-intent="ghost" onClick={onDone}>
           Cancel
         </button>
       </div>

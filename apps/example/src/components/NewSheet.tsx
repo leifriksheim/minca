@@ -102,7 +102,7 @@ function ShareMe({ onClose }: { onClose: () => void }) {
             with your account, so every app finds you by it.
           </p>
           <button
-            data-intent="quiet"
+            data-intent="ghost"
             onClick={() => {
               onClose();
               openAccountHome(state.home, account.did);

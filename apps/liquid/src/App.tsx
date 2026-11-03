@@ -64,7 +64,7 @@ function Spaces() {
           ))}
         </ul>
       )}
-      <button onClick={() => void connection.connect()} data-intent="quiet">
+      <button onClick={() => void connection.connect()} data-intent="ghost">
         Choose other spaces
       </button>
     </main>
@@ -89,7 +89,7 @@ function Assembly({ space, onBack }: { space: SpaceSummary; onBack: (() => void)
           {assembly.status === 'failed' && <small>{assembly.error.message}</small>}
         </div>
         {onBack && (
-          <button onClick={onBack} data-intent="quiet">
+          <button onClick={onBack} data-intent="ghost">
             Another space
           </button>
         )}
@@ -98,7 +98,7 @@ function Assembly({ space, onBack }: { space: SpaceSummary; onBack: (() => void)
   return (
     <main className={styles.wide}>
       {onBack && (
-        <button onClick={onBack} data-intent="quiet">
+        <button onClick={onBack} data-intent="ghost">
           ← Spaces
         </button>
       )}

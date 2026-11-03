@@ -297,7 +297,7 @@
                             { links: columnLinks(lane.key) },
                           )}
                       />`
-                    : html`<button data-intent="quiet" onClick=${() => setAddingTo(lane.key)}>
+                    : html`<button data-intent="ghost" onClick=${() => setAddingTo(lane.key)}>
                         + Add a card
                       </button>`)
                 }
@@ -353,7 +353,7 @@
         lane.record &&
         mayRename &&
         html`<button
-          data-intent="quiet"
+          data-intent="ghost"
           data-icon
           aria-label="Rename this column"
           onClick=${() => setRenaming(true)}
@@ -366,7 +366,7 @@
         mayDelete &&
         empty &&
         html`<button
-          data-intent="quiet"
+          data-intent="ghost"
           data-icon
           aria-label="Delete this empty column"
           onClick=${() => minca.remove(key)}
@@ -634,8 +634,8 @@
           mayDelete &&
           (deleting
             ? html`<button data-intent="danger" onClick=${remove}>Delete for everyone</button>
-                <button data-intent="quiet" onClick=${() => setDeleting(false)}>Keep it</button>`
-            : html`<button data-intent="quiet" onClick=${() => setDeleting(true)}>
+                <button data-intent="ghost" onClick=${() => setDeleting(false)}>Keep it</button>`
+            : html`<button data-intent="ghost" onClick=${() => setDeleting(true)}>
                 Delete ${parent ? 'item' : 'card'}
               </button>`)
         }
@@ -658,7 +658,7 @@
         ${item.body.title}
       </label>
       ${assigneesOf(item).map((did) => html`<${Avatar} key=${did} did=${did} size=${20} round />`)}
-      <button data-intent="quiet" data-icon aria-label="Open this item" onClick=${onOpen}>›</button>
+      <button data-intent="ghost" data-icon aria-label="Open this item" onClick=${onOpen}>›</button>
     </li>`;
   }
 

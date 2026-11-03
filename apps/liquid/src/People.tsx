@@ -187,7 +187,7 @@ function PartyCard({
           <small>Decides: {decidesText(a, p)}</small>
         </div>
         {steward && writable && (
-          <button data-intent="quiet" onClick={onEdit}>
+          <button data-intent="ghost" onClick={onEdit}>
             Edit
           </button>
         )}
@@ -327,7 +327,7 @@ function PartyForm({ a, editing, onClose }: { a: Assembly; editing?: PartyFull; 
                 type="button"
                 role="radio"
                 data-icon
-                data-intent="quiet"
+                data-intent="ghost"
                 aria-checked={picked}
                 aria-label={colour.charAt(0).toUpperCase() + colour.slice(1)}
                 onClick={() => setShade(SHADE_HUES[colour])}
@@ -398,7 +398,7 @@ function PartyForm({ a, editing, onClose }: { a: Assembly; editing?: PartyFull; 
                 <button
                   type="button"
                   className={styles.end}
-                  data-intent="quiet"
+                  data-intent="ghost"
                   disabled={action.busy}
                   onClick={() => void save(members, withSteward(did, !stewards.has(did)))}
                 >
@@ -406,7 +406,7 @@ function PartyForm({ a, editing, onClose }: { a: Assembly; editing?: PartyFull; 
                 </button>
                 <button
                   type="button"
-                  data-intent="quiet"
+                  data-intent="ghost"
                   disabled={action.busy || (decides === 'representative' && representative === did)}
                   title={
                     decides === 'representative' && representative === did
@@ -459,7 +459,7 @@ function PartyForm({ a, editing, onClose }: { a: Assembly; editing?: PartyFull; 
               Dissolve
             </button>
           )}
-          <button type="button" data-intent="quiet" onClick={onClose}>
+          <button type="button" data-intent="ghost" onClick={onClose}>
             Cancel
           </button>
           <button data-intent="primary" disabled={!name.trim() || action.busy}>

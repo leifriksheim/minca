@@ -200,7 +200,7 @@ function Standing({
         </p>
         {error && <p role="alert">{error}</p>}
         <button
-          data-intent="quiet"
+          data-intent="ghost"
           disabled={busy}
           onClick={() =>
             void ask('Your space for two is left and the request here is deleted.', {

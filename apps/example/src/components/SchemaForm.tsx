@@ -82,7 +82,7 @@ export function SchemaForm({
           {submitLabel}
         </button>
         {onCancel && (
-          <button type="button" data-intent="quiet" onClick={onCancel}>
+          <button type="button" data-intent="ghost" onClick={onCancel}>
             Cancel
           </button>
         )}
@@ -292,7 +292,7 @@ function ListInput({
           />
           <button
             type="button"
-            data-intent="quiet"
+            data-intent="ghost"
             data-icon
             onClick={() => onChange(value.filter((_, i) => i !== index))}
             aria-label={`Remove ${field.label} ${index + 1}`}
@@ -302,7 +302,7 @@ function ListInput({
         </div>
       ))}
       <div>
-        <button type="button" data-intent="quiet" onClick={() => onChange([...value, numeric ? 0 : ''])}>
+        <button type="button" data-intent="ghost" onClick={() => onChange([...value, numeric ? 0 : ''])}>
           + Add {field.label.toLowerCase()}
         </button>
       </div>

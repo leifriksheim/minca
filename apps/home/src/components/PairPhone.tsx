@@ -134,7 +134,7 @@ export function PairPhone() {
                   <button onClick={stage.same} data-intent="primary">
                     Same code — send
                   </button>
-                  <button onClick={stage.different} data-intent="quiet">
+                  <button onClick={stage.different} data-intent="ghost">
                     Different
                   </button>
                 </div>
@@ -148,7 +148,7 @@ export function PairPhone() {
                 </Info>
               </p>
               <div className="row">
-                <button onClick={stop} data-intent="quiet">
+                <button onClick={stop} data-intent="ghost">
                   {stage?.kind === 'sent' || stage?.kind === 'failed' ? 'Done' : 'Stop'}
                 </button>
               </div>

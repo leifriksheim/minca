@@ -412,7 +412,7 @@ export function CollectionEditor({
                     type="button"
                     onClick={() => setFields((all) => all.filter((f) => f.id !== field.id))}
                     aria-label={`Remove ${field.label || `field ${i + 1}`}`}
-                    data-intent="quiet"
+                    data-intent="ghost"
                     data-icon
                   >
                     ✕
@@ -507,7 +507,7 @@ export function CollectionEditor({
                     type="button"
                     onClick={() => setLinks((all) => all.filter((l) => l.id !== link.id))}
                     aria-label={`Remove connection ${link.label}`}
-                    data-intent="quiet"
+                    data-intent="ghost"
                     data-icon
                     className={styles.end}
                   >
@@ -582,7 +582,7 @@ export function CollectionEditor({
             <button type="button" data-intent="primary" onClick={() => void save()} disabled={busy}>
               {busy ? 'Saving…' : making ? `Create ${title.trim() || 'collection'}` : 'Save changes'}
             </button>
-            <button type="button" data-intent="quiet" onClick={() => onDone(null)}>
+            <button type="button" data-intent="ghost" onClick={() => onDone(null)}>
               Cancel
             </button>
             {collection && (

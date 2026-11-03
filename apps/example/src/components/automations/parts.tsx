@@ -207,7 +207,7 @@ export function ClauseList({
               type="button"
               onClick={() => onChange(clauses.filter((_, j) => j !== i))}
               aria-label={`Remove condition ${i + 1}`}
-              data-intent="quiet"
+              data-intent="ghost"
               data-icon
             >
               ✕

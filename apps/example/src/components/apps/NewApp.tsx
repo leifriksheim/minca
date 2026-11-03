@@ -91,7 +91,7 @@ export function NewApp({
               {mayDefine && (
                 <button
                   type="button"
-                  data-intent="quiet"
+                  data-intent="ghost"
                   onClick={() => add(app)}
                   disabled={busy}
                   aria-label={`Add ${app.title}`}

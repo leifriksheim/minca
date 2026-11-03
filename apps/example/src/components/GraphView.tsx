@@ -682,7 +682,7 @@ export function GraphView({
           );
         })}
         {chosen !== null && (
-          <button data-intent="quiet" onClick={() => choose(() => null)}>
+          <button data-intent="ghost" onClick={() => choose(() => null)}>
             Show everything
           </button>
         )}
@@ -908,7 +908,7 @@ function Details({
     <article aria-label={label} className={styles.panel}>
       <header>
         <small>Person</small>
-        <button onClick={onClose} aria-label="Close" data-intent="quiet" data-icon>
+        <button onClick={onClose} aria-label="Close" data-intent="ghost" data-icon>
           ✕
         </button>
       </header>

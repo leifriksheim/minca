@@ -222,7 +222,7 @@ function Children({
           mine ? (
             <button
               type="button"
-              data-intent="quiet"
+              data-intent="ghost"
               onClick={() => void run(() => node.records.delete(space.id, mine.key))}
               disabled={busy}
             >
@@ -272,7 +272,7 @@ function AddForm({
   const [open, setOpen] = useState(false);
   if (!open) {
     return (
-      <button type="button" data-intent="quiet" onClick={() => setOpen(true)}>
+      <button type="button" data-intent="ghost" onClick={() => setOpen(true)}>
         {label}
       </button>
     );

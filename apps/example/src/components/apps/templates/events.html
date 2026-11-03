@@ -332,7 +332,7 @@
         body.status !== 'cancelled' &&
         html`<div class="row">
           <button
-            data-intent="quiet"
+            data-intent="ghost"
             aria-pressed=${interested}
             title=${interested ? 'You answered' : 'Show you are interested'}
             onClick=${() => answer(event, mine, interested ? null : 'maybe')}
@@ -701,7 +701,7 @@
         </label>
         ${error && html`<p role="alert">${error}</p>`}
         <div class="row" data-spread>
-          <button type="button" data-intent="quiet" onClick=${onClose}>Cancel</button>
+          <button type="button" data-intent="ghost" onClick=${onClose}>Cancel</button>
           <button type="submit" data-intent="primary" disabled=${!ready || busy}>${busy ? 'Saving…' : initial ? 'Save' : 'Create event'}</button>
         </div>
       </form>

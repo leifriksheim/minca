@@ -41,7 +41,7 @@ export function Library({
             <div className="row" data-spread>
               <strong>{schema.title}</strong>
               <button
-                data-intent="quiet"
+                data-intent="ghost"
                 onClick={() => {
                   setBusy(schema.name);
                   void addSchemas(node, space.id, [schema])

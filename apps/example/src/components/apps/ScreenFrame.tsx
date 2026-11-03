@@ -212,7 +212,7 @@ export function ScreenFrame({
       <aside data-tone="danger" className={`stack ${styles.stopped}`}>
         <p role="alert">This screen tried to open another page, so it was stopped.</p>
         <small>It can't reach your data from there. Reload it to try again.</small>
-        <button type="button" data-intent="quiet" onClick={() => setGeneration((n) => n + 1)}>
+        <button type="button" data-intent="ghost" onClick={() => setGeneration((n) => n + 1)}>
           Reload the screen
         </button>
       </aside>

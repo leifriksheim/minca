@@ -572,7 +572,7 @@
         ></textarea>
       </label>
       <div class="row" data-spread>
-        <button type="button" data-intent="quiet" onClick=${() => setWriting(false)}>Cancel</button>
+        <button type="button" data-intent="ghost" onClick=${() => setWriting(false)}>Cancel</button>
         <button type="submit" data-intent="primary" disabled=${busy}>
           ${busy ? 'Sending…' : 'Send request'}
         </button>
@@ -618,7 +618,7 @@
             <div class="row" data-gap="tight">
               ${
                 state === 'waiting' && mayAnswer
-                  ? html`<button data-intent="quiet" onClick=${() => reply(r, 'cancelled')}>Decline</button>
+                  ? html`<button data-intent="ghost" onClick=${() => reply(r, 'cancelled')}>Decline</button>
                       <button onClick=${() => reply(r, 'accepted')}>Accept</button>`
                   : state === 'accepted' && mayAnswer
                     ? html`<button onClick=${() => reply(r, 'delivered')}>Handed over</button>`
@@ -889,7 +889,7 @@
           <textarea rows="4" maxlength="10000" value=${description} onInput=${(e) => setDescription(e.currentTarget.value)} placeholder="Size, age, any marks, why you're selling"></textarea>
         </label>
         <div class="row" data-spread>
-          <button type="button" data-intent="quiet" onClick=${onClose}>Cancel</button>
+          <button type="button" data-intent="ghost" onClick=${onClose}>Cancel</button>
           <button type="submit" data-intent="primary" disabled=${!ready || busy}>${uploading ? 'Adding photos…' : busy ? 'Saving…' : initial ? 'Save' : 'Publish'}</button>
         </div>
       </form>

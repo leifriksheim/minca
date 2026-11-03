@@ -53,16 +53,16 @@ export function ConnectScreen() {
             Opens <strong>{home}</strong>. This app never sees your password.
           </small>
           <div className="row" data-gap="tight">
-            <button data-intent="quiet" onClick={() => setOwn('')}>
+            <button data-intent="ghost" onClick={() => setOwn('')}>
               Use your own home
             </button>
-            <button data-intent="quiet" onClick={() => setIntro(true)}>
+            <button data-intent="ghost" onClick={() => setIntro(true)}>
               What’s Minca?
             </button>
             {/* Another account connected here works now, without the home. */}
             {state.status !== 'starting' &&
               others.map((other) => (
-                <button data-intent="quiet" key={other.did} onClick={() => void connection.use(other.did)}>
+                <button data-intent="ghost" key={other.did} onClick={() => void connection.use(other.did)}>
                   Use {other.name}
                 </button>
               ))}
@@ -91,7 +91,7 @@ export function ConnectScreen() {
           </button>
           <small>The address of the Minca home you run yourself. This app remembers it.</small>
           <div className="row">
-            <button data-intent="quiet" type="button" onClick={() => setOwn(null)}>
+            <button data-intent="ghost" type="button" onClick={() => setOwn(null)}>
               Use {home} instead
             </button>
           </div>

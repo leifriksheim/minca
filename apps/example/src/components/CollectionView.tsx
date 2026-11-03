@@ -273,14 +273,14 @@ export function CollectionView({
             {!filtered && collection ? ` of ${collection.records}` : ''}
           </small>
           <button
-            data-intent="quiet"
+            data-intent="ghost"
             onClick={() => setCursors(cursors.slice(0, -1))}
             disabled={cursors.length <= 1}
           >
             ← Previous
           </button>
           <button
-            data-intent="quiet"
+            data-intent="ghost"
             onClick={() => page.next && setCursors([...cursors, page.next])}
             disabled={!page.next}
           >

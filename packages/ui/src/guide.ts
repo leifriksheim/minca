@@ -78,7 +78,7 @@ Write plain HTML from this list, no CSS, <style> or style="": say what a thing i
   <main> the column (data-wide: full width; data-fill: the window's height, its first child scrolling over a box to write in);
     <header> title + actions; <section> a group under an h2
   h1 h2 h3 p a strong code; <small> meta and hints; <mark>; <s> done; class="truncate" one line, cut short, taking a row's room
-  <button> data-intent="primary" (the one main action) | "quiet" (toolbars, rows) | "danger" | "open" (a task, a row;
+  <button> data-intent="primary" (the main one) | "subtle" (back, close) | "ghost" (toolbars, rows) | "danger" | "open" (a task, a row;
     .row lays it across) | "inline" (a word in a sentence); data-icon (icon only, aria-label); aria-pressed (on/off);
     <a data-intent> a link drawn as a button;
     <div role="tablist"> of buttons, one aria-selected="true"

@@ -35,7 +35,7 @@ export function InviteBanner({ onJoin }: { onJoin: (invite: string) => Promise<S
         >
           Join this space
         </button>
-        <button data-intent="quiet" onClick={dismiss}>
+        <button data-intent="ghost" onClick={dismiss}>
           Not now
         </button>
       </div>

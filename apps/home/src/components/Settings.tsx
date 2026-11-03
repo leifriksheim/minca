@@ -868,7 +868,7 @@ function Username() {
       ) : (
         <UsernamePicker current={username} suggestion={suggestion} onClaimed={done}>
           {username && (
-            <button type="button" onClick={() => setChanging(false)} data-intent="quiet">
+            <button type="button" onClick={() => setChanging(false)} data-intent="ghost">
               Cancel
             </button>
           )}

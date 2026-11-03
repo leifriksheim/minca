@@ -250,7 +250,7 @@ function Room({
               <div data-actions>
                 <button
                   type="button"
-                  data-intent="quiet"
+                  data-intent="ghost"
                   onClick={() => void run(() => node.records.delete(space.id, m.key))}
                   aria-label="Take back this message"
                 >

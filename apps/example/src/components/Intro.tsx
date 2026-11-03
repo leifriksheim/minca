@@ -52,7 +52,7 @@ export function Intro({ onDone }: { onDone: () => void }) {
       <header>
         <Wordmark compact />
         {/* Not on the last card, where the main button goes on */}
-        <button data-intent="quiet" onClick={onDone} hidden={last}>
+        <button data-intent="ghost" onClick={onDone} hidden={last}>
           Skip
         </button>
       </header>

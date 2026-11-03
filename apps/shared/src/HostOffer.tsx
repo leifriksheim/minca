@@ -81,7 +81,7 @@ export function HostOfferPicker({
       <>
         <HostAddressForm onAddress={onAddress} {...(addressLabel ? { label: addressLabel } : {})} />
         {offer && (
-          <button onClick={() => setOther(false)} data-intent="quiet">
+          <button onClick={() => setOther(false)} data-intent="ghost">
             Use {offer.name} instead
           </button>
         )}
@@ -96,7 +96,7 @@ export function HostOfferPicker({
       <button onClick={onContinue} disabled={busy} data-intent="primary">
         {busy ? 'One moment…' : 'Continue'}
       </button>
-      <button onClick={() => setOther(true)} data-intent="quiet">
+      <button onClick={() => setOther(true)} data-intent="ghost">
         Use another host
       </button>
     </>

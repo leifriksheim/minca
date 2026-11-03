@@ -104,7 +104,7 @@ export function Comments({ about }: { about: Pick<ScreenRecord, 'key' | 'created
                   <span class="truncate">${file.name}</span>
                   <button
                     type="button"
-                    data-intent="quiet"
+                    data-intent="ghost"
                     data-icon
                     aria-label=${`Don't attach ${file.name}`}
                     onClick=${() => setFiles(files.filter((_, j) => j !== i))}
