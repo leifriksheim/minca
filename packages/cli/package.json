@@ -16,7 +16,7 @@
     "prepublishOnly": "npm run bundle"
   },
   "dependencies": {
-    "node-datachannel": "^0.33.4",
+    "node-datachannel": "^0.33.5",
     "ws": "^8.22.0"
   },
   "engines": {
@@ -43,7 +43,7 @@
     "@types/node": "^26.6.5",
     "@types/oidc-provider": "^9.13.1",
     "add-mcp": "2.4.1",
-    "esbuild": "^0.28.0",
+    "esbuild": "^0.28.2",
     "jose": "^6.2.15",
     "oauth4webapi": "^3.8.8",
     "oidc-provider": "^9.13.3",
