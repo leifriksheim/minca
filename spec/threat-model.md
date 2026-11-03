@@ -601,7 +601,8 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     from members who may define collections needs a check the node itself
     makes, not one read off the grants, and guides keyed per author
     (`guidesOf`, `writeGuide` in `packages/core/src/schemas/guides.ts`;
-    `collections_list` in `packages/core/src/node/actions.ts`). Not
+    `collections_list` in `packages/core/src/node/actions.ts`;
+    [#382](https://github.com/leifriksheim/minca/issues/382)). Not
     protocol: a layer the library and its apps keep.
 - **By design.**
   - Whoever may define roles is trusted to. A definer can write power into a
