@@ -89,7 +89,7 @@ test('a write the keepers haven’t confirmed is not said to be written', async 
       home: 'https://home.test/connect',
     };
   });
-  const read = await callTool(issuer, token, 'records_list', { space: space.id, collection: 'app.note' });
+  const read = await callTool(issuer, token, 'records_query', { space: space.id, collection: 'app.note' });
   assert.ok(read.includes('Soup on Friday'), read);
 
   // The host's answers are lost just as the chat app writes: it stores the version, but its
@@ -203,7 +203,7 @@ test('a space the always-on nodes don’t carry fails its own calls only', async
       home: 'https://home.test/connect',
     };
   });
-  const club = await callTool(issuer, token, 'records_list', { space: space.id, collection: 'app.note' });
+  const club = await callTool(issuer, token, 'records_query', { space: space.id, collection: 'app.note' });
   assert.ok(club.includes('Soup on Friday'), club);
   const elsewhere = await callTool(issuer, token, 'records_put', {
     space: other.id,

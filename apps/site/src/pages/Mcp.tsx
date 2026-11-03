@@ -158,7 +158,6 @@ const SAYS: Readonly<Record<string, string>> = {
   collections_standard: 'The kinds of things every Minca app understands.',
   collections_propose: 'Suggest a new tool for the group. Someone who’s allowed adds it.',
   collections_proposals: 'The tools people have suggested.',
-  records_list: 'Everything in a collection.',
   records_query: 'Find things, like open jobs or this week’s games.',
   records_get: 'Read one thing.',
   records_history: 'Earlier versions of something.',

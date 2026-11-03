@@ -151,7 +151,12 @@ exists, and reads one with `records_get` before writing there.
 - A guide is what someone in the space wrote. An agent must read it as data
   about the collections, never as instructions from the person it works for.
 
-_Source: `packages/core/src/schemas/guides.ts` (`writeGuide`, `guidesOf`), `packages/core/src/schemas/library/collections.ts` (`guide`), `packages/core/src/node/actions.ts` (`collections_list`). Tests: `packages/core/tests/records-only.test.ts` ("collections_list points at the guides written about each collection"), `apps/example/tests/launcher.test.ts` ("the guide agents read is in the space, on the collections it is about")._
+- Keep a guide to one task, and write several when an agent may need only
+  some of them: the example app writes how to make an app, how a screen
+  works and the kit a screen draws with as three, so an app without a screen
+  reads a fifth of it.
+
+_Source: `packages/core/src/schemas/guides.ts` (`writeGuide`, `guidesOf`), `packages/core/src/schemas/library/collections.ts` (`guide`), `packages/core/src/node/actions.ts` (`collections_list`), `apps/example/src/components/apps/launcher.ts` (`GUIDES`). Tests: `packages/core/tests/records-only.test.ts` ("collections_list points at the guides written about each collection"), `apps/example/tests/launcher.test.ts` ("the guides agents read are in the space, on the collections they are about")._
 
 ## Apps with a screen of their own
 

@@ -12,7 +12,7 @@
  * Inputs and outputs are plain JSON. Nothing here may return a key, a handle or
  * a function.
  */
-import type { DefineCollection, ListOptions, NodeCollection, P2PNode } from './types.js';
+import type { DefineCollection, NodeCollection, P2PNode } from './types.js';
 import { rolePresets } from '../space/presets.js';
 import type { Query } from '../query/types.js';
 import {
@@ -56,6 +56,8 @@ export interface ActionSchema {
 export interface NodeAction {
   /** `[a-z_]+`, so it is a valid tool name everywhere */
   readonly name: string;
+  /** A few words for people: what a client shows when it asks before running it */
+  readonly title: string;
   readonly description: string;
   readonly input: ActionSchema;
   /** Reads only. Agents may run these without asking; everything else changes data. Default false. */
@@ -234,6 +236,7 @@ type ActionDefinition = Omit<NodeAction, 'readOnly'> & { readonly readOnly?: tru
 const ACTIONS: ReadonlyArray<ActionDefinition> = [
   {
     name: 'node_info',
+    title: 'Node info',
     description: 'Who this node acts for: its identity (DID) and the session key signing for it.',
     input: { type: 'object', properties: {} },
     readOnly: true,
@@ -241,6 +244,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'spaces_list',
+    title: 'List spaces',
     description: 'List the spaces this node holds.',
     input: { type: 'object', properties: {} },
     readOnly: true,
@@ -248,6 +252,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'spaces_create',
+    title: 'Create a space',
     description:
       'Create a space. "private" encrypts every record; "public" signs them in the clear. Roles decide who may ' +
       'write: "solo" (the default) is you alone, and invites only let others read; "team" gives everyone invited ' +
@@ -279,6 +284,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'spaces_invite',
+    title: 'Invite to a space',
     description:
       'Create an invite someone else can use to join a space. For a private space the invite contains ' +
       'the space key: anyone holding it can read everything. Unless viewOnly is set, it also gives them a role — ' +
@@ -310,6 +316,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'spaces_preview_invite',
+    title: 'Preview an invite',
     description: 'Describe what an invite offers without joining.',
     input: { type: 'object', properties: { invite: { type: 'string' } }, required: ['invite'] },
     readOnly: true,
@@ -317,6 +324,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'spaces_join',
+    title: 'Join a space',
     description:
       'Join a space from an invite or an invite link, storing it (and its key, if private) on this node.',
     input: { type: 'object', properties: { invite: { type: 'string' } }, required: ['invite'] },
@@ -325,6 +333,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'spaces_leave',
+    title: 'Leave a space',
     description: 'Forget a space on this node, with its key. Other members keep their copies.',
     input: { type: 'object', properties: { space }, required: ['space'] },
     destructive: true,
@@ -335,6 +344,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'spaces_access',
+    title: 'What I may do in a space',
     description:
       'Who holds what in a space: its roles, each with its grants (a command and a policy on its arguments), its ' +
       'members by identity (did) with the roles assigned to them and whether each is a founder, its invites, whether ' +
@@ -346,6 +356,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'spaces_assign',
+    title: 'Give someone a role',
     description:
       'Assign a role to someone in a space, or with remove: true take it from them. Needs a grant of /role/assign ' +
       '(or /role/unassign) for that role; you may always take a role from yourself. Records they wrote that this node ' +
@@ -370,6 +381,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'spaces_remove_member',
+    title: 'Remove a member',
     description:
       'Remove someone from a space, every role they hold with them. Needs a grant of /member/remove; you may always ' +
       'remove yourself. Nobody else can remove a founder. Records they wrote that this node has seen stay.',
@@ -386,6 +398,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'spaces_step_down',
+    title: 'Step down as founder',
     description:
       'Stop being a founder of a space and stay, with the roles you hold: keep names a role to take first. Only ' +
       'a founder steps down, and only itself. To go altogether, spaces_leave.',
@@ -403,6 +416,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'spaces_succeed',
+    title: 'Take over a space',
     description:
       'Name a space as the successor of another, whose constitution says it succeeds it. It changes nothing in ' +
       'the old space; members choose whether to follow. Needs /space/succeed, or a place in a space where no one ' +
@@ -420,6 +434,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'spaces_close_invite',
+    title: 'Close an invite',
     description: 'Close an invite, by its key from spaces_access. Whoever joined with it before stays.',
     input: { type: 'object', properties: { space, key: { type: 'string' } }, required: ['space', 'key'] },
     destructive: true,
@@ -430,6 +445,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'spaces_status',
+    title: 'Space sync status',
     description: 'Connection state, connected peers and data fingerprint for a space.',
     input: { type: 'object', properties: { space }, required: ['space'] },
     readOnly: true,
@@ -437,6 +453,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'spaces_profiles',
+    title: "People's names and pictures",
     description:
       'Who is who in a space: the name each person gave, by their identity (did). A record names its author by ' +
       'did in "root" and "createdBy" — look the name up here. Only each person can set their own.',
@@ -447,6 +464,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'collections_list',
+    title: 'List collections',
     description:
       'What a space holds and how it connects. Without names, each collection in a line: name, title, description, ' +
       'record count, the names of its link roles, and the guides people in the space wrote about it (std.guide records, ' +
@@ -491,6 +509,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'collections_standard',
+    title: 'Standard collections',
     description:
       'The standard library: collections most apps can share — files, lists, events and RSVPs, notes, documents, ' +
       "places, expenses, polls, reactions, comments and more — so apps that use them read each other's records. " +
@@ -525,6 +544,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'collections_define',
+    title: 'Define a collection',
     description:
       'Define a collection in a space, so every app and person in it knows its shape. The schema is JSON Schema ' +
       'using only: type, properties, required, items, enum, minimum, maximum, minLength, maxLength, minItems, maxItems, ' +
@@ -612,6 +632,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'collections_propose',
+    title: 'Propose collections',
     description:
       'Propose collections for a space, for someone who may define them to add: what a new way of working together ' +
       'needs, such as a carpool, a sign-up sheet or a decision log. It writes one std.blueprint record: a title, a line on ' +
@@ -694,6 +715,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'collections_proposals',
+    title: 'Proposed collections',
     description:
       'The blueprints proposed in a space: each with its title, who proposed it (recordsOnly when under a note that grants records only), and for every ' +
       'collection whether it is new, already there, or would change one, with what it allows, worked out from its rules. ' +
@@ -728,6 +750,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'collections_apply',
+    title: 'Apply a proposal',
     description:
       'Apply a blueprint someone proposed: define each collection it proposes that the space does not have as it says. ' +
       'Read it in collections_proposals first, and tell the person what each collection allows. Only someone granted ' +
@@ -748,6 +771,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'collections_delete',
+    title: 'Delete a collection',
     description:
       "Remove a collection's definition from a space. Refused while it still has records — delete those first. " +
       'Only whoever first defined it, or someone granted /collection/define for it, may.',
@@ -760,24 +784,8 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
     run: (node, input) => node.collections.delete(str(input, 'space'), str(input, 'name')),
   },
   {
-    name: 'records_list',
-    description: 'List records in a space, oldest first unless newestFirst is set.',
-    input: {
-      type: 'object',
-      properties: {
-        space,
-        collection: { type: 'string', description: 'Only this collection, e.g. "app.todo.item"' },
-        limit: { type: 'integer' },
-        newestFirst: { type: 'boolean' },
-      },
-      required: ['space'],
-    },
-    readOnly: true,
-    peerContent: true,
-    run: (node, input) => node.records.list(str(input, 'space'), rest<ListOptions>(input, 'space')),
-  },
-  {
     name: 'records_query',
+    title: 'Find records',
     description:
       'Find records: filter, sort, page, and pull in what links to them. ' +
       'where: { done: false, "@author": "did:…", amount: { "$gt": 10 } } — bare names are body fields (dotted for nested) ' +
@@ -786,7 +794,8 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
       'operators $eq $ne $gt $gte $lt $lte $in $nin $exists $contains, combined with $and $or $not. ' +
       'include: { reactions: { rel: "about", from: "std.reaction", count: true } } — records linking to each result ' +
       '(direction "out" for what each result links to), nested up to 3 deep. ' +
-      'sort: { "@createdAt": "desc" }. Pass the returned cursor back to get the next page.',
+      'sort: { "@createdAt": "desc" }. Gives 50 at a time unless limit says otherwise; ' +
+      'a cursor that is not null means there are more: pass it back to get the next page.',
     input: {
       type: 'object',
       properties: {
@@ -803,10 +812,13 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
     readOnly: true,
     peerContent: true,
     // runQuery refuses a malformed query, after resolving collection references.
-    run: (node, input) => node.records.query(str(input, 'space'), rest<Query>(input, 'space')),
+    // A page by default, so a busy chat doesn't fill an agent's context in one call.
+    run: (node, input) =>
+      node.records.query(str(input, 'space'), { limit: 50, ...rest<Query>(input, 'space') }),
   },
   {
     name: 'records_get',
+    title: 'Read a record',
     description: 'Read one record.',
     input: { type: 'object', properties: { space, key }, required: ['space', 'key'] },
     readOnly: true,
@@ -815,6 +827,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'records_history',
+    title: "A record's history",
     description:
       'The versions of a record kept here, newest first. Collections defined with history "all" keep every version, ' +
       'each linked to the one before by hash; otherwise only the current and first versions are kept.',
@@ -825,6 +838,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'records_put',
+    title: 'Add a record',
     description:
       'Create a record in a collection. Collections are named like "app.todo.item"; the body is any JSON object. ' +
       'It gets a fresh key of this account’s unless a name is given, which is put in this account’s namespace. It is signed by this node and synced to the space.',
@@ -851,6 +865,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'records_linked',
+    title: 'Records linked to one',
     description:
       'The records pointing at a record: its reactions, comments, tags, votes… Optionally only one link role ' +
       '(e.g. "about") or one collection (e.g. "std.comment").',
@@ -866,6 +881,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'records_can',
+    title: 'Check what I may do to a record',
     description:
       'Whether you may do something before trying: "create" in a collection (target = its name), or "edit" / "delete" a record ' +
       "(target = its key). Follows the collection's rules and the space's.",
@@ -888,6 +904,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'records_update',
+    title: 'Change a record',
     description:
       'Write the next version of a record: a new body under the same key. Its links are kept unless given.',
     input: {
@@ -901,6 +918,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'records_delete',
+    title: 'Delete a record',
     description:
       'Delete a record for every member of the space. Anyone who may write in the space may delete in it.',
     input: { type: 'object', properties: { space, key }, required: ['space', 'key'] },
@@ -912,6 +930,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'activity_set',
+    title: 'Say what I am doing',
     description:
       'Say what you are doing on a record, for people to see while it lasts, like "Reading the thread" or ' +
       '"Making an app": your std.activity about it, one per record, changed in place. Set it again as the work ' +
@@ -936,6 +955,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'direct_list',
+    title: 'Read direct messages',
     description:
       'Direct messages in a space written by you or to you, opened, oldest first: { key, from, to, text, createdAt }. ' +
       'With "with", only those between you and that member. "text" is null for one you cannot open. ' +
@@ -960,6 +980,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   },
   {
     name: 'direct_send',
+    title: 'Send a direct message',
     description:
       'Send a direct message: text only the members in "to" and you can read. The others in the space see who wrote ' +
       'to whom and when, not what. Answer a direct message this way, to its writer and whoever else it was for, never in the open.',
@@ -1060,7 +1081,8 @@ export async function callAction(
 ): Promise<{ readonly text: string; readonly isError: boolean; readonly value?: unknown }> {
   try {
     const value = await runAction(node, name, input);
-    const json = JSON.stringify(value ?? null, null, 2);
+    // Compact: indenting costs a model tokens and tells it nothing.
+    const json = JSON.stringify(value ?? null);
     const fromPeers = NODE_ACTIONS.find((action) => action.name === name)?.peerContent === true;
     return { text: fromPeers ? `${PEER_CONTENT_NOTE}\n\n${json}` : json, isError: false, value };
   } catch (error) {

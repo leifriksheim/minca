@@ -249,13 +249,13 @@ test('a stranger’s own node can’t fill the service’s disk', async () => {
   });
 
   // Time enough for the agent to sync whatever it could reach.
-  const seen = await callTool(issuer, token, 'records_list', {
+  const seen = await callTool(issuer, token, 'records_query', {
     space: space.id,
     collection: 'app.bulk',
     limit: 100,
   });
   await new Promise((resolve) => setTimeout(resolve, 4000));
-  const again = await callTool(issuer, token, 'records_list', {
+  const again = await callTool(issuer, token, 'records_query', {
     space: space.id,
     collection: 'app.bulk',
     limit: 100,

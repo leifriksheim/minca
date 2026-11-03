@@ -45,6 +45,15 @@ export interface McpOptions {
   readonly trouble?: () => string | null;
 }
 
+/**
+ * Minca's mark, for a client to show beside the server: a transparent PNG, since
+ * favicon services draw the site's SVG onto white, which shows as a white square
+ * on a dark client.
+ */
+export const MINCA_ICONS = [
+  { src: 'https://minca.social/favicon.png', mimeType: 'image/png', sizes: ['192x192'] },
+];
+
 /** An action's description as a tool, with a warning when its result grants access */
 export const toolDescription = (action: NodeAction) =>
   action.sensitive
@@ -76,6 +85,7 @@ export function toolInstructions(node: Pick<P2PNode, 'did'>, options: McpOptions
 export function mcpTools(options: McpOptions = {}) {
   return offeredActions(options).map((action) => ({
     name: action.name,
+    title: action.title,
     description: toolDescription(action),
     inputSchema: action.input,
     annotations: {
@@ -123,7 +133,7 @@ export async function handleMcpMessage(
       return reply({
         protocolVersion: protocolVersionFor(message),
         capabilities: { tools: { listChanged: false } },
-        serverInfo,
+        serverInfo: { ...serverInfo, icons: MINCA_ICONS },
         instructions: toolInstructions(node, options),
       });
     case 'notifications/initialized':
@@ -198,6 +208,7 @@ export interface Waiting {
   readonly why: string;
   readonly tool: {
     readonly name: string;
+    readonly title: string;
     readonly description: string;
     readonly inputSchema?: Record<string, unknown>;
   };
@@ -279,6 +290,7 @@ export function connectWaiting(params: {
       `ask them for it and call ${CONNECT} again with it. Every Minca tool arrives once the code matches.`,
     tool: {
       name: CONNECT,
+      title: 'Connect Minca',
       description:
         `Connect Minca to the user's account: opens their Minca account home (${params.accountHome}) in the ` +
         'browser to allow this agent. Call it again with `code`, the six digits that page shows once they ' +

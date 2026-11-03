@@ -447,8 +447,8 @@ describe('MCP', () => {
     );
     assert.ok(Array.isArray(tools));
     assert.equal(tools.length, NODE_ACTIONS.length);
-    const recordsList: unknown = tools.find((tool: unknown) => at(tool, 'name') === 'records_list');
-    assert.equal(at(recordsList, 'annotations', 'readOnlyHint'), true);
+    const query: unknown = tools.find((tool: unknown) => at(tool, 'name') === 'records_query');
+    assert.equal(at(query, 'annotations', 'readOnlyHint'), true);
 
     const call = async (name: string, args: unknown) =>
       at(

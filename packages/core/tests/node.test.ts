@@ -476,7 +476,7 @@ describe('actions', () => {
       .object({ id: z.string() })
       .parse(await runAction(node, 'spaces_create', { name: 'Via actions', visibility: 'public' }));
     await runAction(node, 'records_put', { space: space.id, collection: 'app.note', body: { text: 'hi' } });
-    const records = await runAction(node, 'records_list', { space: space.id });
+    const records = await runAction(node, 'records_query', { space: space.id, collection: 'app.note' });
 
     assert.deepEqual(JSON.parse(JSON.stringify(records)), records);
     await assert.rejects(runAction(node, 'records_put', { space: space.id }), /Missing "collection"/);
