@@ -1,181 +1,260 @@
 # Records and queries
 
-A record is a JSON body in a collection of a space, signed by whoever wrote
-it. Its `key` stays the same across edits, and links point at the key. Every
-edit is a new version.
+A record is one piece of your app's data: a to-do, a vote, a message. This
+page shows how to write records, change them, delete them, and find them
+again with a query that stays live as they change.
 
-## Writing
+The examples use the `todos` collection from [Building an app](building-an-app.md).
+
+## Writing a record
+
+`put` makes a new record and gives it back:
 
 ```typescript
-const todo = await node.records.put(space.id, todos, { text: 'milk', done: false });
+const todo = await node.records.put(space.id, todos, { text: 'Buy milk', done: false });
+todo.key; // 'akthxqofxox3iszhpi5j3zhl6a.mfrggzdfmztwq2lknnwg23tpoa'
+```
 
-await node.records.update(space.id, todo.key, { text: 'milk', done: true }); // the whole body, not a patch
+The record gets a fresh `key`. The key stays the same for the record's whole
+life, so it is what you keep, read by and link to.
+
+Pass the collection's definition, as here, and TypeScript checks the body as
+you write it. You can also pass a collection's name as a string, and the body
+is untyped.
+
+## Editing a record
+
+`update` writes the record's next version:
+
+```typescript
+await node.records.update(space.id, todo.key, { text: 'Buy milk', done: true });
+```
+
+It takes the whole new body, not a patch. Every edit is a new version, and it
+syncs to everyone in the space.
+
+## Deleting a record
+
+```typescript
 await node.records.delete(space.id, todo.key);
 ```
 
-- `put` makes a new record at a fresh key of your account's, unless you name
-  one (`{ key: 'settings' }`), which suits a record there is one of per
-  account by nature. Under `onePer` the key is derived for you. See
-  [keys](#keys).
-- `update` takes the whole next body. Links carry over unless you pass new
-  ones.
-- `delete` writes a version marked deleted, which syncs like any other.
-- Pass a definition made with `collection(…)` instead of a name, and the body
-  is type-checked as you write it.
-- A write this account isn't allowed to make throws, with the reason in plain
-  words. Nothing is signed. `node.records.can(space, 'edit', key)` asks first.
+A delete is a version too, marked deleted, and it syncs like any other.
 
-Which version wins is decided by `seq` (one higher each edit), then by version
-id, never by a clock. Two devices that edited apart agree on the same winner.
-Merging edits inside one record is not built yet, so design records so that
-people edit different ones: one record per vote, per card, per reaction.
+## Who may write
 
-## Keys
-
-A record's key says whose it is. Every key an account creates starts with its
-owner part, a hash of the account, so no one else can create a record there:
-every peer refuses a first version at a key the writer doesn't own, however
-it got there ([spec 02 §4.1](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)).
+A write your account isn't allowed to make throws, with the reason in plain
+words, and nothing is signed. To ask first, for example to hide a button:
 
 ```typescript
-const fresh = await node.records.put(space.id, todos, { text: 'milk' });
-fresh.key; // 'akthxqofxox3iszhpi5j3zhl6a.mfrggzdfmztwq2lknnwg23tpoa'
-
-await node.records.put(space.id, 'app.settings', { theme: 'dark' }, { key: 'settings' });
-const mine = await node.records.keyFor(space.id, 'settings'); // 'akthxqofxox3iszhpi5j3zhl6a.settings'
-const hers = await node.records.keyFor(space.id, 'settings', aliceDid); // Alice's, if she wrote one
-await node.records.get(space.id, hers);
+const mayEdit = await node.records.can(space.id, 'edit', todo.key);
 ```
 
-- A name you choose goes in your account's namespace, so two accounts
-  choosing `settings` get two records. Names are 1–101 characters of a–z,
-  0–9 and `: . _ -`. Give a whole key only when it is already yours, to write
-  it again after a delete.
-- Read and link records by their whole `key`, as `put` returns it; a name is
-  only a name in someone's namespace.
-- Your name is the same key in every collection, and a record keeps its
-  collection for life, so `put` refuses a name you already hold in another
-  collection, deleted or not. Choose names that include the collection
-  (`app.todo.settings`), so two apps of yours never pick the same one. A
-  name of the form `one:<hex>` is refused outside a `onePer` collection, as
-  every peer would refuse it.
-- Under `onePer`, the node derives the key from the parts the rules name
-  (`node.records.onePerKey`). With `@author` it is the writer's; without, it
-  is a shared `one:…` key ([collections](collections.md#rules)). In a private
-  space it is keyed with the space's key, so it says nothing to someone who
-  can't read the space.
-- An account's line in a collection, for contracts, has the key
-  `lineKey(account, collection)` (exported by `@minca/core`), an
-  owned key of the account's.
+The action is `'create'`, `'edit'` or `'delete'`. For `'create'`, name the
+collection instead of a key. In React, `useCan(space, action, target)` gives
+the same answer.
 
-_Source: `packages/core/src/records/key.ts`, `packages/core/src/node/space-writing.ts` (`keyToWrite`, `keepsCollection`, `put`, `onePerKey`), `packages/core/src/node/space-runtime.ts` (`keyFor`). Tests: `packages/core/tests/record-keys.test.ts`, `packages/core/tests/versions.test.ts` ("a deleted key can be written again…")._
+Who may write what is set by the collection's rules and the space's roles. See
+[Collections](collections.md#rules).
 
 ## Links
 
-```typescript
-await node.records.put(
-  space.id,
-  votes,
-  { choice: 0 },
-  {
-    links: [{ rel: 'about', to: poll.key }],
-  },
-);
+A record can point at other records. Here a vote points at the poll it is
+about, and `linked` finds what points at the poll:
 
-const all = await node.records.linked(space.id, poll.key, { rel: 'about' });
+```typescript
+const poll = await node.records.put(space.id, 'app.poll', { question: 'Where to?' });
+await node.records.put(space.id, 'app.vote', { choice: 0 }, { links: [{ rel: 'about', to: poll.key }] });
+
+const votes = await node.records.linked(space.id, poll.key, { rel: 'about' });
 ```
 
-The roles a record may carry are declared on its collection
-([collections.md](collections.md)).
+`rel` is the link's role. The roles a record may carry are declared on its
+collection ([Collections](collections.md)).
 
-## What a record looks like
+`update` keeps a record's links unless you pass new ones.
 
-```typescript
-{
-  key, version, seq, space, collection,
-  body,          // null when encrypted and this node has no key
-  links,         // [{ rel, to }]
-  root,          // the account that wrote this version
-  createdBy,     // the account that created the record
-  createdAt, updatedAt,   // the writer's clock: for display only
-  verified,      // signature, delegation and shape check out
-  conforms,      // fits the collection's schema (null when there is none)
-  recordsOnly,   // true when written under a note that can't define collections
-}
-```
+## Querying
 
-A query's records also have `computed`, what the collection's
-[computed fields](computed.md) work out for each on this device (`{}`
-without any), and `included`, what its `include` found.
-
-Show `root` or `createdBy` as the author, not `author`, which is the session
-key that signed. `node.spaces.profiles(space)` maps accounts to names.
-
-## Queries
-
-A query is plain JSON, so an agent can write one, and it can cross a wire.
+A query asks for the records of one collection, filtered and sorted:
 
 ```typescript
-const { records, cursor, complete } = await node.records.query(space.id, {
-  collection: polls,
-  where: { closed: { $ne: true }, question: { $contains: 'may' } },
+const { records } = await node.records.query(space.id, {
+  collection: todos,
+  where: { done: false },
   sort: { '@createdAt': 'desc' },
   limit: 20,
-  include: {
-    votes: { rel: 'about', from: votes }, // records linking to each poll
-    reactions: { rel: 'about', from: 'std.reaction', count: true },
-  },
 });
 ```
 
-- **Fields.** A bare name is a field of the body (`question`,
-  `address.city`), or one of the collection's [computed fields](computed.md)
-  (`done`), which never share a name. A name starting with `@` is about the
-  record: `@key`, `@author`, `@root`, `@createdBy`, `@createdAt`,
-  `@updatedAt`, `@seq`. `link:<role>` is where its first link of that role
-  points.
-- **Operators.** `$eq`, `$ne` (true for a missing field too), `$gt`, `$gte`,
-  `$lt`, `$lte`, `$in`, `$nin`, `$exists`, `$contains` (a case-insensitive
-  substring, or an element of a list). Combine with `$and`, `$or`, `$not`. A
-  bare value means `$eq`.
-- **Sort** by several fields in order. Ties break on the key.
-- **Paging.** Pass the `cursor` back to get the next page. It is null on the
-  last one.
-- **Include** follows links. `direction: 'in'` (the default) finds records
-  linking to this one, `'out'` the ones it links to. Each include takes its own
-  `where`, `limit`, nested `include`, or `count: true` for just the number.
-  What it finds is on each record's `included`.
-- Name collections by their definitions and the results are typed, includes
-  and computed fields too, and so are `where` and `sort`: a field the
-  collection doesn't have, or a value of the wrong type, is a compile error.
-  A collection named as a bare string is untyped.
-- `complete` is false while a node that holds only part of a space is still
-  fetching a collection the query needs. Show "Loading…", not "Nothing here".
-- A malformed query throws, saying what to fix.
+A query is plain JSON, so you can store it, send it, or have an agent write
+it. A malformed query throws, saying what to fix.
 
-This is not full-text search: `$contains` is a substring match.
+## Filters
 
-## Watching
+`where` names fields and what they must be. A bare value means "equals":
 
 ```typescript
-const stop = node.records.watch(space.id, query, (result) => render(result));
+await node.records.query(space.id, {
+  collection: todos,
+  where: { done: false, text: { $contains: 'milk' } },
+});
+```
+
+- A plain name is a field of the body (`text`, `address.city`), or one of the
+  collection's [computed fields](computed.md).
+- A name starting with `@` is about the record itself: `@key`, `@author`,
+  `@root`, `@createdBy`, `@createdAt`, `@updatedAt`, `@seq`.
+- `link:<role>` is where the record's first link of that role points.
+
+The operators are `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`,
+`$exists` and `$contains`. Combine filters with `$and`, `$or` and `$not`.
+`$ne` is true for a missing field. `$contains` is a case-insensitive
+substring, or an element of a list. It is not full-text search.
+
+Every operator and field is in [The query format](query-format.md).
+
+## Sorting and paging
+
+`sort` takes several fields, applied in order. Ties break on the key.
+
+When there are more records than `limit`, the result has a `cursor`. Pass it
+back to get the next page. It is `null` on the last one.
+
+```typescript
+const page1 = await node.records.query(space.id, { collection: todos, limit: 20 });
+const page2 = await node.records.query(space.id, {
+  collection: todos,
+  limit: 20,
+  cursor: page1.cursor ?? undefined,
+});
+```
+
+## Following links
+
+`include` brings related records along with each result. Here each poll comes
+with its votes, and the number of reactions to it:
+
+```typescript
+const { records } = await node.records.query(space.id, {
+  collection: 'app.poll',
+  include: {
+    votes: { rel: 'about', from: 'app.vote' },
+    reactions: { rel: 'about', from: 'std.reaction', count: true },
+  },
+});
+records[0]?.included.votes;
+```
+
+By default an include finds records that link to this one
+(`direction: 'in'`). `direction: 'out'` finds the ones this record links to.
+Each include takes its own `where`, `limit` and nested `include`, or
+`count: true` for just the number.
+
+## Typed results
+
+Name collections by their definitions, in `collection` and `from`, and the
+results are typed: bodies, includes and computed fields. `where` and `sort`
+are typed too, so a field the collection doesn't have, or a value of the wrong
+type, is a compile error. A collection named by a string is untyped.
+
+## While a space loads
+
+The result's `complete` is false while a node that holds only part of a
+space is still fetching a collection the query needs. Show "Loading…", not
+"Nothing here".
+
+## Live results
+
+`watch` runs a query now, and again whenever the space's records change, here
+or on someone else's device:
+
+```typescript
+const stop = node.records.watch(space.id, { collection: todos }, (result) => {
+  console.log(result.records.length, 'to-dos');
+});
 stop();
 ```
 
-It runs now and again whenever the space's records change, here or from a
-peer. In React, `useQuery(space, query)` does the same.
+In React, `useQuery(space, query)` does the same. `useRecord(space, key)`
+keeps one record current, and `useLinked(space, key, { rel })` what links to
+it.
 
 For anything else, subscribe to the node's events:
 
 ```typescript
 const unsubscribe = node.subscribe((event) => {
-  if (event.type === 'records') reload(event.space);
+  if (event.type === 'records') console.log('records changed in', event.space);
 });
 ```
+
+## What a record looks like
+
+Every record the node gives you is a
+[`NodeRecord`](https://minca.dev/api/core/interfaces/NodeRecord/): its `key`,
+its `body`, its `links`, who wrote it and whether it checks out.
+
+A query gives each as a
+[`QueryRecord`](https://minca.dev/api/core/interfaces/QueryRecord/), which
+adds what the collection's [computed fields](computed.md) work out on this
+device and what its `include` found.
+
+Show `root` or `createdBy` as the author. `author` is the app's key that
+signed, not the person. `node.spaces.profiles(space)` maps accounts to names.
+
+## Keys
+
+A record's key says whose it is. Every key starts with its owner's part, a
+hash of the account, so no one else can create a record there.
+
+Most records just take the fresh key `put` gives them. Some records there is
+one of per account, like settings. For those, pass a name:
+
+```typescript
+await node.records.put(space.id, 'app.settings', { theme: 'dark' }, { key: 'settings' });
+
+const mine = await node.records.keyFor(space.id, 'settings'); // 'akthxqofxox3iszhpi5j3zhl6a.settings'
+const theirs = await node.records.keyFor(space.id, 'settings', did); // someone else's, if they wrote one
+await node.records.get(space.id, theirs);
+```
+
+- The name goes in your account's namespace, so two accounts that both
+  choose `settings` get two records.
+- Names are 1–101 characters of `a`–`z`, `0`–`9` and `: . _ -`.
+- Read and link records by their whole `key`, as `put` gives it, not by the
+  name.
+- A name is the same key in every collection, and a record keeps its
+  collection for life. So `put` refuses a name you already hold in another
+  collection, deleted or not. Put the collection in the name
+  (`app.todo.settings`) so two of your apps never clash.
+- Writing a deleted key brings the record back. Pass the whole key when it is
+  already yours.
+- A name of the form `one:<hex>` is refused outside a `onePer` collection.
+
+In a collection with a `onePer` rule, the node works out the key for you
+from the parts the rule names, and `node.records.onePerKey` tells you what it
+is. With `@author` the key is the writer's. Without, it is a shared `one:…`
+key ([Collections](collections.md#rules)). In a private space it is keyed with
+the space's key, so it says nothing to someone who can't read the space.
+
+An account's line in a collection, for contracts, has the key
+`lineKey(account, collection)`, exported by `@minca/core`.
+
+Every peer refuses a first version at a key the writer doesn't own. The rule
+is in [spec 02 §4.1](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md).
+
+## When two devices edit at once
+
+Each edit raises the record's `seq` by one. The version with the higher `seq`
+wins. On a tie, the version id decides. Clocks play no part, so two devices
+that edited apart agree on the same winner.
+
+Edits inside one record are not merged. Design records so that people edit
+different ones: one record per vote, per card, per reaction.
 
 ## History
 
 `node.records.history(space, key)` gives the versions this node keeps whole,
-newest first: the current one, or every one in a collection defined with
-`history: 'all'`. What an earlier version said is otherwise forgotten once
-it is superseded; only a stub of it is kept, to check the next one.
+newest first. That is the current one, or every one in a collection defined
+with `history: 'all'`. Otherwise an earlier version's body is forgotten once
+it is replaced.

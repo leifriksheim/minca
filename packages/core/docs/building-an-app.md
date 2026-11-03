@@ -1,25 +1,27 @@
 # Building an app
 
-An app needs a node. There are two ways to get one, and they end in the same
-place: a `P2PNode` you read and write through.
+A Minca app keeps its data in the person's own spaces, not on a server of
+yours. On this page we'll build a small to-do list: connect, save a to-do, and
+show the list as it changes.
 
-## Connect to the person's account home (recommended)
+## Connecting
 
-The app never sees the account's seed. It asks the person's account home for
-access, the person picks which spaces it gets, and the home signs a note from
-the account to a key the app made for itself. Every peer checks that note, so
-the app cannot write anywhere it was not given.
+Every app starts by asking the person for access, with
+`createMincaConnection`. Wrap your app in `MincaProvider`, and use
+`useConnection` to show a button until the person has said yes:
 
 ```tsx
+declare function Todos(): React.JSX.Element;
+// ---cut---
+import { createRoot } from 'react-dom/client';
 import { createMincaConnection } from '@minca/core/session';
 import { MincaProvider, useConnection } from '@minca/react';
 
 const connection = createMincaConnection({
-  home: 'https://home.minca.social/connect', // a suggestion: the person may use their own
+  home: 'https://home.minca.social/connect',
   request: {
     name: 'Todo',
-    access: 'write', // or 'read'
-    scope: 'spaces', // or 'account', for every space
+    access: 'write',
     create: [{ name: 'Todos', visibility: 'private' }],
   },
   network: { relays: ['wss://relay.minca.social'] },
@@ -33,189 +35,98 @@ createRoot(root).render(
 
 function App() {
   const { connection, state } = useConnection();
-  if (state.status !== 'ready')
+  if (state.status !== 'ready') {
     return <button onClick={() => connection.connect()}>Connect with Minca</button>;
+  }
   return <Todos />;
 }
 ```
 
-- The grant lasts seven days and is remembered between visits. When it runs
-  out, `state.status` is `expired`, and connecting again renews it.
-- `scope: 'spaces'` gives the spaces the person picks, plus any the app asked
-  to `create`. `scope: 'account'` gives every space, and lets the app make and
-  join spaces. Ask for the narrower one unless the app is a view onto
-  everything.
-- Without React: `connectToHome`, `startConnectedNode` and `grantStore` from
-  `@minca/core/session`.
+`home` is where the person's account lives. They see your app's name and what
+it asks for, and pick which of their spaces to give it. `create` asks for a
+new space just for your app, so there's somewhere to start.
 
-## Sign in inside the app
+Your app never sees the person's keys. It gets a key of its own, allowed into
+the spaces it was given and nowhere else.
 
-For an app that holds the account itself. The flow (where data lives, which
-account, password or passkey, creating one, pairing a phone) ships as an
-element and as a React component.
+The connection is remembered between visits, and lasts a week. When it runs
+out, `state.status` is `'expired'`, and connecting again renews it.
 
-```html
-<minca-auth app-name="Todo" relays="wss://relay.minca.social"></minca-auth>
-<script type="module">
-  import '@minca/core/elements';
-  document.querySelector('minca-auth').addEventListener('minca-session', (event) => {
-    const session = event.detail.session; // { account, did, sessionDid, node }, or null
-    if (session) start(session.node);
-  });
-</script>
-```
+## A collection
 
-```tsx
-import { createMincaAuth } from '@minca/core/session';
-import { MincaProvider, MincaAuth, useMinca } from '@minca/react';
+Records live in collections, like rows in a table. Say what a to-do looks
+like:
 
-const auth = createMincaAuth({ appName: 'Todo', network: { relays: ['wss://relay.minca.social'] } });
+```ts
+import * as z from 'zod';
+import { collection } from '@minca/core';
 
-function App() {
-  const { state } = useMinca();
-  if (state?.stage !== 'ready') return <MincaAuth />;
-  return <Todos />;
-}
-
-createRoot(root).render(
-  <MincaProvider auth={auth}>
-    <App />
-  </MincaProvider>,
-);
-```
-
-## A node by hand
-
-For scripts, tests and servers:
-
-```typescript
-import {
-  createNode,
-  createIdentityManager,
-  createLocalRootSigner,
-  indexedDBStores,
-  rolePresets,
-} from '@minca/core';
-
-const manager = createIdentityManager();
-const me = await manager.fromRecoveryCode(code);
-
-const node = await createNode({
-  signer: createLocalRootSigner(me, manager.getProvider()),
-  stores: indexedDBStores('my-app'),
-  network: { relays: ['wss://relay.minca.social'] },
+export const todos = collection({
+  name: 'app.todo.item',
+  title: 'To-do',
+  schema: z.object({ text: z.string().min(1), done: z.boolean() }),
 });
 ```
 
-Leave out `network` to stay offline. Call `node.close()` when done.
+The definition is stored in the space itself, so any app that opens the space
+knows what a to-do is. Add it once, with the `node` that `useNode()` gives
+you in a component:
 
-## Spaces
-
-```typescript
-const space = await node.spaces.create({ name: 'Groceries', visibility: 'private', ...rolePresets.team });
-
-const invite = await node.spaces.invite(space.id, { short: true }); // ~85 characters; treat it as a secret
-const view = await node.spaces.invite(space.id, { write: false }); // read-only
-await node.spaces.join(invite); // on the friend's side
-await node.spaces.closeInvite(space.id, invite); // nobody else joins with it
+```ts
+await node.collections.define(space.id, todos);
 ```
 
-- `rolePresets` are constitution templates: `solo` (just you; invites are
-  view-only), `team` (everyone invited can write, invite and add
-  collections), `community` (admins, moderators, members) and `coop` (no
-  founders: stewards and members, `top: 'none'`). Or pass your own `roles`.
-  Under the first three you are the space's founder: you hold every command,
-  and nobody else can remove you; `spaces.stepDown` gives that up
-  ([spaces.md](spaces.md#the-top-and-founders)).
-- A private invite carries the space key. Anyone holding it can read the
-  space, so don't log it or put it in a URL a server sees (use the fragment,
-  `#invite=…`).
-- `node.spaces.list()` gives every space this node has, with `readable`,
-  `writable` and `role`.
+We'll look at schemas, rules and the shared standard collections in
+[Collections](collections.md).
 
-## React hooks
+## Saving a record
 
-All from `@minca/react`, below a `MincaProvider`:
+```ts
+await node.records.put(space.id, todos, { text: 'Buy milk', done: false });
+```
 
-| Hook                                                                | Gives                                                                   |
-| ------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `useNode()`                                                         | The node, to write with                                                 |
-| `useSpaces({ having? })`                                            | The spaces, kept current, with `create`, `join`, `leave`                |
-| `useQuery(space, query)`                                            | `{ result, error }`, re-run as records change here or arrive from peers |
-| `useRecord(space, key)` / `useLinked(space, key)`                   | One record; the records pointing at it                                  |
-| `useCollections(space)` / `useProfiles(space)` / `useAccess(space)` | What a space holds; who is in it; roles and members                     |
-| `useSpaceStatus(space)`                                             | Connection and peers                                                    |
-| `useCan(space, action, target)`                                     | Whether to show an edit or delete button                                |
-| `useHoldSpace(space)`                                               | Keeps a space syncing while the view is on screen                       |
-| `useLive(space, load, deps)`                                        | Anything else, reloaded as the space changes                            |
-| `useWatched(load, deps, { when, settle, every })`                   | Anything else, reloaded after the node events you pick                  |
-| `useAsync(load, deps)`                                              | One answer: `loading`, `done` with its value, or `failed`               |
-| `useAccountPicture()`                                               | The account's picture as a URL, or null                                 |
-| `useNames(space)`                                                   | `name(did)`: what someone is called there, never passing for another    |
-| `useMyName()`                                                       | The account's name, to ask for when making or joining a space           |
-| `useInviteLink()`                                                   | The invite this page was opened with, what it is for, and `dismiss`     |
+The record is signed by the person, through your app's key, and syncs to
+everyone else in the space. Because `todos` carries its schema, TypeScript
+checks the body as you write it.
+
+## Showing records
+
+`useQuery` gives the records, and runs again whenever they change, here or
+on someone else's device. `Todos`, which `App` shows once connected, picks the
+space from the ones the person gave:
 
 ```tsx
-function Todos({ space }: { space: string }) {
-  const node = useNode();
+import { useQuery, useSpaces } from '@minca/react';
+
+export function Todos() {
+  const { spaces } = useSpaces();
+  const space = spaces[0];
+  return space ? <TodoList space={space.id} /> : null;
+}
+
+function TodoList({ space }: { space: string }) {
   const { result } = useQuery(space, { collection: todos, sort: { '@createdAt': 'asc' } });
   if (!result) return null;
-  if (!result.complete && result.records.length === 0) return <p>Loading…</p>;
-  return result.records.map((todo) => <Todo key={todo.key} todo={todo} />);
-}
-```
-
-**An app given the whole account** sees every space in it. `useSpaces({ having: [proposal] })`
-lists only the spaces that define those collections: the ones the app works in.
-A space still being joined is kept, since its definitions haven't arrived yet.
-
-**Names.** A name is whatever its owner typed, so two people can both be "Sam".
-`useNames(space)` (or `displayName(did, profiles)` from `@minca/core`)
-adds the tail of the identity when a name is shared, and shows the tail alone
-for someone with no profile.
-
-**Invite links** carry the invite after `#`, which browsers never send to a
-server. `inviteLink(invite)` makes one for this page, `inviteFromLink(text)`
-takes the invite out of a pasted link, and `useInviteLink()` reads the one the
-page was opened with:
-
-```tsx
-import { inviteLink, useInviteLink, useMyName, useNode } from '@minca/react';
-
-const link = inviteLink(await node.spaces.invite(space.id, { short: true })); // https://app.example/#invite=…
-
-function Invited({ onJoin }: { onJoin: (invite: string) => Promise<unknown> }) {
-  const { invite, preview, dismiss } = useInviteLink();
-  const me = useMyName();
-  if (!invite || !preview) return null;
   return (
-    <button
-      onClick={() =>
-        void me
-          .save()
-          .then(() => onJoin(invite))
-          .then(dismiss)
-      }
-    >
-      Join {preview.space.name}
-    </button>
+    <ul>
+      {result.records.map((todo) => (
+        <li key={todo.key}>{todo.body.text}</li>
+      ))}
+    </ul>
   );
 }
 ```
 
-`result.complete` is false while an app that holds only part of a space is
-still fetching a collection. Show "Loading…", not "Nothing here".
+That's a whole app. Share the space with a friend, and you both see the same
+list.
 
-## Live messages
+## Next steps
 
-For things that should reach whoever is connected now and be kept nowhere,
-like typing or presence:
-
-```typescript
-await node.spaces.send(space.id, { type: 'typing' });
-node.subscribe((event) => {
-  if (event.type === 'message') console.log(event.from, event.message); // from: the sender's account
-});
-```
-
-At most 64 KB each. Someone who isn't connected misses it.
+- [Records and queries](records-and-queries.md): editing, deleting, filters
+  and links between records.
+- [Collections](collections.md): what a schema can say, and who may write
+  what.
+- [Spaces](spaces.md): making spaces, and inviting people to them.
+- [Signing in](sign-in.md): for an app that keeps the account itself,
+  instead of connecting to a home.
+- [The node](node.md#react): every React hook.

@@ -1,260 +1,208 @@
 # Signing in
 
-> Not protocol. This page describes the reference library, and another
-> implementation may do it differently and still interoperate. What peers must
-> agree on is in the [spec](https://github.com/leifriksheim/minca/blob/main/spec/README.md).
+Most apps connect to the person's account home
+([Building an app](building-an-app.md)). This page is for a page that keeps
+the account itself: an account home, or an app that signs people in on its
+own. `createMincaAuth` is the whole flow, from creating an account to
+pairing a phone.
 
-`createMincaAuth(config)` is the whole sign-in flow of a page that holds the
-seed — an account home, or an app that signs people in itself — as a state to
-read and actions to call. It is a client convenience: nothing in it goes over
-the wire except what the node it starts does. An account home is a page built on it; the exchange it has with apps is
-[spec 06 §2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md).
+## The sign-in screen
+
+The quickest way in is the `<minca-auth>` element. It draws every screen of
+the flow, and fires `minca-session` when someone signs in or out:
+
+```html
+<minca-auth app-name="Todo" relays="wss://relay.minca.social"></minca-auth>
+<script type="module">
+  import '@minca/core/elements';
+  document.querySelector('minca-auth').addEventListener('minca-session', (event) => {
+    const session = event.detail.session; // { account, did, sessionDid, node }, or null
+    if (session) start(session.node);
+  });
+</script>
+```
+
+In React, make the flow with `createMincaAuth`, hand it to `MincaProvider`,
+and show `<MincaAuth>` until the person is signed in:
+
+```tsx
+import { createRoot } from 'react-dom/client';
+import { createMincaAuth } from '@minca/core/session';
+import { MincaProvider, MincaAuth, useMinca } from '@minca/react';
+
+const auth = createMincaAuth({ appName: 'Todo', network: { relays: ['wss://relay.minca.social'] } });
+
+function App() {
+  const { state } = useMinca();
+  if (state?.stage !== 'ready') return <MincaAuth />;
+  return <p>Signed in.</p>;
+}
+
+createRoot(root).render(
+  <MincaProvider auth={auth}>
+    <App />
+  </MincaProvider>,
+);
+```
+
+Everything below the provider works as it does for a connected app. The
+rest of this page is for when you want to know what the flow does, or draw
+your own screens on it.
 
 ## Places
 
-A **place** is where accounts and their data are kept (`Place`):
+A place is where accounts and their data are kept. There are two kinds:
 
-| `kind`             | Accounts are kept                     | Data is kept                                                 |
-| ------------------ | ------------------------------------- | ------------------------------------------------------------ |
-| `browser`          | the browser account store (IndexedDB) | IndexedDB, per account ([stores](node.md#stores))            |
-| `folder` (a _pod_) | the folder's account store            | the folder, per account, registry sealed under the local key |
+| `kind`    | Accounts and data are kept in                                    |
+| --------- | ---------------------------------------------------------------- |
+| `browser` | IndexedDB, per account ([stores](node.md#stores))                |
+| `folder`  | A folder the person picks, called a pod. The registry is sealed. |
 
-A pod is a directory picked through the File System Access API. The last one
-picked is remembered and re-opened without a prompt when permission is still
-granted. A place holds any number of accounts; `listAccounts` returns them most
-recently used first. Account files and vault formats are in [01](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md).
-
-_Source: `packages/core/src/session/places.ts`. Tests: `packages/core/tests/account-store.test.ts`._
-
-## Account stores
-
-A folder's `accounts.json` and vault files are
-[spec 01 §14.1](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md).
-The library lists them most recently used first (`lastUsedAt`, else
-`createdAt`), and writes each file as JSON with a 2-space indent and a trailing
-newline.
-
-**In the browser**, with no folder, the same shape lives in IndexedDB database
-`minca-accounts`, object store `accounts`: key `__list` holds the array of
-summaries, and key `<id>` that account's vault. No other origin can edit it.
-
-_Source: `packages/core/src/identity/account-store.ts`. Tests: `packages/core/tests/account-store.test.ts`, `packages/core/tests/account-vault.test.ts` ("the account file")._
+A pod is a folder picked through the File System Access API. The last one
+picked is remembered, and opened again without a prompt while the browser
+still grants it. A place holds any number of accounts. `listAccounts` returns
+them most recently used first.
 
 ## Stages
 
-`AuthState.stage` is one of:
+The flow is a state to read and actions to call. `auth.getState().stage`
+says which screen it is on. It goes from `starting` through the screens of signing in or setting up,
+to `ready`. What each stage means is in
+[`AuthStage`](https://minca.dev/api/session/type-aliases/AuthStage/).
 
-| Stage      | Meaning                                                                                                                                                    |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `starting` | Looking for accounts and a kept sign-in.                                                                                                                   |
-| `welcome`  | The place holds no accounts: create one, or "I already have one".                                                                                          |
-| `existing` | Ways to an account this place does not list: open a pod, add this device from another, or the recovery code. Where data lives is asked here, not up front. |
-| `signIn`   | Choose an account and unlock it.                                                                                                                           |
-| `restore`  | Type the recovery code.                                                                                                                                    |
-| `create`   | Name a new account.                                                                                                                                        |
-| `recovery` | Signed in; `freshCode` is the recovery code to keep safe.                                                                                                  |
-| `unlock`   | Signed in; choose a passkey or a password. Required.                                                                                                       |
-| `pod`      | Signed in; a new account with no host is offered a pod. Optional, and skipped with `offerPod: false`.                                                      |
-| `pair`     | Opened from a phone-pairing link ([01](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md)).                                              |
-| `ready`    | Signed in; `session` is set.                                                                                                                               |
+Where data lives is asked at `existing`, not up front. A page that waits for
+`ready` doesn't see the session during `recovery`, `unlock` or `pod`.
 
-Transitions:
+A failed action sets `error`, an
+[`AuthError`](https://minca.dev/api/session/interfaces/AuthError/), and stays
+on the same stage. A dismissed passkey or folder prompt sets no error.
 
-| From                            | Action                                                                                                                | To                                                                                                                                                                                                                        |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `starting`                      | `start()`, a kept sign-in for an account in the place ([the session a sign-in starts](#the-session-a-sign-in-starts)) | `ready`, or `pair` (signed in) with a pairing ticket in the URL                                                                                                                                                           |
-| `starting`                      | `start()`, no kept sign-in and a pairing ticket in the URL                                                            | `pair`                                                                                                                                                                                                                    |
-| `starting`                      | `start()`, otherwise                                                                                                  | `signIn` if the place has accounts, else `welcome`                                                                                                                                                                        |
-| `starting`                      | `start()` fails                                                                                                       | `welcome` (with `error`)                                                                                                                                                                                                  |
-| any                             | `showWelcome()` / `showExisting()` / `showRestore()` / `showSignIn()`                                                 | `welcome` / `existing` / `restore` / `signIn`                                                                                                                                                                             |
-| `welcome`, `existing`, `signIn` | `choosePod()` / `useBrowser()` while signed out                                                                       | `signIn` or `welcome`                                                                                                                                                                                                     |
-| `welcome`                       | `reopenPod()`, from a click, with `podToReopen` set                                                                   | `ready` with a kept sign-in for an account there, else `signIn` or `welcome`                                                                                                                                              |
-| `ready`                         | `choosePod()` while signed in                                                                                         | `ready`, with `podChoice` set; `confirmPod('combine' \| 'switch')` restarts the session in the pod                                                                                                                        |
-| `pod`                           | `choosePod()`                                                                                                         | `ready`: the new account moves into the pod without asking, and its browser copy is removed                                                                                                                               |
-| `pod`                           | `finishSetup()`                                                                                                       | `ready`                                                                                                                                                                                                                   |
-| `welcome`, `existing`, `signIn` | `startCreating()`                                                                                                     | `create`                                                                                                                                                                                                                  |
-| `signIn`                        | `signInWithPassword` / `signInWithPasskey` succeeds                                                                   | `ready`                                                                                                                                                                                                                   |
-| `signIn`, `restore`             | `signInWithCode` (or a recovery code given to `signInWithPassword`) succeeds                                          | `ready` if the account has a usable passkey or a password here; else `unlock` with `setup: 'restored'`                                                                                                                    |
-| `create`                        | `createAccount(name, { username? })`                                                                                  | `recovery`, with `session`, `freshCode` and `setup: 'new'` set                                                                                                                                                            |
-| `recovery`                      | `codeSaved()`                                                                                                         | `unlock`                                                                                                                                                                                                                  |
-| `unlock`                        | `addPasskey()` / `setPassword(p)` succeeds                                                                            | `ready` for a new account with a host (the first of `network.hosts`), which is handed the spaces in the background (`settled()`); else `pod` in a browser that can open folders, unless `offerPod` is false; else `ready` |
-| `pair`                          | `acceptPairing()`                                                                                                     | once the computer confirms the code, `unlock` with `setup: 'paired'` if the account has no way in here, else `ready`; signed in to another, `pair` with `pairingArrival`                                                  |
-| `pair`                          | `answerPairing(true)` / `answerPairing(false)`                                                                        | as `acceptPairing()` signed out / `ready`, the account signed in kept                                                                                                                                                     |
-| `pair`                          | `dismissPairing()`                                                                                                    | `ready` if signed in, else `signIn` / `welcome`                                                                                                                                                                           |
-| `ready`                         | `signOut()`                                                                                                           | `starting`, then `signIn` / `welcome`                                                                                                                                                                                     |
+### Moving between stages
 
-A pod this site used last opens at `start()` only while the browser still
-grants it. Chrome keeps the folder's handle between visits, but not the
-permission, unless the person chose "Allow on every visit". Then `start()`
-sets `podToReopen` to the folder's name and goes on as if there were no pod;
-`<minca-auth>` offers it first on the welcome screen, and `reopenPod()`, from
-that click, asks for the permission and goes on as `start()` would have,
-signed in if the sign-in was kept.
+| From                            | Action                                                                      | To                                                                                                                      |
+| ------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `starting`                      | `start()` with a kept sign-in here                                          | `ready`, or `pair` (signed in) with a pairing ticket in the URL                                                         |
+| `starting`                      | `start()` with no kept sign-in and a pairing ticket in the URL              | `pair`                                                                                                                  |
+| `starting`                      | `start()`, otherwise                                                        | `signIn` if the place has accounts, else `welcome`                                                                      |
+| `starting`                      | `start()` fails                                                             | `welcome`, with `error`                                                                                                 |
+| any                             | `showWelcome()`, `showExisting()`, `showRestore()`, `showSignIn()`          | that stage                                                                                                              |
+| `welcome`, `existing`, `signIn` | `choosePod()` or `useBrowser()`, signed out                                 | `signIn` or `welcome`                                                                                                   |
+| `welcome`                       | `reopenPod()` from a click, with `podToReopen` set                          | `ready` with a kept sign-in there, else `signIn` or `welcome`                                                           |
+| `ready`                         | `choosePod()`                                                               | `ready`, with `podChoice` set ([moving into a pod](#moving-into-a-pod))                                                 |
+| `pod`                           | `choosePod()`                                                               | `ready`. The new account moves into the pod, and its browser copy is removed                                            |
+| `pod`                           | `finishSetup()`                                                             | `ready`                                                                                                                 |
+| `welcome`, `existing`, `signIn` | `startCreating()`                                                           | `create`                                                                                                                |
+| `signIn`                        | `signInWithPassword` or `signInWithPasskey` succeeds                        | `ready`                                                                                                                 |
+| `signIn`, `restore`             | `signInWithCode` succeeds, or a recovery code given to `signInWithPassword` | `ready` if the account has a passkey or password here, else `unlock` with `setup: 'restored'`                           |
+| `create`                        | `createAccount(name, { username? })`                                        | `recovery`, with `session`, `freshCode` and `setup: 'new'`                                                              |
+| `recovery`                      | `codeSaved()`                                                               | `unlock`                                                                                                                |
+| `unlock`                        | `addPasskey()` or `setPassword(p)` succeeds                                 | `ready` for a new account with a host. Else `pod` where folders can be opened, unless `offerPod` is false. Else `ready` |
+| `pair`                          | `acceptPairing()`                                                           | See [pairing a phone](#pairing-a-phone)                                                                                 |
+| `pair`                          | `answerPairing(true)` or `answerPairing(false)`                             | As `acceptPairing()` signed out, or `ready` keeping the account signed in                                               |
+| `pair`                          | `dismissPairing()`                                                          | `ready` if signed in, else `signIn` or `welcome`                                                                        |
+| `ready`                         | `signOut()`                                                                 | `starting`, then `signIn` or `welcome`                                                                                  |
 
-A failed action sets `error` (`{ message, hint?, code? }`) and leaves the stage
-as it was. A dismissed passkey or folder prompt sets no error.
+### A pod that needs a click
 
-A pod is brought up to date only by a node that has it open: this page's
-while it runs, or a carrier given the folder. A page that closes once signed
-in, such as an account home's connect page, passes `offerPod: false`, and
-offers the pod where the person comes back instead.
+Chrome keeps a pod's folder between visits, but not the permission to use
+it, unless the person chose "Allow on every visit". Then `start()` sets
+`podToReopen` to the folder's name and goes on as if there were no pod.
+`<minca-auth>` offers it first on the welcome screen. `reopenPod()`, called
+from that click, asks for the permission and carries on as `start()` would
+have.
 
-With `usernames: '<domain>'`, the create screen asks for a username alone,
-the account's name taken from it, and `createAccount` claims it in the
-background ([usernames.md](usernames.md#on-the-node)).
+## Creating an account
 
-With `network.hosts`, a new account is kept online with the first of them as
-it is made, with nothing to choose: `hosting.use` in the background, only
-when the host keeps accounts with nothing paid (`free`, or `limits`), tried
-once more if it doesn't answer. Failing that, the account stays in this
-browser, and is kept online from the account page later. `settled()`
-resolves once this and any username claim are done.
+`createAccount(name)` makes a new account with a random seed. It writes the
+account's vault, asks the browser to keep its storage, starts its session,
+writes its name to `sys.profile` and shows the recovery code (`freshCode`).
 
-_Source: `packages/core/src/session/auth.ts` (`start`, `reopenPod`), `packages/core/src/session/places.ts` (`podToReopen`). Tests: `packages/core/tests/auth.test.ts`, `packages/core/tests/take-up.test.ts` ("a pod the browser wants a click to open again")._
+The person must then set up a passkey or a password before `ready`.
+Otherwise they would open the account with the recovery code every time.
+
+### Usernames
+
+With `usernames: 'minca.social'` in the config, the create screen asks for a
+username alone, and takes the account's name from it. `createAccount` claims
+it in the background ([usernames](usernames.md#on-the-node)).
+
+### Hosts
+
+With `network.hosts`, a new account is kept online with the first host as it
+is made. Nothing to choose: `hosting.use` runs in the background, tried once
+more if the host doesn't answer. It does this only when the host keeps
+accounts for free (`free`, or `limits`). Failing that, the account stays in
+this browser, and the person can keep it online from the account page later.
+
+`settled()` resolves once the host and any username claim are done.
+
+### Pods
+
+A pod is kept up to date only while a node has it open: this page, or a
+carrier given the folder. So a page that closes once signed in, such as an
+account home's connect page, passes `offerPod: false`. It offers the pod
+where the person comes back instead.
 
 ## Ways in
 
-- **The recovery code** is the seed written out, 26 characters
-  ([01](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md)). It works on any site without anything stored there,
-  and is for restoring, not for every day. If an account is selected and the
-  code opens a different one, sign-in fails with a reason. If the code's
-  account is new to this place, it is filed there with an empty vault (no
-  wraps) under the selected account's name or `My account`.
-- **A password** unwraps the seed from the vault's `passphrase` wrap. It
-  works wherever that vault is: this browser, or a pod on any origin. The flow
-  keeps one passphrase wrap as the account's password: setting one replaces
-  any other, except the CLI's (label `CLI passphrase`, `CLI_PASSPHRASE_LABEL`),
-  which is for unattended unlocking and is kept; the CLI account home
-  (`packages/cli/src/home.ts`) makes those. Signing in by password tries every
-  passphrase wrap. Any password but an empty one is taken: a copied vault can
-  be guessed at offline, so the forms show how strong it is as it is typed
-  (`passwordStrength`, weak under 40 bits, strong from 60) and warn, but leave
-  the choice to the person. `signInWithPassword` also accepts a
-  recovery code, which password managers may hold as this site's login from
-  before passwords existed.
-- **A passkey** is a gate, not a key: the WebAuthn ceremony proves presence,
-  and the seed is unwrapped with a non-extractable device key kept in this
-  site's storage, named by the vault's `device` wrap for this `rpId`
-  ([device keys and passkeys](#device-keys-and-passkeys)). Only device wraps
-  whose `rpId` is this site's are offered, since another origin's device key
-  is unreachable from here, and only one whose device key is present in this
-  browser.
+There are three ways into an account.
 
-A new account's seed is random. Creating one writes its vault with no wraps,
-asks the browser to persist its storage (when kept in the browser), starts its
-session, writes its name to `sys.profile` in the account registry, and shows
-the recovery code (`freshCode`). Setting up a passkey or a password is
-required before `ready`: an account with no everyday way in would be opened
-with its recovery code every time, which is the habit this avoids. A page that
-waits for `ready` does not see the session during `recovery`, `unlock` or
-`pod`.
+**The recovery code** is the seed written out, 26 characters. It works on any
+site with nothing stored there. It is for restoring, not for every day. If an
+account is selected and the code opens a different one, sign-in fails with a
+reason. If the code's account is new here, it is filed under the selected
+account's name, or `My account`.
 
-_Source: `packages/core/src/session/auth.ts`, `packages/core/src/session/credentials.ts`, `packages/core/src/identity/account-vault.ts` (`CLI_PASSPHRASE_LABEL`). Tests: `packages/core/tests/auth.test.ts`, `packages/core/tests/account-vault.test.ts`._
+**A password** unlocks the vault. It works wherever that vault is: this
+browser, or a pod on any site. An account has one password. Setting a new one
+replaces the old one, but keeps the CLI's (`CLI_PASSPHRASE_LABEL`), which is
+for unlocking unattended. Signing in tries every password the vault holds.
 
-## Proving it is you
+Any password but an empty one is taken. A copied vault can be guessed at
+offline, so the forms show how strong a password is as it is typed
+(`passwordStrength`: weak under 40 bits, strong from 60) and leave the
+choice to the person. `signInWithPassword` also takes a recovery code, which
+a password manager may hold from before passwords existed.
 
-Being signed in is no proof anyone is there: a page may be left open, and a
-sign-in kept for days. So whatever hands out the whole account, or changes how
-it signs in, asks again. `auth.recoveryCode()` returns the code,
-`auth.offerToPhone()` starts, `setPassword`, `addPasskey`,
-`removeShortcut` and `removeAccount` work (outside the first setup of an account just made,
-restored or paired, which only landing a session opens), only within five
-minutes of `auth.confirm(proof)` succeeding for the account signed in now
-(`isConfirmed()` says whether it has), where `proof` is
-`{ password }`, `{ passkey: true }` (the passkey's own check that someone is
-there: a fingerprint, a face or a PIN) or `{ code }`, the recovery code itself.
-`confirm` resolves false and sets `error` for a wrong answer, and a passkey
-with no credential behind it is no proof. A new sign-in, or signing out, asks
-again. The recovery code shown once when an account is made needs no confirm.
-
-Giving an app or a carrier anything (`auth.grant`, `auth.grantCarry`) takes
-the same proof, or a sign-in with `signInWithPassword`, `signInWithPasskey`
-or `signInWithCode` in the last five minutes: the person just gave it.
-Making the account counts too: whoever made it is there. A passkey sign-in
-counts only when the passkey's own check ran, not for a wrap with no
-credential behind it. `mayGrant()` says whether any of these holds. A
-sign-in kept from an earlier visit is none of them. So the reference home's connect page
-goes as signing in with Google does: choose the account, prove it is you
-(signing in to it, or confirming if it is the one signed in), then allow.
-A suggestion from an app already connected (`auth.propose`) gives nothing
-new, and needs only the sign-in.
-This keeps the seed from someone who only has the open page, not from a
-compromised one: the seed is in the page's memory while it is signed in
-([threat model §4](https://github.com/leifriksheim/minca/blob/main/spec/threat-model.md)).
-
-_Source: `packages/core/src/session/auth.ts` (`confirm`, `mayGrant`, `recoveryCode`, `offerToPhone`), `apps/home/src/components/ConfirmItsYou.tsx`, `apps/home/src/components/ConnectPage.tsx` (`ChooseAccount`). Tests: `packages/core/tests/auth.test.ts` ("reading the recovery code or offering the account to a phone takes proof it is you", "changing how the account signs in takes proof it is you, once it is set up", "no call steps back into setup to skip the proof", "proof is for one account, and does not carry over to another"), `packages/core/tests/connect.test.ts` ("an app or a carrier is given access only just after proof it is you")._
-
-## Device keys and passkeys
-
-A device key ([spec 01 §12](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md))
-is generated non-extractable, with usages `encrypt` and `decrypt`, and kept in
-IndexedDB database `minca-device-keys`, object store `keys`, key = its id,
-value = the `CryptoKey`.
-
-What that protects: someone holding a copy of the folder or the vault gets
-ciphertext and no key, and because the key is non-extractable it cannot be
-carried off and used elsewhere. What it does not: anything that can run script
-in the origin can use the key in place without the passkey. The passkey in
-front of it is enforced by this code, not by cryptography.
-
-**Passkeys are a gate.** A passkey yields no key material here. A WebAuthn
-ceremony is required before the flow reaches for a device key, and the seed
-comes from the device wrap. A passkey can return a secret only through the PRF
-extension, which several major credential providers do not implement or report
-inconsistently, and a passkey is bound to one relying party, so an identity
-derived from it would differ per origin. There is no server, so nobody verifies
-the assertion's challenge or signature; the gate is that the browser completed
-a user-verified ceremony for the recorded credential.
-
-Registration (`navigator.credentials.create`):
-
-| Option                          | Value                                                                                                                                                             |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `rp`                            | `{ id: rpId, name: appName }` (default name `Minca`)                                                                                                              |
-| `user.id`                       | 32 random bytes (kept, base64url, as the wrap's `userHandle`)                                                                                                     |
-| `user.name`, `user.displayName` | The account's name                                                                                                                                                |
-| `challenge`                     | 32 random bytes                                                                                                                                                   |
-| `pubKeyCredParams`              | ES256 (−7), RS256 (−257)                                                                                                                                          |
-| `authenticatorSelection`        | `residentKey: "required"`, `requireResidentKey: true`, `userVerification: "required"`; `authenticatorAttachment: "platform"` when a platform authenticator exists |
-| `hints`                         | `["client-device"]` when preferring the platform authenticator                                                                                                    |
-
-Assertion (`navigator.credentials.get`): random 32-byte challenge,
-`userVerification: "required"`, `allowCredentials` = the wrap's `credentialId`
-when known. Neither asks for the PRF extension.
-
-Renaming an account asks the provider to relabel the passkey through the
-WebAuthn Signal API (`PublicKeyCredential.signalCurrentUserDetails` with the
-`userHandle`); best effort.
-
-_Source: `packages/core/src/identity/device-key.ts`, `packages/core/src/identity/webauthn.ts`, `packages/core/src/session/auth.ts` (`passkeyGate`). Tests: `packages/core/tests/account-vault.test.ts` ("wrapping a seed"); WebAuthn itself is not exercised by tests._
-
-## The session a sign-in starts
-
-A sign-in starts a node with the local root signer from the seed, the account
-key (`deriveAccountKey(seed)`), the contact key (`deriveContactKeyBytes(seed)`),
-the place's stores for that account ([stores](node.md#stores)) and the configured network. A
-page holds the local key (`deriveLocalKey(seed)`), which seals a pod's
-registry, as a non-extractable `CryptoKey`, and never hands it out. The
-session (`MincaSession`) is `{ account, did, sessionDid, node }`. The seed stays
-inside the auth object; `recoveryCode()` returns it as a recovery code.
-
-The account's name follows the account: on every `account` event the node's
-`account.profile()` is read, and a different name is adopted locally (the vault
-label and passkey labels). The name is written to the registry only at creation
-and on `rename`, never on a plain start.
+**A passkey** is a gate, not a key. The passkey proves someone is there, then
+a device key kept in this browser unlocks the seed
+([device keys and passkeys](#device-keys-and-passkeys)). Only passkeys made
+on this site, whose device key is in this browser, are offered.
 
 ## Staying signed in
 
-After an unlock, the seed may be kept on the device so a reload does not ask
-again. It is wrapped with a fresh non-extractable device key, as a device wrap
-labelled `stay signed in` that is kept outside any vault, and stored with an
-expiry that is pushed forward each time it is used. Choices: `never`, `1d`,
-`7d` (default), `30d`. A kept sign-in resumes only for the same kind of place
-it was made in (`browser` or `folder`). Signing out, choosing `never`, or
-finding it expired deletes the device key.
+After an unlock, the account can stay signed in on this device, so a reload
+doesn't ask again. The choices are `never`, `1d`, `7d` and `30d`. The default
+is `7d`, and each use pushes the expiry forward.
 
-_Implementation detail:_ kept in `localStorage` as `<prefix>.stay-signed-in`
-(the choice) and `<prefix>.remembered-session`:
+```ts
+import { createMincaAuth } from '@minca/core/session';
+
+const auth = createMincaAuth();
+await auth.staySignedIn.setChoice('30d');
+auth.staySignedIn.until(); // a Date, or null
+```
+
+The seed is kept wrapped with a fresh device key that can't leave the
+browser. A kept sign-in resumes only in the same kind of place it was made
+in. Signing out, choosing `never`, or finding it expired deletes the device
+key.
+
+A signed-out tab picks up a sign-in another tab keeps, as a reload would. It
+does this only once `start()` has finished, and only at `welcome`,
+`existing` or `signIn` with no account picked, or the same one picked. When
+the person signs out in another tab, a tab that picked it up signs out too.
+
+The flow keeps these in `localStorage`, where `<prefix>` is `storageKey` in
+the config, default `minca`:
+
+| Key                                | Holds                                                       |
+| ---------------------------------- | ----------------------------------------------------------- |
+| `<prefix>.stay-signed-in`          | The choice                                                  |
+| `<prefix>.remembered-session`      | The kept sign-in (below)                                    |
+| `<prefix>.last-account`            | The account used last                                       |
+| `<prefix>.storage-choice`          | Where data lives                                            |
+| `<prefix>.connections:<accountId>` | At an account home, its connections ([below](#connections)) |
 
 ```json
 {
@@ -265,213 +213,343 @@ _Implementation detail:_ kept in `localStorage` as `<prefix>.stay-signed-in`
 }
 ```
 
-Other keys the flow keeps: `<prefix>.last-account`, `<prefix>.storage-choice`,
-and at an account home `<prefix>.connections:<accountId>` ([the account home's side](#the-account-homes-side)). `prefix`
-defaults to `minca`.
+These are implementation details. Don't read them from your app.
 
-_Source: `packages/core/src/session/stay-signed-in.ts`, `packages/core/src/session/auth.ts`. Tests: none._
+## Proving it is you
 
-## Moving into a pod
+Being signed in is no proof anyone is there. A page may be left open, and a
+sign-in kept for days. So anything that hands out the whole account, or
+changes how it signs in, asks again first:
 
-Picking a pod while signed in sets `podChoice` with what the pod holds
-(`inspectPod`: this account's copy, other accounts, whether it is the pod in use).
-`confirmPod('switch')` uses the pod's own copy and brings nothing.
-`confirmPod('combine')` writes the account and a union of both vaults' wraps
-into the pod, copies every space into it (`copyAccountData`, [stores](node.md#stores)), and
-restarts the session there. `forgetBrowserCopy()` then deletes the browser's
-copy. Other accounts in the pod are never touched.
+```ts
+import { createMincaAuth } from '@minca/core/session';
 
-`removeAccount()` takes an account out of the browser altogether, as clearing
-its site data would. It refuses while an app is connected from here: only this
-home can disconnect an app, so the apps go first, from the list where
-`disconnect` says whether each has heard. Then it signs out and deletes the
-account's vault, its spaces' data and what the home remembered of it. A
-revoke no peer but the app has taken in goes with them, as after a disconnect
-nobody heard. Its passkey keys stay, since a pod's vault may name the same
-one; with the vault gone they open nothing.
-Copies on other devices, carriers and hosts stay; with none, its private
-spaces are gone, and so is whatever reached no other copy. An account kept in a pod is not removed this way: the pod is
-its copy.
+const auth = createMincaAuth();
+const ok = await auth.confirm({ password: 'correct horse battery staple' });
+```
 
-The page writes to the pod only while it is open. A carrier given the same
-folder, such as the Chrome extension, keeps it up to date while the page is
-closed: it learns of the pod from its grant (`CarryGrant.pod`), so one that
-connected before the move learns of it only by connecting again.
+The proof is the password, the passkey's own check (a fingerprint, a face or
+a PIN), or the recovery code itself
+([`MincaAuth.confirm`](https://minca.dev/api/session/interfaces/MincaAuth/)).
+A wrong answer resolves false and sets `error`. A passkey with nothing behind
+it is no proof.
 
-_Source: `packages/core/src/session/auth.ts` (`confirmPod`), `packages/core/src/session/places.ts`. Tests: `packages/core/tests/account.test.ts`._
+For five minutes after, these work: `recoveryCode()`, `offerToPhone()`,
+`setPassword`, `addPasskey`, `removeShortcut` and `removeAccount`.
+`isConfirmed()` says whether you're in that window. A new sign-in, or
+signing out, asks again. The first setup of an account just made, restored
+or paired needs no proof, nor does the recovery code shown when an account
+is made.
+
+### Giving apps access
+
+Giving an app or a carrier anything (`auth.grant`, `auth.grantCarry`) takes
+the same proof, or a sign-in in the last five minutes. Making the account
+counts too. A passkey sign-in counts only when the passkey's own check ran. A
+sign-in kept from an earlier visit doesn't count. `mayGrant()` says whether
+any of these holds.
+
+So the reference home's connect page works like signing in with Google:
+choose the account, prove it is you, then allow. A suggestion from an app
+already connected (`auth.propose`) gives nothing new, and needs only the
+sign-in.
+
+This keeps the seed from someone who only has the open page. It can't keep
+it from a compromised page, since the seed is in the page's memory while
+signed in. [Threat model §4](https://github.com/leifriksheim/minca/blob/main/spec/threat-model.md)
 
 ## Pairing a phone
 
-The ticket, the room and the exchange are
-[spec 01 §15](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md).
-`offerToPhone(onStage)` starts an offer on the first configured relay and
-returns `{ url, stop }`: the link for the QR code, and a way to stop. The link
+Pairing moves an account from a computer to a phone with a QR code.
+
+### On the computer
+
+`offerToPhone(onStage)` starts an offer on the first relay, and returns
+`{ url, stop }`: the link to show as a QR code, and a way to stop. The link
 holds a one-time secret, not the account. The offer answers the first phone
-that turns up and nobody after it, and stops working after two minutes if no
-phone has.
+that turns up and nobody after it. It stops after two minutes if no phone
+has come.
 
 When the phone is there, `onStage` gets `{ kind: 'compare', code, same,
-different }`. Show the six digits and ask whether the phone shows the same;
-call `same()` to send the account, or `different()` to end the offer having
-sent nothing. Then come `sending`, and `sent` once the phone says it arrived.
-Each space goes in the handover as `node.spaces.invite(id)` with default
-options.
+different }`. Show the six digits and ask whether the phone shows the same.
+Call `same()` to send the account, or `different()` to end it having sent
+nothing. Then come `sending`, and `sent` once the phone says it arrived.
+Each space goes along as `node.spaces.invite(id)`.
 
-On the phone, the `pair` stage waits for a tap, then meets the computer
-(`receiveFromDesktop`) and shows the same code (`pairingStage` is `{ kind:
-'confirm', code }`). Only when the person confirms on the computer does the
-seed arrive; the phone then signs in with it (`sending`), joins each space in
-turn (`{ kind: 'joining', joined, total }`, before each one), and ends on
-`received`. It waits 60 seconds for the computer to answer, and 10 minutes for
-the person to confirm. Where accounts are already kept here, `<minca-auth>`
-warns before going on: a link someone else sent would put the phone in their
+### On the phone
+
+The phone opens the link at the `pair` stage, and waits for a tap.
+`acceptPairing()` meets the computer and shows the same code
+(`pairingStage` is `{ kind: 'confirm', code }`). The seed arrives only once
+the person confirms on the computer. The phone then signs in, joins each
+space (`{ kind: 'joining', joined, total }`), and ends on `received`.
+
+It waits 60 seconds for the computer to answer, and 10 minutes for the
+person to confirm. Where accounts are already kept, `<minca-auth>` warns
+before going on: a link someone else sent would put the phone in their
 account.
 
-A phone that stays signed in still gets the `pair` stage, with the kept
-account's session open, and `<minca-auth>` names it; `dismissPairing()` goes
-back to it. Signed in, `acceptPairing()` stops once the account arrives,
-before taking it, and sets `pairingArrival` to `{ did, account }`: `account`
-is the summary when this place already keeps that account, else null. The
-same account as the one signed in is taken without asking, and only its
-spaces are joined. `answerPairing(true)` adds the account (or, already here,
-switches to it) and the one signed in stays filed, to switch back to;
-`answerPairing(false)` lets it go and goes back to the account signed in.
-`<minca-auth>` asks "Add this account?" or "Switch to <name>?", with the
-account's avatar. Only the tab's session when the account arrives counts: a
-tab that opens with no kept sign-in, or a caller that accepts before
-`start()` has finished, pairs as a signed-out one does. Switching this way
-starts the arriving account's session without signing the other out: its
-session key is left unrevoked, as when a tab closes. `dismissPairing()` stops
-a pairing at any point before the account is taken: the phone leaves the
-exchange, and tells the computer nothing.
+After that, the account goes to `unlock` with `setup: 'paired'` if it has no
+way in on this phone yet, else to `ready`.
 
-`pairingTransport` in `createMincaAuth`'s config sets how the two sides of a
-pairing reach each other (default: the relay in the ticket), for tests or a
-host with its own.
+### A phone already signed in
 
-An account home ignores a pairing link on its connect page, so a popup an app
-opened never shows a pairing screen. It is no defence: any page can open the
-account page with the link instead.
+A phone that is signed in still gets the `pair` stage. `acceptPairing()`
+stops once the account arrives, before taking it, and sets `pairingArrival`
+to `{ did, account }`. `account` is the summary if this place already keeps
+it, else null. The same account as the one signed in is taken without
+asking, and only its spaces are joined.
 
-The camera opens the link in a new tab, so an app that sent the person to
-sign in is still waiting in another. A flow that is signed out picks up a
-sign-in another tab keeps (`storage` events on the remembered session), as a
-refresh would, so that tab is signed in when the person goes back to it.
+`answerPairing(true)` adds the account, or switches to it, and keeps the
+other one filed to switch back to. `answerPairing(false)` lets it go.
+`<minca-auth>` asks "Add this account?" or "Switch to <name>?".
 
-A tab takes one up only once `start()` has finished, and only at `welcome`,
-`existing`, or `signIn` with no account picked or the same one picked: a tab
-where the person chose another account is left alone. It holds `busy`
-meanwhile, so a sign-in by hand waits for it and two nodes never start in one
-tab. It keeps the remembered key as it is, and gives up if the kept sign-in
-changed meanwhile. When the kept sign-in goes, because the person signed out
-in another tab, a tab that took it up signs out too, revoking its own key.
+Switching doesn't sign the other account out: its session key is left as it
+is, as when a tab closes. Only the session open when the account arrives
+counts, so a caller that accepts before `start()` has finished pairs as a
+signed-out phone.
 
-_Source: `packages/core/src/session/pairing.ts` (`offerToPhone`, `receiveFromDesktop`), `packages/core/src/session/auth.ts` (`start`, `offerToPhone`, `acceptPairing`), `packages/core/src/elements/minca-auth.ts`. Tests: `packages/core/tests/pairing.test.ts`, `packages/core/tests/take-up.test.ts` ("a pairing link opened where a sign-in is kept")._
+`dismissPairing()` stops a pairing at any point before the account is taken.
+The phone leaves, and tells the computer nothing.
+
+### Pairing details
+
+- The camera opens the link in a new tab. The tab the person started in picks
+  up the new sign-in ([staying signed in](#staying-signed-in)).
+- An account home ignores a pairing link on its connect page, so a popup an
+  app opened never shows a pairing screen. This is no defence: any page can
+  open the account page with the link.
+- `pairingTransport` in the config sets how the two sides reach each other.
+  The default is the relay in the ticket. It is for tests, or a host with its
+  own.
+
+The ticket and the exchange are in
+[spec 01 §15](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md).
+
+## Moving into a pod
+
+Picking a pod while signed in sets `podChoice` with what the pod holds:
+this account's copy, other accounts, and whether it is the pod in use. Then
+the person chooses:
+
+- `confirmPod('switch')` uses the pod's own copy and brings nothing.
+- `confirmPod('combine')` copies the account and every space into the pod,
+  keeps the ways in from both, and restarts the session there.
+
+`forgetBrowserCopy()` then deletes the browser's copy. Other accounts in the
+pod are never touched.
+
+The page writes to the pod only while it is open. A carrier given the same
+folder, such as the Chrome extension, keeps it up to date while the page is
+closed. It learns of the pod when it connects, so one that connected before
+the move must connect again.
+
+## Removing an account
+
+`removeAccount()` takes an account out of the browser, as clearing its site
+data would. It signs out, then deletes the account's vault, its spaces' data
+and what the home remembered of it.
+
+It refuses while an app is connected from here. Only this home can disconnect
+an app, so the apps go first. A revoke that only the app had taken in goes
+with the account, as after a disconnect nobody heard.
+
+Copies on other devices, carriers and hosts stay. With none, the account's
+private spaces are gone, and so is anything that reached no other copy. Its
+passkeys stay too, but with the vault gone they open nothing. An account kept
+in a pod is not removed this way: the pod is its copy.
 
 ## Linking to the account home
 
-An app that links to the person's account home (for its settings, say) says
-which account it acts for: `accountHomeLink(home, did, section?)` gives the
-account page beside the home's connect page, with `#account=<did>` in the
-fragment, after the section if there is one (`#notifications&account=…`). The
-fragment never reaches the server that serves the home.
+An app can link to the person's account home, for its settings say.
+`accountHomeLink(home, did, section?)` gives the account page, with the
+account in the fragment, so it never reaches the home's server:
 
-The home may be signed in to another account in that browser, or signed out.
-`readAccountHint()` on the home gives the DID, or null when there is none or it
-is not a P-256 `did:key`; `clearAccountHint()` takes it out of the address and
-leaves the section. Any page can open the home with any DID, so a home must
-treat it as a hint: say which account the app uses, pick it on the sign-in
-screen, offer to switch, and never sign out or switch on the hint alone. For
-an account the home doesn't keep, it must not suggest bringing it in: a
-stranger could name their own account, then send a pairing link "to add this
-browser" ([threat model §3.1](https://github.com/leifriksheim/minca/blob/main/spec/threat-model.md)). An
-account the home keeps is named by the name it filed, never one from the
-link; its avatar helps recognise it, but is no proof, since a look-alike
-takes seconds to find.
+```ts
+import { accountHomeLink, popupFeatures } from '@minca/core/session';
 
-Open it as a popup with `popupFeatures(width, height)`, the third argument to
-`window.open`: a window that size, centred on the one it opens from, as
-connecting does. Given a size alone, a browser puts it where it likes, often
-the screen's top left.
+const home = 'https://home.minca.social/connect';
+window.open(accountHomeLink(home, did, 'notifications'), 'minca', popupFeatures(480, 640));
+```
 
-_Source: `packages/core/src/session/account-hint.ts`, `packages/core/src/session/popup.ts`, `apps/home/src/components/AccountHint.tsx`, `apps/example/src/components/AccountMenu.tsx`, `apps/example/src/notifications.ts`. Tests: `packages/core/tests/account-hint.test.ts`, `packages/core/tests/popup.test.ts`._
+That opens `…#notifications&account=<did>`. `popupFeatures(width, height)`
+centres the popup on the window it opens from. Given only a size, a browser
+puts it where it likes, often the top left of the screen.
+
+On the home, `readAccountHint()` gives the DID, or null when there is none or
+it isn't a P-256 `did:key`. `clearAccountHint()` takes it out of the address
+and leaves the section.
+
+Any page can open the home with any DID, so the home must treat it as a hint.
+Say which account the app uses, pick it on the sign-in screen, and offer to
+switch. Never sign out or switch on the hint alone. For an account the home
+doesn't keep, never suggest bringing it in: a stranger could name their own
+account, then send a pairing link "to add this browser". Name a kept account
+by the name the home filed, never one from the link. Its avatar helps, but is
+no proof. [Threat model §3.1](https://github.com/leifriksheim/minca/blob/main/spec/threat-model.md)
+
+## Options
+
+`createMincaAuth(config)` takes the options in
+[`MincaAuthConfig`](https://minca.dev/api/session/interfaces/MincaAuthConfig/).
+Every one has a default, so `createMincaAuth()` alone signs in offline, in
+this browser.
+
+## Account stores
+
+A folder keeps `accounts.json` and one vault file per account. The library
+lists accounts most recently used first (`lastUsedAt`, else `createdAt`). It
+writes each file as JSON with a 2-space indent and a trailing newline.
+
+In the browser, the same shape lives in IndexedDB database
+`minca-accounts`, object store `accounts`. Key `__list` holds the list of
+accounts, and key `<id>` that account's vault. No other site can edit it.
+
+The file formats are in
+[spec 01 §14.1](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md).
+
+## Device keys and passkeys
+
+A device key is made non-extractable, for `encrypt` and `decrypt`. It is
+kept in IndexedDB database `minca-device-keys`, object store `keys`, under
+its id.
+
+Someone with a copy of the folder or the vault gets ciphertext and no key.
+The key can't be carried off and used elsewhere. But anything that can run
+script on the site can use the key in place, without the passkey. The passkey
+in front of it is enforced by this code, not by cryptography.
+
+**Why passkeys are a gate.** A passkey gives no key material here. The flow
+runs a passkey check before it reaches for a device key, and the seed comes
+from the device key. A passkey could return a secret only through the PRF
+extension, which several major providers don't support or report
+inconsistently. And a passkey belongs to one site, so an identity made from
+it would differ per site. There is no server, so nobody checks the
+assertion's signature. The gate is that the browser finished a verified
+passkey check for the recorded credential.
+
+Registration (`navigator.credentials.create`):
+
+| Option                          | Value                                                                                                                                          |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rp`                            | `{ id: rpId, name: appName }`                                                                                                                  |
+| `user.id`                       | 32 random bytes, kept as the wrap's `userHandle` (base64url)                                                                                   |
+| `user.name`, `user.displayName` | The account's name                                                                                                                             |
+| `challenge`                     | 32 random bytes                                                                                                                                |
+| `pubKeyCredParams`              | ES256 (−7), RS256 (−257)                                                                                                                       |
+| `authenticatorSelection`        | `residentKey: "required"`, `requireResidentKey: true`, `userVerification: "required"`; `authenticatorAttachment: "platform"` when there is one |
+| `hints`                         | `["client-device"]` when preferring the platform authenticator                                                                                 |
+
+Assertion (`navigator.credentials.get`): a random 32-byte challenge,
+`userVerification: "required"`, and `allowCredentials` set to the wrap's
+`credentialId` when known. Neither asks for PRF.
+
+Renaming an account asks the passkey provider to rename the passkey too,
+through `PublicKeyCredential.signalCurrentUserDetails`. Not every provider
+does.
+
+Device keys in the vault are in
+[spec 01 §12](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md).
+
+## The session a sign-in starts
+
+A sign-in starts a node with the account's keys, the place's stores for that
+account ([stores](node.md#stores)) and the configured network. The session is a
+[`MincaSession`](https://minca.dev/api/session/interfaces/MincaSession/).
+
+The seed stays inside the auth object. `recoveryCode()` returns it as a
+recovery code. The page also holds the local key, which seals a pod's
+registry, as a non-extractable `CryptoKey`, and never hands it out.
+
+The account's name follows the account. When another device renames it, this
+one takes the new name for its vault and passkeys. The name is written to the
+account only when it is made and on `rename`.
 
 ## The account home's side
 
-What a home receives from an app, what it must check and what it answers are
-protocol ([spec 06 §2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)). An account home built on `createMincaAuth` does
-its side with these:
+An account home built on `createMincaAuth` answers apps with these. What it
+receives, checks and answers is protocol, in
+[spec 06 §2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md).
 
-**Receiving a request.** `receiveConnectRequest(timeoutMs = 10 minutes)` does
-nothing without `window.opener`, says hello once, and resolves with the first request from the opener and the origin
-the browser reports for it, or `null` once the opener is closed or after the
-timeout. Answering closes the window 100 ms later.
+### Receiving a request
 
-**Granting.** `auth.grant({ origin, request, spaceIds, days? })` makes the
-grant: `spaceIds` are the spaces the person picked, `days` their choice of
-lifetime, clamped to [1/24, 365].
+`receiveConnectRequest(timeoutMs)` resolves with the first request from the
+window that opened this one, and the origin the browser reports for it. It
+resolves `null` once the opener is closed, or after the timeout, 10 minutes
+by default. Without `window.opener` it does nothing. Answering closes the
+window 100 ms later.
 
-**Connections.** The home remembers each connection per account in
-`localStorage` under `<prefix>.connections:<accountId>` (`Connection`:
-`origin`, `name`, `audience`, `access`, `scope`, `carrySpace?`, `spaces`,
-`grantedAt`, `expiresAt`, `via?`, `recordsOnly?`, `retired?`). It keeps no note:
-disconnecting revokes the `audience` key, which is all a revoke names. A kept
-connection with any other field (a `token` from before notes were
-delegations in the UCAN 1.0 profile, say), or one of these in another
-shape, is dropped when read, not read in part: its app or program connects
+### Granting
+
+`auth.grant({ origin, request, spaceIds, days? })` makes the grant.
+`spaceIds` are the spaces the person picked. `days` is the lifetime they
+chose, from 1/24 to 365.
+
+### Connections
+
+`auth.connections()` lists what the home has connected, each a
+[`Connection`](https://minca.dev/api/session/interfaces/Connection/). They are kept
+per account in `localStorage` under `<prefix>.connections:<accountId>`. A kept
+connection in any other shape is dropped when read, and its app connects
 again.
-Connecting the same origin again replaces its connection, revoking nothing:
-the keys it replaced go in `retired`, for disconnecting to revoke. Nothing
-revokes an app on its own, not even once its time has passed: a revoke keeps
-only what this home has seen of the key, and a home that is seldom open has
-seen little ([spec 06 §2.9](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)). A connection with `via: 'code'` (a
-program connected by code, at the home's own origin) is keyed by its audience instead,
-so each such program is its own (`connectionKey`). A carrier is kept apart from the app at its
-origin: connecting either replaces only its own kind, and one key is never
-both. `auth.connections()` lists them.
 
-**Disconnecting.** `auth.disconnect(origin, { audience? })` removes the
-connections made from that origin (`audience`: only that key), revokes the
-keys of those with `access: write` and every key in their `retired`, and
-removes the automations the app proposed. A carrier at
-that origin stays: it goes by its key alone (`audience`), and takes nothing of
-the app's with it. The app hears of it when the revokes reach it,
-from this home or a device that has them: `waitMs` waits up to that long for
-a peer to take them in, and `disconnect` answers whether one did (without
-`waitMs`, true only means written; a read-only app or a carrier has no key to
-revoke, so true there too). False means
-they are still only here, and the app keeps working until this home is next
-online with another of the account's devices or apps. The account home waits
-5 s, and says so when nobody took them in.
+Connecting the same origin again replaces its connection and revokes nothing.
+The keys it replaced go in `retired`, for disconnecting to revoke. Nothing
+revokes an app just because its time has passed.
 
-**Signing out.** `auth.signOut()` forgets the unlocked account on this device
-and revokes the home's own session key, with a cutoff at what it wrote, so
-nothing it wrote is lost. An
-app's note doesn't need the home signed in, so the apps connected from here
-keep working; a note running out stops only their live use, and what they
-write counts until they are disconnected. `auth.signOut({ disconnect: true })`
-disconnects them first, and the programs connected through them, with the
-automations they proposed; carriers stay. The node sends nothing once it has
-stopped, so it waits, up to 5 s for them all (`signOutGraceMs` in
-`createMincaAuth`'s config), for a peer to take in each revoke (`spaces.revoke`
-with `waitMs`). Its own session key's revokes wait only when a peer is connected in some
-open space as signing out starts, so signing out with nobody else online is
-quick; `state.signingOut` is true meanwhile. A node with no network
-configured doesn't wait. With nobody reachable, they leave the next time the account signs in here. A read-only app has no key to revoke: it loses
-access when its time runs out. The account home asks each time, with
-disconnecting unticked, since revoking is for when something is wrong, and is not ready to grant anything from the moment
-signing out starts. Choosing another account on the connect page signs out
-without disconnecting: switching accounts disconnects nothing.
+A program connected by code at the home's own origin (`via: 'code'`) is kept
+by its key instead, so each such program is its own (`connectionKey`). A
+carrier is kept apart from the app at its origin, and connecting one never
+replaces the other.
 
-**Proposals.** `auth.propose({ origin, request, kept? })` adds the
-automations the person kept as the account's own: `kept` is the indices kept,
-default all. The home lists the account's own automations by app, and the
-person pauses or removes them there.
+### Disconnecting
 
-**Carriers.** `auth.grantCarry({ origin, request })` replaces any earlier
-carrier from the same origin (never an app there), adds the carrier with `node.carriers.add`
-([carriers and hosting](node.md#carriers-hosting-and-notifications)) and
-returns the `CarryGrant`. Its connection is kept with `expiresAt: 0`, since a
-carry connection never expires.
+`auth.disconnect(origin, { audience?, waitMs? })` removes the connections
+from that origin, or only the one with that key. It revokes the keys of
+those with `write` access and every key in their `retired`, and removes the
+automations the app proposed. A carrier at that origin stays.
 
-_Source: `packages/core/src/session/auth.ts` (`grant`, `grantCarry`, `propose`, `connections`, `disconnect`, `signOut`, `isConnection`, `connectionKey`), `apps/home/src/components/Settings.tsx`, `packages/core/src/session/connect.ts` (`receiveConnectRequest`). Tests: `packages/core/tests/connect.test.ts` ("the home receiving a request", "connecting an app to an account home", "disconnecting …", "connecting a carrier to an account home", "signing out and disconnecting…", "signing out alone…"), `packages/core/tests/records-only.test.ts` ("a connection kept in an older shape is dropped, not read as the app’s own")._
+The app hears of it when the revokes reach it. `waitMs` waits up to that
+long for a peer to take them in, and `disconnect` resolves whether one did.
+False means the revokes are still only here: the app keeps working until
+this home is next online with another of the account's devices or apps.
+Without `waitMs`, true only means written. A read-only app or a carrier has
+no key to revoke, so it is true there too. The reference home waits 5 s, and
+says so when nobody took them in.
+
+### Signing out
+
+`auth.signOut()` forgets the account on this device and revokes the home's
+own session key. Nothing it wrote is lost.
+
+The apps connected from here keep working, since they don't need the home
+signed in. Their live use stops when their time runs out, and what they
+write counts until they are disconnected. `signOut({ disconnect: true })`
+disconnects them first, with the programs connected through them and the
+automations they proposed. Carriers stay.
+
+Signing out waits up to 5 s (`signOutGraceMs`) for a peer to take in each
+revoke, and `state.signingOut` is true meanwhile. For the home's own key it
+waits only when a peer is connected as signing out starts, so signing out
+alone is quick. With no network, it doesn't wait. With nobody reachable, the
+revokes go out the next time the account signs in here. A read-only app has
+no key to revoke, and loses access when its time runs out.
+
+The reference home asks each time, with disconnecting unticked, since
+revoking is for when something is wrong. It grants nothing once signing out
+starts. Choosing another account on the connect page signs out without
+disconnecting.
+
+### Proposals
+
+`auth.propose({ origin, request, kept? })` adds the automations the person
+kept as the account's own. `kept` is the indices kept, all by default. The
+home lists them by app, where the person can pause or remove them.
+
+### Carriers
+
+`auth.grantCarry({ origin, request })` adds a carrier with
+`node.carriers.add` ([carriers](node.md#carriers-hosting-and-notifications))
+and returns its `CarryGrant`. It replaces any earlier carrier from that
+origin, never the app there. A carrier's connection never expires, so it is
+kept with `expiresAt: 0`.

@@ -1,0 +1,152 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+
+/* Minca's faces, from the tokens (app/layout.tsx puts them on the page). The
+   rest is Fumadocs' own look until the design system's refactor lands. */
+@theme inline {
+  --font-sans: var(--minca-font);
+  --font-mono: var(--minca-mono);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--minca-display);
+}
+
+/* The wordmark, as apps/shared/src/Wordmark.tsx draws it. */
+.wordmark {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--minca-display);
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: -0.05em;
+}
+
+/* The front page: a hero, the topics, what Minca is. */
+.home {
+  width: 100%;
+  max-width: 64rem;
+  padding-bottom: 6rem;
+}
+
+.hero {
+  padding: 6rem 2.5rem 5rem;
+  border-bottom: 1px solid var(--color-fd-border);
+}
+
+/* In the wordmark's face, weight and spacing. */
+.hero h1 {
+  font-family: var(--minca-display);
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  line-height: 1.05;
+}
+
+.hero p {
+  margin: 1rem 0 2rem;
+  font-size: 1.15rem;
+  color: var(--color-fd-muted-foreground);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.actions a {
+  padding: 0.6rem 1.25rem;
+  border: 1px solid var(--color-fd-border);
+  border-radius: 999px;
+  font-weight: 500;
+}
+
+.actions a:hover {
+  background: var(--color-fd-accent);
+}
+
+/* The first is the one thing to do. */
+.actions a:first-child {
+  border-color: var(--color-fd-primary);
+  background: var(--color-fd-primary);
+  color: var(--color-fd-primary-foreground);
+}
+
+.topics {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
+  gap: 1.5rem 2.5rem;
+  padding: 4rem 2.5rem;
+}
+
+.topic {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.topic-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 4rem;
+  height: 4rem;
+  border: 1px solid var(--color-fd-border);
+  border-radius: 0.5rem;
+  transition: border-color 0.15s;
+}
+
+.topic-icon svg {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.topic:hover .topic-icon {
+  border-color: var(--color-fd-primary);
+}
+
+.topic strong {
+  display: block;
+  font-family: var(--minca-display);
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.topic strong + span {
+  color: var(--color-fd-muted-foreground);
+}
+
+.about {
+  max-width: 44rem;
+  padding: 0 2.5rem;
+  display: grid;
+  gap: 1rem;
+  line-height: 1.7;
+}
+
+.about h2 {
+  font-size: 1.75rem;
+  font-weight: 700;
+}
+
+.about a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.about pre {
+  margin: 0.5rem 0;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--color-fd-border);
+  border-radius: 0.5rem;
+  background: var(--color-fd-card);
+  font-family: var(--minca-mono);
+  font-size: 0.8rem;
+  line-height: 1.6;
+  overflow-x: auto;
+}

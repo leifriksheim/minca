@@ -1,23 +1,117 @@
 # Contacts
 
-A contact is someone you share a **private space for two** with. The account
-keeps its list of them in its contacts space, and asks someone to become a
-contact by leaving a knock for them: in a space both belong to, or in their
-inbox.
+A contact is someone you share a private **space for two** with. Use this
+page to ask someone you already share a space with to become a contact. For
+someone you share no space with, use their [inbox](inbox.md).
 
-The list and the request are conventions built on the protocol, not part of
-it. Peers that have never heard of `std.contact` or `std.contact-request`
-sync, store and judge them like any other record. The knock they carry is
-protocol: how it is signed and sealed, and what the person it is for checks,
-is [spec 07 §6](https://github.com/leifriksheim/minca/blob/main/spec/07-inbox.md),
-the same however it is handed over.
-Asking someone you share **no** space with goes through their inbox
-([inbox.md](inbox.md)).
+## Asking someone
 
-## The list: `std.contact`
+Pick a space you both belong to, and the person to ask:
 
-The list lives in the account's contacts space (derived with the label
-`minca/contacts`), one record per person:
+```ts
+const { space: pairSpace, carried } = await node.contacts.ask(space.id, did, { note: 'Hi from the co-op!' });
+```
+
+This makes a new private space for two, puts them on your list with it, and
+leaves a request for them in the shared space. `space`, here `pairSpace`, is
+the space for two.
+
+`carried` is false when none of your always-on carriers held the space in
+time. Then they can join only while one of your devices is online.
+
+## Answering a request
+
+On their side, `requests` lists what was left for them, and `accept` joins:
+
+```ts
+const [request] = await node.contacts.requests(space.id);
+if (request) {
+  const contact = await node.contacts.accept(space.id, request.key);
+}
+```
+
+There is no reply. Joining the space for two is the answer, and you each
+have the other on your list.
+
+## The list
+
+```ts
+const contacts = await node.contacts.list();
+```
+
+`get`, `put`, `remove`, `block` and the rest are in
+[`NodeContacts`](https://minca.dev/api/core/interfaces/NodeContacts/), and
+each contact is a
+[`ContactView`](https://minca.dev/api/core/interfaces/ContactView/). Its
+`name` is what you call them. They never see it.
+
+`remove` and `block` leave the space for two, giving up your place there,
+unless another contact names the same space. `block` keeps them on the list
+with `blocked: true`, and hides their requests in every space and in your
+inbox. `others` lists accounts in the space for two besides the two of you,
+from its members, profiles and connected peers.
+
+A contact's `username` is what their domain answered when you found them by
+it. Nothing checks it again: once a name lapses and someone else claims it,
+a lookup leads to them, and your contact keeps the old one.
+
+## Inviting a contact into a space
+
+```ts
+await node.contacts.invite(did, space.id, { role: 'member' });
+```
+
+This leaves an invite for them in your space for two. They must have joined
+that space first. A request nobody has answered yet is refused, so you never
+open a space to whoever a username led to before you have seen who they are.
+A blocked contact is refused too.
+
+On their side, `invites()` lists what contacts left for them, newest first,
+and `join` takes them in:
+
+```ts
+const [invite] = await node.contacts.invites();
+if (invite) await node.contacts.join(invite.pairSpace, invite.key);
+```
+
+Each item is a
+[`SpaceInviteView`](https://minca.dev/api/core/interfaces/SpaceInviteView/).
+Only invites to spaces you don't hold yet are listed. Only the contact's own
+records count, and each invite is checked as joining checks it: signed by
+the contact, for the space whose constitution it carries. That is where
+`space` and `name` come from. Invites from someone blocked are not shown.
+
+`invites()` also closes and deletes your own invites that the contact has
+joined with.
+
+## Who may ask
+
+`ask` and `accept` need a session note that grants `/account/write` for the
+whole account. An app granted `contacts` can see the list and the requests,
+but can't ask or accept. See
+[spec 06 §2.5](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md).
+
+## How `ask` works
+
+1. It creates a private `team` space named `"<my name> & <their name>"`, and
+   opens an `editor` invite to it.
+2. It waits up to 3 seconds for an online carrier to hold the space
+   (`spaces.carried`).
+3. It writes a `std.contact` for them, with that space.
+4. It leaves the request, a sealed knock, as a `std.contact-request`.
+
+It returns `{ space, request, carried }`: the space for two, the request's
+record key, and whether a carrier held it. It needs the other person's
+`contactKey` on their profile in that space. `accept` joins the invite, and
+writes a `std.contact` for the asker with the space for two.
+
+`requests(space)` skips blocked senders, and knocks whose space for two you
+already hold.
+
+## `std.contact`
+
+The list lives in the account's contacts space, derived with the label
+`minca/contacts`, one record per person:
 
 ```
 std.contact  (rules: onePer ["did"])
@@ -28,123 +122,68 @@ record key = records.onePerKey(contactsSpace, "std.contact", { did })
              // a shared key, spec 02 §7.3: onePer without @author
 ```
 
-`name` is what you call them; they never see it. `space` is the id of the
-space for two. `blocked` hides that person's knocks, in every space and in the
-inbox.
-
-A reader must ignore a record whose key is not the one its `did` derives. It
-also ignores one whose root is not the account, as it does for every record in
-the account's derived spaces (spec 03 §13.1).
+`space` is the id of the space for two. A reader ignores a record whose key
+is not the one its `did` derives. It also ignores one whose root is not the
+account, as for every record in the account's derived spaces (spec 03
+§13.1).
 
 ## The contact key
 
-A knock left in a shared space is sealed to the askee's contact key: the
-public half, published as `contactKey` on their profile in the space (spec 03
-§11). How it is derived is in spec 01 §10.1. A node holds the private half
-only when it was given it (`config.contactKey`); an agent never is.
+A request is sealed to the other person's contact key: the public half,
+published as `contactKey` on their profile in the space. A node holds the
+private half only when it was given it (`config.contactKey`). An agent never
+is. See spec 01 §10.1 for how it is derived, and spec 03 §11 for the
+profile.
 
-## Asking in a shared space
+## `std.contact-request`
 
 ```
 std.contact-request  (no rules; who may write one is the space's grants)
 { to: <the askee's contact key, as on their profile here, ≤64>, sealed: string ≤16000 }
 ```
 
-`ask` leaves one in the space: `sealed` is a knock sealed to `to` (spec 07
-§6), whose invite is to a new space for two. It defines the collection first
-if the space lacks it, which needs `/collection/define`. In a private space
-the body is sealed with the space key too, so other members see that someone
-asked, not whom.
+`sealed` is a knock sealed to `to`, whose invite is to the new space for two.
+`ask` defines the collection first if the space lacks it, which needs
+`/collection/define`. In a private space the body is sealed with the space
+key too, so other members see that someone asked, not whom.
 
 The receiver opens a request only when `to` is its own contact key, the
-knock checks out (spec 07 §6), and the knock's account is the record's root
-and not its own. A knock copied into another record by someone else is not
-theirs to leave, and opens as nothing.
+knock checks out, and the knock's account is the record's root and not its
+own. A knock someone else copied into another record is not theirs to leave,
+and opens as nothing.
 
-## `node.contacts`
-
-- `space()`: the contacts space's id, or null for a node not given it.
-- `list()`, `get(did)`: the list, blocked people too, by name.
-- `put({ did, name, space?, note? })`: adds someone, or changes what the list
-  says about them.
-- `ask(space, did, { note? })` needs whole-account access and the askee's
-  `contactKey` on their profile in that space. It creates a private `team`
-  space named `"<my name> & <their name>"`, opens an `editor` invite to it,
-  waits up to 3 seconds for a carrier that is online to hold it (`spaces.carried`), writes a
-  `std.contact` for them with that space, then leaves the knock as
-  `std.contact-request`. It returns the space for two, the record's key, and `carried`:
-  false when no carrier held the space in time, so the askee can join only
-  while one of the asker's devices is online.
-- `requests(space)` lists the knocks left there that open for this account,
-  skipping blocked senders and knocks whose space for two the account already
-  holds.
-- `accept(space, requestKey)` joins the invite (spec 03 §7.6) and writes a
-  `std.contact` for the asker with the space for two. There is no reply
-  record: joining is the answer.
-- `remove(did)` leaves the space for two (spec 03 §6.2), giving up the
-  account's place there, unless another contact names it, and deletes the
-  `std.contact`.
-- `block(did)` leaves the space for two likewise and writes the contact with
-  `blocked: true`.
-- `others(did)` lists accounts other than the two seen in the space for two
-  (members, profiles, connected peers).
-- `invite(did, spaceId, { role? })` invites a contact into a space you hold:
-  it makes an invite for `role` and leaves it as a `std.space-invite` in your
-  space for two with them. The contact must have joined the space for two: a
-  knock nobody answered yet is refused, so a space is never opened to whoever
-  a username happens to lead to before you have seen who they are. A blocked
-  contact is refused.
-- `invites()` lists the invites a contact left for you in your space for two
-  with them, to spaces you don't hold yet, newest first:
-  `{ from, space, name, invite, pairSpace, key, createdAt }`. Only the
-  contact's own records count, and each invite is checked as joining checks
-  it: signed by the contact, for the space whose constitution it carries,
-  which is where `space` and `name` come from. Invites from someone blocked are
-  not shown. It also closes, and deletes, invites of yours the contact has
-  joined with.
-- `join(pairSpace, key)` joins the space an invite from that contact is for.
+The list and the request are conventions: peers that have never heard of
+them sync and judge them like any other record. The knock inside is
+protocol, the same however it is handed over. See
+[spec 07 §6](https://github.com/leifriksheim/minca/blob/main/spec/07-inbox.md).
 
 ## `std.space-invite`
 
-An invite to a space, left in a space for two: `{ space, invite }`,
+An invite to a space, left in a space for two: `{ space, invite }`, with
 `onePer: ['space']`, so inviting again to the same space replaces it.
 
-It is open until its maker's node sees the contact in the space and closes
-it, the next time it reads `invites()`. A contact removed before then can
-rejoin with it, as with any open role invite
-([#170](https://github.com/leifriksheim/minca/issues/170)), and whoever else
-holds a place in the space for two reads it
-([#313](https://github.com/leifriksheim/minca/issues/313)). An invite with no
-role, to view, carries the space key and can't be closed
+It stays open until its maker's node sees the contact in the space and
+closes it, the next time it reads `invites()`.
+
+Until then, a contact removed from the space can rejoin with it, as with
+any open role invite ([#170](https://github.com/leifriksheim/minca/issues/170)).
+Anyone else with a place in the space for two can read it
+([#313](https://github.com/leifriksheim/minca/issues/313)). A view-only
+invite carries the space key and can't be closed
 ([#172](https://github.com/leifriksheim/minca/issues/172)).
-
-A contact's `username` is what their domain answered when you found them by
-it. Nothing checks it again: once a name lapses and someone else claims it, a
-lookup leads to them, and the contact keeps the old one.
-
-`ask` and `accept` need a session note that grants `/account/write` for the
-whole account, as a knock does. An app granted `contacts` sees the list and
-requests, but may not ask or accept
-([spec 06 §2.5](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
-
-_Source: `packages/core/src/schemas/contacts.ts` (`contact`), `packages/core/src/identity/contact-key.ts` (`deriveContactKeyBytes`), `packages/core/src/inbox/inbox.ts` (`sealKnock`, `openKnock`), `packages/core/src/node/node-contacts.ts` (`openMail`, `makePair`, `contacts`), `packages/core/src/schemas/contacts.ts` (`contactRequest`), `packages/core/src/node/types.ts` (`NodeContacts`), `packages/core/src/space/account-registry.ts` (`deriveContactsSpace`). Tests: `packages/core/tests/contacts.test.ts`, `packages/core/tests/attacks.test.ts` ("a knock re-posted by someone else…"), `packages/core/tests/usernames.test.ts` ("node.contacts.invite")._
 
 ## Planned: requests that can be taken back
 
-A list that never names a space the account left, and requests that can be
-taken back. Today the `std.contact` does not record where `ask` left the
-knock, so `remove` and `block` leave it standing: the askee can still accept
-it, into a space nobody holds. And `spaces.leave` on a space for two leaves the
-`std.contact` naming it.
+Today `remove` and `block` leave your request standing, so they can still
+accept it, into a space nobody holds. And `spaces.leave` on a space for two
+leaves the `std.contact` that names it. The plan:
 
-- `std.contact` gains `asked?: { space: string ≤256, key: string ≤256 }`, the
-  space and record key of the request. `ask` writes it.
-- `remove(did)` and `block(did)` delete the request at `asked` when the
-  space is still held and the record still stands, before leaving the space
-  for two.
-- `spaces.leave(id)` on a space a `std.contact` names does what `remove` does
-  for that contact.
-- `ContactView` gains `waiting: boolean`, true while the other account has no
-  member record in the space for two.
+- `std.contact` gains `asked?: { space: string ≤256, key: string ≤256 }`,
+  where `ask` left the request.
+- `remove` and `block` delete that request, when the space is still held and
+  the record still stands, before leaving the space for two.
+- `spaces.leave` on a space a `std.contact` names does what `remove` does.
+- `ContactView` gains `waiting: boolean`, true while the other account has
+  no member record in the space for two.
 
 Tracked in [#40](https://github.com/leifriksheim/minca/issues/40).

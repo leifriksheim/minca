@@ -46,6 +46,7 @@ function unref(handle: unknown): void {
   if (typeof release === 'function') Reflect.apply(release, handle, []);
 }
 
+/** Options for `createCalls` and `CallsProvider`. Rarely needed but in tests. */
 export interface CallsOptions {
   /** How a WebRTC connection is made. `new RTCPeerConnection` by default. */
   readonly createConnection?: (config: RTCConfiguration) => RTCPeerConnection;
@@ -55,7 +56,7 @@ export interface CallsOptions {
   readonly getDisplayMedia?: (constraints: DisplayMediaStreamOptions) => Promise<MediaStream>;
   /** How a set of tracks becomes something a `<video>` can show. `new MediaStream` by default. */
   readonly createStream?: (tracks: ReadonlyArray<MediaStreamTrack>) => MediaStream | null;
-  /** Where the call you're in is remembered, to offer rejoining after a reload. `sessionStorage` by default; null for nowhere. */
+  /** Where the call you're in is remembered, to offer rejoining after a reload. `sessionStorage` by default, under `minca-call`; null for nowhere. */
   readonly storage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null;
   /** How often you say you're in a call. Default 5 s. */
   readonly heartbeatMs?: number;
@@ -73,8 +74,11 @@ export interface CallPeer {
   readonly account: string;
   /** What they send: sound, and video when their camera is on. Null until it arrives. */
   readonly stream: MediaStream | null;
+  /** Whether they're muted, as they last said */
   readonly muted: boolean;
+  /** Whether their camera is on, as they last said */
   readonly camera: boolean;
+  /** How the connection to their device is going */
   readonly connection: 'connecting' | 'connected' | 'failed';
 }
 
@@ -86,13 +90,19 @@ export interface CurrentCall {
   readonly joinedAt: number;
   /** Your own camera and microphone, for showing yourself */
   readonly local: MediaStream | null;
+  /** Whether you're muted */
   readonly muted: boolean;
+  /** Whether your camera is on */
   readonly camera: boolean;
+  /** Whether you're sharing your screen */
   readonly sharing: boolean;
+  /** Everyone else in the call, one per device */
   readonly people: ReadonlyArray<CallPeer>;
-  /** Who you're ringing, while it rings — and what came of it, for a moment after */
+  /** Who you're ringing, while it rings — and what came of it, `declined` or `missed`, for a moment after */
   readonly outgoing: {
+    /** The account you're ringing */
     readonly to: string;
+    /** When you started ringing, ms */
     readonly since: number;
     readonly state: 'ringing' | 'declined' | 'missed';
   } | null;
@@ -106,6 +116,7 @@ export interface IncomingCall {
   readonly space: string;
   /** The caller's account */
   readonly from: string;
+  /** When it started ringing here, ms */
   readonly since: number;
 }
 
@@ -119,9 +130,13 @@ export interface CallAround {
   readonly since: number;
 }
 
+/** What's going on with calls: `getState()`, or `state` from `useCalls` */
 export interface CallsState {
+  /** The call you're in, or null */
   readonly current: CurrentCall | null;
+  /** Calls ringing you, to answer or decline by `id` */
   readonly ringing: ReadonlyArray<IncomingCall>;
+  /** Calls going on in spaces you have open, that you're not in */
   readonly around: ReadonlyArray<CallAround>;
   /** The call you were in before this page loaded, while it's still going on */
   readonly rejoin: CallAround | null;

@@ -1,0 +1,35 @@
+{
+  "name": "@minca/docs",
+  "private": true,
+  "type": "module",
+  "description": "minca.dev: the docs for building on Minca. It shows packages/core/docs and spec/ as they are, so each page has one copy.",
+  "scripts": {
+    "sync": "node scripts/sync.mjs",
+    "dev": "npm run sync && next dev --port 5187",
+    "build": "npm run sync && next build",
+    "typecheck": "npm run sync && tsc --noEmit && node scripts/check-examples.mjs"
+  },
+  "dependencies": {
+    "@minca/app-shared": "*",
+    "@minca/ui": "*",
+    "fumadocs-core": "^16.17.10",
+    "fumadocs-mdx": "^15.4.10",
+    "fumadocs-ui": "^16.17.10",
+    "lucide-react": "^1.67.0",
+    "next": "^16.4.5",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@minca/core": "*",
+    "@tailwindcss/postcss": "^4.3.4",
+    "@types/mdx": "^2.0.14",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "tailwindcss": "^4.3.4",
+    "typedoc": "^0.28.20",
+    "typedoc-plugin-markdown": "^4.14.1",
+    "typescript": "^6.0.3",
+    "zod": "^4.6.7"
+  }
+}

@@ -7,8 +7,11 @@
  * (`storage/mirror.ts`) is what turns one into a place a space can live.
  */
 export interface BlobStore {
+  /** The bytes, or null when absent */
   get(key: string): Promise<Uint8Array | null>;
+  /** Creates or replaces */
   put(key: string, bytes: Uint8Array): Promise<void>;
+  /** Removes; absent is fine */
   delete(key: string): Promise<void>;
   /** Every key under `prefix`, in no particular order */
   list(prefix: string): Promise<string[]>;

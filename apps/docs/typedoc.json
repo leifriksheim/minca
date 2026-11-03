@@ -1,0 +1,31 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "../../packages/core/src/index.ts",
+    "../../packages/core/src/session/index.ts",
+    "../../packages/core/src/schemas/index.ts",
+    "../../packages/core/src/node/index.ts",
+    "../../packages/core/src/storage/index.ts",
+    "../../packages/core/src/inbox/index.ts",
+    "../../packages/core/src/elements/index.ts",
+    "../../packages/react/src/index.ts",
+    "../../packages/calls/src/index.ts",
+    "../../packages/calls/src/react.ts"
+  ],
+  "tsconfig": "./tsconfig.api.json",
+  "plugin": ["typedoc-plugin-markdown"],
+  "out": ".api",
+  "readme": "none",
+  "entryFileName": "index",
+  "skipErrorChecking": true,
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "disableGit": true,
+  "sourceLinkTemplate": "https://github.com/leifriksheim/minca/blob/main/{path}#L{line}",
+  "hidePageHeader": true,
+  "hideBreadcrumbs": true,
+  "useCodeBlocks": true,
+  "parametersFormat": "table",
+  "interfacePropertiesFormat": "table",
+  "logLevel": "Error"
+}

@@ -139,8 +139,9 @@ export interface ConnectAsk {
 
 /**
  * Writes a request to connect a bot to a service, or with `disconnect` to
- * disconnect it, for the bot's host to check. The secret it returns is for
- * the host's page alone: it is the only proof the request is the asker's.
+ * disconnect it, for the bot's host to check. The secret it returns, 32
+ * random bytes, is for the host's page alone: it is the only proof the
+ * request is the asker's. The request stands for nine minutes.
  */
 export async function askToConnect(
   node: P2PNode,
@@ -169,7 +170,7 @@ export function connectPage(hostUrl: string, ask: ConnectAsk): string {
   return `${botAddress(hostUrl, ask, 'connect')}?${query}`;
 }
 
-/** Asks a bot's host to disconnect it, for a request `askToConnect` wrote with `disconnect` */
+/** Asks a bot's host to disconnect it, for a request `askToConnect` wrote with `disconnect`. Throws what the host said when it refuses. */
 export async function askToDisconnect(hostUrl: string, ask: ConnectAsk): Promise<void> {
   const res = await fetch(botAddress(hostUrl, ask, 'disconnect'), {
     method: 'POST',

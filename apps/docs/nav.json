@@ -1,0 +1,70 @@
+{
+  "start": [
+    {
+      "page": "README",
+      "slug": "understand",
+      "title": "Understand Minca",
+      "icon": "Compass"
+    },
+    { "page": "building-an-app", "title": "Build an app", "icon": "Rocket" },
+    { "page": "agents", "title": "Build with agents", "icon": "Bot" }
+  ],
+  "topics": [
+    {
+      "slug": "sign-in",
+      "title": "Sign-in",
+      "blurb": "Accounts, access and usernames",
+      "icon": "KeyRound",
+      "pages": ["sign-in", "usernames"]
+    },
+    {
+      "slug": "records",
+      "title": "Records and queries",
+      "blurb": "Signed JSON, read live",
+      "icon": "Database",
+      "pages": ["records-and-queries", "query-format", "direct-messages"]
+    },
+    {
+      "slug": "collections",
+      "title": "Collections",
+      "blurb": "Schemas, rules and the standard library",
+      "icon": "Puzzle",
+      "pages": [
+        "collections",
+        "standard-library",
+        "proposing-collections",
+        "blueprints-and-guides",
+        "computed",
+        "contracts"
+      ]
+    },
+    {
+      "slug": "spaces",
+      "title": "Spaces",
+      "blurb": "Members, roles, contacts and invites",
+      "icon": "Users",
+      "pages": ["spaces", "contacts", "inbox", "warrants"]
+    },
+    {
+      "slug": "automations",
+      "title": "Automations and bots",
+      "blurb": "Things that happen on their own",
+      "icon": "Workflow",
+      "pages": ["automations", "bots", "actions"]
+    },
+    {
+      "slug": "node",
+      "title": "Node and storage",
+      "blurb": "Running it, and where data lives",
+      "icon": "HardDrive",
+      "pages": ["node", "storage"]
+    },
+    {
+      "slug": "calls",
+      "title": "Calls",
+      "blurb": "Voice and video in a space",
+      "icon": "Phone",
+      "pages": ["../../calls/README"]
+    }
+  ]
+}

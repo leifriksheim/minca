@@ -1,1090 +1,1156 @@
 # The node
 
-`createNode` and what it returns: configuration, root signers and notes, renewing
-the session note, stores, holding spaces, following the account, events, live
-messages, the rest of its surface, the network, acting as an agent, the
-app-side client, carriers and hosting, the inbox, and the React and element
-conveniences.
+A node is what takes part in Minca for an account. It holds the account's
+spaces, signs what it writes, checks what peers send, and keeps everything in
+sync. Most apps never make one: the connection starts it for you
+([building an app](building-an-app.md)). You make one yourself in a program
+that holds the account's keys, such as a script, a server or a test.
 
-> Not protocol. This page describes the reference library, and another
-> implementation may do it differently and still interoperate. What peers must
-> agree on is in the [spec](https://github.com/leifriksheim/minca/blob/main/spec/README.md).
+```ts
+import { createNode, deriveAccountKey, generateSeed, indexedDBStores, rootFromSeed } from '@minca/core';
+
+const seed = generateSeed();
+const { signer } = await rootFromSeed(seed);
+
+const node = await createNode({
+  signer,
+  accountKey: await deriveAccountKey(seed),
+  stores: indexedDBStores('my-app'),
+  network: { relays: ['wss://relay.minca.social'] },
+});
+
+const space = await node.spaces.create({ name: 'Notes', visibility: 'private' });
+await node.records.put(space.id, 'app.note', { text: 'Hello' });
+```
 
 ## Configuration
 
-`createNode(config)` takes (`NodeConfig`):
+`createNode(config)` takes a [`NodeConfig`](https://minca.dev/api/core/interfaces/NodeConfig/),
+whose page gives each field's meaning and default. The sections below explain
+the ones that work together: [root signers](#root-signers-and-notes),
+[stores](#stores), [writer keys](#writer-keys) and
+[holding part of a space](#holding-part-of-a-space).
 
-| Field               | Type                        | Meaning                                                                                                                                                                                                                                                                                                               |
-| ------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `signer`            | `RootSigner`                | Who the node acts for. Asked only for session notes ([spec 06 §1.2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).                                                                                                                                                                  |
-| `accountKey`        | bytes, optional             | The account key (`deriveAccountKey(seed)`). Enables the account registry and the contacts space ([spec 06 §1.3](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).                                                                                                                      |
-| `contactKey`        | bytes, optional             | The contact key's secret. Opens knocks, in shared spaces and, through the keys derived from it, in the inbox; published on profiles.                                                                                                                                                                                  |
-| `contactsSpace`     | string, optional            | The contacts space's id, for a node given it without the account key (an app granted `contacts`, [spec 06 §2.5](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).                                                                                                                      |
-| `stores`            | `StoreFactory`              | Where the registry and each space's store live ([stores](#stores)).                                                                                                                                                                                                                                                   |
-| `provider`          | `CryptoProvider`, optional  | Default: P-256 over WebCrypto.                                                                                                                                                                                                                                                                                        |
-| `collections`       | `CollectionDef[]`, optional | Schemas the node knows, used when a space does not describe a collection itself. Writes are checked against them; reads are flagged `conforms`. Nothing is refused on arrival for its shape ([02](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)).                                               |
-| `network`           | optional                    | `relays` (where peers meet: Minca `wss://` and Nostr `nostr+wss://` relays), `nodes` (always-on nodes to dial, `wss://host/peer#<DID>`; the fragment pins the node, spec 04 §5.2; `ws://` only on this machine), `iceServers`, `transports` (extra transports per space). Omitted: offline.                           |
-| `sessionTtlSeconds` | number, optional            | Lifetime of each session note. Default `3600`.                                                                                                                                                                                                                                                                        |
-| `sessionKey`        | `CryptoKeyPair`, optional   | Sign with this key instead of a fresh one. Used when the signer's note names a specific key (an app's key, an agent's key, [spec 06 §2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md), [spec 06 §3](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)). |
-| `writerKey`         | `WriterKeySource`, optional | Keep a signing key across runs, so this device keeps one log in each space ([writer keys](#writer-keys)). Ignored with `sessionKey`.                                                                                                                                                                                  |
-| `watchIntervalMs`   | number, optional            | How often to look for writes another app, device or process made: a data folder's segments, a store file another process shares. `0` disables. Default `2000`. _Implementation detail._                                                                                                                               |
-| `cache`             | `CacheConfig`, optional     | Hold only the collections used, in spaces that name a keeper ([holding part of a space](#holding-part-of-a-space)).                                                                                                                                                                                                   |
-| `mailbox`           | `MailboxClient`, optional   | How the inbox and short links reach mailboxes ([07](https://github.com/leifriksheim/minca/blob/main/spec/07-inbox.md)). Default: a WebSocket to each relay.                                                                                                                                                           |
+### Collections the node knows
 
-_Source: `packages/core/src/node/types.ts` (`NodeConfig`, `NodeNetworkConfig`, `CacheConfig`). Tests: `packages/core/tests/node.test.ts`, `packages/core/tests/caches.test.ts`._
+`collections` gives the node schemas to use when a space doesn't describe a
+collection itself. Writes are checked against them, and reads are flagged
+`conforms`. Nothing arriving from a peer is refused for its shape.
+
+### Network options
+
+`network` is a [`NodeNetworkConfig`](https://minca.dev/api/core/interfaces/NodeNetworkConfig/):
+the relays where peers meet, always-on nodes to dial, hosts to look for the
+account registry at, and more. Omitted, the node stays offline.
+[The network](#the-network) says how the node uses them.
 
 ## Lifecycle
 
-Starting a node does the following, in order:
+When it starts, a node picks its signing key: `sessionKey` if given, else one
+claimed from `writerKey`, else a fresh P-256 key for this run. Its DID is
+`node.sessionDid`. Then it asks the signer for a session note and waits. If
+the signer refuses, `createNode` fails.
 
-1. Uses `config.sessionKey`; else claims a lasting key from `config.writerKey`
-   ([writer keys](#writer-keys)); else generates a fresh P-256 key pair for this
-   run. Its DID (`did:key`, P-256 multicodec) is `sessionDid`.
-2. Asks `config.signer.delegate` for a session note ([spec 06 §1.2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)) and waits for it.
-   If the signer refuses, `createNode` fails.
-3. Schedules renewal of the note ([renewing the session note](#renewing-the-session-note)).
-4. Opens the `registry` store, sealed ([stores](#stores)).
-5. With an account key: derives the account registry space and the contacts
-   space ([03](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)). The contacts space is added to the node's own
-   registry like a joined space (so it can be granted to an app like any other
-   space), and both are _hidden_ from `spaces.list` ([following the account](#following-the-account)).
-6. With an account key: opens the account registry space and reconciles
-   ([following the account](#following-the-account)) before `createNode` returns.
+With an account key, the node also opens the account registry and makes its
+spaces match it before `createNode` returns
+([following the account](#following-the-account)).
 
-A node acts for one account (`node.did`) and signs with one session key
-(`node.sessionDid`) for its whole lifetime. To act for another account, start
-another node.
+A node acts for one account (`node.did`) and signs with one key for its whole
+life. To act for another account, start another node.
 
-`revokeKey(key, { spaces?, waitMs? })` revokes a key of the account, each
-revoke with a cutoff at what the key wrote: in `spaces`, or by default
-wherever the account writes (every space it lists, its carry spaces, the
-contacts space and the account registry). It says whether a peer took each in
-within `waitMs`. The account home's disconnect calls it for an app's key.
-`revokeSelf()` does the same for the node's own session key, and forgets a
-lasting key at once; the account home's sign-out calls it
-([spec 01 §7.4](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md)).
-A record is judged with no time, so a revoke, not the note running out, is
-what ends what a key can write. An agent's view refuses both.
+### Revoking keys
 
-`close()` stops renewal, closes every open space (flushing what each keeps,
-stopping sync and disconnecting its transports), closes the registry store,
-and drops all event listeners. After `close()`, any call that needs a space
-fails with `Node is closed`. Closing twice does nothing.
+`revokeKey(key, { spaces?, waitMs? })` revokes one of the account's keys, with
+a cutoff at what that key wrote. By default it does this wherever the account
+writes: every space it lists, its carry spaces, the contacts space and the
+account registry. It says whether a peer took each revoke in within `waitMs`.
+The account home calls it when you disconnect an app.
 
-_Source: `packages/core/src/node/node.ts` (`createNode`, `close`). Tests: `packages/core/tests/node.test.ts`._
+`revokeSelf()` does the same for the node's own key, and forgets a lasting
+key at once. The account home calls it on sign-out.
+
+A record is judged with no clock, so it is a revoke, not the note running out,
+that ends what a key can write. An agent can't call either.
+[Spec 01 §7.4](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md).
+
+### Closing
+
+`close()` stops renewing the note, closes every open space and the registry,
+and drops all event listeners. After that, any call that needs a space fails
+with `Node is closed`. Closing twice does nothing.
 
 ## Root signers and notes
 
-A node never holds the root key. It is given a **root signer** (`RootSigner`),
-which hides where the key lives and is asked only for notes. This is an
-in-process interface, not a wire format; what a note must be is
-[spec 01 §7](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md).
+A node never holds the account's root key. It gets a **root signer**, which
+hides where the key lives and is only asked for notes.
 
-| Member                                                         | Type           | Meaning                                     |
-| -------------------------------------------------------------- | -------------- | ------------------------------------------- |
-| `did`                                                          | string         | The account DID                             |
-| `delegate({audience, command, subject?, policy?, expiration})` | → `Delegation` | Issue a note from the account to `audience` |
+Its interface is [`RootSigner`](https://minca.dev/api/core/interfaces/RootSigner/): the
+account's DID, and `delegate`, which issues a note from the account to a key.
 
-- The **local** signer (`createLocalRootSigner`) calls `issueDelegation` with
-  the root key. `subject` defaults to the account's own DID (the whole
-  account), `policy` to none. It never sets `meta`.
-- The **grant** signer an app uses returns the one note the account home
-  already issued to the app's key, unchanged, and refuses once the grant's
-  `expiresAt` has passed. It cannot mint new notes
-  ([spec 06 §2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
-- A signer **across a port** (`serveSigner` on the side that holds the key,
-  `remoteSigner` on the node's, as a page signs for its worker's node) signs
-  only notes of the session note's shape below: `command` `/`, no `subject`,
-  no `policy`. It refuses anything else without asking the signer behind it.
-  The audience and expiration are the far end's to pick, so it bounds
-  neither.
+There are three kinds:
 
-The **session note** a node asks for when it starts:
+- **Local**, `createLocalRootSigner`, signs with the root key itself.
+  `subject` defaults to the whole account and `policy` to none.
+- **Grant**, `grantSigner`, is what an app uses. It returns the one note the
+  account home gave the app, and refuses once the grant has expired. It can't
+  make new notes.
+- **Across a port**, `serveSigner` on the side with the key and
+  `remoteSigner` on the node's side, as a page signs for its worker. It signs
+  only session notes (command `/`, no subject, no policy) and refuses anything
+  else without asking the signer behind it.
+
+### The session note
+
+This is the note a node asks for when it starts:
 
 ```
 aud = session DID
 sub = the account's DID
-cmd = "/"                     (SESSION_COMMAND; a node acting as an agent signs under its grant, `/record`)
+cmd = "/"                     (an agent's node signs under its grant, `/record`)
 pol = []
 exp = now + sessionTtlSeconds (default 3600)
-nbf = now − 300               (issueDelegation's default)
+nbf = now − 300
 ```
 
-Its proof is that token. Peers check only that the note grants what each
-record needs, so the command is this node's choice, not a rule. The note is renewed before it runs out
-([spec 06 §1.2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
+Peers only check that the note grants what each record needs, so the command
+is the node's choice.
 
-**Issuing.** `issueDelegation` defaults `exp` to now + 3600, `nbf` to now − 300
-(`UCAN_CLOCK_SKEW_SECONDS`, so a peer whose clock is a little behind still
-accepts it), `nonce` to 12 random bytes in base64url, `subject` to the
-issuer's own DID and `policy` to `[]`; it signs in the low-S form only.
-Only the account's root signer issues notes peers accept: a note is one
-token from the account, never passed on
-([spec 01 §7.5](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md)).
-A key that needs another key (a helper, a key per tab) asks the account,
-through its home or root signer, for a note of its own.
+### Issuing notes
 
-**What a home grants.** `grantTerms(access, spaces)` (and `noteTerms` under it)
-turns a grant into a note's terms: `/`, `/record` or `/record/read`; the
-whole account, or one space as the subject, or several named by a policy on
-`.space`; none, as a policy nothing satisfies. `noteSpaces(note)` reads that
-back, for showing which spaces a note reaches, and reaches no space for a
-policy statement it can't read that way, so it never offers more than the
-note grants; peers judge each use against the note itself
-([spec 06 §2.5](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
+`issueDelegation` defaults `exp` to an hour from now, `nbf` to five minutes
+ago so a peer with a slow clock still accepts it, `nonce` to 12 random bytes,
+`subject` to the issuer and `policy` to `[]`. It signs in low-S form only.
 
-_Source: `packages/core/src/identity/root-signer.ts`, `packages/core/src/node/remote.ts` (`serveSigner`, `remoteSigner`), `packages/core/src/identity/ucan.ts` (`issueDelegation`, `verifyNote`), `packages/core/src/identity/abilities.ts` (`noteTerms`, `noteSpaces`), `packages/core/src/node/node.ts` (`SESSION_COMMAND`, `delegate`), `packages/core/src/session/connect.ts` (`grantSigner`, `grantTerms`). Tests: `packages/core/tests/ucan.test.ts`, `packages/core/tests/remote.test.ts` ("the page's signer, from a worker"), `packages/core/tests/node.test.ts`, `packages/core/tests/connect.test.ts`._
+Only the account's root signer issues notes that peers accept, and a note is
+never passed on. A key that needs another key, such as a helper or a key per
+tab, asks the account for a note of its own.
+
+### What a home grants
+
+`grantTerms(access, spaces)` turns a grant into a note's terms: the command
+`/`, `/record` or `/record/read`, and the whole account, one space, or several
+spaces named by a policy. `noteSpaces(note)` reads that back, to show which
+spaces a note reaches. It never claims more than the note grants.
+[Spec 01 §7](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md),
+[spec 06 §2.5](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md).
 
 ## Renewing the session note
 
-The note format, and that every record carries it, are protocol
-([spec 06 §1.2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)). When to renew it is the node's own:
+The node asks for a new note three quarters of the way through the old one:
+2700 seconds in, with the default lifetime. Each renewal schedules the next.
 
-- The first renewal is asked for at `0.75 × ttl` seconds after start (2700 s
-  with the default TTL), and each successful renewal schedules the next
-  `0.75 × ttl` later.
-- If the signer refuses or cannot be reached, the node keeps the note it has
-  and asks again after `min(60, ttl / 4)` seconds, repeating until it succeeds
-  or the node closes. Once the held note expires, live checks (knocks, live
-  messages, connecting to peers) refuse it; records it signs are judged with
-  no time, so they count until its key is revoked.
+If the signer refuses or can't be reached, the node keeps its note and asks
+again after `min(60, ttl / 4)` seconds, until it succeeds or the node closes.
+Once the note expires, live checks refuse it: knocks, live messages and
+connecting to peers. Records it signed still count until its key is revoked.
 
-A signer need not be able to sign. `grantSigner(grant)` answers every
-`delegate` call with the one note an account home granted, unchanged, and
-refuses once `grant.expiresAt` has passed. `grantSigner(() => grant)` answers
-with whichever grant the getter returns, as the desktop app's node does when
-a renewed grant replaces the last. A node started from a grant
-therefore never gets a fresh note: its "renewal" returns the same note, and when
-it runs out the app must connect again ([spec 06 §2.9](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
+A node started from a grant never gets a fresh note. `grantSigner(grant)`
+answers every renewal with the same note, and when that runs out the app must
+connect again. `grantSigner(() => grant)` answers with whatever grant the
+getter returns, so a renewed grant can replace the last.
 
-`node.delegation()` returns the note the session key writes under now.
-
-_Source: `packages/core/src/node/node.ts` (`delegate`, `scheduleRenewal`, `SESSION_COMMAND`), `packages/core/src/session/connect.ts` (`grantSigner`). Tests: `packages/core/tests/node.test.ts` ("the delegation is renewed before it expires")._
+`node.delegation()` returns the note the node writes under now.
+[Spec 06 §1.2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md).
 
 ## Stores
 
-A node asks for stores by path through its `StoreFactory`:
+A node asks its `StoreFactory` for stores by path:
 
-| Path               | Holds                                                | Sealed                                  |
-| ------------------ | ---------------------------------------------------- | --------------------------------------- |
-| `registry`         | the node's list of spaces and their keys             | yes: the node asks for `{ seal: true }` |
-| `spaces/<spaceId>` | one space's records and what the node keeps about it | no                                      |
-| `writers`          | the last place each lasting key took in each line    | no                                      |
+| Path               | Holds                                                 | Sealed |
+| ------------------ | ----------------------------------------------------- | ------ |
+| `registry`         | the node's list of spaces and their keys              | yes    |
+| `spaces/<spaceId>` | one space's records, and what the node keeps about it | no     |
+| `writers`          | each lasting key's place in each line                 | no     |
 
-What a path means is the factory's choice:
+It also opens `mirrors/<spaceId>/<n>` for a [mirror](storage.md#mirrors),
+`folder/<spaceId>` for a data folder, and `host` for a host's subscriptions.
 
-- `indexedDBStores(prefix)` — one IndexedDB database per path, named
-  `<prefix>:<path with / replaced by :>`. Never sealed: the browser profile
-  already guards it.
-- `folderStores(directory, { basePath?, localKey?, local? })` — a data folder
-  ([sync and storage](storage.md#data-folders)): the `registry` in the folder
-  under `basePath`, sealed under `localKey` (`deriveLocalKey(seed)`) when one
-  is given; every other path in `local`; and each space mirrored to the
-  folder's segments, which the factory names as `folder`.
-- `directoryStores(directory, { localKey? })` — a directory on this device,
-  one file per entry and per version; the `registry` sealed as above.
+What a path means is up to the factory:
 
-Every version a node signs in a space takes the next place in its key's line
-for that collection there ([spec 02 §4.10](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)).
-Writes by one key in one space go one at a time, and the place is remembered
-before the version leaves the node. Where the places are kept depends on the key:
+- `indexedDBStores(prefix)` makes one IndexedDB database per path, named
+  `<prefix>:<path with / replaced by :>`. It never seals, since the browser
+  profile already guards it.
+- `folderStores(directory, { basePath?, localKey?, local? })` uses a
+  [data folder](storage.md#data-folders). The `registry` goes in the folder
+  under `basePath`, sealed under `localKey` (`deriveLocalKey(seed)`) when
+  given. Every other path goes in `local`, and each space is mirrored to the
+  folder's segments.
+- `directoryStores(directory, { localKey? })` uses a directory on this
+  device, one file per entry and per version, sealing the `registry` the same
+  way.
 
-- **A key made for this run** lives only as long as the node, so its places
-  are kept in memory.
-- **A claimed writer key** (`config.writerKey`) keeps them in its slot, beside
-  the key.
-- **A key handed in** (`config.sessionKey`, an agent's) or a carrier's own key
-  keeps them in the `writers` store, and a restart carries on where it left off.
-  Such a key may be signing in several nodes at once: every tab of an app
-  signs with the app's key. So each place is taken under a Web Lock
-  (`minca-writer:lines/<did>/<space>`) every tab and worker of the origin
-  shares, and read afresh from the store inside it, never from a copy in
-  memory. Nodes that share a key must share that store too, as tabs of one
-  origin share IndexedDB; two nodes signing with one key from separate stores,
-  or in separate processes without a shared lock, fork its lines, and every
-  peer then withdraws what it signed in a forked collection from the fork on.
+[Sign-in](sign-in.md) picks stores with `storesFor(account)`: IndexedDB with
+prefix `minca:<dataPath with : for />` in the browser, or `folderStores(pod,
+{ basePath: account.dataPath, localKey })` in a pod, where `dataPath` is
+`accounts/<id>/stores`. A connected app uses
+`indexedDBStores('minca-app:<account DID>')`. These names may change
+([sync and storage](storage.md#indexeddb)). A pod's layout is in
+[spec 05](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md).
 
-_Source: `packages/core/src/node/writers.ts` (`createWriters`, `exclusively`). Tests: `packages/core/tests/writer-logs.test.ts` ("a writer’s log", "two nodes sharing a handed-in key…")._
+### Copying an account
+
+`copyAccountData({ from, to, did, accountKey? })` copies every space an
+account holds, with its keys and records, from one set of stores to another.
+With `accountKey` it copies the account registry too. It merges by the same
+rule as sync, so copying into a store that has some of it already is safe,
+and copying twice changes nothing.
+
+> **Known defect:** `copyAccountData` stores versions without validating
+> them, so a pod another origin wrote to can
+> bring in versions a peer's would have been refused. Tracked in
+> [#20](https://github.com/leifriksheim/minca/issues/20).
+
+### Places in a key's line
+
+Every version a key signs in a space takes the next place in that key's line
+for the collection. Writes by one key in one space go one at a time, and the
+place is saved before the version leaves the node. Where it is saved depends
+on the key:
+
+- **A key made for this run** keeps its places in memory.
+- **A writer key** (`config.writerKey`) keeps them beside the key.
+- **A key handed in** (`config.sessionKey`) or a carrier's key keeps them in
+  the `writers` store, so a restart carries on.
+
+A handed-in key may sign in several nodes at once: every tab of an app signs
+with the app's key. So each place is taken under a Web Lock
+(`minca-writer:lines/<did>/<space>`) shared by the origin's tabs and workers,
+and read fresh from the store each time. Nodes that share a key must share
+that store too. Two nodes signing with one key from separate stores fork its
+lines, and every peer then withdraws what it signed in a forked collection
+from the fork on.
+[Spec 02 §4.10](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md).
 
 ### Writer keys
 
-A node given `writerKey` claims a lasting key at start and signs with it
-until it closes, so the device keeps one log in each space instead of a new
-one each run. The source hands a key to one node at a time; a node that
-finds every key taken, or a source that can't lock one, gets none, and the
-node makes a key for this run as it would without a source.
+With `writerKey`, a node claims a lasting key when it starts and signs with
+it until it closes. The device then keeps one log in each space, instead of
+a new one each run. A key goes to one node at a time. If every key is taken,
+or none can be locked, the node makes a key for this run instead.
 
-- `browserWriterKeys(name)` keeps keys in this origin's IndexedDB, one
-  database per slot (`<name>:writer:<slot>`, up to 32), each claimed under a Web
-  Lock of the same name. A tab or worker that finds a slot taken tries the
-  next; one that closes, or crashes, frees its slot. The private key is
-  non-extractable: a script in the page can sign with it while it runs, but
-  can't take it away. Without IndexedDB or Web Locks it gives none.
-- A node started from a store description (`startPageNode`, a node in a
-  worker) claims from `browserWriterKeys` under the account's IndexedDB prefix,
-  whether its stores are in IndexedDB or a data folder, so signing out
-  (`deleteBrowserData`) deletes the keys too. The key never goes in the data
-  folder, which other apps and devices share.
-- `forget()` drops the key but keeps its places, which still count while it
-  signs this run; the slot's next claim makes a new key and clears them.
-  `revokeSelf` forgets the claimed key before it writes a single revoke, so a
-  page closed while the revokes wait leaves no revoked key to claim again.
-  With a peer connected in any open space, each revoke waits up to
-  `waitMs` for one to take it in; with none, none wait. A node that claims a
-  key the account registry has revoked anyway (one forgotten by an older
-  version, say) forgets it and starts again on a key for this run alone; the
-  next start claims a new lasting one.
-- A node never signs at a place behind one it took itself this run: if the
-  slot has lost them (site data cleared while the page was open), every
-  write fails until the page reloads, since signing on would fork the line
-  and withdraw what the key wrote. A slot whose connection the browser
-  closed opens again only while it still holds the key.
-- The CLI keeps them outside its home, in `<local>/writer-keys/slot-<n>/` (`localPath` in `packages/cli/src/home.ts`, [sync and storage](storage.md#data-folders)): the key as
-  JWK in an envelope (spec 01 §9.1) under the account's local key, with label
-  `minca/writer-key/v1` and bound `{ did: <account DID>, slot: <n> }`
-  (`key.sealed`, mode 600), so a copy of the files can't sign, and a key file
-  moved to another slot or account is refused rather than used; its places in
-  `heads/`; and numbered `lock.<n>` files naming the process that holds the
-  highest, taken over once that process is gone.
+In the browser, `browserWriterKeys(name)` keeps up to 32 keys in IndexedDB,
+one database per slot (`<name>:writer:<slot>`), each claimed under a Web Lock
+of the same name. A tab that finds a slot taken tries the next. A tab that
+closes or crashes frees its slot. The private key can't be extracted: a
+script in the page can sign with it while it runs, but can't take it away.
+Without IndexedDB or Web Locks there are no writer keys.
 
-_Source: `packages/core/src/node/writer-keys.ts` (`browserWriterKeys`), `packages/core/src/node/writers.ts` (`createWriters`), `packages/core/src/node/node.ts` (`createNode`, `revokeSelf`), `packages/core/src/node/stores.ts` (`writerKeysFor`), `packages/core/src/node/worker.ts` (`withWriterKey`), `packages/cli/src/writer-keys.ts` (`fileWriterKeys`), `packages/cli/src/home.ts` (`unlock`, `nodeFor`). Tests: `packages/core/tests/writer-logs.test.ts` ("a writer key that outlives the node"), `packages/cli/tests/writer-keys.test.ts` ("a key file moved to another slot, or to another account, does not open")._
+A node started from a store description, such as `startPageNode` or a node in
+a worker, claims its key under the account's IndexedDB prefix, even when its
+stores are in a data folder. So signing out (`deleteBrowserData`) deletes the
+keys too, and a key never goes in a data folder that other apps share.
 
-Sign-in ([sign-in](sign-in.md)) uses `storesFor(account)`: IndexedDB with prefix
-`minca:<dataPath with : for />` in the browser, or `folderStores(pod,
-{ basePath: account.dataPath, localKey })` in a pod, where `dataPath` is
-`accounts/<id>/stores`. A connected app uses `indexedDBStores('minca-app:<account DID>')`
-by default. These names are _implementation details_ ([sync and storage](storage.md#indexeddb));
-a pod's layout is in
-[05](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md).
-A node also opens `mirrors/<spaceId>/<n>` for a mirror's writer state
-([mirrors](storage.md#mirrors)), `folder/<spaceId>` for a data folder's, and
-a host `host` for its subscriptions.
+What happens when a key goes away:
 
-`copyAccountData({ from, to, did, accountKey? })` copies every space an
-account holds, with its key and records, from one set of stores to another —
-the account registry too, when `accountKey` is given. It is a union: every
-version goes through the same ordering rule as sync, so copying into a store
-that holds some of it already is safe, and copying twice changes nothing.
+- `forget()` drops the key but keeps its places, which still count for this
+  run. The slot's next claim makes a new key and clears them.
+- `revokeSelf` forgets the claimed key before it writes a single revoke, so a
+  page closed mid-way leaves no revoked key to claim again. With a peer
+  connected in any open space, each revoke waits up to `waitMs` for one to
+  take it in.
+- A node that claims a key the account registry has revoked forgets it, and
+  uses a key for this run. The next start claims a new lasting one.
+- A node never signs at a place behind one it already took this run. If the
+  slot lost its places (site data cleared while the page was open), every
+  write fails until the page reloads, since signing on would fork the line.
+  A slot whose connection the browser closed reopens only while it still
+  holds the key.
 
-Copied versions are meant to pass the same checks as versions arriving by
-sync ([02 — Records](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md), validation) before they are stored.
-
-> **Known defect:** `copyAccountData` stores each version with
-> `addVersion` directly, without running it through the validation
-> pipeline (`packages/core/src/node/copy.ts`). A pod or data folder that another origin
-> wrote to can bring versions this node would have refused from a peer. A fix
-> will validate on copy, as sync does.
-> Tracked in [#20](https://github.com/leifriksheim/minca/issues/20).
-
-_Source: `packages/core/src/node/stores.ts`, `packages/core/src/node/copy.ts`, `packages/core/src/session/places.ts` (`storesFor`). Tests: `packages/core/tests/account.test.ts`, `packages/core/tests/folder-adapter.test.ts`._
+The CLI keeps its writer keys outside its home, in
+`<local>/writer-keys/slot-<n>/` ([data folders](storage.md#data-folders)).
+The key is sealed under the account's local key in `key.sealed` (mode 600,
+label `minca/writer-key/v1`, bound to `{ did, slot }`), so a copy of the files
+can't sign, and a key moved to another slot or account is refused. Its places
+are in `heads/`, and numbered `lock.<n>` files name the process holding it,
+taken over once that process is gone.
 
 ## Opening and holding spaces
 
-A space is opened (its store read, its peers joined, sync started) the first
-time anything asks for it — a read, a write, a status — and stays open until
-it is released or the node closes. Opening a space also: publishes the
-account's profile in it ([following the account](#following-the-account)), checks whether the session note was revoked
-there ([events](#events), `revoked`), and names the account's carriers as keepers if the
-account manages it ([spec 06 §4.2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
+A space opens the first time anything asks for it: a read, a write, a status.
+Opening reads its store, joins its peers and starts syncing. It also
+publishes the account's profile there, checks whether the node's note was
+revoked there ([`revoked`](#events)), and names the account's carriers as
+keepers if the account manages the space.
 
-`spaces.hold(id)` keeps a space open until released. It returns a function
-that lets go of that one hold:
+The space stays open until it is released or the node closes.
+`spaces.hold(id)` keeps it open, and resolves to a function that lets go:
 
-- Holds are counted per space. When the count reaches zero, the space closes.
+```ts
+const release = await node.spaces.hold(space.id);
+// later
+await release();
+```
+
+- Holds are counted per space. At zero, the space closes.
 - Releasing twice does nothing.
-- A hold made before the space was closed for another reason (leaving it) is
-  tied to that stretch of being held: releasing it later does nothing to a hold
-  made after rejoining.
-- Reading or writing needs no hold.
+- A hold from before the space was left is tied to that time. Releasing it
+  later doesn't touch a hold made after rejoining.
+- Reading and writing need no hold.
 
-> Rationale: anything that needs a space live holds it — a screen showing it, a
-> call in it — so a screen going away never cuts off a call in the same space.
-
-_Source: `packages/core/src/node/node.ts` (`runtime`, `hold`, `closeRuntime`). Tests: `packages/core/tests/live.test.ts` ("holding a space")._
+Anything that needs a space live holds it, such as a screen or a call. That
+way a screen going away never cuts off a call in the same space.
 
 ## Leaving a space
 
-`spaces.leave(id)` first gives up the account's place in the space
-([spec 03 §6.2](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)):
-it writes the account's own removal, `sys.remove` naming itself, so the
-others stop counting it a reader and a private space's key changes. Leaving
-needs no grant. A founder who leaves is a founder no more, for good; to stay
-without being one, `spaces.stepDown`
-([spaces](spaces.md#the-top-and-founders)). Then it deletes
-the space's `sys.joined` record in the account registry, closes the space and
-forgets it with its keys. The account registry, the contacts space and carry
-spaces cannot be left.
+`spaces.leave(id)` first gives up the account's place. It writes a
+`sys.remove` naming the account, so the others stop counting it a reader and a
+private space's key changes. Leaving needs no grant. Then it deletes the
+space's `sys.joined` record, closes the space and forgets it with its keys.
 
-- The removal goes out only while the space is open, so `leave` waits up to
-  5 s for a peer of another account to say it has it. With nobody reachable,
-  it leaves anyway.
-- Another device of the account that follows the deleted `sys.joined`, and
-  still sees the account holding a place, writes the removal itself, and waits
-  the same way.
-- Shared to view, or the only reader left, there is nothing to write and
+A founder who leaves is a founder no more, for good. To stay without being
+one, use [`spaces.stepDown`](spaces.md#the-top-and-founders).
+
+- The removal waits up to 5 seconds for a peer of another account to have
+  it. With nobody reachable, the node leaves anyway.
+- Another device of the account that sees the `sys.joined` record go, while
+  the account still holds a place, writes the removal itself.
+- Shared to view, or the last reader left, there's nothing to write, and
   `leave` returns at once.
-- A note that may not change access (a narrow app note) can't write the
-  removal; `leave` still forgets the space, and another device writes it.
+- A narrow app note that may not change access can't write the removal.
+  `leave` still forgets the space, and another device writes it.
 
+The account registry, the contacts space and carry spaces can't be left.
 `contacts.remove` and `contacts.block` leave the space for two this way.
-
-_Source: `packages/core/src/node/node.ts` (`spaces.leave`, `giveUpPlace`, `forget`, `LEAVE_WAIT_MS`), `packages/core/src/node/space-membership.ts` (`giveUpPlace`), `packages/core/src/node/space-peers.ts` (`writeUntilStored`). Tests: `packages/core/tests/key-change.test.ts` ("leaving a private space"), `packages/core/tests/contacts.test.ts` ("removing a contact gives up your place"), `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/carrier.test.ts` ("its carry space cannot be left…")._
+[Spec 03 §6.2](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md).
 
 ## Holding part of a space
 
-With `config.cache`, and once a space names at least one keeper
-([03](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md), `sys.keepers`), the node holds only the collections it
-uses, besides the space's own `sys.*` collections. Everything about this is the
-node's own choice; how it tells peers what it holds is in
-[05](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md). As implemented:
+A node doesn't need every record in a space. With `config.cache`, once a space
+names at least one keeper, the node holds only the collections it uses, plus
+the space's own `sys.*` collections. Apps connected to an account home do this
+by default.
 
-- Collections listed in `cache.collections` are held from the start and never
-  dropped.
-- A query marks the collections it reads (its own and every `include … from`)
-  as used, and a write the collection it writes in; sync then fetches them. A
-  writer holds its own earlier writes that way, and the rest beside them. A query's result has `complete: false`
-  until, for every collection it reads, the node has once been level with a
-  node holding the whole space, **and** it lacks nothing a writer's line in
-  that collection names
-  ([spec 02 §4.10](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)).
-  A version naming one not here adds it to `missing` and asks every peer for
-  it by id; when it arrives it comes off. They are asked again whenever the
-  collection is level with a peer.
-- Until the node has once caught up fully with a node holding the whole space,
-  it cannot know whether the space names keepers, so it holds only what it uses.
-- A collection holding a pending write (below) is never dropped.
-- A collection unused for `cache.unusedAfterDays` (default 30) days is dropped
-  when the space opens and every 6 hours while it stays open. It stops being
-  held _before_ its versions are removed, so nothing syncs it back meanwhile.
-- A space that names no keeper is held whole, and the node may itself be one
-  of its copies.
-- When what it holds changes (whole or part, or a newly used collection), the
-  node says hello to every peer.
+```ts
+declare const signer: RootSigner;
+// ---cut---
+import { createNode, indexedDBStores, type RootSigner } from '@minca/core';
 
-On every node, holding part of a space or all of it, its own writes in a
-space that names keepers are _pending_ until `min(keepers named, max(copies ??
-2, cache.copies ?? 0))` of them have them; a keeper's own node counts as one.
-A node holding part of the space keeps them in its store, across runs; one
-holding all of it in memory, the latest 4096. A keeper confirms a write the way
-the spec says: by `stored`, or by being level with the writer on its
-collection. Only a peer named in `sys.keepers` counts
-([spec 05 §9](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md)).
+const node = await createNode({
+  signer,
+  stores: indexedDBStores('my-app'),
+  cache: { collections: ['app.todo.item'] },
+});
+```
 
-`node.spaces.kept(spaceId, waitMs, since?)` waits up to `waitMs` (at most a
-minute) for this node's writes in a space to be kept elsewhere. In a space
-that names keepers, it says `'keepers'` once none of its writes from `since`
-(ms) on, or all of them, is pending. In one that names none, every member's
-node is a copy, so it says `'peer'` once a peer connected now holds all this
-node does: less sure, since that peer may be a device that goes away. Null
-when nobody had, in time. A node that may stop before it syncs again waits on
-it: a tab about to close, a command about to exit, a node a server runs for a
-while (the MCP service's).
+`cache` is a [`CacheConfig`](https://minca.dev/api/core/interfaces/CacheConfig/): the
+collections to hold from the start, when to drop one nothing uses, and how
+many keepers a write must reach.
 
-This state is kept in the space's own store (`spaces/<spaceId>`):
+### What gets held
 
-| Key                    | Value (UTF-8 JSON)                                                                                                                                                                                                                                                                                                                         |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `cache`                | `{ "settled": boolean, "used": { [collection]: ms }, "level": { [collection]: ms }, "missing": { [collection]: [version id…] } }`. `settled`: has synced with a whole-space peer; `used`: when a query last used it; `level`: when it was first level with a whole-space peer; `missing`: what a writer's line there names that isn't here |
-| `pending/<version id>` | `{ "collection": string, "by": [keeper DID…], "at": ms }`, deleted once `by` reaches the target                                                                                                                                                                                                                                            |
+- A query marks every collection it reads as used, including each
+  `include … from`, and a write marks the one it writes. Sync then fetches
+  them.
+- Until the node has caught up once with a node holding the whole space, it
+  can't know whether the space names keepers, so it holds only what it uses.
+- An unused collection is dropped when the space opens, and every 6 hours
+  while it stays open. It stops being held before its versions go, so nothing
+  syncs it back meanwhile. A collection with a pending write is never dropped.
+- A space that names no keeper is held whole.
+- The account registry, the contacts space and carry spaces are always held
+  whole.
+- When what it holds changes, the node says hello to every peer again.
 
-What a keeper withholds from the middle of a writer's line shows up as
-missing, whichever peer the node was level with. A writer's newest versions
-are named by no line yet; holding those back needs every peer the node syncs
-with to do it.
+### Complete results
 
-The account registry, the contacts space and carry spaces are always held
-whole. Apps connected to an account home use `cache: {}` by default ([the app-side client](#the-app-side-client)).
+A query's result has `complete: false` until, for every collection it reads,
+the node has been level once with a node holding the whole space, and it
+lacks nothing a writer's line there names. A version that names one the node
+doesn't have adds it to `missing`, and the node asks every peer for it by id.
+It asks again whenever the collection is level with a peer.
 
-_Source: `packages/core/src/node/space-holding.ts` (`openSpaceHolding`, `kept`), `packages/core/src/node/space-writing.ts` (`write`), `packages/core/src/node/types.ts` (`CacheConfig`). Tests: `packages/core/tests/caches.test.ts`, `packages/core/tests/reconcile.test.ts` ("holding part of a space")._
+So what a keeper withholds from the middle of a writer's line shows up as
+missing. A writer's newest versions aren't named by any line yet, so holding
+those back would take every peer the node syncs with.
+
+### Pending writes
+
+In a space that names keepers, every node's own writes are _pending_ until
+`min(keepers named, max(copies ?? 2, cache.copies ?? 0))` keepers have them. A
+keeper's own node counts as one. A keeper confirms a write with `stored`, or by
+being level with the writer on its collection. Only peers named in
+`sys.keepers` count. A node holding part of a space keeps pending writes in
+its store across runs. One holding all of it keeps the latest 4096 in memory.
+
+`node.spaces.kept(spaceId, waitMs, since?)` waits up to `waitMs`, at most a
+minute, for this node's writes to be kept elsewhere:
+
+- In a space with keepers, it says `'keepers'` once none of its writes from
+  `since` (ms) on is pending.
+- In a space without, it says `'peer'` once a connected peer holds all this
+  node does. That's less sure, since the peer may be a device that goes away.
+- It says `null` if nobody had them in time.
+
+Wait on it before a node stops: a tab about to close, a command about to exit,
+a server's node at the end of its job.
+
+### What the node stores
+
+This state lives in the space's own store, `spaces/<spaceId>`:
+
+| Key                    | Value (JSON)                                                         |
+| ---------------------- | -------------------------------------------------------------------- |
+| `cache`                | `{ settled, used, level, missing }`, below                           |
+| `pending/<version id>` | `{ collection, by: [keeper DID…], at }`, deleted once `by` is enough |
+
+In `cache`, `settled` says whether the node has synced with a whole-space
+peer. `used` maps each collection to when a query last used it, `level` to
+when it was first level with a whole-space peer, and `missing` to the version
+ids a writer's line names that aren't here.
+[Spec 05 §9](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md).
 
 ### Planned: caches that widen and trim
 
-> **Planned.** None of it changes what other nodes see. Fetching linked
-> records by key, and holding less than a collection, need new messages and
-> are planned in [spec 05 §9.1](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md).
-
-- **Widening.** A node holding part of a space starts holding all of it when
-  too few keepers are online (Holochain's arcs: nodes grow their share when
-  others go missing). Opt-in only (`cache.widen: true`), since done on its own
-  it could fill a disk at a bad moment. Open: what "too few" is, and for how
-  long. Today a cache only widens as queries use collections.
-- **Trimming by size.** `cache.maxBytes`: above it, drop least recently used
-  collections first, undeclared ones before declared. Also trim when
-  `navigator.storage.estimate()` says room is low, before the browser clears
-  the site. Pending writes are never dropped.
+> **Planned.** A node holding part of a space would hold all of it when too
+> few keepers are online (opt-in, `cache.widen: true`), and drop least
+> recently used collections above `cache.maxBytes` or when the browser runs
+> low on room. Fetching linked records by key, and holding less than a
+> collection, are planned in
+> [spec 05 §9.1](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md).
 
 ## Following the account
 
-What counts in the account's list of spaces, and what a device with the
-account key must keep current for carriers, is protocol
-([spec 06 §1.3](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)). How the reference node does it:
+With the account key, a node keeps its spaces in step with the account's
+list in the account registry. Join a space on your phone, and your laptop
+joins it too.
 
-The node's `registry` store ([stores](#stores)) lists every space it holds,
-with its key(s), its invite secret while one is waiting to be used, its place
-(`founder`, or a role it holds) as last seen, the relays the space names and, for an app without the account
-key, its member key. Its format is the node's own
-(`packages/core/src/space/space-manager.ts`).
+The node's own `registry` store lists each space it holds: its keys, an
+invite secret while one waits to be used, the account's place there as last
+seen, the relays the space names, and, for an app without the account key,
+its member key.
 
-Three kinds of space are the account's own machinery and are hidden from
-`spaces.list`:
+Three kinds of space are the account's own machinery, and `spaces.list`
+hides them:
 
-| Space                | Derived from                               | Notes                                                          |
-| -------------------- | ------------------------------------------ | -------------------------------------------------------------- |
-| The account registry | the account key                            | Never in the node's registry; opened directly. Cannot be left. |
-| The contacts space   | the account key, or `config.contactsSpace` | Held in the registry, hidden. Cannot be left.                  |
-| Carry spaces         | the account key and the carrier's key      | Never in the node's registry; opened directly. Cannot be left. |
+| Space                | Derived from                               | Notes                                                                  |
+| -------------------- | ------------------------------------------ | ---------------------------------------------------------------------- |
+| The account registry | the account key                            | Opened directly. Can't be left.                                        |
+| The contacts space   | the account key, or `config.contactsSpace` | In the node's registry, so it can be granted to an app. Can't be left. |
+| Carry spaces         | the account key and the carrier's key      | Opened directly. Can't be left.                                        |
 
-**Reconciling.** With an account key, the node makes its spaces match the
-account's list of `sys.joined` records. This runs at start and whenever
-records change in the account registry, one run at a time. It:
+### Reconciling
 
-1. joins every space a live `sys.joined` record names that the node does not
-   hold, using the view-only invite in the record;
-2. leaves every space whose `sys.joined` record is deleted;
-3. writes a `sys.joined` record for any space held here that the account
-   registry has never heard of (joined before the registry existed, or on a
-   node without the account key);
-4. brings every carrier's passes and wakes up to date
-   ([spec 06 §4.2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md));
-5. names the account's carriers as keepers of the open spaces it manages
-   (also whenever a space opens);
-6. asks every host the account uses how it stands, handing it the spaces if it
-   has been paid since ([carriers and hosting](#carriers-hosting-and-notifications)),
-   without waiting for the answer.
+At start, and whenever the account registry changes, the node reconciles,
+one run at a time:
 
-Creating or joining a space writes its `sys.joined` record; leaving deletes it.
+1. It joins every space a `sys.joined` record names that it doesn't hold,
+   with the view-only invite in the record.
+2. It leaves every space whose `sys.joined` record was deleted.
+3. It writes a `sys.joined` record for a space it holds that the registry
+   doesn't know.
+4. It brings every carrier's passes and wakes up to date.
+5. It names the account's carriers as keepers of the open spaces it manages.
+6. It asks each host the account uses how it stands, without waiting, and
+   hands it the spaces if it was paid ([hosting](#carriers-hosting-and-notifications)).
 
-**Profiles.** When a space opens, when the node's account takes a place in it,
-and when the account's name changes on any device, the node publishes the
-account's profile in that space: `{ name, contactKey? }`, with the name taken
-from the account registry's `sys.profile` record and `contactKey` only when
-the node holds the contact key. It does this only in spaces other than the
-account registry and the contacts space, only with an account name to publish,
-and never under a note that lacks `/account/write`, such as an agent's. The profile record format is in
-[03](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md).
+Creating or joining a space writes its `sys.joined` record. Leaving deletes it.
 
-**Joining.** `spaces.join(invite)` accepts a bare invite or any link carrying
-`#invite=…`, `?invite=…` or `&invite=…`, long or short; a short one is
-fetched from its mailboxes first ([spaces](spaces.md#invites)). It stores the space (and its key, for
-a private space), stores `memberKey` when given, writes the `sys.joined`
-record, then tries to use the invite's role secret at once. If the space's
-invite record has not reached this device yet, the space is held with
-`joining: true` and the node tries again each time records arrive in it.
+### Profiles
 
-**Leaving.** `spaces.leave(id)` gives up the account's place in the space,
-then deletes the `sys.joined` record, closes the space and forgets it with its
-key ([leaving a space](#leaving-a-space)).
+The node publishes the account's profile, `{ name, contactKey? }`, in a space
+when it opens, when the account takes a place there, and when the name
+changes on any device. The name comes from the registry's `sys.profile`
+record, and `contactKey` is included only when the node holds it. It skips
+the account registry and the contacts space, an account with no name, and
+any note without `/account/write`, such as an agent's.
 
-_Source: `packages/core/src/node/node.ts` (`reconcileOnce`, `remember`, `forget`, `finishJoining`, `spaces`), `packages/core/src/node/node-contacts.ts` (`publishProfile`), `packages/core/src/space/space-manager.ts`. Tests: `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/profiles.test.ts`, `packages/core/tests/space-access.test.ts`._
+### Joining
+
+`spaces.join(invite)` takes a bare invite, or any link with `#invite=…`,
+`?invite=…` or `&invite=…`. A short link is fetched from its mailboxes first
+([invites](spaces.md#invites)). It stores the space and its key, and
+`memberKey` when given, writes the `sys.joined` record, then uses the
+invite's role secret. If the space's invite record hasn't arrived yet, the
+space shows `joining: true`, and the node tries again each time records
+arrive.
+[Spec 06 §1.3](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md).
 
 ## Events
 
-`node.subscribe(listener)` delivers `NodeEvent`s and returns an unsubscribe
-function. A listener that throws does not stop the others.
+`node.subscribe(listener)` tells you what happens, and returns a function to
+stop. A listener that throws doesn't stop the others.
 
-| `type`     | Fields                                            | When                                                                                                                                                                                |
-| ---------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `records`  | `space`                                           | Records were added, changed or deleted in a space, locally or by sync.                                                                                                              |
-| `status`   | `space`                                           | Connection state or peers changed. A status change in the account registry is re-emitted for every open space (which peers are the account's own is read off the registry's peers). |
-| `spaces`   | —                                                 | The node's list of spaces changed: created, joined, left, a role or waiting invite changed.                                                                                         |
-| `account`  | —                                                 | The account's profile may have changed (records changed in the account registry, or `setName`).                                                                                     |
-| `rejected` | `space`, `peer`, `reason`                         | A peer sent a version that failed validation.                                                                                                                                       |
-| `message`  | `space`, `from`, `peer`, `recordsOnly`, `message` | A live message arrived ([live messages and status](#live-messages-and-status)).                                                                                                     |
-| `revoked`  | `space`                                           | The note this node writes under was revoked in that space. Emitted at most once per space per node.                                                                                 |
+```ts
+const stop = node.subscribe((event) => {
+  if (event.type === 'records') console.log('changed in', event.space);
+});
+```
 
-_Source: `packages/core/src/node/types.ts` (`NodeEvent`), `packages/core/src/node/node.ts` (`fromRuntime`, `checkRevoked`). Tests: `packages/core/tests/node.test.ts` ("events announce local writes"), `packages/core/tests/connect.test.ts` ("disconnecting revokes the note")._
+Each event is a [`NodeEvent`](https://minca.dev/api/core/type-aliases/NodeEvent/), told
+apart by its `type`: records changed, status, the list of spaces, the account,
+a refused version, a live message, a revoked note, or the network.
+
+A `status` change in the account registry is sent for every open space too,
+since that is where the node learns which peers are the account's own.
 
 ### Versions that wait or are refused
 
-A version from a peer stands, waits or is refused
-([spec 02 §9.5](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)).
-What the node does with each is its own:
+A version from a peer stands, waits or is refused. What the node does with
+each:
 
-- A batch from a peer is admitted `sys.collection` versions first, then by
-  ascending `seq`, so definitions and first versions are in before what
-  depends on them and little has to wait.
-- A version that waits is held in memory, at most 1,000, the oldest dropped
-  when full, and judged again whenever something new is stored. A version
-  waiting for its first version, or the one before it, asks the peer for
-  them at once.
-- A withdrawn version (allowed when written, then taken away by a removal or
-  a revoke it had not seen) is stored and passed on like one that stands,
-  emits no `rejected` event, and never shows as a record: `records.get` and queries skip
-  it. It is there for proofs that cite it ([spec 09 §6](https://github.com/leifriksheim/minca/blob/main/spec/09-contracts.md)).
-- A version that fails its collection's contract stands: it is stored and
-  passed on, emits no `rejected` event, and `records.get` and queries skip
-  it ([contracts](contracts.md)).
-- A refused version emits a `rejected` event with the peer and the reason,
-  and is remembered as (peer, id), at most 10,000, so it is not asked of that
-  peer again. Never by id alone: a copy with a mangled signature has the
-  genuine version's id.
+- A batch is taken in `sys.collection` versions first, then by `seq`, so
+  what others depend on is in first and little has to wait.
+- A version that waits is held in memory, at most 1,000, oldest dropped
+  first, and judged again whenever something new is stored. One waiting for
+  an earlier version asks the peer for it at once.
+- A withdrawn version, allowed when written but taken away by a removal or a
+  revoke it hadn't seen, is stored and passed on. It sends no `rejected`
+  event and never shows as a record. It is kept for proofs that cite it
+  ([spec 09 §6](https://github.com/leifriksheim/minca/blob/main/spec/09-contracts.md)).
+- A version that breaks its collection's [contract](contracts.md) is also
+  stored and passed on, with no `rejected` event, and `records.get` and
+  queries skip it.
+- A refused version sends a `rejected` event and is remembered by peer and
+  id, at most 10,000, so it isn't asked of that peer again. Never by id
+  alone: a copy with a mangled signature has the real version's id.
 
-_Source: `packages/core/src/sync/sync-engine.ts` (`admit`, `admitAll`, `rank`, `MAX_WAITING`, `MAX_REFUSED`). Tests: `packages/core/tests/reconcile.test.ts` ("a refused version is not asked for again", "a version that waits for its first version asks for it at once, and is acknowledged once in")._
+[Spec 02 §9.5](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md).
 
 ## Live messages and status
 
-`spaces.send(id, message, to?)` sends a JSON value to the peers connected in
-the space right now, kept nowhere and signed as nothing. The message is
-`JSON.stringify(message ?? null)`; if that is longer than 65 536 characters
-the call throws "A live message can be at most 64 KB". It goes as a `live`
-message to every connected peer of the space, once per peer, over whichever
-network that peer was last connected on. With `to`, it goes only to peers
-whose session DID equals `to` (one device), or whose account DID, as learned
-from their `who`, equals `to` (every device of that account); a peer whose
-`who` has not been checked yet is matched by session DID only. In a private
-space, nothing goes to someone removed or who left, and nothing from them is
-emitted. An agent's node
-refuses `send` ([acting as an agent](#a-node-acting-as-an-agent)). The wire
-format, the per-peer allowance (a burst of 60, then 20 per second) and how the
-sender's account is established are in
-[spec 04 §9](https://github.com/leifriksheim/minca/blob/main/spec/04-network.md).
+`spaces.send(id, message, to?)` sends any JSON value to the peers connected
+in the space right now. It isn't stored or signed. Use it for things like
+"typing…" or a cursor.
 
-A received live message is emitted as a `message` event,
-`{ type: "message", space, from, peer, recordsOnly, message }`:
+```ts
+await node.spaces.send(space.id, { typing: true });
+```
 
-| Field         | Meaning                                                                                                                                                                                                                                                     |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `from`        | The account behind the sending device, proven by the note it showed, made out to the key the connection proved. `null` for a peer that showed no note (a carrier, a node serving sockets).                                                                  |
-| `peer`        | The sending device's session DID — also where a reply to that device goes.                                                                                                                                                                                  |
-| `recordsOnly` | `true` when the sender's note grants writing records in this space and nothing more (`/record`): it can't define collections there ([spec 01 §8](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md)). `false` for a note that only reads. |
-| `message`     | The value sent.                                                                                                                                                                                                                                             |
+- The message, as JSON, can be at most 65,536 characters. Longer throws
+  "A live message can be at most 64 KB".
+- It goes once to each connected peer, over whichever network it last used.
+- With `to`, it goes only to the peer with that session DID (one device), or
+  to every device of the account with that DID. A peer whose account isn't
+  checked yet is matched by session DID only.
+- In a private space, nothing goes to someone removed or who left, and
+  nothing from them arrives.
+- An agent's node refuses `send`.
 
-`spaces.status(id)` returns `SpaceStatus`:
+Each peer may send a burst of 60, then 20 a second.
 
-| Field         | Meaning                                                                                                                                                                                                                                                                                   |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `connection`  | `offline` (no network), `connecting`, `connected` (while any one transport is connected: a relay socket open, or a peer), `error` (the first connect failed and nothing has connected since). A space whose relays all drop and whose peers leave is `connecting` again, not `connected`. |
-| `peers`       | Session DIDs connected in the space.                                                                                                                                                                                                                                                      |
-| `own`         | Of `peers`, the account's own other devices and apps: those also connected in the account registry, minus carriers. Empty without an account key.                                                                                                                                         |
-| `carriers`    | Of `peers`, the account's carriers, by the keys `sys.carrier` records name.                                                                                                                                                                                                               |
-| `accounts`    | Session DID → account, for each peer that showed a valid note.                                                                                                                                                                                                                            |
-| `fingerprint` | A fingerprint of every version held; equal on two nodes means identical data ([the store in memory](storage.md#the-store-in-memory)).                                                                                                                                                     |
-| `rejected`    | How many versions peers sent failed validation.                                                                                                                                                                                                                                           |
-| `holds`       | `"all"`, or the sorted list of collections held ([holding part of a space](#holding-part-of-a-space)).                                                                                                                                                                                    |
-| `pending`     | This node's writes still waiting for keepers ([holding part of a space](#holding-part-of-a-space)).                                                                                                                                                                                       |
+A message that arrives is a `message` [event](https://minca.dev/api/core/type-aliases/NodeEvent/),
+with the value sent, the sender's account and the device it came from.
 
-> Rationale: a peer's key does not say whose it is, but only the account's own
-> devices and apps can read its registry, so a peer there is one of ours.
+[Spec 04 §9](https://github.com/leifriksheim/minca/blob/main/spec/04-network.md).
 
-_Source: `packages/core/src/node/node.ts` (`spaces.send`, `spaces.status`), `packages/core/src/node/space-peers.ts` (`send`, `onLive`), `packages/core/src/node/space-runtime.ts` (`status`). Tests: `packages/core/tests/live.test.ts`._
+### Status
+
+`spaces.status(id)` tells you how a space is connected, as a
+[`SpaceStatus`](https://minca.dev/api/core/interfaces/SpaceStatus/): its connection, the peers
+connected and whose they are, a fingerprint of what it holds, and what it
+holds and still has pending.
+
+`connection` is `offline` with no network, and `connected` while any one
+relay socket or peer is. A space whose relays all drop and whose peers leave
+goes back to `connecting`. It is `error` only when the first connect failed
+and nothing has connected since.
+
+A peer's key doesn't say whose it is. But only the account's own devices and
+apps can read its registry, so a peer there is one of ours. That is how `own`
+is worked out.
 
 ## The rest of the node's surface
 
-The node's other parts are specified where their data lives; the node only
-exposes them. Every value a node method returns is JSON-serialisable, so the
-same calls can be exposed over a command line, MCP and WebMCP
-([actions](actions.md)).
+Every value a node method returns can be turned into JSON. So the same calls
+work over a command line, MCP and WebMCP ([actions](actions.md)).
 
-- `node.spaces` — create, invite, preview, join, leave, access, `may`,
-  `holdsRole`, `defineRole`, `assign`, `unassign`, `removeMember`, `stepDown`,
-  `succeed`, `closeInvite`,
-  `changeKey`, `setRelays`, `setKeepers`, `revoke`, `profiles`,
-  `authenticator` ([03](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md),
-  [04](https://github.com/leifriksheim/minca/blob/main/spec/04-network.md)). Default invite role: `member` when
-  the inviter may assign it, else the first role by name it may assign; with
-  none, a view-only invite ([spaces](spaces.md#invites)).
-  - `access(id)` answers `{ roles, members, invites, founder, top, headless,
-successors, mine, heads, key, relays, keepers, copies, forks, flagged }`
-    ([spaces](spaces.md#the-top-and-founders)). Each role has its
-    current `definitions` (one, or rivals that hold only the grants they
-    share), each with `event`, `by` (null for the constitution's), `grants`
-    and `nests`. Each member is `{ did, founder, roles }`. `founder` and
-    `mine` say what this account is here.
-  - `may(id, cmd, args?, account?)` asks whether this account, or another,
-    may invoke a command with these arguments now, as the replay judges it
-    ([spec 03 §2](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)).
-    Apps use it to show what someone can do; peers judge each version on
-    its own.
-  - `holdsRole(id, role, account?)` asks whether this account, or another,
-    holds every grant a role gives, each as wide or wider: its own grant's
-    command covers it, and every statement of its policy is among the
-    role's. Only the words are compared, so it can say no where the
-    policies would allow, never yes where they wouldn't. Apps use it before
-    giving a bot a role, and `minca agent` before taking instructions.
-  - `defineRole(id, { name, title?, grants, nests? })` writes the role's
-    definition, each grant a delegation from this account to the role. It
-    holds only what this account could invoke itself.
-  - `assign(id, did, role)` and `unassign(id, did, role)` give and take a
-    role; taking your own needs no grant. `removeMember(id, did)` removes an
-    account with every role it holds; removing yourself is leaving. Taking
-    power away writes a cutoff of what this node holds of theirs
-    ([spec 03 §6.3](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)).
-- `node.records`, `node.collections` — [02](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md). `records.watch`
-  re-runs a query after every `records` event for its space, one run at a time,
-  with at most one more queued.
-- `node.account` — `profile()`, `setName(name)` (writes `sys.profile`, key
-  `profile`, in the account registry, then republishes the profile in every
-  open space), `setAvatar({ bytes, mime } | null, { name? })` and `picture()`
-  (the account's picture, likewise; see [spaces](spaces.md)), `revoke(key, { waitMs? })` (one of the account's keys, by DID, in the account registry). All need the account
-  key.
-- `spaces.revoke(space, key, { waitMs? })` and `account.revoke` resolve once the revoke is written; with
-  `waitMs`, once a peer says it has taken it in, or that long has passed (`true` when one did). A node
-  with no network configured can't send it anywhere, so that is `false` at once. A node about
-  to stop waits like that: it sends nothing afterwards.
-- `node.contacts` — [contacts.md](contacts.md). `ask` and `accept` make or join a space
-  for two, so they need a note granting `/account/write` over the whole
-  account (whole-account access).
-- `node.direct` — [direct-messages.md](direct-messages.md): `reachable`, `send`
-  and `list`. Needs the account's member key for the space.
-- `node.inbox` — [inbox.md](inbox.md), [07](https://github.com/leifriksheim/minca/blob/main/spec/07-inbox.md). Needs the contact key; knocking and
+### Spaces
+
+`node.spaces` creates, invites, previews, joins and leaves spaces, and
+manages who is in them: `access`, `may`, `holdsRole`, `defineRole`, `assign`,
+`unassign`, `removeMember`, `stepDown`, `succeed`, `closeInvite`,
+`changeKey`, `setRelays`, `setKeepers`, `revoke`, `profiles` and
+`authenticator` ([spaces](spaces.md)).
+
+An invite is for `member` when the inviter may give that role. Otherwise it's
+for the first role by name the inviter may give, or view-only with none
+([invites](spaces.md#invites)).
+
+- `access(id)` gives a [`SpaceAccess`](https://minca.dev/api/core/interfaces/SpaceAccess/):
+  the roles with their current definitions, the members, invites, founders,
+  successors, keepers and more
+  ([the top and founders](spaces.md#the-top-and-founders)).
+- `may(id, cmd, args?, account?)` asks whether an account may run a command
+  with these arguments now. Apps use it to show what someone can do. Peers
+  still judge each version on its own.
+- `holdsRole(id, role, account?)` asks whether an account holds every grant a
+  role gives, each as wide or wider. It compares the words only, so it may
+  say no where the policies would allow, but never yes where they wouldn't.
+  Apps use it before giving a bot a role.
+- `defineRole(id, { name, title?, grants, nests? })` writes a role. It can
+  hold only what this account could do itself.
+- `assign(id, did, role)` and `unassign(id, did, role)` give and take a role.
+  Taking your own needs no grant. `removeMember(id, did)` removes an account
+  with all its roles, and removing yourself is leaving. Taking power away
+  writes a cutoff at what this node holds of theirs.
+
+[Spec 03](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md).
+
+### Revokes
+
+`spaces.revoke(space, key, { waitMs? })` and `account.revoke(key, { waitMs? })`
+resolve once the revoke is written. With `waitMs`, they wait until a peer has
+taken it in or that time has passed, and say `true` when one did. With no
+network, that is `false` at once. A node about to stop should wait like
+this, since it sends nothing afterwards.
+
+### Records and the account
+
+- `node.records` and `node.collections` read and write records
+  ([records and queries](records-and-queries.md), [collections](collections.md)).
+  `records.watch` runs a query again after each `records` event for its
+  space, one run at a time, with at most one more queued.
+- `node.account` needs the account key. `profile()` reads the profile.
+  `setName(name)` writes it to the registry, then publishes it in every open
+  space. `setAvatar({ bytes, mime } | null, { name? })` and `picture()` do the
+  same for the account's picture ([spaces](spaces.md)). `revoke` revokes one
+  of the account's keys in the registry.
+- `node.contacts` ([contacts](contacts.md)). `ask` and `accept` make a space
+  for two, so they need whole-account access (`/account/write`).
+- `node.direct` ([direct messages](direct-messages.md)): `reachable`, `send`
+  and `list`. It needs the account's member key for the space.
+- `node.inbox` ([the inbox](#the-inbox)) needs the contact key. Knocking and
   accepting also need whole-account access.
-- `node.carriers`, `node.hosting`, `node.notifications` — [carriers and hosting](#carriers-hosting-and-notifications), [spec 06 §4](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md).
-- `node.iceServers()` — the configured ICE servers plus TURN servers a relay
-  offers ([the network](#the-network)); what [calls](../../calls/README.md#connections) use.
-- `node.network` — `status()`: each relay's state (open, or waiting to redial,
-  when and why), the connections open and those still being made, and whether
-  a relay offered TURN; `reconnect()` redials a waiting relay now
-  ([the network](#the-network), [spec 04 §2](https://github.com/leifriksheim/minca/blob/main/spec/04-network.md)). A `network` event follows every change.
-  Local only: nothing here goes over the wire.
-- `node.asAgent({ keys, note })` — [acting as an agent](#a-node-acting-as-an-agent).
+- `node.carriers`, `node.hosting` and `node.notifications`
+  ([carriers and hosting](#carriers-hosting-and-notifications)).
 
-_Source: `packages/core/src/node/types.ts`, `packages/core/src/node/node.ts` (`spaces`), `packages/core/src/node/space-membership.ts` (`access`, `may`, `holdsRole`, `defineRole`, `assign`, `removeAccount`), `packages/core/src/space/roles.ts` (`holdsRole`). Tests: `packages/core/tests/roles.test.ts` ("holding what a role gives"), `packages/core/tests/node.test.ts`, `packages/core/tests/space-access.test.ts`, `packages/core/tests/contacts.test.ts`, `packages/core/tests/direct.test.ts`, `packages/core/tests/profiles.test.ts`._
+### The network and agents
+
+- `node.iceServers()` gives the ICE servers for your own connections, such as
+  [calls](../../calls/README.md#connections) ([the network](#the-network)).
+- `node.network.status()` shows each relay's state, the connections open and
+  being made, and whether a relay offered TURN. `reconnect()` redials a
+  waiting relay now. A `network` event follows each change. This is local
+  only.
+- `node.asAgent({ keys, note })` ([acting as an agent](#a-node-acting-as-an-agent)).
 
 ## The network
 
-How the node uses relays, always-on nodes and WebRTC, where
-[spec 04](https://github.com/leifriksheim/minca/blob/main/spec/04-network.md)
-leaves it the choice. Another implementation may pick other values and still
-meet this one.
+How this node uses relays, always-on nodes and WebRTC. Another
+implementation may pick other numbers and still talk to this one
+([spec 04](https://github.com/leifriksheim/minca/blob/main/spec/04-network.md)).
 
-**Redialling a relay** (spec 04 §2.1). The client waits 1, 2, 4, 8, 16 s and
-then 30 s between attempts, each ±25% so peers that dropped together do not
-return together, and never stops until `disconnect`. It tries at once when the page becomes visible again, and when asked
-(`reconnect`). A successful open resets the count. A socket can die without
-closing, and after a sleep it has: so the client looks at the clock every
-5 s, and a look more than 30 s after the last means the device slept; it
-then lets go of its socket and dials again at once, as it does when the
-browser reports `online`. An open socket to a Minca relay that has heard
-nothing for 30 s also sends `ping`; once its relay has answered one, two going unanswered end
-the socket ("The relay stopped answering.") and it redials. Each relay's state
-(`connecting`, `open`, `waiting` with the time of the next attempt and why the
-last one failed, `stopped`) is readable as `RelayStatus`, and through a node
-as `network.status()`.
+### Relays
 
-**Meeting** (spec 04 §2, §3). A node says hello in each room when it joins,
-on every relay as its socket opens, and every 2 minutes. It remembers, per
-room, the times it acted on from each peer in the last 2 minutes (at most
-256 a peer), and the failed tries of the last 512 peers. It
-says hello back in a room at most once every 10 s; one due sooner waits
-for the 10 s, once for everyone who said hello meanwhile. Each socket
-sends at most 20 messages a second, in bursts of 40, and queues the rest. A
-connection attempt that times out is retried on the peer's next hello. `requestIce`
-asks every connected relay whose kind can hand out TURN passwords. Each WebRTC
-offer or answer waits for ICE gathering to finish, or 2 s, and carries what it
-found.
+Network settings can mix kinds of relay:
 
-**Kinds of relay** (spec 04 §1.2). `network.relays` may mix kinds:
-`['wss://relay.minca.social', 'nostr+wss://relay.damus.io']`. A relay of a kind
-this library doesn't speak is left out of `network.status()`. On a Nostr
-relay, each event is signed with a key made for it and forgotten.
+```ts
+import type { NodeNetworkConfig } from '@minca/core';
 
-**A space's relays** (spec 04 §4). A relay socket opened only for spaces'
-own relays is closed once no room needs it. A node whose account may invoke
-`/space/relays` in a space that names no relays names its own configured relays (the valid ones,
-at most 8) by itself.
+const network: NodeNetworkConfig = {
+  relays: ['wss://relay.minca.social', 'nostr+wss://relay.damus.io'],
+};
+```
 
-**Always-on nodes** (spec 04 §5.2). `network.nodes` lists the node URLs to
-dial, one socket per node per space. After an unexpected close the client
-redials without limit, waiting `min(1 s · 2ⁿ, 30 s)`, ±25%, like a relay
-(`backoff` in `packages/core/src/utils/backoff.ts`); a deliberate close is
-never redialled. The
-`/peer` endpoint waits 10 s for the hello (configurable).
+A relay of a kind the library doesn't speak is left out of
+`network.status()`. On a Nostr relay, each event is signed with a throwaway
+key.
 
-**In-process links** (spec 04 §5.4). `createLocalHub()` links every
-transport made from it that has connected, delivering on a later task with
-the bytes copied, as on a real wire. It performs no handshake. A carrier uses
-it to link its own copy of a space with the copy in the person's pod folder,
-so the usual sync keeps the two level.
+When a relay drops, the node redials after 1, 2, 4, 8 and 16 seconds, then
+every 30, each ±25% so peers that dropped together don't return together. It
+never stops until `disconnect`. It tries at once when the page becomes
+visible, when the browser reports `online`, and on `reconnect()`. A
+successful open resets the count.
 
-**The mesh** (spec 04 §7). Admission raises `peer-connected` for the room. A
-newly opened connection that no room takes up within 10 s is closed. A
-connection attempt is given 20 s, doubling with each failed attempt at the
-same peer up to 5 min. The node remembers the last 512 relayed signals it passed on, by their signatures.
-When a node that must prove read access holds no read key, the handshake
-throws and the room times out.
+A socket can die without closing, as it does when the device sleeps. So the
+node checks the clock every 5 seconds, and a gap over 30 seconds means it
+slept: it drops the socket and dials again. A socket to a Minca relay that
+has heard nothing for 30 seconds sends `ping`. Once the relay has answered
+one, two unanswered pings end the socket ("The relay stopped answering.").
 
-**ICE servers** (spec 04 §10). The defaults are STUN only:
-`stun:stun.l.google.com:19302` and `stun:stun1.l.google.com:19302`.
-`network.iceServers` replaces them. Each new WebRTC connection uses the
-configured servers plus the TURN servers relays offered, the latter only while
-`expiresAt` is in the future. `node.iceServers()` returns the same list for
-the application's own connections (a call's). Before answering it refreshes:
-if any relay is connected and the TURN passwords held are missing or expire
-within 10 minutes, and it has not asked in the last 10 minutes, it asks every
-connected relay that can and waits up to 1.5 s for an answer (relays without
-TURN never answer), then returns what it has. A node with no relays returns
-the configured servers.
+Each relay's state is a [`RelayStatus`](https://minca.dev/api/core/interfaces/RelayStatus/):
+connecting, open, waiting to try again (with when and why), or stopped.
 
-_Source: `packages/core/src/network/relay-socket.ts` (`createRelaySocket`, `RelayStatus`), `packages/core/src/network/rendezvous.ts` (`createRendezvous`, `HELLO_MS`, `release`), `packages/core/src/network/relay-nostr.ts`, `packages/core/src/network/rtc-transport.ts` (`GATHER_MS`), `packages/core/src/network/ws-transport.ts`, `packages/core/src/network/local-transport.ts` (`createLocalHub`), `packages/core/src/node/carrier.ts` (`carry`), `packages/core/src/network/mesh.ts` (`CONNECT_TIMEOUT_MS`, `closeIfIdle`, `iceServers`, `ICE_REFRESH_MS`, `ICE_WAIT_MS`), `packages/core/src/network/introductions.ts` (`createSeenSignals`), `packages/core/src/network/rtc-transport.ts` (`DEFAULT_ICE_SERVERS`), `packages/core/src/node/space-keys.ts` (`nameRelays`), `packages/core/src/node/node.ts` (`iceServers`), `packages/cli/src/serve.ts` (`onPeer`). Tests: `packages/core/tests/relay-socket.test.ts`, `packages/core/tests/rendezvous.test.ts`, `packages/core/tests/relay-nostr.test.ts`, `packages/core/tests/introductions.test.ts`, `packages/core/tests/space-relays.test.ts`, `packages/core/tests/ws-transport.test.ts`, `packages/core/tests/carrier.test.ts`; the client-side ICE refresh is untested._
+A socket opened only for a space's own relays closes once no space needs it.
+A node that may change a space's relays (`/space/relays`), in a space that
+names none, names its own relays there, up to 8.
+
+### Meeting peers
+
+A node says hello in each space's room when it joins, on each relay as it
+opens, and every 2 minutes.
+
+- It says hello back at most once every 10 seconds, to everyone who said
+  hello meanwhile.
+- It remembers, per room, the hellos it acted on from each peer in the last 2
+  minutes (up to 256 a peer), and failed tries for the last 512 peers.
+- Each socket sends at most 20 messages a second, in bursts of 40, and queues
+  the rest.
+- A connection attempt that times out is tried again at the peer's next
+  hello.
+- Each WebRTC offer or answer waits up to 2 seconds for ICE gathering.
+
+### Connections
+
+- A connection no room takes up within 10 seconds is closed.
+- An attempt gets 20 seconds, doubling with each failure at the same peer, up
+  to 5 minutes.
+- The node remembers the last 512 signals it relayed, by their signatures.
+- A node that must prove read access but holds no read key fails the
+  handshake, and the room times out.
+
+### Always-on nodes
+
+`network.nodes` lists nodes to dial, one socket per node per space. After an
+unexpected close the node redials forever, waiting `min(1 s · 2ⁿ, 30 s)`,
+±25%, like a relay. A deliberate close is never redialled. The node's `/peer`
+endpoint waits 10 seconds for the hello.
+
+### In-process links
+
+`createLocalHub()` links every transport made from it, delivering bytes on a
+later task, copied, as on a real wire. There is no handshake. A carrier uses
+it to keep its copy of a space level with the copy in the person's pod folder.
+
+### ICE servers
+
+The default ICE servers are STUN only, `stun:stun.l.google.com:19302` and
+`stun:stun1.l.google.com:19302`. `network.iceServers` replaces them. Each new
+WebRTC connection also uses the TURN servers relays offered, while they
+haven't expired.
+
+`node.iceServers()` returns the same list, for your own connections. If a
+relay is connected and the TURN passwords are missing or expire within 10
+minutes, it first asks each relay that can, at most once every 10 minutes,
+and waits up to 1.5 seconds. With no relays, it returns the configured
+servers.
 
 ## A node acting as an agent
 
-`node.asAgent({ keys, note })` returns the same node acting as an agent. It
-throws unless the note verifies, grants records only (its command is under
-`/record`), is made out to `keys`, and was issued by `node.did`. The agent:
+An agent writes for a person, but only records, and only where it was let in.
+`node.asAgent({ keys, note })` gives you the same node acting as one:
 
-- signs with its own key, under its note, so what it writes is `recordsOnly`;
-- reaches only spaces its note names (`noteSpaces`: its subject, or a policy
-  on `.space`), or every space for a note about the whole account;
-  events for other spaces are filtered out;
-- refuses, locally, everything that needs a person: making, inviting, joining
-  or leaving spaces; changing members, roles, invites or revocations; changing
-  a space's key, relays or keepers; defining
-  or deleting collections; live messages (`send`, which a person's devices
-  would take as theirs); renaming or revoking at the account level; adding or
-  removing carriers; notifications; hosting; changing, blocking, asking or
-  accepting contacts; everything about the inbox (it has none);
-  `delegate`; `asAgent`;
-- sees the contact list only if the contacts space is within its note.
+```ts
+import type { Delegation } from '@minca/core';
+declare const keys: CryptoKeyPair;
+declare const note: Delegation;
+// ---cut---
+const agent = await node.asAgent({ keys, note });
+await agent.records.put(space.id, 'app.note', { text: 'Written by the agent' });
+```
 
-Closing the agent leaves the underlying node running. A node used across a
-port (`remoteNode`) starts no agent: the agent's keys would have to cross, so
-an agent is started on the node itself.
+It throws unless the note verifies, grants records only (under `/record`), is
+made out to `keys`, and was issued by `node.did`. The agent:
 
-An agent granted `scope: account` gets a records-only note for every space
-(`/record`, about the whole account) and the account key in its
-grant ([spec 06 §2.8](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)), so the contact list is within its note to read. A home never
-gives a records-only key the contact key: with it, it could open the
-account's knocks, in shared spaces and in its inbox ([inbox.md](inbox.md)).
+- signs with its own key under its note, so what it writes is `recordsOnly`;
+- reaches only the spaces its note names, or every space for a note about
+  the whole account, and hears no events from others;
+- sees the contact list only if its note covers the contacts space.
 
-Which of these each method of the node is — passed through, held to the note's spaces, or refused — is one table, `API` in `packages/core/src/node/api.ts`; a new method does not type-check until it is decided there. The same table lists what `remoteNode` forwards.
+It refuses everything that needs a person: making, inviting, joining or
+leaving spaces; changing members, roles, invites, revokes, keys, relays or
+keepers; defining or deleting collections; live messages, which a person's
+devices would take as theirs; renaming or revoking at the account level;
+carriers, notifications and hosting; contacts and the inbox; `delegate` and
+`asAgent`.
 
-_Source: `packages/core/src/node/node-records.ts` (`startAgent`), `packages/core/src/node/api.ts` (`API`). Tests: `packages/core/tests/records-only.test.ts` ("an agent acting for a person"), `packages/core/tests/remote.test.ts` ("no agent is started across the port…")._
+Closing the agent leaves the node running. A node used across a port
+(`remoteNode`) starts no agent, since the agent's keys would have to cross.
+
+An agent granted `scope: account` gets a records-only note for every space,
+and the account key, so it can read the contact list. A home never gives a
+records-only key the contact key, which would open the account's knocks
+([the inbox](inbox.md)).
+
+One table in the library says which methods an agent passes through, limits
+to its spaces or refuses, and what `remoteNode` forwards. A new method
+doesn't type-check until it's listed there.
+[Spec 06 §2.8](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md).
 
 ## The app-side client
 
-What an app and an account home send each other, and what each checks, is
-protocol ([spec 06 §2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)). The reference app side:
+An app connects to an account home with `createMincaConnection`
+([building an app](building-an-app.md)). These are the pieces underneath.
+[Spec 06 §2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)
+says what the app and the home send each other.
 
-**The app's key.** `appKey(name = 'default')` makes the app's P-256 key once
-and keeps it, non-extractable, in the IndexedDB database `minca-app-key`,
-object store `keys`, under `name`. `forgetAppKey` deletes it; the next
-connection makes a new one.
+### The app's key
 
-**An app's node outside the page.** The desktop app (`apps/desktop`) runs its
-app's node in a process of its own, `minca app-node`, so it keeps running with
-the window closed; the window uses it over a port, as a page uses its worker,
-carried on a WebSocket to the shell's own server at the app's origin, which
-opens only for the app's window, with a token made for it.
-That process holds the key, so the window and the menu bar are one node: two
-signing with one key would fork its lines, and a lock on the folder keeps a
-second from starting. Its key and grant can't stay in a page there, so they
-rest in its folder, sealed under a key the shell keeps in the system's
-keychain and hands to it on stdin: `key.sealed` and `grant.sealed` as
-`sealValue` envelopes (labels `minca/desktop-app-key/v1` and
-`minca/desktop-grant/v1`, each bound to `{ file }`), and the stores with their
-registry sealed as an account's is (spec 05 §15), one folder of stores per
-account: connecting as another account deletes the last one's, so its
-spaces never reach the new one's registry. Copied without the keychain, the
-folder yields no key, grant or private body, only what a carrier sees; a
-program running as the person can ask the keychain, as it can read a
-browser profile. Renewing keeps the key (a page's app asks with a new one each time, below).
-The key changes only when the app leaves an account: disconnecting, from the
-app or at the home, forgets it (`forgetAppKey` in a page), so a revoked key
-stays revoked. A home that answers as another account than the one connected
-is not used: the app leaves the last account, dropping what it wrote there
-that no peer had taken yet, and asks to be connected again with a new key,
-so one key never holds two accounts' notes. A folder that doesn't open with the keychain's
-key is moved aside, and the node starts again unconnected. The window is shown the grant
-without its account, contact or member keys. It asks the home for a 30-day
-note, where a page asks for the home's default.
+`appKey(name = 'default')` makes the app's P-256 key once and keeps it,
+non-extractable, in the IndexedDB database `minca-app-key`, store `keys`,
+under `name`. `forgetAppKey` deletes it, and the next connection makes a new
+one.
 
-_Source: `packages/cli/src/app-node.ts` (`runAppNode`), `apps/desktop/src/bun/app-node.ts` (`createAppNode`, `keychainKey`), `apps/desktop/src/bun/node-link.ts` (`createNodeLink`), `apps/example/src/desktop.ts` (`desktopConnection`). Tests: `packages/cli/tests/app-node.test.ts`, `apps/desktop/tests/app-node.test.ts`, `apps/desktop/tests/bridge.test.ts` ("only the app’s own window gets a node token…"), `apps/desktop/tests/node-link.test.ts`._
+### An app's node outside the page
 
-**The home's address.** `homeAddress(input)` turns what a person typed into the
-home's connect page:
+The desktop app runs its app's node in a process of its own,
+`minca app-node`, so it keeps running with the window closed. The window
+talks to it over a WebSocket to the shell's server, which opens only for the
+app's window, with a token made for it. One process holds the key, so the
+window and the menu bar share one node. A lock on the folder stops a second
+one, since two nodes signing with one key would fork its lines.
 
-- no scheme → `https://`, or `http://` for `localhost`, `127.0.0.1`, `[::1]`;
-- the host must be a loopback name or a domain name with a TLD of two or more
-  letters;
-- the scheme must be `https:`, or `http:` on loopback;
-- a path of `/` or empty becomes `/connect`; query and fragment are dropped.
+Its key and grant rest in its folder as `key.sealed` and `grant.sealed`
+(labels `minca/desktop-app-key/v1` and `minca/desktop-grant/v1`, bound to
+`{ file }`), sealed under a key the shell keeps in the system keychain. Its
+registry is sealed as an account's is. Copied without the keychain, the
+folder gives up no key, grant or private body. A program running as the
+person can still ask the keychain, as it could read a browser profile. A
+folder that doesn't open with the keychain's key is moved aside, and the node
+starts again unconnected.
 
-Example: `minca.example.com` → `https://minca.example.com/connect`.
+- There's one folder of stores per account. Connecting as another account
+  deletes the last one's.
+- Renewing keeps the key. Disconnecting, from the app or the home, forgets it,
+  so a revoked key stays revoked.
+- If the home answers as a different account, the app leaves the last one,
+  dropping what no peer had taken yet, and asks again with a new key. One key
+  never holds two accounts' notes.
+- The window sees the grant without its account, contact or member keys.
+- It asks the home for a 30-day note, where a page asks for the home's
+  default.
 
-**Asking the home.** `connectToHome` (and `proposeToHome`, for a proposal)
-opens the home in a popup named `minca-home` with features
-`popup,width=460,height=720`, listens from that moment, answers a hello once its
-request is made and sends the request again every 500 ms, to the home's origin
-only, until the home answers, polls every 500 ms to see whether the person
-closed it, and gives up after 10 minutes by default.
+### The home's address
 
-**Starting the node.** `startConnectedNode({ grant, key?, network?, stores?, cache? })`
-starts a node with:
+`homeAddress(input)` turns what a person typed into the home's connect page:
 
-- `signer = grantSigner(grant)` ([renewing the session note](#renewing-the-session-note)):
-  `did` = `grant.did`;
-- `sessionKey` = the app's key;
-- stores `indexedDBStores('minca-app:<grant.did>')` unless given;
-- `cache: {}` unless `cache: false` ([holding part of a space](#holding-part-of-a-space));
-- `accountKey`, `contactKey`, `contactsSpace` from the grant when present (never `contactKey` under a records-only note), and
-  relays = the app's relays ∪ `grant.relays` (`nodeOptionsFromGrant`).
+```ts
+import { homeAddress } from '@minca/core/session';
 
-It then joins each granted space it does not hold yet, passing its `memberKey`
-(`joinGranted`). The desktop app's node (`minca app-node`) and the agent on a
-computer start theirs from a grant the same way, from their own folders.
+homeAddress('minca.example.com'); // 'https://minca.example.com/connect'
+```
 
-**The connection.** `createMincaConnection({ home, request, network?, storage?, stores?, worker?, keys?, account? })`
-is the app's twin of [sign-in](sign-in.md): statuses `starting`, `disconnected`,
-`connecting`, `ready`, `expired`. With `worker`, it runs the node there
-(`startNodeInWorker`); a worker that reports a load error, or does not say the
-node started within 30 s (`WorkerNotStarted`), is given up on and the node
-runs in the page. A worker that started and refused passes its reason on.
-It switches to `expired` at `expiresAt` (`watchGrant`). When the node sees its
-own note revoked in a space it emits `revoked` ([events](#events)), and the
-connection forgets that account's grant and key. `propose(automations)` sends
-a proposal to the grant's home
-([spec 06 §2.11](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
+- With no scheme it adds `https://`, or `http://` for `localhost`,
+  `127.0.0.1` and `[::1]`.
+- The host must be a loopback name, or a domain with a TLD of two letters or
+  more.
+- The scheme must be `https:`, or `http:` on loopback.
+- An empty path or `/` becomes `/connect`. Query and fragment are dropped.
 
-**Several accounts.** The connection keeps a grant for every account the
-person connects, and acts for one at a time; `state.accounts` lists them
-(`did`, the `name` the home gave, `expiresAt`), in the order they were first
-connected. Each grant is made out to a key of its own, named
-`account-<uuid>` in `appKey`'s store (or `keys`, given), so peers never see
-one key act for two accounts. They are kept in `localStorage` under
-`minca.grants` (`[{ grant, keyName }]`), the account acted for last under
-`minca.account`, and the person's chosen home under `minca.home` (`home` in
-the config is only a default). A grant of another format (`v` other than
-`GRANT_VERSION`, 2) is dropped when read; one that ran out stays, and opens
-as `expired`.
+### Asking the home
 
-- `start()` acts for the account `account(accounts)` names, else the one used
+`connectToHome`, and `proposeToHome` for a proposal, open the home in a popup
+named `minca-home` (`popup,width=460,height=720`). They send the request to
+the home's origin only, every 500 ms, until the home answers. They check every
+500 ms whether the person closed the popup, and give up after 10 minutes by
+default.
+
+### Starting the node
+
+[`startConnectedNode`](https://minca.dev/api/session/functions/startConnectedNode/) starts a
+node with:
+
+- `signer`: `grantSigner(grant)`, so `did` is `grant.did`;
+- `sessionKey`: the app's key;
+- stores: `indexedDBStores('minca-app:<grant.did>')` unless given;
+- `cache: {}` unless `cache: false`;
+- `accountKey`, `contactKey` and `contactsSpace` from the grant when there,
+  never `contactKey` under a records-only note;
+- relays: the app's plus `grant.relays`.
+
+It then joins each granted space it doesn't hold yet, with its `memberKey`.
+The desktop app's node and the agent on a computer start the same way, from
+their own folders.
+
+### The connection
+
+`createMincaConnection(config)` is the app's version of [sign-in](sign-in.md).
+It takes a [`MincaConnectionConfig`](https://minca.dev/api/session/interfaces/MincaConnectionConfig/),
+and its status is a [`ConnectionStatus`](https://minca.dev/api/session/type-aliases/ConnectionStatus/).
+
+- With `worker`, the node runs in a worker. If the worker fails to load or
+  doesn't start the node within 30 seconds (`WorkerNotStarted`), the node runs
+  in the page instead. A worker that started and refused passes its reason on.
+- It turns `expired` when the grant's `expiresAt` passes.
+- When the node sees its note revoked (`revoked`), the connection forgets that
+  account's grant and key.
+- `propose(automations)` sends a proposal to the grant's home.
+
+### Several accounts
+
+A person can connect more than one account. The connection keeps a grant for
+each and acts for one at a time. `state.accounts` lists them as
+[`ConnectedAccount`](https://minca.dev/api/session/interfaces/ConnectedAccount/)s, in the order
+first connected.
+
+- `start()` acts for the account `account(accounts)` picks, else the one used
   last, else the first.
-- `use(did)` acts for another connected account. Its grant is here, so the
-  home is not asked; the node acting for the last one closes, and one for
-  this one starts, with its own stores.
-- `connect(home?)` asks with a new key, and acts for whichever account the
-  person chooses at the home: a new one, or one connected already, whose grant
-  it renews. A key that asked once may hold a note from whatever account the
-  home was signed in as, so no key is asked with twice. An account connected
-  again gets the new key and the app forgets the old one; the home revokes
-  nothing, and what the old key wrote stands
-  ([spec 06 §2.10](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
-  While it waits, an app acting for an account stays `ready`; a grant whose
-  node won't start is kept, and the connection says `disconnected` with why.
-- `disconnect(did?)` forgets an account's grant and key (default the one
-  acted for) and acts for the next connected account, or none. Disconnected
-  at the home instead, it acts for none, with `error` saying why, rather than
-  another account the person didn't choose.
+- `use(did)` switches to another connected account without asking the home.
+  The old node closes, and one for this account starts, with its own stores.
+- `connect(home?)` asks with a new key, for whichever account the person
+  picks at the home: a new one, or one already connected, whose grant it
+  renews. No key is ever used to ask twice, since a key that asked once may
+  hold a note from any account the home was signed in as. The renewed account
+  gets the new key and the old one is forgotten. The home revokes nothing, and
+  what the old key wrote stands.
+- While `connect` waits, an app acting for an account stays `ready`. A grant
+  whose node won't start is kept, and the status is `disconnected` with why.
+- `disconnect(did?)` forgets an account's grant and key, by default the
+  current one, and acts for the next account, or none. Disconnected at the
+  home instead, it acts for none, with `error` saying why.
 
-Another tab's changes reach `state.accounts` by `storage` events; each tab
-acts for its own account. A tab whose account another tab connected again
-goes on with its key until it starts again, then takes the newer grant; one
-whose key is revoked takes up a newer grant rather than forgetting it. A
-shared worker runs a node per key, not only per account, so tabs on two keys
-never share one. Switching again before a node has started closes it.
+Each grant is made out to a key of its own, `account-<uuid>` in `appKey`'s
+store (or `keys`), so peers never see one key act for two accounts. Grants
+live in `localStorage` under `minca.grants` (`[{ grant, keyName }]`), the
+current account under `minca.account`, and the chosen home under `minca.home`
+(the config's `home` is only a default). A grant whose `v` isn't
+`GRANT_VERSION` (2) is dropped. An expired one stays, and opens as `expired`.
 
-**Showing notifications.** The app shows its own notifications.
-`watchNotifications(node, { origin?, onNotify })` needs the account key (an
-app with `scope: account`): it reads the account's own automations naming the
-app's origin from the registry and hands the app each record that arrives
-matching one, as `{ automation, record }`, with the body in hand
-(`matchesRecord`): not paused, the collection, one of the spaces, created at
-or after `since` and within the last 24 hours, by another account when
-`others`, and for which its `where` holds, with `$me` the account. What the
-node held before it started is never news, and neither is what a collection
-held the first time an automation made it look there; anything arriving after that
-is, even while the account or the list of spaces changes. How the app shows a match is its own
-to decide; a "Notify me" button is where a proposal usually starts.
+Each tab acts for its own account, and sees other tabs' changes to
+`state.accounts`. A tab whose account was connected again elsewhere keeps
+its key until it restarts, then takes the newer grant. One whose key was
+revoked takes up a newer grant rather than forgetting it. A shared worker
+runs a node per key. Switching again before a node has started closes it.
+[Spec 06 §2.10](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md).
 
-_Source: `packages/core/src/session/connect.ts` (`appKey`, `forgetAppKey`, `homeAddress`, `connectToHome`, `proposeToHome`, `startConnectedNode`, `nodeOptionsFromGrant`, `joinGranted`, `grantSigner`, `usableGrant`, `watchGrant`, `grantStore`), `packages/cli/src/app-node.ts` (`startDesktopNode`), `packages/core/src/session/connection.ts`, `packages/core/src/node/watch-notifications.ts`, `packages/core/src/space/own-automations.ts` (`matchesRecord`). Tests: `packages/core/tests/connect.test.ts` ("an account home typed by a person", "watching a grant", "an app connected to several accounts", "an app showing its own notifications"), `packages/core/tests/topics.test.ts` ("an automation of the account’s own: its where"), `packages/core/tests/watch-notifications.test.ts`._
+### Showing notifications
+
+An app shows its own notifications with
+`watchNotifications(node, { origin?, onNotify })`. It needs the account key,
+so an app with `scope: account`. It reads the account's automations for the
+app's origin, and calls `onNotify({ automation, record })` for each record
+that arrives matching one.
+
+A record matches when the automation isn't paused, and the record is in its
+collection and one of its spaces, created after `since` and within the last
+24 hours, by another account when `others` is set, and its `where` holds,
+with `$me` the account. What the node held before it started is never news,
+and nor is what a collection held when an automation first looked there.
+
+How to show a match is up to the app. A "Notify me" button is usually where a
+proposal starts.
 
 ## Carriers, hosting and notifications
 
-What goes into a carry space, what a carrier checks and the host's HTTP API
-are protocol ([spec 06 §4](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)). The reference node's side:
+A carrier is an always-on node that keeps the account's spaces online while
+its devices are off. A host runs carriers for you, for a fee or for free.
+[Spec 06 §4](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)
+and [spec 08](https://github.com/leifriksheim/minca/blob/main/spec/08-hosting.md)
+cover what goes over the wire.
 
-**Carriers.** `node.carriers.add({ did, name })` (needs the account key)
-derives the carry space, writes the `sys.carrier` record (name trimmed to 80,
-default `Carrier`), fills the carry space, and returns `{ space, invite }` for
-the carrier to join with; for a carrier it already has, by `did`, it returns
-that one's. Carry spaces are never kept in the node's own list: each is
-derived again from its record. A node that starts, or hears the registry change,
-refills every carrier's carry space in the background: it opens every space
-the account holds, which from a data folder is slow, and signing in doesn't
-wait for it. Adding an automation doesn't either (adding a carrier writes that
-carrier's passes before it returns):
-`node.carriers.settled(waitMs)` waits up to `waitMs` for the refill under way
-and says whether it finished, for a window about to close. `node.carriers.reached(carrySpace, waitMs)`
-waits up to `waitMs` for the node to be level with the carrier in the carry
-space and then the account registry, and says whether it was: a node about to
-close (the home's window, once it has answered) waits on it, so what it wrote
-for the carrier is not left with nobody (spec 06 §4.3). `node.carriers.remove(carrySpace)`
-writes `carry:closed` and marks the record removed; the node keeps the carry
-space open until it closes, so the carrier hears it.
+### Carriers
 
-**A space made just now.** Until a carrier opens it from its pass and syncs
-it, a new space is only on the device that made it: an invite handed out and
-the device closed can't be used. `node.spaces.carried(spaceId, { waitMs? })`
-is a short loading step: when a carrier of the account is connected now, it
-names it a keeper, writes its pass at once, and waits up to `waitMs`
-(default 3 s) until it is level with this node in the space, so it holds the
-genesis and any invite opened before the call. It says whether it was: false
-at once when no carrier is connected. `contacts.ask` and `inbox.knock` wait on it before the knock goes
-out, and pass what it said on as `carried`, for the app to tell the person.
+`node.carriers.add({ did, name })` needs the account key. It derives the
+carry space, writes the `sys.carrier` record, fills the carry space, and
+returns `{ space, invite }` for the carrier to join with. The name is trimmed
+to 80 characters, `Carrier` by default. Adding a carrier it already has
+returns that one.
 
-`node.spaces.reached(spaceId, peer, waitMs)` is the same wait for one peer
-named by its key, such as an app's key from the request it connected with:
-true once that peer holds all this node does of the space, false when
-`waitMs` (at most a minute) passed first or the peer never came. For a node about to close,
-like a connect page waiting for the app to have what it wrote.
+Carry spaces aren't kept in the node's list. Each is derived again from its
+record. When the node starts, or the registry changes, it refills every carry
+space in the background. That opens every space the account holds, which is
+slow from a data folder, so signing in doesn't wait for it, and nor does
+adding an automation. Adding a carrier writes its passes before it returns.
 
-_Source: `packages/core/src/node/node.ts` (`spaces.carried`, `spaces.reached`), `packages/core/src/node/node-contacts.ts` (`makePair`). Tests: `packages/core/tests/carrier.test.ts` ("a space made just now, carried before its invite goes out…", "carried is false at once with no carrier…"), `packages/core/tests/usernames.test.ts` ("spaces.reached is true once a peer holds the space…")._
+- `carriers.settled(waitMs)` waits for the refill under way, and says whether
+  it finished. Use it before a window closes.
+- `carriers.reached(carrySpace, waitMs)` waits until the node is level with
+  the carrier in the carry space and the account registry. A node about to
+  close waits on it, so what it wrote for the carrier isn't lost.
+- `carriers.remove(carrySpace)` writes `carry:closed` and marks the record
+  removed. The carry space stays open until the node closes, so the carrier
+  hears it.
 
-**The account's own automations.** `node.automations` (needs the account
-key) lists, adds, updates (`name`, `paused`) and removes the account's own
-automations, kept in its registry ([automations](automations.md#the-accounts-own)),
-and copies a wake for each into every carry space. The reference home adds
-them when a person keeps an app's proposal, and lists them by app for the
-person to pause or remove ([sign-in](sign-in.md#the-account-homes-side)).
+### A space made just now
 
-**A carrier's matches.** `CarrierNode` reports a version that wakes one of
-the account's wakes through a `wake` event, with only the wake, the space and
-the record's key, collection and `createdAt`; `wakes()` lists the wakes it
-holds. The desktop app shows them as notifications (`apps/desktop/src/bun/notify.ts`); the browser extension shows none yet.
+A new space lives only on the device that made it until a carrier syncs it.
+An invite handed out before then, with the device closed, can't be used.
 
-**Hosting.** `node.hosting`:
+`node.spaces.carried(spaceId, { waitMs? })` is a short loading step for that.
+If a carrier of the account is connected, it names it a keeper, writes its
+pass, and waits up to `waitMs` (default 3 seconds) for it to be level. It
+says whether it was, and is `false` at once with no carrier connected.
+`contacts.ask` and `inbox.knock` wait on it, and return what it said as
+`carried`, so the app can tell the person.
 
-| Call                                                                                   | Does                                                                                                                                                                                                                                                                                                    |
-| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `use(url)`                                                                             | Reads the host's description, makes the subscription key and writes the `sys.hosting` record.                                                                                                                                                                                                           |
-| `list()`                                                                               | Asks each host for its status and hands over the carry space when paid and not carrying, making the carrier first if needed (named after the host's address). At most once a minute per host; a second look waits for a handover in flight.                                                             |
-| `pay(url, { amount, method, monthly? })`                                               | Adds to the account's balance at the host (dollars, by `checkout` or `request`, monthly by card, as its `HostingView.fund` says): a pay answer, `checkout` (a page to open in a new tab with no opener) or `request` (a payment for a wallet, shown by the app). Call `list()` until the balance moves. |
-| `remind(url, email)`                                                                   | Asks the host to email a reminder before paid time runs out; it mails a link to confirm first.                                                                                                                                                                                                          |
-| `stop(url)`                                                                            | Sends `DELETE …/carry` (ignoring failure), removes the carrier and deletes the `sys.hosting` record.                                                                                                                                                                                                    |
-| `space(id)`                                                                            | The hosts a space names in `std.host`, each asked how the space's own subscription stands, with how its fund is paid into (below).                                                                                                                                                                      |
-| `over(id)`                                                                             | The account's hosts whose last status says the space is over their free line, each `{ url, name, over }` (`over.until`, `over.reasons`), from the receipts in `sys.hosting`: asks no host. An agent may call it for a space it was given.                                                               |
-| `payForSpace(id, url, { amount, method, monthly? })`, `remindForSpace(id, url, email)` | Adds to a space's fund at a host it names (dollars, by `checkout` or `request`, monthly by card), and asks for reminders before it runs out. Anyone in it may. `space(id)` gives each host's `fund` offer, and in its status the `balance`, `daily` spend and `bots`.                                   |
-| `startBot(id, url, { name, role? })`                                                   | Asks a host the space names to run a bot there ([spec 08 §3](https://github.com/leifriksheim/minca/blob/main/spec/08-hosting.md)): makes an invite for `role` (by default as `spaces.invite` picks one) and hands it over. The host holds the bot's keys, so an app says so first.                      |
-| `stopForSpace(id, url)`                                                                | Stops a space using a host it names: deletes its `std.host` record, removes the host's bots and changes the key (below).                                                                                                                                                                                |
+`node.spaces.reached(spaceId, peer, waitMs)` waits the same way for one peer,
+named by its key, such as an app's key. It is `true` once that peer holds
+everything this node does, and `false` when `waitMs` (at most a minute)
+passed first. A connect page uses it to wait for the app to have what it
+wrote.
 
-Every device runs `list()` after each reconciliation ([following the account](#following-the-account)).
-A device reaches a host at the socket its description names (`peer`,
-[spec 08 §1](https://github.com/leifriksheim/minca/blob/main/spec/08-hosting.md)): every
-open space holds one to each host in `sys.hosting`, and to each host the space
-names in `std.host`, and follows as those change. `network.hosts` names hosts
-to look for the account registry at before the account says which it uses, so
-an app built with a default host restores an account from its recovery code
-alone. `network.nodes` still adds sockets of its own, to every space.
+### The account's own automations
 
-`network.reach` says where a node may connect, asked of every address it
-found rather than was given: a host or node a record or an invite names, a
-relay a space or an invite names, a place a short link names, a host it asks
-to describe itself. Its own `relays`, `nodes` and `hosts` are taken as given;
-without `reach`, anywhere. Refused, a host is not asked (`hosting` calls fail),
-a node or relay not dialled, a short link's place not asked. It is for a node
-a server runs for someone else, such as the MCP service's for chat apps: what
-that node reads, and the invites it is handed, are the other's to write, and
-must not make the server connect inside its own network.
+`node.automations` needs the account key. It lists, adds, updates (`name`,
+`paused`) and removes the account's own
+[automations](automations.md#the-accounts-own), kept in its registry, and
+copies a wake for each into every carry space. The reference home adds them
+when a person keeps an app's proposal, and lists them by app to pause or
+remove ([the account home's side](sign-in.md#the-account-homes-side)).
 
-A device waits 15 seconds for a host to answer any call, and a minute for
-`startBot`. A host that gives no answer, or none in time, is a `HostError`
-with status 0 whose message names the address (`describeHost(url, timeoutMs?)`
-takes another limit). `list()` and `space(id)` do not throw it: they return
-that host's view with `error` set, so one host that is down does not hide the
-others, and an app can say so and offer to ask again or to stop using it.
+### A carrier's matches
 
-The reference host (`minca host`, `packages/cli/src/host.ts`) keeps a lapsed
-subscription for `graceDays` (default 30) after `paidUntil`, and drops lapsed
-ones in a sweep every hour (`sweepMs`). It measures each carried space's
-folder at most every ten minutes, and each status gives the sum as `bytes`,
-with `quotaBytes` as `quota` (`MINCA_HOST_QUOTA_GB`, none unless set, at a
-host without limits). At its quota, an account's carry space takes no new space
-(`full`, in `createCarryCore`): what it carries stays and keeps syncing, and a
-space that waited is taken once a later measure finds room. All of this is the
-host's own policy.
+When a version wakes one of the account's wakes, a `CarrierNode` sends a
+`wake` event with only the wake, the space, and the record's key, collection
+and `createdAt`. `wakes()` lists the wakes it holds. The desktop app shows
+these as notifications. The browser
+extension doesn't yet.
 
-With `limits` ([spec 08 §1.1](https://github.com/leifriksheim/minca/blob/main/spec/08-hosting.md),
-`MINCA_HOST_FREE_GB`), an account's subscription is active with nothing paid,
-its `plan` `free` until it pays, and its quota by plan; a device hands such a
-host its carry space as it would a free one. A space its own fund pays for
-takes none of its members' room. The host counts each carried space's writers
-as versions arrive (`onArrived`, in `createCarryCore`) and its readers as
-sockets prove themselves (`onPeer`, `packages/cli/src/serve.ts`), and once an
-hour (`evaluate`) holds each to the free line. Past a space's `until`, every
-account's carry space stops carrying it (`skip`, in `createCarryCore`), while
-its own subscription still may. Each change is a line in the host's log.
+### Hosting
 
-_Source: `packages/core/src/node/node-carriers.ts` (`carriers`, `fetchInvite`), `packages/core/src/node/node-hosting.ts` (`hosting`, `describeAt`), `packages/core/src/node/space-peers.ts` (`useNodes`, `meshFor`), `packages/core/src/node/carrier.ts` (`arrived`, `skip`, `onArrived`), `packages/core/src/node/host.ts` (`evaluate`), `packages/core/src/session/hosting.ts`, `packages/cli/src/host.ts`. Tests: `packages/core/tests/carrier.test.ts`, `packages/core/tests/host-limits.test.ts`, `packages/core/tests/reach.test.ts`, `packages/cli/tests/host.test.ts`, `packages/cli/tests/remote-mcp-server.test.ts`, `packages/cli/tests/remote-mcp-offline.test.ts`._
+`node.hosting` pays a host and hands it the account's spaces. Its calls are
+on [`NodeHosting`](https://minca.dev/api/core/interfaces/NodeHosting/): start and stop using a
+host, pay into the account's balance or a space's own fund, ask for reminders,
+see how each host stands, and start a bot.
+
+A few details:
+
+- `list()` makes the carrier first if needed, named after the host's address.
+  A second call waits for a handover already in flight. Every device runs it
+  after each [reconcile](#following-the-account).
+- `pay` and `payForSpace` take `method` `checkout` or `request`, and
+  `monthly` by card, as the host's `HostingView.fund` offers. They answer
+  with `checkout`, a page to open in a new tab with no opener, or `request`,
+  a payment for a wallet that the app shows. Call `list()` until the balance
+  moves.
+- `remind` mails a link to confirm first.
+- `stop` sends `DELETE …/carry`, ignoring failure, removes the carrier and
+  deletes the `sys.hosting` record.
+- `over(id)` returns `{ url, name, over }` with `over.until` and
+  `over.reasons`, read from the receipts in `sys.hosting`. It asks no host.
+  An agent may call it for a space it was given.
+- `startBot` makes an invite for `role` (by default as `spaces.invite` picks)
+  and hands it over. The host holds the bot's keys, so tell the person first.
+  [Spec 08 §3](https://github.com/leifriksheim/minca/blob/main/spec/08-hosting.md).
+
+### Reaching hosts
+
+A device reaches a host at the socket its description names (`peer`). Every
+open space holds a socket to each host in `sys.hosting`, and to each host the
+space names in `std.host`, and follows as those change. `network.nodes` adds
+sockets of its own, to every space.
+
+`network.hosts` names hosts to look for the account registry at, before the
+account says which it uses. An app with a default host can then restore an
+account from its recovery code alone.
+
+`network.reach(address)` decides whether the node may connect to an address
+it found rather than was given: a host or node a record or invite names, a
+relay a space or invite names, a short link's place, a host it asks to
+describe itself. Its own `relays`, `nodes` and `hosts` are always allowed,
+and without `reach`, so is everything. A refused host isn't asked, so
+`hosting` calls fail. A refused node or relay isn't dialled. Use it for a node
+a server runs for someone else, such as the MCP service's: what that node
+reads isn't the server's to trust, and must not make it connect inside its
+own network.
+
+A device waits 15 seconds for a host to answer, and a minute for `startBot`.
+No answer in time is a `HostError` with status 0, whose message names the
+address. `describeHost(url, timeoutMs?)` takes another limit. `list()` and
+`space(id)` don't throw it. They return that host's view with `error` set,
+so one host that is down doesn't hide the others.
+
+### The reference host
+
+`minca host` makes these choices of its own:
+
+- A lapsed subscription is kept for `graceDays` (default 30) after
+  `paidUntil`, and swept out hourly (`sweepMs`).
+- It measures each carried space's folder at most every ten minutes. Each
+  status gives the total as `bytes`, and `quota` from `MINCA_HOST_QUOTA_GB`
+  (none unless set).
+- At its quota, an account's carry space takes no new space (`full`). What it
+  carries stays and keeps syncing, and a space that waited is taken once
+  there's room.
+
+With `limits` (`MINCA_HOST_FREE_GB`), a subscription is active with nothing
+paid, on the `free` plan until it pays, with its quota by plan. A device
+hands such a host its carry space as it would a free one. A space paid for by
+its own fund takes none of its members' room. The host counts each space's
+writers as versions arrive (`onArrived`) and its readers as sockets prove
+themselves (`onPeer`), and once an hour (`evaluate`) holds each space to the
+free line. Past a space's `until`, every account's carry space stops carrying
+it (`skip`), while the space's own subscription still may. Each change is a
+line in the host's log.
+[Spec 08 §1.1](https://github.com/leifriksheim/minca/blob/main/spec/08-hosting.md).
 
 ### A space paying for itself
 
-A space names the hosts it pays in `std.host` records ([standard library](standard-library.md)),
-which only members granted it may write: the `community` template leaves
-`std.host` to admins and moderators (`STAFF_COLLECTIONS`). The host keeps the
-space for the space itself: its own subscription, `space:<id>`, with a fund
-anyone adds to, which pays for keeping it online and for its bots
-([spec 08 §2](https://github.com/leifriksheim/minca/blob/main/spec/08-hosting.md)).
+A community can pay for its own hosting. It names its hosts in `std.host`
+records ([standard library](standard-library.md)), which only members granted
+it may write. The `community` template leaves `std.host` to admins and
+moderators (`STAFF_COLLECTIONS`). The host then keeps the space under a
+subscription of its own, `space:<id>`, with a fund anyone can add to. The
+fund pays for keeping it online and for its bots.
 
-Every device holding the space's key (not one whose note lacks
-`/account/write`, such as an agent's, nor a carrier) looks at the hosts its space names when it takes a role there and
-on changes after that: at once when the list of hosts changed, else at most
-every ten minutes. For each, it reads the description, refuses a host whose
-key is not the one the record names, asks for the status, and hands over the
-space's pass when the host is paid (or free and not lapsed) and either does
-not carry the space or carries it with an older read key. It looks only where
-the space defines `std.host`, so a space held in part is not made to hold it.
+Every device holding the space's key looks at the hosts the space names: when
+it takes a role there, at once when the hosts change, and otherwise at most
+every ten minutes. Agents and carriers don't. For each host it reads the
+description, refuses one whose key isn't the one the record names, asks for
+the status, and hands over the space's pass when the host is paid (or free
+and not lapsed) and doesn't carry the space yet, or carries it with an older
+read key. It looks only where the space defines `std.host`, so a space held
+in part isn't made to hold it.
 
-`node.hosting.space(id)` does the same at once and returns each host's view:
-its name, key, status (with the fund's `balance`, its `daily` spend, and
-the `bots` running), whether it is `free`, and `fund`, how money goes in,
-which an app shows anyone who wants to chip in, paying with `payForSpace`.
-A host with neither `free` nor a `fund` takes no communities. A host that
-could not be asked has `error` and no status. An agent may call `space` for
-a space it was given; paying is a person's.
+`node.hosting.space(id)` does the same at once, and returns each host's view:
+its name, key, status (the fund's `balance`, its `daily` spend and the `bots`
+running), whether it is `free`, and `fund`, how money goes in. Show `fund` to
+anyone who wants to chip in, and pay with `payForSpace`. A host with neither
+`free` nor `fund` takes no communities. A host that couldn't be asked has
+`error` and no status. An agent may call `space` for a space it was given,
+but paying is a person's.
 
-`node.hosting.stopForSpace(id, url)` stops a space using a host it names, with
-what the space can do by itself. It asks the host which bots it runs there,
-then deletes the `std.host` record first, so no device hands the host what
-follows, removes those bots from the space, and gives a private space a new
-key when the host was handed it (or can't be asked). Removing a bot changes
-the key by itself; with none removed, `changeKey` is called. It answers
-`{ bots, newKey }`. A bot is removed only where the account may invoke
-`/member/remove` on it, and the key changed only with `/key/change`: without
-either, only the record goes, and the answer is `{ bots: [], newKey: false }`. A host named and never
-handed the space costs no key change. No call asks the host to drop what it
-has, so it keeps that, unreadable, for as long as the space's subscription is
-paid, and what is in the fund stays there
+`node.hosting.stopForSpace(id, url)` stops a space using a host. It asks the
+host which bots it runs there, deletes the `std.host` record first so no
+device hands the host anything new, removes those bots, and gives a private
+space a new key if the host had it, or can't be asked. Removing a bot
+changes the key by itself. With no bot removed, it calls `changeKey`. It
+answers `{ bots, newKey }`.
+
+It removes a bot only where the account may run `/member/remove` on it, and
+changes the key only with `/key/change`. Without either, only the record
+goes, and the answer is `{ bots: [], newKey: false }`. A host that was named
+but never handed the space costs no key change.
+
+No call asks the host to drop what it has. It keeps the space, unreadable,
+for as long as the space's subscription is paid, and the fund keeps its money
 ([#220](https://github.com/leifriksheim/minca/issues/220)).
-
-_Source: `packages/core/src/node/node-hosting.ts` (`keepSpaceHosts`, `askSpaceHost`, `hosting.space`), `packages/core/src/session/hosting.ts` (`describeHost`, `HostError`). Tests: `packages/cli/tests/host.test.ts` ("a space paying for itself", "an address that is not a host, or one that is down", "bots a host runs": the two on stopping a space's host)._
 
 ## The inbox
 
-`node.inbox` ([inbox.md](inbox.md), [spec 07](https://github.com/leifriksheim/minca/blob/main/spec/07-inbox.md)):
+The inbox is where strangers knock to start a conversation, using a code, a
+link or a username. `node.inbox` needs the contact key
+([inbox](inbox.md), [spec 07](https://github.com/leifriksheim/minca/blob/main/spec/07-inbox.md)).
 
-| Call                       | Does                                                                                                                                                                                                                                                                             |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `get()`                    | Your inbox, or null until opened: `{ gen, name?, key, sign, places, code, username?, usernameUntil?, updatedAt }`. `code` is signed afresh each time; what it says stays the same                                                                                                |
-| `open({ places?, name? })` | Opens your inbox, or changes where its knocks wait and the name it gives. Places default to the current ones, else this node's relays (up to 3); name to the current one, else the account's                                                                                     |
-| `rotate()`                 | Clears the inbox and replaces it with `gen + 1`: the old code leads nowhere                                                                                                                                                                                                      |
-| `clear()`                  | Purges every knock waiting, from every mailbox it names                                                                                                                                                                                                                          |
-| `claim(username)`          | Claims a username for your inbox on its domain's name service ([usernames.md](usernames.md)), opening the inbox if need be; one at a time. It follows the inbox: `rotate` and `open` point it at the new code, and `knocks` renews it a month before it lapses                   |
-| `release()`                | Gives the username up: it leads nowhere                                                                                                                                                                                                                                          |
-| `knock(code, { note? })`   | by a code, a link or a username: [the exchange](inbox.md#the-exchange), returns `{ space, carried }`                                                                                                                                                                             |
-| `knocks()`                 | Fetches the inbox's topic from every mailbox it names, opens and checks ([spec 07 §6](https://github.com/leifriksheim/minca/blob/main/spec/07-inbox.md); opened results are cached by id), settles sent knocks; returns `{ id, from, name, note?, pairSpace, at }`, newest first |
-| `sent()`                   | Your knocks nobody has joined yet: `{ space, name, username?, at }`                                                                                                                                                                                                              |
-| `accept(id)`               | [the exchange](inbox.md#the-exchange), returns the new `ContactView`                                                                                                                                                                                                             |
-| `dismiss(id)`              | Purges one knock                                                                                                                                                                                                                                                                 |
+Its calls are on [`NodeInbox`](https://minca.dev/api/core/interfaces/NodeInbox/): open,
+rotate and clear the inbox, claim a username, knock, and list, accept or
+dismiss the knocks that arrive. `get()` returns an
+[`InboxView`](https://minca.dev/api/core/interfaces/InboxView/), with the code to hand out.
+
+A username follows the inbox. `rotate` and `open` point it at the new code,
+and `knocks` renews it a month before it lapses. You hold one at a time.
+
+`knocks()` fetches the inbox from every mailbox it names, opens and checks
+each knock (caching the results by id), and settles knocks you sent. Each is
+a [`KnockView`](https://minca.dev/api/core/interfaces/KnockView/). Knocking and accepting both follow
+[the exchange](inbox.md#the-exchange), and need whole-account access.
+[Spec 07 §6](https://github.com/leifriksheim/minca/blob/main/spec/07-inbox.md).
 
 ## Client conveniences
 
-These are not protocol; another client may draw sign-in and [calls](../../calls/README.md) however it
-likes.
+These aren't protocol. Another client may draw sign-in and
+[calls](../../calls/README.md) however it likes.
 
-- **`<minca-auth>`** draws the flow of [sign-in](sign-in.md) into its own light DOM (so password
-  managers find its forms). Attributes: `app-name`, `relays` and `nodes`
-  (comma-separated). It fires `minca-session` (`detail: { session }`, `null` when
-  signed out), bubbling and composed. A page can hand it its own flow with
-  `element.auth = createMincaAuth(…)`. It sizes to its container, so it fits a
-  page, a modal or a side panel, and draws nothing once someone is in. Colours,
-  font and radius are custom properties (`--minca-accent`, `--minca-font`, …).
-- **React** (`@minca/react`): `MincaProvider`, `useMinca`,
-  `useAuth`, `useSession`, `useConnection`, `useAccount`, `useNode`,
-  `<MincaAuth>`, `useQuery`, `useLive`, `useSpaces`,
-  `useHoldSpace` (holds a space while mounted, releasing it a few seconds late),
-  `useRecord`, `useLinked`, `useCollections`, `useProfiles`, `useAccess`,
-  `useSpaceStatus`, `useCan`. Calls' `CallsProvider` and `useCalls` are in
-  `@minca/calls/react`.
+`<minca-auth>` draws the [sign-in](sign-in.md) flow into its own light DOM,
+so password managers find its forms.
 
-_Source: `packages/core/src/elements/minca-auth.ts`, `packages/react/src/`. Tests: none._
+```html
+<minca-auth app-name="Todo" relays="wss://relay.minca.social"></minca-auth>
+```
+
+- Attributes: `app-name`, and `relays` and `nodes`, comma-separated.
+- It fires `minca-session` with `detail: { session }`, or `null` when signed
+  out. The event bubbles and is composed.
+- A page can give it its own flow with `element.auth = createMincaAuth(…)`.
+- It sizes to its container, so it fits a page, a modal or a side panel, and
+  draws nothing once someone is in.
+- Colours, font and radius are custom properties (`--minca-accent`,
+  `--minca-font`, …).
+
+## React
+
+`@minca/react` follows sign-in or the connection, and keeps what you read
+live. `MincaProvider` goes at the top, given an `auth` or a `connection`;
+`useMinca`, `useAuth`, `useSession`, `useConnection` and `useAccount` read
+it, and `<MincaAuth>` draws the sign-in. Below it, hooks such as `useNode`,
+`useSpaces`, `useQuery`, `useRecord` and `useCan` read and keep current what
+you show, with `useLive` and `useWatched` for anything else. Each one, and what
+it gives, is in the [React reference](https://minca.dev/api/react/).
+
+`result.complete` is false while an app that holds only part of a space is
+still fetching a collection. Show "Loading…", not "Nothing here".
+
+An app given the whole account sees every space in it. `useSpaces({ having: [todos] })`
+lists only the spaces that define those collections.
+
+Calls have their own, `CallsProvider` and `useCalls`, in `@minca/calls/react`.

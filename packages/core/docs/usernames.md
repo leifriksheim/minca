@@ -1,80 +1,126 @@
 # Usernames
 
-A username, `leif@minca.social`, is a name at a domain that leads to an
-inbox code, so someone can find you by a name they can say aloud. What a
-username is, how it is looked up and what a reader checks are protocol
-([spec 07 §9](https://github.com/leifriksheim/minca/blob/main/spec/07-inbox.md)):
-every reader must agree on them.
-
-How a name is claimed at a domain is not. A domain can answer from a file it
-edits by hand, or from anything else. This page describes the **Minca name
-service** (`packages/names`), which minca.social runs and anyone can run for a
-domain of their own, and how the library claims a name on one.
+A username, like `leif@minca.social`, is a name at a domain that leads to an
+inbox code. It lets someone find you by a name they can say aloud. This page
+shows how to look one up and claim one, and how to run the Minca name service
+for a domain of your own.
 
 ## Looking a name up
 
 ```ts
+import { createP256Provider } from '@minca/core';
 import { resolveUsername } from '@minca/core/inbox';
 
-const { code, inbox } = await resolveUsername('leif@minca.social', provider);
+const { code, inbox } = await resolveUsername('leif@minca.social', createP256Provider());
 ```
 
-It asks `https://minca.social/.well-known/minca.json?name=leif`, refuses a
-redirect, and checks the code it gets as any other. The code then works
-wherever one does: knock on it.
+This asks `https://minca.social/.well-known/minca.json?name=leif`. It refuses
+a redirect, and checks the code it gets like any other. The code then works
+wherever a code does, so you can knock on it.
+
+It throws when the text isn't a username, the domain doesn't know the name,
+or the code doesn't check out.
+
+How a name is looked up and checked is protocol, the same for every reader:
+[spec 07 §9](https://github.com/leifriksheim/minca/blob/main/spec/07-inbox.md).
 
 ## On the node
 
-`node.inbox.claim('leif@minca.social')` does all of the below for the
-account's inbox, and keeps the name in `std.inbox` so every device knows it:
-replacing the inbox, or changing its name or mailboxes, points the name at
-the new code, and reading knocks renews it a month before its year is up.
-`node.inbox.release()` gives it up. `node.inbox.knock('anna@minca.social')`
-knocks by username, and the contact it becomes keeps the username
-(`ContactView.username`). See [node.md](node.md#the-inbox).
+Most apps never call the functions on this page directly. The node does it
+for the account's inbox:
 
-**At sign-up.** `createMincaAuth({ usernames: 'minca.social' })` makes the
-create screen of `<minca-auth>` one field: the username, with a tick once the
-service says it is free and a cross once it is taken. A bare name is at that
-domain, and is how it is shown and handed out (`leif`); a whole username,
-`leif@example.org`, is checked and claimed at its own domain, and one that
-gives out no Minca usernames says so, with a link to running a service. The account's name
-starts as the username's (`nameFromUsername`: `leif.r` is Leif R) and is
-changed on the account page. "Continue without a username" makes the account with none, so nobody
-finds it by one, and a made-up name to show until it is given one
-(`adHocName`: Swift Otter). `createAccount(name,
-{ username })` claims it in the background while the recovery code and
-password screens are up, and those screens say how it went: `state.username`
-is `claiming`, `claimed`, or `failed` with an `error`, when it was taken
-meanwhile or the service was down. The account is made either way.
+```ts
+await node.inbox.claim('leif@minca.social');
+await node.inbox.knock('anna@minca.social');
+await node.inbox.release();
+```
+
+`claim` keeps the name in `std.inbox`, so every device knows it. After that,
+the node keeps the name pointing at the right place:
+
+- Replacing the inbox, or changing its name or mailboxes, points the name at
+  the new code.
+- Reading knocks renews the name a month before its year is up.
+
+`knock` knocks by username, and the contact it becomes keeps the username
+(`ContactView.username`). `release` gives the name up. See
+[the inbox](node.md#the-inbox).
+
+Renewal claims the code of the inbox this device knows. If another device
+replaced the inbox and this one hasn't synced that yet, renewing points the
+name back at the old inbox until the inbox next changes. Renewal starts only
+within a month of the name lapsing, so this is rare.
+
+## At sign-up
+
+Pass `usernames` to `createMincaAuth`, and the create screen of
+`<minca-auth>` becomes one field: the username.
+
+```ts
+import { createMincaAuth } from '@minca/core/session';
+
+const auth = createMincaAuth({ usernames: 'minca.social' });
+```
+
+The field shows a tick once the service says the name is free, and a cross
+once it's taken. A bare name like `leif` is at that domain, and is how it is
+shown. A whole username like `leif@example.org` is checked and claimed at its
+own domain. A domain that gives out no Minca usernames says so, with a link to
+[running a service](#running-one-for-your-domain).
+
+The account's name starts as the username's (`nameFromUsername`: `leif.r`
+becomes Leif R), and can be changed on the account page.
+
+"Continue without a username" makes an account with none, so nobody finds it
+by one. It gets a made-up name to show until it is given one (`adHocName`:
+Swift Otter).
+
+### The claim runs in the background
+
+`createAccount(name, { username })` claims the name while the recovery code
+and password screens are up. Those screens say how it went, in
+`state.username`: its `status` goes from `claiming` to `claimed`, or to
+`failed` with an `error` (the name was taken meanwhile, or the service was
+down).
+
+The account is made either way. If the claim failed, the app's contacts
+screen asks for a name again.
+
+### Handing over to the app
 
 The claim is made on the home's node, which may be the only one holding the
-inbox: a connect page that closes once it answers keeps the window open
-until the app's node holds the contacts space too (`spaces.reached`, keyed
-by the app's key from its request), or else the app would read no knocks
-until the two next met. The account home waits for what setup began in
-the background (`auth.settled()`: the claim, and the host's handover) to
-finish, however long, so neither is cut off halfway; then up to 30 s for the app,
-and only for an account that claimed a name there. If the claim failed, the
-app's contacts screen asks for a name again.
+inbox. So a connect page that closes once it answers stays open until the
+app's node holds the contacts space too (`spaces.reached`, keyed by the app's
+key from its request). Otherwise the app would read no knocks until the two
+next met.
 
-_Source: `packages/core/src/session/auth.ts` (`createAccount`, `claimInBackground`), `packages/core/src/elements/minca-auth.ts` (`#create`), `packages/core/src/inbox/names.ts` (`adHocName`, `nameFromUsername`, `usernameFree`), `apps/home/src/components/ConnectPage.tsx` (`handOver`). Tests: `packages/core/tests/usernames.test.ts` ("a username at sign-up")._
-
-Renewing claims the code of the inbox this device knows. A device that
-hasn't yet synced a replacement made on another one points the name back at
-the old inbox until the inbox next changes; renewal starts only within a
-month of the name lapsing, so this is rare.
+The account home first waits for what setup began in the background to
+finish, however long that takes (`auth.settled()`: the claim, and the host's
+handover). Then it waits up to 30 s for the app, and only for an account that
+claimed a name there.
 
 ## Claiming a name
 
+To claim a name without a node, call `claimUsername` with the contact key and
+the inbox code. Pass `null` as the code to give the name up.
+
 ```ts
+declare const contactKey: Uint8Array;
+declare const inboxCode: string;
+// ---cut---
 import { claimUsername } from '@minca/core/inbox';
 
 const until = await claimUsername('leif@minca.social', contactKey, inboxCode);
 ```
 
-`claimUsername` looks the name up first. A Minca name service says, in every
-answer, where claims go and how much work one needs:
+It returns when the name lapses, in ms, unless claimed again. It throws when
+the code isn't this account's, the domain names no name service, or the
+service refuses.
+
+### What goes over the wire
+
+`claimUsername` looks the name up first. In every answer, a Minca name
+service says where claims go and how much work one needs:
 
 ```json
 { "names": {}, "claim": "https://usernames.minca.social/.well-known/minca.json", "work": 20 }
@@ -94,51 +140,74 @@ Then it posts the claim there:
 }
 ```
 
-| Field  |                                                                                                                                                  |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `key`  | The **name key**'s public half, compressed P-256, base64url                                                                                      |
-| `at`   | When the claim was made, ms. It must be within 10 minutes of the service's clock, and later than the claim it follows                            |
-| `work` | A counter: SHA-256 of `minca/name-work/v1\|<name>@<domain>\|<key>\|<at>\|<work>` starts with `work` zero bits                                    |
-| `code` | The inbox code, at most 4,096 characters. None gives the name up                                                                                 |
-| `bind` | With a code: the inbox signing key's signature over `minca/name-bind/v1\|<name>@<domain>`, so a name leads only to an inbox whose owner chose it |
-| `sig`  | The name key's ECDSA P-256 signature over `minca/name-claim/v1\|<name>@<domain>\|<at>\|<code, or empty>`                                         |
+| Field  |                                                                                                               |
+| ------ | ------------------------------------------------------------------------------------------------------------- |
+| `key`  | The name key's public half: compressed P-256, base64url                                                       |
+| `at`   | When the claim was made, ms. Within 10 minutes of the service's clock, and later than the last claim          |
+| `work` | A counter: SHA-256 of `minca/name-work/v1\|<name>@<domain>\|<key>\|<at>\|<work>` starts with `work` zero bits |
+| `code` | The inbox code, at most 4,096 characters. Leave it out to give the name up                                    |
+| `bind` | With a code: the inbox signing key's signature over `minca/name-bind/v1\|<name>@<domain>`                     |
+| `sig`  | The name key's ECDSA P-256 signature over `minca/name-claim/v1\|<name>@<domain>\|<at>\|<code, or empty>`      |
 
-The answer is `{ "until": <ms> }`, when the name lapses, or
+`bind` makes sure a name leads only to an inbox whose owner chose it.
+
+The service answers `{ "until": <ms> }`, when the name lapses, or
 `{ "error": "…" }` with a 4xx status.
 
-**The name key** is derived from the contact key, one per username:
-`HKDF-SHA-256(contact key, info = "minca/p256-name-key/v1|" + name@domain)`,
-with the username as `formatUsername` writes it, so every spelling a reader takes gives one key. `claimUsername` derives it itself. Every device that holds the contact key
-derives the same one; it is not an inbox key, so replacing the inbox keeps
-the name, and nothing ties it to the account. Only the key that holds a name
-can point it elsewhere, renew it or give it up.
+### The name key
 
-**Who may.** A name leads to the account's inbox, so only what may run the
-inbox may claim one: a node whose note grants `/account/write` for the whole
-account, holding the contact key. An app given the contact key could claim
-the account's names too, and its hold outlasts revoking it, since a name key
-has no generation to move on to
-([#313](https://github.com/leifriksheim/minca/issues/313)).
+Each username has its own name key, derived from the contact key:
+
+```
+HKDF-SHA-256(contact key, info = "minca/p256-name-key/v1|" + name@domain)
+```
+
+The username is written as `formatUsername` writes it, so every spelling a
+reader accepts gives the same key. `claimUsername` derives it for you.
+
+Every device that holds the contact key derives the same name key. It isn't
+an inbox key, so replacing the inbox keeps the name. Nothing ties it to the
+account. Only the key that holds a name can point it elsewhere, renew it or
+give it up.
+
+### Who may claim
+
+A name leads to the account's inbox, so only what may run the inbox may claim
+one. That's a node whose note grants `/account/write` for the whole account,
+holding the contact key.
+
+An app given the contact key could claim the account's names too. It keeps
+that power after it's revoked, since a name key has no generation to move on
+to ([#313](https://github.com/leifriksheim/minca/issues/313)).
 
 ## What the service keeps to
 
-| Rule                       | On minca.social                                                                                                                                               |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| How long a claim holds     | A year. Claiming again, with the same code or a new one, renews it                                                                                            |
-| New names from one address | 3 a day (an IPv4 address, or an IPv6 /48). Changing or renewing a name is free                                                                                |
-| Work                       | 18 bits: a fraction of a second on a laptop, about a second on a phone                                                                                        |
-| Names held                 | 50,000: each is a file of up to 8 KB, so a 1 GB volume holds them, inodes included                                                                            |
-| Reserved                   | `admin`, `support`, `security`, `minca` and a few more that pass for the service. A lookup of one answers `"reserved": true`, so `usernameFree` says it isn't |
-| Given up                   | Free again after 10 minutes, so no earlier claim can be replayed to take it back                                                                              |
+How a name is claimed isn't protocol. A domain can answer lookups from a file
+it edits by hand, or from anything else. The **Minca name service**
+(`packages/names`) is what minca.social runs, and anyone can run it.
 
-The work is a speed bump for bots, not a gate: a server does it ten times
-faster than a phone. The address budget and the year are what keep squatting
-in check; a name nobody renews comes back. The budget is kept in memory, so a
-restart forgets it; nothing a client sends can make the service stop, since
-whatever goes wrong with one request answers that request.
+| Rule                       | On minca.social                                                                  |
+| -------------------------- | -------------------------------------------------------------------------------- |
+| How long a claim holds     | A year. Claiming again, with the same code or a new one, renews it               |
+| New names from one address | 3 a day, per IPv4 address or IPv6 /48. Changing or renewing a name is free       |
+| Work                       | 18 bits: a fraction of a second on a laptop, about a second on a phone           |
+| Names held                 | 50,000, each a file of up to 8 KB, so a 1 GB volume holds them, inodes included  |
+| Reserved                   | `admin`, `support`, `security`, `minca` and a few more that pass for the service |
+| Given up                   | Free again after 10 minutes, so no earlier claim can be replayed to take it back |
 
-Each name is a file of its own on the service's disk, so nothing grows in
-memory and no large file is rewritten. Lookups are open to any page
+A lookup of a reserved name answers `"reserved": true`, so `usernameFree`
+says it isn't free.
+
+The work is a speed bump for bots, not a gate. A server does it ten times
+faster than a phone. What keeps squatting in check is the address budget and
+the year: a name nobody renews comes back.
+
+The address budget is kept in memory, so a restart forgets it. Nothing a
+client sends can stop the service, since whatever goes wrong with one request
+only fails that request.
+
+Each name is its own file on disk, so nothing grows in memory and no large
+file is rewritten. Lookups are open to any page
 (`Access-Control-Allow-Origin: *`).
 
 ## Running one for your domain
@@ -152,10 +221,8 @@ NAMES_DIR=/data/names \
 node packages/names/server.mjs 8080
 ```
 
-Then answer `https://example.org/.well-known/minca.json` from it, by serving
-the domain from it or proxying that one path (minca.social's site does this,
-in `apps/site/public/_redirects`). Claims go to `NAMES_CLAIM_URL` directly, so
-the service sees each client's address. `packages/names/fly.toml` deploys it
-on Fly.
+Then answer `https://example.org/.well-known/minca.json` from it. Either serve
+the domain from it, or proxy that one path, as minca.social's site does.
 
-_Source: `packages/core/src/inbox/names.ts` (`claimUsername`, `claimMessage`), `packages/core/src/identity/contact-key.ts` (`deriveNameKeyBytes`), `packages/names/names.mjs` (`createNames`, `NAMES_LIMITS`), `packages/names/server.mjs`, `apps/site/public/_redirects`. Tests: `packages/names/tests/names.test.ts`._
+Claims go to `NAMES_CLAIM_URL` directly, so the service sees each client's
+address. `packages/names/fly.toml` deploys it on Fly.

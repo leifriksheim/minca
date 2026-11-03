@@ -41,12 +41,19 @@ import type {
 } from '../session/hosting.js';
 
 export interface NodeNetworkConfig {
-  /** Relays for WebRTC, browsers only. Each space meets in the room named after its id. */
+  /**
+   * Where peers meet: Minca relays (`wss://`) and Nostr relays (`nostr+wss://`).
+   * Each space meets in the room named after its id.
+   */
   readonly relays?: ReadonlyArray<string>;
-  /** Always-on nodes to hold a socket to, `wss://host/peer#<DID>` (spec 04 §5.2); the space id is appended */
+  /**
+   * Always-on nodes to hold a socket to, `wss://host/peer#<DID>` (spec 04 §5.2); the space id is appended.
+   * The fragment pins the node's key. `ws://` only on this machine.
+   */
   readonly nodes?: ReadonlyArray<string>;
   /** Hosts to look for the account registry at, so a new device with only the recovery code finds its spaces */
   readonly hosts?: ReadonlyArray<string>;
+  /** Replaces the default STUN servers. TURN servers relays offer are added to these. */
   readonly iceServers?: ReadonlyArray<RTCIceServer>;
   /** How WebRTC connections are made; a node in a worker passes `remoteTransport` */
   readonly createTransport?: (iceServers: () => ReadonlyArray<RTCIceServer>) => SignalledTransport;
@@ -67,11 +74,14 @@ export interface NodeNetworkConfig {
 export interface NodeConfig {
   /** Who this node acts for. The root key only signs session delegations. */
   readonly signer: RootSigner;
-  /** The account key (`deriveAccountKey(seed)`): the node then follows the account registry */
+  /** The account key (`deriveAccountKey(seed)`): the node then follows the account registry and opens the contacts space */
   readonly accountKey?: Uint8Array;
-  /** The account's contact key (`deriveContactKeyBytes(seed)`), to open contact requests and knocks */
+  /**
+   * The account's contact key (`deriveContactKeyBytes(seed)`), to open contact requests and knocks,
+   * in shared spaces and in the inbox. Its public half is published on the account's profiles.
+   */
   readonly contactKey?: Uint8Array;
-  /** The account's contacts space, for a node given it without the account key */
+  /** The account's contacts space, for a node given it without the account key (an app granted `contacts`) */
   readonly contactsSpace?: string;
   /**
    * The account's name as a grant gives it: what knocks and a new inbox say
@@ -82,6 +92,7 @@ export interface NodeConfig {
   readonly mailbox?: MailboxClient;
   /** Where the registry and each space's store live */
   readonly stores: StoreFactory;
+  /** The cryptography to sign and check with. Default: P-256 over Web Crypto. */
   readonly provider?: CryptoProvider;
   /** Collection shapes to use where a space has none: checked on write, flagged (`conforms`) on read, never refused */
   readonly collections?: ReadonlyArray<CollectionDef>;
@@ -91,7 +102,7 @@ export interface NodeConfig {
   readonly sessionTtlSeconds?: number;
   /** The key to sign with, when the signer already named it. Default: one claimed from `writerKey`, else a fresh one */
   readonly sessionKey?: CryptoKeyPair;
-  /** Where to keep a signing key across runs (`browserWriterKeys`). Without one, each run makes a new key. */
+  /** Where to keep a signing key across runs (`browserWriterKeys`). Without one, each run makes a new key. Ignored with `sessionKey`. */
   readonly writerKey?: WriterKeySource;
   /** How often to look for another process's writes to a folder store, ms. 0 disables. Default 2000. */
   readonly watchIntervalMs?: number;
@@ -106,7 +117,7 @@ export interface NodeConfig {
 
 /** How a node holds part of a space: its own choice */
 export interface CacheConfig {
-  /** Collections this app uses: held from the start, and dropped last */
+  /** Collections this app uses: held from the start, and never dropped */
   readonly collections?: ReadonlyArray<string>;
   /** Drop a collection no query touched for this many days, unless it holds unsent writes. Default 30. */
   readonly unusedAfterDays?: number;
@@ -150,8 +161,10 @@ export interface NewSpace {
   readonly succeeds?: string;
 }
 
+/** What an invite is for, read without joining (`spaces.preview`) */
 export interface InvitePreview {
   readonly space: Pick<SpaceSummary, 'id' | 'name' | 'visibility' | 'founders' | 'createdAt' | 'succeeds'>;
+  /** The account that signed the invite */
   readonly invitedBy: string;
   /** Whether the invite carries the key to a private space */
   readonly carriesKey: boolean;
@@ -164,11 +177,11 @@ export interface InvitePreview {
 }
 
 export interface InviteOptions {
-  /** The role it gives. Default: the lowest below yours, or view-only */
+  /** The role it gives. Default: `member` when you may assign it, else the first role you may assign, else a view-only invite */
   readonly role?: string;
-  /** False for a view-only invite: the key, and no role */
+  /** False for a view-only invite: the key, and no role. Default true */
   readonly write?: boolean;
-  /** A short link, the rest sealed in mailboxes (spec 03 §7.7); the long form when no mailbox takes it */
+  /** A short link, the rest sealed in mailboxes (spec 03 §7.7); the long form when no mailbox takes it. Default false */
   readonly short?: boolean;
   /** For a short link: when to stop sharing it, ms. Closing the invite is what ends it. */
   readonly until?: number;
@@ -253,7 +266,7 @@ export interface NodeRecord<T = unknown> {
   readonly seq: number;
   readonly space: string;
   readonly collection: string;
-  /** The key that signed this version, usually a session key */
+  /** The key that signed this version, usually an app's session key, not the person: show `root` or `createdBy` as the author */
   readonly author: string;
   /** The identity that key was acting for, when its delegation checks out */
   readonly root: string | null;
@@ -311,15 +324,27 @@ export interface DefineCollection {
   readonly description?: string;
   /** JSON Schema in the supported subset, or a Standard JSON Schema validator */
   readonly schema: JsonSchema | StandardJSONSchemaV1;
-  /** Default: one past the current version, or 1 */
+  /**
+   * The definition's version number. Default: one past the current version,
+   * or 1. This library refuses one that isn't higher than the one in force,
+   * or not below 2^53; peers don't check it (spec 02 §6.3)
+   */
   readonly version?: number;
-  /** Keep every version (`all`), or only the current one (`latest`, the default) */
+  /**
+   * `all` keeps every version of every record whole, hash-linked, for
+   * `records.history`. `latest`, the default, keeps the current version whole
+   * and forgets what earlier ones and deleted records said
+   */
   readonly history?: 'latest' | 'all';
   /** The link roles its records may carry, and what each may point at */
   readonly links?: Readonly<Record<string, LinkDeclaration>>;
-  /** What must be unique, which fields are fixed, whether records are written once: every peer checks */
+  /** What must be unique, which fields are fixed, whether records are written once: every peer checks. None by default */
   readonly rules?: CollectionRules;
-  /** Fields whose values are topics, like `channel`, so a keeper can match them unread */
+  /**
+   * Fields whose values are topics, like `mentions`, or link roles as
+   * `link:<rel>`, so a node that can't read the space still matches records
+   * by them. At most 8
+   */
   readonly topics?: ReadonlyArray<string>;
   /** What a version must be to count, judged by readers: `check` conditions and a `line` (packages/core/docs/contracts.md) */
   readonly contract?:
@@ -346,8 +371,9 @@ export interface NodeCollections {
 /** A version under its collection's contract: `passes` null when it has none, or this node can't judge it */
 export interface RecordContracts {
   readonly version: string;
+  /** True when it passes, false when it fails, null when there's no contract, it is `pending`, or it is `unjudged` */
   readonly passes: boolean | null;
-  /** Why it fails, or why it is unjudged */
+  /** Why it fails (the failing condition's `else`), or why it is unjudged */
   readonly reason?: string;
   /** A version it cites, or the one before it, hasn't arrived yet */
   readonly pending?: true;
@@ -376,19 +402,19 @@ export interface RevokeOptions {
 export interface SpaceStatus {
   readonly space: string;
   readonly connection: ConnectionState;
-  /** Peers currently connected in this space */
+  /** Session DIDs of the peers connected in this space now */
   readonly peers: ReadonlyArray<string>;
-  /** Of `peers`, this account's own other devices and apps */
+  /** Of `peers`, this account's own other devices and apps, not counting carriers. Empty without an account key. */
   readonly own: ReadonlyArray<string>;
   /** Of `peers`, carriers the account uses */
   readonly carriers: ReadonlyArray<string>;
-  /** The account each peer showed it acts for, by session DID */
+  /** The account each peer acts for, by session DID: only peers that showed a valid note */
   readonly accounts: Readonly<Record<string, string>>;
   /** A fingerprint of every version kept here: equal on two nodes means identical data */
   readonly fingerprint: string;
-  /** Records peers sent that failed validation */
+  /** How many versions peers sent that failed validation */
   readonly rejected: number;
-  /** What this node holds of the space: `all`, or the collections it uses */
+  /** What this node holds of the space: `all`, or the collections it uses, sorted */
   readonly holds: 'all' | ReadonlyArray<string>;
   /** Writes of this node's that haven't reached enough keepers yet */
   readonly pending: number;
@@ -396,12 +422,13 @@ export interface SpaceStatus {
 
 /** A live message as it arrives: what was sent, and who sent it */
 export interface LiveMessage {
-  /** The sender's account, proven by its note; null for a peer that showed none */
+  /** The sender's account, proven by its note; null for a peer that proved no account: anyone, so treat it as anonymous */
   readonly from: string | null;
   /** The sending device's session DID, where a reply to it goes */
   readonly peer: string;
   /** Whether the sender's note writes records but can't define collections here (false for a read-only note) */
   readonly recordsOnly: boolean;
+  /** The value sent */
   readonly message: unknown;
 }
 
@@ -410,14 +437,21 @@ export type NodeEvent =
   | { readonly type: 'records'; readonly space: string }
   /** Connection or peers changed */
   | { readonly type: 'status'; readonly space: string }
-  /** The registry changed: a space was created, joined or left */
+  /** The list of spaces changed: one was created, joined or left, or this account's role or invite in one changed */
   | { readonly type: 'spaces' }
   /** The account's profile may have changed, here or on another device */
   | { readonly type: 'account' }
+  /** A peer sent a version that failed validation, and why */
   | { readonly type: 'rejected'; readonly space: string; readonly peer: string; readonly reason: string }
-  /** A live message from a peer in a space (`spaces.send`) */
+  /**
+   * A live message from a peer in a space (`spaces.send`): `message` is the value sent;
+   * `from` the sender's account, proven by its note, or null for a peer that
+   * proved no account: anyone, so treat it as anonymous; `peer` the sending device's session DID, where a
+   * reply to it goes; `recordsOnly` whether its note writes records but can't
+   * define collections here (false for a note that only reads)
+   */
   | ({ readonly type: 'message'; readonly space: string } & LiveMessage)
-  /** The note this node writes under was revoked in a space */
+  /** The note this node writes under was revoked in a space. Sent at most once per space. */
   | { readonly type: 'revoked'; readonly space: string }
   /** A relay or a connection changed (`network.status()`) */
   | { readonly type: 'network' };
@@ -513,7 +547,10 @@ export interface NodeSpaces {
   profiles(spaceId: string): Promise<ReadonlyArray<SpaceProfile>>;
 }
 
-/** A file a body refers to, as `records.addFile` gives it */
+/**
+ * A file a body refers to, as `records.addFile` gives it. Put it anywhere in a
+ * body: when the body is written, every file in it is named on the record, at most 16.
+ */
 export interface FileRef {
   readonly hash: string;
   readonly size: number;
@@ -528,7 +565,13 @@ export interface NodeRecords {
   list<T = unknown>(spaceId: string, options?: ListOptions): Promise<ReadonlyArray<NodeRecord<T>>>;
   /** A record's current version, or null when there is none or it was deleted */
   get<T = unknown>(spaceId: string, key: string): Promise<NodeRecord<T> | null>;
-  /** How a record's newest standing version, or the one named, fares under its collection's contract */
+  /**
+   * How a record's newest standing version, or the one named, fares under its
+   * collection's contract: `{ version, passes, reason?, pending?, unjudged? }`.
+   * `passes` is false with the failing condition's `else` as `reason`, and null
+   * when the collection has no contract, the version waits on one it cites
+   * (`pending`), or this library can't judge it (`unjudged`, with why)
+   */
   contracts(spaceId: string, key: string, version?: string): Promise<RecordContracts | null>;
   /** The key `name` has in an account's namespace (this one's by default): where `put(…, { key: name })` writes */
   keyFor(spaceId: string, name: string, account?: string): Promise<string>;
@@ -568,13 +611,17 @@ export interface NodeRecords {
   ): Promise<ReadonlyArray<NodeRecord<T>>>;
   /** Deletes a record everywhere, by writing a version marked deleted */
   delete(spaceId: string, key: string): Promise<void>;
-  /** The versions of a record kept here, newest first */
+  /** The versions of a record kept whole here, newest first: the current one, or every one in a collection defined with `history: 'all'` */
   history<T = unknown>(spaceId: string, key: string): Promise<ReadonlyArray<NodeRecord<T>>>;
   /** Whether this account may `create` in a collection, or `edit` / `delete` a record; `target` names it */
   can(spaceId: string, action: 'create' | 'edit' | 'delete', target: string): Promise<boolean>;
   /** Seals and keeps a file, giving the reference to put in a body (spec 05 §16.6) */
   addFile(spaceId: string, bytes: Uint8Array, about: { mime: string; name?: string }): Promise<FileRef>;
-  /** The bytes of a file a body refers to: held here, or fetched from peers or mirrors */
+  /**
+   * The bytes of a file a body refers to: held here, or fetched from peers or mirrors,
+   * checking every chunk. While nobody has it, it waits and asks again.
+   * @throws When no record here names it, when it won't open as named, or when the space closes
+   */
   readFile(spaceId: string, ref: FileRef): Promise<Uint8Array>;
   /**
    * Records matching a query, typed when it names a collection by its definition.
@@ -675,9 +722,12 @@ export interface HostingView {
 
 /** Hosts: carriers the account pays for (spec/06-nodes-and-sessions.md, Hosts) */
 export interface NodeHosting {
-  /** The hosts the account uses, each asked how it stands; a host paid since gets the spaces */
+  /** The hosts the account uses, each asked how it stands; a host paid since gets the spaces, handed over at most once a minute */
   list(): Promise<ReadonlyArray<HostingView>>;
-  /** Starts using a host: a subscription key every device signs as, and the spaces once it is paid */
+  /**
+   * Starts using a host: reads its description and writes a `sys.hosting` record, with a
+   * subscription key every device signs as. The spaces follow once it is paid.
+   */
   use(url: string): Promise<HostingView>;
   /** Adds to the account's balance at a host: a `checkout` page to open, or a `request` for a wallet */
   pay(url: string, payment: FundPayment): Promise<PayAnswer>;
@@ -814,6 +864,7 @@ export interface NodeContacts {
   space(): Promise<string | null>;
   /** Everyone in the list, blocked people too, by name */
   list(): Promise<ReadonlyArray<ContactView>>;
+  /** One person on the list, or null */
   get(did: string): Promise<ContactView | null>;
   /** Adds someone, or changes what the list says about them */
   put(contact: {
@@ -875,7 +926,13 @@ export interface DirectMessage {
 export interface NodeDirect {
   /** Members who published a member key, besides you */
   reachable(spaceId: string): Promise<ReadonlyArray<string>>;
-  /** Seals text for these members and you, and writes it, defining `std.direct` when needed */
+  /**
+   * Seals text for these members and you, and writes it, first defining
+   * `std.direct` when the space lacks it and you may.
+   * @throws When the text is empty, it is for no one or for more than
+   * `MAX_DIRECT_TO` people, someone it is for has no member key here, or this
+   * node wasn't given your member key for the space (an agent isn't)
+   */
   send(spaceId: string, to: ReadonlyArray<string>, text: string): Promise<DirectMessage>;
   /** Every direct message in the space written by or to this account, oldest first */
   list(spaceId: string): Promise<ReadonlyArray<DirectMessage>>;
@@ -893,7 +950,7 @@ export interface InboxView {
   readonly sign: string;
   /** Mailboxes that hold its knocks */
   readonly places: ReadonlyArray<string>;
-  /** The inbox code to hand out, in a link (`#inbox=…`) or a QR code */
+  /** The inbox code to hand out, in a link (`#inbox=…`) or a QR code. Signed afresh each time, but says the same. */
   readonly code: string;
   /** The username that leads to it, and when it lapses unless claimed again (ms) */
   readonly username?: string;
@@ -931,9 +988,13 @@ export interface SentKnockView {
 export interface NodeInbox {
   /** Your inbox, or null until it is opened */
   get(): Promise<InboxView | null>;
-  /** Opens your inbox, or changes its mailboxes (1–3) and the name its code gives */
+  /**
+   * Opens your inbox, or changes its mailboxes (1–3) and the name its code gives. Keeps the
+   * current ones by default; a new inbox waits at up to 3 of this node's relays, under the
+   * account's name.
+   */
   open(options?: { readonly places?: ReadonlyArray<string>; readonly name?: string }): Promise<InboxView>;
-  /** Replaces your inbox: codes for the old one lead nowhere */
+  /** Replaces your inbox with the next generation, clearing it first: codes for the old one lead nowhere */
   rotate(): Promise<InboxView>;
   /** Clears every knock waiting in your inbox, and keeps it open */
   clear(): Promise<void>;

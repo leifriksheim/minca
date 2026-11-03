@@ -1,18 +1,13 @@
 # The query format
 
-A query is plain JSON data: it can be written by hand, sent over a wire, or
-produced by an agent. It runs against the records one node holds of one space.
+This is the full reference for the query JSON that `node.records.query`,
+`watch` and `useQuery` take. For a gentler start, see
+[Records and queries](records-and-queries.md#querying).
 
-> Not protocol: peers never exchange queries, so another implementation may
-> offer any query language, and a better one later is not a protocol change.
-> Ideas for later, from
-> [#28](https://github.com/leifriksheim/minca/issues/28): the interface another query language plugs into, which reports the collections
-> it read so a cache ([holding part of a space](node.md#holding-part-of-a-space)) keeps them.
-> An [automation](automations.md) keeps a query in a record, and a
-> [screen](blueprints-and-guides.md#apps-with-a-screen-of-their-own) passes a `where` to `minca.list`
-> (`apps/example/src/components/apps/screens.ts`), so everything that runs
-> automations or screens has to read this format the same way; peers that
-> only sync and judge the record still never read it.
+A query runs against the records one node holds of one space. Peers never
+exchange queries, but [automations](automations.md) and
+[screens](blueprints-and-guides.md#apps-with-a-screen-of-their-own) keep them
+in records, so everything that runs those must read this format the same way.
 
 ## Grammar
 
@@ -55,124 +50,156 @@ Include    = { "rel": string,
                ?"count":     boolean }
 ```
 
-A query is refused, with a reason, before it runs if: it is not an object;
-`collection` is missing or empty; a filter is not an object, or `$and`/`$or`
-is not a list; a member name starts with `$` and is not `$and`, `$or` or
-`$not`; a `@` field is not a MetaField; a `link:` field is not a LinkField; an operator object names an unknown
-operator; an include lacks `rel`, has a non-string `from`, a bad `direction`,
-or a non-integer or negative `limit`; includes nest more than 3 deep; a `sort`
-direction is not `asc`/`desc` or names an unknown `@` field; `limit` is not a
-non-negative integer; `cursor` is not a string.
+## Malformed queries
 
-_Implementation detail:_ the TypeScript API also accepts a definition object
-as `collection` or `from`; it is replaced by its `name` before the query runs.
-With a definition whose records' type is known, `where` and `sort` are typed
-from it: each field a body path, computed field, `@` field or `link:<role>`
-it has, each value of that field's type. A misspelled field
-or a number compared with a string is a type error. A bare name is untyped.
+A query is refused before it runs, with a reason, when:
 
-## Candidates
+- it is not an object, or `collection` is missing or empty;
+- a filter is not an object, or `$and` or `$or` is not a list;
+- a member name starts with `$` and is not `$and`, `$or` or `$not`;
+- a `@` field is not one of the MetaFields, or a `link:` field is malformed;
+- an operator object names an unknown operator;
+- an include lacks `rel`, has a `from` that isn't a string, a bad
+  `direction`, or a `limit` that isn't a non-negative integer;
+- includes nest more than 3 deep;
+- a `sort` direction is not `asc` or `desc`, or names an unknown `@` field;
+- `limit` is not a non-negative integer, or `cursor` is not a string.
 
-A query considers the **current, non-deleted** version of every record in
-`collection` that stands ([spec 02 §9.5](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)) and whose body this node can read. Records it
-cannot open are left out — here and in every include — so a result's `body` is
-never `null`.
+## Definitions in TypeScript
 
-> **Planned: leaving out records that do not conform.** Records whose body or
-> links do not fit the definition are kept and flagged ([spec 02 §9.6](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)), but queries,
-> includes and counts use them like any other, so a tally can count a record
-> the definition says is malformed. The plan: queries and includes leave out
-> records with `conforms: false` unless the query asks for them (a new
-> optional member, e.g. `"nonconforming": true`). Rules are already enforced
-> on arrival ([spec 02 §9.4](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)), so this is about shape, not about who wrote it.
+In TypeScript you can pass a collection's definition as `collection` or
+`from`. It is replaced by its `name` before the query runs.
+
+With a definition, `where` and `sort` are typed from it. Each field must be a
+body path, a computed field, an `@` field or a `link:<role>` it has, and each
+value must have that field's type. A misspelled field, or a number compared
+with a string, is a type error. A collection named by a string is untyped.
+
+## Which records it considers
+
+A query considers the current, non-deleted version of every record in
+`collection` that stands and whose body this node can read. Records it can't
+open are left out, here and in every include, so a result's `body` is never
+`null`. What "stands" means is in
+[spec 02 §9.5](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md).
+
+> **Planned: leaving out records that do not conform.** Today a record whose
+> body or links don't fit the definition is flagged `conforms: false` but
+> still counted by queries, includes and counts. The plan is to leave such
+> records out unless the query asks for them, with a new optional member such
+> as `"nonconforming": true`.
 
 ## Field values
 
-| Field            | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@key`           | the record key                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `@author`        | the DID that signed this version                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `@root`          | the account it acted for                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `@createdBy`     | the root of the record's first version (or null)                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `@createdAt`     | `createdAt` of the record's first version (the creator's clock)                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `@updatedAt`     | `createdAt` of this version                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `@seq`           | `seq`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `@collection`    | `collection`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `link:<rel>`     | the `to` of the record's first link with that `rel`, as contracts' `link` and `onePer` read it; missing when it has none. `{ "link:in": key }` finds a channel's messages, `{ "link:in": { "$exists": false } }` those in no channel.                                                                                                                                                                                                                                                                             |
-| `include:<name>` | in an [automation](automations.md)'s `holds` only: what the query's `include` of that name found for the record, a number for a count                                                                                                                                                                                                                                                                                                                                                                             |
-| path             | When its first segment names one of the collection's [computed fields](computed.md), start from that field's value and walk the rest; otherwise walk the body. A body member with a computed field's name is never read: a writer can't stand in for what the node works out. Walking: at each segment, the current value must be a non-null object or array, and the segment one of its own member names, or of an array a position (`0`, `1`, …; nothing else, not `length`); otherwise the value is _missing_. |
+| Field            | Value                                                                          |
+| ---------------- | ------------------------------------------------------------------------------ |
+| `@key`           | the record key                                                                 |
+| `@author`        | the DID that signed this version                                               |
+| `@root`          | the account it acted for                                                       |
+| `@createdBy`     | the root of the record's first version, or null                                |
+| `@createdAt`     | `createdAt` of the record's first version, by the creator's clock              |
+| `@updatedAt`     | `createdAt` of this version                                                    |
+| `@seq`           | `seq`                                                                          |
+| `@collection`    | `collection`                                                                   |
+| `link:<rel>`     | the `to` of the record's first link with that `rel`; missing when it has none  |
+| `include:<name>` | in an automation's `holds` only: what that include found, a number for a count |
+| path             | a computed field, or a value in the body (see below)                           |
+
+`link:<rel>` reads links the way contracts' `link` and `onePer` do.
+`{ "link:in": key }` finds a channel's messages, and
+`{ "link:in": { "$exists": false } }` the messages in no channel.
+
+### Paths
+
+When a path's first segment names one of the collection's
+[computed fields](computed.md), the path starts from that field's value.
+Otherwise it starts from the body. A body member with a computed field's name
+is never read, so a writer can't stand in for what the node works out.
+
+At each segment, the current value must be a non-null object or array, and
+the segment one of its own member names, or a position in an array (`0`, `1`,
+and so on, not `length`). Otherwise the value is _missing_.
 
 ## Operators
 
-`value` is the field's value (possibly missing); `x` the operand. _Equal_
-means deep equality: same JSON type; objects with the same member names
-(order ignored) and equal values; arrays with equal elements in order.
+`value` is the field's value, which may be missing. `x` is the operand.
+_Equal_ means deep equality: the same JSON type, objects with the same member
+names in any order and equal values, arrays with equal elements in order.
 
-| Operator                  | Holds when                                                                                                                                                   |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| bare value `x`            | `value` equals `x`                                                                                                                                           |
-| `$eq`                     | `value` equals `x`                                                                                                                                           |
-| `$ne`                     | `value` does not equal `x` — **true for a missing field**                                                                                                    |
-| `$gt` `$gte` `$lt` `$lte` | both are numbers, or both strings (compared by UTF-16 code units), and the comparison holds. Any other pairing, including missing, is false.                 |
-| `$in`                     | `x` is a list containing an element equal to `value`, or, when `value` is a list, equal to any of its elements                                               |
-| `$nin`                    | `x` is a list for which `$in` does not hold (false if `x` is not a list)                                                                                     |
-| `$exists`                 | `(value is not missing) == x`. `null` exists.                                                                                                                |
-| `$contains`               | `value` and `x` are strings and `lower(x)` is a substring of `lower(value)`; or `value` is a list with an element equal to `x`. Otherwise false. Not search. |
+| Operator                  | Holds when                                                                                                             |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| bare value `x`            | `value` equals `x`                                                                                                     |
+| `$eq`                     | `value` equals `x`                                                                                                     |
+| `$ne`                     | `value` does not equal `x`. **True for a missing field.**                                                              |
+| `$gt` `$gte` `$lt` `$lte` | both are numbers, or both strings, and the comparison holds. Otherwise false.                                          |
+| `$in`                     | `x` is a list with an element equal to `value`, or to any element of a list `value`                                    |
+| `$nin`                    | `x` is a list and `$in` does not hold. False when `x` is not a list.                                                   |
+| `$exists`                 | `value` is not missing, when `x` is true; is missing, when `x` is false. `null` exists.                                |
+| `$contains`               | a string `value` contains a string `x`, ignoring case; or a list `value` has an element equal to `x`. Otherwise false. |
 
-> **Planned: full-text search.** `$contains` scans every candidate, which is
-> honest at browser scale but is not search. Ranking and prefix matching need
-> an inverted index kept beside the records, and a query operator or member
-> for it. Not designed. _Open:_ whether the index is a node's local business
-> (specified here only as query syntax and result order) or something peers
-> share; and, for private spaces, that the index holds plaintext and must be
-> kept like the bodies it came from ([05](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md)).
+Strings compare by UTF-16 code units. A missing value never passes `$gt`,
+`$gte`, `$lt` or `$lte`.
 
-`$and`, `$or` and `$not` nest at most 16 deep.
+Several operators on one field must all hold, and so must several fields in
+one filter. `$and` holds when all its subfilters do, `$or` when at least one
+does, `$not` when its subfilter doesn't. They nest at most 16 deep.
 
-Several operators on one field must all hold; several fields in one filter
-must all hold. `$and`: all subfilters hold; `$or`: at least one; `$not`: the
-subfilter does not hold.
+> **Planned: full-text search.** `$contains` scans every candidate, so it is a
+> substring match, not search. Ranking and prefix matching need an index kept
+> beside the records. Not designed yet, including whether peers would share
+> the index, and how a private space would keep its plaintext safe.
 
-## Sort, limit and cursor
+## Sort
 
-- `sort` is applied field by field in the **order the members appear** in the
-  `sort` object (JSON member order is significant here). Default:
-  `{ "@createdAt": "asc" }`.
-- Values compare: missing or `null` first; two numbers numerically; two
-  booleans `false < true`; anything else by their string forms. `desc`
-  reverses a field's order (so missing sorts last).
-- Ties always break on `@key`, ascending — a total order that is the same on
-  every node holding the same records.
-- `limit` takes at most that many records after the cursor; absent means all.
-  There is no maximum.
-- The result's `cursor` is the key of the last record returned when more
-  records follow it, else `null`. Passing it back resumes after the record with
-  that key in the re-sorted candidates.
-- If no candidate has the cursor's key any more, the query is meant to resume
-  from where that record would have been. _Open:_ how "where it
-  would have been" is found once the record is gone.
+`sort` applies field by field, in the order the members appear in the `sort`
+object. JSON member order matters here. The default is
+`{ "@createdAt": "asc" }`.
 
-> **Known defect:** when the cursor's key is gone, the reference starts again
-> from the first record (`packages/core/src/query/engine.ts`), so a caller paging through
-> sees records twice. A fix will resume after the cursor's position.
-> Tracked in [#20](https://github.com/leifriksheim/minca/issues/20).
+Values compare like this:
+
+- missing or `null` first;
+- two numbers numerically;
+- two booleans `false` before `true`;
+- anything else by their string forms.
+
+`desc` reverses a field's order, so missing values sort last. Ties always
+break on `@key`, ascending, so every node holding the same records gives the
+same order.
+
+## Limit and cursor
+
+`limit` takes at most that many records after the cursor. Without it you get
+all of them. There is no maximum.
+
+The result's `cursor` is the key of the last record returned when more
+follow, else `null`. Pass it back to resume after the record with that key.
+
+If the cursor's record is gone, the query is meant to resume from where it
+would have been. How to find that place is still open.
+
+> **Known defect:** when the cursor's record is gone, paging starts again from
+> the first record, so you see records twice
+> ([#20](https://github.com/leifriksheim/minca/issues/20)).
 
 ## Include
 
-For each record returned, each named include finds related records:
+For each record returned, each named include finds related records.
 
-- `direction: "in"` (default): current, readable, non-deleted records that
-  have a link `{ rel, to: <this record's key> }`, optionally only those in
-  `from`; ordered by `@createdAt`, then `@key`.
-- `direction: "out"`: this record's own links with that `rel`, in link order,
-  each resolved to the target's current, readable, non-deleted version,
-  optionally only those in `from`. A target not held finds nothing.
+- `direction: "in"`, the default, finds records with a link
+  `{ rel, to: <this record's key> }`. They come ordered by `@createdAt`, then
+  `@key`.
+- `direction: "out"` follows this record's own links with that `rel`, in link
+  order. A target this node doesn't hold finds nothing.
 
-Then `where` filters them. With `count: true` the include's value is the
-number found (after `where`, ignoring `limit`). Otherwise it is the first
-`limit` of them (all when absent), each expanded by its own nested `include`.
-Every returned record has an `included` object, empty when there were no
-includes.
+Either way, only current, readable, non-deleted records count, and only those
+in `from` when it is given. Then `where` filters them.
+
+With `count: true` the include's value is how many it found, after `where`
+and ignoring `limit`. Otherwise it is the first `limit` of them, or all, each
+expanded by its own nested `include`.
+
+Every returned record has an `included` object. It is empty when the query
+has no includes.
 
 ## Result
 
@@ -180,9 +207,6 @@ includes.
 { "records": [ … ], "cursor": "mfrggzdfmztwq2lknnwg23tpoa", "complete": true }
 ```
 
-`complete` is false only on a node that holds part of a space while a
-collection the query needs is still arriving
-([05 — Sync and storage](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md)). The shape of each record
-object is the node's record view ([06 — Nodes, sessions and apps](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
-
-_Source: `packages/core/src/query/types.ts`, `packages/core/src/query/filter.ts` (`checkQuery`, `matches`, `fieldValue`, `MAX_INCLUDE_DEPTH`), `packages/core/src/query/engine.ts` (`runQuery`, `sortRecords`, `expand`). Tests: `packages/core/tests/query.test.ts` (all; "link:<rel> is where the first link…" for link fields), `packages/core/tests/typed-query.test.ts`._
+`complete` is false only on a node that holds part of a space, while a
+collection the query needs is still arriving. Each record has the shape shown
+in [Records and queries](records-and-queries.md#what-a-record-looks-like).

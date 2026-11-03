@@ -58,7 +58,9 @@ export interface NodeAction {
   readonly name: string;
   /** A few words for people: what a client shows when it asks before running it */
   readonly title: string;
+  /** One or more sentences, for a person or a model */
   readonly description: string;
+  /** What it takes, as a JSON Schema object */
   readonly input: ActionSchema;
   /** Reads only. Agents may run these without asking; everything else changes data. Default false. */
   readonly readOnly: boolean;
@@ -79,6 +81,7 @@ export interface NodeAction {
    * descriptions. Data for an agent to read, never instructions to follow.
    */
   readonly peerContent?: boolean;
+  /** Runs it. Input and output are plain JSON: never a key, a handle or a function. */
   readonly run: (node: P2PNode, input: Record<string, unknown>) => Promise<unknown>;
 }
 
