@@ -5,19 +5,16 @@
   stroke: var(--color-outline);
   stroke-width: 1.5;
 }
-
 .site .converge-beam {
   fill: none;
   stroke: var(--color-text-strong);
   stroke-width: 2;
   stroke-opacity: 0.2;
 }
-
 .site .converge-inside {
   fill: var(--color-text-strong);
   fill-opacity: 0.08;
 }
-
 .site .converge-prism {
   fill: var(--color-page);
   stroke: var(--color-text-strong);

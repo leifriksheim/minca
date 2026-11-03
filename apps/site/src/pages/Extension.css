@@ -5,7 +5,6 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 }
-
 .site .tile-num {
   font-family: var(--font-display);
   font-size: 3.5rem;
@@ -14,31 +13,26 @@
   letter-spacing: -0.05em;
   color: var(--color-text-strong);
 }
-
 .site .tiles .tile {
   min-height: 280px;
 }
-
 .site .tiles .tile-art {
   right: -40px;
   bottom: -40px;
   width: 160px;
   height: 160px;
 }
-
 .site .tiles .tile h3 {
   margin-top: 20px;
   font-size: 1.375rem;
   letter-spacing: -0.03em;
 }
-
 .site .tiles .tile p {
   margin-top: 8px;
   max-width: 260px;
   font-size: var(--text-body);
   color: var(--color-text);
 }
-
 .site .tiles .tile code {
   font-size: var(--text-small);
   padding: 1px 6px;
@@ -50,7 +44,6 @@
 .site .tiles + .split {
   margin-top: 72px;
 }
-
 .site .toolbar {
   display: flex;
   align-items: center;
@@ -61,19 +54,16 @@
   background: var(--color-surface);
   box-shadow: 0 24px 48px -24px color-mix(in srgb, var(--color-text-strong) 35%, transparent);
 }
-
 .site .toolbar-dots {
   display: flex;
   gap: 6px;
 }
-
 .site .toolbar-dots i {
   width: 11px;
   height: 11px;
   border-radius: var(--radius-control);
   background: var(--color-field);
 }
-
 .site .toolbar-url {
   flex: 1;
   padding: 6px 14px;
@@ -111,12 +101,10 @@
   font-weight: 500;
   color: var(--color-text-strong);
 }
-
 .site .popup .toolbar-badge {
   position: static;
   border: 0;
 }
-
 .site .toolbar-badge {
   position: absolute;
   right: 5px;
@@ -127,7 +115,6 @@
   border-radius: var(--radius-control);
   background: var(--color-good);
 }
-
 .site .split-title {
   margin-bottom: 16px;
   font-size: clamp(1.875rem, 3.8vw, 2.75rem);

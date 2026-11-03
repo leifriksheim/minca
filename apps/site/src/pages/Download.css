@@ -13,7 +13,6 @@
   align-items: flex-start;
   min-height: 300px;
 }
-
 .site .platform h2 {
   display: flex;
   align-items: center;
@@ -28,31 +27,26 @@
   font-family: var(--font-body);
   letter-spacing: normal;
 }
-
 .site .platform p {
   flex: 1;
   margin-top: 10px;
   color: var(--color-text-muted);
 }
-
 .site .platform [data-intent] {
   margin-top: 32px;
 }
-
 .site .verify {
   padding: 0 16px 72px;
   text-align: center;
   font-size: var(--text-body);
   color: var(--color-text-muted);
 }
-
 @media (max-width: 860px) {
   .site .platforms,
   .site .tiles,
   .site .extension {
     grid-template-columns: minmax(0, 1fr);
   }
-
   .site .platform {
     min-height: 240px;
   }

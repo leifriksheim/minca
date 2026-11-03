@@ -7,23 +7,19 @@
   gap: 12px;
   padding: 2px 4px 12px;
 }
-
 .site .app-event > span:last-child {
   display: flex;
   flex-direction: column;
   min-width: 0;
   line-height: 1.3;
 }
-
 .site .app-event b {
   font-size: 1.1em;
 }
-
 .site .app-event small {
   font-size: var(--text-small);
   color: var(--color-text-muted);
 }
-
 .site .app-date {
   display: flex;
   flex: none;
@@ -39,7 +35,6 @@
   line-height: 1.5;
   color: var(--color-text-strong);
 }
-
 .site .app-date small {
   align-self: stretch;
   background: var(--color-hue-2);
@@ -63,7 +58,6 @@
   box-shadow: 0 0 0 2px var(--color-surface);
   animation: pop 0.35s ease;
 }
-
 @keyframes pop {
   from {
     opacity: 0;
