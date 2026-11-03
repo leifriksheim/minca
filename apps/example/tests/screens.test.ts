@@ -192,6 +192,11 @@ describe('screens', () => {
       screenPolicy(['https://api.open-meteo.com']),
       /connect-src https:\/\/api\.open-meteo\.com(;|$)/,
     );
+    assert.match(screenPolicy([]), /frame-src 'none'/);
+    assert.match(
+      screenPolicy(['https://drivelines.app', 'wss://live.example']),
+      /frame-src https:\/\/drivelines\.app;/,
+    );
     assert.match(screenPolicy(['*']), /connect-src 'none'/);
     // Hosts allow forms in the frame only because every policy sends them nowhere.
     assert.match(screenPolicy([]), /form-action 'none'/);
