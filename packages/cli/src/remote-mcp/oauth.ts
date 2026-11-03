@@ -6,13 +6,18 @@
  * over, the interaction: the person allows the app at their own account home
  * (`consent.ts`), which signs a records-only note for a key the page made.
  *
- * That key and note travel inside the access token, an encrypted JWT under a
- * key only this service holds, so it keeps neither: only between the person
- * allowing it and the app collecting its token, a few minutes at most. There is no refresh token; a token lasts as long as
- * the note, and disconnecting at the account home is what ends it sooner.
+ * That key and note are kept here sealed under a key that only the access
+ * token carries, an encrypted JWT under a key only this service holds: the
+ * token stays a few hundred bytes however many spaces were picked, where
+ * the grant itself is a few kilobytes a space, more than a request's headers
+ * may hold. Neither the disk nor a token alone opens it. Only between the
+ * person allowing it and the app collecting its token is it kept unsealed,
+ * a few minutes at most. There is no refresh token; a token lasts as long as
+ * the note, and disconnecting at the account home, which drops what it
+ * opens, is what ends it sooner.
  *
- * What it does keep (registered apps, codes, sign-ins under way, tokens
- * disconnected at the home) is small, runs out, and holds no key.
+ * What else it keeps (registered apps, codes, sign-ins under way) is small,
+ * runs out, and holds no key.
  */
 import Provider, { errors, type Adapter, type AdapterPayload, type Configuration } from 'oidc-provider';
 import type { IncomingMessage } from 'node:http';
@@ -34,14 +39,43 @@ const ACCESS_TOKEN_SECONDS = 30 * 86_400;
 const PENDING_SECONDS = 600;
 /** Where it waits */
 const PENDING = 'oauth:Pending:';
-/** Tokens whose key was revoked: kept as long as such a token could last */
-const REVOKED = 'oauth:Revoked:';
+/** What each token opens, by its id, sealed under a key the token alone carries */
+const GRANTED = 'oauth:Granted:';
 
 /** `oidc-provider`'s session cookie and its signature, by their default names */
 const SESSION_COOKIE = /^\s*_session(\.[a-z]+)?=/;
 
 const now = () => Math.floor(Date.now() / 1000);
 const encode = (value: unknown) => new TextEncoder().encode(JSON.stringify(value));
+const base64url = (bytes: Uint8Array) => Buffer.from(bytes).toString('base64url');
+
+/** AES-GCM under `key`, bound to the token `id` it belongs to: the nonce, then the ciphertext */
+async function seal(key: Uint8Array<ArrayBuffer>, id: string, value: unknown): Promise<string> {
+  const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
+  const aes = await globalThis.crypto.subtle.importKey('raw', key, 'AES-GCM', false, ['encrypt']);
+  const sealed = await globalThis.crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv, additionalData: new TextEncoder().encode(id) },
+    aes,
+    encode(value),
+  );
+  return base64url(new Uint8Array([...iv, ...new Uint8Array(sealed)]));
+}
+
+/** What {@link seal} sealed, or null when the key or the id isn't its */
+async function open(key: Uint8Array<ArrayBuffer>, id: string, sealed: string): Promise<unknown> {
+  const bytes = new Uint8Array(Buffer.from(sealed, 'base64url'));
+  try {
+    const aes = await globalThis.crypto.subtle.importKey('raw', key, 'AES-GCM', false, ['decrypt']);
+    const plain = await globalThis.crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: bytes.subarray(0, 12), additionalData: new TextEncoder().encode(id) },
+      aes,
+      bytes.subarray(12),
+    );
+    return JSON.parse(new TextDecoder().decode(plain));
+  } catch {
+    return null;
+  }
+}
 
 /** What each kept entry holds: the payload, and when it runs out (unix seconds) */
 interface Kept {
@@ -281,12 +315,20 @@ export async function createOAuth(options: OAuthOptions) {
     // The account is what the person allowed, until the app collects it.
     findAccount: async (_ctx, id) =>
       (await pending.has(id)) ? { accountId: id, claims: () => ({ sub: id }) } : undefined,
-    // The key and the note go into the token, sealed with it, and leave the service with it.
+    // The key and the note are kept sealed, and the key that opens them leaves the service in the token.
     extraTokenClaims: async (_ctx, token) => {
       if (token.kind !== 'AccessToken' || !token.accountId) return undefined;
       const granted = await pending.take(token.accountId);
       if (!granted) throw new errors.InvalidGrant('what was allowed has run out; connect again');
-      return { minca: granted };
+      const key = globalThis.crypto.getRandomValues(new Uint8Array(32));
+      await options.store.put(
+        `${GRANTED}${token.jti}`,
+        encode({
+          payload: { sealed: await seal(key, token.jti, granted) },
+          expiresAt: now() + ACCESS_TOKEN_SECONDS,
+        }),
+      );
+      return { minca: base64url(key) };
     },
     features: {
       devInteractions: { enabled: false },
@@ -383,12 +425,9 @@ export async function createOAuth(options: OAuthOptions) {
   return {
     provider,
     stop: () => clearInterval(sweeping),
-    /** Refuses a token from now on: its key was revoked, so the person disconnected the app */
+    /** Refuses a token from now on, by dropping what it opens: its key was revoked, so the person disconnected the app */
     async revoke(session: string) {
-      await options.store.put(
-        `${REVOKED}${session}`,
-        encode({ payload: {}, expiresAt: now() + ACCESS_TOKEN_SECONDS }),
-      );
+      await options.store.delete(`${GRANTED}${session}`);
     },
     /** Keeps what a person allowed until the app collects its token: the id the sign-in names */
     async pend(granted: Granted): Promise<string> {
@@ -411,15 +450,21 @@ export async function createOAuth(options: OAuthOptions) {
       } catch {
         throw new errors.InvalidToken('not a token this service sealed, or run out');
       }
-      const carried: unknown = payload.minca;
-      if (!isRecord(carried)) throw new errors.InvalidToken('it carries nothing');
-      const granted = await checkGranted(carried.key, carried.grant).catch(() => null);
-      if (!granted) throw new errors.InvalidToken('what it carries no longer checks out; connect again');
-      if (typeof payload.jti === 'string' && (await options.store.get(`${REVOKED}${payload.jti}`)))
-        throw new errors.InvalidToken('disconnected at the account home; connect again');
+      const { jti, minca } = payload;
+      if (typeof jti !== 'string' || typeof minca !== 'string')
+        throw new errors.InvalidToken('it carries nothing');
+      const bytes = await options.store.get(`${GRANTED}${jti}`);
+      const kept: unknown = bytes ? JSON.parse(new TextDecoder().decode(bytes)) : null;
+      if (!isKept(kept) || typeof kept.payload.sealed !== 'string')
+        throw new errors.InvalidToken('disconnected at the account home, or run out; connect again');
+      const carried = await open(new Uint8Array(Buffer.from(minca, 'base64url')), jti, kept.payload.sealed);
+      const granted = isRecord(carried)
+        ? await checkGranted(carried.key, carried.grant).catch(() => null)
+        : null;
+      if (!granted) throw new errors.InvalidToken('what it opens no longer checks out; connect again');
       const scopes = typeof payload.scope === 'string' ? payload.scope.split(' ') : [];
       return {
-        session: typeof payload.jti === 'string' ? payload.jti : '',
+        session: jti,
         granted,
         clientId: typeof payload.client_id === 'string' ? payload.client_id : '',
         scopes,

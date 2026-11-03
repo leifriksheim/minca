@@ -1,7 +1,7 @@
 /**
  * `minca mcp-server`: Minca's MCP service on its own, apart from any host.
  * Chat apps connect to it by its address (`remote-mcp/index.ts`). It keeps
- * nothing per connection: a token carries the key, and each session's node
+ * each connection's key sealed under one only its token carries, and each session's node
  * holds its spaces in memory while it runs, reaching them through the
  * always-on nodes and relays its invites and spaces name, on the public
  * internet only (`reach.ts`), and these.
@@ -9,7 +9,7 @@
  *   MINCA_MCP_URL     its public address, https:// (localhost may be http://)
  *   MINCA_NODES       always-on nodes of the operator's own, wss://host/peer#did:key:…, besides those spaces name
  *   MINCA_RELAYS      relays sessions meet devices through, besides those spaces name. Default wss://relay.minca.social
- *   MINCA_MCP_DATA    where it keeps its token secret and its sign-ins under way. Default ~/.minca-mcp
+ *   MINCA_MCP_DATA    where it keeps its token secret, sign-ins under way and sealed keys. Default ~/.minca-mcp
  *   MINCA_MCP_HOME    the account home its consent page suggests
  *   MINCA_MCP_APPS    more chat apps a sign-in may go back to: hosts (chat.example.com) or schemes (zed:)
  */

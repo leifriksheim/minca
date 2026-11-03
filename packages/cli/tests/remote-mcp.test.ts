@@ -684,6 +684,20 @@ describe('a host’s MCP endpoint', () => {
     assert.equal((await call(one.resource, parts.join('.'))).status, 401, 'one changed on the way');
   });
 
+  test('a token stays small however many spaces were picked, so the app can send it', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    // The most a chat app may be given: each invite is a few kilobytes, and a token that held
+    // them all would pass 16 KB, which Node's server, like most, refuses as a header (431).
+    for (let n = 1; n <= 8; n++) await ada.node.spaces.create({ name: `Space ${n}`, visibility: 'private' });
+    const host = await aHost(hub);
+    const app = await anApp(host.resource);
+    const { tokens } = await signIn(app, host.resource, (audience) => ada.grantFor(audience));
+    assert.ok(tokens.access_token.length < 1024, `${tokens.access_token.length} bytes`);
+    const client = await mcpClient(host.resource, tokens.access_token);
+    assert.equal((await client.callTool({ name: 'spaces_list', arguments: {} })).isError, false);
+  });
+
   test('a sign-in is answered once, and never for the whole account', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const ada = await accountHolder(hub);

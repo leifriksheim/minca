@@ -11,12 +11,13 @@
  *        /oauth/...                                    registering, signing in, tokens (`oauth.ts`)
  *        /oauth/interaction/:uid                       where the person allows the app (`consent.ts`)
  *
- * Each token carries an agent of the person's account: a key, with a
+ * Each token opens an agent of the person's account: a key, with a
  * records-only note their account home signed for the spaces they picked
  * (`sessions.ts`). It writes as them, "via agent", and can't add collections
  * or change who is in a space. The tools are `NODE_ACTIONS`, as `minca mcp`
- * offers them (`mcp.ts`). The token holds the key; the service holds a
- * copy of the spaces only while their node runs (`sessions.ts`).
+ * offers them (`mcp.ts`). The service keeps the key sealed under one only the
+ * token carries, and a copy of the spaces only while their node runs
+ * (`sessions.ts`).
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import {

@@ -1011,10 +1011,12 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     there. Only the account's own keys and apps can; apps should choose names
     that include their collection (02 §4.1). By design.
   - An MCP service a person connects a chat app through (`minca mcp-server`)
-    is such an app, holding its key inside the app's access token, sealed
-    under a key of its own: on its disk only between the person allowing it
-    and the app collecting the token, twenty minutes at most, and in memory
-    while a node runs. While the app uses it, a node of its holds the spaces
+    is such an app. It keeps its key and note on its disk sealed under a key
+    only the app's access token carries, itself sealed under a key of the
+    service's own, so neither the disk nor a token alone opens them; unsealed
+    only between the person allowing it and the app collecting the token,
+    twenty minutes at most, and in memory while a node runs. A disconnect the
+    service sees drops the sealed copy, and with it the token. While the app uses it, a node of its holds the spaces
     the person picked in memory, reads them and writes records there "via
     agent", as the app's model asks; and whoever holds its sealing key and a
     token can do the same until the note runs out or the person disconnects
