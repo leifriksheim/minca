@@ -3,10 +3,6 @@
  * things beside or under each other. Gaps come in three: data-gap="tight"
  * for things that belong together, none for the usual, "loose" for groups.
  */
-body {
-  padding: var(--space-loose);
-}
-
 /* The screen's column, as wide as reads well. data-wide: all of it, for a board, a map or a game. */
 main {
   display: flex;
@@ -14,6 +10,7 @@ main {
   gap: var(--space-section);
   max-width: var(--reading-width);
   margin: 0 auto;
+  padding: var(--space-loose);
 
   &[data-wide] {
     max-width: none;
@@ -21,7 +18,7 @@ main {
 
   /* The window's height, its first child scrolling: a conversation over the box to write in */
   &[data-fill] {
-    height: calc(100dvh - 2 * var(--space-loose));
+    height: 100dvh;
     gap: var(--space);
 
     & > :first-child {
