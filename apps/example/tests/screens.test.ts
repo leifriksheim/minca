@@ -198,9 +198,9 @@ describe('screens', () => {
     assert.match(screenPolicy(['https://api.open-meteo.com']), /form-action 'none'/);
     assert.ok(
       screenDocument('<p>Weather</p>', ['https://api.open-meteo.com']).startsWith(
-        '<meta http-equiv="Content-Security-Policy"',
+        '<!doctype html>\n<meta http-equiv="Content-Security-Policy"',
       ),
-      'the policy comes before any script',
+      'a doctype, so the screen is drawn in standards mode, then the policy before any script',
     );
   });
 

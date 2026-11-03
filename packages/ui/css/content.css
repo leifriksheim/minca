@@ -50,6 +50,15 @@ ol[role='list'] {
         background: var(--color-sunken);
       }
     }
+
+    /* A field in a row (adding one, renaming one) is the row's text: the row is its box */
+    & :is(input:not([type='checkbox'], [type='radio']), textarea) {
+      min-height: 0;
+      padding: 0;
+      border: none;
+      background: none;
+      outline: none;
+    }
   }
 }
 

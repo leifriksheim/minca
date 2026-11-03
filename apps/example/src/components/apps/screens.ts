@@ -342,8 +342,9 @@ export function screenPolicy(network: ReadonlyArray<string> = []): string {
  * @param ui The kit as one script (`bundleUi` in `@minca/ui/bundle`), which sets up `ui` over `minca`
  */
 export function screenDocument(screen: string, network: ReadonlyArray<string> = [], ui = ''): string {
+  // A doctype, or the browser draws the screen in quirks mode (a form gets a margin below it, and more).
   // The policy first, so it is in force before any script runs; `minca` next, then `ui` on it, so both are there when the screen's run.
-  return `<meta http-equiv="Content-Security-Policy" content="${screenPolicy(network)}">\n<script>${SCREEN_CLIENT}</script>\n<script>${ui}</script>\n${screen}`;
+  return `<!doctype html>\n<meta http-equiv="Content-Security-Policy" content="${screenPolicy(network)}">\n<script>${SCREEN_CLIENT}</script>\n<script>${ui}</script>\n${screen}`;
 }
 
 const toScreen = (

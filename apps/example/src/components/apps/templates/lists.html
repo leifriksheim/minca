@@ -238,12 +238,12 @@
     };
     return html`<form
       class="row"
-      data-gap="tight"
       onSubmit=${(e) => {
         e.preventDefault();
         submit();
       }}
     >
+      <${Icon} name="plus" />
       <input
         value=${text}
         placeholder=${placeholder}
