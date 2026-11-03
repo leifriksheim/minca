@@ -311,7 +311,9 @@ input[type='checkbox'][role='switch'] {
       color: var(--color-text-strong);
     }
 
-    &[aria-selected='true'] {
+    /* The chosen one stays as it is under the pointer */
+    &[aria-selected='true'],
+    &[aria-selected='true']:hover:not(:disabled) {
       border-color: var(--color-outline);
       background: var(--color-surface);
       color: var(--color-text-strong);
