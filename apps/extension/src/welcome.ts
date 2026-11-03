@@ -73,16 +73,12 @@ function connectView(): Array<Node | null> {
 
   return [
     status?.removed
-      ? h(
-          'p',
-          { class: 'note' },
-          'Your account disconnected this extension, and it forgot everything it held.',
-        )
+      ? h('aside', {}, 'Your account disconnected this extension, and it forgot everything it held.')
       : null,
     h('h1', {}, 'Keep your spaces online'),
     h(
       'p',
-      { class: 'lead' },
+      {},
       'While Chrome is open, this keeps your Minca spaces in sync with your other devices and the people you share with — even with no app open. It can’t read them.',
     ),
     h(
@@ -95,20 +91,16 @@ function connectView(): Array<Node | null> {
         { class: 'actions' },
         h(
           'button',
-          { class: 'wide', disabled: busy, onClick: () => void connect() },
+          { 'data-intent': 'primary', class: 'wide', disabled: busy, onClick: () => void connect() },
           busy ? 'Waiting for your account home…' : 'Connect',
         ),
       ),
-      h(
-        'p',
-        { class: 'hint', style: 'margin-top: 12px' },
-        'Your account home opens in a new window. Sign in there, and allow it.',
-      ),
-      error ? h('p', { class: 'error' }, error) : null,
+      h('p', {}, 'Your account home opens in a new window. Sign in there, and allow it.'),
+      error ? h('p', { role: 'alert' }, error) : null,
     ),
     h(
-      'p',
-      { class: 'faint' },
+      'small',
+      {},
       'It holds your spaces as they travel, private ones still locked. It never gets your password or the keys that open them.',
     ),
   ];
@@ -121,7 +113,7 @@ function connectedView(): Array<Node | null> {
   const account = status?.account ?? (grant ? { name: grant.name, did: grant.did, home: grant.home } : null);
   return [
     h('h1', {}, 'Keeping your spaces online'),
-    h('p', { class: 'lead' }, 'While Chrome is open, your spaces stay in sync — even with no app open.'),
+    h('p', {}, 'While Chrome is open, your spaces stay in sync — even with no app open.'),
     account
       ? h(
           'section',
@@ -130,21 +122,21 @@ function connectedView(): Array<Node | null> {
             account,
             h(
               'button',
-              { class: 'quiet small', disabled: busy, onClick: () => void switchAccount() },
+              { disabled: busy, onClick: () => void switchAccount() },
               busy ? 'Waiting…' : 'Switch account',
             ),
           ),
           h(
             'p',
-            { class: 'hint', style: 'margin-top: 10px' },
+            {},
             'It keeps one account online at a time. If your apps show a different account or picture, switch to that one.',
           ),
         )
       : null,
     status?.state === 'error'
       ? h(
-          'p',
-          { class: 'note' },
+          'aside',
+          {},
           `Something went wrong: ${status.error ?? 'unknown'}. It will try again when Chrome restarts.`,
         )
       : null,
@@ -152,7 +144,7 @@ function connectedView(): Array<Node | null> {
       'section',
       {},
       h('h2', {}, 'Spaces'),
-      status ? h('p', { class: 'hint' }, summary(status)) : null,
+      status ? h('small', {}, summary(status)) : null,
       status ? spaceList(status) : null,
     ),
     grant?.pod ? podSection(grant.pod) : grant ? noPodSection() : null,
@@ -160,25 +152,19 @@ function connectedView(): Array<Node | null> {
       'section',
       {},
       h('h2', {}, 'Disconnect'),
-      h('p', { class: 'hint' }, 'Forgets everything this extension holds. Your spaces stay on your devices.'),
+      h('small', {}, 'Forgets everything this extension holds. Your spaces stay on your devices.'),
       h(
         'div',
         { class: 'actions' },
         h(
           'button',
-          { class: 'danger small', disabled: busy, onClick: () => void disconnect() },
+          { 'data-intent': 'danger', disabled: busy, onClick: () => void disconnect() },
           'Disconnect',
         ),
-        accountHome
-          ? h(
-              'a',
-              { href: accountHome, target: '_blank', class: 'hint', style: 'align-self: center' },
-              'Your account home',
-            )
-          : null,
+        accountHome ? h('a', { href: accountHome, target: '_blank' }, 'Your account home') : null,
       ),
     ),
-    error ? h('p', { class: 'error' }, error) : null,
+    error ? h('p', { role: 'alert' }, error) : null,
   ];
 }
 
@@ -204,7 +190,7 @@ function podSection(pod: NonNullable<CarryGrant['pod']>): HTMLElement {
       { class: 'actions' },
       h(
         'button',
-        { class: quiet ? 'quiet small' : 'small', disabled: busy, onClick: () => void onClick() },
+        { 'data-intent': quiet ? undefined : 'primary', disabled: busy, onClick: () => void onClick() },
         label,
       ),
     );
@@ -214,8 +200,8 @@ function podSection(pod: NonNullable<CarryGrant['pod']>): HTMLElement {
       : state === 'needs-permission'
         ? [
             h(
-              'p',
-              { class: 'note', style: 'margin-top: 10px' },
+              'aside',
+              {},
               'When Chrome asks, choose ',
               h('strong', {}, 'Allow on every visit'),
               '. Then it keeps writing to your pod without asking again.',
@@ -244,8 +230,8 @@ function noPodSection(): HTMLElement {
     {},
     h('h2', {}, 'A folder'),
     h(
-      'p',
-      { class: 'hint' },
+      'small',
+      {},
       'If your account home keeps your account in a folder, this extension can keep that folder up to date while Chrome is open, so it holds everything even when your account home is closed. Choose “Keep in a folder” in your account home first, then connect again here.',
     ),
     h(
@@ -253,7 +239,7 @@ function noPodSection(): HTMLElement {
       { class: 'actions' },
       h(
         'button',
-        { class: 'quiet small', disabled: busy, onClick: () => void switchAccount() },
+        { disabled: busy, onClick: () => void switchAccount() },
         busy ? 'Waiting…' : 'Connect again',
       ),
     ),
