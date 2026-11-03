@@ -251,7 +251,7 @@ changes as you move around.
 **In the browser (WebMCP).** When the app loads, it registers every node
 operation as a WebMCP tool on `document.modelContext` (`src/webmcp.ts`, with
 `@mcp-b/webmcp-polyfill`: Chrome's own WebMCP when present, a polyfill
-otherwise). A browser agent sees the same tools as the CLI and `minca mcp`,
+otherwise). A browser agent sees the same tools as the CLI and the MCP service,
 and works as the person, with nothing to switch on: anything that can call a
 page's tools can already click through the page. It isn't offered
 `collections_define`: it proposes collections (`collections_propose`) and a
@@ -260,12 +260,11 @@ key, asks the person first. An app an agent makes may bring its own screen,
 which the example runs in a sandboxed frame with no network (the launcher's
 guide, `src/components/apps/launcher.ts`, and `src/components/apps/screens.ts`).
 
-**On your computer (Claude Code, Claude Desktop, Cursor, VS Code, …).** "Connect an
-agent", in the account menu, shows one command:
-`npx @minca/cli connect mc_…`. The person allows it at their account
-home, and the command adds `minca` to the agents it finds, which start
-`minca mcp` themselves: a node of its own that keeps working with every tab
-closed. See [agents](../../packages/core/docs/agents.md).
+**On your computer (Claude Code, Codex, Cursor's agent, …).** "Connect an
+agent", in the account menu, shows one command: `npx @minca/cli connect`.
+The person allows it at their account home, and from then on an agent's
+shell runs `minca` commands as that agent. A chat app connects to the MCP
+service instead. See [agents](../../packages/core/docs/agents.md).
 
 ### Ready-made apps
 

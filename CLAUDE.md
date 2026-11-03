@@ -237,17 +237,8 @@ Elsewhere:
   mode and redrawing, which is fiddly across terminals to get right. Released
   since 2023, widely used, four tiny dependencies. Used only when stdin and
   stderr are terminals; with none, the CLI asks nothing.
-- `node-datachannel` in `packages/cli`: WebRTC for `minca mcp` and headless
-  nodes.
-- `add-mcp`, a dev dependency of `packages/cli`, pinned and bundled, loaded
-  only when `minca connect` runs (`packages/cli/src/clients.ts`): where each
-  MCP client keeps its config, in what format (JSON, JSONC, YAML, TOML) and
-  under which key, for twenty-odd clients that move their files between
-  releases. A long tail someone else keeps current. Neon's, released since
-  2025; its library API (`detectGlobalAgents`, `upsertServer`) needs only its
-  parsers (js-yaml, @iarna/toml, jsonc-parser). Young and still changing, so
-  it is pinned to an exact version and bumped on purpose. Claude Code still
-  goes through `claude mcp add`.
+- `node-datachannel` in `packages/cli`: WebRTC for the agent's node and
+  headless nodes.
 - `@anthropic-ai/sdk`, a dev dependency of `packages/cli`, bundled into
   `minca agent` only and loaded when that command runs
   (`packages/cli/src/agent-chat.ts`): the Messages API's streaming, tool use,
@@ -261,8 +252,7 @@ Elsewhere:
   2025 one apps still speak, and the resource server's half of MCP's OAuth
   (protected-resource metadata, bearer challenges). A wire protocol with a long
   tail, from its own maintainers, used by most MCP servers; the server's only
-  dependency is `zod`. `minca mcp` over stdio still has its own small loop
-  (`packages/cli/src/mcp.ts`), with the same tools (`mcpTools`).
+  dependency is `zod`. The tools are `mcpTools` (`packages/cli/src/mcp.ts`).
 - `oidc-provider` 9, a dev dependency of `packages/cli`, bundled into `minca
 mcp-server` (`packages/cli/src/remote-mcp/oauth.ts`):
   the OAuth 2.1 authorization server chat apps sign in through, with dynamic

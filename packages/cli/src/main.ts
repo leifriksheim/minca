@@ -45,7 +45,7 @@ import {
 } from './host-setup.js';
 import { isHostStats, statsLines } from './host-stats.js';
 import { mcpServerFromEnv, startMcpServer } from './remote-mcp/server.js';
-import { CONNECT, connectWaiting, runMcpStdio, runWaitingMcpStdio } from './mcp.js';
+import { CATCH_UP_MS, KEPT_MS, levelIn } from './level.js';
 import {
   ACCOUNT_HOME,
   claimSlot,
@@ -59,18 +59,15 @@ import {
   loadModelKey,
   openInBrowser,
   reconnectAgent,
-  reloadOnConnect,
   saveModelKey,
   startAgentNode,
   startBotNode,
-  type RunningAgent,
   type Slot,
 } from './agent.js';
 import { createAgentChat, DEFAULT_MODEL, fileSpend, priceOf } from './agent-chat.js';
 import { capEachOf, runAutomations } from './bot-runner.js';
 import { holdLock } from './writer-keys.js';
 import { chooseModel, isLoopback, isPlain, thinker, type ModelChoice } from './model.js';
-import { configSnippet, configureClients, serverCommand, unconfigureClients } from './clients.js';
 import { addRule, defineStandard, loadModelSetting, setUpModel } from './guide.js';
 import * as ask from './ask.js';
 import { commaList, isRecord, messageOf } from './json.js';
@@ -84,21 +81,13 @@ command still needs is asked for: a space from your spaces, a role, a yes or
 no. Anywhere else (an agent, a script, CI) nothing is ever asked: a missing
 value fails at once, naming the flag that gives it. --yes answers yes ahead.
 
-Usage:
-  minca init [--name NAME] [--passphrase] [--existing]
-  minca whoami
-  minca spaces  list | create | invite | join | leave | status   [--flags]
-  minca spaces  access | assign | remove_member | step_down | succeed
-  minca records query | get | put | update | delete               [--flags]
-  minca run [--port 8787] [--host 127.0.0.1] [--node wss://…/peer] [--no-relays] [--create]
-  minca host [--port 8787] [--host 127.0.0.1] [--data DIR] [--free] [--allow did:key:…]
-  minca host stats <address> [--json]       what a host carries and takes in, as it shows anyone
-  minca mcp-server [--port 8788] [--host 127.0.0.1]   Minca for chat apps: Claude, ChatGPT, an IDE
-  minca carry --data DIR                     one account's spaces, from a folder the desktop app connected
-  minca app-node --data DIR                  the desktop app's node; the desktop shell runs it
-  minca connect [--account-home home.minca.social] [--name NAME] [--relay wss://…] [--no-configure]
+Use Minca:
+  minca connect [--account-home home.minca.social] [--name NAME] [--relay wss://…]
   minca disconnect
-  minca mcp
+  minca spaces  list | create | invite | join | leave | status   [--flags]
+  minca spaces  access | assign | remove-member | step-down | succeed
+  minca records query | get | put | update | delete | history | linked
+  minca collections list | standard | propose | proposals
   minca agent [--setup] [--model claude-opus-5-5] [--daily-cap 2] [--no-chat]
               [--provider anthropic|openai] [--base-url URL] [--price IN/OUT]
   minca agent --bot [--name NAME] [--invite LINK] [--daily-cap-each 0.5]
@@ -106,15 +95,31 @@ Usage:
   minca bots                                 the bots kept here, to start again
   minca automation add [--space ID] [--name N] [--collection C] [--where JSON] [--every CRON]
                  [--from ROLES] [--do TEXT] [--by BOT|me]
-  minca collections define --standard std.automation [--space ID]
-  minca actions
+  minca init [--name NAME] [--passphrase] [--existing]   an account of its own on this computer
+  minca whoami
+  minca actions                              every action, with its flags
 
-Agents (Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Zed, Codex, …):
-  "minca connect" opens your account home in the browser, where you allow
-  this computer's agent, and adds "minca" to the agents it finds. From then
-  on they start "minca mcp" themselves: a node of its own, working with every
-  tab closed. An agent that starts "minca mcp" before it is connected offers
-  one tool, agent_connect, which opens your account home the same way.
+Run a service:
+  minca run [--port 8787] [--host 127.0.0.1] [--node wss://…/peer] [--no-relays] [--create]
+  minca host [--port 8787] [--host 127.0.0.1] [--data DIR] [--free] [--allow did:key:…]
+  minca host stats <address> [--json]       what a host carries and takes in, as it shows anyone
+  minca mcp-server [--port 8788] [--host 127.0.0.1]   the MCP service chat apps connect to
+
+Started for you:
+  minca carry --data DIR                     one account's spaces, from a folder the desktop app connected
+  minca app-node --data DIR                  the desktop app's node; the desktop shell runs it
+
+Agents:
+  In a chat app (Claude on the web, desktop or phone, ChatGPT, Cursor), add
+  https://mcp.minca.social/mcp as a connector: nothing to install here.
+
+  An agent with a shell (Claude Code, Codex, Cursor's agent, …) runs these
+  commands. "minca connect" opens your account home in the browser, where
+  you allow this computer's agent; from then on, with no account of its own
+  here to open, every command runs as that agent: it writes records, marked
+  "via agent", and can't change who is in a space or add collections. Each
+  command reaches the space before it reads, and sees what it writes kept
+  by an always-on node before it ends.
   Your account home is home.minca.social unless you name another: at a
   terminal it asks, filled in, so Enter takes it; or --account-home, or
   MINCA_ACCOUNT_HOME. Connecting again uses the one you used last.
@@ -186,7 +191,6 @@ type Command = (args: string[], globals: Globals) => Promise<number>;
 
 const stderr = ask.say;
 const logLine = (line: string) => stderr(`[${new Date().toISOString()}] ${line}`);
-const MCP_INFO = { name: 'minca', version: VERSION };
 
 async function main(argv: ReadonlyArray<string>): Promise<number> {
   const { globals, rest } = splitGlobals(argv);
@@ -224,7 +228,6 @@ const COMMANDS = new Map<string, Command>([
   ['bots', bots],
   ['disconnect', disconnect],
   ['agent', agent],
-  ['mcp', agentMcp],
 ]);
 
 async function pickFromMenu(): Promise<string[] | null> {
@@ -505,7 +508,6 @@ async function connect(args: string[], globals: Globals): Promise<number> {
       'account-home': { type: 'string' },
       name: { type: 'string' },
       relay: { type: 'string', multiple: true },
-      'no-configure': { type: 'boolean' },
     },
   });
   const home = homePath(globals.home);
@@ -520,20 +522,10 @@ async function connect(args: string[], globals: Globals): Promise<number> {
   stderr(
     `Connected to ${grant.name}'s account (${grant.did}), for ${daysLeft(grant)} days. What the agent writes shows "via agent".`,
   );
-  const server = serverCommand(home);
-  if (values['no-configure']) return showSnippet("Add this to your agent's MCP settings:", server);
-  const configured = await configureClients(server);
-  for (const { client, result } of configured) stderr(`  ${client}: ${result}`);
-  if (configured.some((entry) => entry.ok)) return 0;
-  return showSnippet(
-    "No agent found on this computer to add it to. Add this to your agent's MCP settings:",
-    server,
+  stderr(
+    'Agents on this computer (Claude Code, Codex, Cursor, …) can now run "minca" commands as it: tell yours to ' +
+      'start with "minca help". For a chat app, add https://mcp.minca.social/mcp as a connector instead.',
   );
-}
-
-function showSnippet(lead: string, server: ReturnType<typeof serverCommand>): number {
-  stderr(lead);
-  process.stdout.write(`${configSnippet(server)}\n`);
   return 0;
 }
 
@@ -551,95 +543,10 @@ async function bots(_args: string[], globals: Globals): Promise<number> {
 async function disconnect(_args: string[], globals: Globals): Promise<number> {
   const home = homePath(globals.home);
   await forgetAgent(home);
-  for (const { client, result } of await unconfigureClients(home)) stderr(`  ${client}: ${result}`);
   stderr(
     "This computer's agent is forgotten here. To stop its notes working everywhere, disconnect each of its sessions in your account home.",
   );
   return 0;
-}
-
-/**
- * `mcp`: the connected agent, a node of its own with a key no other session
- * signs with. Not connected yet, it offers only to connect.
- */
-async function agentMcp(_args: string[], globals: Globals): Promise<never> {
-  const home = homePath(globals.home);
-  const slot = await claimSlot(home);
-  let agent: RunningAgent | null = null;
-  let stopReloading = () => {};
-  const current = () => agent?.node ?? null;
-  const close = async () => {
-    stopReloading();
-    await (agent?.close() ?? slot.release());
-  };
-  // Stopped by a signal, it still lets go of the slot, so the next session needn't take it over.
-  const stop = () => {
-    stderr('minca mcp: stopped');
-    void close().finally(() => process.exit(0));
-  };
-  process.once('SIGINT', stop);
-  process.once('SIGTERM', stop);
-
-  const start = async () => {
-    agent = await startAgentNode(home, slot, {
-      nodes: commaList(process.env.MINCA_NODES),
-      onRevoked: (space: string) =>
-        stderr(
-          `minca mcp: the agent's key was revoked in ${space}; nothing it writes there counts until it connects again`,
-        ),
-    });
-    const { grant } = agent;
-    stderr(`minca mcp: an agent for ${grant.name} (${grant.did}), ${daysLeft(grant)} days left`);
-    // `minca connect` again, after a disconnect or to renew, is taken up here.
-    stopReloading = reloadOnConnect(slot, agent, (line) => stderr(`minca mcp: ${line}`));
-    return agent.node;
-  };
-  // The model sees only "revoked" otherwise.
-  const trouble = () =>
-    agent?.revoked().length
-      ? "This agent was disconnected in the person's account home, so its key is revoked and nothing it writes counts. " +
-        'Ask them to start this session again: it then asks to be allowed at their account home, with a new key.'
-      : null;
-  const options = { agent: true, trouble };
-
-  if (await isConnected(slot)) {
-    const first = await start();
-    await runMcpStdio(() => current() ?? first, MCP_INFO, options);
-  } else {
-    stderr(`minca mcp: this session isn't connected to an account; offering only ${CONNECT} until it is`);
-    const accountHome = await usualAccountHome(home);
-    const waiting = connectWaiting({
-      accountHome,
-      others: (await loadAgentGrant(home)) !== null,
-      connect: connectOnce(slot.dir, accountHome),
-      tryStart: async () => ((await isConnected(slot)) ? start() : null),
-      current,
-      account: () => agent && { name: agent.grant.name, did: agent.grant.did },
-    });
-    await runWaitingMcpStdio(waiting, MCP_INFO, options);
-  }
-  await close();
-  // WebRTC keeps the process alive; the agent closed stdin, so it's done.
-  process.exit(0);
-}
-
-/** Connects from inside MCP, opening the account home once however often the agent asks */
-function connectOnce(slot: string, accountHome: string) {
-  let link: Promise<{ opened: boolean; url: string }> | null = null;
-  return (check: Check) =>
-    (link ??= new Promise((resolve, reject) => {
-      connectHere(slot, homeAddress(accountHome), {
-        check,
-        onLink: (url) => void openInBrowser(url).then((opened) => resolve({ opened, url })),
-      }).then(
-        (grant) => stderr(`minca mcp: connected to ${grant.name}'s account (${grant.did})`),
-        (error: unknown) => {
-          link = null;
-          stderr(`minca mcp: connecting failed: ${messageOf(error)}`);
-          reject(error instanceof Error ? error : new Error(String(error)));
-        },
-      );
-    }));
 }
 
 async function agent(args: string[], globals: Globals): Promise<number> {
@@ -1023,7 +930,7 @@ async function runNodeAction(command: string, args: string[], globals: Globals):
     return 2;
   }
   const { action } = found;
-  return withNode(globals, async (node) => {
+  return withNode(globals, async (node, asAgent) => {
     // What the flags left out is asked for at a terminal, or refused naming its flag.
     const input = await completeInput(node, action, inputFromFlags(action, found.rest));
     // With nobody to ask, it runs: an agent or a script said so.
@@ -1033,7 +940,21 @@ async function runNodeAction(command: string, args: string[], globals: Globals):
       !(await ask.confirm(question, { ...(globals.yes ? { yes: true } : {}), otherwise: true }))
     )
       return 1;
+    const space = typeof input.space === 'string' ? input.space : undefined;
+    // The agent's node runs for this one command: it catches up first, and sees a write out.
+    if (asAgent && space !== undefined && !(await levelIn(node, space, CATCH_UP_MS)))
+      stderr('No always-on node of this space answered: what this shows may be out of date.');
+    const since = Date.now();
     const result = await runAction(node, action.name, input);
+    if (asAgent && space !== undefined && !action.readOnly) {
+      const by = await node.spaces.kept(space, KEPT_MS, since);
+      if (by !== 'keepers')
+        stderr(
+          by === 'peer'
+            ? 'Kept by a device of this space online now, not an always-on node: it reaches the rest when that device syncs.'
+            : 'Written here, not yet kept anywhere else: it goes out the next time a minca command runs here.',
+        );
+    }
     const invite = action.name === 'spaces_invite' && isRecord(result) ? result.invite : undefined;
     if (typeof invite !== 'string' || !process.stdout.isTTY) return print(result);
     // To a person, the invite alone, whole on one line to copy.
@@ -1064,7 +985,10 @@ function findAction(
   words: ReadonlyArray<string>,
 ): { action: NodeAction; rest: ReadonlyArray<string> } | null {
   const [first, second] = words;
-  const byPair = second ? NODE_ACTIONS.find((a) => a.name === `${first}_${second}`) : undefined;
+  // `spaces remove-member` as well as `spaces remove_member`
+  const byPair = second
+    ? NODE_ACTIONS.find((a) => a.name === `${first}_${second.replace(/-/g, '_')}`)
+    : undefined;
   if (byPair) return { action: byPair, rest: words.slice(2) };
   const byName = NODE_ACTIONS.find((a) => a.name === first || a.name === first?.replace(/-/g, '_'));
   return byName ? { action: byName, rest: words.slice(1) } : null;
@@ -1134,10 +1058,24 @@ function splitGlobals(argv: ReadonlyArray<string>): { globals: Globals; rest: st
  * Runs something against the unlocked account's folder, offline. With a
  * daemon running on the same folder, it picks the change up and syncs it.
  */
-async function withNode(globals: Globals, work: (node: P2PNode) => Promise<number>): Promise<number> {
-  const node = await nodeFor(await openAccount(globals), { watchIntervalMs: 0 });
+/**
+ * Runs `work` on a node of this computer's account when it has one that can
+ * be opened, by someone at the terminal or a secret from the environment;
+ * else as the agent "minca connect" allowed. An agent can't type a
+ * passphrase, and as the agent what it writes shows "via agent".
+ */
+async function withNode(
+  globals: Globals,
+  work: (node: P2PNode, asAgent: boolean) => Promise<number>,
+): Promise<number> {
+  const home = homePath(globals.home);
+  const asAgent = !(await accountOpens(globals)) && (await loadAgentGrant(home)) !== null;
+  const agent = asAgent
+    ? await startAgentNode(home, await agentSlot(home), { nodes: commaList(process.env.MINCA_NODES) })
+    : null;
+  const node = agent?.node ?? (await nodeFor(await openAccount(globals), { watchIntervalMs: 0 }));
   try {
-    return await work(node);
+    return await work(node, asAgent);
   } catch (error) {
     if (error instanceof Error && error.message.startsWith('Unknown space'))
       throw new Error(
@@ -1147,7 +1085,34 @@ async function withNode(globals: Globals, work: (node: P2PNode) => Promise<numbe
       );
     throw error;
   } finally {
-    await node.close();
+    await (agent ? agent.close() : node.close());
+  }
+}
+
+/** Whether this computer has an account a command can open without an agent's help */
+async function accountOpens(globals: Globals): Promise<boolean> {
+  if ((await (await openHome(globals.home)).accounts.list()).length === 0) return false;
+  const secret = process.env.MINCA_RECOVERY_CODE ?? process.env.MINCA_PASSPHRASE;
+  return (
+    ask.interactive() ||
+    secret !== undefined ||
+    globals.codeFile !== undefined ||
+    globals.passphraseFile !== undefined
+  );
+}
+
+/** A connected slot of this computer's agent, waiting a while for one another command holds */
+async function agentSlot(home: string): Promise<Slot> {
+  const until = Date.now() + 30_000;
+  for (;;) {
+    const slot = await claimSlot(home);
+    if (await isConnected(slot)) return slot;
+    await slot.release();
+    if (Date.now() > until)
+      throw new Error(
+        'Every connected session of this computer\'s agent is busy. Try again, or run "minca connect" for another.',
+      );
+    await new Promise((resolve) => setTimeout(resolve, 250));
   }
 }
 
@@ -1219,28 +1184,21 @@ async function chooseAccountHome(home: string, given?: string): Promise<string> 
   return homeAddress(typed);
 }
 
-type Check = (matches: (typed: string) => boolean) => Promise<void>;
-
 /**
  * Connects a slot of this computer's agent: opens the account home in the
  * browser at a new code, and waits there for the person to allow it.
- * @param options.onLink Given the link first, instead of opening and showing it here
  */
-function connectHere(
-  slot: string,
-  accountHome: string,
-  options: { name?: string; relays?: string[]; onLink?: (url: string) => void; check?: Check } = {},
-) {
+function connectHere(slot: string, accountHome: string, options: { name?: string; relays?: string[] } = {}) {
   const session = Number(path.basename(slot));
   // Each session named apart, so the person can tell them apart at their account home.
   const name = options.name ?? `${defaultAgentName()}${session > 1 ? `, session ${session}` : ''}`;
   return connectAgent({
     slot,
     accountHome,
-    check: options.check ?? typeCheck,
+    check: typeCheck,
     name,
     relays: [...new Set([...(options.relays ?? []), ...configuredRelays()])],
-    onLink: options.onLink ?? openLink,
+    onLink: openLink,
   });
 }
 
@@ -1259,7 +1217,7 @@ function openLink(url: string): void {
 async function typeCheck(matches: (typed: string) => boolean): Promise<void> {
   if (!ask.interactive())
     throw new Error(
-      'Connecting needs a terminal to type the code your account home shows. Run it in one, or connect from your AI.',
+      'Connecting needs a terminal to type the code your account home shows: run "minca connect" in one.',
     );
   await ask.text({
     flag: 'check',

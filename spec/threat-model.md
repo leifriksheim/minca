@@ -966,7 +966,7 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     and a file where a space's directory belongs stops every client pushing
     or pulling that space through the folder, until it is removed (05 §14.5,
     §16.4; [#33](https://github.com/leifriksheim/minca/issues/33)).
-  - `minca agent` and `minca mcp` keep each session's key, grant and stores
+  - `minca agent` and the commands an agent runs keep each session's key, grant and stores
     together in a slot of the CLI home (`<home>/agent/<n>`). One process signs
     with a slot's key at a time only while the slot's lock holds: numbered
     files, each linked into place whole, the highest the lock, no number used

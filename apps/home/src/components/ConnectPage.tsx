@@ -33,7 +33,7 @@ const ChooseAgain = createContext<() => void>(() => {});
  * leaves this page. The app's address is what is trusted, as the browser
  * reports it, not what it calls itself.
  *
- * Or a program on a computer (`minca connect`, an AI's `minca mcp`) opened it
+ * Or a program on a computer (`minca connect`) opened it
  * at `/connect#mc_…`: the same steps, for records in the whole account.
  */
 export function ConnectPage() {

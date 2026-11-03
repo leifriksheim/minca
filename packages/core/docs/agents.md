@@ -38,19 +38,14 @@ npx @minca/cli connect
 It makes a key for this computer's agent and opens the person's account home
 in the browser, where they sign in, or make an account, and allow it. The
 home then shows six digits, which the person types into the terminal: the
-agent keeps its note only once they match. Then it
-adds `minca mcp` to the agents it finds (Claude Code, Claude Desktop, Cursor,
-VS Code, Windsurf, Zed, Codex and more). The agent is then a node of its own:
-it follows the account's spaces and keeps working with every tab closed.
-
-An agent can also start `minca mcp` before it is connected, from settings
-added by hand. Until it is, the server offers one tool, which opens the
-account home the same way, and gives the model the link only when no
-browser opened. The model asks the person for the six digits the home shows
-and gives them back to the same tool
-([the CLI's README](https://github.com/leifriksheim/minca/blob/main/packages/cli/README.md#agents)). Once the
-person has allowed it, every tool arrives (`notifications/tools/list_changed`)
-without a restart.
+agent keeps its note only once they match. From then on every `minca`
+command on that computer, with no account of its own there to open, runs as
+the agent: an agent with a shell (Claude Code, Codex, Cursor's agent) uses
+Minca through the CLI, and what it writes shows "via agent". Each command
+reaches the space before it reads, and sees what it writes kept by an
+always-on node before it ends
+([the CLI's README](https://github.com/leifriksheim/minca/blob/main/packages/cli/README.md#agents)).
+A chat app with no shell connects to Minca's MCP service instead (below).
 
 `minca agent` runs the same agent without a chat client: it chats in the
 terminal and thinks with the person's own Anthropic API key, offering the model
@@ -118,14 +113,14 @@ What the reference sides add:
   with `checkGrant(grant, did, { recordsOnly: true })` before keeping it, and
   again each time it starts, and says whose account it joined.
 - The terminal makes a new key for each connect. Connecting again, after a
-  disconnect or to renew, gives a new key and note; a running `minca mcp`
+  disconnect or to renew, gives a new key and note; a running `minca agent`
   takes them up without a restart. The earlier connection stays in the
   account home until it is disconnected there, and nothing can use it: its
   key is gone from the computer.
 - An app only says how: "Connect an agent" in the example app shows the
   command (`apps/example/src/components/ConnectAgent.tsx`).
 
-_Source: `packages/core/src/session/connect-code.ts`, `packages/cli/src/agent.ts` (`connectAgent`, `openInBrowser`, `startAgentNode`, `reloadOnConnect`), `packages/cli/src/main.ts` (`chooseAccountHome`), `packages/cli/src/mcp.ts` (`connectWaiting`, `waitingMcp`), `apps/home/src/components/ConnectPage.tsx`. Tests: `packages/core/tests/connect-code.test.ts`, `packages/core/tests/records-only.test.ts` ("a program connected by code, through the account home"), `packages/cli/tests/agent-reconnect.test.ts`, `packages/cli/tests/cli.test.ts` ("not connected yet, it offers agent_connect…")._
+_Source: `packages/core/src/session/connect-code.ts`, `packages/cli/src/agent.ts` (`connectAgent`, `openInBrowser`, `startAgentNode`, `reloadOnConnect`), `packages/cli/src/main.ts` (`chooseAccountHome`), `apps/home/src/components/ConnectPage.tsx`. Tests: `packages/core/tests/connect-code.test.ts`, `packages/core/tests/records-only.test.ts` ("a program connected by code, through the account home"), `packages/cli/tests/agent-reconnect.test.ts`, `packages/cli/tests/cli-agent.test.ts`._
 
 ## Tools an agent gets
 

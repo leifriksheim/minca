@@ -31,4 +31,3 @@ updates:
     ignore:
       # Pinned on purpose (CLAUDE.md, Dependencies): bumped by hand.
       - dependency-name: electrobun
-      - dependency-name: add-mcp
