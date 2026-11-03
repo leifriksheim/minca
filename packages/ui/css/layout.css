@@ -1,0 +1,84 @@
+/*
+ * Where things go. A screen is a <main> of <section>s; .row and .stack set
+ * things beside or under each other. Gaps come in three: data-gap="tight"
+ * for things that belong together, none for the usual, "loose" for groups.
+ */
+body {
+  padding: var(--space-loose);
+}
+
+/* The screen's column, as wide as reads well. data-wide: all of it, for a board, a map or a game. */
+main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-section);
+  max-width: var(--reading-width);
+  margin: 0 auto;
+
+  &[data-wide] {
+    max-width: none;
+  }
+}
+
+/* A title and the actions for it, at the end */
+header {
+  display: flex;
+  align-items: center;
+  gap: var(--space);
+  min-height: var(--control-height);
+
+  & > :first-child {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+/* A group under a heading */
+section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-loose);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space);
+
+  /* The first thing at the start, the rest at the end */
+  &[data-spread] > :first-child {
+    margin-inline-end: auto;
+  }
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+}
+
+/* Tiles that fill the width, as many across as fit */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(180px, 100%), 1fr));
+  gap: var(--space);
+}
+
+:is(.row, .stack, .grid, section) {
+  &[data-gap='tight'] {
+    gap: var(--space-tight);
+  }
+
+  &[data-gap='loose'] {
+    gap: var(--space-loose);
+  }
+}
+
+/* Text that may be cut short, on one line */
+.truncate {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

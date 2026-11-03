@@ -5,10 +5,15 @@ export const UI_GUIDE = `Before the screen's own scripts run, window.ui holds Pr
     const tasks = useRecords('app.todo.task');         // null until loaded, then kept current
     const mayAdd = useCan('create', 'app.todo.task');
     if (!tasks) return null;
-    return html\`<div class="stack">
-      \${tasks.map((t) => html\`<div class="card row" key=\${t.key}>\${t.body.title} <\${Person} did=\${t.createdBy} /></div>\`)}
-      \${mayAdd && html\`<button data-variant="primary" onClick=\${() => minca.put('app.todo.task', { title: 'New' })}>Add</button>\`}
-    </div>\`;
+    return html\`<main>
+      <header>
+        <h1>Tasks</h1>
+        \${mayAdd && html\`<button data-intent="primary" onClick=\${() => minca.put('app.todo.task', { title: 'New' })}>Add</button>\`}
+      </header>
+      <ul role="list">
+        \${tasks.map((t) => html\`<li class="row" data-spread key=\${t.key}>\${t.body.title} <\${Person} did=\${t.createdBy} /></li>\`)}
+      </ul>
+    </main>\`;
   }
   render(html\`<\${App} />\`);
 
@@ -23,14 +28,12 @@ ui has:
   useFile(key, ref)                 a picture the record \`key\` refers to, as a URL for <img>; null until here
   useShown()                        { key } of the record this app was last asked to show (its "shows"), a new object each time;
                                     null until one is. Scroll to it, open it: useEffect(() => …, [shown])
-  useView()                         [view, go]: where in itself the screen is (null at its start), and go(view, title) one level
-                                    in, as a list opened from a list of lists, named title in the app's bar. Its Back, and the phone's,
-                                    come back out: never draw a back button of your own. go(null) is back to the start. Draw what
-                                    view says; the person going back changes it
-  useMarked()                       for a list, that key once the element with data-key=\${key} is drawn: scrolled to, and kept a
-                                    moment, for data-marked=\${key === marked} to light it up
-  usePresence(state)                [{ did, device, state }] of everyone else with this app open, each sharing their state (a cursor,
-                                    what is selected, "typing"): yours goes out when it changes, ten times a second at most. Once per screen
+  useView()                         [view, go]: where in itself the screen is (null at its start); go(view, title) goes one level
+                                    in, titled in the app's bar, whose Back comes out: never draw a back button. go(null): the start
+  useMarked()                       for a list, that key once data-key=\${key} is drawn, scrolled to: data-marked=\${key === marked}
+                                    lights it up
+  usePresence(state)                [{ did, device, state }] of everyone else here, each sharing a state (a cursor, "typing");
+                                    yours goes out as it changes, ten times a second at most. Once per screen
   useLive(callback)                 callback({ from, device, data }) for each minca.live.send from another device, kept nowhere
   useBlob(key, ref)                 the whole file, as a URL for <img>, <video> or <audio>; null until here
   <\${Avatar} did size? round? />   someone's face: their picture, or the shape their account gives. Always use it for a person
@@ -43,24 +46,22 @@ ui has:
   <\${Playable} record />          a std.file that is a video or a sound, playing where it is; fetched once it comes into view
   useSeen(ref)                      whether the element in ref has come into view: load something large only then
   sizeOf(bytes)                     "812 KB", "3.1 MB"
-  <\${Record} record=\${r} onOpen? />  any record as one line, the same in every app: a file's picture, a task's tick, an event's
-                                    time; a click opens it in the app that shows it, or calls onOpen. Use it for records of collections
-                                    other apps own: a shared one, from minca.get(key, { link: 'shares' }), with
+  <\${Record} record=\${r} onOpen? />  any record as one line, as every app shows it; a click opens it where it belongs, or calls
+                                    onOpen. For records other apps own, as a shared one: minca.get(key, { link: 'shares' }), with
                                     onOpen=\${() => minca.open({ record: key, link: 'shares' })}
   useShare()                        sharing into what you send, as chat and comments do: share.pick() asks the person to choose a
                                     record (a "/" button), onChange=\${(next) => setDraft(share.typed(draft, next))} does the same for "/"
                                     typed into an empty box; put share.links on what you send, then share.clear(). <\${Sharing} share />
-                                    is the chip of the one waiting; <\${Shared} from=\${record} /> the card of what a record shares
+                                    is the one waiting; <\${Shared} from=\${record} /> what a record shares
   <\${AddMenu} onShare onFiles? />   "+" for a message box: share something from the space, and attach files when onFiles is given
   <\${EmojiPicker} onPick />        a 🙂 button with a grid of emoji; put the one picked in the text, or react with it
   <\${Reactions} about=\${record} adding? />   emoji reactions on a record (std.reaction), yours toggled; react(record, emoji) adds one
                                     (needs "std.reaction" in collections)
   For a message box, put AddMenu and EmojiPicker inside the field, as Comments does: <div class="composer"> holding
   <\${AddMenu} />, the input, and <div class="composer-end"><\${EmojiPicker} /></div>
-  <\${Modal} title onClose width?>…</\${Modal}>   a dialog over the screen, and the only way to draw one: it floats without dimming
-                                    what is behind, since the screen is one pane of the app. Never draw a backdrop of your own
-  <\${Empty} shape? colour? title text?>…</\${Empty}>   where there is nothing yet, as every app shows it: a shape, a short
-                                    title, one line on what goes here, and the button that starts it inside. Always use it for an empty app
+  <\${Modal} title onClose width?>…</\${Modal}>   a dialog over the screen, the only way to draw one
+  <\${Empty} shape? colour? title text?>…</\${Empty}>   an empty app: a shape, a title, a line on what goes here,
+                                    and the button that starts it inside
   <\${Shape} kind colour? size? />  one of Minca's shapes; <\${Cover} seed colour size? class?>…</\${Cover}> a picture for what has none
                                     (colour: cobalt, coral, peach, sage or lilac)
   <\${PlaceField} value onChange coarse? near? placeholder />   find a place by name, or use where the person is
@@ -73,9 +74,17 @@ ui has:
 
 To show a record the way the app does, with its comments, attachments and history, call minca.open({ record: key }).
 
-The page already looks like Minca: buttons are pills (data-variant="primary" for the main action, "ghost" for quiet ones,
-"danger" for deleting; data-icon makes one holding a single symbol a circle), inputs, headings and the page are styled, and these classes lay things out: card, row, stack,
-muted, faint, empty, chip (a toggle pill, on with aria-pressed), label, error, ellipsis. Write as little CSS as you can; when you need colours, use the variables: var(--minca-ink),
---minca-body, --minca-muted, --minca-faint, --minca-page, --minca-card, --minca-sunken, --minca-line, --minca-accent,
---minca-danger, and corners --minca-radius-sm, -md, -lg, -pill. Fonts from URLs never load. The page is centred,
-640px at most; a board or a map sets :root { --minca-page-width: none }.`;
+Write plain HTML from this list, no CSS, <style> or style="": say what a thing is for, never how it looks.
+  <main> the column (data-wide: full width); <header> title + actions; <section> a group under an h2
+  h1 h2 h3 p a strong code; <small> meta and hints; <mark>; class="truncate" one line, cut short
+  <button> data-intent="primary" (the one main action) | "quiet" (toolbars, rows) | "danger" | "open" (a task, a row);
+    data-icon (icon only, give aria-label); aria-pressed (a toggle or filter);
+    <div role="tablist"> of buttons, one aria-selected="true"
+  <label>Name <input></label>; <fieldset><legend>; input textarea select; <input type="checkbox" role="switch">;
+    <p role="alert"> an error
+  <article> one thing; <ul role="list"> of <li> (an <li> holding a data-intent="open" button is a row to open);
+    class="grid" tiles; class="tag" a label or count; <aside> a notice; <progress> <meter>
+  class="row" | "stack", data-gap="tight" | "loose", data-spread (row: first at the start, the rest at the end)
+  data-tone="good|warn|danger" on a tag or aside; data-hue="1"…"5" a category's colour: a tint on a tag or article, var(--hue)
+Nothing else exists. Only a game or drawing styles itself, in <main data-wide>, with var(--color-text), var(--color-surface),
+var(--color-action), var(--hue). Fonts from URLs never load.`;

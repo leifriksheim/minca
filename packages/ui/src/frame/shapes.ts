@@ -38,7 +38,7 @@ export function Empty({
   text?: string;
   children?: ComponentChildren;
 }) {
-  return html`<div class="empty-state">
+  return html`<div class="empty">
     <${Shape} kind=${shape} colour=${colour} size=${56} />
     <h3>${title}</h3>
     ${text && html`<p>${text}</p>`} ${children}

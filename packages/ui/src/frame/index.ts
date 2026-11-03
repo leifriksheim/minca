@@ -35,7 +35,6 @@ import {
   useNear,
 } from './places';
 import { Cover, Empty, Shape } from './shapes';
-import { css } from './styles';
 
 /**
  * Preact's `render`, except that with nowhere to draw it draws into an
@@ -55,8 +54,11 @@ function draw(tree: Parameters<typeof render>[0], into?: Element | null) {
   else go();
 }
 
+/** Minca's stylesheet (css/minca.css), written in by bundleUi */
+declare const MINCA_CSS: string;
+
 const style = document.createElement('style');
-style.textContent = css;
+style.textContent = MINCA_CSS;
 document.head.append(style);
 
 Object.defineProperty(globalThis, 'ui', {

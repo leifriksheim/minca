@@ -1,0 +1,94 @@
+/*
+ * Minca's tokens. The palette is private to this file: everything else reads
+ * the names below it, which say what a value is for, not what it looks like.
+ * A redesign changes this file and nothing that uses it.
+ */
+:root {
+  /* The palette: warm paper, navy ink, one cobalt, and the shapes' colours. */
+  --paper: #f6f3ee;
+  --paper-light: #fffdf9;
+  --paper-dark: #efe9df;
+  --sand: #e2dcd0;
+  --sand-dark: #cbc3b3;
+  --navy: #13214a;
+  --navy-body: #2a3352;
+  --navy-muted: #5d6480;
+  --cobalt: #2340d6;
+  --cobalt-soft: #e6eafb;
+  --coral: #ff6b4a;
+  --peach: #ffc46b;
+  --sage: #4e8f6c;
+  --lilac: #f0c3ef;
+  --red: #c8361f;
+  --red-soft: #fdebe6;
+  --green: #2f7a52;
+  --green-soft: #e3f0e8;
+  --amber: #9a5a0b;
+  --amber-soft: #fbefd9;
+
+  /* Grounds */
+  --color-page: var(--paper);
+  --color-surface: var(--paper-light);
+  --color-sunken: var(--paper-dark);
+  --color-scrim: rgb(19 33 74 / 0.35);
+
+  /* Lines: the outline of anything that stands on the page, the divider
+     between things inside it, and the edge of a field to type in. */
+  --color-outline: var(--navy);
+  --color-divider: var(--sand);
+  --color-field: var(--sand-dark);
+
+  /* Text */
+  --color-text-strong: var(--navy);
+  --color-text: var(--navy-body);
+  --color-text-muted: var(--navy-muted);
+
+  /* The one colour for acting: the main action, focus, what is selected. */
+  --color-action: var(--cobalt);
+  --color-action-hover: var(--navy);
+  --color-action-soft: var(--cobalt-soft);
+  --color-on-action: #fff;
+
+  /* State, used sparingly */
+  --color-good: var(--green);
+  --color-good-soft: var(--green-soft);
+  --color-warn: var(--amber);
+  --color-warn-soft: var(--amber-soft);
+  --color-danger: var(--red);
+  --color-danger-soft: var(--red-soft);
+
+  /* Five hues for telling things apart: people, labels, a chart's series. In this order. */
+  --color-hue-1: var(--cobalt);
+  --color-hue-2: var(--coral);
+  --color-hue-3: var(--peach);
+  --color-hue-4: var(--sage);
+  --color-hue-5: var(--lilac);
+
+  /* Space: between things that belong together, the usual, between groups, between sections. */
+  --space-tight: 4px;
+  --space: 8px;
+  --space-loose: 16px;
+  --space-section: 32px;
+
+  /* Type: supporting text, body, and three headings. */
+  --text-small: 12px;
+  --text-body: 14px;
+  --text-heading-3: 15px;
+  --text-heading-2: 18px;
+  --text-heading-1: 24px;
+  --font-body: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-display: 'Bricolage Grotesque', 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Shape: controls are pills; inner things, surfaces and big frames round more as they grow. */
+  --radius-control: 999px;
+  --radius-small: 6px;
+  --radius: 10px;
+  --radius-surface: 16px;
+  --radius-frame: 28px;
+  --control-height: 36px;
+  --reading-width: 640px;
+
+  /* Only what floats over the page casts a shadow. */
+  --shadow-float: 0 1px 2px rgb(19 33 74 / 0.06), 0 16px 40px -12px rgb(19 33 74 / 0.22);
+}

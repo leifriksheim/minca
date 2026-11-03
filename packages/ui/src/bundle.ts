@@ -15,6 +15,14 @@ export async function bundleUi(): Promise<{
   readonly script: string;
   readonly files: ReadonlyArray<string>;
 }> {
+  // Minca's stylesheet, its imports in one, for the kit to write into the screen
+  const css = await build({
+    metafile: true,
+    entryPoints: [fileURLToPath(new URL('../css/minca.css', import.meta.url))],
+    bundle: true,
+    write: false,
+    minify: true,
+  });
   const result = await build({
     metafile: true,
     entryPoints: [fileURLToPath(new URL('./frame/index.ts', import.meta.url))],
@@ -25,6 +33,7 @@ export async function bundleUi(): Promise<{
     minify: true,
     conditions: ['@minca/source'],
     legalComments: 'none',
+    define: { MINCA_CSS: JSON.stringify(css.outputFiles[0]?.text ?? '') },
     plugins: [
       {
         // Core's modules only define things, so what the kit doesn't use of them can go:
@@ -48,6 +57,8 @@ export async function bundleUi(): Promise<{
     // It goes inside a <script> element, which ends at the first "</script" whatever the JavaScript around it.
     script: text.replaceAll('</script', '<\\/script'),
     // What it was made from, for a dev server to watch
-    files: Object.keys(result.metafile.inputs).map((file) => resolve(file)),
+    files: [...Object.keys(result.metafile.inputs), ...Object.keys(css.metafile.inputs)].map((file) =>
+      resolve(file),
+    ),
   };
 }

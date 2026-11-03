@@ -128,7 +128,7 @@ export function MapLink({ place }: { place: Place | undefined }) {
   const { lat, lon } = place;
   return html`<button
     type="button"
-    data-variant="ghost"
+    data-intent="quiet"
     onClick=${() => minca.link(`https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}`)}
   >
     Open map
@@ -201,11 +201,9 @@ export function PlaceField({
       `${value.lat.toFixed(4)}, ${value.lon.toFixed(4)}`;
     return html`<div class="place-chosen row">
       <span aria-hidden="true">📍</span>
-      <span class="stack" style="flex: 1; min-width: 0; gap: 0">
-        <strong class="ellipsis">${value.name ?? 'A point on the map'}</strong>
-        <span class="faint ellipsis"
-          >${where}${coarse ? ' · shown as the area, not the exact spot' : ''}</span
-        >
+      <span class="stack" data-gap="tight">
+        <strong class="truncate">${value.name ?? 'A point on the map'}</strong>
+        <small class="truncate">${where}${coarse ? ' · shown as the area, not the exact spot' : ''}</small>
       </span>
       <button
         type="button"
@@ -260,13 +258,13 @@ export function PlaceField({
         ◎
       </button>
     </div>
-    ${state === 'failed' && html`<p class="faint">The place search can't be reached. What you type is kept as it is.</p>`}
-    ${state === 'located' && html`<p class="faint">This browser didn't share where you are.</p>`}
+    ${state === 'failed' && html`<p><small>The place search can't be reached. What you type is kept as it is.</small></p>`}
+    ${state === 'located' && html`<p><small>This browser didn't share where you are.</small></p>`}
     ${
       text.trim() &&
       !shown.length &&
       state === 'idle' &&
-      html`<p class="faint">Pick a suggestion to put it on the map, so people nearby can find it.</p>`
+      html`<p><small>Pick a suggestion to put it on the map, so people nearby can find it.</small></p>`
     }
     ${
       shown.length > 0 &&
@@ -283,8 +281,8 @@ export function PlaceField({
               }}
               onMouseEnter=${() => setActive(i)}
             >
-              <span class="ellipsis">${found.name}</span>
-              ${found.detail && html`<span class="faint ellipsis">${found.detail}</span>`}
+              <span class="truncate">${found.name}</span>
+              ${found.detail && html`<small class="truncate">${found.detail}</small>`}
             </li>`,
         )}
         <li
@@ -301,9 +299,9 @@ export function PlaceField({
 /** "Anywhere", or "Within 5 km of Grünerløkka": opens the choice of where and how far */
 export function NearButton({ near, onChange }: { near: Near | null; onChange: (near: Near | null) => void }) {
   const [choosing, setChoosing] = useState(false);
-  return html`<button type="button" class="chip" aria-pressed=${!!near} onClick=${() => setChoosing(true)}>
+  return html`<button type="button" aria-pressed=${!!near} onClick=${() => setChoosing(true)}>
       <span aria-hidden="true">📍</span>
-      <span class="ellipsis">${near ? `Within ${near.km} km of ${near.label}` : 'Anywhere'}</span>
+      <span class="truncate">${near ? `Within ${near.km} km of ${near.label}` : 'Anywhere'}</span>
     </button>
     ${
       choosing &&
@@ -332,34 +330,27 @@ function NearChoice({
   );
   const [km, setKm] = useState<number>(near?.km ?? 5);
   return html`<${Modal} title="Where to look" onClose=${onClose} width=${480}>
-    <div class="stack" style="gap: 16px">
-      <label class="stack" style="gap: 6px">
-        <span class="label">Near</span>
+    <div class="stack" data-gap="loose">
+      <label>
+        Near
         <${PlaceField} value=${centre} onChange=${setCentre} placeholder="A town, an area, an address" />
       </label>
-      <div class="stack" role="group" aria-label="How far" style="gap: 6px">
-        <span class="label">Within</span>
-        <div class="row" style="flex-wrap: wrap">
+      <fieldset>
+        <legend>Within</legend>
+        <div class="row">
           ${RADII.map(
             (r) =>
-              html`<button
-                type="button"
-                class="chip"
-                key=${r}
-                aria-pressed=${km === r}
-                onClick=${() => setKm(r)}
-              >
+              html`<button type="button" key=${r} aria-pressed=${km === r} onClick=${() => setKm(r)}>
                 ${r} km
               </button>`,
           )}
         </div>
-      </div>
-      <div class="row">
+      </fieldset>
+      <div class="row" data-spread>
         <button type="button" onClick=${() => onChoose(null)}>Anywhere</button>
-        <span style="flex: 1"></span>
         <button
           type="button"
-          data-variant="primary"
+          data-intent="primary"
           disabled=${!hasPoint(centre)}
           onClick=${() =>
             hasPoint(centre) &&

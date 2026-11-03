@@ -58,7 +58,7 @@ export function useShare(): Share {
 /** The record waiting to be shared, as a chip that takes it off */
 export function Sharing({ share }: { share: Share }) {
   if (!share.sharing) return null;
-  return html`<button type="button" class="chip" title="Don't share it" onClick=${share.clear}>
+  return html`<button type="button" aria-pressed="true" title="Don't share it" onClick=${share.clear}>
     ↗ ${recordTitle(share.sharing)} ✕
   </button>`;
 }
@@ -76,7 +76,7 @@ export function Shared({ from }: { from: ScreenRecord }) {
     return minca.onChange(load);
   }, [from.key, shares]);
   if (!shares || record === undefined) return null;
-  if (record === null) return html`<p class="faint">Shared something that isn't here.</p>`;
+  if (record === null) return html`<p><small>Shared something that isn't here.</small></p>`;
   return html`<div class="shared">
     <${Record} record=${record} onOpen=${() => minca.open({ record: from.key, link: 'shares' })} />
   </div>`;

@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Minca: every piece</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&family=Geist:wght@400;500;600&family=Geist+Mono&display=swap"
+    />
+    <link rel="stylesheet" href="css/minca.css" />
+  </head>
+  <!-- Every piece of Minca's look, written as a screen writes it (src/guide.ts). Change the look, then look here. -->
+  <body>
+    <main>
+      <header>
+        <h1>Every piece</h1>
+        <button data-intent="quiet" data-icon aria-label="Search">⌕</button>
+        <button data-intent="primary">New</button>
+      </header>
+
+      <section>
+        <h2>Text</h2>
+        <p>
+          Body text, with <strong>something strong</strong>, <a href="#">a link</a>,
+          <code>some code</code> and <mark>@Ada</mark>.
+        </p>
+        <p><small>Supporting text: 3 replies · 2h</small></p>
+        <p class="truncate">
+          A long line that is cut short when there is no more room for it on the line, however long it goes
+          on.
+        </p>
+      </section>
+
+      <section>
+        <h2>Actions</h2>
+        <div class="row">
+          <button data-intent="primary">Save</button>
+          <button>Cancel</button>
+          <button data-intent="quiet">Edit</button>
+          <button data-intent="danger">Delete</button>
+          <button disabled>Not now</button>
+          <button data-icon aria-label="Add">+</button>
+        </div>
+        <div class="row" data-gap="tight">
+          <button aria-pressed="true">All</button>
+          <button aria-pressed="false">Mine</button>
+          <button aria-pressed="false">Done</button>
+        </div>
+        <div role="tablist">
+          <button role="tab" aria-selected="true">Board</button>
+          <button role="tab" aria-selected="false">List</button>
+          <button role="tab" aria-selected="false">Calendar</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Forms</h2>
+        <form class="stack" data-gap="loose">
+          <label>Title <input placeholder="What needs doing" /></label>
+          <label>Notes <textarea rows="3" placeholder="Anything else"></textarea></label>
+          <label>
+            List
+            <select>
+              <option>To do</option>
+              <option>Doing</option>
+            </select>
+          </label>
+          <fieldset>
+            <legend>Who sees it</legend>
+            <label><input type="radio" name="who" checked /> Everyone in the space</label>
+            <label><input type="radio" name="who" /> Only me</label>
+          </fieldset>
+          <label><input type="checkbox" checked /> Remind me</label>
+          <label><input type="checkbox" role="switch" checked /> Notify the group</label>
+          <p role="alert">A title is needed.</p>
+          <div class="row" data-spread>
+            <button type="button" data-intent="quiet">Cancel</button>
+            <button data-intent="primary">Add task</button>
+          </div>
+        </form>
+      </section>
+
+      <section>
+        <h2>Content</h2>
+        <article>
+          <header>
+            <h3>Garden day</h3>
+            <span class="tag" data-tone="good">Going</span>
+          </header>
+          <p>Bring gloves. We start at the gate and work along the beds.</p>
+          <p><small>Saturday 10:00 · 12 going</small></p>
+        </article>
+        <ul role="list">
+          <li class="row" data-spread><span>Fix the gate</span><span class="tag">2</span></li>
+          <li>
+            <button data-intent="open"><strong>Order seeds</strong><small>Due Friday</small></button>
+          </li>
+          <li>
+            <button data-intent="open"><strong>Paint the shed</strong><small>Ada · 3 comments</small></button>
+          </li>
+        </ul>
+        <div class="grid">
+          <article data-hue="1">
+            <h3>Cobalt</h3>
+            <small>hue 1</small>
+          </article>
+          <article data-hue="2">
+            <h3>Coral</h3>
+            <small>hue 2</small>
+          </article>
+          <article data-hue="3">
+            <h3>Peach</h3>
+            <small>hue 3</small>
+          </article>
+          <article data-hue="4">
+            <h3>Sage</h3>
+            <small>hue 4</small>
+          </article>
+          <article data-hue="5">
+            <h3>Lilac</h3>
+            <small>hue 5</small>
+          </article>
+        </div>
+        <div class="row" data-gap="tight">
+          <span class="tag">Draft</span>
+          <span class="tag" data-tone="good">Paid</span>
+          <span class="tag" data-tone="warn">Due soon</span>
+          <span class="tag" data-tone="danger">Overdue</span>
+          <span class="tag" data-hue="2">Garden</span>
+          <span class="tag" data-hue="4">Kitchen</span>
+        </div>
+        <aside>Only people in the space see this.</aside>
+        <aside data-tone="warn">This poll closes in an hour.</aside>
+        <progress value="60" max="100"></progress>
+        <div class="empty">
+          <h3>No tasks yet</h3>
+          <p>Add what needs doing, and who is on it.</p>
+          <button data-intent="primary">Add a task</button>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
