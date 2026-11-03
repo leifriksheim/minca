@@ -17,6 +17,7 @@ import { RecordPanel } from './RecordPanel';
 import { Person } from './Person';
 import { Loader } from '@minca/app-shared/Loader';
 import styles from './GraphView.module.css';
+import { Info } from '@minca/app-shared/Info';
 
 /** A dot on the map: a record, or — when people are shown — a person */
 interface Dot {
@@ -623,11 +624,13 @@ export function GraphView({
 
   const header = (
     <div className="stack" data-gap="tight">
-      <h2>Explore</h2>
-      <small>
-        The records in this space, with a line wherever one points at another. Drag to move around, scroll to
-        zoom, and click a dot to see what it is and follow its lines.
-      </small>
+      <h2>
+        Explore
+        <Info label="How to explore">
+          The records in this space, with a line wherever one points at another. Drag to move around, scroll
+          to zoom, and click a dot to see what it is and follow its lines.
+        </Info>
+      </h2>
     </div>
   );
 

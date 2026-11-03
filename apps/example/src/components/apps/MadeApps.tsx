@@ -24,6 +24,7 @@ import { ago } from '@minca/ui/time';
 import { Person } from '../Person';
 import styles from './MadeApps.module.css';
 import { confirmThen } from '../../confirm';
+import { Info } from '@minca/app-shared/Info';
 
 /**
  * The blueprint a proposed app points at, if any, and what applying it would
@@ -68,12 +69,14 @@ export function Proposals({
   if (proposals.length === 0) return null;
   return (
     <section aria-label="Proposed apps">
-      <h2>Proposed</h2>
-      <small>
-        Apps someone, or their agent, made for this space. Nothing changes until someone who can add
-        collections adds one. What each allows is worked out from its rules, not from what its author says
-        about it.
-      </small>
+      <h2>
+        Proposed
+        <Info label="About proposed apps">
+          Apps someone, or their agent, made for this space. Nothing changes until someone who can add
+          collections adds one. What each allows is worked out from its rules, not from what its author says
+          about it.
+        </Info>
+      </h2>
       <div className="stack">
         {proposals.map((record) => (
           <Proposal

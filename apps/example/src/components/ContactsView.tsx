@@ -31,6 +31,7 @@ import { RingButton } from './calls/Calls';
 import { onlineAccounts } from '../derive/network';
 import { InviteToSpace } from './InvitePeople';
 import { shortUsername, useUsernameLookup } from '@minca/app-shared/usernames';
+import { Info } from '@minca/app-shared/Info';
 
 /** Checks inbox codes as they are typed */
 const provider = createP256Provider();
@@ -597,8 +598,11 @@ function Inbox({
   return (
     <div className="stack">
       <small>
-        Your username leads to your inbox. You can also hand out its link, which works without a username, or
-        knock with a code someone gave you. Replace the inbox and old links lead nowhere; your contacts stay.
+        Your username leads to your inbox.
+        <Info label="About your inbox">
+          You can also hand out its link, which works without a username, or knock with a code someone gave
+          you. Replace the inbox and old links lead nowhere; your contacts stay.
+        </Info>
       </small>
       <div className="row">
         {inbox ? (
@@ -700,8 +704,10 @@ function KnockDialog({
           <textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={500} rows={3} />
         </label>
         <small>
-          They see your name and note, and choose whether to accept. The name a link shows is the owner’s to
-          choose, so be sure it came from them.
+          They see your name and note, and choose whether to accept.
+          <Info label="Is this link theirs?">
+            The name a link shows is the owner’s to choose, so be sure it came from them.
+          </Info>
         </small>
         <button
           data-intent="primary"

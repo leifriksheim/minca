@@ -7,6 +7,7 @@ import { CollectionsOverview, namespaceLabel } from './CollectionsOverview';
 import { Library } from './Library';
 import { CollectionEditor } from './CollectionDesigner';
 import styles from './DataView.module.css';
+import { Info } from '@minca/app-shared/Info';
 
 /** Where the Data view is: which collection, and which record is open beside it */
 export interface Place {
@@ -131,11 +132,13 @@ export function DataView({
         {selected === NEW ? (
           <section>
             <div className="stack" data-gap="tight">
-              <h2>New collection</h2>
-              <small>
-                Give it a name and some fields. Everything else — forms, lists, boards — is worked out from
-                this.
-              </small>
+              <h2>
+                New collection
+                <Info label="About collections">
+                  Give it a name and some fields. Everything else — forms, lists, boards — is worked out from
+                  this.
+                </Info>
+              </h2>
             </div>
             <CollectionEditor
               space={space}

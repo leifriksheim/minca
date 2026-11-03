@@ -11,6 +11,7 @@ import { Loader } from '@minca/app-shared/Loader';
 import styles from './QueryPlayground.module.css';
 import table from './table.module.css';
 import { DocsNote } from './DocsNote';
+import { Info } from '@minca/app-shared/Info';
 
 // Try the query language on this space's own data, with examples built from its real collections.
 
@@ -315,11 +316,13 @@ export function QueryPlayground({
 function Header() {
   return (
     <div className="stack" data-gap="tight">
-      <h2>Try a query</h2>
-      <small>
-        Ask this space for exactly the records you want, written as plain JSON. It runs as you type, on the
-        data on this device, and nothing you do here changes anything.
-      </small>
+      <h2>
+        Try a query
+        <Info label="About queries">
+          Ask this space for exactly the records you want, written as plain JSON. It runs as you type, on the
+          data on this device, and nothing you do here changes anything.
+        </Info>
+      </h2>
     </div>
   );
 }

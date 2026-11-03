@@ -1,14 +1,18 @@
-/* A small circled "i" in the text it explains, and what it opens floating under it */
+/* A small info icon in the text it explains, and what it opens floating under it */
 .info {
   position: relative;
 
   & > button {
-    width: 16px;
-    min-height: 16px;
-    margin-left: 6px;
-    padding: 0;
-    vertical-align: text-bottom;
-    font-size: 0.625rem;
+    display: inline-grid;
+    width: 22px;
+    min-height: 22px;
+    margin-left: 2px;
+    vertical-align: middle;
+
+    & > svg {
+      width: 15px;
+      height: 15px;
+    }
   }
 
   & > [role='note'] {
@@ -17,6 +21,11 @@
     top: 22px;
     left: 0;
     width: 260px;
+    /* A hint's own type, whether the "i" sits in a heading or a line of small print */
+    color: var(--color-text);
+    font: 400 var(--text-small) / 1.5 var(--font-body);
+    letter-spacing: normal;
+    text-align: left;
     padding: 12px 14px;
     border: 1px solid var(--color-outline);
     border-radius: var(--radius);

@@ -19,6 +19,7 @@ import {
 import { SchemaForm } from './SchemaForm';
 import styles from './CollectionDesigner.module.css';
 import { confirmThen } from '../confirm';
+import { Info } from '@minca/app-shared/Info';
 
 type LinkDeclaration = NonNullable<DefineCollection['links']>[string];
 
@@ -572,8 +573,11 @@ export function CollectionEditor({
 
         {!making && (
           <small>
-            Changes reach everyone in the space and apply to what's written from now on. Nothing already
-            written is changed or deleted. Stored as <code>{name}</code>.
+            Stored as <code>{name}</code>
+            <Info label="Who this changes">
+              Changes reach everyone in the space and apply to what's written from now on. Nothing already
+              written is changed or deleted.
+            </Info>
           </small>
         )}
         {error && <p role="alert">{error}</p>}

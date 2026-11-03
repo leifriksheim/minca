@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState, type ReactNode } from 'react';
+import { Icon } from './Icon';
 import styles from './Info.module.css';
 import { useDismiss } from './useDismiss';
 
@@ -28,11 +29,13 @@ export function Info({ label, children }: { label: string; children: ReactNode }
     <span ref={root} className={styles.info}>
       <button
         type="button"
+        data-intent="ghost"
+        data-icon
         onClick={() => setOpen((was) => !was)}
         aria-expanded={open}
         aria-label={open ? `Hide: ${label}` : label}
       >
-        i
+        <Icon name="info" />
       </button>
       {open && <span role="note">{children}</span>}
     </span>

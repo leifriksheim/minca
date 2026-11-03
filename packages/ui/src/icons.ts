@@ -35,6 +35,11 @@ export const ICONS = {
     ['path', { d: 'm21 21-4.34-4.34' }],
     ['circle', { cx: '11', cy: '11', r: '8' }],
   ],
+  info: [
+    ['circle', { cx: '12', cy: '12', r: '10' }],
+    ['path', { d: 'M12 16v-4' }],
+    ['path', { d: 'M12 8h.01' }],
+  ],
   settings: [
     [
       'path',

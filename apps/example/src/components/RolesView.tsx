@@ -19,6 +19,7 @@ import { RowMenu } from './PeopleParts';
 import { Person } from './Person';
 import { Loader } from '@minca/app-shared/Loader';
 import { confirmThen } from '../confirm';
+import { Info } from '@minca/app-shared/Info';
 
 /** Who holds what in the space, as the node reports it */
 type SpaceAccess = NonNullable<ReturnType<typeof useAccess>>;
@@ -189,7 +190,12 @@ function Roles({ space, access, powers }: { space: SpaceSummary; access: SpaceAc
           New role
         </button>
       </header>
-      <p>A role is what it grants. Whoever defines a role can give it only what they may do themselves.</p>
+      <small>
+        A role is what it grants.
+        <Info label="Who can give what">
+          Whoever defines a role can give it only what they may do themselves.
+        </Info>
+      </small>
 
       {editing?.kind === 'new' && (
         <RoleEditor space={space} existing={null} roles={roles} onDone={() => setEditing(null)} />
@@ -351,8 +357,8 @@ function RoleEditor({
         )}
       </fieldset>
       <small>
-        A grant counts only as far as you may do it yourself. Narrowing a role keeps what its holders already
-        wrote.
+        A grant counts only as far as you may do it yourself.
+        <Info label="Narrowing a role">Narrowing a role keeps what its holders already wrote.</Info>
       </small>
 
       {problem && <small>{problem}</small>}

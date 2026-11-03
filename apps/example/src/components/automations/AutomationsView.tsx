@@ -17,6 +17,7 @@ import { SpaceBots } from '@minca/app-shared/CommunitySetup';
 import { useAction } from '@minca/app-shared/action';
 import { useActivityOff } from '../../activity';
 import { confirmThen } from '../../confirm';
+import { Info } from '@minca/app-shared/Info';
 
 type Open = {
   readonly kind: 'automation';
@@ -105,11 +106,13 @@ export function AutomationsView({
       <section>
         <header>
           <div>
-            <h3>Automations</h3>
-            <small>
-              Everyone here sees these. Each runs as its maker, on their devices or agent, or as the bot it
-              names.
-            </small>
+            <h3>
+              Automations
+              <Info label="Who sees and runs these">
+                Everyone here sees these. Each runs as its maker, on their devices or agent, or as the bot it
+                names.
+              </Info>
+            </h3>
           </div>
           <button
             data-intent="primary"

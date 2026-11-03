@@ -137,10 +137,6 @@ export function AccountActions({
         <Item onClick={onConnectAgent} hint="Claude, ChatGPT, Cursor">
           Connect an agent
         </Item>
-        <small>
-          An agent in this browser works as you, with nothing to set up. Claude or another AI app connects
-          here, and keeps working with this tab closed.
-        </small>
       </Section>
 
       <Section>
