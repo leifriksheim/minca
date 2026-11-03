@@ -18,6 +18,18 @@ main {
   &[data-wide] {
     max-width: none;
   }
+
+  /* The window's height, its first child scrolling: a conversation over the box to write in */
+  &[data-fill] {
+    height: calc(100dvh - 2 * var(--space-loose));
+    gap: var(--space);
+
+    & > :first-child {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+    }
+  }
 }
 
 /* A title and the actions for it, at the end */
@@ -46,6 +58,13 @@ section {
   align-items: center;
   gap: var(--space);
 
+  /* A field takes the room the buttons beside it leave */
+  & > :is(input, select) {
+    flex: 1 1 12ch;
+    width: auto;
+    min-width: 0;
+  }
+
   /* The first thing at the start, the rest at the end */
   &[data-spread] > :first-child {
     margin-inline-end: auto;
@@ -65,13 +84,36 @@ section {
   gap: var(--space);
 }
 
-:is(.row, .stack, .grid, section) {
+:is(.row, .stack, .grid, .lanes, section) {
   &[data-gap='tight'] {
     gap: var(--space-tight);
   }
 
   &[data-gap='loose'] {
     gap: var(--space-loose);
+  }
+}
+
+/* Columns side by side, scrolled across: a board, a week. A phone snaps to one, the next peeking in. */
+.lanes {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-loose);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+
+  & > * {
+    flex: 0 0 280px;
+    scroll-snap-align: start;
+  }
+
+  @media (max-width: 640px) {
+    scroll-snap-type: x mandatory;
+
+    & > * {
+      flex-basis: 85%;
+    }
   }
 }
 

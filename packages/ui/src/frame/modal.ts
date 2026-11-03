@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact';
-import { useEffect, useRef } from 'preact/hooks';
+import { useLayoutEffect, useRef } from 'preact/hooks';
 import { html } from './html';
 
 /**
@@ -19,7 +19,8 @@ export function Modal({
   children?: ComponentChildren;
 }) {
   const box = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
+  // Open before what is inside it runs its effects, so a field it focuses keeps the focus.
+  useLayoutEffect(() => {
     const dialog = box.current;
     dialog?.showModal();
     return () => dialog?.close();

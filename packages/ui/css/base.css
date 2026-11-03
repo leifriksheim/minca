@@ -64,6 +64,11 @@ small {
   font-size: var(--text-small);
 }
 
+/* Done, or no longer so */
+s {
+  color: var(--color-text-muted);
+}
+
 a {
   color: var(--color-action);
   text-underline-offset: 3px;
@@ -100,6 +105,15 @@ canvas {
 :focus-visible {
   outline: 2px solid var(--color-action);
   outline-offset: 2px;
+}
+
+/* Being dragged, and where it would land */
+[aria-grabbed='true'] {
+  opacity: 0.4;
+}
+
+hr[data-drop] {
+  border-top: 2px solid var(--color-action);
 }
 
 [hidden] {

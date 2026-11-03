@@ -15,19 +15,19 @@ screen.** Retro in the shapes and the type, clean everywhere else.
 apps and the site import it, and the kit writes it into every app's screen.
 `reference.html` shows every piece; open it after changing anything here.
 
-| File               |                                                                                                 |
-| ------------------ | ----------------------------------------------------------------------------------------------- |
-| `css/tokens.css`   | The palette, and the names everything reads: `--color-*`, `--space-*`, `--text-*`, `--radius-*` |
-| `css/base.css`     | The page and its text                                                                           |
-| `css/layout.css`   | `main`, `header`, `section`, `.row`, `.stack`, `.grid`                                          |
-| `css/controls.css` | Buttons by `data-intent`, fields, switches, tabs                                                |
-| `css/content.css`  | `article`, lists, `.tag`, `aside`, `.empty`, `data-tone`, `data-hue`                            |
-| `css/overlay.css`  | `dialog`, `menu`                                                                                |
-| `css/kit.css`      | The kit's own parts, which only its components use                                              |
-| `src/shapes.ts`    | The shapes' paths, and which shape each app and space has                                       |
-| `src/round.ts`     | The round shapes as formulas, for the shapes, the avatar and the morph                          |
-| `src/avatar.ts`    | An account's avatar, two round shapes blended by its DID                                        |
-| `src/frame/`       | The kit an app's screen draws with: Preact, people's faces, comments, places                    |
+| File               |                                                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------------------------- |
+| `css/tokens.css`   | The palette, and the names everything reads: `--color-*`, `--space-*`, `--text-*`, `--radius-*`         |
+| `css/base.css`     | The page and its text                                                                                   |
+| `css/layout.css`   | `main`, `header`, `section`, `.row`, `.stack`, `.grid`, `.lanes`                                        |
+| `css/controls.css` | Buttons by `data-intent`, fields, switches, tabs                                                        |
+| `css/content.css`  | `article`, lists, `figure`, a month, `.tag`, `aside`, `.empty`, `data-tone`, `data-hue`, `data-actions` |
+| `css/overlay.css`  | `dialog`, `menu`                                                                                        |
+| `css/kit.css`      | The kit's own parts, which only its components use                                                      |
+| `src/shapes.ts`    | The shapes' paths, and which shape each app and space has                                               |
+| `src/round.ts`     | The round shapes as formulas, for the shapes, the avatar and the morph                                  |
+| `src/avatar.ts`    | An account's avatar, two round shapes blended by its DID                                                |
+| `src/frame/`       | The kit an app's screen draws with: Preact, people's faces, comments, places                            |
 
 `src/tokens.ts` and `apps/shared/src/styles.ts` are the old way, inline styles
 from values, and go as the apps move onto `css/`.
@@ -37,7 +37,7 @@ from values, and go as the apps move onto `css/`.
 - **Semantic HTML first.** An element is styled by what it is: `button`,
   `input`, `label`, `article`, `section`, `dialog`, `small`. A class only where
   HTML has no element for the role: `.row`, `.stack`, `.grid`, `.tag`,
-  `.empty`, `.truncate`.
+  `.empty`, `.lanes`, `.truncate`.
 - **Intent, never appearance.** Variants say why a thing is there:
   `data-intent="primary|quiet|danger|open"`, `data-tone="good|warn|danger"`,
   `data-hue="1"`…`"5"`, `data-gap="tight|loose"`. Nothing names a colour or a

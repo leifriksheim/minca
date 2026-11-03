@@ -1,235 +1,4 @@
 <!-- Bills: std.expense and std.settlement, split and settled up like Splitwise, on tabs: a trip, a flat, a dinner. A tab is a std.list (kind "tab"), and an expense or a payment is on it by a std.list-item in it about the record, as Files puts files in categories. Each tab settles up on its own. Every share is written out exactly, in the expense's currency, so every device adds up the same balances. The tabs come first; one opens one level in (minca.go), so the app's bar names it and its Back comes back out. -->
-<style>
-  .wrap {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    padding-bottom: 48px;
-  }
-  .rows {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    overflow: hidden;
-    background: var(--minca-card);
-    border: 1px solid var(--minca-rule);
-    border-radius: var(--minca-radius-lg);
-  }
-  .rows > li + li {
-    border-top: 1px solid var(--minca-line);
-  }
-  .open {
-    width: 100%;
-    min-height: 60px;
-    justify-content: flex-start;
-    gap: 12px;
-    padding: 10px 14px 10px 16px;
-    border: none;
-    border-radius: 0;
-    background: none;
-    color: var(--minca-body);
-    font-weight: 400;
-    text-align: left;
-  }
-  .open:hover {
-    background: var(--minca-sunken);
-  }
-  .open b {
-    display: block;
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--minca-ink);
-  }
-  .chevron {
-    margin-left: auto;
-    flex-shrink: 0;
-    color: var(--minca-faint);
-  }
-  .item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    min-height: 52px;
-    padding: 6px 8px 6px 16px;
-  }
-  .item input {
-    flex: 1;
-    min-width: 0;
-    min-height: 36px;
-    padding: 0;
-    border: none;
-    border-radius: 0;
-    background: none;
-    font-size: 15px;
-  }
-  .item input:focus {
-    outline: none;
-  }
-  .plus {
-    width: 24px;
-    height: 24px;
-    flex-shrink: 0;
-    display: grid;
-    place-items: center;
-    color: var(--minca-muted);
-    font-size: 20px;
-    line-height: 1;
-  }
-  .summary {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    padding: 18px 18px 16px;
-    background: var(--minca-card);
-    border: 1px solid var(--minca-rule);
-    border-radius: var(--minca-radius-lg);
-  }
-  .summary strong {
-    display: block;
-    font-family: var(--minca-display);
-    font-size: 26px;
-    font-weight: 700;
-    letter-spacing: -0.03em;
-    color: var(--minca-ink);
-  }
-  .summary .row > button {
-    flex: 1;
-  }
-  .owed {
-    color: var(--minca-good) !important;
-  }
-  .owe {
-    color: var(--minca-danger) !important;
-  }
-  /* A part of a tab: its label, and its card right under it */
-  .part {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    min-height: 24px;
-    padding: 0 4px;
-  }
-  .entry {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    min-height: 60px;
-    padding: 10px 16px;
-    border: none;
-    border-radius: 0;
-    background: none;
-    color: var(--minca-body);
-    font-weight: 400;
-    text-align: left;
-  }
-  .entry:hover {
-    background: var(--minca-sunken);
-  }
-  .icon {
-    width: 36px;
-    height: 36px;
-    flex-shrink: 0;
-    display: grid;
-    place-items: center;
-    border-radius: var(--minca-radius-md);
-    background: var(--minca-sunken);
-    font-size: 17px;
-  }
-  .what {
-    flex: 1;
-    min-width: 0;
-  }
-  .what > div:first-child {
-    font-size: 15px;
-    color: var(--minca-ink);
-  }
-  .side {
-    flex-shrink: 0;
-    text-align: right;
-    font-size: 12px;
-    line-height: 1.3;
-  }
-  .side b {
-    display: block;
-    font-size: 14px;
-    font-weight: 600;
-  }
-  .person-line {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-height: 52px;
-    padding: 8px 16px;
-  }
-  .person-line .person,
-  .split-row .person {
-    justify-content: flex-start;
-  }
-  .person-line > :first-child {
-    flex: 1;
-    min-width: 0;
-  }
-  .amount-big {
-    font-size: 30px;
-    font-weight: 600;
-    color: var(--minca-ink);
-  }
-  .money {
-    display: flex;
-    gap: 8px;
-  }
-  .money select {
-    width: 96px;
-    flex-shrink: 0;
-  }
-  .split-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-height: 40px;
-  }
-  .split-row > :nth-child(2) {
-    flex: 1;
-    min-width: 0;
-  }
-  .split-row input[type='checkbox'] {
-    width: 18px;
-    min-height: 18px;
-    flex-shrink: 0;
-    accent-color: var(--minca-ink);
-  }
-  .split-row input:not([type='checkbox']) {
-    width: 110px;
-    text-align: right;
-  }
-  .split-row .each {
-    font-variant-numeric: tabular-nums;
-  }
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-  .pair {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-  }
-  .num {
-    font-variant-numeric: tabular-nums;
-  }
-  .foot {
-    display: flex;
-    justify-content: center;
-    gap: 8px;
-  }
-</style>
 <script>
   const {
     html,
@@ -437,14 +206,17 @@
   const mineIn = (balances) =>
     [...balances].map(([cur, one]) => [cur, one.get(me) ?? 0]).filter(([, b]) => b !== 0);
 
+  /** An amount someone gets back (above zero) or owes, as a tag in its tone */
+  const owing = (b, text) => html`<span class="tag" data-tone=${b > 0 ? 'good' : 'warn'}>${text}</span>`;
+
   /** Where you stand on a tab, in a few words */
   function standing(balances, count) {
-    if (count === 0) return html`<span class="faint">Nothing on it yet</span>`;
+    if (count === 0) return html`<small>Nothing on it yet</small>`;
     const mine = mineIn(balances);
-    if (mine.length === 0) return html`<span class="faint">You're settled up</span>`;
+    if (mine.length === 0) return html`<small>You're settled up</small>`;
     const [cur, b] = mine[0];
-    return html`<span class=${`faint ${b > 0 ? 'owed' : 'owe'}`}>
-      ${b > 0 ? 'You are owed' : 'You owe'} ${show(Math.abs(b), cur)}${mine.length > 1 ? ' and more' : ''}
+    return html`<span class="row">
+      ${owing(b, `${b > 0 ? 'You are owed' : 'You owe'} ${show(Math.abs(b), cur)}${mine.length > 1 ? ' and more' : ''}`)}
     </span>`;
   }
 
@@ -497,9 +269,9 @@
     if (view === EARLIER) return html`<${Tab} ...${shared} tab=${null} ...${on(null)} />`;
     const open = view && tabs.find((t) => t.key === view);
     if (view && !open)
-      return html`<div class="wrap">
+      return html`<main>
         <${Empty} shape="receipt" colour="lilac" title="This tab isn't here any more" />
-      </div>`;
+      </main>`;
     if (open) return html`<${Tab} key=${open.key} ...${shared} tab=${open} ...${on(open.key)} />`;
     return html`<${Tabs} tabs=${tabs} on=${on} go=${go} />`;
   }
@@ -523,15 +295,12 @@
     const anyEarlier = earlier.expenses.length + earlier.settlements.length > 0;
     const row = (key, title, icon, { expenses, settlements }) =>
       html`<li key=${key}>
-        <button class="open" onClick=${() => go(key, title)}>
-          <span class="ellipsis" style="min-width: 0">
-            <b class="ellipsis">${icon ? `${icon} ` : ''}${title}</b>
-            ${standing(balancesOf(expenses, settlements), expenses.length + settlements.length)}
-          </span>
-          <span class="chevron" aria-hidden="true">›</span>
+        <button data-intent="open" onClick=${() => go(key, title)}>
+          <strong class="truncate">${icon ? `${icon} ` : ''}${title}</strong>
+          ${standing(balancesOf(expenses, settlements), expenses.length + settlements.length)}
         </button>
       </li>`;
-    return html`<div class="wrap">
+    return html`<main>
       ${
         sorted.length === 0 &&
         !anyEarlier &&
@@ -542,12 +311,12 @@
           text="Start one for a trip, the flat or a dinner, then add what each of you pays."
         />`
       }
-      <ul class="rows" aria-label="Tabs">
+      <ul role="list" aria-label="Tabs">
         ${sorted.map((tab) => row(tab.key, titleOf(tab), tab.body.icon, on(tab.key)))}
         ${anyEarlier && row(EARLIER, 'Earlier', '', earlier)}
         ${mayCreate && html`<li><${AddRow} placeholder="New tab" onAdd=${create} /></li>`}
       </ul>
-    </div>`;
+    </main>`;
   }
 
   /**
@@ -591,10 +360,10 @@
       go(null);
     };
 
-    return html`<div class="wrap">
+    return html`<main>
       ${
         renaming &&
-        html`<ul class="rows">
+        html`<ul role="list">
           <li>
             <${AddRow}
               placeholder="Name"
@@ -610,15 +379,18 @@
       }
       ${
         entries.length > 0 &&
-        html`<section class="summary">
+        html`<article>
           ${
             mine.length === 0
-              ? html`<div><span class="muted">All square</span><strong>You're settled up</strong></div>`
+              ? html`<div class="stack" data-gap="tight">
+                  <small>All square</small>
+                  <h1>You're settled up</h1>
+                </div>`
               : mine.map(
                   ([cur, b]) =>
-                    html`<div key=${cur}>
-                      <span class="muted">${b > 0 ? 'You are owed' : 'You owe'}</span>
-                      <strong class=${b > 0 ? 'owed' : 'owe'}>${show(Math.abs(b), cur)}</strong>
+                    html`<div class="stack" data-gap="tight" key=${cur}>
+                      <small>${b > 0 ? 'You are owed' : 'You owe'}</small>
+                      <h1>${show(Math.abs(b), cur)}</h1>
                     </div>`,
                 )
           }
@@ -626,24 +398,24 @@
             (mayAdd || maySettle) &&
             html`<div class="row">
               ${maySettle && entries.length > 0 && html`<button onClick=${() => setSettling(firstSettle ?? { from: me, to: null, minor: 0, currency })}>Settle up</button>`}
-              ${mayAdd && tab && html`<button data-variant="primary" onClick=${() => setAdding({})}>Add an expense</button>`}
+              ${mayAdd && tab && html`<button data-intent="primary" onClick=${() => setAdding({})}>Add an expense</button>`}
             </div>`
           }
-        </section>`
+        </article>`
       }
       ${
         payments.length > 0 &&
-        html`<section class="part">
-          <div class="head"><span class="label">To settle up</span></div>
-          <ul class="rows" aria-label="To settle up">
+        html`<section>
+          <h2>To settle up</h2>
+          <ul role="list" aria-label="To settle up">
             ${payments.map(
               (p, i) =>
-                html`<li class="person-line" key=${i}>
-                  <span class="row" style="gap: 10px">
+                html`<li class="row" data-spread key=${i}>
+                  <span class="row">
                     <${Avatar} did=${p.from} size=${28} round />
                     <span>
                       ${names(p.from)} ${p.from === me ? 'pay' : 'pays'} ${p.to === me ? 'you' : names(p.to)}
-                      <b class="num"> ${show(p.minor, p.currency)}</b>
+                      <strong> ${show(p.minor, p.currency)}</strong>
                     </span>
                   </span>
                   ${maySettle && (p.from === me || p.to === me) && html`<button onClick=${() => setSettling(p)}>Record</button>`}
@@ -654,16 +426,14 @@
       }
       ${
         people.length > 1 &&
-        html`<section class="part">
-          <div class="head"><span class="label">Balances</span></div>
-          <ul class="rows" aria-label="Balances">
+        html`<section>
+          <h2>Balances</h2>
+          <ul role="list" aria-label="Balances">
             ${people.map(
               (p) =>
-                html`<li class="person-line" key=${p.did + p.cur}>
+                html`<li class="row" data-spread key=${p.did + p.cur}>
                   <${Person} did=${p.did} size=${28} />
-                  <span class=${`num ${p.b > 0 ? 'owed' : 'owe'}`}>
-                    ${p.b > 0 ? 'gets back' : p.did === me ? 'owe' : 'owes'} ${show(Math.abs(p.b), p.cur)}
-                  </span>
+                  ${owing(p.b, `${p.b > 0 ? 'gets back' : p.did === me ? 'owe' : 'owes'} ${show(Math.abs(p.b), p.cur)}`)}
                 </li>`,
             )}
           </ul>
@@ -677,15 +447,15 @@
               title="Nothing on this tab yet"
               text="Add what someone paid, and it splits itself between whoever it was for."
             >
-              ${mayAdd && tab && html`<button data-variant="primary" onClick=${() => setAdding({})}>Add an expense</button>`}
+              ${mayAdd && tab && html`<button data-intent="primary" onClick=${() => setAdding({})}>Add an expense</button>`}
             </${Empty}>`
-          : html`<section class="part">
-              <div class="head"><span class="label">Spent and paid</span></div>
-              <ul class="rows" aria-label="Spent and paid">
+          : html`<section>
+              <h2>Spent and paid</h2>
+              <ul role="list" aria-label="Spent and paid">
                 ${entries.map(
                   (r) =>
                     html`<li key=${r.key}>
-                      <button class="entry" onClick=${() => setOpenKey(r.key)}>
+                      <button data-intent="open" onClick=${() => setOpenKey(r.key)}>
                         ${isExpense(r) ? html`<${ExpenseLine} expense=${r} names=${names} />` : html`<${SettlementLine} settlement=${r} names=${names} />`}
                       </button>
                     </li>`,
@@ -695,14 +465,14 @@
       }
       ${
         tab &&
-        html`<div class="foot">
-          ${mayRename && !renaming && html`<button data-variant="ghost" onClick=${() => setRenaming(true)}>Rename</button>`}
+        html`<div class="row">
+          ${mayRename && !renaming && html`<button data-intent="quiet" onClick=${() => setRenaming(true)}>Rename</button>`}
           ${
             mayDelete &&
             (deleting
-              ? html`<button data-variant="danger" onClick=${removeTab}>Delete tab and what's on it</button>
-                  <button data-variant="ghost" onClick=${() => setDeleting(false)}>Keep it</button>`
-              : html`<button data-variant="ghost" onClick=${() => setDeleting(true)}>Delete tab</button>`)
+              ? html`<button data-intent="danger" onClick=${removeTab}>Delete tab and what's on it</button>
+                  <button data-intent="quiet" onClick=${() => setDeleting(false)}>Keep it</button>`
+              : html`<button data-intent="quiet" onClick=${() => setDeleting(true)}>Delete tab</button>`)
           }
         </div>`
       }
@@ -744,7 +514,18 @@
           onClose=${() => setSettling(null)}
         />`
       }
-    </div>`;
+    </main>`;
+  }
+
+  /** An entry on a tab, as one row: what it was, and what it means for you */
+  function EntryLine({ icon, title, meta, side }) {
+    return html`<span class="row" data-spread>
+      <span class="stack" data-gap="tight">
+        <strong>${icon} ${title}</strong>
+        <small>${meta}</small>
+      </span>
+      ${side}
+    </span>`;
   }
 
   function ExpenseLine({ expense, names }) {
@@ -753,39 +534,33 @@
     const lent = [...parts].filter(([did]) => did !== payer).reduce((a, [, p]) => a + p, 0);
     const side =
       payer === me
-        ? lent > 0 && html`<span class="owed">you lent<b>${show(lent, currency)}</b></span>`
+        ? lent > 0 && owing(1, `you lent ${show(lent, currency)}`)
         : parts.has(me)
-          ? html`<span class="owe">you borrowed<b>${show(parts.get(me), currency)}</b></span>`
-          : html`<span class="faint">not involved</span>`;
-    return html`<span class="icon" aria-hidden="true">🧾</span>
-      <span class="what">
-        <div class="ellipsis">${expense.body.title}</div>
-        <div class="faint ellipsis">
-          ${`${names(payer)} paid ${show(total, currency)} · ${dateText(dayOf(expense), { day: 'numeric', month: 'short' })}`}
-        </div>
-      </span>
-      <span class="side">${side}</span>`;
+          ? owing(-1, `you borrowed ${show(parts.get(me), currency)}`)
+          : html`<small>not involved</small>`;
+    return html`<${EntryLine}
+      icon="🧾"
+      title=${expense.body.title}
+      meta=${`${names(payer)} paid ${show(total, currency)} · ${dateText(dayOf(expense), { day: 'numeric', month: 'short' })}`}
+      side=${side}
+    />`;
   }
 
   function SettlementLine({ settlement, names }) {
     const { from, to, amount } = settlement.body;
     const minor = toMinor(amount.amount, amount.currency) ?? 0;
-    return html`<span class="icon" aria-hidden="true">💸</span>
-      <span class="what">
-        <div class="ellipsis">${names(from)} paid ${to === me ? 'you' : names(to)}</div>
-        <div class="faint ellipsis">
-          ${[
-            show(minor, amount.currency),
-            dateText(dayOf(settlement), { day: 'numeric', month: 'short' }),
-            settlement.body.note,
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-        </div>
-      </span>
-      <span class="side">
-        ${from === me ? html`<span class="owed">you paid<b>${show(minor, amount.currency)}</b></span>` : to === me ? html`<span class="owe">you received<b>${show(minor, amount.currency)}</b></span>` : null}
-      </span>`;
+    return html`<${EntryLine}
+      icon="💸"
+      title=${`${names(from)} paid ${to === me ? 'you' : names(to)}`}
+      meta=${[
+        show(minor, amount.currency),
+        dateText(dayOf(settlement), { day: 'numeric', month: 'short' }),
+        settlement.body.note,
+      ]
+        .filter(Boolean)
+        .join(' · ')}
+      side=${from === me ? owing(1, `you paid ${show(minor, amount.currency)}`) : to === me ? owing(-1, `you received ${show(minor, amount.currency)}`) : null}
+    />`;
   }
 
   function ExpenseView({ expense, items, onClose, onEdit }) {
@@ -795,29 +570,29 @@
     const { total, currency, parts } = partsOf(expense.body);
     const payer = expense.body.paidBy;
     return html`<${Modal} title=${expense.body.title} onClose=${onClose}>
-      <div class="stack" style="gap: 4px">
-        <span class="amount-big">${show(total, currency)}</span>
-        <span class="faint">
+      <div class="stack" data-gap="tight">
+        <h1>${show(total, currency)}</h1>
+        <small>
           Added by ${names(expense.createdBy)} · ${dateText(dayOf(expense), { day: 'numeric', month: 'long', year: 'numeric' })}
           ${expense.version > 1 ? ' · edited' : ''}
-        </span>
+        </small>
       </div>
-      <div class="stack" style="gap: 0">
-        <div class="person-line">
+      <ul role="list">
+        <li class="row" data-spread>
           <${Person} did=${payer} size=${28} />
-          <span>paid <b class="num">${show(total, currency)}</b></span>
-        </div>
+          <span>paid <strong>${show(total, currency)}</strong></span>
+        </li>
         ${[...parts].map(
           ([did, part]) =>
-            html`<div class="person-line" key=${did} style="padding-left: 20px">
-              <${Person} did=${did} size=${22} />
-              <span class="muted num"
-                >${`${did === payer ? (did === me ? 'your part' : 'their part') : did === me ? 'owe' : 'owes'} ${show(part, currency)}`}</span
-              >
-            </div>`,
+            html`<li class="row" data-spread key=${did}>
+              <${Person} did=${did} />
+              <small>
+                ${`${did === payer ? (did === me ? 'your part' : 'their part') : did === me ? 'owe' : 'owes'} ${show(part, currency)}`}
+              </small>
+            </li>`,
         )}
-      </div>
-      ${expense.body.note && html`<p class="muted" style="white-space: pre-wrap">${expense.body.note}</p>`}
+      </ul>
+      ${expense.body.note && html`<p>${expense.body.note}</p>`}
       ${
         (mayEdit || mayDelete) &&
         html`<div class="row">
@@ -825,7 +600,7 @@
           ${
             mayDelete &&
             html`<button
-              data-variant="danger"
+              data-intent="danger"
               onClick=${async () => {
                 await minca.remove(expense.key);
                 // What put it on a tab goes with it; one that can't go points at nothing, harmlessly.
@@ -847,17 +622,17 @@
     const mayDelete = useCan('delete', settlement.key);
     const { from, to, amount, note } = settlement.body;
     return html`<${Modal} title="Payment" onClose=${onClose}>
-      <div class="stack" style="gap: 4px">
-        <span class="amount-big">${show(toMinor(amount.amount, amount.currency) ?? 0, amount.currency)}</span>
-        <span>${names(from)} paid ${to === me ? 'you' : names(to)}</span>
-        <span class="faint">${dateText(dayOf(settlement), { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+      <div class="stack" data-gap="tight">
+        <h1>${show(toMinor(amount.amount, amount.currency) ?? 0, amount.currency)}</h1>
+        <p>${names(from)} paid ${to === me ? 'you' : names(to)}</p>
+        <small>${dateText(dayOf(settlement), { day: 'numeric', month: 'long', year: 'numeric' })}</small>
       </div>
-      ${note && html`<p class="muted">${note}</p>`}
+      ${note && html`<p>${note}</p>`}
       ${
         mayDelete &&
         html`<div class="row">
           <button
-            data-variant="danger"
+            data-intent="danger"
             onClick=${async () => {
               await minca.remove(settlement.key);
               await Promise.allSettled(items.map((i) => minca.remove(i.key)));
@@ -975,43 +750,33 @@
       setPicked(next);
     };
 
-    return html`<${Modal} title=${expense ? 'Edit expense' : 'Add an expense'} onClose=${onClose} width=${520}>
-      <form class="stack" style="gap: 14px" onSubmit=${save}>
-        <input
-          value=${title}
-          onInput=${(e) => setTitle(e.currentTarget.value)}
-          placeholder="What was it for? Dinner, rent, tickets…"
-          aria-label="What it was for"
-          ref=${first}
-        />
-        <div class="money">
-          <select value=${currency} onChange=${(e) => setCurrency(e.currentTarget.value)} aria-label="Currency">
-            ${currencies.map((c) => html`<option key=${c} value=${c}>${c}</option>`)}
-          </select>
+    return html`<${Modal} title=${expense ? 'Edit expense' : 'Add an expense'} onClose=${onClose}>
+      <form class="stack" data-gap="loose" onSubmit=${save}>
+        <label>
+          What it was for
           <input
-            value=${amount}
-            inputmode="decimal"
-            onInput=${(e) => setAmount(e.currentTarget.value)}
-            placeholder="0.00"
-            aria-label="Amount"
-            style="font-size: 18px"
+            value=${title}
+            onInput=${(e) => setTitle(e.currentTarget.value)}
+            placeholder="Dinner, rent, tickets…"
+            ref=${first}
           />
-        </div>
-        <div class="pair">
-          <label class="field">
-            <span class="label">Paid by</span>
+        </label>
+        <${Money} currency=${currency} currencies=${currencies} onCurrency=${setCurrency} amount=${amount} onAmount=${setAmount} />
+        <div class="grid">
+          <label>
+            Paid by
             <select value=${paidBy} onChange=${(e) => setPaidBy(e.currentTarget.value)}>
               ${everyone.map((d) => html`<option key=${d} value=${d}>${nameIn(people, d)}</option>`)}
             </select>
           </label>
-          <label class="field">
-            <span class="label">Date</span>
+          <label>
+            Date
             <input type="date" value=${date} onInput=${(e) => setDate(e.currentTarget.value || today())} />
           </label>
         </div>
-        <div class="stack" style="gap: 6px">
-          <span class="label">Split</span>
-          <div class="tabs" role="tablist">
+        <fieldset>
+          <legend>Split</legend>
+          <div role="tablist">
             ${MODES.map(
               ([id, label]) =>
                 html`<button
@@ -1025,12 +790,17 @@
                 </button>`,
             )}
           </div>
-          <div class="stack" style="gap: 0">
+          <ul role="list">
             ${everyone.map((did) => {
               const at = chosen.indexOf(did);
-              return html`<label class="split-row" key=${did}>
-                <input type="checkbox" checked=${inIt.has(did)} onChange=${() => toggle(did)} />
-                <${Person} did=${did} size=${24} />
+              return html`<li class="stack" data-gap="tight" key=${did}>
+                <div class="row" data-spread>
+                  <label>
+                    <input type="checkbox" checked=${inIt.has(did)} onChange=${() => toggle(did)} />
+                    <${Person} did=${did} size=${24} />
+                  </label>
+                  <small>${at >= 0 && parts ? show(parts[at], currency) : ''}</small>
+                </div>
                 ${
                   mode !== 'equal' &&
                   inIt.has(did) &&
@@ -1042,28 +812,48 @@
                     onInput=${(e) => setTyped({ ...typed, [did]: e.currentTarget.value })}
                   />`
                 }
-                <span class="each faint" style="min-width: 72px; text-align: right">
-                  ${at >= 0 && parts ? show(parts[at], currency) : ''}
-                </span>
-              </label>`;
+              </li>`;
             })}
-          </div>
-        </div>
-        <textarea
-          rows="2"
-          value=${note}
-          onInput=${(e) => setNote(e.currentTarget.value)}
-          placeholder="Notes (optional)"
-          aria-label="Notes"
-        ></textarea>
-        ${error && html`<p class="error">${error}</p>`}
-        <div class="row">
-          <span class="faint" style="flex: 1">${!error && problem && total ? problem : ''}</span>
-          <button type="button" onClick=${onClose}>Cancel</button>
-          <button type="submit" data-variant="primary" disabled=${busy}>${busy ? 'Saving…' : 'Save'}</button>
+          </ul>
+        </fieldset>
+        <label>
+          Notes
+          <textarea
+            rows="2"
+            value=${note}
+            onInput=${(e) => setNote(e.currentTarget.value)}
+            placeholder="Optional"
+          ></textarea>
+        </label>
+        ${error && html`<p role="alert">${error}</p>`}
+        ${!error && problem && total ? html`<small>${problem}</small>` : null}
+        <div class="row" data-spread>
+          <button type="button" data-intent="quiet" onClick=${onClose}>Cancel</button>
+          <button type="submit" data-intent="primary" disabled=${busy}>${busy ? 'Saving…' : 'Save'}</button>
         </div>
       </form>
     </${Modal}>`;
+  }
+
+  /** A currency and an amount in it, side by side */
+  function Money({ currency, currencies, onCurrency, amount, onAmount }) {
+    return html`<div class="grid">
+      <label>
+        Currency
+        <select value=${currency} onChange=${(e) => onCurrency(e.currentTarget.value)}>
+          ${currencies.map((c) => html`<option key=${c} value=${c}>${c}</option>`)}
+        </select>
+      </label>
+      <label>
+        Amount
+        <input
+          value=${amount}
+          inputmode="decimal"
+          onInput=${(e) => onAmount(e.currentTarget.value)}
+          placeholder="0.00"
+        />
+      </label>
+    </div>`;
   }
 
   /** A payment from one person to another: settling up all or part of what they owe */
@@ -1079,10 +869,10 @@
     const [error, setError] = useState(null);
     const minor = toMinor(amount, currency);
     const problem = !to || from === to ? 'Pick two different people' : !minor ? 'How much was paid?' : null;
-    return html`<${Modal} title="Settle up" onClose=${onClose} width=${440}>
+    return html`<${Modal} title="Settle up" onClose=${onClose}>
       <form
         class="stack"
-        style="gap: 14px"
+        data-gap="loose"
         onSubmit=${async (event) => {
           event.preventDefault();
           if (problem) return setError(problem);
@@ -1099,42 +889,30 @@
           }
         }}
       >
-        <div class="row" style="justify-content: center; gap: 16px; padding: 8px 0">
+        <div class="row">
           <${Avatar} did=${from} size=${48} round />
-          <span class="muted" style="font-size: 22px">→</span>
-          ${to ? html`<${Avatar} did=${to} size=${48} round />` : html`<span style="width: 48px"></span>`}
+          <span aria-hidden="true">→</span>
+          ${to && html`<${Avatar} did=${to} size=${48} round />`}
         </div>
-        <div class="pair">
-          <label class="field">
-            <span class="label">Who paid</span>
+        <div class="grid">
+          <label>
+            Who paid
             <select value=${from} onChange=${(e) => setFrom(e.currentTarget.value)}>
               ${everyone.map((d) => html`<option key=${d} value=${d}>${nameIn(people, d)}</option>`)}
             </select>
           </label>
-          <label class="field">
-            <span class="label">To</span>
+          <label>
+            To
             <select value=${to} onChange=${(e) => setTo(e.currentTarget.value)}>
               ${everyone.map((d) => html`<option key=${d} value=${d}>${nameIn(people, d)}</option>`)}
             </select>
           </label>
         </div>
-        <div class="money">
-          <select value=${currency} onChange=${(e) => setCurrency(e.currentTarget.value)} aria-label="Currency">
-            ${currencies.map((c) => html`<option key=${c} value=${c}>${c}</option>`)}
-          </select>
-          <input
-            value=${amount}
-            inputmode="decimal"
-            onInput=${(e) => setAmount(e.currentTarget.value)}
-            placeholder="0.00"
-            aria-label="Amount"
-            style="font-size: 18px"
-          />
-        </div>
-        ${error && html`<p class="error">${error}</p>`}
-        <div class="row" style="justify-content: flex-end">
-          <button type="button" onClick=${onClose}>Cancel</button>
-          <button type="submit" data-variant="primary">Record payment</button>
+        <${Money} currency=${currency} currencies=${currencies} onCurrency=${setCurrency} amount=${amount} onAmount=${setAmount} />
+        ${error && html`<p role="alert">${error}</p>`}
+        <div class="row" data-spread>
+          <button type="button" data-intent="quiet" onClick=${onClose}>Cancel</button>
+          <button type="submit" data-intent="primary">Record payment</button>
         </div>
       </form>
     </${Modal}>`;
@@ -1156,13 +934,12 @@
       }
     };
     return html`<form
-      class="item"
+      class="stack"
       onSubmit=${(e) => {
         e.preventDefault();
         submit();
       }}
     >
-      <span class="plus" aria-hidden="true">+</span>
       <input
         value=${text}
         placeholder=${placeholder}
@@ -1173,7 +950,12 @@
         onInput=${(e) => setText(e.currentTarget.value)}
         onKeyDown=${(e) => e.key === 'Escape' && onCancel?.()}
       />
-      ${text.trim() && html`<button type="submit" data-variant="primary" disabled=${busy}>Save</button>`}
+      ${
+        text.trim() &&
+        html`<div class="row">
+          <button type="submit" data-intent="primary" disabled=${busy}>Save</button>
+        </div>`
+      }
     </form>`;
   }
 

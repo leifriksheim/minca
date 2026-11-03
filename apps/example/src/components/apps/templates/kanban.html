@@ -1,300 +1,4 @@
 <!-- Kanban: std.task and std.column as a board, like a small Trello. Moving a card rewrites only its in link (to its column) and position: by dragging with a mouse, or from the card itself. A card opens one level in (minca.go), so the app's bar names it and its Back comes back out. A card's checklist is tasks whose parent is the card; they stay off the board. -->
-<style>
-  /* The whole window: a board scrolls sideways through its columns. */
-  :root {
-    --minca-page-width: none;
-  }
-  body {
-    padding: 0;
-  }
-  .toolbar {
-    padding: 14px 16px 0;
-  }
-  /* Columns side by side, scrolled across; a phone snaps to one column at a time, the next peeking in. */
-  .board {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 14px 16px 24px;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scroll-snap-type: x proximity;
-    scroll-padding-inline: 16px;
-  }
-  .lane,
-  .new-column {
-    flex: 0 0 280px;
-    scroll-snap-align: start;
-  }
-  .lane {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 10px;
-    border: 1px solid var(--minca-rule);
-    border-radius: var(--minca-radius-lg);
-    background: var(--minca-sunken);
-  }
-  .lane > header {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-height: 32px;
-    padding: 0 2px 0 4px;
-  }
-  .lane > header > button.name {
-    flex: 1;
-    justify-content: flex-start;
-    min-height: 0;
-    padding: 0;
-    border: none;
-    background: none;
-    color: var(--minca-ink);
-    font-size: 15px;
-    font-weight: 600;
-  }
-  .lane > header > button.name:disabled {
-    opacity: 1;
-  }
-  .lane > header form {
-    flex: 1;
-  }
-  .lane > header > button[data-icon] {
-    width: 28px;
-    min-height: 28px;
-  }
-  .count {
-    min-width: 22px;
-    padding: 0 7px;
-    border-radius: var(--minca-radius-pill);
-    background: var(--minca-card);
-    color: var(--minca-muted);
-    font-size: 12px;
-    text-align: center;
-  }
-  .lane-empty {
-    padding: 14px 8px;
-    border: 1.5px dashed var(--minca-line-strong);
-    border-radius: var(--minca-radius-md);
-    color: var(--minca-faint);
-    font-size: 13px;
-    text-align: center;
-  }
-  .task {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
-    min-height: 0;
-    padding: 12px 14px;
-    border: 1px solid var(--minca-line);
-    border-radius: var(--minca-radius-md);
-    background: var(--minca-card);
-    color: var(--minca-ink);
-    font-size: 15px;
-    font-weight: 500;
-    line-height: 1.35;
-    text-align: left;
-    overflow-wrap: anywhere;
-  }
-  .task:hover {
-    background: var(--minca-card);
-    border-color: var(--minca-line-strong);
-  }
-  .task[draggable='true'] {
-    cursor: grab;
-  }
-  .meta {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-    font-size: 12px;
-    font-weight: 400;
-    color: var(--minca-muted);
-  }
-  .meta .faces {
-    display: flex;
-    gap: 2px;
-    margin-left: auto;
-  }
-  .late {
-    color: var(--minca-danger);
-  }
-  .pill {
-    align-self: flex-start;
-    padding: 1px 9px;
-    border-radius: var(--minca-radius-pill);
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--minca-ink);
-    background: color-mix(in srgb, var(--c, var(--minca-sunken)) 45%, var(--minca-card));
-  }
-  .marker {
-    height: 3px;
-    border-radius: var(--minca-radius-pill);
-    background: var(--minca-accent);
-  }
-  .add {
-    justify-content: flex-start;
-    min-height: 40px;
-    padding: 0 10px;
-    border-radius: var(--minca-radius-md);
-  }
-  .new-column > button {
-    width: 100%;
-    min-height: 52px;
-    border: 1.5px dashed var(--minca-line-strong);
-    border-radius: var(--minca-radius-lg);
-    background: none;
-    color: var(--minca-muted);
-  }
-  .new-column > form {
-    padding: 10px;
-    border: 1px solid var(--minca-rule);
-    border-radius: var(--minca-radius-lg);
-    background: var(--minca-sunken);
-  }
-  /* A card opened: one column of it, in the middle */
-  .page {
-    display: flex;
-    flex-direction: column;
-    gap: 22px;
-    max-width: 680px;
-    margin: 0 auto;
-    padding: 18px 16px 48px;
-  }
-  .card-title {
-    min-height: 0;
-    padding: 0;
-    border: none;
-    border-radius: 0;
-    background: none;
-    color: var(--minca-ink);
-    font-family: var(--minca-display);
-    font-size: 26px;
-    font-weight: 700;
-    letter-spacing: -0.03em;
-    line-height: 1.2;
-  }
-  .card-title:focus {
-    outline: none;
-  }
-  .part-of {
-    align-self: flex-start;
-    min-height: 30px;
-    padding: 0 12px;
-    font-weight: 400;
-  }
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .rows {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    overflow: hidden;
-    background: var(--minca-card);
-    border: 1px solid var(--minca-rule);
-    border-radius: var(--minca-radius-lg);
-  }
-  .rows > li + li {
-    border-top: 1px solid var(--minca-line);
-  }
-  .item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    min-height: 52px;
-    padding: 6px 8px 6px 16px;
-  }
-  .item > span {
-    flex: 1;
-    min-width: 0;
-    color: var(--minca-ink);
-    font-size: 15px;
-    overflow-wrap: anywhere;
-  }
-  .item[data-done='true'] > span {
-    color: var(--minca-faint);
-    text-decoration: line-through;
-  }
-  .item input {
-    flex: 1;
-    min-width: 0;
-    min-height: 36px;
-    padding: 0;
-    border: none;
-    border-radius: 0;
-    background: none;
-    font-size: 15px;
-  }
-  .item input:focus {
-    outline: none;
-  }
-  .item form {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  .tick {
-    width: 24px;
-    height: 24px;
-    min-height: 0;
-    flex-shrink: 0;
-    padding: 0;
-    border: 1.5px solid var(--minca-line-strong);
-    border-radius: 50%;
-    background: none;
-    color: var(--minca-inverse);
-  }
-  .tick:hover {
-    border-color: var(--minca-accent);
-    background: none;
-  }
-  .tick[aria-checked='true'] {
-    border-color: var(--minca-accent);
-    background: var(--minca-accent);
-  }
-  .plus {
-    width: 24px;
-    flex-shrink: 0;
-    color: var(--minca-muted);
-    font-size: 20px;
-    line-height: 1;
-    text-align: center;
-  }
-  .bar {
-    height: 4px;
-    border-radius: var(--minca-radius-pill);
-    background: var(--minca-sunken);
-    overflow: hidden;
-  }
-  .bar > span {
-    display: block;
-    height: 100%;
-    background: var(--minca-good);
-  }
-  .chips {
-    flex-wrap: wrap;
-  }
-  @media (max-width: 640px) {
-    .board {
-      scroll-snap-type: x mandatory;
-    }
-    .lane,
-    .new-column {
-      flex-basis: calc(100vw - 56px);
-    }
-    .chips {
-      flex-wrap: nowrap;
-    }
-  }
-</style>
 <script>
   const { html, render, useState, useEffect, useRef, useRecords, useCan, usePeople, useShown, useView } = ui;
   const { Avatar, Person, Empty, Comments, Attachments, attach, positionBetween } = ui;
@@ -306,12 +10,12 @@
   const has = (collection) => minca.collections.includes(collection);
   /** The lane for tasks whose column is gone, or that never had one */
   const LOOSE = '';
-  /** std.task's priority, 1 urgent to 4 low (0 or none: no label), each with a colour */
+  /** std.task's priority, 1 urgent to 4 low (0 or none: no label), each with a hue */
   const PRIORITIES = [
-    [1, 'Urgent', 'coral'],
-    [2, 'High', 'peach'],
-    [3, 'Medium', 'lilac'],
-    [4, 'Low', 'sage'],
+    [1, 'Urgent', 2],
+    [2, 'High', 3],
+    [3, 'Medium', 5],
+    [4, 'Low', 4],
   ];
   /** Dragging is for a mouse; on a touchscreen a card moves from its own page */
   const canDrag = matchMedia('(pointer: fine)').matches;
@@ -339,16 +43,6 @@
     new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
   const nameIn = (people, did) =>
     did === me ? 'You' : (people.find((p) => p.did === did)?.name ?? 'Someone');
-  const tickIcon = html`<svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true">
-    <path
-      d="M3 8.5 6.5 12 13 4.5"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2.2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
-  </svg>`;
 
   /** Whether the person looking may do this to a record: null until known */
   function useMay(action, key) {
@@ -463,12 +157,14 @@
     if (view) {
       const opened = tasks.find((t) => t.key === view);
       if (!opened)
-        return html`<${Empty}
-          shape="columns"
-          colour="cobalt"
-          title="This card isn't here"
-          text="It may have been deleted."
-        />`;
+        return html`<main>
+          <${Empty}
+            shape="columns"
+            colour="cobalt"
+            title="This card isn't here"
+            text="It may have been deleted."
+          />
+        </main>`;
       const parent = tasks.find((t) => t.key === linkOf(opened, 'parent'));
       return html`<${CardPage}
         key=${opened.key}
@@ -483,14 +179,16 @@
     }
 
     if (cols.length === 0 && cards.length === 0)
-      return html`<${Empty}
-        shape="columns"
-        colour="cobalt"
-        title="No board yet"
-        text="Columns for each stage of the work, and cards that move along them."
-      >
-        ${mayAddColumn && html`<button data-variant="primary" onClick=${startColumns}>Start with To do, Doing, Done</button>`}
-      </${Empty}>`;
+      return html`<main>
+        <${Empty}
+          shape="columns"
+          colour="cobalt"
+          title="No board yet"
+          text="Columns for each stage of the work, and cards that move along them."
+        >
+          ${mayAddColumn && html`<button data-intent="primary" onClick=${startColumns}>Start with To do, Doing, Done</button>`}
+        </${Empty}>
+      </main>`;
 
     const endDrag = () => {
       setDragging(null);
@@ -506,18 +204,14 @@
     };
     const landing = (lane, before) => dragging !== null && drop?.lane === lane && drop.before === before;
 
-    return html`<div>
+    return html`<main data-wide>
       ${
         assigned.length > 0 &&
-        html`<div class="toolbar scroll-x" role="group" aria-label="Show the cards of">
-          <button class="chip" aria-pressed=${only === null} onClick=${() => setOnly(null)}>Everyone</button>
+        html`<div class="row" data-gap="tight" role="group" aria-label="Show the cards of">
+          <button aria-pressed=${only === null} onClick=${() => setOnly(null)}>Everyone</button>
           ${
             assigned.includes(me) &&
-            html`<button
-              class="chip"
-              aria-pressed=${only === me}
-              onClick=${() => setOnly(only === me ? null : me)}
-            >
+            html`<button aria-pressed=${only === me} onClick=${() => setOnly(only === me ? null : me)}>
               Mine
             </button>`
           }
@@ -527,7 +221,6 @@
               (did) =>
                 html`<button
                   key=${did}
-                  class="chip"
                   aria-pressed=${only === did}
                   onClick=${() => setOnly(only === did ? null : did)}
                 >
@@ -536,11 +229,10 @@
             )}
         </div>`
       }
-      <div class="board">
+      <div class="lanes">
         ${lanes.map(
           (lane) =>
             html`<section
-              class="lane"
               key=${lane.key}
               aria-label=${lane.name}
               onDragOver=${(event) => {
@@ -562,53 +254,59 @@
                 count=${tasksIn(lane.key).length}
                 empty=${!cards.some((t) => laneOf(t) === lane.key)}
               />
-              ${tasksIn(lane.key).map(
-                (t) =>
-                  html`<div key=${t.key} class="stack" style="gap: 8px">
-                    ${landing(lane.key, t.key) && html`<div class="marker" aria-hidden="true"></div>`}
-                    <${Card}
-                      task=${t}
-                      checklist=${childrenOf(t.key)}
-                      comments=${countAbout(comments, t.key)}
-                      files=${countAbout(files, t.key)}
-                      faded=${dragging === t.key}
-                      onOpen=${() => go(t.key, t.body.title)}
-                      onDragStart=${() => setDragging(t.key)}
-                      onDragEnd=${endDrag}
-                      onDragOver=${(event) => overCard(event, lane.key, t.key)}
-                    />
-                  </div>`,
-              )}
-              ${landing(lane.key, null) && html`<div class="marker" aria-hidden="true"></div>`}
-              ${
-                tasksIn(lane.key).length === 0 &&
-                addingTo !== lane.key &&
-                !landing(lane.key, null) &&
-                html`<div class="lane-empty">${only ? 'None of theirs here' : 'No cards yet'}</div>`
-              }
-              ${
-                mayAddTask &&
-                (addingTo === lane.key
-                  ? html`<${OneLine}
-                      placeholder="Card title"
-                      onDone=${() => setAddingTo(null)}
-                      onSubmit=${(title) =>
-                        minca.put(
-                          TASK,
-                          // Added while one person's cards are shown, it is theirs, so it stays in sight
-                          { title, position: place(lane.key, null), ...(only ? { assignees: [only] } : {}) },
-                          { links: columnLinks(lane.key) },
-                        )}
-                    />`
-                  : html`<button class="add" data-variant="ghost" onClick=${() => setAddingTo(lane.key)}>
-                      + Add a card
-                    </button>`)
-              }
+              <div class="stack">
+                ${tasksIn(lane.key).map(
+                  (t) =>
+                    html`<div key=${t.key} class="stack">
+                      ${landing(lane.key, t.key) && html`<hr data-drop />`}
+                      <${Card}
+                        task=${t}
+                        checklist=${childrenOf(t.key)}
+                        comments=${countAbout(comments, t.key)}
+                        files=${countAbout(files, t.key)}
+                        dragged=${dragging === t.key}
+                        onOpen=${() => go(t.key, t.body.title)}
+                        onDragStart=${() => setDragging(t.key)}
+                        onDragEnd=${endDrag}
+                        onDragOver=${(event) => overCard(event, lane.key, t.key)}
+                      />
+                    </div>`,
+                )}
+                ${landing(lane.key, null) && html`<hr data-drop />`}
+                ${
+                  tasksIn(lane.key).length === 0 &&
+                  addingTo !== lane.key &&
+                  !landing(lane.key, null) &&
+                  html`<p><small>${only ? 'None of theirs here' : 'No cards yet'}</small></p>`
+                }
+                ${
+                  mayAddTask &&
+                  (addingTo === lane.key
+                    ? html`<${OneLine}
+                        placeholder="Card title"
+                        onDone=${() => setAddingTo(null)}
+                        onSubmit=${(title) =>
+                          minca.put(
+                            TASK,
+                            // Added while one person's cards are shown, it is theirs, so it stays in sight
+                            {
+                              title,
+                              position: place(lane.key, null),
+                              ...(only ? { assignees: [only] } : {}),
+                            },
+                            { links: columnLinks(lane.key) },
+                          )}
+                      />`
+                    : html`<button data-intent="quiet" onClick=${() => setAddingTo(lane.key)}>
+                        + Add a card
+                      </button>`)
+                }
+              </div>
             </section>`,
         )}
         ${
           mayAddColumn &&
-          html`<div class="new-column">
+          html`<div>
             ${
               addingColumn
                 ? html`<${OneLine}
@@ -627,7 +325,7 @@
           </div>`
         }
       </div>
-    </div>`;
+    </main>`;
   }
 
   /** A column's name, renamed in place; an empty column can be taken away */
@@ -636,42 +334,41 @@
     const mayRename = useMay('edit', key) === true;
     const mayDelete = useMay('delete', key) === true;
     const [renaming, setRenaming] = useState(false);
-    if (!lane.record)
+    if (renaming)
       return html`<header>
-        <span class="muted" style="flex: 1; font-weight: 600">${lane.name}</span
-        ><span class="count">${count}</span>
+        <${OneLine}
+          placeholder="Column name"
+          initial=${lane.name}
+          onDone=${() => setRenaming(false)}
+          onSubmit=${async (name) => {
+            setRenaming(false);
+            await minca.update(key, { ...lane.record.body, name });
+          }}
+        />
       </header>`;
     return html`<header>
+      <h2 class="truncate">${lane.name}</h2>
+      <span class="tag">${count}</span>
       ${
-        renaming
-          ? html`<${OneLine}
-              placeholder="Column name"
-              initial=${lane.name}
-              onDone=${() => setRenaming(false)}
-              onSubmit=${async (name) => {
-                setRenaming(false);
-                await minca.update(key, { ...lane.record.body, name });
-              }}
-            />`
-          : html`<button
-              class="name"
-              title=${mayRename ? 'Rename this column' : undefined}
-              disabled=${!mayRename}
-              onClick=${() => setRenaming(true)}
-            >
-              ${lane.name}
-            </button>`
+        lane.record &&
+        mayRename &&
+        html`<button
+          data-intent="quiet"
+          data-icon
+          aria-label="Rename this column"
+          onClick=${() => setRenaming(true)}
+        >
+          ✎
+        </button>`
       }
-      ${!renaming && html`<span class="count">${count}</span>`}
       ${
+        lane.record &&
         mayDelete &&
         empty &&
-        !renaming &&
         html`<button
-          data-variant="ghost"
+          data-intent="quiet"
           data-icon
-          title="Delete this empty column"
-          aria-label="Delete this column"
+          aria-label="Delete this empty column"
           onClick=${() => minca.remove(key)}
         >
           ✕
@@ -681,7 +378,7 @@
   }
 
   /** A card on the board: its label, title, and what is on it at a glance */
-  function Card({ task, checklist, comments, files, faded, onOpen, onDragStart, onDragEnd, onDragOver }) {
+  function Card({ task, checklist, comments, files, dragged, onOpen, onDragStart, onDragEnd, onDragOver }) {
     // Draggable until the answer is no, so a card just added moves at once
     const mayMove = useMay('edit', task.key) !== false;
     const { title, notes, priority } = task.body;
@@ -693,10 +390,10 @@
     const more = due || notes || checklist.length > 0 || comments > 0 || files > 0 || faces.length > 0;
     return html`<button
       type="button"
-      class="task"
+      data-intent="open"
       data-key=${task.key}
       draggable=${canDrag && mayMove}
-      style=${{ opacity: faded ? 0.4 : 1 }}
+      aria-grabbed=${dragged}
       onDragStart=${(event) => {
         event.dataTransfer.effectAllowed = 'move';
         event.dataTransfer.setData('text/plain', title);
@@ -706,19 +403,21 @@
       onDragOver=${onDragOver}
       onClick=${onOpen}
     >
-      ${label && html`<span class=${`pill c-${label[2]}`}>${label[1]}</span>`}
-      <span>${title}</span>
+      ${label && html`<span class="row"><span class="tag" data-hue=${label[2]}>${label[1]}</span></span>`}
+      <strong>${title}</strong>
       ${
         more &&
-        html`<span class="meta">
-          ${due && html`<span class=${late ? 'late' : ''} title=${late ? 'Overdue' : 'Due'}>◷ ${dueText(due)}</span>`}
-          ${notes && html`<span title="Has a description">≡</span>`}
-          ${checklist.length > 0 && html`<span title="Checklist">☑ ${done}/${checklist.length}</span>`}
-          ${comments > 0 && html`<span title="Comments">💬 ${comments}</span>`}
-          ${files > 0 && html`<span title="Attachments">📎 ${files}</span>`}
+        html`<span class="row" data-spread>
+          <small class="row">
+            ${due && (late ? html`<span class="tag" data-tone="danger" title="Overdue">◷ ${dueText(due)}</span>` : html`<span title="Due">◷ ${dueText(due)}</span>`)}
+            ${notes && html`<span title="Has a description">≡</span>`}
+            ${checklist.length > 0 && html`<span title="Checklist">☑ ${done}/${checklist.length}</span>`}
+            ${comments > 0 && html`<span title="Comments">💬 ${comments}</span>`}
+            ${files > 0 && html`<span title="Attachments">📎 ${files}</span>`}
+          </small>
           ${
             faces.length > 0 &&
-            html`<span class="faces">
+            html`<span class="row" data-gap="tight">
               ${faces.slice(0, 4).map((did) => html`<${Avatar} key=${did} did=${did} size=${22} round />`)}
             </span>`
           }
@@ -759,131 +458,126 @@
       else go(null);
     };
 
-    return html`<div class="page">
-      ${
-        parent &&
-        html`<button class="part-of" onClick=${() => go(parent.key, parent.body.title)}>
-          On the card <b>${parent.body.title}</b>
-        </button>`
-      }
-      <input
-        class="card-title"
-        value=${title}
-        readonly=${!mayEdit}
-        aria-label="Title"
-        maxlength="200"
-        onInput=${(e) => setTitle(e.currentTarget.value)}
-        onKeyDown=${(e) => e.key === 'Enter' && e.currentTarget.blur()}
-        onBlur=${() => title.trim() && title.trim() !== task.body.title && set('title', title.trim())}
-      />
-      ${
-        !parent &&
-        lanes.length > 0 &&
-        html`<div class="field">
-          <span class="label">Column</span>
-          <div class="row chips scroll-x" role="group" aria-label="Move to">
-            ${lane === LOOSE && html`<button class="chip" aria-pressed="true" disabled>No column</button>`}
-            ${lanes.map(
-              (l) =>
+    return html`<main>
+      <section>
+        ${
+          parent &&
+          html`<div class="row">
+            <button onClick=${() => go(parent.key, parent.body.title)}>
+              On the card <strong>${parent.body.title}</strong>
+            </button>
+          </div>`
+        }
+        <label>
+          Title
+          <input
+            value=${title}
+            readonly=${!mayEdit}
+            maxlength="200"
+            onInput=${(e) => setTitle(e.currentTarget.value)}
+            onKeyDown=${(e) => e.key === 'Enter' && e.currentTarget.blur()}
+            onBlur=${() => title.trim() && title.trim() !== task.body.title && set('title', title.trim())}
+          />
+        </label>
+        ${
+          !parent &&
+          lanes.length > 0 &&
+          html`<fieldset>
+            <legend>Column</legend>
+            <div class="row" data-gap="tight" role="group" aria-label="Move to">
+              ${lane === LOOSE && html`<button aria-pressed="true" disabled>No column</button>`}
+              ${lanes.map(
+                (l) =>
+                  html`<button
+                    key=${l.key}
+                    aria-pressed=${l.key === lane}
+                    disabled=${!mayEdit}
+                    onClick=${() => l.key !== lane && onMove(l.key)}
+                  >
+                    ${l.name}
+                  </button>`,
+              )}
+            </div>
+          </fieldset>`
+        }
+        <fieldset>
+          <legend>Members</legend>
+          <div class="row" data-gap="tight">
+            ${people.map(
+              (p) =>
                 html`<button
-                  key=${l.key}
-                  class="chip"
-                  aria-pressed=${l.key === lane}
+                  key=${p.did}
+                  aria-pressed=${assignees.includes(p.did)}
                   disabled=${!mayEdit}
-                  onClick=${() => l.key !== lane && onMove(l.key)}
+                  onClick=${() =>
+                    set(
+                      'assignees',
+                      assignees.includes(p.did)
+                        ? assignees.filter((d) => d !== p.did)
+                        : [...assignees, p.did],
+                    )}
                 >
-                  ${l.name}
+                  <${Avatar} did=${p.did} size=${18} round /> ${nameIn(people, p.did)}
                 </button>`,
             )}
           </div>
-        </div>`
-      }
-      <div class="field">
-        <span class="label">Members</span>
-        <div class="row chips scroll-x">
-          ${people.map(
-            (p) =>
-              html`<button
-                key=${p.did}
-                class="chip"
-                aria-pressed=${assignees.includes(p.did)}
-                disabled=${!mayEdit}
-                onClick=${() =>
-                  set(
-                    'assignees',
-                    assignees.includes(p.did) ? assignees.filter((d) => d !== p.did) : [...assignees, p.did],
-                  )}
-              >
-                <${Avatar} did=${p.did} size=${18} round /> ${nameIn(people, p.did)}
-              </button>`,
-          )}
-        </div>
-      </div>
-      <div class="field">
-        <span class="label">Due</span>
-        <div class="row">
+        </fieldset>
+        <label>
+          Due
           <input
             type="date"
             value=${due ?? ''}
             disabled=${!mayEdit}
-            style="max-width: 200px"
             onChange=${(e) => set('due', e.currentTarget.value)}
           />
-          ${due && due < today() && html`<span class="late" style="font-size: 13px">Overdue</span>`}
-        </div>
-      </div>
-      <div class="field">
-        <span class="label">Priority</span>
-        <div class="row chips scroll-x">
-          <button
-            class="chip"
-            aria-pressed=${!task.body.priority}
-            disabled=${!mayEdit}
-            onClick=${() => set('priority', null)}
-          >
-            None
-          </button>
-          ${PRIORITIES.map(
-            ([p, name]) =>
-              html`<button
-                key=${p}
-                class="chip"
-                aria-pressed=${task.body.priority === p}
-                disabled=${!mayEdit}
-                onClick=${() => set('priority', p)}
-              >
-                ${name}
-              </button>`,
-          )}
-        </div>
-      </div>
-      <div class="field">
-        <span class="label">Description</span>
-        <textarea
-          rows="4"
-          value=${notes}
-          readonly=${!mayEdit}
-          placeholder="Add more detail…"
-          onInput=${(e) => setNotes(e.currentTarget.value)}
-          onBlur=${() => notes !== (task.body.notes ?? '') && set('notes', notes)}
-        ></textarea>
-      </div>
+        </label>
+        ${due && due < today() && html`<div class="row"><span class="tag" data-tone="danger">Overdue</span></div>`}
+        <fieldset>
+          <legend>Priority</legend>
+          <div class="row" data-gap="tight">
+            <button
+              aria-pressed=${!task.body.priority}
+              disabled=${!mayEdit}
+              onClick=${() => set('priority', null)}
+            >
+              None
+            </button>
+            ${PRIORITIES.map(
+              ([p, name]) =>
+                html`<button
+                  key=${p}
+                  aria-pressed=${task.body.priority === p}
+                  disabled=${!mayEdit}
+                  onClick=${() => set('priority', p)}
+                >
+                  ${name}
+                </button>`,
+            )}
+          </div>
+        </fieldset>
+        <label>
+          Description
+          <textarea
+            rows="4"
+            value=${notes}
+            readonly=${!mayEdit}
+            placeholder="Add more detail…"
+            onInput=${(e) => setNotes(e.currentTarget.value)}
+            onBlur=${() => notes !== (task.body.notes ?? '') && set('notes', notes)}
+          ></textarea>
+        </label>
+      </section>
       ${
         !parent &&
-        html`<div class="field">
-          <div class="row">
-            <span class="label" style="flex: 1">Checklist</span>
-            ${checklist.length > 0 && html`<span class="faint">${done}/${checklist.length}</span>`}
-          </div>
-          ${
-            checklist.length > 0 &&
-            html`<div class="bar">
-              <span style=${{ width: `${(done / checklist.length) * 100}%` }}></span>
-            </div>`
-          }
+        html`<section>
+          <header>
+            <h2>Checklist</h2>
+            ${checklist.length > 0 && html`<small>${done}/${checklist.length}</small>`}
+          </header>
+          ${checklist.length > 0 && html`<progress value=${done} max=${checklist.length}></progress>`}
           ${
             (checklist.length > 0 || mayAddItem) &&
-            html`<ul class="rows" aria-label="Checklist">
+            html`<ul role="list" aria-label="Checklist">
               ${checklist.map(
                 (item) =>
                   html`<${CheckItem}
@@ -894,7 +588,7 @@
               )}
               ${
                 mayAddItem &&
-                html`<li class="item">
+                html`<li>
                   <${AddItem}
                     onAdd=${(itemTitle) =>
                       minca.put(
@@ -911,13 +605,13 @@
               }
             </ul>`
           }
-        </div>`
+        </section>`
       }
       ${
         has(FILE) &&
-        html`<div class="field">
-          <div class="row">
-            <span class="label" style="flex: 1">Attachments</span>
+        html`<section>
+          <header>
+            <h2>Attachments</h2>
             <button onClick=${() => fileInput.current?.click()}>Attach a file</button>
             <input
               ref=${fileInput}
@@ -929,44 +623,42 @@
                 e.currentTarget.value = '';
               }}
             />
-          </div>
+          </header>
           <${Attachments} about=${task.key} />
-        </div>`
+        </section>`
       }
-      ${error && html`<p class="error">${error}</p>`} ${has(COMMENT) && html`<${Comments} about=${task} />`}
-      <div class="row" style="flex-wrap: wrap">
-        <span class="faint" style="flex: 1">Added by <${Person} did=${task.createdBy} face=${false} /></span>
+      ${error && html`<p role="alert">${error}</p>`} ${has(COMMENT) && html`<${Comments} about=${task} />`}
+      <div class="row" data-spread>
+        <small>Added by <${Person} did=${task.createdBy} face=${false} /></small>
         ${
           mayDelete &&
           (deleting
-            ? html`<button data-variant="danger" onClick=${remove}>Delete for everyone</button>
-                <button data-variant="ghost" onClick=${() => setDeleting(false)}>Keep it</button>`
-            : html`<button data-variant="ghost" onClick=${() => setDeleting(true)}>
+            ? html`<button data-intent="danger" onClick=${remove}>Delete for everyone</button>
+                <button data-intent="quiet" onClick=${() => setDeleting(false)}>Keep it</button>`
+            : html`<button data-intent="quiet" onClick=${() => setDeleting(true)}>
                 Delete ${parent ? 'item' : 'card'}
               </button>`)
         }
       </div>
-    </div>`;
+    </main>`;
   }
 
   /** One item of a card's checklist: ticked here, or opened as a task of its own */
   function CheckItem({ item, onOpen }) {
     const mayEdit = useMay('edit', item.key) !== false;
     const isDone = item.body.status === 'done';
-    return html`<li class="item" data-done=${isDone}>
-      <button
-        class="tick"
-        role="checkbox"
-        aria-checked=${isDone}
-        aria-label=${isDone ? 'Not done' : 'Done'}
-        disabled=${!mayEdit}
-        onClick=${() => minca.update(item.key, { ...item.body, status: isDone ? 'todo' : 'done' })}
-      >
-        ${isDone && tickIcon}
-      </button>
-      <span>${item.body.title}</span>
+    return html`<li class="row" data-spread>
+      <label>
+        <input
+          type="checkbox"
+          checked=${isDone}
+          disabled=${!mayEdit}
+          onChange=${() => minca.update(item.key, { ...item.body, status: isDone ? 'todo' : 'done' })}
+        />
+        ${item.body.title}
+      </label>
       ${assigneesOf(item).map((did) => html`<${Avatar} key=${did} did=${did} size=${20} round />`)}
-      <button data-variant="ghost" data-icon aria-label="Open this item" onClick=${onOpen}>›</button>
+      <button data-intent="quiet" data-icon aria-label="Open this item" onClick=${onOpen}>›</button>
     </li>`;
   }
 
@@ -974,6 +666,7 @@
   function AddItem({ onAdd }) {
     const [text, setText] = useState('');
     return html`<form
+      class="stack"
       onSubmit=${(e) => {
         e.preventDefault();
         if (!text.trim()) return;
@@ -981,16 +674,15 @@
         setText('');
       }}
     >
-      <span class="plus" aria-hidden="true">+</span>
       <input
         value=${text}
-        placeholder="Add an item"
+        placeholder="+ Add an item"
         aria-label="Add an item"
         maxlength="200"
         enterkeyhint="next"
         onInput=${(e) => setText(e.currentTarget.value)}
       />
-      ${text.trim() && html`<button type="submit" data-variant="primary">Add</button>`}
+      ${text.trim() && html`<div class="row"><button type="submit" data-intent="primary">Add</button></div>`}
     </form>`;
   }
 

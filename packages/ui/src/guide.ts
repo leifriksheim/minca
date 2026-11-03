@@ -22,48 +22,48 @@ ui has:
   html, h, Fragment, and the hooks useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, useReducer
   useRecords(collection, where?)    its records, oldest first, redrawn whenever the space changes; null until here
   useCan(action, target)            whether the person looking may "create" in a collection, or "edit" or "delete" a record
-                                    (by its key); false until known
+    (by its key); false until known
   usePeople()                       [{ did, name }], kept current
   useName(did)                      their name here, "You" for the person looking
   useFile(key, ref)                 a picture the record \`key\` refers to, as a URL for <img>; null until here
   useShown()                        { key } of the record this app was last asked to show (its "shows"), a new object each time;
-                                    null until one is. Scroll to it, open it: useEffect(() => …, [shown])
+    null until one is. Scroll to it, open it: useEffect(() => …, [shown])
   useView()                         [view, go]: where in itself the screen is (null at its start); go(view, title) goes one level
-                                    in, titled in the app's bar, whose Back comes out: never draw a back button. go(null): the start
+    in, titled in the app's bar, whose Back comes out: never draw a back button. go(null): the start
   useMarked()                       for a list, that key once data-key=\${key} is drawn, scrolled to: data-marked=\${key === marked}
-                                    lights it up
+    lights it up
   usePresence(state)                [{ did, device, state }] of everyone else here, each sharing a state (a cursor, "typing");
-                                    yours goes out as it changes, ten times a second at most. Once per screen
+    yours goes out as it changes, ten times a second at most. Once per screen
   useLive(callback)                 callback({ from, device, data }) for each minca.live.send from another device, kept nowhere
   useBlob(key, ref)                 the whole file, as a URL for <img>, <video> or <audio>; null until here
   <\${Avatar} did size? round? />   someone's face: their picture, or the shape their account gives. Always use it for a person
   <\${Person} did size? name? face? />   face and name (face={false}: the name alone); a click opens their card in the app
   <\${Comments} about=\${record} />   the comments on a record and a box to add one, with @mentions and "/" to share something from
-                                    the space (needs "std.comment" in collections)
+    the space (needs "std.comment" in collections)
   <\${Attachments} about=\${key} />   the files attached to a record (std.file about it): pictures, videos and sound that play, others saved
   attach(about, files)              keeps Files (from a drop, a paste or <input type=file>) as std.file records about a record,
-                                    or about nothing when about is null; → the records written
+    or about nothing when about is null; → the records written
   <\${Playable} record />          a std.file that is a video or a sound, playing where it is; fetched once it comes into view
   useSeen(ref)                      whether the element in ref has come into view: load something large only then
   sizeOf(bytes)                     "812 KB", "3.1 MB"
   <\${Record} record=\${r} onOpen? />  any record as one line, as every app shows it; a click opens it where it belongs, or calls
-                                    onOpen. For records other apps own, as a shared one: minca.get(key, { link: 'shares' }), with
-                                    onOpen=\${() => minca.open({ record: key, link: 'shares' })}
+    onOpen. For records other apps own, as a shared one: minca.get(key, { link: 'shares' }), with
+    onOpen=\${() => minca.open({ record: key, link: 'shares' })}
   useShare()                        sharing into what you send, as chat and comments do: share.pick() asks the person to choose a
-                                    record (a "/" button), onChange=\${(next) => setDraft(share.typed(draft, next))} does the same for "/"
-                                    typed into an empty box; put share.links on what you send, then share.clear(). <\${Sharing} share />
-                                    is the one waiting; <\${Shared} from=\${record} /> what a record shares
+    record (a "/" button), onChange=\${(next) => setDraft(share.typed(draft, next))} does the same for "/"
+    typed into an empty box; put share.links on what you send, then share.clear(). <\${Sharing} share />
+    is the one waiting; <\${Shared} from=\${record} /> what a record shares
   <\${AddMenu} onShare onFiles? />   "+" for a message box: share something from the space, and attach files when onFiles is given
   <\${EmojiPicker} onPick />        a 🙂 button with a grid of emoji; put the one picked in the text, or react with it
   <\${Reactions} about=\${record} adding? />   emoji reactions on a record (std.reaction), yours toggled; react(record, emoji) adds one
-                                    (needs "std.reaction" in collections)
+    (needs "std.reaction" in collections)
   For a message box, put AddMenu and EmojiPicker inside the field, as Comments does: <div class="composer"> holding
   <\${AddMenu} />, the input, and <div class="composer-end"><\${EmojiPicker} /></div>
   <\${Modal} title onClose width?>…</\${Modal}>   a dialog over the screen, the only way to draw one
   <\${Empty} shape? colour? title text?>…</\${Empty}>   an empty app: a shape, a title, a line on what goes here,
-                                    and the button that starts it inside
-  <\${Shape} kind colour? size? />  one of Minca's shapes; <\${Cover} seed colour size? class?>…</\${Cover}> a picture for what has none
-                                    (colour: cobalt, coral, peach, sage or lilac)
+    and the button that starts it inside
+  <\${Shape} kind colour? size? />  one of Minca's shapes; <\${Cover} seed colour size? wide?>…</\${Cover}> a thing's picture
+    (colour: cobalt, coral, peach, sage or lilac)
   <\${PlaceField} value onChange coarse? near? placeholder />   find a place by name, or use where the person is
   <\${NearButton} near onChange />  "Within 5 km of …", from useNear(): [near, setNear], remembered on this device
   placeLabel(place), distanceText(near, place), inReach(near, place), nearWhere(near)   for showing and finding places nearby
@@ -75,15 +75,19 @@ ui has:
 To show a record the way the app does, with its comments, attachments and history, call minca.open({ record: key }).
 
 Write plain HTML from this list, no CSS, <style> or style="": say what a thing is for, never how it looks.
-  <main> the column (data-wide: full width); <header> title + actions; <section> a group under an h2
-  h1 h2 h3 p a strong code; <small> meta and hints; <mark>; class="truncate" one line, cut short
+  <main> the column (data-wide: full width; data-fill: the window's height, its first child scrolling over a box to write in);
+    <header> title + actions; <section> a group under an h2
+  h1 h2 h3 p a strong code; <small> meta and hints; <mark>; <s> done; class="truncate" one line, cut short
   <button> data-intent="primary" (the one main action) | "quiet" (toolbars, rows) | "danger" | "open" (a task, a row);
     data-icon (icon only, give aria-label); aria-pressed (a toggle or filter);
     <div role="tablist"> of buttons, one aria-selected="true"
-  <label>Name <input></label>; <fieldset><legend>; input textarea select; <input type="checkbox" role="switch">;
-    <p role="alert"> an error
-  <article> one thing; <ul role="list"> of <li> (an <li> holding a data-intent="open" button is a row to open);
-    class="grid" tiles; class="tag" a label or count; <aside> a notice; <progress> <meter>
+  <label>Name <input></label>; <fieldset><legend>; input textarea select (in a row, a field takes the room left);
+    <input type="checkbox" role="switch">; <p role="alert"> an error
+  <article> one thing; <ul role="list"> of <li> (a data-intent="open" button in one is the row's text);
+    class="grid" tiles; class="lanes" columns scrolled across (a board); class="tag" a label or count; <aside> a notice;
+    <progress> <meter>; <figure> a picture (Cover draws one; a photo covers it, tags sit on top);
+    <div aria-roledescription="carousel"> pictures swiped through; <div role="grid"> of role="gridcell" a month
+  <div data-actions> buttons shown when what holds them is pointed at; aria-grabbed="true" dragged; <hr data-drop> lands here
   class="row" | "stack", data-gap="tight" | "loose", data-spread (row: first at the start, the rest at the end)
   data-tone="good|warn|danger" on a tag or aside; data-hue="1"…"5" a category's colour: a tint on a tag or article, var(--hue)
 Nothing else exists. Only a game or drawing styles itself, in <main data-wide>, with var(--color-text), var(--color-surface),

@@ -1,411 +1,4 @@
 <!-- Events: std.event and std.rsvp, the way people browse what's on. Covers and dates up front, what's next first, a month to look across, and on each event who's going and a place to talk about it (std.comment). -->
-<style>
-  /* The whole window: covers in a grid, and a month to look across. */
-  :root {
-    --minca-page-width: none;
-  }
-  .bare {
-    min-height: 0;
-    padding: 0;
-    border: none;
-    background: none;
-    color: inherit;
-    font-weight: inherit;
-    text-align: left;
-  }
-  .bare:hover {
-    background: none;
-  }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 16px;
-  }
-  .tile {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    padding: 0;
-  }
-  .tile > .bare {
-    flex-direction: column;
-    align-items: stretch;
-    flex: 1;
-  }
-  .tile .cover {
-    height: 132px;
-    width: 100%;
-  }
-  .tile .cover.past {
-    opacity: 0.7;
-  }
-  .tile .what {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 12px 14px 4px;
-    min-width: 0;
-  }
-  .tile .what strong {
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--minca-ink);
-    line-height: 1.3;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    word-break: break-word;
-  }
-  .tile footer {
-    padding: 8px 14px 14px;
-  }
-  .when {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--minca-accent);
-  }
-  .hero {
-    display: grid;
-    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
-    overflow: hidden;
-    padding: 0;
-  }
-  .hero > .bare {
-    display: block;
-    width: 100%;
-  }
-  .hero .cover {
-    height: 100%;
-    min-height: 260px;
-  }
-  .hero .about {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding: 24px;
-    justify-content: center;
-    min-width: 0;
-  }
-  .hero h2 {
-    font-size: 26px;
-    line-height: 1.15;
-    word-break: break-word;
-  }
-  .banner {
-    height: 240px;
-    border-radius: var(--minca-radius-lg);
-  }
-  /* An event's own photo, over its cover's shape, filling it */
-  .cover-photo {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  /* Choosing it, atop the form: the photo, or a dashed space for one */
-  .cover-pick {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 132px;
-    overflow: hidden;
-    border: 1.5px dashed var(--minca-line-strong);
-    border-radius: var(--minca-radius-lg);
-    color: var(--minca-muted);
-    font-size: 13px;
-    cursor: pointer;
-  }
-  .cover-pick:hover {
-    border-color: var(--minca-accent);
-    color: var(--minca-accent);
-  }
-  .cover-pick > span {
-    position: relative;
-    padding: 4px 12px;
-    border-radius: 999px;
-    background: var(--minca-card);
-  }
-  .cover-pick input {
-    display: none;
-  }
-  .page h1 {
-    font-size: 30px;
-    line-height: 1.15;
-    word-break: break-word;
-  }
-  .actions {
-    flex-wrap: wrap;
-    padding-bottom: 20px;
-    border-bottom: 1px solid var(--minca-line);
-  }
-  .detail {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 300px;
-    gap: 36px;
-    align-items: start;
-  }
-  .fact {
-    display: flex;
-    gap: 12px;
-    align-items: baseline;
-  }
-  .fact > span:first-child {
-    width: 20px;
-    text-align: center;
-    flex-shrink: 0;
-  }
-  .description {
-    font-size: 15px;
-    line-height: 1.6;
-    white-space: pre-wrap;
-    word-break: break-word;
-  }
-  .link {
-    min-height: 0;
-    padding: 0;
-    border: none;
-    background: none;
-    font-weight: 400;
-    color: var(--minca-ink);
-    text-decoration: underline;
-    text-underline-offset: 3px;
-    word-break: break-all;
-    text-align: left;
-  }
-  .counts > div {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 10px 12px;
-    border-radius: var(--minca-radius-lg);
-    background: var(--minca-sunken);
-  }
-  .counts strong {
-    font-size: 22px;
-    font-weight: 600;
-    color: var(--minca-ink);
-  }
-  .badge.cancelled {
-    background: var(--minca-danger-soft);
-    border-color: var(--minca-danger);
-    color: var(--minca-danger);
-    font-weight: 600;
-  }
-  .tile .badge.cancelled {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-  }
-  button[aria-pressed='true']:not(.chip) {
-    background: var(--minca-ink);
-    border-color: var(--minca-ink);
-    color: var(--minca-inverse);
-  }
-  .date {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 46px;
-    padding: 4px 0 6px;
-    border-radius: var(--minca-radius-lg);
-    background: var(--minca-card);
-    border: 1px solid var(--minca-rule);
-  }
-  .date span:first-child {
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--minca-accent);
-  }
-  .date span:last-child {
-    font-size: 20px;
-    font-weight: 700;
-    line-height: 1.05;
-    color: var(--minca-ink);
-    font-variant-numeric: tabular-nums;
-  }
-  .date.large {
-    top: 16px;
-    left: 16px;
-    width: 60px;
-    padding: 6px 0 8px;
-  }
-  .date.large span:first-child {
-    font-size: 12px;
-  }
-  .date.large span:last-child {
-    font-size: 26px;
-  }
-  .faces {
-    display: flex;
-  }
-  .faces > * + * {
-    margin-left: -8px;
-  }
-  .faces svg,
-  .faces img {
-    box-shadow: 0 0 0 2px var(--minca-card);
-  }
-  .month {
-    display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
-    gap: 1px;
-    border: 1px solid var(--minca-rule);
-    border-radius: var(--minca-radius-lg);
-    overflow: hidden;
-    background: var(--minca-rule);
-  }
-  .weekday {
-    padding: 8px 10px;
-    background: var(--minca-sunken);
-    color: var(--minca-muted);
-    font-size: 12px;
-    font-weight: 500;
-  }
-  .day {
-    min-height: 108px;
-    padding: 6px;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    background: var(--minca-card);
-    cursor: pointer;
-    min-width: 0;
-  }
-  .day[data-other] {
-    background: var(--minca-sunken);
-  }
-  .day[data-other] .number {
-    color: var(--minca-faint);
-  }
-  .day[data-picked] {
-    box-shadow: inset 0 0 0 2px var(--minca-accent);
-  }
-  .number {
-    align-self: flex-start;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 24px;
-    height: 24px;
-    padding: 0 4px;
-    border-radius: var(--minca-radius-pill);
-    font-size: 12px;
-    font-weight: 500;
-  }
-  .number[data-today] {
-    background: var(--minca-accent);
-    color: var(--minca-card);
-    font-weight: 600;
-  }
-  .on-day {
-    display: block;
-    width: 100%;
-    min-height: 0;
-    padding: 2px 6px;
-    border: none;
-    border-radius: var(--minca-radius-sm);
-    background: var(--minca-sunken);
-    color: var(--minca-ink);
-    font-size: 11.5px;
-    text-align: left;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .on-day.cancelled {
-    text-decoration: line-through;
-  }
-  .more {
-    font-size: 11px;
-    color: var(--minca-faint);
-    padding-left: 6px;
-  }
-  .dots {
-    display: none;
-    gap: 3px;
-    justify-content: center;
-  }
-  .dots > i {
-    width: 6px;
-    height: 6px;
-    border-radius: var(--minca-radius-pill);
-  }
-  .event-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px;
-    text-align: left;
-    justify-content: flex-start;
-  }
-  .event-row .cover {
-    width: 48px;
-    height: 48px;
-    border-radius: var(--minca-radius-lg);
-    flex-shrink: 0;
-  }
-  .form-row {
-    display: flex;
-    gap: 10px;
-  }
-  .form-row > label {
-    flex: 1;
-    min-width: 0;
-  }
-  .on-day[class*='c-'] {
-    box-shadow: inset 3px 0 0 var(--c);
-  }
-  .dots > i[class*='c-'] {
-    background: var(--c);
-  }
-  @media (max-width: 760px) {
-    .hero,
-    .detail {
-      grid-template-columns: minmax(0, 1fr);
-    }
-    .hero .cover {
-      min-height: 180px;
-    }
-    .banner {
-      height: 170px;
-    }
-    .grid {
-      grid-template-columns: minmax(0, 1fr);
-    }
-    .form-row {
-      flex-direction: column;
-    }
-    .day {
-      min-height: 54px;
-      align-items: center;
-      padding: 4px 2px;
-    }
-    .number {
-      align-self: center;
-    }
-    .on-day,
-    .more {
-      display: none;
-    }
-    .dots {
-      display: flex;
-    }
-    .weekday {
-      padding: 6px 2px;
-      text-align: center;
-      font-size: 11px;
-    }
-  }
-</style>
 <script>
   const {
     html,
@@ -444,10 +37,10 @@
   }
 
   /** An event's cover: its photo when it has one, or else a shape in its kind's colour, with whatever goes on it */
-  function EventCover({ event, size, class: className, children }) {
+  function EventCover({ event, size, children }) {
     const photo = useCoverPhoto(event);
-    return html`<${Cover} seed=${event.key} colour=${kindOf(event.body.category).colour} size=${size} class=${className}>
-      ${photo && html`<img class="cover-photo" src=${photo} alt="" />`}${children}
+    return html`<${Cover} seed=${event.key} colour=${kindOf(event.body.category).colour} size=${size} wide>
+      ${photo && html`<img src=${photo} alt="" />`}${children}
     </${Cover}>`;
   }
 
@@ -464,6 +57,8 @@
     { id: 'other', label: 'Other', emoji: '✨', colour: 'cobalt' },
   ];
   const kindOf = (id) => KINDS.find((k) => k.id === id) ?? KINDS[KINDS.length - 1];
+  /** A kind's colour as a hue, for its events in the month */
+  const HUES = { cobalt: '1', coral: '2', peach: '3', sage: '4', lilac: '5' };
 
   const VIEWS = [
     { id: 'upcoming', label: 'Upcoming' },
@@ -529,6 +124,9 @@
     const ics = when.icsOf(event.key, { ...body, location: placeLabel(body.place) || undefined });
     minca.save(`${body.title.replace(/[^\w -]+/g, '').trim() || 'event'}.ics`, ics, 'text/calendar');
   }
+
+  /** Text as it was typed: a paragraph to a line */
+  const paragraphs = (text) => text.split(/\n+/).map((line, i) => html`<p key=${i}>${line}</p>`);
 
   function Events() {
     const all = useRecords(EVENT);
@@ -602,9 +200,9 @@
     const shown = kind ? inView.filter((e) => kindOf(e.body.category).id === kind) : inView;
     const kindsHere = KINDS.filter((k) => events.some((e) => kindOf(e.body.category).id === k.id));
 
-    return html`<div class="stack" style="gap: 20px">
-      <div class="row" style="flex-wrap: wrap; gap: 12px">
-        <div class="tabs" role="tablist" aria-label="Events">
+    return html`<main>
+      <div class="row" data-spread>
+        <div role="tablist" aria-label="Events">
           ${VIEWS.map(
             (v) =>
               html`<button
@@ -617,32 +215,27 @@
               </button>`,
           )}
         </div>
-        <span style="flex: 1"></span>
-        ${mayCreate && events.length > 0 && html`<button data-variant="primary" onClick=${() => setEditing('new')}>+ Create event</button>`}
+        ${mayCreate && events.length > 0 && html`<button data-intent="primary" onClick=${() => setEditing('new')}>+ Create event</button>`}
       </div>
       ${
         view !== 'mine' &&
         view !== 'hosting' &&
-        html`<div class="scroll-x">
+        html`<div class="row" data-gap="tight">
           <${NearButton} near=${near} onChange=${setNear} />
           ${
             view !== 'calendar' &&
             kindsHere.length > 1 &&
-            html`<span class="divider" aria-hidden="true"></span>
-              <div class="row" style="gap: 6px" role="group" aria-label="Kinds">
-                <button class="chip" aria-pressed=${kind === null} onClick=${() => setKind(null)}>All</button>
-                ${kindsHere.map(
-                  (k) =>
-                    html`<button
-                      key=${k.id}
-                      class="chip"
-                      aria-pressed=${kind === k.id}
-                      onClick=${() => setKind(kind === k.id ? null : k.id)}
-                    >
-                      <span aria-hidden="true">${k.emoji}</span> ${k.label}
-                    </button>`,
-                )}
-              </div>`
+            html`<button aria-pressed=${kind === null} onClick=${() => setKind(null)}>All</button>
+              ${kindsHere.map(
+                (k) =>
+                  html`<button
+                    key=${k.id}
+                    aria-pressed=${kind === k.id}
+                    onClick=${() => setKind(kind === k.id ? null : k.id)}
+                  >
+                    <span aria-hidden="true">${k.emoji}</span> ${k.label}
+                  </button>`,
+              )}`
           }
         </div>`
       }
@@ -663,7 +256,7 @@
                 </div>`
       }
       ${form}
-    </div>`;
+    </main>`;
   }
 
   /** What's on: the very next thing large, then the rest by how soon */
@@ -674,18 +267,15 @@
       const label = when.horizon(when.dateOf(e.body.start), shared.now);
       groups.set(label, [...(groups.get(label) ?? []), e]);
     }
-    return html`<div class="stack" style="gap: 28px">
-      <${Hero} ...${shared} event=${next} />
-      ${[...groups].map(
+    return html`<${Hero} ...${shared} event=${next} /> ${[...groups].map(
         ([label, list]) =>
-          html`<section key=${label} class="stack" style="gap: 12px">
-            <h3>${label}</h3>
+          html`<section key=${label}>
+            <h2>${label}</h2>
             <div class="grid">
               ${list.map((e) => html`<${EventCard} key=${e.key} ...${shared} event=${e} />`)}
             </div>
           </section>`,
-      )}
-    </div>`;
+      )}`;
   }
 
   /** The next event, given the room to sell itself */
@@ -695,27 +285,25 @@
     const live = when.dateOf(body.start) <= now;
     const answers = answersOf(event);
     const going = [...answers.values()].filter((a) => a.body.status === 'going').map((a) => a.createdBy);
-    return html`<article class="card hero">
-      <button class="bare" aria-label=${`Open ${body.title}`} onClick=${() => onOpen(event)}>
-        <${EventCover} event=${event} size=${96}><${DateTile} at=${body.start} large /></${EventCover}>
+    return html`<section>
+      <h2>${live ? 'Happening now' : `Next up · ${when.horizon(when.dateOf(body.start), now)}`}</h2>
+      <button data-intent="open" onClick=${() => onOpen(event)}>
+        <${EventCover} event=${event} size=${96}>
+          <${DateTile} at=${body.start} />
+          ${body.status === 'cancelled' && html`<span class="tag" data-tone="danger">Cancelled</span>`}
+        </${EventCover}>
+        <strong>${body.title}</strong>
+        <small>🕒 ${when.longWhen(body)}</small>
+        ${placeLabel(body.place) && html`<small>📍 ${placeLabel(body.place)}</small>`}
       </button>
-      <div class="about">
-        <span class="when" style=${live ? 'color: var(--minca-good)' : ''}>
-          ${live ? 'Happening now' : `Next up · ${when.horizon(when.dateOf(body.start), now)}`}
+      <div class="row" data-spread>
+        <span class="row" data-gap="tight">
+          ${going.slice(0, 5).map((did) => html`<${Avatar} key=${did} did=${did} size=${24} round />`)}
+          <small>${headcount(answers)}</small>
         </span>
-        <button class="bare" onClick=${() => onOpen(event)}><h2>${body.title}</h2></button>
-        <div class="stack muted" style="gap: 4px">
-          <span>🕒 ${when.longWhen(body)}</span>
-          ${placeLabel(body.place) && html`<span>📍 ${placeLabel(body.place)}</span>`}
-        </div>
-        ${body.status === 'cancelled' && html`<span class="badge cancelled" style="align-self: flex-start">Cancelled</span>`}
-        <div class="row" style="flex-wrap: wrap; gap: 10px">
-          ${going.length > 0 && html`<span class="faces">${going.slice(0, 5).map((did) => html`<${Avatar} key=${did} did=${did} size=${26} round />`)}</span>`}
-          <span class="muted">${headcount(answers)}</span>
-        </div>
         ${mayAnswer && body.status !== 'cancelled' && html`<${RsvpButtons} event=${event} answers=${answers} compact />`}
       </div>
-    </article>`;
+    </section>`;
   }
 
   /** An event in a grid: cover and date, what and where, and who's coming */
@@ -727,34 +315,33 @@
     const past = when.endOf(body) <= now;
     const interested = mine?.body.status === 'maybe' || mine?.body.status === 'going';
     const where = [placeLabel(body.place), distanceText(near, body.place)].filter(Boolean).join(' · ');
-    return html`<article class="card tile">
-      <button class="bare" onClick=${() => onOpen(event)}>
-        <${EventCover} event=${event} size=${52} class=${past ? 'past' : ''}>
+    return html`<div class="stack" data-gap="tight">
+      <button data-intent="open" onClick=${() => onOpen(event)}>
+        <${EventCover} event=${event} size=${52}>
           <${DateTile} at=${body.start} />
-          ${body.status === 'cancelled' && html`<span class="badge cancelled">Cancelled</span>`}
+          ${body.status === 'cancelled' && html`<span class="tag" data-tone="danger">Cancelled</span>`}
         </${EventCover}>
-        <div class="what">
-          <span class="when">${when.shortWhen(body)}</span>
-          <strong>${body.title}</strong>
-          ${placeLabel(body.place) && html`<span class="muted ellipsis">${where}</span>`}
-        </div>
+        <small>${when.shortWhen(body)}</small>
+        <strong>${body.title}</strong>
+        ${placeLabel(body.place) && html`<small class="truncate">${where}</small>`}
+        <small>${headcount(answers) || 'Be the first to answer'}</small>
       </button>
-      <footer class="row">
-        <span class="faint ellipsis" style="flex: 1">${headcount(answers) || 'Be the first to answer'}</span>
-        ${
-          mayAnswer &&
-          !past &&
-          body.status !== 'cancelled' &&
-          html`<button
+      ${
+        mayAnswer &&
+        !past &&
+        body.status !== 'cancelled' &&
+        html`<div class="row">
+          <button
+            data-intent="quiet"
             aria-pressed=${interested}
             title=${interested ? 'You answered' : 'Show you are interested'}
             onClick=${() => answer(event, mine, interested ? null : 'maybe')}
           >
             ${mine?.body.status === 'going' ? '✓ Going' : interested ? '★ Interested' : '☆ Interested'}
-          </button>`
-        }
-      </footer>
-    </article>`;
+          </button>
+        </div>`
+      }
+    </div>`;
   }
 
   /** One event's own page */
@@ -768,20 +355,19 @@
     const cancelled = body.status === 'cancelled';
     const away = distanceText(near, body.place);
     const answers = answersOf(event);
-    return html`<div class="stack page" style="gap: 20px">
-      <${EventCover} event=${event} size=${120} class="banner"><${DateTile} at=${body.start} large /></${EventCover}>
-      <header class="stack">
-        <span class="when">${when.longWhen(body)}</span>
-        <h1>${body.title}</h1>
-        ${placeLabel(body.place) && html`<span class="muted" style="font-size: 15px">${placeLabel(body.place)}</span>`}
-        <div class="row">
-          ${cancelled && html`<span class="badge cancelled">Cancelled</span>`}
-          ${past && !cancelled && html`<span class="badge">Ended</span>`}
+    return html`<main>
+      <${EventCover} event=${event} size=${120}><${DateTile} at=${body.start} /></${EventCover}>
+      <header>
+        <div class="stack" data-gap="tight">
+          <small>${when.longWhen(body)}</small>
+          <h1>${body.title}</h1>
+          ${placeLabel(body.place) && html`<small>${placeLabel(body.place)}</small>`}
         </div>
+        ${cancelled && html`<span class="tag" data-tone="danger">Cancelled</span>`}
+        ${past && !cancelled && html`<span class="tag">Ended</span>`}
       </header>
-      <div class="row actions">
+      <div class="row" data-spread>
         ${mayAnswer && !past && !cancelled && html`<${RsvpButtons} event=${event} answers=${answers} />`}
-        <span style="flex: 1"></span>
         <button onClick=${() => download(event)}>Add to calendar</button>
         ${
           hosting &&
@@ -795,7 +381,7 @@
               </button>`
             }
             <button
-              data-variant="danger"
+              data-intent="danger"
               onBlur=${() => setConfirmDelete(false)}
               onClick=${() => {
                 if (!confirmDelete) return setConfirmDelete(true);
@@ -807,75 +393,77 @@
             </button>`
         }
       </div>
-      <div class="detail">
-        <div class="stack" style="gap: 28px; min-width: 0">
-          <section class="stack" style="gap: 14px">
-            <h3>Details</h3>
-            <div class="fact"><span aria-hidden="true">👤</span><span>Hosted by <${Person} did=${event.createdBy} face=${false} /></span></div>
-            <div class="fact"><span aria-hidden="true">${k.emoji}</span><span>${k.label}</span></div>
-            <div class="fact"><span aria-hidden="true">🕒</span><span>${when.longWhen(body)}</span></div>
-            ${
-              placeLabel(body.place) &&
-              html`<div class="fact">
-                <span aria-hidden="true">📍</span>
-                <span
-                  >${placeLabel(body.place)}${away && html`<span class="faint"> · ${away} away</span>`}
-                  <${MapLink} place=${body.place}
-                /></span>
-              </div>`
-            }
-            ${
-              body.url &&
-              html`<div class="fact">
-                <span aria-hidden="true">🔗</span>
-                <button class="link" onClick=${() => minca.link(body.url)}>
-                  ${body.url.replace(/^https?:\/\//, '')}
-                </button>
-              </div>`
-            }
-            ${body.description && html`<p class="description">${body.description}</p>`}
-          </section>
-          <${Comments} about=${event} />
-        </div>
-        <${Guests} answers=${answers} />
-      </div>
-    </div>`;
+      <section>
+        <h3>Details</h3>
+        <ul role="list">
+          <li><span aria-hidden="true">👤</span> Hosted by <${Person} did=${event.createdBy} face=${false} /></li>
+          <li><span aria-hidden="true">${k.emoji}</span> ${k.label}</li>
+          <li><span aria-hidden="true">🕒</span> ${when.longWhen(body)}</li>
+          ${
+            placeLabel(body.place) &&
+            html`<li class="row" data-spread>
+              <span
+                ><span aria-hidden="true">📍</span>
+                ${placeLabel(body.place)}${away && html`<small> · ${away} away</small>`}</span
+              >
+              <${MapLink} place=${body.place} />
+            </li>`
+          }
+          ${
+            body.url &&
+            html`<li class="truncate">
+              <span aria-hidden="true">🔗</span>
+              <a
+                href=${body.url}
+                onClick=${(e) => {
+                  e.preventDefault();
+                  minca.link(body.url);
+                }}
+                >${body.url.replace(/^https?:\/\//, '')}</a
+              >
+            </li>`
+          }
+        </ul>
+        ${body.description && paragraphs(body.description)}
+      </section>
+      <${Guests} answers=${answers} />
+      <${Comments} about=${event} />
+    </main>`;
   }
 
   /** Who answered, by answer */
   function Guests({ answers }) {
     const all = [...answers.values()];
-    return html`<aside class="card stack" style="gap: 18px; padding: 18px">
-      <div class="row counts">
-        <div><strong>${countOf(answers, 'going')}</strong><span class="faint">Going</span></div>
-        <div>
-          <strong>${all.filter((a) => a.body.status === 'maybe').length}</strong
-          ><span class="faint">Interested</span>
-        </div>
+    return html`<section>
+      <h3>Guests</h3>
+      <div class="row" data-gap="tight">
+        <span class="tag">${countOf(answers, 'going')} going</span>
+        <span class="tag">${all.filter((a) => a.body.status === 'maybe').length} interested</span>
       </div>
       ${ANSWERS.map(({ status, label }) => {
         const these = all.filter((a) => a.body.status === status);
         if (these.length === 0) return null;
-        return html`<section key=${status} class="stack">
-          <h4 class="label">${label} · ${these.length}</h4>
-          ${these.map(
-            (a) =>
-              html`<div key=${a.key} class="row">
-                <${Avatar} did=${a.createdBy} size=${24} />
-                <${Person} did=${a.createdBy} face=${false} />
-                ${!!a.body.guests && html`<span class="faint">+${a.body.guests}</span>`}
-              </div>`,
-          )}
-        </section>`;
+        return html`<div key=${status} class="stack" data-gap="tight">
+          <small>${label} · ${these.length}</small>
+          <ul role="list">
+            ${these.map(
+              (a) =>
+                html`<li key=${a.key} class="row">
+                  <${Person} did=${a.createdBy} size=${24} />
+                  ${!!a.body.guests && html`<small>+${a.body.guests}</small>`}
+                </li>`,
+            )}
+          </ul>
+        </div>`;
       })}
-      ${all.length === 0 && html`<p class="faint">Nobody has answered yet.</p>`}
-    </aside>`;
+      ${all.length === 0 && html`<p><small>Nobody has answered yet.</small></p>`}
+    </section>`;
   }
 
   /** Going, Interested, Can't go: one answer per person, and choosing yours again takes it back */
   function RsvpButtons({ event, answers, compact }) {
     const mine = answers.get(me);
-    return html`<div class="row" style="flex-wrap: wrap; gap: 6px">
+    return html`<div class="row" data-gap="tight">
       ${ANSWERS.map(({ status, label, on }) => {
         const chosen = mine?.body.status === status;
         return html`<button
@@ -889,16 +477,15 @@
       ${
         mine?.body.status === 'going' &&
         !compact &&
-        html`<label class="row muted" style="gap: 6px">
-          Bringing
+        html`<span>
           <select
+            aria-label="Bringing"
             value=${mine.body.guests ?? 0}
-            style="width: auto"
             onChange=${(e) => minca.update(mine.key, { ...mine.body, guests: Number(e.currentTarget.value) })}
           >
-            ${[0, 1, 2, 3, 4, 5].map((n) => html`<option key=${n} value=${n}>${n === 0 ? 'nobody' : `+${n}`}</option>`)}
+            ${[0, 1, 2, 3, 4, 5].map((n) => html`<option key=${n} value=${n}>${n === 0 ? 'Bringing nobody' : `Bringing +${n}`}</option>`)}
           </select>
-        </label>`
+        </span>`
       }
     </div>`;
   }
@@ -914,9 +501,9 @@
     const on = (day) => events.filter((e) => when.isOn(e.body, day));
     const shift = (by) => setMonth(new Date(month.getFullYear(), month.getMonth() + by, 1));
     const pickedEvents = on(picked);
-    return html`<div class="stack" style="gap: 20px">
-      <div class="row">
-        <h2 style="flex: 1">${month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</h2>
+    return html`<section>
+      <header>
+        <h2>${month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</h2>
         <button
           onClick=${() => {
             setMonth(new Date(today.getFullYear(), today.getMonth(), 1));
@@ -927,69 +514,70 @@
         </button>
         <button data-icon aria-label="Previous month" onClick=${() => shift(-1)}>‹</button>
         <button data-icon aria-label="Next month" onClick=${() => shift(1)}>›</button>
-      </div>
-      <div class="month" role="grid" aria-label="Month">
-        ${days.slice(0, 7).map((d) => html`<div key=${d} class="weekday" role="columnheader">${d.toLocaleDateString(undefined, { weekday: 'short' })}</div>`)}
+      </header>
+      <div role="grid" aria-label="Month">
+        ${days.slice(0, 7).map((d) => html`<small key=${d} role="columnheader">${d.toLocaleDateString(undefined, { weekday: 'short' })}</small>`)}
         ${days.map((day) => {
           const these = on(day);
+          const number =
+            when.dayKey(day) === when.dayKey(today)
+              ? html`<mark>${day.getDate()}</mark>`
+              : day.getMonth() !== month.getMonth()
+                ? html`<small>${day.getDate()}</small>`
+                : html`<strong>${day.getDate()}</strong>`;
           return html`<div
             key=${when.dayKey(day)}
             role="gridcell"
-            class="day"
-            data-other=${day.getMonth() !== month.getMonth() || undefined}
-            data-picked=${when.dayKey(day) === when.dayKey(picked) || undefined}
+            aria-selected=${when.dayKey(day) === when.dayKey(picked)}
             onClick=${() => setPicked(day)}
           >
-            <span class="number" data-today=${when.dayKey(day) === when.dayKey(today) || undefined}
-              >${day.getDate()}</span
-            >
+            <span>${number}</span>
             ${these.slice(0, 3).map(
               (e) =>
                 html`<button
                   key=${e.key}
-                  class=${`on-day c-${kindOf(e.body.category).colour}${e.body.status === 'cancelled' ? ' cancelled' : ''}`}
+                  class="tag"
+                  data-hue=${HUES[kindOf(e.body.category).colour]}
                   title=${e.body.title}
                   onClick=${(click) => {
                     click.stopPropagation();
                     onOpen(e);
                   }}
                 >
-                  ${when.isWholeDay(e.body.start) || e.body.allDay ? '' : `${when.clockOf(when.dateOf(e.body.start))} `}${e.body.title}
+                  <span class="truncate">
+                    ${when.isWholeDay(e.body.start) || e.body.allDay ? '' : `${when.clockOf(when.dateOf(e.body.start))} `}${e.body.status === 'cancelled' ? html`<s>${e.body.title}</s>` : e.body.title}
+                  </span>
                 </button>`,
             )}
-            ${these.length > 3 && html`<span class="more">+${these.length - 3} more</span>`}
+            ${these.length > 3 && html`<small>+${these.length - 3} more</small>`}
             ${
               these.length > 0 &&
-              html`<span class="dots" aria-hidden="true"
-                >${these.slice(0, 3).map((e) => html`<i key=${e.key} class=${`c-${kindOf(e.body.category).colour}`}></i>`)}</span
+              html`<span class="row" data-gap="tight" aria-hidden="true"
+                >${these.slice(0, 3).map((e) => html`<${Shape} key=${e.key} kind="squircle" colour=${kindOf(e.body.category).colour} size=${8} />`)}</span
               >`
             }
           </div>`;
         })}
       </div>
-      <section class="stack" style="gap: 10px">
-        <h3>${picked.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</h3>
-        ${
-          pickedEvents.length === 0
-            ? html`<p class="faint">Nothing on this day.</p>`
-            : pickedEvents.map(
+      <h3>${picked.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</h3>
+      ${
+        pickedEvents.length === 0
+          ? html`<p><small>Nothing on this day.</small></p>`
+          : html`<ul role="list">
+              ${pickedEvents.map(
                 (e) =>
-                  html`<button key=${e.key} class="card event-row" onClick=${() => onOpen(e)}>
-                    <${EventCover} event=${e} size=${26} />
-                    <span class="stack" style="gap: 2px; min-width: 0">
-                      <strong class="ellipsis">${e.body.title}</strong>
-                      <span class="muted ellipsis"
-                        >${when.shortWhen(e.body)}${placeLabel(e.body.place) ? ` · ${placeLabel(e.body.place)}` : ''}</span
+                  html`<li key=${e.key}>
+                    <button data-intent="open" onClick=${() => onOpen(e)}>
+                      <strong class="truncate">${e.body.title}</strong>
+                      <small class="truncate"
+                        >${when.shortWhen(e.body)}${placeLabel(e.body.place) ? ` · ${placeLabel(e.body.place)}` : ''}${headcount(answersOf(e)) ? ` · ${headcount(answersOf(e))}` : ''}</small
                       >
-                    </span>
-                    <span class="faint" style="margin-left: auto; white-space: nowrap"
-                      >${headcount(answersOf(e))}</span
-                    >
-                  </button>`,
-              )
-        }
-      </section>
-    </div>`;
+                    </button>
+                  </li>`,
+              )}
+            </ul>`
+      }
+    </section>`;
   }
 
   /** Making an event, or changing one: what, when, where */
@@ -1033,7 +621,7 @@
     return html`<${Modal} title=${initial ? 'Edit event' : 'Create event'} onClose=${onClose} width=${560}>
       <form
         class="stack"
-        style="gap: 14px"
+        data-gap="loose"
         onSubmit=${(e) => {
           e.preventDefault();
           if (!ready) return;
@@ -1058,9 +646,9 @@
             .finally(() => setBusy(false));
         }}
       >
-        <label class="cover-pick" aria-label="Cover photo">
-          ${shown && html`<img class="cover-photo" src=${shown} alt="" />`}
-          <span>${shown ? 'Change photo' : '+ Add a cover photo'}</span>
+        ${shown && html`<${Cover} seed=${initial?.key ?? 'new'} colour=${kindOf(category).colour} wide><img src=${shown} alt="" /></${Cover}>`}
+        <label>
+          ${shown ? 'Change photo' : 'Cover photo'}
           <input
             type="file"
             accept="image/*"
@@ -1072,17 +660,17 @@
             }}
           />
         </label>
-        <label class="stack"><span class="label">Name</span>
+        <label>Name
           <input value=${title} onInput=${value(setTitle)} placeholder="Summer concert in the park" maxlength="500" />
         </label>
-        <div class="stack" role="group" aria-label="Kind"><span class="label">Kind</span>
-          <div class="scroll-x">
+        <fieldset>
+          <legend>Kind</legend>
+          <div class="row" data-gap="tight">
             ${KINDS.map(
               (k) =>
                 html`<button
                   key=${k.id}
                   type="button"
-                  class="chip"
                   aria-pressed=${category === k.id}
                   onClick=${() => setCategory(k.id)}
                 >
@@ -1090,31 +678,31 @@
                 </button>`,
             )}
           </div>
+        </fieldset>
+        <div class="grid">
+          <label>Starts<input type="date" value=${day} onInput=${value(setDay)} /></label>
+          ${!allDay && html`<label>At<input type="time" value=${clock} onInput=${value(setClock)} /></label>`}
         </div>
-        <div class="form-row">
-          <label class="stack"><span class="label">Starts</span><input type="date" value=${day} onInput=${value(setDay)} /></label>
-          ${!allDay && html`<label class="stack"><span class="label">At</span><input type="time" value=${clock} onInput=${value(setClock)} /></label>`}
+        <div class="grid">
+          <label>Ends (optional)<input type="date" value=${endDay} min=${day} onInput=${value(setEndDay)} /></label>
+          ${!allDay && html`<label>At<input type="time" value=${endClock} onInput=${value(setEndClock)} /></label>`}
         </div>
-        <div class="form-row">
-          <label class="stack"><span class="label">Ends (optional)</span><input type="date" value=${endDay} min=${day} onInput=${value(setEndDay)} /></label>
-          ${!allDay && html`<label class="stack"><span class="label">At</span><input type="time" value=${endClock} onInput=${value(setEndClock)} /></label>`}
-        </div>
-        <label class="row"><input type="checkbox" style="width: auto; min-height: 0" checked=${allDay} onChange=${(e) => setAllDay(e.currentTarget.checked)} /> All day</label>
-        ${backwards && html`<p class="error">It ends before it starts.</p>`}
-        <div class="stack" role="group" aria-label="Where"><span class="label">Where</span>
+        <label><input type="checkbox" checked=${allDay} onChange=${(e) => setAllDay(e.currentTarget.checked)} /> All day</label>
+        ${backwards && html`<p role="alert">It ends before it starts.</p>`}
+        <label>Where
           <${PlaceField} value=${place} onChange=${setPlace} near=${near} placeholder="A venue, an address, a park" />
-        </div>
-        <label class="stack"><span class="label">Link (tickets, stream, page)</span>
+        </label>
+        <label>Link (tickets, stream, page)
           <input value=${url} onInput=${value(setUrl)} placeholder="https://" inputmode="url" />
         </label>
-        ${badUrl && html`<p class="error">A link starts with https://</p>`}
-        <label class="stack"><span class="label">About</span>
+        ${badUrl && html`<p role="alert">A link starts with https://</p>`}
+        <label>About
           <textarea rows="4" maxlength="10000" value=${description} onInput=${value(setDescription)} placeholder="What to expect, what to bring, who's playing"></textarea>
         </label>
-        ${error && html`<p class="error">${error}</p>`}
-        <div class="row" style="justify-content: flex-end">
-          <button type="button" onClick=${onClose}>Cancel</button>
-          <button type="submit" data-variant="primary" disabled=${!ready || busy}>${busy ? 'Saving…' : initial ? 'Save' : 'Create event'}</button>
+        ${error && html`<p role="alert">${error}</p>`}
+        <div class="row" data-spread>
+          <button type="button" data-intent="quiet" onClick=${onClose}>Cancel</button>
+          <button type="submit" data-intent="primary" disabled=${!ready || busy}>${busy ? 'Saving…' : initial ? 'Save' : 'Create event'}</button>
         </div>
       </form>
     </${Modal}>`;
@@ -1129,16 +717,15 @@
       past: 'No past events',
     };
     return html`<${ui.Empty} shape="calendar" colour="sage" title=${filtered ? 'Nothing of this kind here' : said[view]}>
-      ${mayCreate && (view === 'upcoming' || view === 'hosting') && !filtered && html`<button data-variant="primary" onClick=${onCreate}>Create an event</button>`}
+      ${mayCreate && (view === 'upcoming' || view === 'hosting') && !filtered && html`<button data-intent="primary" onClick=${onCreate}>Create an event</button>`}
     </${ui.Empty}>`;
   }
 
-  /** A tear-off calendar page in a cover's corner */
-  function DateTile({ at, large }) {
+  /** The day it starts, in a cover's corner */
+  function DateTile({ at }) {
     const date = when.dateOf(at);
-    return html`<span class=${large ? 'date large' : 'date'}>
-      <span>${date.toLocaleDateString(undefined, { month: 'short' }).replace('.', '')}</span>
-      <span>${date.getDate()}</span>
+    return html`<span class="tag">
+      ${date.toLocaleDateString(undefined, { month: 'short' }).replace('.', '')} ${date.getDate()}
     </span>`;
   }
 

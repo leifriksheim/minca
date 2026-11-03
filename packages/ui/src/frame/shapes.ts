@@ -46,26 +46,27 @@ export function Empty({
 }
 
 /**
- * A picture for something that has none: a big flat shape in a colour, on a
- * sunken ground, picked and turned a little by `seed` (a record's key), so
- * two side by side differ. Whatever is inside sits on top.
+ * A thing's picture (a <figure>): a big flat shape in a colour, picked and
+ * turned a little by `seed` (a record's key), so two side by side differ. A
+ * photo inside covers it; labels and buttons inside sit along its top.
  */
 export function Cover({
   seed,
   colour,
   size = 64,
-  class: className,
+  wide = false,
   children,
 }: {
   seed: string;
   colour: ShapeColour;
   /** How big the shape is: twice this many pixels across */
   size?: number;
-  class?: string;
+  /** A banner, twice as wide as tall, not a tile */
+  wide?: boolean;
   children?: ComponentChildren;
 }) {
   const tilt = (hash(`${seed}:tilt`) % 24) - 12;
-  return html`<div class=${className ? `cover ${className}` : 'cover'}>
+  return html`<figure data-wide=${wide || undefined}>
     <${Shape}
       kind=${shapeFor(seed).kind}
       colour=${colour}
@@ -73,5 +74,5 @@ export function Cover({
       style=${`position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(${tilt}deg)`}
     />
     ${children}
-  </div>`;
+  </figure>`;
 }

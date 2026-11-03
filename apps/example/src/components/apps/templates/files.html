@@ -1,294 +1,4 @@
 <!-- Files: every std.file in the space, by kind, size and name, in categories that are std.lists with an item about each file. -->
-<style>
-  html,
-  body {
-    height: 100%;
-  }
-  body {
-    padding: 0;
-  }
-  /* The whole window: the folders beside the files. */
-  :root {
-    --minca-page-width: none;
-  }
-  #app {
-    height: 100%;
-    display: flex;
-  }
-  .side {
-    flex: 0 0 200px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 16px 10px;
-    border-right: 1px solid var(--minca-line);
-    overflow-y: auto;
-  }
-  .side h3 {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin: 14px 8px 4px;
-    font-size: 12px;
-    color: var(--minca-muted);
-  }
-  .side h3 button {
-    min-height: 0;
-    padding: 0 6px;
-    font-size: 16px;
-  }
-  .place {
-    justify-content: flex-start;
-    gap: 8px;
-    min-height: 32px;
-    padding: 0 8px;
-    border: 1px solid transparent;
-    background: none;
-    font-weight: 400;
-    text-align: left;
-  }
-  .place .count {
-    margin-left: auto;
-    color: var(--minca-faint);
-    font-size: 12px;
-  }
-  .place.on {
-    background: var(--minca-accent-soft);
-    color: var(--minca-accent);
-    font-weight: 600;
-  }
-  .place.target {
-    border-color: var(--minca-accent);
-    border-style: dashed;
-  }
-  .dot {
-    width: 10px;
-    height: 10px;
-    flex-shrink: 0;
-    border-radius: 50%;
-  }
-  .main {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-  }
-  .bar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-    padding: 14px 16px;
-    border-bottom: 1px solid var(--minca-line);
-  }
-  .bar h2 {
-    flex: 1;
-    min-width: 120px;
-    margin: 0;
-  }
-  .bar input[type='search'] {
-    width: 180px;
-  }
-  .bar select {
-    width: auto;
-  }
-  .grid {
-    flex: 1;
-    overflow-y: auto;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    align-content: start;
-    gap: 12px;
-    padding: 16px;
-  }
-  .file {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 2px;
-    min-height: 0;
-    padding: 6px 6px 8px;
-    border: 1px solid var(--minca-line);
-    border-radius: var(--minca-radius-md);
-    background: var(--minca-card);
-    font-weight: 400;
-    text-align: left;
-  }
-  .file:hover {
-    border-color: var(--minca-line-strong);
-    background: var(--minca-card);
-  }
-  .thumb {
-    position: relative;
-    display: grid;
-    place-items: center;
-    aspect-ratio: 4 / 3;
-    margin-bottom: 4px;
-    overflow: hidden;
-    border-radius: var(--minca-radius-sm);
-    background: var(--minca-sunken);
-    font-size: 30px;
-  }
-  .thumb img,
-  .thumb video {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  .thumb .ext {
-    position: absolute;
-    bottom: 6px;
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--minca-muted);
-  }
-  .thumb .play {
-    position: absolute;
-    font-size: 22px;
-    color: #fff;
-    text-shadow: 0 1px 4px rgb(0 0 0 / 0.6);
-  }
-  .file .name {
-    font-size: 13px;
-    font-weight: 600;
-  }
-  .file .meta {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 12px;
-  }
-  .file .dots {
-    display: flex;
-    gap: 3px;
-    margin-left: auto;
-  }
-  .file .dots .dot {
-    width: 8px;
-    height: 8px;
-  }
-  .drop {
-    position: fixed;
-    inset: 8px;
-    z-index: 10;
-    display: grid;
-    place-items: center;
-    border: 2px dashed var(--minca-accent);
-    border-radius: var(--minca-radius-lg);
-    background: var(--minca-accent-soft);
-    color: var(--minca-accent);
-    font-weight: 600;
-    pointer-events: none;
-  }
-  .viewer {
-    position: fixed;
-    inset: 0;
-    z-index: 20;
-    display: flex;
-    flex-direction: column;
-    background: rgb(10 10 12 / 0.94);
-    color: #fff;
-  }
-  .viewer header,
-  .viewer footer {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 16px;
-  }
-  .viewer header strong {
-    flex: 1;
-    min-width: 0;
-  }
-  .viewer .stage {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 0 8px;
-  }
-  .viewer .show {
-    flex: 1;
-    min-width: 0;
-    height: 100%;
-    display: grid;
-    place-items: center;
-  }
-  .viewer .show img,
-  .viewer .show video {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
-  }
-  .viewer .show pre {
-    width: min(100%, 860px);
-    max-height: 100%;
-    overflow: auto;
-    margin: 0;
-    padding: 16px;
-    border-radius: var(--minca-radius-md);
-    background: var(--minca-card);
-    color: var(--minca-body);
-    font-size: 13px;
-    white-space: pre-wrap;
-  }
-  .viewer .icon {
-    font-size: 64px;
-    text-align: center;
-  }
-  .viewer button {
-    color: #fff;
-    border-color: rgb(255 255 255 / 0.3);
-    background: rgb(255 255 255 / 0.08);
-  }
-  .viewer button[data-variant='danger'] {
-    border-color: transparent;
-    background: var(--minca-danger);
-  }
-  .viewer .step {
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    font-size: 20px;
-  }
-  .viewer .step:disabled {
-    visibility: hidden;
-  }
-  .viewer .chip.on {
-    border-color: transparent;
-    background: #fff;
-    color: #111;
-  }
-  @media (max-width: 640px) {
-    #app {
-      flex-direction: column;
-    }
-    .side {
-      flex: none;
-      flex-direction: row;
-      align-items: center;
-      padding: 8px 10px;
-      border-right: none;
-      border-bottom: 1px solid var(--minca-line);
-      overflow-x: auto;
-    }
-    .side h3 {
-      margin: 0 4px 0 12px;
-    }
-    .place {
-      flex-shrink: 0;
-    }
-    .bar input[type='search'] {
-      width: 100%;
-      order: 3;
-    }
-    .grid {
-      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    }
-  }
-</style>
 <script>
   const {
     html,
@@ -303,7 +13,7 @@
     useBlob,
     useShown,
   } = ui;
-  const { useSeen, Avatar, Person, Empty, attach, sizeOf, ago } = ui;
+  const { useSeen, Avatar, Person, Empty, Modal, attach, sizeOf, ago } = ui;
   const FILE = 'std.file';
   const LIST = 'std.list';
   const ITEM = 'std.list-item';
@@ -342,10 +52,8 @@
     name: ['Name', (a, b) => a.body.name.localeCompare(b.body.name)],
   };
 
-  /** A category's colour, the same on every device, from its key */
-  const COLOURS = ['cobalt', 'coral', 'peach', 'sage', 'lilac'];
-  const colourOf = (key) =>
-    `var(--minca-${COLOURS[[...key].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % COLOURS.length]})`;
+  /** A category's colour, one of the five hues, the same on every device, from its key */
+  const hueOf = (key) => String(([...key].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % 5) + 1);
 
   /** Where a record's link of this role points, if it has one */
   const linkOf = (record, rel) => record.links.find((l) => l.rel === rel)?.to;
@@ -538,159 +246,163 @@
       view.kind === 'type' ? KINDS.find(([k]) => k === view.type)[1] : group ? group.body.title : 'All files';
     const at = shown.findIndex((f) => f.key === opened);
 
-    return html`
-      <nav class="side" aria-label="Files">
-        <${Place}
-          on=${view.kind === 'all'}
-          label="All files"
-          icon="🗂"
-          count=${all.length}
-          onClick=${() => setView({ kind: 'all' })}
-        />
-        ${KINDS.map(([type, name, icon]) => {
-          const count = all.filter((f) => kindOf(f.body.mime)[0] === type).length;
-          return (
-            count > 0 &&
-            html`<${Place}
-              key=${type}
-              on=${view.kind === 'type' && view.type === type}
-              label=${name}
-              icon=${icon}
-              count=${count}
-              onClick=${() => setView({ kind: 'type', type })}
-            />`
-          );
-        })}
-        <h3>
-          Categories
-          ${
-            mayMake &&
-            html`<button
-              type="button"
-              data-variant="ghost"
-              title="New category"
-              onClick=${() => setNaming('')}
-            >
-              +
-            </button>`
-          }
-        </h3>
+    return html`<main data-wide>
+      <header>
+        <div>
+          <h1>${title}</h1>
+          <small>${shown.length} · ${sizeOf(total)}</small>
+        </div>
         ${
-          naming !== null &&
-          html`<form
-            onSubmit=${(event) => {
-              event.preventDefault();
-              const title = naming.trim().slice(0, 200);
-              setNaming(null);
-              if (title) makeGroup(title);
-            }}
-          >
-            <${Focused}
-              value=${naming}
-              placeholder="Name it"
-              aria-label="Category name"
-              onInput=${(event) => setNaming(event.currentTarget.value)}
-              onBlur=${(event) => !event.currentTarget.value.trim() && setNaming(null)}
-            />
-          </form>`
+          group?.mine &&
+          html`<button type="button" data-intent="quiet" onClick=${() => dropGroup(group)}>
+            Remove category
+          </button>`
         }
-        ${groups.length === 0 && naming === null && html`<p class="faint" style="margin: 0 8px; font-size: 12px">None yet</p>`}
-        ${groups.map(
-          (list) =>
-            html`<${Place}
-              key=${list.key}
-              on=${view.kind === 'group' && view.key === list.key}
-              label=${list.body.title}
-              colour=${colourOf(list.key)}
-              count=${counts.get(list.key)}
-              onClick=${() => setView({ kind: 'group', key: list.key })}
-              onFile=${mayGroup && ((key) => putIn(key, list.key))}
-              onError=${setError}
-            />`,
-        )}
-      </nav>
-      <main class="main">
-        <div class="bar">
-          <h2>
-            ${title}
-            <span class="faint" style="margin-left: 6px; font-size: 13px; font-weight: 400"
-              >${shown.length} · ${sizeOf(total)}</span
+        ${
+          mayAdd &&
+          html`<button
+              type="button"
+              data-intent="primary"
+              disabled=${busy}
+              onClick=${() => picker.current?.click()}
             >
-          </h2>
-          <input
-            type="search"
-            placeholder="Search"
-            aria-label="Search by name"
-            value=${query}
-            onInput=${(event) => setQuery(event.currentTarget.value)}
-          />
-          <select aria-label="Sort" value=${sort} onChange=${(event) => setSort(event.currentTarget.value)}>
-            ${Object.entries(SORTS).map(([key, [name]]) => html`<option value=${key}>${name}</option>`)}
-          </select>
-          ${
-            group?.mine &&
-            html`<button type="button" data-variant="ghost" onClick=${() => dropGroup(group)}>
-              Remove category
-            </button>`
-          }
-          ${
-            mayAdd &&
-            html`<button
-                type="button"
-                data-variant="primary"
-                disabled=${busy}
-                onClick=${() => picker.current?.click()}
-              >
-                ${busy ? 'Uploading…' : 'Upload'}
-              </button>
-              <input
-                ref=${picker}
-                type="file"
-                multiple
-                hidden
-                onChange=${(event) => {
-                  upload([...event.currentTarget.files]);
-                  event.currentTarget.value = '';
+              ${busy ? 'Uploading…' : 'Upload'}
+            </button>
+            <input
+              ref=${picker}
+              type="file"
+              multiple
+              hidden
+              onChange=${(event) => {
+                upload([...event.currentTarget.files]);
+                event.currentTarget.value = '';
+              }}
+            />`
+        }
+      </header>
+      <section>
+        <nav class="stack" aria-label="Files">
+          <div class="row" data-gap="tight">
+            <${Place}
+              on=${view.kind === 'all'}
+              label="🗂 All files"
+              count=${all.length}
+              onClick=${() => setView({ kind: 'all' })}
+            />
+            ${KINDS.map(([type, name, icon]) => {
+              const count = all.filter((f) => kindOf(f.body.mime)[0] === type).length;
+              return (
+                count > 0 &&
+                html`<${Place}
+                  key=${type}
+                  on=${view.kind === 'type' && view.type === type}
+                  label=${`${icon} ${name}`}
+                  count=${count}
+                  onClick=${() => setView({ kind: 'type', type })}
+                />`
+              );
+            })}
+          </div>
+          <div class="row" data-gap="tight">
+            <small>Categories</small>
+            ${groups.length === 0 && naming === null && html`<small>· none yet</small>`}
+            ${groups.map(
+              (list) =>
+                html`<${Place}
+                  key=${list.key}
+                  on=${view.kind === 'group' && view.key === list.key}
+                  label=${list.body.title}
+                  hue=${hueOf(list.key)}
+                  count=${counts.get(list.key)}
+                  onClick=${() => setView({ kind: 'group', key: list.key })}
+                  onFile=${mayGroup && ((key) => putIn(key, list.key))}
+                  onError=${setError}
+                />`,
+            )}
+            ${
+              naming !== null &&
+              html`<form
+                onSubmit=${(event) => {
+                  event.preventDefault();
+                  const title = naming.trim().slice(0, 200);
+                  setNaming(null);
+                  if (title) makeGroup(title);
                 }}
-              />`
-          }
+              >
+                <${Focused}
+                  value=${naming}
+                  placeholder="Name it"
+                  aria-label="Category name"
+                  onInput=${(event) => setNaming(event.currentTarget.value)}
+                  onBlur=${(event) => !event.currentTarget.value.trim() && setNaming(null)}
+                />
+              </form>`
+            }
+            ${
+              mayMake &&
+              naming === null &&
+              html`<button
+                type="button"
+                data-intent="quiet"
+                data-icon
+                title="New category"
+                aria-label="New category"
+                onClick=${() => setNaming('')}
+              >
+                +
+              </button>`
+            }
+          </div>
+        </nav>
+        <div class="row">
+          <label>
+            Search
+            <input
+              type="search"
+              placeholder="By name"
+              value=${query}
+              onInput=${(event) => setQuery(event.currentTarget.value)}
+            />
+          </label>
+          <label>
+            Sort
+            <select value=${sort} onChange=${(event) => setSort(event.currentTarget.value)}>
+              ${Object.entries(SORTS).map(([key, [name]]) => html`<option value=${key}>${name}</option>`)}
+            </select>
+          </label>
         </div>
-        ${error && html`<p class="error" style="margin: 8px 16px 0">${error}</p>`}
-        <div class="grid">
-          ${
-            shown.length === 0 &&
-            html`<div style="grid-column: 1 / -1">
-              ${
-                query
-                  ? html`<${Empty} shape="folder" colour="sage" title="Nothing by that name" />`
-                  : group
-                    ? html`<${Empty}
-                        shape="folder"
-                        colour="sage"
-                        title="Nothing in this category yet"
-                        text="Drag files onto it, or drop new ones here."
-                      />`
-                    : html`<${Empty}
-                        shape="folder"
-                        colour="sage"
-                        title="No files yet"
-                        text="Drop some here, paste them, or share them in a chat."
-                      />`
-              }
-            </div>`
-          }
-          ${shown.map(
-            (file) =>
-              html`<${Card}
-                key=${file.key}
-                file=${file}
-                groups=${groups.filter((g) => groupsOf(file.key).includes(g.key))}
-                onOpen=${() => setOpened(file.key)}
-              />`,
-          )}
-        </div>
-      </main>
-      ${dropping && html`<div class="drop">Drop files to add them${group ? ` to “${group.body.title}”` : ''}</div>`}
+        ${error && html`<p role="alert">${error}</p>`}
+        ${dropping && html`<aside>Drop files to add them${group ? ` to “${group.body.title}”` : ''}</aside>`}
+        ${
+          shown.length === 0
+            ? query
+              ? html`<${Empty} shape="folder" colour="sage" title="Nothing by that name" />`
+              : group
+                ? html`<${Empty}
+                    shape="folder"
+                    colour="sage"
+                    title="Nothing in this category yet"
+                    text="Drag files onto it, or drop new ones here."
+                  />`
+                : html`<${Empty}
+                    shape="folder"
+                    colour="sage"
+                    title="No files yet"
+                    text="Drop some here, paste them, or share them in a chat."
+                  />`
+            : html`<div class="grid">
+                ${shown.map(
+                  (file) =>
+                    html`<${Card}
+                      key=${file.key}
+                      file=${file}
+                      groups=${groups.filter((g) => groupsOf(file.key).includes(g.key))}
+                      onOpen=${() => setOpened(file.key)}
+                    />`,
+                )}
+              </div>`
+        }
+      </section>
       ${
         at >= 0 &&
         html`<${Viewer}
@@ -707,7 +419,7 @@
           onClose=${() => setOpened(null)}
         />`
       }
-    `;
+    </main>`;
   }
 
   /** A text field that takes the focus when it appears; autofocus only works as the page loads */
@@ -717,12 +429,13 @@
     return html`<input ref=${input} ...${props} />`;
   }
 
-  /** A place in the side list; a category also takes a file dragged onto it */
-  function Place({ on, label, icon, colour, count, onClick, onFile, onError }) {
+  /** A place to look in, as a filter; a category, in its colour, also takes a file dragged onto it */
+  function Place({ on, label, hue, count, onClick, onFile, onError }) {
     const [target, setTarget] = useState(false);
     return html`<button
       type="button"
-      class=${`place${on ? ' on' : ''}${target ? ' target' : ''}`}
+      aria-pressed=${on}
+      data-marked=${target}
       onClick=${onClick}
       onDragOver=${
         onFile &&
@@ -744,9 +457,7 @@
         })
       }
     >
-      ${colour ? html`<span class="dot" style=${{ background: colour }}></span>` : html`<span>${icon}</span>`}
-      <span class="ellipsis">${label}</span>
-      <span class="count">${count || ''}</span>
+      ${label} ${count > 0 && html`<span class="tag" data-hue=${hue}>${count}</span>`}
     </button>`;
   }
 
@@ -761,45 +472,46 @@
     return html`<button
       ref=${box}
       type="button"
-      class="file"
+      data-intent="open"
       title=${name}
       draggable="true"
       onDragStart=${(event) => event.dataTransfer.setData(DRAGGED, file.key)}
       onClick=${onOpen}
     >
-      <div class="thumb">
+      <figure aria-hidden="true">
         ${
           picture
             ? html`<img src=${picture} alt="" loading="lazy" />`
             : clip
               ? html`<video src=${`${clip}#t=0.1`} muted playsinline preload="metadata"></video>`
-              : html`<span aria-hidden="true">${icon}</span><span class="ext">${extOf(name)}</span>`
+              : html`<span>${icon}</span>`
         }
-        ${kind === 'video' && html`<span class="play" aria-hidden="true">▶</span>`}
-      </div>
-      <span class="ellipsis name">${name}</span>
-      <span class="meta faint">
-        ${file.createdBy && html`<${Avatar} did=${file.createdBy} size=${16} round />`} ${sizeOf(size ?? 0)} ·
-        ${ago(file.createdAt)}
-        <span class="dots">
-          ${groups.map((g) => html`<span key=${g.key} class="dot" title=${g.body.title} style=${{ background: colourOf(g.key) }}></span>`)}
-        </span>
+        ${clip && html`<span class="tag">▶</span>`}
+      </figure>
+      <strong class="truncate">${name}</strong>
+      <span class="row" data-gap="tight">
+        ${file.createdBy && html`<${Avatar} did=${file.createdBy} size=${16} round />`}
+        <small>${[extOf(name), sizeOf(size ?? 0), ago(file.createdAt)].filter(Boolean).join(' · ')}</small>
       </span>
+      ${
+        groups.length > 0 &&
+        html`<span class="row" data-gap="tight">
+          ${groups.map((g) => html`<span key=${g.key} class="tag" data-hue=${hueOf(g.key)}>${g.body.title}</span>`)}
+        </span>`
+      }
     </button>`;
   }
 
-  /** One file over the whole screen: shown as well as it can be, ← and → to the next, Esc to close */
+  /** One file in a dialog: shown as well as it can be, ← and → to the next, Esc to close */
   function Viewer({ file, groups, on, mayGroup, onGroup, onStep, hasPrevious, hasNext, onDelete, onClose }) {
     const { name, mime, size, blob, url } = file.body;
-    const [kind, , icon] = kindOf(mime);
+    const [kind] = kindOf(mime);
     const picture = useFile(file.key, kind === 'picture' ? blob : null);
     const whole = useBlob(file.key, /^(picture|video|audio)$/.test(kind) ? blob : null);
     const [text, setText] = useState(null);
     const [sure, setSure] = useState(false);
-    const box = useRef(null);
 
     useEffect(() => {
-      box.current?.focus();
       const keys = (event) => {
         if (event.target.closest?.('input, textarea, select')) return;
         if (event.key === 'Escape') onClose();
@@ -827,24 +539,15 @@
     }, [file.key]);
 
     const about = file.links.some((l) => l.rel === 'about');
-    return html`<div
-      class="viewer"
-      ref=${box}
-      tabindex="-1"
-      role="dialog"
-      aria-modal="true"
-      aria-label=${name}
-    >
-      <header>
-        <strong class="ellipsis">${name}</strong>
-        ${file.createdBy && html`<${Person} did=${file.createdBy} size=${20} />`}
-        <span style="opacity: 0.7">${sizeOf(size ?? 0)} · ${ago(file.createdAt)}</span>
-        <button type="button" data-icon aria-label="Close" onClick=${onClose}>✕</button>
-      </header>
-      <div class="stage">
+    return html`<${Modal} title=${name} onClose=${onClose} width=${720}>
+      <div class="row" data-spread>
+        <span class="row" data-gap="tight">
+          ${file.createdBy && html`<${Person} did=${file.createdBy} size=${20} />`}
+          <small>${sizeOf(size ?? 0)} · ${ago(file.createdAt)}</small>
+        </span>
         <button
           type="button"
-          class="step"
+          data-intent="quiet"
           data-icon
           aria-label="Previous"
           disabled=${!hasPrevious}
@@ -852,29 +555,9 @@
         >
           ←
         </button>
-        <div class="show">
-          ${
-            kind === 'picture' && (whole || picture)
-              ? html`<img src=${whole ?? picture} alt=${name} />`
-              : kind === 'video' && whole
-                ? html`<video src=${whole} controls autoplay playsinline></video>`
-                : kind === 'audio' && whole
-                  ? html`<div class="stack" style="align-items: center">
-                      <span class="icon">${icon}</span><audio src=${whole} controls autoplay></audio>
-                    </div>`
-                  : text !== null
-                    ? html`<pre>${text}</pre>`
-                    : html`<div class="icon">
-                        ${icon}
-                        <p style="font-size: 14px; opacity: 0.7">
-                          ${blob ? (whole === null && /^(picture|video|audio)$/.test(kind) ? 'Loading…' : 'No preview') : 'Kept elsewhere'}
-                        </p>
-                      </div>`
-          }
-        </div>
         <button
           type="button"
-          class="step"
+          data-intent="quiet"
           data-icon
           aria-label="Next"
           disabled=${!hasNext}
@@ -883,21 +566,39 @@
           →
         </button>
       </div>
-      <footer>
-        ${groups.map(
-          (g) =>
-            html`<button
-              type="button"
-              key=${g.key}
-              class=${on.includes(g.key) ? 'chip on' : 'chip'}
-              disabled=${!mayGroup}
-              aria-pressed=${on.includes(g.key)}
-              onClick=${() => onGroup(g.key, !on.includes(g.key))}
-            >
-              <span class="dot" style=${{ background: colourOf(g.key) }}></span> ${g.body.title}
-            </button>`,
-        )}
-        <span style="flex: 1"></span>
+      ${
+        kind === 'picture' && (whole || picture)
+          ? html`<img src=${whole ?? picture} alt=${name} />`
+          : kind === 'video' && whole
+            ? html`<video src=${whole} controls autoplay playsinline></video>`
+            : kind === 'audio' && whole
+              ? html`<audio src=${whole} controls autoplay></audio>`
+              : text !== null
+                ? html`<textarea readonly rows="16" aria-label=${name} value=${text}></textarea>`
+                : html`<${Empty}
+                    shape="folder"
+                    colour="sage"
+                    title=${blob ? (whole === null && /^(picture|video|audio)$/.test(kind) ? 'Loading…' : 'No preview') : 'Kept elsewhere'}
+                  />`
+      }
+      ${
+        groups.length > 0 &&
+        html`<div class="row" data-gap="tight">
+          ${groups.map(
+            (g) =>
+              html`<button
+                type="button"
+                key=${g.key}
+                disabled=${!mayGroup}
+                aria-pressed=${on.includes(g.key)}
+                onClick=${() => onGroup(g.key, !on.includes(g.key))}
+              >
+                ${g.body.title}
+              </button>`,
+          )}
+        </div>`
+      }
+      <div class="row" data-gap="tight">
         ${about && html`<button type="button" onClick=${() => minca.open({ record: file.key, link: 'about' })}>Where it was shared</button>`}
         ${
           blob
@@ -909,14 +610,12 @@
         ${
           file.mine &&
           (sure
-            ? html`<button type="button" data-variant="danger" onClick=${onDelete}>
-                  Delete for everyone
-                </button>
-                <button type="button" onClick=${() => setSure(false)}>Keep</button>`
-            : html`<button type="button" onClick=${() => setSure(true)}>Delete</button>`)
+            ? html`<button type="button" data-intent="danger" onClick=${onDelete}>Delete for everyone</button>
+                <button type="button" data-intent="quiet" onClick=${() => setSure(false)}>Keep</button>`
+            : html`<button type="button" data-intent="quiet" onClick=${() => setSure(true)}>Delete</button>`)
         }
-      </footer>
-    </div>`;
+      </div>
+    </${Modal}>`;
   }
 
   render(html`<${Files} />`);

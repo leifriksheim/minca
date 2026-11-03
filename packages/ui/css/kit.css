@@ -316,10 +316,3 @@
   align-self: flex-start;
   max-width: 100%;
 }
-
-/* A picture for what has none (Cover) */
-.cover {
-  position: relative;
-  overflow: hidden;
-  background: var(--color-sunken);
-}
