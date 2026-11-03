@@ -15,7 +15,19 @@
     <main>
       <header>
         <h1>Every piece</h1>
-        <button data-intent="quiet" data-icon aria-label="Search">⌕</button>
+        <button data-intent="quiet" data-icon aria-label="Search">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            aria-hidden="true"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-4-4" />
+          </svg>
+        </button>
         <button data-intent="primary">New</button>
       </header>
 
@@ -41,6 +53,8 @@
           <button data-intent="danger">Delete</button>
           <button disabled>Not now</button>
           <button data-icon aria-label="Add">+</button>
+          <button data-intent="quiet" data-icon aria-label="Close">✕</button>
+          <button data-intent="quiet" data-icon aria-label="React">🙂</button>
         </div>
         <div class="row" data-gap="tight">
           <button aria-pressed="true">All</button>

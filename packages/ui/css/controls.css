@@ -91,6 +91,14 @@ button {
     flex-shrink: 0;
     width: var(--control-height);
     padding: 0;
+    font-size: 20px;
+    font-weight: 400;
+    line-height: 1;
+
+    & > svg {
+      width: 18px;
+      height: 18px;
+    }
   }
 
   /* A toggle or a filter, on */
