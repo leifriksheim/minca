@@ -225,9 +225,9 @@
 .place-chosen {
   flex-wrap: nowrap;
   min-height: 40px;
-  padding: 4px 4px 4px 16px;
+  padding: 4px 4px 4px 12px;
   border: 1px solid var(--color-field);
-  border-radius: var(--radius-control);
+  border-radius: var(--radius);
 
   & > .stack {
     flex: 1;

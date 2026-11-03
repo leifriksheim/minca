@@ -81,8 +81,9 @@ from values, and go as the apps move onto `css/`.
   chips, `md` for rows, inputs and cards inside a surface, `lg` for surfaces
   (cards, panels, menus, dialogs), `xl` for the big frames on a page. Nothing
   is square, and nothing picks a size off the scale.
-- **Controls are pills**: buttons, inputs that ask for one line, segmented
-  controls, chips, the nav.
+- **Things you press are pills**: buttons, tabs, toggles, tags, the nav.
+  Fields to type or choose in (inputs, selects, text boxes) take the `md`
+  corner, like a row.
 - **One line for edges.** The navy rule (`surface.rule`), one pixel, draws the
   edge of anything that stands on the page: a card, a frame, the nav, a
   secondary button, the footer. **Hairlines** (`surface.line`) only separate

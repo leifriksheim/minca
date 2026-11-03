@@ -147,9 +147,9 @@ textarea,
 select {
   width: 100%;
   min-height: var(--control-height);
-  padding: 6px 14px;
+  padding: 6px 12px;
   border: 1px solid var(--color-field);
-  border-radius: var(--radius-control);
+  border-radius: var(--radius);
   background: var(--color-surface);
   color: var(--color-text-strong);
   font: 400 var(--text-body) / 1.5 var(--font-body);
@@ -172,7 +172,6 @@ select {
 
 textarea {
   display: block;
-  border-radius: var(--radius);
   resize: vertical;
 }
 
@@ -181,7 +180,7 @@ select {
   padding-right: 34px;
   background: var(--color-surface)
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%235d6480' stroke-width='1.5'/%3E%3C/svg%3E")
-    no-repeat right 14px center;
+    no-repeat right 12px center;
   cursor: pointer;
 }
 
