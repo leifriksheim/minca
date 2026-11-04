@@ -7,6 +7,6 @@ public/*
 .next/
 out/
 next-env.d.ts
-.examples/
+examples/pages/
 # The playground's Minca code, bundled by scripts/sync.mjs
 .minca/

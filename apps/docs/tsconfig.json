@@ -13,5 +13,5 @@
     "plugins": [{ "name": "next" }]
   },
   "include": ["next-env.d.ts", "../shared/src/vite-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "out", "examples.ts"]
+  "exclude": ["node_modules", "out", "examples"]
 }

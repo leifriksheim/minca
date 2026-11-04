@@ -9,7 +9,7 @@ apps/desktop/parts
 # Copied in by apps/docs/scripts/sync.mjs, and Next's build
 apps/docs/content
 apps/docs/.api
-apps/docs/.examples
+apps/docs/examples/pages
 apps/docs/.minca
 apps/docs/public
 apps/docs/.next

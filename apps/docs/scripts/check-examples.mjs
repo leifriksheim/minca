@@ -2,8 +2,9 @@
  * Type-checks every TypeScript example in the library's docs against the real
  * code, so an example that stops compiling fails the build instead of
  * drifting. Each ```ts, ```tsx or ```typescript block becomes a module in
- * .examples/; examples.d.ts declares the few names the pages take as given,
- * like `node` and `space`. Errors are reported at the page and line.
+ * examples/pages/; examples/given.ts declares the few names the pages take as
+ * given, like `node` and `space`. The folder has a tsconfig of its own, so
+ * the type checker and the linter read them the same way. Errors are reported at the page and line.
  */
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -12,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../../..', import.meta.url));
 const docsDir = fileURLToPath(new URL('..', import.meta.url));
-const out = join(docsDir, '.examples');
+const out = join(docsDir, 'examples', 'pages');
 const library = 'packages/core/docs';
 const pages = [
   ...readdirSync(join(root, library))
@@ -45,7 +46,7 @@ let report = '';
 try {
   execFileSync(
     join(docsDir, 'node_modules/.bin/tsc'),
-    ['-p', 'tsconfig.examples.json', '--pretty', 'false'],
+    ['-p', 'examples/tsconfig.json', '--pretty', 'false'],
     {
       cwd: docsDir,
       encoding: 'utf8',
@@ -55,12 +56,12 @@ try {
   report = String(error.stdout);
 }
 
-// tsc says `.examples/name.tsx(3,7): error …`: say the page and line instead.
+// tsc says `examples/pages/name.tsx(3,7): error …`: say the page and line instead.
 const errors = report
   .split('\n')
   .filter((line) => line.includes('error TS'))
   .map((line) => {
-    const match = line.match(/^\.examples\/([^(]+)\((\d+),(\d+)\): (.*)$/);
+    const match = line.match(/^examples\/pages\/([^(]+)\((\d+),(\d+)\): (.*)$/);
     const origin = match && origins.get(match[1]);
     return origin ? `${origin.page}:${origin.line + Number(match[2]) - 1}: ${match[4]}` : line;
   });

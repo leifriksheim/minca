@@ -1,5 +1,5 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
     "noEmit": true,
     "jsx": "react-jsx",
@@ -7,5 +7,5 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false
   },
-  "include": [".examples/*.tsx", "examples.ts"]
+  "include": ["given.ts", "pages/*.tsx"]
 }
