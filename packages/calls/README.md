@@ -205,7 +205,7 @@ A receiver must ignore a call message when:
 - its type is not one of these, or its `call` is not a valid id;
 - it comes from a peer with no account (`from: null`);
 - it comes from a records-only key (`recordsOnly: true`), judged on the whole
-  note, so records given in another space don't count here;
+  note: a key given records in any space is kept out of calls in every space;
 - it is a `call.here`, `call.ring` or `call.signal` from an account that is
   not a member ([who takes part](#who-takes-part)).
 
