@@ -9,7 +9,7 @@ import type { AppNodeState } from './app-node';
 export interface MenuLine {
   readonly label: string;
   /** What clicking it does; none for a line that only says something */
-  readonly action?: 'renew' | 'open';
+  readonly action?: 'renew' | 'open' | 'check' | 'update';
 }
 
 export interface ConnectionMenu {
