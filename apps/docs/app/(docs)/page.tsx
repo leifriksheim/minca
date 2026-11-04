@@ -1,8 +1,12 @@
 import Link from 'next/link';
 import { icons, type LucideIcon } from 'lucide-react';
+import { PATHS, type ShapeKind } from '@minca/ui/shapes';
 import nav from '@/nav.json';
 
 const iconByName = new Map<string, LucideIcon>(Object.entries(icons));
+
+/** Each topic's icon sits on one of Minca's shapes, taking turns as the colours do */
+const GROUNDS: ReadonlyArray<ShapeKind> = ['scallop', 'flower', 'clover', 'burst', 'squircle'];
 
 // From spec/02-records.md §3.4: what a write puts in the space.
 const version = `{
@@ -36,7 +40,12 @@ export default function Home() {
           const Icon = iconByName.get(topic.icon);
           return (
             <Link key={topic.slug} href={`/${topic.slug}/`} className="topic" data-hue={(i % 5) + 1}>
-              <span className="topic-icon">{Icon && <Icon strokeWidth={1.25} />}</span>
+              <span className="topic-icon">
+                <svg className="topic-shape" viewBox="0 0 100 100" aria-hidden>
+                  <path d={PATHS[GROUNDS[i % GROUNDS.length] ?? 'scallop']} />
+                </svg>
+                {Icon && <Icon strokeWidth={1.5} />}
+              </span>
               <span>
                 <strong>{topic.title}</strong>
                 <span>{topic.blurb}</span>
