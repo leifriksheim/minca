@@ -155,6 +155,14 @@ describe('a node across a port', () => {
     assert.deepEqual([results.length, events.length], seen);
   });
 
+  test('file limits cross the port, Infinity included, and a limit that is no byte count is refused', async () => {
+    const { remote } = await served();
+    await remote.setFileLimits({ ahead: Infinity, keep: Infinity });
+    await remote.setFileLimits({ ahead: 0, keep: 64 * 1024 * 1024 });
+    await assert.rejects(remote.setFileLimits({ ahead: -1, keep: 0 }), /byte counts/);
+    await assert.rejects(remote.setFileLimits({ ahead: Number.NaN, keep: 0 }), /byte counts/);
+  });
+
   test("the node's refusals come back as errors with their messages", async () => {
     const { node, remote } = await served();
     const { id: space } = await node.spaces.create({ name: 'Todo', ...team, visibility: 'private' });

@@ -419,14 +419,20 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     and every node that keeps that version whole fetches each, unread. A
     carrier or host holds them all while the version is kept whole, and
     copies each into every mirror it writes (a bucket, a data folder).
-    Every other node, the account home and agents too, fetches unread only
-    files of up to 5 MiB and keeps at most 256 MiB of files it did not add
-    per space, dropping those used longest ago, so a flood costs it
-    bandwidth, not storage, though the limit adds up across spaces. A flood
-    of 256 MiB pushes other members' files back, for good, to being fetched
-    when read, from a writer or carrier that is online. An app granted to
-    write as the account is held to the same limit on the account's other
-    devices. The files are held for good where the version is retained, a first version under `onePer`, or under
+    Every other node, the account home and agents too, by default fetches
+    unread only files of up to 5 MiB and keeps at most 256 MiB of files it
+    did not add per space, dropping those used longest ago, so a flood costs
+    it bandwidth, not storage, though the limit adds up across spaces. A
+    person may raise either on their own device (`setFileLimits`), up to
+    fetching every file unread: there a flood is bounded by bandwidth alone,
+    and a file larger than what the device keeps is never fetched unread. A
+    flood of 256 MiB pushes other members' files back, for good, to being
+    fetched when read, from a writer or carrier that is online. An app
+    granted to write as the account is held to the same limit on the
+    account's other devices, unless the person there raised it. A
+    `thumbnail` is the writer's word too: an app shows one only when the
+    file is a picture or a video, and fetches it only if it is small, so a
+    large or misleading one costs no more than the file it stands for. The files are held for good where the version is retained, a first version under `onePer`, or under
     `history: "all"`. It can also name another member's deleted file in a
     version of its own, keeping its ciphertext held, though nobody without
     the old body can open it. `size` is the writer's word until the bytes
@@ -1381,7 +1387,9 @@ _Source: 04 §1, §2, §5.1, §6.2; 07 §5, §6, §9; 01 §15.2; 06 §3. Tests: 
     (03 §8.6, [#223](https://github.com/leifriksheim/minca/issues/223)).
     Unlike `links`, a version's `files` stays outside a private body: how
     many files each names, how big, and that versions naming one id share a
-    file, in one space or across the spaces it holds (05 §16.6). A host with limits also keeps, for its window, which
+    file, in one space or across the spaces it holds (05 §16.6). A small
+    second file beside a larger one says, most likely, that it is a picture
+    or a video with its thumbnail. A host with limits also keeps, for its window, which
     accounts wrote in each space on each day, as hashes salted with a salt
     on the same disk, which hides nothing from the host or whoever holds its
     disk, since every writer is in the space's envelopes anyway, and tells

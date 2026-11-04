@@ -88,7 +88,7 @@ export const file = define({
       duration: { type: 'number', minimum: 0, description: 'Seconds, for a video or a sound' },
       takenAt: when('When it was taken or recorded'),
       place: placeRef('Where it was taken'),
-      thumbnail: blob('A still to show before a video plays'),
+      thumbnail: blob('A small still of a picture or a video, shown in its place until it is opened'),
       captions: blob('WebVTT'),
     },
     required: ['name', 'mime'],

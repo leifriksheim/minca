@@ -42,8 +42,8 @@ ui has:
     (needs "std.comment" in collections)
   <\${Attachments} about=\${key} />  a record's files (std.file about it): pictures, videos and sound play, others save
   attach(about, files)  keeps Files (from a drop, a paste or <input type=file>) as std.file records about a record,
-    or about nothing when about is null; → the records written
-  <\${Playable} record />  a std.file that is a video or a sound, playing where it is; fetched once it comes into view
+    or about nothing when about is null, with thumbnails; → the records written
+  <\${Playable} record />  a std.file that is a video or a sound, playing where it is; fetched when played
   useSeen(ref)  whether ref's element has come into view: load large things only then
   sizeOf(bytes)  "812 KB", "3.1 MB"
   <\${Record} record=\${r} onOpen? />  any record as one line, as every app shows it; a click opens it where it belongs, or calls

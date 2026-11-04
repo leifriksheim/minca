@@ -13,6 +13,7 @@ import {
 } from '@minca/react';
 import { CallsProvider } from '@minca/calls/react';
 import { useShowNotifications } from './notifications';
+import { useApplyDownloads } from './downloads';
 import { useRememberPicture } from '@minca/app-shared/rememberedPictures';
 import { TabBar } from './components/TabBar';
 import { SyncLine } from './components/SyncLine';
@@ -75,6 +76,7 @@ function Workspace() {
   });
   const navigate = useNavigate();
   const node = useNode();
+  useApplyDownloads();
   const pictures = usePictures(spaces);
   // A space opens on its Overview: its apps, who is in it and what is new.
   const openSpace = (id: string) => void navigate({ to: '/spaces/$spaceId', params: { spaceId: id } });

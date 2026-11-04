@@ -306,6 +306,7 @@ export async function startAgent(
     }),
     delegation: () => note,
     iceServers: () => node.iceServers(),
+    setFileLimits: person('change what this device downloads'),
     asAgent: person('start another agent'),
     revokeKey: person('revoke a key'),
     revokeSelf: person('sign the account out'),

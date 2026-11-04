@@ -51,8 +51,8 @@ export interface SpaceFilesConfig {
   readonly mirrors?: () => ReadonlyArray<FileMirror>;
   /** Whether a version stands: a version that doesn't, though kept whole, keeps no files here */
   readonly stands?: (version: Version) => Promise<boolean>;
-  /** Limits on the files others wrote, for a device; absent, every file named is fetched and kept */
-  readonly limits?: FileLimits;
+  /** Limits on the files others wrote, for a device, as they are now; null or absent, every file named is fetched and kept */
+  readonly limits?: () => FileLimits | null;
 }
 
 export interface FileLimits {
@@ -613,7 +613,8 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
     const fresh = [...joined];
     joined.clear();
     const named = await namedFiles();
-    let total = config.limits ? await dropLeastUsed(config.limits.keep) : 0;
+    const limits = config.limits?.() ?? null;
+    let total = limits ? await dropLeastUsed(limits.keep) : 0;
     for (const hash of [...waiting.keys()]) {
       // Its body was superseded meanwhile: nothing here names it to ask for any more.
       if (!named.has(hash)) settle(hash, new Error('No record here names that file'));
@@ -621,7 +622,10 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
     for (const [hash, sizes] of named) {
       if (closed) return;
       const waited = waiting.has(hash);
-      const ahead = sizes.filter((file) => file.size <= (config.limits?.ahead ?? Infinity));
+      // A file larger than this device keeps would be dropped as soon as it came: never fetched unread.
+      const ahead = sizes.filter(
+        (file) => file.size <= Math.min(limits?.ahead ?? Infinity, limits?.keep ?? Infinity),
+      );
       const dropped = async () => !!(await adapter.get(usedKey(hash))) && !(await adapter.get(listKey(hash)));
       if (!waited && (ahead.length === 0 || (await dropped()))) continue;
       const recent = Date.now() - (unfound.get(hash) ?? 0) < RETRY_MS;
@@ -632,9 +636,9 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
         unfound.delete(hash);
         settle(hash, null);
         // Within the limit as it goes, not only after the pass: a flood never holds more than `keep`.
-        if (got === 'fetched' && !waited && config.limits) {
+        if (got === 'fetched' && !waited && limits) {
           total += Math.max(...ahead.map((file) => file.size));
-          if (total > config.limits.keep) total = await dropLeastUsed(config.limits.keep);
+          if (total > limits.keep) total = await dropLeastUsed(limits.keep);
         }
       } else if (!recent) unfound.set(hash, Date.now());
     }

@@ -39,7 +39,12 @@ const TAG = 'minca-node';
 const SIGNER_TAG = 'minca-signer';
 
 /** The node's own methods that cross; every namespace's do (`node/api.ts`) */
-const OWN_METHODS = Object.freeze({ iceServers: true, revokeKey: true, revokeSelf: true });
+const OWN_METHODS = Object.freeze({
+  iceServers: true,
+  setFileLimits: true,
+  revokeKey: true,
+  revokeSelf: true,
+});
 
 /** How often the served side checks for a renewed delegation between calls */
 const DELEGATION_CHECK_MS = 60_000;
@@ -293,6 +298,7 @@ export async function remoteNode(port: MessagePortLike): Promise<P2PNode> {
     ),
     delegation: () => current().delegation,
     iceServers: () => ask<ReadonlyArray<RTCIceServer>>('iceServers', []),
+    setFileLimits: (limits) => ask('setFileLimits', [limits]),
     revokeKey: (key, options) => ask('revokeKey', options ? [key, options] : [key]),
     revokeSelf: (options) => ask('revokeSelf', options ? [options] : []),
     // Its keys would have to cross the port; an agent is started on the node itself.

@@ -87,6 +87,13 @@ Five rules keep the choice obvious.
 - What several people edit is several records, not an array in one body. A
   list and its items, a document and its blocks, an order and its updates.
 - "One per person" or "one per slot" is the `onePer` rule.
+- A picture or a video in a `std.file` may carry a `thumbnail`: a small
+  still, about 480 px on its longer side, that apps show in its place until
+  someone opens it. It is small enough for every device to fetch ahead, so a
+  long chat shows its pictures without fetching each file whole. A picture
+  that is already small has none, and an app shows the picture itself. An
+  app shows a thumbnail only for a `mime` of `image/` or `video/`, and only
+  one of at most 256 KiB: it is the writer's word, like the rest of the body.
 - Bodies have no `createdAt`, since the record has one. They carry only the
   times of the thing itself: `start`, `due`, `takenAt`.
 - Link roles: `about` (what an annotation is on), `replyTo` and `root`

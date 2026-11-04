@@ -27,6 +27,7 @@ import type { MeshStatus } from '../network/mesh.js';
 import type { ServerAuth } from '../network/peer-auth.js';
 import type { WriterKeySource } from './writer-keys.js';
 import type { StoreFactory } from './stores.js';
+import type { FileLimits } from '../files/space-files.js';
 import type { JsonSchema, SchemaIssue } from '../schema/collection-def.js';
 import type { Keeper } from '../space/roles.js';
 import type { Automation } from '../schemas/automations.js';
@@ -109,6 +110,7 @@ export interface NodeConfig {
   /**
    * Fetch and keep every file of any size, as a keeper does. Default: others'
    * files up to 5 MiB, dropping the least used past 256 MiB a space (spec 05 §16.6).
+   * `setFileLimits` changes either while the node runs.
    */
   readonly fetchFiles?: 'all';
   /** Hold only the collections this node uses, once a space names a keeper to hold the rest */
@@ -1056,6 +1058,13 @@ export interface P2PNode {
   delegation(): Delegation;
   /** ICE servers for the app's own WebRTC: the configured ones, and a relay's TURN servers */
   iceServers(): Promise<ReadonlyArray<RTCIceServer>>;
+  /**
+   * How much of others' files this device fetches before anyone reads them,
+   * and keeps per space, from now on: a person's choice, such as fewer
+   * downloads on a phone. Not kept: give it again each time the node starts.
+   * @throws When either is not a byte count of 0 or more
+   */
+  setFileLimits(limits: FileLimits): Promise<void>;
   /** Relays and connections, for showing why a peer is or is not there */
   readonly network: NodeNetwork;
   /**
