@@ -1,0 +1,32 @@
+/* Only where there is room for it; a phone has the topics on each proposal */
+.wide {
+  @media (max-width: 640px) {
+    display: none;
+  }
+}
+
+.end {
+  align-self: flex-end;
+}
+
+/* How it works: points marked with a dash */
+.dashes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  & > li {
+    position: relative;
+    padding-left: 18px;
+
+    &::before {
+      content: '–';
+      position: absolute;
+      left: 0;
+      color: var(--color-text-muted);
+    }
+  }
+}

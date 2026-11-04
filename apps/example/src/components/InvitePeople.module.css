@@ -1,0 +1,30 @@
+/* A round mark where a shape would be: "+" for a new group, a link for the link */
+.mark {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--color-sunken);
+}
+
+/* The link's words take the room its button leaves; not cut short, so the roles' menu can open out */
+.grow {
+  flex: 1;
+  gap: 0;
+}
+
+/* The roles a link can give, opening upward: the row is the last thing in its dialog */
+.anchor {
+  position: relative;
+
+  & > menu {
+    bottom: calc(100% + 6px);
+    left: 0;
+  }
+}
+
+.picks {
+  max-height: 360px;
+  overflow-y: auto;
+}

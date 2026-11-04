@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useNode } from '@minca/react';
-import { Avatar } from '@minca/app-shared/Avatar';
 import { Modal } from '@minca/app-shared/Modal';
 import { SpaceHosting } from '@minca/app-shared/SpaceHosting';
 import { SpaceBots } from '@minca/app-shared/CommunitySetup';
@@ -13,11 +12,22 @@ import {
   party as partyCollection,
   type PartyRule,
 } from './schema';
-import { PARTY_RULE_LABEL, PartyChip, PartyMark, Problem, Who, decidesText } from './ui';
+import {
+  Faces,
+  PARTY_RULE_LABEL,
+  PartyChip,
+  PartyMark,
+  Problem,
+  SHADE_HUES,
+  Who,
+  colourOf,
+  decidesText,
+  partyMarkOf,
+} from './ui';
 import { useAction } from '@minca/app-shared/action';
 import { Shape } from '@minca/app-shared/shapes';
 import { SHAPE_CYCLE } from '@minca/ui/tokens';
-import { SHADE_HUES, colourOf, palette, partyMarkOf, hstack, stack } from './styles';
+import styles from './People.module.css';
 import { ask } from '@minca/app-shared/Ask';
 
 /** A party picks one of the shapes' colours; its record keeps it as a hue */
@@ -28,30 +38,22 @@ export function People({ a, writable }: { a: Assembly; writable: boolean }) {
   const [editing, setEditing] = useState<PartyFull | null>(null);
 
   return (
-    <div style={stack(32)}>
-      <section style={stack(12)}>
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
-          <div>
-            <h2 className="lq-display" style={{ fontSize: 26 }}>
-              Parties
-            </h2>
-            <p className="lq-muted" style={{ fontSize: 14, marginTop: 2 }}>
+    <div className="stack" data-gap="loose">
+      <section>
+        <header>
+          <div className="stack" data-gap="tight">
+            <h2>Parties</h2>
+            <p>
               People who vote together. Trust a party, and once it takes a position, by its members or its
               representative, your device casts that vote for you.
             </p>
           </div>
-          {writable && (
-            <button className="lq-btn" data-variant="quiet" onClick={() => setFounding(true)}>
-              Start a party
-            </button>
-          )}
-        </div>
+          {writable && <button onClick={() => setFounding(true)}>Start a party</button>}
+        </header>
         {a.parties.length === 0 ? (
-          <p className="lq-faint" style={{ fontSize: 13.5 }}>
-            No parties yet. Everyone here stands for themselves.
-          </p>
+          <small>No parties yet. Everyone here stands for themselves.</small>
         ) : (
-          <div className="lq-grid">
+          <div className={styles.grid}>
             {a.parties.map((p) => (
               <PartyCard key={p.key} a={a} p={p} writable={writable} onEdit={() => setEditing(p)} />
             ))}
@@ -59,16 +61,12 @@ export function People({ a, writable }: { a: Assembly; writable: boolean }) {
         )}
       </section>
 
-      <section style={stack(12)}>
-        <div>
-          <h2 className="lq-display" style={{ fontSize: 26 }}>
-            Members
-          </h2>
-          <p className="lq-muted" style={{ fontSize: 14, marginTop: 2 }}>
-            Everyone who can vote. Trust someone with everything here, or topic by topic under Your vote.
-          </p>
+      <section>
+        <div className="stack" data-gap="tight">
+          <h2>Members</h2>
+          <p>Everyone who can vote. Trust someone with everything here, or topic by topic under Your vote.</p>
         </div>
-        <div className="lq-card">
+        <ul role="list">
           {[...a.members]
             .sort((x, y) =>
               x.did === a.me ? -1 : y.did === a.me ? 1 : a.name(x.did).localeCompare(a.name(y.did)),
@@ -76,7 +74,7 @@ export function People({ a, writable }: { a: Assembly; writable: boolean }) {
             .map((m) => (
               <MemberRow key={m.did} a={a} did={m.did} role={m.role} writable={writable} />
             ))}
-        </div>
+        </ul>
       </section>
 
       <SpaceHosting spaceId={a.spaceId} writable={writable} />
@@ -108,42 +106,37 @@ function MemberRow({
   const roleTitle = a.roles.find((r) => r.name === role)?.title ?? role;
 
   return (
-    <div className="lq-row" style={{ flexWrap: 'wrap' }}>
+    <li className="row">
       <Who did={did} a={a} size={32} />
-      {role !== 'member' && <span className="lq-chip">{roleTitle}</span>}
+      {role !== 'member' && <span className="tag">{roleTitle}</span>}
       {parties.map((p) => (
         <PartyChip key={p.key} party={p} />
       ))}
-      <span style={{ flex: 1 }} />
-      {trusted > 0 && (
-        <span className="lq-faint lq-num" style={{ fontSize: 12.5 }}>
-          trusted {trusted}×
-        </span>
-      )}
-      {writable && did !== a.me && (
-        <button
-          className="lq-btn"
-          data-variant={trustsThem ? 'primary' : 'quiet'}
-          data-size="sm"
-          disabled={action.busy}
-          title={
-            trustsThem
-              ? 'They vote for you on everything you haven’t given someone else. Click to stop.'
-              : undefined
-          }
-          onClick={() =>
-            void action.run(() =>
-              trustsThem && mine
-                ? node.records.delete(a.spaceId, mine.key)
-                : node.records.put(a.spaceId, delegation, { kind: 'person', to: did, topic: EVERYTHING }),
-            )
-          }
-        >
-          {trustsThem ? 'Trusted with everything' : 'Trust with everything'}
-        </button>
-      )}
+      <span className={`row ${styles.end}`}>
+        {trusted > 0 && <small>trusted {trusted}×</small>}
+        {writable && did !== a.me && (
+          <button
+            data-intent={trustsThem ? 'primary' : undefined}
+            disabled={action.busy}
+            title={
+              trustsThem
+                ? 'They vote for you on everything you haven’t given someone else. Click to stop.'
+                : undefined
+            }
+            onClick={() =>
+              void action.run(() =>
+                trustsThem && mine
+                  ? node.records.delete(a.spaceId, mine.key)
+                  : node.records.put(a.spaceId, delegation, { kind: 'person', to: did, topic: EVERYTHING }),
+              )
+            }
+          >
+            {trustsThem ? 'Trusted with everything' : 'Trust with everything'}
+          </button>
+        )}
+      </span>
       <Problem>{action.error}</Problem>
-    </div>
+    </li>
   );
 }
 
@@ -182,65 +175,32 @@ function PartyCard({
     );
 
   return (
-    <article
-      className="lq-card"
-      style={{
-        padding: 18,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 12,
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+    <article>
+      <div className={styles.head}>
         <PartyMark party={p} size={40} />
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <p className="lq-display" style={{ fontSize: 18 }}>
-            {p.name}
-          </p>
-          <p className="lq-faint lq-num" style={{ fontSize: 12.5 }}>
+        <div>
+          <h3>{p.name}</h3>
+          <small>
             {p.members.size} {p.members.size === 1 ? 'member' : 'members'}
             {trusted ? ` · trusted by ${trusted}` : ''}
-          </p>
-          <p className="lq-muted lq-num" style={{ fontSize: 12.5 }}>
-            Decides: {decidesText(a, p)}
-          </p>
+          </small>
+          <small>Decides: {decidesText(a, p)}</small>
         </div>
         {steward && writable && (
-          <button className="lq-btn" data-variant="ghost" data-size="sm" onClick={onEdit}>
+          <button data-intent="ghost" onClick={onEdit}>
             Edit
           </button>
         )}
       </div>
-      {p.platform && (
-        <p
-          className="lq-muted"
-          style={{
-            fontSize: 13.5,
-            lineHeight: 1.55,
-            display: '-webkit-box',
-            WebkitLineClamp: 3,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden',
-          }}
-        >
-          {p.platform}
-        </p>
-      )}
-      <div className="lq-stack">
-        {[...p.members].slice(0, 8).map((did) => (
-          <Avatar key={did} did={did} size={22} />
-        ))}
-      </div>
-      <div style={{ ...hstack(6), flexWrap: 'wrap', marginTop: 'auto' }}>
+      {p.platform && <p className={styles.platform}>{p.platform}</p>}
+      <Faces dids={[...p.members].slice(0, 8)} />
+      <div className={`row ${styles.foot}`} data-gap="tight">
         {writable &&
           (steward ? (
-            <span className="lq-chip">You’re a steward</span>
+            <span className="tag">You’re a steward</span>
           ) : inIt || myAsk ? (
             // Leaving, or taking back the ask: either way, the ask goes.
             <button
-              className="lq-btn"
-              data-variant="quiet"
-              data-size="sm"
               disabled={action.busy}
               title={inIt ? undefined : 'A steward lets members in'}
               onClick={() => myAsk && void action.run(() => node.records.delete(a.spaceId, myAsk))}
@@ -249,8 +209,7 @@ function PartyCard({
             </button>
           ) : (
             <button
-              className="lq-btn"
-              data-size="sm"
+              data-intent="primary"
               disabled={action.busy}
               onClick={() =>
                 void action.run(() =>
@@ -262,20 +221,18 @@ function PartyCard({
             </button>
           ))}
         {steward && writable && waiting.length > 0 && (
-          <button className="lq-btn" data-size="sm" onClick={() => setRequests((was) => !was)}>
+          <button data-intent="primary" onClick={() => setRequests((was) => !was)}>
             {waiting.length} asking to join
           </button>
         )}
       </div>
       {requests && steward && waiting.length > 0 && (
-        <div style={{ ...stack(6), paddingTop: 10, borderTop: `1px solid ${palette.surface.line}` }}>
+        <div className={styles.requests}>
           {waiting.map((did) => (
-            <div key={did} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div key={did} className="row" data-spread>
               <Who did={did} a={a} size={22} />
-              <span style={{ flex: 1 }} />
               <button
-                className="lq-btn"
-                data-size="sm"
+                data-intent="primary"
                 disabled={action.busy}
                 onClick={() => setMembers([...p.listed, did])}
               >
@@ -286,16 +243,16 @@ function PartyCard({
         </div>
       )}
       {p.decides === 'representative' && !(p.representative && p.members.has(p.representative)) && (
-        <p className="lq-note" data-tone="warn" style={{ fontSize: 12.5, lineHeight: 1.5 }}>
+        <aside data-tone="warn">
           Its representative isn’t a member, so it can’t take a position on new proposals. A steward picks
           another under Edit.
-        </p>
+        </aside>
       )}
       {steward && writable && p.stewards.size === 1 && (
-        <p className="lq-note" data-tone="warn" style={{ fontSize: 12.5, lineHeight: 1.5 }}>
+        <aside data-tone="warn">
           You’re its only steward. If you stop using Liquid, nobody can let people in or freeze its members
           for new proposals, and it can’t take a position again. Add a second steward under Edit.
-        </p>
+        </aside>
       )}
       <Problem>{action.error}</Problem>
     </article>
@@ -341,18 +298,18 @@ function PartyForm({ a, editing, onClose }: { a: Assembly; editing?: PartyFull; 
   return (
     <Modal title={editing ? `Edit ${editing.name}` : 'Start a party'} onClose={onClose} width={480}>
       <form
-        style={stack(16)}
+        className="stack"
+        data-gap="loose"
         onSubmit={(event) => {
           event.preventDefault();
           if (name.trim()) void save(editing ? [...editing.listed] : []);
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div className={styles.name}>
           <PartyMark party={{ name: name || '?', hue: shade }} size={44} />
-          <label className="lq-label" style={{ flex: 1 }}>
+          <label>
             Name
             <input
-              className="lq-input"
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="The Green Bench"
@@ -361,7 +318,7 @@ function PartyForm({ a, editing, onClose }: { a: Assembly; editing?: PartyFull; 
             />
           </label>
         </div>
-        <div role="radiogroup" aria-label="Colour" style={{ ...hstack(6), flexWrap: 'wrap' }}>
+        <div role="radiogroup" aria-label="Colour" className={`row ${styles.colours}`} data-gap="tight">
           {SHAPE_CYCLE.map((colour) => {
             const picked = colourOf(shade) === colour;
             return (
@@ -369,43 +326,34 @@ function PartyForm({ a, editing, onClose }: { a: Assembly; editing?: PartyFull; 
                 key={colour}
                 type="button"
                 role="radio"
+                data-icon
+                data-intent="ghost"
                 aria-checked={picked}
                 aria-label={colour.charAt(0).toUpperCase() + colour.slice(1)}
                 onClick={() => setShade(SHADE_HUES[colour])}
-                style={{
-                  width: 36,
-                  height: 36,
-                  padding: 5,
-                  borderRadius: palette.radius.pill,
-                  border: `1px solid ${picked ? palette.surface.rule : 'transparent'}`,
-                  background: 'none',
-                }}
               >
                 <Shape kind={partyMarkOf(name || '?', shade).kind} colour={colour} size={24} />
               </button>
             );
           })}
         </div>
-        <label className="lq-label">
+        <label>
           What it stands for
           <textarea
-            className="lq-textarea"
+            rows={4}
             value={platform}
             onChange={(event) => setPlatform(event.target.value)}
             placeholder="More green space, fewer car parks, and a budget everyone can read."
             maxLength={2000}
-            style={{ minHeight: 96 }}
           />
         </label>
-        <div style={stack(8)}>
-          <p className="lq-label">How it takes a position</p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }} role="group" aria-label="How it decides">
+        <fieldset>
+          <legend>How it takes a position</legend>
+          <div className="row" data-gap="tight" role="group" aria-label="How it decides">
             {PARTY_RULES.map((rule) => (
               <button
                 key={rule}
                 type="button"
-                className="lq-chip"
-                data-filter
                 aria-pressed={decides === rule}
                 onClick={() => setDecides(rule)}
               >
@@ -416,7 +364,6 @@ function PartyForm({ a, editing, onClose }: { a: Assembly; editing?: PartyFull; 
           {decides === 'representative' ? (
             <>
               <select
-                className="lq-input"
                 value={representative}
                 onChange={(event) => setRepresentative(event.target.value)}
                 aria-label="Representative"
@@ -427,35 +374,31 @@ function PartyForm({ a, editing, onClose }: { a: Assembly; editing?: PartyFull; 
                   </option>
                 ))}
               </select>
-              <p className="lq-faint" style={{ fontSize: 12.5, lineHeight: 1.5 }}>
+              <small>
                 Their own vote on a proposal is the party’s, and everyone who trusts the party follows it. A
                 vote they cast by following someone doesn’t count.
-              </p>
+              </small>
             </>
           ) : (
-            <p className="lq-faint" style={{ fontSize: 12.5, lineHeight: 1.5 }}>
+            <small>
               It takes a position once{' '}
               {decides === 'everyone' ? 'all' : PARTY_RULE_LABEL[decides].toLowerCase()} of its members vote
               the same way themselves. Until then, nobody who trusts it votes by it.
-            </p>
+            </small>
           )}
-          <p className="lq-faint" style={{ fontSize: 12.5, lineHeight: 1.5 }}>
-            Changing this applies to proposals made from now on.
-          </p>
-        </div>
+          <small>Changing this applies to proposals made from now on.</small>
+        </fieldset>
         {editing && members.length > 0 && (
-          <div style={stack(6)}>
-            <p className="lq-label">Members</p>
+          <fieldset>
+            <legend>Members</legend>
             {members.map((did) => (
-              <div key={did} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div key={did} className="row">
                 <Who did={did} a={a} size={22} />
-                {stewards.has(did) && <span className="lq-chip">Steward</span>}
-                <span style={{ flex: 1 }} />
+                {stewards.has(did) && <span className="tag">Steward</span>}
                 <button
                   type="button"
-                  className="lq-btn"
-                  data-variant="ghost"
-                  data-size="sm"
+                  className={styles.end}
+                  data-intent="ghost"
                   disabled={action.busy}
                   onClick={() => void save(members, withSteward(did, !stewards.has(did)))}
                 >
@@ -463,9 +406,7 @@ function PartyForm({ a, editing, onClose }: { a: Assembly; editing?: PartyFull; 
                 </button>
                 <button
                   type="button"
-                  className="lq-btn"
-                  data-variant="ghost"
-                  data-size="sm"
+                  data-intent="ghost"
                   disabled={action.busy || (decides === 'representative' && representative === did)}
                   title={
                     decides === 'representative' && representative === did
@@ -483,26 +424,23 @@ function PartyForm({ a, editing, onClose }: { a: Assembly; editing?: PartyFull; 
                 </button>
               </div>
             ))}
-          </div>
+          </fieldset>
         )}
         {editing && stewards.size === 1 && (
-          <p className="lq-faint" style={{ fontSize: 12.5, lineHeight: 1.5 }}>
-            Give it a second steward, so the party carries on if you stop using Liquid.
-          </p>
+          <small>Give it a second steward, so the party carries on if you stop using Liquid.</small>
         )}
         {!editing && (
-          <p className="lq-faint" style={{ fontSize: 12.5, lineHeight: 1.5 }}>
+          <small>
             You start it as its steward: you let people in, and your device freezes its members for each new
             proposal. Make other members stewards too, so it doesn’t depend on you alone.
-          </p>
+          </small>
         )}
         <Problem>{action.error}</Problem>
-        <div style={hstack(8)}>
+        <div className={`row ${styles.actions}`}>
           {editing && (
             <button
               type="button"
-              className="lq-btn"
-              data-variant="danger"
+              data-intent="danger"
               disabled={action.busy}
               onClick={() =>
                 void ask('Everyone who trusts it will need to vote themselves, or trust someone else.', {
@@ -521,11 +459,10 @@ function PartyForm({ a, editing, onClose }: { a: Assembly; editing?: PartyFull; 
               Dissolve
             </button>
           )}
-          <span style={{ flex: 1 }} />
-          <button type="button" className="lq-btn" data-variant="ghost" onClick={onClose}>
+          <button type="button" data-intent="ghost" onClick={onClose}>
             Cancel
           </button>
-          <button className="lq-btn" disabled={!name.trim() || action.busy}>
+          <button data-intent="primary" disabled={!name.trim() || action.busy}>
             {action.busy ? 'Saving…' : editing ? 'Save' : 'Start party'}
           </button>
         </div>

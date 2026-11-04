@@ -1,0 +1,47 @@
+/* The space's own pages: an icon over its name, each an equal share, scrolled sideways when they don't
+   fit; centred, yet scrolled from its start when it overflows (justify-content: center would cut it off). */
+.quick {
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
+
+  & > :first-child {
+    margin-left: auto;
+  }
+
+  & > :last-child {
+    margin-right: auto;
+  }
+
+  & > :where(button) {
+    flex: 1 0 64px;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 112px;
+    height: auto;
+    padding: 10px 6px;
+    border-radius: var(--radius);
+    font-size: var(--text-small);
+  }
+}
+
+/* Where the next app goes: an empty tile, dashed, as on the rail */
+.slot {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1.5px dashed var(--color-field);
+  border-radius: var(--radius);
+  color: var(--color-text-muted);
+}
+
+/* An app's moves: the chevron turned up, or down */
+.up svg {
+  rotate: -90deg;
+}
+
+.down svg {
+  rotate: 90deg;
+}

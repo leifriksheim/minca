@@ -1,0 +1,157 @@
+/*
+ * Where things go. A screen is a <main> of <section>s; .row and .stack set
+ * things beside or under each other. Gaps come in three: data-gap="tight"
+ * for things that belong together, none for the usual, "loose" for groups.
+ */
+/* The screen's column, as wide as reads well. data-wide: all of it, for a board, a map or a game. */
+main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-section);
+  max-width: var(--reading-width);
+  margin: 0 auto;
+  padding: var(--space-loose);
+
+  &[data-wide] {
+    max-width: none;
+  }
+
+  /* The window's height, its first child scrolling: a conversation over the box to write in */
+  &[data-fill] {
+    height: 100dvh;
+    gap: var(--space);
+
+    & > :first-child {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+    }
+  }
+}
+
+/* A title and the actions for it, at the end */
+header {
+  display: flex;
+  align-items: center;
+  gap: var(--space);
+  min-height: var(--control-height);
+
+  & > :first-child {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+/* A group under a heading */
+section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-loose);
+}
+
+.row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space);
+
+  /* A field to type in takes the room the buttons beside it leave; a select is as wide as its choices */
+  & > input {
+    flex: 1 1 12ch;
+    width: auto;
+    min-width: 0;
+  }
+
+  & > select {
+    width: auto;
+  }
+
+  /* A sentence or a block of lines beside a mark takes the room left, and wraps */
+  & > :is(p, .stack) {
+    flex: 1 1 200px;
+    min-width: 0;
+  }
+
+  & > .truncate {
+    flex: 1 1 0;
+  }
+
+  /* The first thing at the start, the rest at the end */
+  &[data-spread] > :first-child {
+    margin-inline-end: auto;
+  }
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+}
+
+/* Tiles that fill the width, as many across as fit */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(180px, 100%), 1fr));
+  gap: var(--space);
+}
+
+:is(.row, .stack, .grid, .lanes, section) {
+  &[data-gap='tight'] {
+    gap: var(--space-tight);
+  }
+
+  &[data-gap='loose'] {
+    gap: var(--space-loose);
+  }
+}
+
+/* Columns side by side, scrolled across: a board, a week. A phone snaps to one, the next peeking in. */
+.lanes {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-loose);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+
+  /* Each column a ground of its own, set back from the page, that its cards stand on */
+  & > * {
+    flex: 0 0 280px;
+    padding: var(--space);
+    border-radius: var(--radius-surface);
+    background: var(--color-sunken);
+    scroll-snap-align: start;
+  }
+
+  & .tag:not([data-tone], [data-hue]) {
+    background: var(--color-surface);
+  }
+
+  /* A lane's own buttons (add a card, add a column) start at the left, as its cards do, and a hover on
+     its ground goes one shade darker */
+  & > button,
+  & button[data-intent='ghost']:not([data-icon]) {
+    justify-content: flex-start;
+  }
+
+  & button[data-intent='ghost']:hover:not(:disabled) {
+    background: var(--color-divider);
+  }
+
+  @media (max-width: 640px) {
+    scroll-snap-type: x mandatory;
+
+    & > * {
+      flex-basis: 85%;
+    }
+  }
+}
+
+/* Text that may be cut short, on one line. In a row it takes the room the rest leave. */
+.truncate {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -1,0 +1,40 @@
+.loader {
+  display: inline-flex;
+  align-items: center;
+
+  & svg {
+    animation: hop 2.4s ease-in-out infinite;
+  }
+
+  /* Each hops a beat after the one before */
+  & svg:nth-child(2) {
+    animation-delay: 0.12s;
+  }
+  & svg:nth-child(3) {
+    animation-delay: 0.24s;
+  }
+  & svg:nth-child(4) {
+    animation-delay: 0.36s;
+  }
+  & svg:nth-child(5) {
+    animation-delay: 0.48s;
+  }
+}
+
+@keyframes hop {
+  30% {
+    transform: translateY(-36%) rotate(20deg);
+  }
+  60% {
+    transform: none;
+  }
+}
+
+/* Read by screen readers, hidden from the eye */
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}

@@ -103,7 +103,7 @@ export function Record({ record, onOpen }: { record: ScreenRecord; onOpen?: () =
     onClick=${() => (onOpen ? onOpen() : void minca.open({ record: record.key }))}
   >
     ${face}
-    <span class="ellipsis">${title}</span>
-    ${detail && html`<span class="faint">${detail}</span>`}
+    <span class="truncate">${title}</span>
+    ${detail && html`<small>${detail}</small>`}
   </button>`;
 }

@@ -1,0 +1,333 @@
+/*
+ * Buttons and fields. A button says how much it asks for with data-intent; nothing
+ * else changes how it looks, and every control is the same height.
+ */
+button,
+a[data-intent] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space);
+  min-height: var(--control-height);
+  padding: 0 14px;
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text-strong);
+  font: 500 0.875rem / 1.2 var(--font-body);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: var(--color-sunken);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  /* The one main action on a view */
+  &[data-intent='primary'] {
+    border-color: transparent;
+    background: var(--color-action);
+    color: var(--color-on-action);
+
+    &:hover:not(:disabled) {
+      background: var(--color-action-hover);
+    }
+  }
+
+  /* With no data-intent, a button is secondary: outlined, for what isn't the main action. */
+
+  /* A soft fill and no line: back, close, a page's own tools */
+  &[data-intent='subtle'] {
+    border-color: transparent;
+    background: var(--color-sunken);
+
+    &:hover:not(:disabled) {
+      background: var(--color-divider);
+    }
+  }
+
+  /* Nothing until pointed at: in a toolbar, on a row, beside a field */
+  &[data-intent='ghost'] {
+    border-color: transparent;
+    background: none;
+    color: var(--color-text-muted);
+
+    /* The page you're on looks as a hover does */
+    &:hover:not(:disabled),
+    &[aria-current='page'] {
+      background: var(--color-sunken);
+      color: var(--color-text-strong);
+    }
+  }
+
+  /* Deletes something, or can't be undone */
+  &[data-intent='danger'] {
+    color: var(--color-danger);
+
+    &:hover:not(:disabled) {
+      background: var(--color-danger-soft);
+    }
+  }
+
+  /* A button that reads as a word in a sentence: "Change", "show more" */
+  &[data-intent='inline'] {
+    min-height: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--color-action);
+    font: inherit;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+
+    &:hover:not(:disabled) {
+      background: none;
+      color: var(--color-action-hover);
+    }
+  }
+
+  /* A whole thing to open: a task on a board, a row in a list. With .row, laid out across. */
+  &[data-intent='open'] {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: var(--space-tight);
+    width: 100%;
+    min-height: 0;
+    padding: 12px 14px;
+    border-color: var(--color-divider);
+    border-radius: var(--radius);
+    color: var(--color-text);
+    /* What it holds reads as body text, not as a button's label */
+    font: 400 var(--text-body) / 1.5 var(--font-body);
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
+
+    &:hover:not(:disabled) {
+      border-color: var(--color-field);
+      background: var(--color-surface);
+    }
+
+    &.row {
+      flex-direction: row;
+      align-items: center;
+      flex-wrap: nowrap;
+      gap: var(--space);
+    }
+  }
+
+  /* Holds only an icon or an emoji: a circle. Give it an aria-label. */
+  &[data-icon] {
+    flex-shrink: 0;
+    width: var(--control-height);
+    padding: 0;
+    font-size: 1.25rem;
+    font-weight: 400;
+    line-height: 1;
+
+    & > svg {
+      width: 18px;
+      height: 18px;
+    }
+  }
+
+  /* A toggle or a filter, on */
+  &[aria-pressed='true'] {
+    border-color: var(--color-text-strong);
+    background: var(--color-text-strong);
+    color: var(--color-on-action);
+
+    &:hover:not(:disabled) {
+      background: var(--color-text-strong);
+    }
+  }
+}
+
+/* A field: its name above, the control under it. A checkbox sits beside its name. */
+label {
+  display: grid;
+  gap: var(--space-tight);
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+  font-weight: 600;
+
+  &:has(> input:is([type='checkbox'], [type='radio'])) {
+    display: flex;
+    align-items: center;
+    gap: var(--space);
+    color: var(--color-text);
+    font-size: var(--text-body);
+    font-weight: 400;
+    cursor: pointer;
+  }
+}
+
+/* A group of controls under one name: choices, a range */
+fieldset {
+  display: grid;
+  gap: var(--space-tight);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+legend {
+  padding: 0;
+  margin-bottom: var(--space-tight);
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+
+input,
+textarea,
+select {
+  width: 100%;
+  min-height: var(--control-height);
+  padding: 6px 12px;
+  border: 1px solid var(--color-field);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text-strong);
+  font: 400 var(--text-body) / 1.5 var(--font-body);
+  transition: border-color 0.15s ease;
+
+  &::placeholder {
+    color: var(--color-text-muted);
+    opacity: 0.7;
+  }
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-action);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+  }
+}
+
+textarea {
+  display: block;
+  resize: vertical;
+}
+
+select {
+  appearance: none;
+  padding-right: 34px;
+  background: var(--color-surface)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%235d6480' stroke-width='1.5'/%3E%3C/svg%3E")
+    no-repeat right 12px center;
+  cursor: pointer;
+}
+
+input:is([type='checkbox'], [type='radio']) {
+  width: 18px;
+  min-height: 0;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  flex-shrink: 0;
+  accent-color: var(--color-action);
+  cursor: pointer;
+}
+
+/* An on/off switch */
+input[type='checkbox'][role='switch'] {
+  appearance: none;
+  position: relative;
+  width: 34px;
+  height: 20px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: var(--color-field);
+  transition: background-color 0.15s ease;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--color-surface);
+    transition: transform 0.15s ease;
+  }
+
+  &:checked {
+    background: var(--color-action);
+
+    &::after {
+      transform: translateX(14px);
+    }
+  }
+}
+
+/* No field under 16px on a touchscreen, or iOS zooms the page each time one is tapped. */
+@media (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: max(1rem, 1em);
+  }
+}
+
+/* What went wrong with a form */
+[role='alert'] {
+  color: var(--color-danger);
+  font-size: var(--text-small);
+}
+
+/* Pages to pick between: one outlined pill, the chosen one filled, as a hover is */
+[role='tablist'] {
+  display: flex;
+  gap: 2px;
+  /* As wide as its tabs, in a block or a flex column alike */
+  width: fit-content;
+  max-width: 100%;
+  padding: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+
+  & > button {
+    min-height: 32px;
+    border-color: transparent;
+    background: none;
+    color: var(--color-text-muted);
+
+    &:hover:not(:disabled),
+    &[aria-selected='true'] {
+      background: var(--color-sunken);
+      color: var(--color-text-strong);
+    }
+  }
+}
+
+/* The calls to action a page opens with, beside its h1: the one place a control is larger */
+.lead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-loose);
+
+  & > :is(button, a[data-intent]) {
+    min-height: var(--control-height-lead);
+    padding: 0 26px;
+    font-size: 1rem;
+  }
+}

@@ -1,7 +1,6 @@
 import { useMinca } from '@minca/react';
 import { relayOnlyLocal, relayProblem } from '@minca/app-shared/relay';
 import { PodChoice } from './PodChoice';
-import { palette, styles } from '../styles';
 
 /**
  * What the account has to say, above whatever page is showing: a relay that
@@ -18,18 +17,16 @@ export function AccountNotices() {
       {/* Without a reachable relay nothing syncs, and the only symptom is a
           peer count that never moves. Better to say it than to look broken. */}
       {relayProblem() && (
-        <div style={styles.errorBox}>
-          <p style={styles.error}>Peers cannot find each other</p>
-          <p style={styles.errorHint}>{relayProblem()}</p>
-          <p style={styles.errorHint}>
+        <aside data-tone="danger" className="stack">
+          <strong>Peers cannot find each other</strong>
+          <p>{relayProblem()}</p>
+          <p>
             Your spaces still work, and still save. They just will not reach your other devices until this is
             set.
           </p>
-        </div>
+        </aside>
       )}
-      {!relayProblem() && relayOnlyLocal() && (
-        <p style={{ ...styles.errorHint, marginBottom: 12 }}>{relayOnlyLocal()}</p>
-      )}
+      {!relayProblem() && relayOnlyLocal() && <small>{relayOnlyLocal()}</small>}
 
       {podChoice && (
         <PodChoice
@@ -44,41 +41,31 @@ export function AccountNotices() {
       )}
 
       {!podChoice && error && (
-        <div style={{ ...styles.errorBox, marginTop: 0, marginBottom: 16 }}>
-          <p style={styles.error}>{error.message}</p>
-          {error.hint && <p style={styles.errorHint}>{error.hint}</p>}
-        </div>
+        <aside data-tone="danger" className="stack">
+          <strong>{error.message}</strong>
+          {error.hint && <p>{error.hint}</p>}
+        </aside>
       )}
 
       {moved && (
-        <div style={{ ...styles.panel, marginTop: 0, marginBottom: 16 }}>
-          <div style={{ ...styles.panelBody, paddingTop: 14 }}>
-            <p style={{ ...styles.ok, color: palette.ink.strong }}>
-              {moved.merged
-                ? `Combined with the copy in the pod — ${moved.recordsAdded} new records, ${moved.spacesAdded} new spaces.`
-                : `Moved into the pod — ${moved.spacesAdded} spaces, ${moved.recordsAdded} records.`}
-            </p>
-            <p style={styles.errorHint}>
-              {moved.from
-                ? `“${moved.from}” still has its own copy. Minca won't use it any more — delete the folder yourself once you're sure you don't need it.`
-                : "This browser still has its own copy. Nothing uses it now; remove it once you're happy the pod has everything."}
-            </p>
-            <div style={{ ...styles.linkRow, gap: 8 }}>
-              {!moved.from && (
-                <button
-                  onClick={() => void auth.forgetBrowserCopy()}
-                  data-variant="quiet"
-                  style={styles.smallButton}
-                >
-                  Remove the browser copy
-                </button>
-              )}
-              <button onClick={() => auth.dismissMoved()} data-variant="quiet" style={styles.smallButton}>
-                {moved.from ? 'Got it' : 'Keep it'}
-              </button>
-            </div>
+        <article>
+          <strong>
+            {moved.merged
+              ? `Combined with the copy in the pod — ${moved.recordsAdded} new records, ${moved.spacesAdded} new spaces.`
+              : `Moved into the pod — ${moved.spacesAdded} spaces, ${moved.recordsAdded} records.`}
+          </strong>
+          <small>
+            {moved.from
+              ? `“${moved.from}” still has its own copy. Minca won't use it any more — delete the folder yourself once you're sure you don't need it.`
+              : "This browser still has its own copy. Nothing uses it now; remove it once you're happy the pod has everything."}
+          </small>
+          <div className="row">
+            {!moved.from && (
+              <button onClick={() => void auth.forgetBrowserCopy()}>Remove the browser copy</button>
+            )}
+            <button onClick={() => auth.dismissMoved()}>{moved.from ? 'Got it' : 'Keep it'}</button>
           </div>
-        </div>
+        </article>
       )}
     </>
   );

@@ -1,0 +1,10 @@
+/* The quick emoji, in a row under the button that opened them */
+.reactions {
+  position: relative;
+}
+
+.picker {
+  top: 100%;
+  flex-direction: row;
+  min-width: 0;
+}

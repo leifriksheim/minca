@@ -5,11 +5,10 @@ import { comment } from '@minca/core/schemas';
 import { bodyOf } from '../../derive/schema-ui';
 import { ago } from '@minca/ui/time';
 import { PersonFace } from '../PersonFace';
-import { styles, palette, hstack, stack } from '../../styles';
+import styles from './Comments.module.css';
 import { Person } from '../Person';
 import { peopleFrom, respondingTo } from '../../derive/people';
 import { MentionField, MentionList, MentionText, useMentions } from './Mentions';
-import { AddButton } from '../Buttons';
 
 /**
  * `std.comment` on a record: a thread, oldest first, and a box to add to it.
@@ -38,30 +37,19 @@ export function Comments({
   const sorted = [...comments].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
   return (
-    <section aria-label="Comments" style={stack(14)}>
-      <h3 style={styles.sectionTitle}>
-        Comments{' '}
-        {comments.length > 0 && (
-          <span style={{ color: palette.ink.faint, fontWeight: 400 }}>{comments.length}</span>
-        )}
-      </h3>
+    <section aria-label="Comments">
+      <h3>Comments {comments.length > 0 && <small>{comments.length}</small>}</h3>
       {sorted.map((c) => (
-        <div key={c.key} style={hstack(10)}>
+        <div key={c.key} className="row">
           <PersonFace did={c.root ?? c.author} size={26} />
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 13 }}>
-              <Person did={c.root} style={{ fontWeight: 600, color: palette.ink.strong }} />
-              <span style={{ color: palette.ink.faint }}> · {ago(c.createdAt)}</span>
-            </div>
-            <p
-              style={{
-                fontSize: 14,
-                lineHeight: 1.5,
-                color: palette.ink.body,
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-              }}
-            >
+          <div className={`truncate ${styles.text}`}>
+            <small>
+              <strong>
+                <Person did={c.root} />
+              </strong>{' '}
+              · {ago(c.createdAt)}
+            </small>
+            <p>
               <MentionText text={textIn(c) ?? ''} mentions={mentionsIn(c)} people={people} />
             </p>
           </div>
@@ -73,11 +61,6 @@ export function Comments({
           choice={mention.choice}
           people={people}
           onPick={mention.pick}
-          style={{
-            border: `1px solid ${palette.surface.line}`,
-            borderRadius: palette.radius.md,
-            overflow: 'hidden',
-          }}
         />
       )}
       {space.writable && (
@@ -95,7 +78,7 @@ export function Comments({
               { links: [{ rel: 'about', to: target }] },
             );
           }}
-          style={hstack(8)}
+          className="row"
         >
           <MentionField
             input={input}
@@ -106,11 +89,10 @@ export function Comments({
             onKeyDown={mention.onKeyDown}
             placeholder="Write a comment… @ to mention someone"
             aria-label="Write a comment"
-            style={styles.input}
           />
-          <AddButton type="submit" disabled={!draft.trim()}>
+          <button type="submit" data-intent="primary" disabled={!draft.trim()}>
             Send
-          </AddButton>
+          </button>
         </form>
       )}
     </section>

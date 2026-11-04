@@ -1,10 +1,8 @@
 import type { ShapeKind } from '@minca/ui/shapes';
 import type { ShapeColour } from '@minca/ui/tokens';
 import { Shape } from '@minca/app-shared/shapes';
-import { palette, ui } from '../styles';
-import { Icon } from './Icon';
-
-const { ink, surface, accent } = palette;
+import { Icon } from '@minca/app-shared/Icon';
+import styles from './Options.module.css';
 
 /** One thing to pick: its shape, its name and a line on what it means */
 export interface Option<T extends string> {
@@ -34,67 +32,36 @@ export function Options<T extends string>({
 }) {
   const choosing = picked !== undefined;
   return (
-    <ul
-      className="rows"
-      role={choosing ? 'radiogroup' : undefined}
-      aria-label={label}
-      style={{ ...ui.list, listStyle: 'none' }}
-    >
-      {options.map((option, at) => {
-        const on = option.value === picked;
-        return (
-          <li key={option.value} data-tile style={{ listStyle: 'none', ...(on ? chosen : {}) }}>
-            <button
-              type="button"
-              role={choosing ? 'radio' : undefined}
-              aria-checked={choosing ? on : undefined}
-              onClick={() => onPick(option.value)}
-              style={row}
-            >
-              <Shape kind={option.shape} colour={TURNS[at % TURNS.length]} size={36} />
-              <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
-                <strong style={{ fontSize: 15, fontWeight: 600, color: ink.strong }}>{option.title}</strong>
-                <span style={{ fontSize: 13, lineHeight: 1.45, color: ink.muted }}>{option.detail}</span>
-              </span>
-              {on && (
-                <span aria-hidden style={tick}>
-                  <Icon name="check" size={12} />
+    // The list's look, and a radio group's meaning around it when one is chosen.
+    <div role={choosing ? 'radiogroup' : 'group'} aria-label={label}>
+      <ul role="list">
+        {options.map((option, at) => {
+          const on = option.value === picked;
+          return (
+            <li key={option.value}>
+              <button
+                type="button"
+                data-intent="open"
+                role={choosing ? 'radio' : undefined}
+                aria-checked={choosing ? on : undefined}
+                onClick={() => onPick(option.value)}
+                className={`row ${styles.option}`}
+              >
+                <Shape kind={option.shape} colour={TURNS[at % TURNS.length]} size={36} />
+                <span className="stack" data-gap="tight">
+                  <strong>{option.title}</strong>
+                  <small>{option.detail}</small>
                 </span>
-              )}
-            </button>
-          </li>
-        );
-      })}
-    </ul>
+                {on && (
+                  <span aria-hidden className={styles.tick}>
+                    <Icon name="check" size={12} />
+                  </span>
+                )}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
-
-const row = {
-  width: '100%',
-  display: 'flex',
-  alignItems: 'center',
-  gap: 14,
-  position: 'relative',
-  padding: '14px 36px 14px 16px',
-  border: 'none',
-  borderRadius: 'inherit',
-  background: 'none',
-  textAlign: 'left',
-} as const;
-
-/** The chosen one: set on the soft action colour, with no edge of its own */
-const chosen = { background: accent.soft } as const;
-
-/** And a small tick in its top right corner */
-const tick = {
-  position: 'absolute',
-  top: 10,
-  right: 10,
-  width: 20,
-  height: 20,
-  display: 'grid',
-  placeItems: 'center',
-  borderRadius: palette.radius.pill,
-  background: accent.base,
-  color: surface.card,
-} as const;

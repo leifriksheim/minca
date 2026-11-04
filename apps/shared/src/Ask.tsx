@@ -1,7 +1,5 @@
 import { createRoot } from 'react-dom/client';
 import { Modal } from './Modal';
-import { styles } from './styles';
-import { accent, ink } from '@minca/ui/tokens';
 
 export interface Asking {
   /** Above the question; "Are you sure?" by default */
@@ -53,17 +51,16 @@ function Ask({
 }) {
   return (
     <Modal title={options.title ?? 'Are you sure?'} onClose={() => answer(false)} width={420}>
-      <p style={{ fontSize: 14, lineHeight: 1.5 }}>{question}</p>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+      <p>{question}</p>
+      <div className="row" data-spread>
         {/* First, so it has the focus: Enter alone never does the thing asked about. */}
-        <button type="button" onClick={() => answer(false)} data-variant="quiet" style={both}>
+        <button type="button" onClick={() => answer(false)}>
           {options.no ?? 'Cancel'}
         </button>
         <button
           type="button"
           onClick={() => answer(true)}
-          data-variant={options.danger ? undefined : 'primary'}
-          style={{ ...both, ...(options.danger ? danger : primary) }}
+          data-intent={options.danger ? 'danger' : 'primary'}
         >
           {options.yes ?? 'Continue'}
         </button>
@@ -71,7 +68,3 @@ function Ask({
     </Modal>
   );
 }
-
-const both = { ...styles.smallButton, height: 36, width: 'auto', padding: '0 16px', fontSize: 14 };
-const primary = { backgroundColor: accent.base, borderColor: accent.base, color: ink.inverse };
-const danger = { backgroundColor: accent.danger, borderColor: accent.danger, color: ink.inverse };

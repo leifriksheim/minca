@@ -2,10 +2,8 @@ import { useState } from 'react';
 import type { NodeCollection, NodeRecord, SpaceSummary } from '@minca/core';
 import { useNode } from '@minca/react';
 import { collectionLabel, humanize } from '../derive/schema-ui';
-import { styles, palette, stack } from '../styles';
 import { useAction } from '@minca/app-shared/action';
 import { RecordFinder } from './RecordFinder';
-import { LinkButton, QuietButton } from './Buttons';
 
 /**
  * Links this record to another, in one of the ways its collection allows —
@@ -56,42 +54,30 @@ export function LinkPicker({
   const allowed = declared ? (declared.to === '*' ? 'anything' : declared.to.map(kindOf).join(' or ')) : '';
 
   return (
-    <section
-      aria-label="Link to another record"
-      style={{
-        ...stack(10),
-        padding: 14,
-        border: `1px solid ${palette.surface.line}`,
-        borderRadius: palette.radius.md,
-      }}
-    >
-      <h3 style={styles.sectionTitle}>{rel ? `${humanize(rel)}…` : 'Link to…'}</h3>
+    <article aria-label="Link to another record">
+      <h3>{rel ? `${humanize(rel)}…` : 'Link to…'}</h3>
       {!initialRel && kinds.length > 1 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        <div className="row" data-gap="tight">
           {kinds.map(([r, d]) => (
-            <QuietButton
+            <button
               key={r}
               type="button"
               onClick={() => setRel(r)}
               title={d.description}
               aria-pressed={rel === r}
-              style={{
-                height: 28,
-                ...(rel === r ? { borderColor: palette.ink.strong, color: palette.ink.strong } : {}),
-              }}
             >
               {humanize(r).toLowerCase()}
-            </QuietButton>
+            </button>
           ))}
         </div>
       )}
       {declared && (
         <>
-          <p style={{ ...styles.quiet, lineHeight: 1.5 }}>
-            <strong style={{ color: palette.ink.strong }}>{humanize(rel!).toLowerCase()}</strong>
+          <small>
+            <strong>{humanize(rel!).toLowerCase()}</strong>
             {declared.description && ` — ${declared.description}`}. Can point at {allowed}
             {one && current.length > 0 ? '; picking one replaces the one it has.' : '.'}
-          </p>
+          </small>
           <RecordFinder
             spaceId={space.id}
             collections={collections}
@@ -106,10 +92,12 @@ export function LinkPicker({
           />
         </>
       )}
-      {error && <p style={styles.error}>{error}</p>}
-      <LinkButton type="button" onClick={onDone} style={{ alignSelf: 'flex-start' }}>
-        Cancel
-      </LinkButton>
-    </section>
+      {error && <p role="alert">{error}</p>}
+      <div className="row">
+        <button type="button" data-intent="ghost" onClick={onDone}>
+          Cancel
+        </button>
+      </div>
+    </article>
   );
 }

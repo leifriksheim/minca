@@ -1,0 +1,319 @@
+/*
+ * The kit's own parts (src/frame/): what its components draw beyond the
+ * vocabulary. Screens use the components, never these classes.
+ */
+
+/* A person: face and name, a click opens their card. button.person, so the base button's hover (a
+   background) can't outrank this one's (an underline). */
+button.person {
+  gap: 6px;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+
+  &:hover:not(:disabled) {
+    background: none;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}
+
+/* A small control inside a tag, to take it off */
+.tag > button[data-icon] {
+  width: 18px;
+  min-height: 18px;
+  margin-inline-end: -4px;
+  font-size: 0.625rem;
+}
+
+/* Something the menus and suggestions float from */
+.anchor {
+  position: relative;
+}
+
+.anchor > menu {
+  bottom: calc(100% + 8px);
+  left: 0;
+}
+
+/* Comments: a face beside each */
+.comment {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 10px;
+
+  & > div {
+    min-width: 0;
+  }
+}
+
+.comment-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* A message box as chat apps have it: one field, "+" at its start, then the words, then 🙂 and send */
+.composer {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-tight);
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-tight);
+  border: 1px solid var(--color-field);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  transition: border-color 0.15s ease;
+
+  &:focus-within {
+    border-color: var(--color-action);
+  }
+
+  /* The field is the box around them, so what is typed in has none of its own */
+  & :is(input, textarea) {
+    min-height: 32px;
+    padding: 4px 6px;
+    border: none;
+    background: none;
+    outline: none;
+  }
+
+  & button[data-icon] {
+    width: 32px;
+    min-height: 32px;
+    font-size: 1.125rem;
+  }
+}
+
+.composer-end {
+  display: flex;
+  gap: 2px;
+}
+
+/* A box that grows with its lines (MentionInput), one to start, never dragged to a size */
+.mention-input {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+
+  & textarea {
+    resize: none;
+    overflow-y: auto;
+  }
+}
+
+/* What typing suggests: people, places */
+.suggestions {
+  position: absolute;
+  z-index: 5;
+  left: 0;
+  right: 0;
+  margin: 4px 0 0;
+  padding: 4px 0 0;
+  list-style: none;
+  overflow: hidden;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-float);
+
+  &.above {
+    top: auto;
+    bottom: 100%;
+    margin: 0 0 4px;
+  }
+
+  & li {
+    display: flex;
+    flex-direction: column;
+    padding: 8px 12px;
+    cursor: pointer;
+
+    &[aria-selected='true'] {
+      background: var(--color-sunken);
+    }
+  }
+
+  & .credit {
+    padding: 6px 12px;
+    border-top: 1px solid var(--color-divider);
+    color: var(--color-text-muted);
+    font-size: 0.6875rem;
+  }
+}
+
+.emoji-grid {
+  position: absolute;
+  z-index: 7;
+  bottom: calc(100% + 8px);
+  left: 0;
+  display: grid;
+  grid-template-columns: repeat(8, 32px);
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-float);
+
+  &.right {
+    left: auto;
+    right: 0;
+  }
+
+  &.below {
+    top: calc(100% + 8px);
+    bottom: auto;
+  }
+
+  & button {
+    width: 32px;
+    min-height: 32px;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-small);
+    background: none;
+    font-size: 1.125rem;
+  }
+}
+
+.reactions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-tight);
+}
+
+.reaction {
+  gap: var(--space-tight);
+  min-height: 26px;
+  padding: 0 8px;
+  border-color: var(--color-divider);
+  font-weight: 400;
+
+  & span {
+    color: var(--color-text-muted);
+    font-size: var(--text-small);
+  }
+
+  &[aria-pressed='true'] {
+    border-color: var(--color-action);
+    background: var(--color-action-soft);
+    color: var(--color-text-strong);
+
+    &:hover:not(:disabled) {
+      background: var(--color-action-soft);
+    }
+
+    & span {
+      color: var(--color-action);
+    }
+  }
+}
+
+.place-field {
+  position: relative;
+
+  & > .row {
+    flex-wrap: nowrap;
+  }
+}
+
+.place-chosen {
+  flex-wrap: nowrap;
+  min-height: 40px;
+  padding: 4px 4px 4px 12px;
+  border: 1px solid var(--color-field);
+  border-radius: var(--radius);
+
+  & > .stack {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.attachment {
+  justify-content: flex-start;
+  max-width: 280px;
+  border-radius: var(--radius);
+  font-weight: 400;
+
+  &.picture {
+    padding: 0;
+    overflow: hidden;
+    border-color: var(--color-divider);
+
+    & img {
+      max-width: 280px;
+      max-height: 220px;
+      object-fit: cover;
+    }
+  }
+
+  &.playable {
+    display: block;
+    padding: 6px;
+    border: 1px solid var(--color-divider);
+    background: var(--color-sunken);
+
+    &.video {
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+    }
+
+    & video {
+      width: 280px;
+      max-height: 220px;
+    }
+
+    & audio {
+      display: block;
+      width: 268px;
+    }
+  }
+}
+
+.lightbox {
+  max-height: 75vh;
+  margin: 0 auto;
+  object-fit: contain;
+  border-radius: var(--radius);
+}
+
+/* Any record as one line (Record) */
+.record {
+  justify-content: flex-start;
+  max-width: 100%;
+  padding: 4px 10px 4px 6px;
+  border-color: var(--color-divider);
+  border-radius: var(--radius);
+  font-weight: 400;
+  text-align: left;
+}
+
+.record-face {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  object-fit: cover;
+  border-radius: var(--radius-small);
+}
+
+/* A shared record sits as wide as it says, not across the whole line */
+.shared {
+  align-self: flex-start;
+  max-width: 100%;
+}

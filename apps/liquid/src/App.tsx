@@ -2,10 +2,10 @@ import { useState } from 'react';
 import type { SpaceSummary } from '@minca/core';
 import { useAsync, useConnection, useNode, useSpaces } from '@minca/react';
 import { Loader } from '@minca/app-shared/Loader';
-import { styles, palette, stack } from '@minca/app-shared/styles';
 import { Wordmark } from '@minca/app-shared/Wordmark';
 import { AssemblySpace } from './Assembly';
 import { becomeAssembly } from './setup';
+import styles from './App.module.css';
 
 /**
  * Liquid on its own: connect an account, pick one of the spaces given to it,
@@ -22,27 +22,20 @@ function Connect() {
   const { connection, state } = useConnection();
   const waiting = state.status === 'connecting' || state.status === 'starting';
   return (
-    <div className="page">
-      <div style={styles.card}>
-        <div style={{ marginBottom: 40 }}>
-          <Wordmark compact />
-        </div>
-        <h1 style={styles.title}>Liquid</h1>
-        <p style={styles.subtitle}>
+    <main className={styles.narrow}>
+      <Wordmark compact />
+      <div className="stack">
+        <h1>Liquid</h1>
+        <p>
           Vote on proposals yourself, or trust someone to vote for you, topic by topic. Connect your Minca
           account, and choose the space your group decides in.
         </p>
-        <button
-          onClick={() => void connection.connect()}
-          disabled={waiting}
-          data-variant="primary"
-          style={styles.button}
-        >
-          {state.status === 'connecting' ? 'Waiting for your account home…' : 'Connect with Minca'}
-        </button>
-        {state.error && <p style={styles.error}>{state.error}</p>}
       </div>
-    </div>
+      <button onClick={() => void connection.connect()} disabled={waiting} data-intent="primary">
+        {state.status === 'connecting' ? 'Waiting for your account home…' : 'Connect with Minca'}
+      </button>
+      {state.error && <p role="alert">{state.error}</p>}
+    </main>
   );
 }
 
@@ -56,33 +49,25 @@ function Spaces() {
   if (space)
     return <Assembly key={space.id} space={space} onBack={spaces.length > 1 ? () => setOpen(null) : null} />;
   return (
-    <div className="page">
-      <div style={styles.card}>
-        <h1 style={styles.title}>Which space decides?</h1>
-        {spaces.length === 0 ? (
-          <p style={styles.subtitle}>
-            Liquid has no spaces yet. Connect again, and give it one at your account home.
-          </p>
-        ) : (
-          <ul style={{ listStyle: 'none', ...stack(8), padding: 0 }}>
-            {spaces.map((one) => (
-              <li key={one.id}>
-                <button
-                  onClick={() => setOpen(one.id)}
-                  data-variant="quiet"
-                  style={{ ...styles.button, width: '100%' }}
-                >
-                  {one.name}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        <button onClick={() => void connection.connect()} data-variant="quiet" style={styles.smallButton}>
-          Choose other spaces
-        </button>
-      </div>
-    </div>
+    <main className={styles.narrow}>
+      <h1>Which space decides?</h1>
+      {spaces.length === 0 ? (
+        <p>Liquid has no spaces yet. Connect again, and give it one at your account home.</p>
+      ) : (
+        <ul role="list">
+          {spaces.map((one) => (
+            <li key={one.id}>
+              <button onClick={() => setOpen(one.id)} data-intent="open">
+                {one.name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <button onClick={() => void connection.connect()} data-intent="ghost">
+        Choose other spaces
+      </button>
+    </main>
   );
 }
 
@@ -94,32 +79,30 @@ function Assembly({ space, onBack }: { space: SpaceSummary; onBack: (() => void)
   if (assembly.status === 'loading') return <Loader />;
   if (assembly.status === 'failed' || !assembly.value)
     return (
-      <div className="page">
-        <div style={styles.card}>
-          <h1 style={styles.title}>{space.name} isn't an assembly yet</h1>
-          <p style={styles.subtitle}>
+      <main className={styles.narrow}>
+        <div className="stack">
+          <h1>{space.name} isn't an assembly yet</h1>
+          <p>
             Someone whose role lets them add collections there opens it in Liquid first, and then it is one
             for everyone.
           </p>
-          {assembly.status === 'failed' && (
-            <p style={{ fontSize: 13, color: palette.ink.faint }}>{assembly.error.message}</p>
-          )}
-          {onBack && (
-            <button onClick={onBack} data-variant="quiet" style={styles.smallButton}>
-              Another space
-            </button>
-          )}
+          {assembly.status === 'failed' && <small>{assembly.error.message}</small>}
         </div>
-      </div>
+        {onBack && (
+          <button onClick={onBack} data-intent="ghost">
+            Another space
+          </button>
+        )}
+      </main>
     );
   return (
-    <div className="page">
+    <main className={styles.wide}>
       {onBack && (
-        <button onClick={onBack} data-variant="ghost" style={styles.linkButton}>
+        <button onClick={onBack} data-intent="ghost">
           ← Spaces
         </button>
       )}
       <AssemblySpace space={space} />
-    </div>
+    </main>
   );
 }

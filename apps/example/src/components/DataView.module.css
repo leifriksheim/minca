@@ -1,0 +1,38 @@
+/* The collections down the side, the chosen one beside them */
+.layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: var(--space-section);
+  align-items: start;
+}
+
+.nav > [aria-current] {
+  background: var(--color-sunken);
+  color: var(--color-text-strong);
+}
+
+/* On a phone the side comes apart: the collections become a row of pills above the list, scrolled across */
+@media (max-width: 760px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .side {
+    display: contents;
+  }
+
+  .nav {
+    flex-direction: row;
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    & > button {
+      flex-shrink: 0;
+      border-color: var(--color-divider);
+    }
+  }
+
+  .heading {
+    display: none;
+  }
+}

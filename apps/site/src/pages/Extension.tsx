@@ -5,6 +5,7 @@ import { Shape } from '@minca/app-shared/shapes';
 import { type ShapeKind } from '@minca/ui/shapes';
 import { Band, ChromeMark, EXTERNAL, GITHUB, Marked, Page } from './Site';
 import { downloadLink } from './Install';
+import './Extension.css';
 
 /**
  * The Chrome extension (`apps/extension`), and how to install it by hand until
@@ -81,8 +82,8 @@ export function Extension() {
               </div>
               <h1>Your spaces, awake while Chrome is.</h1>
               <p>Everything keeps moving with every app closed, and you hear when something happens.</p>
-              <div className="actions">
-                <Link {...downloadLink('chrome')} className="btn btn-primary btn-lg">
+              <div className="actions lead">
+                <Link {...downloadLink('chrome')} data-intent="primary">
                   <ChromeMark />
                   Download for Chrome
                 </Link>
@@ -148,7 +149,7 @@ export function Extension() {
             </div>
           ))}
         </div>
-        <div className="split" style={{ marginTop: 72 }}>
+        <div className="split">
           <div>
             <h3 className="split-title">Updating?</h3>
           </div>

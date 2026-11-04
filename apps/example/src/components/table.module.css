@@ -1,0 +1,12 @@
+/* A table too wide for its place scrolls sideways; rows that open what they show say so */
+.table {
+  overflow-x: auto;
+}
+
+.opens tr {
+  cursor: pointer;
+}
+
+.opens tr:hover td {
+  background: var(--color-sunken);
+}

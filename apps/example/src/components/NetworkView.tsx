@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { checkRelays, MAX_RELAYS, SPACE_RELAYS } from '@minca/core';
 import { useMay } from '@minca/app-shared/may';
 import type { CarrierSummary, MeshStatus, RelayStatus, SpaceStatus, SpaceSummary } from '@minca/core';
@@ -14,7 +14,6 @@ import {
   type Health,
   type PeerKind,
 } from '../derive/network';
-import { styles, palette, hstack, stack, ui } from '../styles';
 import { Person } from './Person';
 import { DocsNote } from './DocsNote';
 import { useAction } from '@minca/app-shared/action';
@@ -45,34 +44,28 @@ function useCarriers(status: SpaceStatus): ReadonlyArray<CarrierSummary> {
   return carriers;
 }
 
-/** The colour of each health, and of each relay state, as a dot */
-const HEALTH_COLOR: Record<Health, string> = {
-  syncing: palette.accent.good,
-  alone: palette.ink.faint,
-  connecting: palette.accent.warn,
-  offline: palette.accent.danger,
+type Tone = 'good' | 'warn' | 'danger' | undefined;
+
+/** The tone of each health, and of each relay state, as a dot; none is muted */
+const HEALTH_TONE: Record<Health, Tone> = {
+  syncing: 'good',
+  alone: undefined,
+  connecting: 'warn',
+  offline: 'danger',
 };
 
-const RELAY_COLOR: Record<RelayStatus['state'], string> = {
-  open: palette.accent.good,
-  connecting: palette.accent.warn,
-  waiting: palette.accent.danger,
-  stopped: palette.ink.faint,
+const RELAY_TONE: Record<RelayStatus['state'], Tone> = {
+  open: 'good',
+  connecting: 'warn',
+  waiting: 'danger',
+  stopped: undefined,
 };
 
-function Dot({ color, size = 8 }: { color: string; size?: number }) {
+function Dot({ tone }: { tone: Tone }) {
   return (
-    <span
-      aria-hidden
-      style={{
-        display: 'inline-block',
-        flexShrink: 0,
-        width: size,
-        height: size,
-        borderRadius: '50%',
-        backgroundColor: color,
-      }}
-    />
+    <small aria-hidden data-tone={tone}>
+      ●
+    </small>
   );
 }
 
@@ -86,7 +79,7 @@ export function NetworkView({ space, status }: { space: SpaceSummary; status: Sp
   const health = healthOf(status, network);
 
   return (
-    <div style={stack(36)}>
+    <>
       <Summary
         health={health}
         status={status}
@@ -108,7 +101,7 @@ export function NetworkView({ space, status }: { space: SpaceSummary; status: Sp
       <DocsNote path="spec/04-network.md">
         Devices meet through a relay, then connect directly and introduce each other.
       </DocsNote>
-    </div>
+    </>
   );
 }
 
@@ -154,31 +147,24 @@ function Summary({
   const [title, text] = copy[health];
 
   return (
-    <section
+    <aside
       aria-label="Connection"
-      style={{
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: 14,
-        padding: 18,
-        borderRadius: palette.radius.lg,
-        border: `1px solid ${health === 'offline' ? palette.accent.danger : palette.surface.line}`,
-        backgroundColor: health === 'offline' ? palette.accent.dangerSoft : palette.surface.sunken,
-      }}
+      className="row"
+      data-spread
+      data-tone={health === 'offline' ? 'danger' : undefined}
     >
-      <span style={{ paddingTop: 7 }}>
-        <Dot color={HEALTH_COLOR[health]} size={10} />
-      </span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <h2 style={{ ...styles.appTitle, fontSize: 18 }}>{title}</h2>
-        <p style={{ fontSize: 14, color: palette.ink.body, marginTop: 4, lineHeight: 1.6 }}>{text}</p>
+      <div className="stack" data-gap="tight">
+        <h2>
+          <Dot tone={HEALTH_TONE[health]} /> {title}
+        </h2>
+        <p>{text}</p>
       </div>
       {retry && (
-        <button type="button" onClick={onRetry} style={styles.smallButton}>
+        <button type="button" onClick={onRetry}>
           Try now
         </button>
       )}
-    </section>
+    </aside>
   );
 }
 
@@ -199,9 +185,9 @@ function Peers({ status }: { status: SpaceStatus }) {
   return (
     <Section title="In this space" hint="Devices syncing this space with you right now, and whose they are.">
       {groups.length === 0 ? (
-        <p style={empty}>Nobody else right now.</p>
+        <small>Nobody else right now.</small>
       ) : (
-        <ul className="rows" style={ui.list}>
+        <ul role="list">
           {groups.map((group) => {
             const name =
               group.kind === 'mine' ? (
@@ -216,13 +202,13 @@ function Peers({ status }: { status: SpaceStatus }) {
             const [only] = group.peers;
             if (only !== undefined && group.peers.length === 1)
               return (
-                <li key={group.did} style={row}>
+                <li key={group.did} className="row">
                   <PeerLine
                     did={group.did}
                     name={name}
                     meta={
                       <>
-                        {KIND_LABEL[group.kind]} · <Mono>{short(only)}</Mono>
+                        {KIND_LABEL[group.kind]} · <code>{short(only)}</code>
                       </>
                     }
                   />
@@ -231,27 +217,20 @@ function Peers({ status }: { status: SpaceStatus }) {
             // An account on more than one device: one row for the account, its devices folded under it.
             return (
               <li key={group.did}>
-                <details className="peer-fold">
-                  <summary style={{ ...row, cursor: 'pointer' }}>
+                <details>
+                  <summary className="row">
                     <PeerLine
                       did={group.did}
                       name={group.kind === 'mine' ? 'You, on other devices' : name}
                       meta={`${group.peers.length} devices online`}
                     />
                   </summary>
-                  <ul style={{ listStyle: 'none', margin: 0, padding: '0 14px 8px 50px' }}>
-                    {group.peers.map((peer) => (
-                      <li
-                        key={peer}
-                        style={{ ...meta, display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}
-                      >
-                        <span style={{ flex: 1 }}>
-                          {group.kind === 'mine' ? 'Your device' : 'Device'} · <Mono>{short(peer)}</Mono>
-                        </span>
-                        <Dot color={palette.accent.good} size={6} />
-                      </li>
-                    ))}
-                  </ul>
+                  {group.peers.map((peer) => (
+                    <small key={peer} className="row">
+                      <Dot tone="good" />
+                      {group.kind === 'mine' ? 'Your device' : 'Device'} · <code>{short(peer)}</code>
+                    </small>
+                  ))}
                 </details>
               </li>
             );
@@ -263,15 +242,15 @@ function Peers({ status }: { status: SpaceStatus }) {
 }
 
 /** Whose a peer is, in one row: the account's avatar, a name, and what it is */
-function PeerLine({ did, name, meta: line }: { did: string; name: ReactNode; meta: ReactNode }) {
+function PeerLine({ did, name, meta }: { did: string; name: ReactNode; meta: ReactNode }) {
   return (
     <>
       <PersonFace did={did} size={24} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, color: palette.ink.strong }}>{name}</div>
-        <div style={meta}>{line}</div>
+      <div className="stack truncate" data-gap="tight">
+        <strong>{name}</strong>
+        <small>{meta}</small>
       </div>
-      <Dot color={palette.accent.good} />
+      <Dot tone="good" />
     </>
   );
 }
@@ -327,31 +306,27 @@ function Relays({
       hint="A relay introduces devices to each other, then steps aside: they talk directly, and it never sees what is in the space. The ones this space names let every member find the others, whatever app they use."
       action={
         waiting ? (
-          <button type="button" onClick={onRetry} style={styles.smallButton}>
+          <button type="button" onClick={onRetry}>
             Reconnect now
           </button>
         ) : null
       }
     >
       {urls.length === 0 ? (
-        <p style={empty}>No relay, so this device only reaches the nodes it is given directly.</p>
+        <small>No relay, so this device only reaches the nodes it is given directly.</small>
       ) : (
-        <ul className="rows" style={ui.list}>
+        <ul role="list">
           {urls.map((url) => {
             const relay = network.relays.find((r) => r.url === url);
             const ours = named.includes(url);
             return (
-              <li key={url} style={{ ...row, alignItems: 'flex-start' }}>
-                <span style={{ paddingTop: 6 }}>
-                  <Dot color={relay ? RELAY_COLOR[relay.state] : palette.ink.faint} />
-                </span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 14, color: palette.ink.strong, overflowWrap: 'anywhere' }}>
-                      <Mono>{relayName(url)}</Mono>
-                    </span>
+              <li key={url} className="row" data-spread>
+                <div className="stack" data-gap="tight">
+                  <span className="row" data-gap="tight">
+                    <Dot tone={relay ? RELAY_TONE[relay.state] : undefined} />
+                    <code>{relayName(url)}</code>
                     <span
-                      style={tag}
+                      className="tag"
                       title={
                         ours
                           ? 'Named by this space, for every member'
@@ -360,11 +335,9 @@ function Relays({
                     >
                       {ours ? 'This space' : 'Your app'}
                     </span>
-                  </div>
-                  <div style={meta}>{relay ? relayLine(relay, now) : 'Not connected from this device'}</div>
-                  {relay?.problem && relay.state !== 'open' && (
-                    <div style={{ ...meta, color: palette.accent.danger }}>{relay.problem}</div>
-                  )}
+                  </span>
+                  <small>{relay ? relayLine(relay, now) : 'Not connected from this device'}</small>
+                  {relay?.problem && relay.state !== 'open' && <p role="alert">{relay.problem}</p>}
                 </div>
                 {manages && ours && (
                   <button
@@ -372,8 +345,7 @@ function Relays({
                     onClick={() => remove(url)}
                     disabled={busy || named.length === 1}
                     title={named.length === 1 ? 'Add another relay before removing the last one' : undefined}
-                    data-variant="danger"
-                    style={{ ...styles.smallButton, flexShrink: 0, color: palette.accent.danger }}
+                    data-intent="danger"
                   >
                     Remove
                   </button>
@@ -384,43 +356,28 @@ function Relays({
         </ul>
       )}
       {manages && (
-        <form onSubmit={(event) => void add(event)} style={{ ...hstack(8), flexWrap: 'wrap' }}>
-          <label htmlFor="space-relay" style={visuallyHidden}>
-            Relay for this space
-          </label>
+        <form onSubmit={(event) => void add(event)} className="row">
           <input
-            id="space-relay"
+            aria-label="Relay for this space"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             placeholder="Add one for this space: relay.example.com"
             disabled={busy || full}
             autoComplete="off"
             spellCheck={false}
-            style={{ ...styles.input, flex: '1 1 240px', minWidth: 0 }}
           />
-          <button
-            type="submit"
-            disabled={busy || full || !candidate || problem !== null}
-            data-variant="quiet"
-            style={styles.smallButton}
-          >
+          <button type="submit" disabled={busy || full || !candidate || problem !== null}>
             Add relay
           </button>
         </form>
       )}
-      {manages && (full || problem || error) && (
-        <p
-          role="alert"
-          style={{ ...meta, color: full && !error ? palette.ink.muted : palette.accent.danger }}
-        >
-          {error ?? problem ?? `A space names at most ${MAX_RELAYS} relays.`}
-        </p>
-      )}
-      <p style={meta}>
+      {manages && (error ?? problem) && <p role="alert">{error ?? problem}</p>}
+      {manages && full && !error && !problem && <small>A space names at most {MAX_RELAYS} relays.</small>}
+      <small>
         {network.turn
           ? 'A relay offers to pass traffic on too, so devices on strict networks can still connect.'
           : 'No relay offers to pass traffic on: two devices behind strict firewalls may not connect.'}
-      </p>
+      </small>
     </Section>
   );
 }
@@ -451,33 +408,31 @@ function Connections({
       title="On this device"
       hint="Connections this device holds for all your spaces, and the ones it is still trying to make. A connection that doesn't open within a while is given up and tried again."
     >
-      <ul className="rows" style={ui.list}>
+      <ul role="list">
         {network.connecting.map((attempt) => (
-          <li key={attempt.peer} style={row}>
-            <Dot color={RELAY_COLOR.connecting} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 14, color: palette.ink.strong }}>
-                Connecting to <Mono>{short(attempt.peer)}</Mono>
-              </div>
-              <div style={meta}>
+          <li key={attempt.peer} className="row">
+            <Dot tone={RELAY_TONE.connecting} />
+            <div className="stack truncate" data-gap="tight">
+              <strong>
+                Connecting to <code>{short(attempt.peer)}</code>
+              </strong>
+              <small>
                 For {duration(now - attempt.since)}
                 {attempt.tries > 0 && ` · try ${attempt.tries + 1}`}
-              </div>
+              </small>
             </div>
           </li>
         ))}
         {elsewhere.map((link) => (
-          <li key={link.peer} style={row}>
-            <Dot color={palette.ink.faint} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 14, color: palette.ink.strong }}>
-                <Mono>{short(link.peer)}</Mono>
-              </div>
-              <div style={meta}>
+          <li key={link.peer} className="row">
+            <Dot tone={undefined} />
+            <div className="stack truncate" data-gap="tight">
+              <code>{short(link.peer)}</code>
+              <small>
                 {link.rooms === 0
                   ? 'Connected, proving itself'
                   : `Connected in ${link.rooms} other ${link.rooms === 1 ? 'space' : 'spaces'}`}
-              </div>
+              </small>
             </div>
           </li>
         ))}
@@ -517,29 +472,20 @@ function SyncFacts({ status }: { status: SpaceStatus }) {
     },
     {
       label: 'Version',
-      value: <Mono>{status.fingerprint.slice(0, 12)}</Mono>,
+      value: <code>{status.fingerprint.slice(0, 12)}</code>,
       about: 'Two devices showing the same code hold exactly the same space.',
     },
   ];
   return (
     <Section title="This device’s copy">
-      <ul className="rows" style={ui.list}>
+      <ul role="list">
         {facts.map((fact) => (
-          <li key={fact.label} style={{ ...row, alignItems: 'flex-start' }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 14, color: palette.ink.strong }}>{fact.label}</div>
-              <div style={meta}>{fact.about}</div>
+          <li key={fact.label} className="row" data-spread>
+            <div className="stack" data-gap="tight">
+              <strong>{fact.label}</strong>
+              <small>{fact.about}</small>
             </div>
-            <span
-              style={{
-                fontSize: 14,
-                fontWeight: 600,
-                color: fact.bad ? palette.accent.danger : palette.ink.strong,
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {fact.value}
-            </span>
+            <strong data-tone={fact.bad ? 'danger' : undefined}>{fact.value}</strong>
           </li>
         ))}
       </ul>
@@ -561,34 +507,16 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section aria-label={title} style={stack(10)}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'space-between' }}>
-        <h2 style={{ ...styles.appTitle, fontSize: 20 }}>{title}</h2>
+    <section aria-label={title}>
+      <header>
+        <h2>{title}</h2>
         {action}
-      </div>
-      {hint && <p style={{ ...styles.quiet, margin: 0, lineHeight: 1.6 }}>{hint}</p>}
+      </header>
+      {hint && <small>{hint}</small>}
       {children}
     </section>
   );
 }
 
-function Mono({ children }: { children: ReactNode }) {
-  return <span style={{ fontFamily: palette.mono, fontSize: 12 }}>{children}</span>;
-}
-
 /** The end of an identifier: enough to tell two apart */
 const short = (did: string) => `…${did.slice(-8)}`;
-
-const row: CSSProperties = { display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px' };
-/** A small label beside a relay's name: whose it is */
-const tag: CSSProperties = { ...styles.badge, color: palette.ink.body, background: palette.surface.sunken };
-const meta: CSSProperties = { fontSize: 12, color: palette.ink.muted, marginTop: 2 };
-const empty: CSSProperties = { fontSize: 13, color: palette.ink.faint, margin: 0 };
-const visuallyHidden: CSSProperties = {
-  position: 'absolute',
-  width: 1,
-  height: 1,
-  overflow: 'hidden',
-  clip: 'rect(0 0 0 0)',
-  whiteSpace: 'nowrap',
-};

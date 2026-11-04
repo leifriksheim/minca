@@ -1,13 +1,4 @@
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-  type JSX,
-  type KeyboardEvent,
-  type ReactNode,
-} from 'react';
+import { useEffect, useMemo, useRef, useState, type JSX, type KeyboardEvent, type ReactNode } from 'react';
 import { parse, render } from 'sugar-high/core';
 import * as json from 'sugar-high/lang/json';
 import { useNode, useProfiles } from '@minca/react';
@@ -17,9 +8,10 @@ import { nameOf, peopleFrom } from '../derive/people';
 import { ago } from '@minca/ui/time';
 import { message as messageOf } from '@minca/app-shared/action';
 import { Loader } from '@minca/app-shared/Loader';
-import { styles, palette, ui, hstack, stack } from '../styles';
+import styles from './QueryPlayground.module.css';
+import table from './table.module.css';
 import { DocsNote } from './DocsNote';
-import { QuietButton } from './Buttons';
+import { Info } from '@minca/app-shared/Info';
 
 // Try the query language on this space's own data, with examples built from its real collections.
 
@@ -227,46 +219,31 @@ export function QueryPlayground({
 
   if (examples.length === 0 && text === null) {
     return (
-      <section aria-label="Try a query" style={stack(16)}>
+      <section aria-label="Try a query">
         <Header />
-        <p style={styles.emptyState}>Nothing here to look through yet. Add something to this space first.</p>
+        <p className="empty">Nothing here to look through yet. Add something to this space first.</p>
       </section>
     );
   }
 
   return (
-    <section aria-label="Try a query" style={{ ...stack(16), minWidth: 0 }}>
+    <section aria-label="Try a query">
       <Header />
 
-      <div role="group" aria-label="Examples" style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+      <div role="group" aria-label="Examples" className="row" data-gap="tight">
         {examples.map((example) => {
           const current = text !== null && text === pretty(example.query);
           return (
-            <button
-              key={example.label}
-              onClick={() => setText(pretty(example.query))}
-              data-variant={current ? undefined : 'quiet'}
-              aria-pressed={current}
-              style={{ ...ui.chip, padding: '0 11px', ...(current && ui.chipOn) }}
-            >
+            <button key={example.label} onClick={() => setText(pretty(example.query))} aria-pressed={current}>
               {example.label}
             </button>
           );
         })}
       </div>
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))',
-          gap: 16,
-          alignItems: 'start',
-        }}
-      >
-        <div style={{ ...stack(8), minWidth: 0 }}>
-          <label htmlFor="query-editor" style={styles.fieldLabel}>
-            Your query
-          </label>
+      <div className={styles.columns}>
+        <div className={`stack ${styles.column}`}>
+          <label htmlFor="query-editor">Your query</label>
           <Editor value={text ?? ''} onChange={setText} />
           {jsonError && (
             <Problem title="This isn't valid JSON yet">
@@ -280,49 +257,28 @@ export function QueryPlayground({
           </DocsNote>
         </div>
 
-        <div style={{ ...stack(8), minWidth: 0, opacity: stale ? 0.5 : 1, transition: 'opacity .15s ease' }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 8,
-              minHeight: 20,
-            }}
-          >
-            <span style={styles.fieldLabel}>
+        <div className={`stack ${styles.column} ${stale ? styles.stale : ''}`}>
+          <div className="row" data-spread>
+            <small className="row" data-gap="tight">
               {result ? `${records.length} found${result.cursor ? ', and more after these' : ''}` : 'Results'}
-              {running && <Loader size={9} label="Running the query" style={{ marginLeft: 8 }} />}
-              {stale && result && (
-                <span style={{ color: palette.ink.faint, fontWeight: 400 }}>
-                  {' '}
-                  · from the last query that worked
-                </span>
-              )}
-            </span>
-            <div role="tablist" aria-label="Show results as" style={{ ...styles.segmented, padding: 2 }}>
-              {(['Table', 'JSON'] as const).map((mode) => {
-                const on = (mode === 'JSON') === raw;
-                return (
-                  <button
-                    key={mode}
-                    role="tab"
-                    aria-selected={on}
-                    onClick={() => setRaw(mode === 'JSON')}
-                    style={{
-                      ...(on ? styles.segmentActive : styles.segment),
-                      padding: '3px 10px',
-                      fontSize: 12,
-                    }}
-                  >
-                    {mode}
-                  </button>
-                );
-              })}
+              {running && <Loader size={9} label="Running the query" />}
+              {stale && result && ' · from the last query that worked'}
+            </small>
+            <div role="tablist" aria-label="Show results as">
+              {(['Table', 'JSON'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  role="tab"
+                  aria-selected={(mode === 'JSON') === raw}
+                  onClick={() => setRaw(mode === 'JSON')}
+                >
+                  {mode}
+                </button>
+              ))}
             </div>
           </div>
 
-          {result && records.length === 0 && <p style={styles.emptyState}>Nothing matches this query.</p>}
+          {result && records.length === 0 && <p className="empty">Nothing matches this query.</p>}
           {result && records.length > 0 && !raw && (
             <ResultTable
               records={records}
@@ -335,15 +291,19 @@ export function QueryPlayground({
               onOpen={onOpen}
             />
           )}
-          {result && raw && <Highlighted code={pretty(result)} style={{ maxHeight: 520 }} />}
+          {result && raw && <Highlighted code={pretty(result)} />}
 
           {parsed?.ok && (result?.cursor || parsed.query.cursor) && (
-            <div style={{ ...hstack(8), flexWrap: 'wrap' }}>
+            <div className="row">
               {parsed.query.cursor && (
-                <QuietButton onClick={() => setCursor(null)}>Back to the first page</QuietButton>
+                <button data-intent="ghost" onClick={() => setCursor(null)}>
+                  Back to the first page
+                </button>
               )}
               {result?.cursor && (
-                <QuietButton onClick={() => setCursor(result.cursor)}>Next page →</QuietButton>
+                <button data-intent="ghost" onClick={() => setCursor(result.cursor)}>
+                  Next page →
+                </button>
               )}
             </div>
           )}
@@ -355,42 +315,19 @@ export function QueryPlayground({
 
 function Header() {
   return (
-    <header>
-      <h2 style={{ ...styles.appTitle, fontSize: 22 }}>Try a query</h2>
-      <p style={{ ...styles.quiet, marginTop: 4, lineHeight: 1.6 }}>
-        Ask this space for exactly the records you want, written as plain JSON. It runs as you type, on the
-        data on this device, and nothing you do here changes anything.
-      </p>
-    </header>
+    <div className="stack" data-gap="tight">
+      <h2>
+        Try a query
+        <Info label="About queries">
+          Ask this space for exactly the records you want, written as plain JSON. It runs as you type, on the
+          data on this device, and nothing you do here changes anything.
+        </Info>
+      </h2>
+    </div>
   );
 }
 
 // ─── Editor ────────────────────────────────────────────────────────
-
-/** Colours for sugar-high, in the app's greys: names and values read first, punctuation fades back */
-const syntax = {
-  '--sh-keyword': palette.ink.strong,
-  '--sh-class': palette.ink.strong,
-  '--sh-entity': palette.ink.strong,
-  '--sh-identifier': palette.ink.body,
-  '--sh-property': palette.ink.strong,
-  '--sh-string': palette.accent.good,
-  '--sh-jsxliterals': palette.ink.body,
-  '--sh-sign': palette.ink.faint,
-  '--sh-comment': palette.ink.faint,
-  '--sh-break': palette.ink.body,
-  '--sh-space': palette.ink.body,
-};
-
-const codeText: CSSProperties = {
-  fontFamily: palette.mono,
-  fontSize: 12.5,
-  lineHeight: 1.65,
-  padding: '12px 14px',
-  whiteSpace: 'pre',
-  tabSize: 2,
-  letterSpacing: 0,
-};
 
 const highlight = (code: string) => render(parse(code, { ...json }));
 
@@ -410,32 +347,16 @@ function Editor({ value, onChange }: { value: string; onChange: (next: string) =
   };
 
   return (
-    <div
-      style={{
-        position: 'relative',
-        borderRadius: palette.radius.lg,
-        backgroundColor: palette.surface.sunken,
-      }}
-    >
+    <div className={styles.editor}>
       <pre
         ref={under}
         aria-hidden
-        className="code-layer"
-        style={{
-          ...codeText,
-          ...syntax,
-          position: 'absolute',
-          inset: 0,
-          margin: 0,
-          overflow: 'hidden',
-          pointerEvents: 'none',
-          border: '1px solid transparent',
-        }}
+        className={`${styles.code} ${styles.under}`}
         dangerouslySetInnerHTML={{ __html: `${html}\n ` }}
       />
       <textarea
         id="query-editor"
-        className="code-layer"
+        className={`${styles.code} ${styles.input}`}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKeyDown}
@@ -449,52 +370,25 @@ function Editor({ value, onChange }: { value: string; onChange: (next: string) =
         autoComplete="off"
         autoCorrect="off"
         wrap="off"
-        style={{
-          ...codeText,
-          position: 'relative',
-          display: 'block',
-          width: '100%',
-          minHeight: 320,
-          resize: 'vertical',
-          margin: 0,
-          border: `1px solid ${palette.surface.rule}`,
-          borderRadius: palette.radius.lg,
-          background: 'transparent',
-          color: 'transparent',
-          caretColor: palette.ink.strong,
-          overflow: 'auto',
-        }}
       />
     </div>
   );
 }
 
 /** Read-only highlighted JSON */
-function Highlighted({ code, style }: { code: string; style?: CSSProperties }) {
+function Highlighted({ code }: { code: string }) {
   const html = useMemo(() => highlight(code), [code]);
   return (
-    <pre
-      style={{
-        ...codeText,
-        ...syntax,
-        margin: 0,
-        overflow: 'auto',
-        border: `1px solid ${palette.surface.rule}`,
-        borderRadius: palette.radius.lg,
-        backgroundColor: palette.surface.sunken,
-        ...style,
-      }}
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
+    <pre className={`${styles.code} ${styles.highlighted}`} dangerouslySetInnerHTML={{ __html: html }} />
   );
 }
 
 function Problem({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div role="alert" style={{ ...styles.errorBox, marginTop: 0, padding: '10px 14px' }}>
-      <p style={{ ...styles.error, fontSize: 13 }}>{title}</p>
-      <p style={{ ...styles.errorHint, marginTop: 4, fontSize: 12.5, wordBreak: 'break-word' }}>{children}</p>
-    </div>
+    <aside role="alert" data-tone="danger" className="stack" data-gap="tight">
+      <strong>{title}</strong>
+      <small>{children}</small>
+    </aside>
   );
 }
 
@@ -515,18 +409,18 @@ function ResultTable({
 }) {
   const anyIncluded = records.some((r) => r.included && Object.keys(r.included).length > 0);
   return (
-    <div style={ui.tableBox}>
-      <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
+    <div className={table.table}>
+      <table>
         <thead>
           <tr>
-            <th style={th}>What</th>
-            <th style={th}>Collection</th>
-            <th style={th}>By</th>
-            <th style={th}>Added</th>
-            {anyIncluded && <th style={th}>Pulled in</th>}
+            <th>What</th>
+            <th>Collection</th>
+            <th>By</th>
+            <th>Added</th>
+            {anyIncluded && <th>Pulled in</th>}
           </tr>
         </thead>
-        <tbody>
+        <tbody className={table.opens}>
           {records.map((record) => (
             <tr
               key={record.key}
@@ -535,27 +429,16 @@ function ResultTable({
               onKeyDown={(e) => {
                 if (e.key === 'Enter') onOpen(record);
               }}
-              style={{ cursor: 'pointer' }}
               aria-label={`Open ${label(record)}`}
             >
-              <td
-                style={{
-                  ...td,
-                  color: palette.ink.strong,
-                  fontWeight: 500,
-                  maxWidth: 240,
-                  ...ui.ellipsis,
-                }}
-              >
-                {label(record)}
+              <td>
+                <strong>{label(record)}</strong>
               </td>
-              <td style={{ ...td, color: palette.ink.muted }}>{collection(record.collection)}</td>
-              <td style={{ ...td, color: palette.ink.muted }}>{author(record)}</td>
-              <td style={{ ...td, color: palette.ink.muted }} title={record.createdAt}>
-                {ago(record.createdAt)}
-              </td>
+              <td>{collection(record.collection)}</td>
+              <td>{author(record)}</td>
+              <td title={record.createdAt}>{ago(record.createdAt)}</td>
               {anyIncluded && (
-                <td style={{ ...td, color: palette.ink.muted }}>
+                <td>
                   <Included record={record} label={label} />
                 </td>
               )}
@@ -570,21 +453,21 @@ function ResultTable({
 /** What an `include` found, in a few words: "3 comments · reactions: 👍, 🎉" */
 function Included({ record, label }: { record: QueryRecord; label: (r: QueryRecord) => string }) {
   const entries = Object.entries(record.included ?? {});
-  if (entries.length === 0) return <span style={{ color: palette.ink.faint }}>—</span>;
+  if (entries.length === 0) return <span>—</span>;
   return (
-    <span style={stack(2)}>
+    <span className="stack" data-gap="tight">
       {entries.map(([name, found]) => {
         if (typeof found === 'number') {
           return (
             <span key={name}>
-              <span style={{ color: palette.ink.faint }}>{name}</span> {found}
+              <small>{name}</small> {found}
             </span>
           );
         }
         const shown = found.slice(0, 3).map(label).join(', ');
         return (
-          <span key={name} style={{ overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 260 }}>
-            <span style={{ color: palette.ink.faint }}>{name}</span> {found.length}
+          <span key={name} className="truncate">
+            <small>{name}</small> {found.length}
             {found.length > 0 && `: ${shown}${found.length > 3 ? '…' : ''}`}
           </span>
         );
@@ -592,6 +475,3 @@ function Included({ record, label }: { record: QueryRecord; label: (r: QueryReco
     </span>
   );
 }
-
-const th: CSSProperties = { ...ui.th, padding: '9px 12px', whiteSpace: 'nowrap' };
-const td: CSSProperties = { ...ui.td, padding: '9px 12px', whiteSpace: 'nowrap', verticalAlign: 'top' };

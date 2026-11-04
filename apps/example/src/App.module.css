@@ -1,0 +1,38 @@
+/* The home screen: room above and below, and on a phone under the last row for the tab bar */
+.home {
+  gap: var(--space-loose);
+  max-width: 720px;
+  padding: 56px 20px 80px;
+
+  @media (max-width: 640px) {
+    padding: 12px 16px calc(114px + env(safe-area-inset-bottom));
+  }
+}
+
+/* All, People and Groups, named as large as a page's title, the one you're on in full ink */
+.tabs {
+  display: flex;
+  gap: 20px;
+
+  & > a {
+    position: relative;
+    color: var(--color-text-muted);
+    font: 700 var(--text-heading-1) var(--font-display);
+    text-decoration: none;
+
+    &[aria-current] {
+      color: var(--color-text-strong);
+    }
+  }
+}
+
+/* Something waiting for you behind a tab, on its top right corner */
+.dot {
+  position: absolute;
+  top: 2px;
+  right: -9px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-danger);
+}

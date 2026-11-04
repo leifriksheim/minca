@@ -16,7 +16,6 @@ import {
 } from '@minca/core/schemas';
 import { useMay } from './may';
 import { useAction } from './action';
-import { styles, palette, hstack, stack } from './styles';
 import { popupFeatures } from '@minca/core/session';
 
 /**
@@ -101,28 +100,23 @@ export function BotConnectors({
     });
 
   return (
-    <div style={{ ...stack(4), padding: '0 14px 10px 54px' }}>
+    <div className="stack" data-gap="tight">
       {host.connectors.map(({ id, name }) => {
         const connected = said?.get(id);
         return (
-          <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-            <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: palette.ink.muted }}>
+          <div key={id} className="row" data-spread>
+            <small>
               {connected ? (
                 <>
-                  {name} · <strong style={{ color: palette.ink.body }}>{connected.account}</strong>
+                  {name} · <strong>{connected.account}</strong>
                   {connected.reaches?.length ? ` · ${connected.reaches.join(', ')}` : ''}
                 </>
               ) : (
                 `Not connected to ${name}`
               )}
-            </span>
+            </small>
             {instructs && (
-              <button
-                onClick={() => (connected ? disconnect(id) : connectTo(id))}
-                disabled={busy}
-                data-variant="quiet"
-                style={styles.smallButton}
-              >
+              <button onClick={() => (connected ? disconnect(id) : connectTo(id))} disabled={busy}>
                 {connected ? 'Disconnect' : `Connect ${name}`}
               </button>
             )}
@@ -130,12 +124,12 @@ export function BotConnectors({
         );
       })}
       {instructs && (
-        <p style={styles.faint}>
+        <small>
           Anyone here who can set the bot off can ask about what it reaches, and set off what your automations
           do there. {host.name} keeps what reaches each service.
-        </p>
+        </small>
       )}
-      {error && <p style={{ ...styles.error, fontSize: 12 }}>{error}</p>}
+      {error && <p role="alert">{error}</p>}
     </div>
   );
 }
@@ -194,23 +188,12 @@ export function BotInstructions({
     });
 
   return (
-    <div style={{ ...stack(6), padding: '0 14px 10px 54px' }}>
+    <div className="stack">
       {draft === null ? (
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-          <p
-            style={{
-              flex: 1,
-              minWidth: 0,
-              fontSize: 13,
-              color: newest ? palette.ink.body : palette.ink.muted,
-            }}
-          >
-            {newest ?? 'No instructions: it goes by its name and its own rules.'}
-          </p>
+        <div className="row" data-spread>
+          {newest ? <p>{newest}</p> : <small>No instructions: it goes by its name and its own rules.</small>}
           {instructs && (
-            <button onClick={() => setDraft(newest ?? '')} data-variant="quiet" style={styles.smallButton}>
-              {newest ? 'Edit' : 'Add instructions'}
-            </button>
+            <button onClick={() => setDraft(newest ?? '')}>{newest ? 'Edit' : 'Add instructions'}</button>
           )}
         </div>
       ) : (
@@ -221,22 +204,19 @@ export function BotInstructions({
             maxLength={BOT_INSTRUCTIONS_MAX}
             rows={4}
             placeholder="You are Ferris, the team’s helper. Answer briefly, and link issues as #N."
-            style={{ ...styles.input, resize: 'vertical' }}
           />
-          <div style={{ ...hstack(8), justifyContent: 'flex-end' }}>
-            <button onClick={() => setDraft(null)} data-variant="quiet" style={styles.smallButton}>
-              Cancel
-            </button>
-            <button onClick={() => save(draft)} disabled={busy || !draft.trim()} style={styles.smallButton}>
+          <div className="row" data-spread>
+            <button onClick={() => setDraft(null)}>Cancel</button>
+            <button onClick={() => save(draft)} disabled={busy || !draft.trim()} data-intent="primary">
               Save
             </button>
           </div>
-          <p style={styles.faint}>
+          <small>
             Everyone here can read these. The bot follows them after its own rules, which they can’t change.
-          </p>
+          </small>
         </>
       )}
-      {error && <p style={{ ...styles.error, fontSize: 12 }}>{error}</p>}
+      {error && <p role="alert">{error}</p>}
     </div>
   );
 }

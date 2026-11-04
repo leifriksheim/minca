@@ -29,12 +29,11 @@ import { ago } from '@minca/ui/time';
 import { byRecent, useLastActive } from './recent';
 import { CallLayer } from './components/calls/Calls';
 import { NewSheet } from './components/NewSheet';
-import { AddButton, PrimaryButton } from './components/Buttons';
-import { Icon } from './components/Icon';
+import { Icon } from '@minca/app-shared/Icon';
 import { addChat } from './components/apps/entries';
 
 import { takeBack } from './contacts';
-import { styles, palette, hstack, stack, ui } from './styles';
+import css from './App.module.css';
 import { ask } from '@minca/app-shared/Ask';
 import {
   Notices,
@@ -158,27 +157,16 @@ function Workspace() {
   );
 }
 
-/** A tab on the home screen, the colour of where you are */
-const tab = (on: boolean) =>
-  ({
-    ...styles.appTitle,
-    position: 'relative',
-    textDecoration: 'none',
-    color: on ? palette.ink.strong : palette.ink.faint,
-  }) as const;
-
 /** The home screen: Home, Activity and you (`TabBar`), and the one of them you're on */
 export function HomeLayout() {
   return (
-    <div className="page">
+    <main className={css.home}>
       <SyncLine />
-      <div style={styles.app}>
-        <TabBar />
-        <Notices />
-        <RelayDown />
-        <Outlet />
-      </div>
-    </div>
+      <TabBar />
+      <Notices />
+      <RelayDown />
+      <Outlet />
+    </main>
   );
 }
 
@@ -207,25 +195,24 @@ export function ChatsLayout() {
   };
   return (
     <>
-      <header style={{ ...hstack(20), alignItems: 'center', marginBottom: 20 }}>
-        <nav role="tablist" aria-label="Home" style={{ ...hstack(20), flex: 1 }}>
+      <header>
+        <nav aria-label="Home" className={css.tabs}>
           {TABS.map((one) => (
-            <Link
-              key={one.to}
-              to={one.to}
-              role="tab"
-              activeOptions={{ exact: one.to === '/' }}
-              activeProps={{ 'aria-selected': true, style: tab(true) }}
-              inactiveProps={{ 'aria-selected': false, style: tab(false) }}
-            >
+            <Link key={one.to} to={one.to} activeOptions={{ exact: one.to === '/' }}>
               {one.label}
-              {waiting[one.to] && <span style={tabDot} aria-label="New" />}
+              {waiting[one.to] && <span className={css.dot} aria-label="New" />}
             </Link>
           ))}
         </nav>
-        <AddButton onClick={() => setStarting(true)} aria-label="New" title="New" style={plus}>
+        <button
+          data-intent="primary"
+          data-icon
+          onClick={() => setStarting(true)}
+          aria-label="New"
+          title="New"
+        >
           <Icon name="plus" size={20} />
-        </AddButton>
+        </button>
       </header>
       <Outlet />
       {starting && (
@@ -234,27 +221,6 @@ export function ChatsLayout() {
     </>
   );
 }
-
-/** Something waiting for you behind a tab, on its top right corner */
-const tabDot = {
-  position: 'absolute',
-  top: 2,
-  right: -9,
-  width: 8,
-  height: 8,
-  borderRadius: palette.radius.pill,
-  background: palette.accent.danger,
-} as const;
-
-const plus = {
-  width: 40,
-  height: 40,
-  padding: 0,
-  display: 'grid',
-  placeItems: 'center',
-  borderRadius: palette.radius.pill,
-} as const;
-
 /**
  * Everything, at `/`: your groups and the people you talk to in one list, the one something last
  * happened in first, the way a messaging app's chats are
@@ -275,24 +241,22 @@ export function AllPage() {
   };
   return (
     <>
-      <div style={{ marginBottom: 20 }}>
-        <SpaceInvites
-          names={new Map([...pairs.values()].map((pair) => [pair.face, pair.name]))}
-          onJoined={openSpace}
-        />
-      </div>
+      <SpaceInvites
+        names={new Map([...pairs.values()].map((pair) => [pair.face, pair.name]))}
+        onJoined={openSpace}
+      />
       {loading && spaces.length === 0 ? (
-        <Loading label="Opening your chats" style={styles.emptyState} />
+        <Loading label="Opening your chats" />
       ) : rows.length === 0 ? (
-        <div style={{ ...styles.emptyState, ...stack(10), alignItems: 'center' }}>
-          <strong style={{ color: palette.ink.strong, fontSize: 15 }}>Nothing here yet</strong>
-          <span>Start a group, or find someone by their username under People.</span>
-          <PrimaryButton onClick={() => setNaming(true)} style={{ marginTop: 6 }}>
+        <div className="empty">
+          <h3>Nothing here yet</h3>
+          <p>Start a group, or find someone by their username under People.</p>
+          <button data-intent="primary" onClick={() => setNaming(true)}>
             New group
-          </PrimaryButton>
+          </button>
         </div>
       ) : (
-        <ul className="rows" aria-label="Groups and people" style={ui.list}>
+        <ul role="list" aria-label="Groups and people">
           {rows.map(({ space, pair }) =>
             pair ? (
               <PersonRow
@@ -315,7 +279,7 @@ export function AllPage() {
           )}
         </ul>
       )}
-      {error && <p style={{ ...styles.error, marginTop: 10 }}>{error}</p>}
+      {error && <p role="alert">{error}</p>}
       {naming && (
         <SpaceDialog initial="new" onClose={() => setNaming(false)} onCreate={create} onJoin={join} />
       )}
@@ -331,12 +295,10 @@ export function GroupsPage() {
   useHeldSpaces([...pairs.keys()]);
   return (
     <>
-      <div style={{ marginBottom: 20 }}>
-        <SpaceInvites
-          names={new Map([...pairs.values()].map((pair) => [pair.face, pair.name]))}
-          onJoined={openSpace}
-        />
-      </div>
+      <SpaceInvites
+        names={new Map([...pairs.values()].map((pair) => [pair.face, pair.name]))}
+        onJoined={openSpace}
+      />
       <SpaceList
         spaces={spaces.filter((space) => !pairs.has(space.id))}
         loading={loading}

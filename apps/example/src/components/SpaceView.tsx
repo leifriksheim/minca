@@ -35,8 +35,8 @@ import { AddPeople } from './InvitePeople';
 import type { PairWith } from '../contacts';
 import { AccountMenu } from './AccountMenu';
 import { usePopover } from './usePopover';
-import { styles, palette, stack, ui } from '../styles';
-import { Icon, type IconName } from './Icon';
+import css from './SpaceView.module.css';
+import { Icon, type IconName } from '@minca/app-shared/Icon';
 import { SyncLine } from './SyncLine';
 import { RelayDown } from './RelayNotice';
 import { homeTab, Notices, useWorkspace } from '../workspace';
@@ -159,12 +159,12 @@ export function SpaceLayout() {
   // overlapped a join) shows the space as soon as it catches up.
   if (!space)
     return loading ? null : (
-      <div className="page">
-        <div style={styles.app}>
-          <p style={styles.emptyState}>This space isn't on this device.</p>
+      <main>
+        <div className="empty">
+          <p>This space isn't on this device.</p>
           <Link to="/">Your spaces</Link>
         </div>
-      </div>
+      </main>
     );
   // The space takes the whole window, the way chat apps are laid out.
   return <SpaceView key={space.id} space={space} />;
@@ -355,30 +355,17 @@ function SpaceView({ space }: { space: SpaceSummary }) {
   return (
     <PersonScopeProvider space={space} people={people} roles={roleOf} me={account.did} openSpace={openSpace}>
       <SyncLine space={space.id} />
-      <div className="space-shell" data-app-open={open ? '' : undefined}>
-        {/* The space's apps down the left edge, under the space itself; a phone has them as tabs. */}
-        <nav className="app-rail" aria-label={`Apps in ${name}`}>
-          <div className="rail-top">
+      <div className={css.shell} data-app-open={open ? '' : undefined}>
+        {/* The space's apps down the left edge, under the space itself; a phone has them in its bar. */}
+        <nav className={`${css.rail} ${css.wide}`} aria-label={`Apps in ${name}`}>
+          <div className={css.top}>
             <SpaceMenu space={space} pair={pair} leaf={leaf} go={go} />
           </div>
-          <div className="rail-apps">
+          <div className={css.apps}>
             {/* Back to your spaces and people, then this one's Overview: every app, with the ones proposed. */}
+            <RailItem icon={<Icon name="arrowLeft" />} label="Home" on={false} onClick={goHome} />
             <RailItem
-              icon={
-                <span className="rail-glyph">
-                  <Icon name="arrowLeft" size={16} />
-                </span>
-              }
-              label="Home"
-              on={false}
-              onClick={goHome}
-            />
-            <RailItem
-              icon={
-                <span className="rail-glyph">
-                  <Icon name="apps" size={16} />
-                </span>
-              }
+              icon={<Icon name="apps" />}
               label="Overview"
               unread={newProposals}
               on={onApps}
@@ -397,7 +384,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
             {space.writable && (
               <RailItem
                 icon={
-                  <span className="rail-slot">
+                  <span className={css.slot}>
                     <Icon name="plus" size={12} />
                   </span>
                 }
@@ -407,105 +394,85 @@ function SpaceView({ space }: { space: SpaceSummary }) {
               />
             )}
           </div>
-          <div className="rail-foot">
+          <div className={`row ${css.foot}`}>
             {/* You, and what's new for you beside you, at its foot. */}
             <AccountMenu />
             <Bell spaces={spaces} here={space} onOpenSpace={openSpace} />
           </div>
         </nav>
 
-        <main className="space-main">
-          <header className="space-bar">
-            {/* A phone has no rail: the way back at the left of its bar, where you are in the middle, and the
-                space's apps behind the open one's shape at the right. */}
-            <span className="phone-only bar-end">
-              <button
-                onClick={goBack}
-                aria-label={onApps ? 'Home' : 'Back'}
-                title={onApps ? 'Home' : 'Back'}
-                className="group-button"
-                style={barButton}
-              >
-                <span style={{ display: 'inline-flex', transform: 'rotate(180deg)' }}>
-                  <Icon name="chevron" size={16} />
+        <div className={css.main}>
+          <header className={css.bar}>
+            {/* Back for everywhere a step in from the apps; a phone, with no rail, has it everywhere. */}
+            <button
+              data-icon
+              data-intent="subtle"
+              className={!onApps && (!onApp || inView) ? undefined : css.phone}
+              onClick={goBack}
+              aria-label={onApps ? 'Home' : 'Back'}
+              title={onApps ? 'Home' : 'Back'}
+            >
+              <Icon name="back" />
+            </button>
+            <div className={`row ${css.title}`}>
+              {onApps && (
+                <span className={css.phone}>
+                  <SpaceFace space={space} pair={pair} size={28} />
                 </span>
-              </button>
-            </span>
-            <span className="phone-only bar-middle">
-              {/* The space on its Overview, the app in an app, and anywhere else, the page's own name. */}
-              <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                {onApps && <SpaceFace space={space} pair={pair} size={26} />}
-                {open && <AppIcon app={open} size={26} />}
-                <h1 style={{ ...styles.appTitle, ...ui.ellipsis, fontSize: 17 }}>{title}</h1>
-              </span>
-            </span>
-            <span className="phone-only bar-end" style={{ justifySelf: 'end', maxWidth: '100%' }}>
-              {/* The Overview lists the apps already. */}
-              {!onApps && (
-                <AppSwitcher
-                  space={space}
-                  apps={apps.ready}
-                  unread={unread}
-                  open={open}
-                  onNew={onNew}
-                  go={go}
-                  openApp={openApp}
-                />
-              )}
-            </span>
-            <span className="hide-on-phone" style={{ display: 'contents' }}>
-              {/* A wide screen has the rail to go between apps; Back for everywhere a step in from them. */}
-              {!onApps && (!onApp || inView) && (
-                <button
-                  onClick={goBack}
-                  aria-label="Back"
-                  title="Back"
-                  className="group-button"
-                  style={barButton}
-                >
-                  <span style={{ display: 'inline-flex', transform: 'rotate(180deg)' }}>
-                    <Icon name="chevron" size={16} />
-                  </span>
-                </button>
               )}
               {open && <AppIcon app={open} size={28} />}
-              {/* The rail names the space, so here the Overview is named for itself. */}
-              <h1 style={{ ...styles.appTitle, ...ui.ellipsis, flex: 1, minWidth: 0, fontSize: 18 }}>
-                {onApps ? 'Overview' : title}
+              {/* The rail names the space, so there the Overview is named for itself. */}
+              <h1 className="truncate">
+                {onApps ? (
+                  <>
+                    <span className={css.phone}>{name}</span>
+                    <span className={css.wide}>Overview</span>
+                  </>
+                ) : (
+                  title
+                )}
               </h1>
-            </span>
+            </div>
+            {/* The Overview lists the apps already. */}
+            {!onApps && (
+              <AppSwitcher
+                space={space}
+                apps={apps.ready}
+                unread={unread}
+                open={open}
+                onNew={onNew}
+                go={go}
+                openApp={openApp}
+              />
+            )}
           </header>
 
-          <div className="space-content" data-fill={fill || undefined}>
-            <div className="space-inner" data-wide={hood ? true : undefined}>
+          <div className={css.content} data-fill={fill || undefined}>
+            <main data-wide={hood ? true : undefined}>
               <Notices inSpace />
               {!hood && <RelayDown />}
               {!space.writable && (
-                <p style={{ ...styles.errorHint, marginTop: 0, marginBottom: 16 }}>
+                <aside>
                   {space.joining
                     ? 'Joining — waiting for your invite to arrive from someone in the space. It will, once one of them is online.'
                     : "You're following this space: you can see it but not change it. Someone who runs it can give you a role."}
-                </p>
+                </aside>
               )}
               {status && status.rejected > 0 && !onApp && (
-                <button
-                  onClick={() => go('/spaces/$spaceId/network')}
-                  style={{
-                    ...styles.badge,
-                    color: palette.accent.danger,
-                    border: 'none',
-                    cursor: 'pointer',
-                    marginBottom: 16,
-                  }}
-                  title="Records peers sent that failed validation"
-                >
-                  {status.rejected} rejected
-                </button>
+                <p>
+                  <button
+                    data-intent="danger"
+                    onClick={() => go('/spaces/$spaceId/network')}
+                    title="Records peers sent that failed validation"
+                  >
+                    {status.rejected} rejected
+                  </button>
+                </p>
               )}
 
               {hood && (
-                <div style={{ ...stack(10), marginBottom: 24 }}>
-                  <div role="tablist" aria-label="Under the hood" className="segmented phone-only scroll-x">
+                <div className="stack">
+                  <div role="tablist" aria-label="Under the hood" className={css.phone}>
                     {HOOD.map((h) => (
                       <button
                         key={h.id}
@@ -519,16 +486,16 @@ function SpaceView({ space }: { space: SpaceSummary }) {
                       </button>
                     ))}
                   </div>
-                  {'about' in hood && <p style={styles.quiet}>{hood.about}</p>}
+                  {'about' in hood && <small>{hood.about}</small>}
                 </div>
               )}
 
               <SpaceScreenContext value={screen}>
                 <Outlet />
               </SpaceScreenContext>
-            </div>
+            </main>
           </div>
-        </main>
+        </div>
       </div>
 
       {record && (
@@ -605,14 +572,9 @@ export function OpenApp({ app }: { app: AppEntry }) {
 /** Who can read the space, in a word */
 function Privacy({ space }: { space: SpaceSummary }) {
   return (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 5,
-        fontSize: 12.5,
-        color: palette.ink.muted,
-      }}
+    <small
+      className="row"
+      data-gap="tight"
       title={
         space.visibility === 'private'
           ? 'Encrypted end to end: only people in the space hold the key'
@@ -622,22 +584,7 @@ function Privacy({ space }: { space: SpaceSummary }) {
       <Icon name={space.visibility === 'private' ? 'lock' : 'globe'} size={12} />
       {space.visibility === 'private' ? 'Private' : 'Public'}
       {space.role ? ` · ${space.role}` : ''}
-    </span>
-  );
-}
-
-function SideHeading({ children }: { children: ReactNode }) {
-  return (
-    <span
-      style={{
-        padding: '16px 8px 4px',
-        fontSize: 12.5,
-        fontWeight: 500,
-        color: palette.ink.muted,
-      }}
-    >
-      {children}
-    </span>
+    </small>
   );
 }
 
@@ -665,29 +612,30 @@ function SpaceMenu({
     action();
   };
   return (
-    <div ref={root} style={{ position: 'relative', display: 'flex' }}>
+    <div ref={root} className={css.anchor}>
       <button
         onClick={() => setOpen((was) => !was)}
         aria-expanded={shown}
         aria-haspopup="menu"
         aria-label={name}
         title={name}
-        className="group-button"
-        style={faceButton}
+        className={css.item}
       >
         <SpaceFace space={space} pair={pair} size={36} />
-        <span style={{ ...styles.appTitle, ...ui.ellipsis, fontSize: 16 }}>{name}</span>
+        <strong className="truncate">{name}</strong>
       </button>
       {shown && (
-        <nav aria-label={name} style={{ ...menu, ...beside }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px 10px' }}>
+        <menu aria-label={name} className={css.menu}>
+          <li className="row">
             <SpaceFace space={space} pair={pair} size={32} />
-            <span style={{ ...stack(1), minWidth: 0 }}>
-              <strong style={{ ...styles.appTitle, ...ui.ellipsis, fontSize: 16 }}>{name}</strong>
+            <span className="stack" data-gap="tight">
+              <strong>{name}</strong>
               <Privacy space={space} />
             </span>
-          </div>
-          <SideHeading>{pair ? 'This chat' : 'This group'}</SideHeading>
+          </li>
+          <li>
+            <small>{pair ? 'This chat' : 'This group'}</small>
+          </li>
           <SideItem
             icon={<Icon name="apps" size={16} />}
             label="Overview"
@@ -704,17 +652,15 @@ function SpaceMenu({
               onClick={then(() => go(section.to))}
             />
           ))}
-          <div style={{ height: 1, background: palette.surface.line, margin: '6px 4px' }} />
-          <button
-            onClick={then(() => forget(space.id))}
-            data-nav
-            className="side-item"
-            style={{ width: '100%', color: palette.accent.danger }}
-          >
-            <span style={{ width: 20, flexShrink: 0 }} />
-            {pair ? 'Leave this chat' : 'Leave group'}
-          </button>
-        </nav>
+          <li>
+            <hr />
+          </li>
+          <li>
+            <button data-intent="danger" onClick={then(() => forget(space.id))}>
+              {pair ? 'Leave this chat' : 'Leave group'}
+            </button>
+          </li>
+        </menu>
       )}
     </div>
   );
@@ -749,65 +695,66 @@ function AppSwitcher({
   // While its grid is shut, what's new in the apps not on screen shows on the button.
   const elsewhere = totalOf([...unread.entries()].filter(([id]) => id !== open?.id).map(([, one]) => one));
   return (
-    <div ref={root} style={{ position: 'relative', display: 'flex' }}>
+    <div ref={root} className={`${css.anchor} ${css.phone}`}>
       <button
+        data-icon
+        data-intent="subtle"
         onClick={() => setOpen((was) => !was)}
         aria-expanded={shown}
         aria-haspopup="menu"
         aria-label={open ? `${open.title}: every app` : 'Every app'}
         title="Apps"
-        className="group-button"
-        style={barButton}
       >
-        <Icon name="apps" size={16} />
+        <Icon name="apps" />
         {!shown && (
-          <span className="rail-count">
+          <span className={css.corner}>
             <Count unread={elsewhere} />
           </span>
         )}
       </button>
       {shown && (
-        <nav aria-label="Apps" className="drop" style={{ ...menu, left: 'auto', right: 0, padding: 12 }}>
-          <div className="app-switch">
-            {apps.map((app) => (
+        <menu aria-label="Apps" className={css.drop}>
+          {apps.map((app) => (
+            <li key={app.id}>
               <button
-                key={app.id}
                 onClick={then(() => openApp(app.id))}
                 aria-current={open?.id === app.id ? 'page' : undefined}
-                className="rail-item"
+                className={css.item}
               >
-                <span className="rail-icon">
+                <span className={css.icon}>
                   <AppIcon app={app} size={36} />
-                  <span className="rail-count">
+                  <span className={css.corner}>
                     <Count unread={unreadOf(unread, app.id)} />
                   </span>
                 </span>
-                <span className="rail-label">{app.title}</span>
+                <span className="truncate">{app.title}</span>
               </button>
-            ))}
-            {space.writable && (
+            </li>
+          ))}
+          {space.writable && (
+            <li>
               <button
                 onClick={then(() => go('/spaces/$spaceId/new'))}
                 aria-current={onNew ? 'page' : undefined}
-                className="rail-item"
+                className={css.item}
               >
                 {/* On the same tile an app's shape takes, so its name lines up with theirs. */}
-                <span className="rail-icon">
-                  <span className="rail-slot" style={{ width: 36, height: 36 }}>
-                    <Icon name="plus" size={16} />
+                <span className={css.icon}>
+                  <span className={css.slot}>
+                    <Icon name="plus" />
                   </span>
                 </span>
-                <span className="rail-label">Add</span>
+                <span className="truncate">Add</span>
               </button>
-            )}
-          </div>
-        </nav>
+            </li>
+          )}
+        </menu>
       )}
     </div>
   );
 }
 
-/** An app on the rail: its shape, its name under it, what's new on its corner, and a bar beside it while open */
+/** An app on the rail: its shape beside its name, what's new on its corner, and a tile of its own while open */
 function RailItem({
   icon,
   label,
@@ -822,95 +769,38 @@ function RailItem({
   onClick: () => void;
 }) {
   return (
-    <button onClick={onClick} aria-current={on ? 'page' : undefined} title={label} className="rail-item">
-      <span className="rail-icon">
+    <button onClick={onClick} aria-current={on ? 'page' : undefined} title={label} className={css.item}>
+      <span className={css.icon}>
         {icon}
         {unread && (
-          <span className="rail-count">
+          <span className={css.corner}>
             <Count unread={unread} />
           </span>
         )}
       </span>
-      <span className="rail-label">{label}</span>
+      <span className="truncate">{label}</span>
     </button>
   );
 }
 
-/** Back and the apps, at either end of a phone's bar: round and a shade darker than the page, as a dialog's ✕ is */
-const barButton = {
-  position: 'relative',
-  display: 'grid',
-  placeItems: 'center',
-  width: 36,
-  height: 36,
-  padding: 0,
-  border: 'none',
-  borderRadius: palette.radius.pill,
-  backgroundColor: palette.surface.sunken,
-  color: palette.ink.strong,
-} as const;
-
-/** The space's face and name, atop the rail */
-const faceButton = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 10,
-  width: '100%',
-  minWidth: 0,
-  padding: 6,
-  border: 'none',
-  borderRadius: palette.radius.md,
-  background: 'none',
-};
-
-/** A menu under what opens it; a phone pins it under the bar instead (`.drop`) */
-const menu = {
-  ...styles.float,
-  ...stack(1),
-  position: 'absolute',
-  top: 'calc(100% + 6px)',
-  left: 0,
-  zIndex: 20,
-  width: 300,
-  padding: 8,
-  maxHeight: 'min(560px, calc(100vh - 90px))',
-  overflowY: 'auto',
-  animation: 'minca-fade .1s ease',
-} as const;
-/** The space's menu sits beside its face on the rail */
-const beside = { top: 0, left: 'calc(100% + 8px)' } as const;
-
-/** A row in the sidebar; bold while something in it is new, the way unread channels are */
+/** A row in the space's menu */
 function SideItem({
   icon,
   label,
-  unread,
   on,
   onClick,
 }: {
   icon: ReactNode;
   label: string;
-  unread?: Unread;
-  on?: boolean;
+  on: boolean;
   onClick: () => void;
 }) {
   return (
-    <button
-      onClick={onClick}
-      aria-current={on ? 'page' : undefined}
-      data-nav
-      className="side-item"
-      style={{
-        width: '100%',
-        color: on || (unread?.count ?? 0) > 0 ? palette.ink.strong : palette.ink.body,
-        fontWeight: on || (unread?.count ?? 0) > 0 ? 600 : 400,
-      }}
-    >
-      <span style={{ width: 20, display: 'inline-flex', justifyContent: 'center', flexShrink: 0 }}>
+    <li>
+      <button onClick={onClick} aria-current={on ? 'page' : undefined}>
         {icon}
-      </span>
-      <span style={{ ...ui.ellipsis, flex: 1, minWidth: 0 }}>{label}</span>
-      {unread && <Count unread={unread} />}
-    </button>
+        {label}
+      </button>
+    </li>
   );
 }

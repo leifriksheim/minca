@@ -1,0 +1,37 @@
+.option[aria-selected='true'] {
+  background: var(--color-sunken);
+}
+
+/* A see-through field over a copy of its text, whose text is invisible but whose mentions are tinted.
+   Both must set their text alike, or the tint drifts off the words. */
+.field {
+  position: relative;
+  flex: 1;
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.under {
+  position: absolute;
+  inset: 0;
+  padding: 0 13px;
+  overflow: hidden;
+  color: transparent;
+  line-height: var(--control-height);
+  white-space: pre;
+  pointer-events: none;
+
+  & mark {
+    padding: 0;
+    color: transparent;
+  }
+
+  @media (pointer: coarse) {
+    font-size: 1rem;
+  }
+}
+
+.input {
+  position: relative;
+  background: transparent;
+}

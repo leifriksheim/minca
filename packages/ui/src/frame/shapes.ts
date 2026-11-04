@@ -1,8 +1,18 @@
-import type { ComponentChildren } from 'preact';
+import { h, type ComponentChildren } from 'preact';
 import { hash } from '../hash';
 import { PATHS, shapeFor, type ShapeKind } from '../shapes';
 import { shapeColours, type ShapeColour } from '../tokens';
 import { html } from './html';
+import { ICONS, ICON_SVG, type IconName } from '../icons';
+
+/** An action icon (../icons.ts): what a button does, in the colour of the text around it */
+export function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
+  return h(
+    'svg',
+    { ...ICON_SVG, width: size, height: size },
+    ...ICONS[name].map(([tag, attrs]) => h(tag, attrs)),
+  );
+}
 
 /** One of Minca's shapes, in one of their colours */
 export function Shape({
@@ -38,7 +48,7 @@ export function Empty({
   text?: string;
   children?: ComponentChildren;
 }) {
-  return html`<div class="empty-state">
+  return html`<div class="empty">
     <${Shape} kind=${shape} colour=${colour} size=${56} />
     <h3>${title}</h3>
     ${text && html`<p>${text}</p>`} ${children}
@@ -46,26 +56,27 @@ export function Empty({
 }
 
 /**
- * A picture for something that has none: a big flat shape in a colour, on a
- * sunken ground, picked and turned a little by `seed` (a record's key), so
- * two side by side differ. Whatever is inside sits on top.
+ * A thing's picture (a <figure>): a big flat shape in a colour, picked and
+ * turned a little by `seed` (a record's key), so two side by side differ. A
+ * photo inside covers it; labels and buttons inside sit along its top.
  */
 export function Cover({
   seed,
   colour,
   size = 64,
-  class: className,
+  wide = false,
   children,
 }: {
   seed: string;
   colour: ShapeColour;
   /** How big the shape is: twice this many pixels across */
   size?: number;
-  class?: string;
+  /** A banner, twice as wide as tall, not a tile */
+  wide?: boolean;
   children?: ComponentChildren;
 }) {
   const tilt = (hash(`${seed}:tilt`) % 24) - 12;
-  return html`<div class=${className ? `cover ${className}` : 'cover'}>
+  return html`<figure data-wide=${wide || undefined}>
     <${Shape}
       kind=${shapeFor(seed).kind}
       colour=${colour}
@@ -73,5 +84,5 @@ export function Cover({
       style=${`position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(${tilt}deg)`}
     />
     ${children}
-  </div>`;
+  </figure>`;
 }

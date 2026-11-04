@@ -21,10 +21,10 @@ import {
 import { DirectMessages } from './DirectMessages';
 import { ScreenFrame } from './ScreenFrame';
 import { ago } from '@minca/ui/time';
-import { styles, palette, hstack, stack } from '../../styles';
 import { Person } from '../Person';
-import { LinkButton, QuietButton } from '../Buttons';
+import styles from './MadeApps.module.css';
 import { confirmThen } from '../../confirm';
+import { Info } from '@minca/app-shared/Info';
 
 /**
  * The blueprint a proposed app points at, if any, and what applying it would
@@ -68,16 +68,16 @@ export function Proposals({
 }) {
   if (proposals.length === 0) return null;
   return (
-    <section aria-label="Proposed apps" style={stack(10)}>
-      <div>
-        <h2 style={styles.sectionTitle}>Proposed</h2>
-        <p style={{ ...styles.quiet, marginTop: 2 }}>
+    <section aria-label="Proposed apps">
+      <h2>
+        Proposed
+        <Info label="About proposed apps">
           Apps someone, or their agent, made for this space. Nothing changes until someone who can add
           collections adds one. What each allows is worked out from its rules, not from what its author says
           about it.
-        </p>
-      </div>
-      <div style={stack(8)}>
+        </Info>
+      </h2>
+      <div className="stack">
         {proposals.map((record) => (
           <Proposal
             key={record.key}
@@ -166,61 +166,59 @@ function Proposal({
   ];
 
   return (
-    <article style={{ ...tile, gap: 12 }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-        <div style={{ minWidth: 0 }}>
-          <strong style={{ ...tileTitle, fontSize: 15 }}>
-            {body?.title ?? 'An app that could not be read'}
-          </strong>
-          <p style={{ ...styles.faint, marginTop: 2 }}>
-            {wasAdded ? 'Changed by' : 'Proposed by'} <Person did={by} />
-            {record.recordsOnly && <AgentBadge />} · {ago(record.updatedAt)}
-            {plan?.from && ' · copied from another space'}
-            {replaces?.body && ` · an update to ${replaces.body.title}`}
-            {body?.updates !== undefined &&
-              !replaces &&
-              ' · an update to an app no longer here; adding it adds it as its own'}
+    <article>
+      <header>
+        <div>
+          <strong>{body?.title ?? 'An app that could not be read'}</strong>
+          <p>
+            <small>
+              {wasAdded ? 'Changed by' : 'Proposed by'} <Person did={by} />
+              {record.recordsOnly && <AgentBadge />} · {ago(record.updatedAt)}
+              {plan?.from && ' · copied from another space'}
+              {replaces?.body && ` · an update to ${replaces.body.title}`}
+              {body?.updates !== undefined &&
+                !replaces &&
+                ' · an update to an app no longer here; adding it adds it as its own'}
+            </small>
           </p>
         </div>
-        <div style={{ ...hstack(6), flexShrink: 0 }}>
-          {mine && (
-            <QuietButton onClick={remove} disabled={busy} style={{ height: 28 }}>
-              Withdraw
-            </QuietButton>
-          )}
-          {mayDefine && !mine && (
-            <QuietButton onClick={remove} disabled={busy} style={{ height: 28 }}>
-              Decline
-            </QuietButton>
-          )}
-          {mayDefine && body && !problem && (
-            <button
-              onClick={() => void add()}
-              disabled={busy}
-              data-variant="primary"
-              style={{ ...styles.darkSmall, height: 28 }}
-              aria-label={`Add ${body?.title}`}
-            >
-              {busy ? 'Adding…' : 'Add'}
-            </button>
-          )}
-        </div>
+        {mine && (
+          <button type="button" data-intent="ghost" onClick={remove} disabled={busy}>
+            Withdraw
+          </button>
+        )}
+        {mayDefine && !mine && (
+          <button type="button" data-intent="ghost" onClick={remove} disabled={busy}>
+            Decline
+          </button>
+        )}
+        {mayDefine && body && !problem && (
+          <button
+            type="button"
+            data-intent="primary"
+            onClick={() => void add()}
+            disabled={busy}
+            aria-label={`Add ${body?.title}`}
+          >
+            {busy ? 'Adding…' : 'Add'}
+          </button>
+        )}
       </header>
 
       {body?.description && (
-        <p style={{ ...styles.quiet, lineHeight: 1.5 }}>
-          <span style={{ color: palette.ink.faint }}>What they say it's for: </span>“{body.description}”
+        <p>
+          <small>What they say it's for: </small>“{body.description}”
         </p>
       )}
 
-      {problem && <p style={styles.error}>This can't be added: {problem}</p>}
+      {problem && <p role="alert">This can't be added: {problem}</p>}
 
       {body?.screen && <ScreenNote screen={body.screen} network={body.network ?? []} />}
 
       {!problem && reviewed.length > 0 && (
         <>
           {changes.length > 0 && (
-            <p style={{ ...styles.dangerText, lineHeight: 1.5 }}>
+            <p role="alert">
               It changes{' '}
               {changes
                 .map(
@@ -240,7 +238,7 @@ function Proposal({
           )}
           {body?.shows?.length ? (
             // What opens here is what it learns the person opens, from anywhere in the space.
-            <p style={{ ...styles.quiet, lineHeight: 1.5 }}>
+            <p>
               {body.shows
                 .map((name) => {
                   // `std.list:tab`: the lists of one kind
@@ -252,52 +250,30 @@ function Proposal({
               opened anywhere in {space.name} can open here.
             </p>
           ) : null}
-          <LinkButton
-            onClick={() => setOpen((was) => !was)}
-            style={{ alignSelf: 'flex-start', padding: 0, fontSize: 13 }}
-          >
+          <button type="button" data-intent="inline" onClick={() => setOpen((was) => !was)}>
             {open
               ? 'Hide what it allows'
               : `What it allows (${reviewed.length} ${reviewed.length === 1 ? 'collection' : 'collections'})`}
-          </LinkButton>
+          </button>
           {open && (
-            <ul
-              style={{
-                listStyle: 'none',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 12,
-                paddingTop: 10,
-                borderTop: `1px solid ${palette.surface.line}`,
-              }}
-            >
+            <ul role="list">
               {reviewed.map((need) => (
-                <li key={need.definition.name} style={stack(4)}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 13 }}>
-                    <span style={{ color: palette.ink.strong, fontWeight: 500 }}>
-                      {need.definition.title ?? need.definition.name}{' '}
-                      <code style={{ fontSize: 11, color: palette.ink.faint }}>{need.definition.name}</code>
-                    </span>
-                    <span
-                      style={{
-                        fontSize: 12,
-                        whiteSpace: 'nowrap',
-                        color:
-                          need.status === 'change'
-                            ? palette.accent.danger
-                            : need.status === 'same'
-                              ? palette.accent.good
-                              : palette.ink.faint,
-                      }}
+                <li key={need.definition.name} className="stack" data-gap="tight">
+                  <div className="row" data-spread>
+                    <strong>
+                      {need.definition.title ?? need.definition.name} <code>{need.definition.name}</code>
+                    </strong>
+                    <small
+                      data-tone={
+                        need.status === 'same' ? 'good' : need.status === 'change' ? 'danger' : undefined
+                      }
                     >
                       {need.status === 'new' ? 'new' : need.status === 'same' ? 'already here' : 'changes it'}
-                    </span>
+                    </small>
                   </div>
-                  <ul style={{ margin: 0, paddingLeft: 18, ...stack(2) }}>
+                  <ul>
                     {need.summary.map((sentence) => (
-                      <li key={sentence} style={{ fontSize: 13, color: palette.ink.body, lineHeight: 1.45 }}>
-                        {sentence}
-                      </li>
+                      <li key={sentence}>{sentence}</li>
                     ))}
                   </ul>
                 </li>
@@ -307,10 +283,8 @@ function Proposal({
         </>
       )}
 
-      {!mayDefine && !problem && (
-        <p style={styles.faint}>Someone whose role lets them add collections can add it.</p>
-      )}
-      {error && <p style={styles.error}>{error}</p>}
+      {!mayDefine && !problem && <small>Someone whose role lets them add collections can add it.</small>}
+      {error && <p role="alert">{error}</p>}
     </article>
   );
 }
@@ -324,26 +298,16 @@ function ScreenNote({ screen, network }: { screen: string; network: ReadonlyArra
   const [open, setOpen] = useState(false);
   const kb = Math.max(1, Math.round(new TextEncoder().encode(screen).length / 1024));
   return (
-    <div
-      style={{
-        ...stack(6),
-        padding: '10px 12px',
-        background: palette.surface.sunken,
-        borderRadius: palette.radius.lg,
-      }}
-    >
-      <p style={{ fontSize: 13, color: palette.ink.body, lineHeight: 1.5 }}>
-        <strong style={{ color: palette.ink.strong }}>It brings its own screen</strong> ({kb} KB of code). It
-        runs sealed: it can read and change only this app's records, in this space, as whoever is looking —
-        under the rules below.{' '}
+    <aside className="stack">
+      <p>
+        <strong>It brings its own screen</strong> ({kb} KB of code). It runs sealed: it can read and change
+        only this app's records, in this space, as whoever is looking — under the rules below.{' '}
         {network.length ? (
           <>
             It can also connect to{' '}
-            <strong style={{ color: palette.ink.strong }}>
-              {network.map((origin) => origin.replace(/^[a-z]+:\/\//, '')).join(', ')}
-            </strong>
-            , and send there anything the person looking can see in it. Adding it allows that for everyone
-            here; nothing else on the internet is reachable.
+            <strong>{network.map((origin) => origin.replace(/^[a-z]+:\/\//, '')).join(', ')}</strong>, and
+            send there anything the person looking can see in it. Adding it allows that for everyone here;
+            nothing else on the internet is reachable.
           </>
         ) : (
           <>It can't reach the internet or anything else in the app.</>
@@ -351,32 +315,11 @@ function ScreenNote({ screen, network }: { screen: string; network: ReadonlyArra
         The rules below can't vouch for what the screen shows, so add it only if you trust whoever proposed
         it.
       </p>
-      <LinkButton
-        onClick={() => setOpen((was) => !was)}
-        style={{ alignSelf: 'flex-start', padding: 0, fontSize: 13 }}
-      >
+      <button type="button" data-intent="inline" onClick={() => setOpen((was) => !was)}>
         {open ? 'Hide the code' : 'Show the code'}
-      </LinkButton>
-      {open && (
-        <pre
-          style={{
-            maxHeight: 280,
-            overflow: 'auto',
-            margin: 0,
-            padding: 10,
-            fontSize: 11,
-            lineHeight: 1.45,
-            background: palette.surface.card,
-            border: `1px solid ${palette.surface.line}`,
-            borderRadius: palette.radius.md,
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-          }}
-        >
-          {screen}
-        </pre>
-      )}
-    </div>
+      </button>
+      {open && <pre className={styles.code}>{screen}</pre>}
+    </aside>
   );
 }
 
@@ -384,15 +327,8 @@ function ScreenNote({ screen, network }: { screen: string; network: ReadonlyArra
 function AgentBadge() {
   return (
     <span
+      className="tag"
       title="An agent wrote this for them. Their account said so when it let the agent in."
-      style={{
-        marginLeft: 6,
-        padding: '1px 6px',
-        borderRadius: palette.radius.pill,
-        border: `1px solid ${palette.surface.line}`,
-        fontSize: 11,
-        color: palette.ink.muted,
-      }}
     >
       via agent
     </span>
@@ -426,10 +362,7 @@ export function MadeAppScreen({
   const screen = body.screen;
 
   return (
-    <section
-      aria-label={body.title}
-      style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1, minHeight: 0 }}
-    >
+    <section aria-label={body.title} className={styles.app}>
       {isDirect(body) ? (
         <DirectMessages space={space} shown={shown} onShown={onShown} view={view ?? null} onGo={onGo} />
       ) : screen ? (
@@ -450,22 +383,10 @@ export function MadeAppScreen({
         />
       ) : (
         // The app fills the window edge to edge, so the lists bring their own margin and scroll.
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '20px 24px' }}>
+        <div className={styles.board}>
           <AppBoard space={space} names={names} collections={collections} onOpen={onOpen} />
         </div>
       )}
     </section>
   );
 }
-
-/** A proposal, as a card in the list of them */
-const tile = {
-  ...styles.tile,
-  display: 'flex',
-  flexDirection: 'column' as const,
-  gap: 8,
-  padding: 14,
-  font: 'inherit',
-  color: 'inherit',
-};
-const tileTitle = { fontSize: 14, fontWeight: 600, color: palette.ink.strong };

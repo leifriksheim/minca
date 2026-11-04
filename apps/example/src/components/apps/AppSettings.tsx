@@ -4,8 +4,6 @@ import { useNode } from '@minca/react';
 import { useAction } from '@minca/app-shared/action';
 import { Modal } from '@minca/app-shared/Modal';
 import { saveSettings, type LauncherApp } from './launcher';
-import { styles } from '../../styles';
-import { PrimaryButton } from '../Buttons';
 
 /**
  * An app's settings, for someone who may add apps: what the app asks for, like
@@ -40,31 +38,27 @@ export function AppSettings({
           event.preventDefault();
           void save();
         }}
-        style={styles.form}
+        className="stack"
+        data-gap="loose"
       >
-        <p style={{ ...styles.hint, marginBottom: 8 }}>
-          What you fill in here is for everyone in {space.name}: they won't be asked.
-        </p>
+        <small>What you fill in here is for everyone in {space.name}: they won't be asked.</small>
         {settings.map((setting) => (
-          <label key={setting.key} style={{ display: 'block', marginBottom: 8 }}>
-            <span style={{ ...styles.fieldLabel, display: 'block' }}>{setting.title}</span>
+          <label key={setting.key}>
+            {setting.title}
             <input
               type="text"
               value={values[setting.key] ?? ''}
               onChange={(event) => setValues((was) => ({ ...was, [setting.key]: event.target.value }))}
-              style={styles.input}
               spellCheck={false}
               autoComplete="off"
             />
-            {setting.description && (
-              <span style={{ ...styles.errorHint, display: 'block' }}>{setting.description}</span>
-            )}
+            {setting.description && <small>{setting.description}</small>}
           </label>
         ))}
-        {error && <p style={styles.error}>{error}</p>}
-        <PrimaryButton type="submit" disabled={busy}>
+        {error && <p role="alert">{error}</p>}
+        <button type="submit" data-intent="primary" disabled={busy}>
           {busy ? 'Saving…' : 'Save'}
-        </PrimaryButton>
+        </button>
       </form>
     </Modal>
   );

@@ -1,15 +1,12 @@
+import '@minca/ui/minca.css';
+import './app.css';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider } from '@tanstack/react-router';
-import { injectBaseStyles } from './styles';
 import { exposeToAgents } from './webmcp';
 import { MincaProvider } from '@minca/react';
 import { connection } from './minca';
 import { tellDesktop } from './desktop';
 import { router } from './router';
-
-// Hover, focus and placeholder states, plus the page background — the things
-// inline styles cannot express.
-injectBaseStyles();
 
 // The node's operations as WebMCP tools, from the start — agents and
 // extensions read the list on load. They act for whoever signs in.

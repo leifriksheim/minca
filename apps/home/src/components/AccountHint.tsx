@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { useMinca } from '@minca/react';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { wantedAccount } from '../minca';
-import { palette, styles, hstack } from '../styles';
 
 /**
  * Which account the app that opened this page acts for, when it is not the one
@@ -37,51 +36,43 @@ export function AccountHint() {
   if (!wanted) {
     if (session ? stage !== 'ready' : stage !== 'signIn' && stage !== 'welcome') return null;
     return (
-      <div style={{ ...hstack(10), alignItems: 'center', marginBottom: 16 }}>
+      <aside className="row">
         <Avatar did={wantedAccount} size={28} />
-        <p style={{ ...styles.errorHint, margin: 0, flex: 1 }}>
-          The app you came from uses an account that isn't in this browser. If you don't recognise it, ignore
-          this.
+        <p>
+          <small>
+            The app you came from uses an account that isn't in this browser. If you don't recognise it,
+            ignore this.
+          </small>
         </p>
-        <button onClick={() => setDismissed(true)} data-variant="quiet" style={styles.smallButton}>
-          OK
-        </button>
-      </div>
+        <button onClick={() => setDismissed(true)}>OK</button>
+      </aside>
     );
   }
 
   // Signed in as someone else.
   if (session && stage === 'ready') {
     return (
-      <div style={{ ...styles.panel, marginTop: 0, marginBottom: 16 }}>
-        <div style={{ ...styles.panelBody, paddingTop: 14, ...hstack(12) }}>
-          <Avatar did={wantedAccount} size={32} />
-          <div style={{ flex: 1 }}>
-            <p style={{ ...styles.ok, color: palette.ink.strong }}>
-              The app you came from uses {wanted.name}. You're signed in as {session.account.name}.
-            </p>
-            <p style={styles.errorHint}>
-              What you change here is for {session.account.name}, not the app's account.
-            </p>
-            <div style={{ ...styles.linkRow, gap: 8 }}>
-              <button
-                onClick={() => {
-                  picking.current = true;
-                  void auth.signOut();
-                }}
-                disabled={state.busy}
-                data-variant="quiet"
-                style={styles.smallButton}
-              >
-                Switch to {wanted.name}
-              </button>
-              <button onClick={() => setDismissed(true)} data-variant="quiet" style={styles.smallButton}>
-                Stay as {session.account.name}
-              </button>
-            </div>
+      <article className="row" data-gap="loose">
+        <Avatar did={wantedAccount} size={32} />
+        <div className="stack">
+          <strong>
+            The app you came from uses {wanted.name}. You're signed in as {session.account.name}.
+          </strong>
+          <small>What you change here is for {session.account.name}, not the app's account.</small>
+          <div className="row">
+            <button
+              onClick={() => {
+                picking.current = true;
+                void auth.signOut();
+              }}
+              disabled={state.busy}
+            >
+              Switch to {wanted.name}
+            </button>
+            <button onClick={() => setDismissed(true)}>Stay as {session.account.name}</button>
           </div>
         </div>
-      </div>
+      </article>
     );
   }
   return null;

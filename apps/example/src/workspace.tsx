@@ -3,7 +3,6 @@ import type { NewSpace, SpaceSummary } from '@minca/core';
 import type { PairWith } from './contacts';
 import { InviteBanner } from './components/InviteBanner';
 import { RelayNotice } from './components/RelayNotice';
-import { styles } from './styles';
 
 /** Your spaces, and what to do with them, for every page under `App` */
 export interface Workspace {
@@ -52,9 +51,9 @@ export function Notices({ inSpace = false }: { inSpace?: boolean }) {
     <>
       {/* At home the list of spaces shows the error itself. */}
       {inSpace && error && (
-        <div style={{ ...styles.errorBox, marginTop: 0, marginBottom: 16 }}>
-          <p style={styles.error}>{error}</p>
-        </div>
+        <aside data-tone="danger" role="alert">
+          {error}
+        </aside>
       )}
       <InviteBanner
         onJoin={(link) =>

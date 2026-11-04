@@ -1,0 +1,12 @@
+/* The page an app opens: a narrow column under Minca's mark */
+.frame {
+  max-width: 420px;
+  gap: var(--space-loose);
+}
+
+/* The six digits a program needs, in two groups */
+.check {
+  display: block;
+  font: 600 1.75rem var(--font-mono);
+  letter-spacing: 0.12em;
+}

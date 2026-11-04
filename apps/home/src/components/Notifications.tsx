@@ -4,7 +4,6 @@ import { message, useAction } from '@minca/app-shared/action';
 import { Shape } from '@minca/app-shared/shapes';
 import { Toggle } from '@minca/app-shared/Toggle';
 import { shapeFor } from '@minca/ui/shapes';
-import { styles, palette, stack } from '../styles';
 
 /**
  * "Notify me when…": what apps asked to let you know about, and you allowed.
@@ -51,38 +50,34 @@ export function Notifications({ node }: { node: P2PNode }) {
   }, [subscriptions]);
 
   return (
-    <section id="notifications" className="surface" style={styles.settingsSection}>
-      <div>
-        <h2 style={styles.sectionHeading}>Notify me when…</h2>
-        <p style={styles.sectionText}>
-          What apps asked to tell you about, and you allowed. Switch one off to pause it.
-        </p>
+    <article id="notifications">
+      <div className="stack" data-gap="tight">
+        <h2>Notify me when…</h2>
+        <small>What apps asked to tell you about, and you allowed. Switch one off to pause it.</small>
       </div>
 
       {subscriptions?.length === 0 && (
-        <p style={styles.errorHint}>Nothing yet. An app asks first, when you turn its notifications on.</p>
+        <small>Nothing yet. An app asks first, when you turn its notifications on.</small>
       )}
 
       {groups.map(([app, subs]) => (
-        <div key={app?.origin ?? ''} style={stack(8)}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div key={app?.origin ?? ''} className="stack">
+          <div className="row">
             <Shape {...shapeFor(app?.origin ?? 'here')} size={24} />
-            <strong style={{ fontSize: 14, color: palette.ink.strong }}>
-              {app ? (app.name ?? new URL(app.origin).host) : 'Made here before'}
-            </strong>
-            {app?.name && <span style={styles.faint}>{new URL(app.origin).host}</span>}
+            <strong>{app ? (app.name ?? new URL(app.origin).host) : 'Made here before'}</strong>
+            {app?.name && <small>{new URL(app.origin).host}</small>}
           </div>
-          <ul className="rows" style={styles.list}>
+          <ul role="list">
             {subs.map((sub) => (
-              <li key={sub.id} style={row}>
-                <span style={{ ...stack(1), flex: 1, minWidth: 0, opacity: sub.paused ? 0.55 : 1 }}>
-                  <span style={{ fontSize: 14, fontWeight: 500, color: palette.ink.strong }}>{sub.name}</span>
-                  <span style={styles.faint}>
+              <li key={sub.id} className="row">
+                <span className="stack truncate" data-gap="tight">
+                  <strong>{sub.name}</strong>
+                  <small>
                     {(sub.spaces ?? 'all') === 'all'
                       ? 'Every space'
                       : [...(sub.spaces ?? [])].map(spaceName).join(', ')}
                     {sub.paused ? ' · Paused' : ''}
-                  </span>
+                  </small>
                 </span>
                 <Toggle
                   on={!sub.paused}
@@ -100,9 +95,8 @@ export function Notifications({ node }: { node: P2PNode }) {
                   disabled={busy !== null}
                   aria-label={`Remove ${sub.name}`}
                   title="Remove"
-                  data-variant="ghost"
-                  data-round
-                  style={remove}
+                  data-intent="ghost"
+                  data-icon
                 >
                   ×
                 </button>
@@ -112,21 +106,7 @@ export function Notifications({ node }: { node: P2PNode }) {
         </div>
       ))}
 
-      {error && <p style={{ ...styles.errorHint, color: palette.accent.danger }}>{error}</p>}
-    </section>
+      {error && <p role="alert">{error}</p>}
+    </article>
   );
 }
-
-const row = { display: 'flex', alignItems: 'center', gap: 12, padding: '10px 10px 10px 14px' } as const;
-
-/** Taking one away for good: a quiet × beside its switch */
-const remove = {
-  ...styles.smallButton,
-  border: 'none',
-  background: 'none',
-  width: 30,
-  height: 30,
-  minHeight: 30,
-  fontSize: 16,
-  color: palette.ink.muted,
-} as const;

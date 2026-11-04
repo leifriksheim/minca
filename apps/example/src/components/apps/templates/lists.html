@@ -1,135 +1,4 @@
 <!-- Lists: simple lists anyone in the space can tick and add to, on std.list and std.list-item. Each item is a record of its own, ordered by position, so two people adding or ticking at once never undo each other. The lists come first; one opens one level in (minca.go), so the app's bar names it and its Back comes back out. -->
-<style>
-  .wrap {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    padding-bottom: 48px;
-  }
-  .rows {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    overflow: hidden;
-    background: var(--minca-card);
-    border: 1px solid var(--minca-rule);
-    border-radius: var(--minca-radius-lg);
-  }
-  .rows > li + li {
-    border-top: 1px solid var(--minca-line);
-  }
-  .open {
-    width: 100%;
-    min-height: 60px;
-    justify-content: flex-start;
-    gap: 12px;
-    padding: 10px 14px 10px 16px;
-    border: none;
-    border-radius: 0;
-    background: none;
-    font-weight: 400;
-    text-align: left;
-  }
-  .open:hover {
-    background: var(--minca-sunken);
-  }
-  .open b {
-    display: block;
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--minca-ink);
-  }
-  .chevron {
-    margin-left: auto;
-    flex-shrink: 0;
-    color: var(--minca-faint);
-  }
-  .item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    min-height: 52px;
-    padding: 6px 8px 6px 16px;
-  }
-  .tick {
-    width: 24px;
-    height: 24px;
-    min-height: 0;
-    flex-shrink: 0;
-    padding: 0;
-    border: 1.5px solid var(--minca-line-strong);
-    border-radius: 50%;
-    background: none;
-    color: var(--minca-inverse);
-  }
-  .tick:hover {
-    border-color: var(--minca-accent);
-    background: none;
-  }
-  .tick[aria-checked='true'] {
-    border-color: var(--minca-accent);
-    background: var(--minca-accent);
-  }
-  .text {
-    flex: 1;
-    min-width: 0;
-    min-height: 36px;
-    justify-content: flex-start;
-    padding: 0;
-    border: none;
-    border-radius: 0;
-    background: none;
-    color: var(--minca-ink);
-    font-size: 15px;
-    font-weight: 400;
-    line-height: 1.4;
-    text-align: left;
-    white-space: normal;
-    overflow-wrap: anywhere;
-  }
-  .text:hover {
-    background: none;
-  }
-  .item[data-done='true'] .text {
-    color: var(--minca-faint);
-    text-decoration: line-through;
-  }
-  .item input {
-    flex: 1;
-    min-width: 0;
-    min-height: 36px;
-    padding: 0;
-    border: none;
-    border-radius: 0;
-    background: none;
-    font-size: 15px;
-  }
-  .item input:focus {
-    outline: none;
-  }
-  .plus {
-    width: 24px;
-    height: 24px;
-    flex-shrink: 0;
-    display: grid;
-    place-items: center;
-    color: var(--minca-muted);
-    font-size: 20px;
-    line-height: 1;
-  }
-  .head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    min-height: 32px;
-    padding: 0 4px;
-  }
-  .foot {
-    display: flex;
-    justify-content: center;
-    gap: 8px;
-  }
-</style>
 <script>
   const {
     html,
@@ -144,6 +13,7 @@
     Empty,
     positionBetween,
   } = ui;
+  const { Icon } = ui;
   const LIST = 'std.list';
   const ITEM = 'std.list-item';
   /** The kinds of std.list this app shows: other apps keep lists too, like the categories of files */
@@ -181,9 +51,9 @@
     // opens here from elsewhere too.
     const open = view && lists.find((l) => l.key === view && l.body);
     if (view && !open)
-      return html`<div class="wrap">
+      return html`<main>
         <${Empty} shape="tick" colour="peach" title="This list is gone" text="Someone deleted it." />
-      </div>`;
+      </main>`;
     return open
       ? html`<${List} key=${open.key} list=${open} items=${itemsOf(open.key)} go=${go} />`
       : html`<${Lists} lists=${mine} itemsOf=${itemsOf} go=${go} />`;
@@ -199,27 +69,22 @@
       const made = await minca.put(LIST, { title, kind: 'checklist' });
       go(made.key, title);
     };
-    return html`<div class="wrap">
+    return html`<main>
       ${sorted.length === 0 && html`<${Empty} shape="tick" colour="peach" title="No lists yet" text="Start one for groceries, packing or the week." />`}
-      <ul class="rows" aria-label="Lists">
+      <ul role="list" aria-label="Lists">
         ${sorted.map((list) => {
           const all = itemsOf(list.key);
           const left = all.filter((i) => !i.body.checked).length;
           return html`<li key=${list.key}>
-            <button class="open" onClick=${() => go(list.key, titleOf(list))}>
-              <span class="ellipsis" style="min-width: 0">
-                <b class="ellipsis">${list.body.icon ? `${list.body.icon} ` : ''}${titleOf(list)}</b>
-                <span class="faint"
-                  >${all.length === 0 ? 'Empty' : left === 0 ? 'All done' : `${left} left`}</span
-                >
-              </span>
-              <span class="chevron" aria-hidden="true">›</span>
+            <button data-intent="open" onClick=${() => go(list.key, titleOf(list))}>
+              <strong class="truncate">${list.body.icon ? `${list.body.icon} ` : ''}${titleOf(list)}</strong>
+              <small>${all.length === 0 ? 'Empty' : left === 0 ? 'All done' : `${left} left`}</small>
             </button>
           </li>`;
         })}
         ${mayCreate && html`<li><${AddRow} placeholder="New list" onAdd=${create} keep=${false} /></li>`}
       </ul>
-    </div>`;
+    </main>`;
   }
 
   /** One list: what is left, a row to add to it, then what is done */
@@ -247,10 +112,10 @@
       go(null);
     };
 
-    return html`<div class="wrap">
+    return html`<main>
       ${
         renaming &&
-        html`<ul class="rows">
+        html`<ul role="list">
           <li>
             <${AddRow}
               placeholder="Name"
@@ -265,36 +130,38 @@
           </li>
         </ul>`
       }
-      <ul class="rows" aria-label="To do">
+      <ul role="list" aria-label="To do">
         ${todo.map((item) => html`<${Item} key=${item.key} item=${item} />`)}
         ${mayAdd && html`<li><${AddRow} placeholder="Add an item" onAdd=${add} keep=${true} /></li>`}
-        ${!mayAdd && todo.length === 0 && html`<li class="item faint">Nothing left to do.</li>`}
+        ${!mayAdd && todo.length === 0 && html`<li><small>Nothing left to do.</small></li>`}
       </ul>
       ${
         done.length > 0 &&
-        html`<div class="head">
-            <span class="label">Done · ${done.length}</span>
-            ${mayAdd && html`<button data-variant="ghost" onClick=${() => Promise.allSettled(done.map((i) => minca.remove(i.key)))}>Clear</button>`}
-          </div>
-          <ul class="rows" aria-label="Done">
+        html`<section>
+          <header>
+            <h2>Done <span class="tag">${done.length}</span></h2>
+            ${mayAdd && html`<button data-intent="ghost" onClick=${() => Promise.allSettled(done.map((i) => minca.remove(i.key)))}>Clear</button>`}
+          </header>
+          <ul role="list" aria-label="Done">
             ${done.map((item) => html`<${Item} key=${item.key} item=${item} />`)}
-          </ul>`
+          </ul>
+        </section>`
       }
-      <div class="foot">
-        ${mayRename && !renaming && html`<button data-variant="ghost" onClick=${() => setRenaming(true)}>Rename</button>`}
+      <div class="row" data-gap="tight">
+        ${mayRename && !renaming && html`<button data-intent="ghost" onClick=${() => setRenaming(true)}>Rename</button>`}
         ${
           mayDelete &&
           (deleting
-            ? html`<button data-variant="danger" onClick=${removeList}>Delete for everyone</button>
-                <button data-variant="ghost" onClick=${() => setDeleting(false)}>Keep it</button>`
-            : html`<button data-variant="ghost" onClick=${() => setDeleting(true)}>Delete list</button>`)
+            ? html`<button data-intent="danger" onClick=${removeList}>Delete for everyone</button>
+                <button data-intent="ghost" onClick=${() => setDeleting(false)}>Keep it</button>`
+            : html`<button data-intent="ghost" onClick=${() => setDeleting(true)}>Delete list</button>`)
         }
       </div>
-    </div>`;
+    </main>`;
   }
 
   /**
-   * One item: a circle to tick it, and its text, which a tap turns into a field. Enter or leaving it
+   * One item: a box to tick it, and its text, which a tap turns into a field. Enter or leaving it
    * saves, Escape keeps what was there, and an empty item goes. What someone else changes shows,
    * except in the one being typed in.
    */
@@ -313,51 +180,50 @@
       if (!text) return minca.remove(item.key);
       if (text !== textOf(item)) await minca.update(item.key, { ...item.body, text });
     };
-    return html`<li class="item" data-done=${checked}>
-      <button
-        class="tick"
-        role="checkbox"
-        aria-checked=${checked}
-        aria-label=${checked ? 'Not done' : 'Done'}
-        disabled=${!mayEdit}
-        onClick=${() => minca.update(item.key, { ...item.body, checked: !checked })}
-      >
-        ${checked && html`<svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5 6.5 12 13 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></svg>`}
-      </button>
-      ${
-        draft === null
-          ? html`<button class="text" disabled=${!mayEdit} onClick=${() => setDraft(textOf(item))}>
-              ${textOf(item) || ' '}
-            </button>`
-          : html`<input
-                ref=${field}
-                value=${draft}
-                aria-label="Item"
-                maxlength="1000"
-                onInput=${(e) => setDraft(e.currentTarget.value)}
-                onBlur=${save}
-                onKeyDown=${(e) => {
-                  if (e.key === 'Enter') e.currentTarget.blur();
-                  if (e.key === 'Escape') setDraft(null);
-                }}
-              />
-              <button
-                data-variant="ghost"
-                data-icon
-                aria-label="Delete item"
-                onPointerDown=${(e) => e.preventDefault()}
-                onClick=${() => {
-                  setDraft(null);
-                  minca.remove(item.key);
-                }}
-              >
-                ×
+    return html`<li>
+      <label>
+        <input
+          type="checkbox"
+          checked=${checked}
+          aria-label=${checked ? 'Not done' : 'Done'}
+          disabled=${!mayEdit}
+          onChange=${() => minca.update(item.key, { ...item.body, checked: !checked })}
+        />
+        ${
+          draft === null
+            ? html`<button data-intent="open" disabled=${!mayEdit} onClick=${() => setDraft(textOf(item))}>
+                ${checked ? html`<s>${textOf(item)}</s>` : textOf(item) || ' '}
               </button>`
-      }
+            : html`<input
+                  ref=${field}
+                  value=${draft}
+                  aria-label="Item"
+                  maxlength="1000"
+                  onInput=${(e) => setDraft(e.currentTarget.value)}
+                  onBlur=${save}
+                  onKeyDown=${(e) => {
+                    if (e.key === 'Enter') e.currentTarget.blur();
+                    if (e.key === 'Escape') setDraft(null);
+                  }}
+                />
+                <button
+                  data-intent="ghost"
+                  data-icon
+                  aria-label="Delete item"
+                  onPointerDown=${(e) => e.preventDefault()}
+                  onClick=${() => {
+                    setDraft(null);
+                    minca.remove(item.key);
+                  }}
+                >
+                  <${Icon} name="close" />
+                </button>`
+        }
+      </label>
     </li>`;
   }
 
-  /** A row to type something new into: Enter adds it, and with `keep` the field stays for the next */
+  /** A row to type something new into: Enter adds it (no button, so the row never changes size), and with `keep` the field stays for the next */
   function AddRow({ placeholder, onAdd, keep, initial = '', onCancel }) {
     const [text, setText] = useState(initial);
     const [busy, setBusy] = useState(false);
@@ -373,13 +239,13 @@
       }
     };
     return html`<form
-      class="item"
+      class="row"
       onSubmit=${(e) => {
         e.preventDefault();
         submit();
       }}
     >
-      <span class="plus" aria-hidden="true">+</span>
+      <${Icon} name="plus" />
       <input
         value=${text}
         placeholder=${placeholder}
@@ -390,7 +256,6 @@
         onInput=${(e) => setText(e.currentTarget.value)}
         onKeyDown=${(e) => e.key === 'Escape' && onCancel?.()}
       />
-      ${text.trim() && html`<button type="submit" data-variant="primary" disabled=${busy}>${keep ? 'Add' : 'Save'}</button>`}
     </form>`;
   }
 

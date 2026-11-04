@@ -1,5 +1,5 @@
 import { MARK_BANDS, MARK_VIEWBOX } from './mark';
-import { display, ink } from '@minca/ui/tokens';
+import styles from './Wordmark.module.css';
 
 /**
  * Minca's mark and wordmark. A minca (minka, in the Andes) is when everyone
@@ -17,22 +17,12 @@ export function Mark({ size = 26 }: { size?: number }) {
   );
 }
 
-/** The product's name, small, above every onboarding step */
-export function Wordmark({ compact = false }: { compact?: boolean }) {
+/** The product's name, small, above every onboarding step. `compact` is no longer different. */
+export function Wordmark(_props: { compact?: boolean }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: compact ? 0 : 40 }}>
+    <div className={styles.wordmark}>
       <Mark size={24} />
-      <span
-        style={{
-          fontFamily: display,
-          fontWeight: 800,
-          fontSize: 18,
-          letterSpacing: '-0.05em',
-          color: ink.strong,
-        }}
-      >
-        minca
-      </span>
+      <span>minca</span>
     </div>
   );
 }

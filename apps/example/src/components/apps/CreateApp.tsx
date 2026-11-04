@@ -1,12 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { SpaceSummary } from '@minca/core';
 import { Loader } from '@minca/app-shared/Loader';
-import { ConnectAgent, stepText } from '../ConnectAgent';
+import { ConnectAgent } from '../ConnectAgent';
 import { useNode } from '@minca/react';
 import { useLauncherRecords } from './entries';
 import { checkLauncherApp, prepareLauncher } from './launcher';
-import { styles, palette, stack } from '../../styles';
-import { LinkButton, PrimaryButton } from '../Buttons';
 
 const TITLE = 'Add your own app';
 
@@ -79,59 +77,38 @@ function AskForApp({
 
   return (
     <>
-      <p style={stepText}>
+      <p>
         In a new chat with your agent, say what {space.name} should have, or what to change in an app it has.
         For example:
       </p>
-      <p style={example}>
-        “In Minca, add a potluck sign-up to {space.name}, where everyone says what they bring.”
-      </p>
+      <aside>“In Minca, add a potluck sign-up to {space.name}, where everyone says what they bring.”</aside>
 
       {proposed ? (
-        <div style={{ ...styles.note, ...stack(4), padding: '12px 14px' }}>
-          <p style={{ fontSize: 14, fontWeight: 600, color: palette.ink.strong }}>
-            <span style={{ color: palette.accent.good }}>✓</span> Your agent proposed “{proposed.title}”
-          </p>
+        <aside className="stack" data-tone="good">
+          <strong>✓ Your agent proposed “{proposed.title}”</strong>
           {problem ? (
-            <p style={styles.error}>It can't be added yet; ask your agent to fix it: {problem}</p>
+            <p role="alert">It can't be added yet; ask your agent to fix it: {problem}</p>
           ) : (
-            <p style={{ fontSize: 13, color: palette.ink.body }}>
+            <p>
               Nothing changes in {space.name} until {adds}.
             </p>
           )}
-          <PrimaryButton
-            type="button"
-            onClick={onReview}
-            style={{ alignSelf: 'flex-start', width: 'auto', padding: '0 18px', marginTop: 6 }}
-          >
+          <button type="button" data-intent="primary" onClick={onReview}>
             Review it
-          </PrimaryButton>
-        </div>
+          </button>
+        </aside>
       ) : (
-        <p style={{ ...stepText, color: palette.ink.muted, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <small className="row">
           <Loader size={10} decorative /> Its proposal shows here. Nothing changes in {space.name} until{' '}
           {adds}.
-        </p>
+        </small>
       )}
 
       {onBuildByHand && (
-        <LinkButton
-          type="button"
-          onClick={onBuildByHand}
-          style={{ fontSize: 13, padding: 0, alignSelf: 'flex-start' }}
-        >
+        <button type="button" data-intent="ghost" onClick={onBuildByHand}>
           Or build one by hand
-        </LinkButton>
+        </button>
       )}
     </>
   );
 }
-
-const example = {
-  padding: '10px 14px',
-  borderRadius: palette.radius.md,
-  background: palette.surface.sunken,
-  fontSize: 14,
-  lineHeight: 1.5,
-  color: palette.ink.strong,
-} as const;

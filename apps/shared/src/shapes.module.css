@@ -1,0 +1,9 @@
+/* A shape keeps its size beside text, and may turn past its box; a morph's colour melts as long as MELT_MS. */
+.shape {
+  flex-shrink: 0;
+  overflow: visible;
+
+  & path {
+    transition: fill 900ms ease;
+  }
+}

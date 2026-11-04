@@ -3,7 +3,6 @@ import { describeHost, type HostDescription } from '@minca/core';
 import { DEFAULT_HOST } from './relay';
 import { HostAddressForm, type Wanted } from './HostAddress';
 import { FeatureIcon, StatusPill, type Tone } from './Feature';
-import { styles, palette, hstack } from './styles';
 
 /** Bytes as people read them: 12 KB, 3.4 MB, 10 GB */
 export function size(bytes: number): string {
@@ -82,7 +81,7 @@ export function HostOfferPicker({
       <>
         <HostAddressForm onAddress={onAddress} {...(addressLabel ? { label: addressLabel } : {})} />
         {offer && (
-          <button onClick={() => setOther(false)} style={{ ...styles.linkButton, alignSelf: 'center' }}>
+          <button onClick={() => setOther(false)} data-intent="ghost">
             Use {offer.name} instead
           </button>
         )}
@@ -90,24 +89,14 @@ export function HostOfferPicker({
     );
   return (
     <>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'baseline',
-          gap: 12,
-          padding: '12px 14px',
-          borderRadius: 10,
-          background: palette.surface.sunken,
-        }}
-      >
-        <span style={{ fontSize: 14, fontWeight: 500, color: palette.ink.strong }}>{offer.name}</span>
-        <span style={styles.quiet}>{price}</span>
-      </div>
-      <button onClick={onContinue} disabled={busy} data-variant="primary" style={styles.button}>
+      <aside className="row" data-spread>
+        <strong>{offer.name}</strong>
+        <small>{price}</small>
+      </aside>
+      <button onClick={onContinue} disabled={busy} data-intent="primary">
         {busy ? 'One moment…' : 'Continue'}
       </button>
-      <button onClick={() => setOther(true)} style={{ ...styles.linkButton, alignSelf: 'center' }}>
+      <button onClick={() => setOther(true)} data-intent="ghost">
         Use another host
       </button>
     </>
@@ -130,21 +119,12 @@ export function StopFooter({
 }) {
   return (
     <>
-      {error && (
-        <p role="alert" style={styles.dangerText}>
-          {error}
-        </p>
-      )}
-      <div style={{ ...hstack(8), justifyContent: 'flex-end', flexWrap: 'wrap', marginTop: 4 }}>
-        <button onClick={onKeep} disabled={busy} data-variant="quiet" style={styles.smallButton}>
+      {error && <p role="alert">{error}</p>}
+      <div className="row" data-spread>
+        <button onClick={onKeep} disabled={busy}>
           Keep it
         </button>
-        <button
-          onClick={onStop}
-          disabled={busy}
-          data-variant="danger"
-          style={{ ...styles.smallButton, color: palette.accent.danger }}
-        >
+        <button onClick={onStop} disabled={busy} data-intent="danger">
           {busy ? 'Stopping…' : `Stop using ${name}`}
         </button>
       </div>
@@ -169,14 +149,14 @@ export function HostStatusRow({
   return (
     <>
       <FeatureIcon kind="online" size={size} />
-      <div style={{ flex: '1 1 200px', minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <strong style={{ fontSize: 14, color: palette.ink.strong }}>{name}</strong>
+      <div className="stack" data-gap="tight">
+        <div className="row">
+          <strong>{name}</strong>
           {pill && <StatusPill tone={pill.tone}>{pill.pill}</StatusPill>}
         </div>
-        <p style={{ ...styles.quiet, marginTop: 2, overflowWrap: 'anywhere' }}>{line}</p>
+        <small>{line}</small>
       </div>
-      <span style={{ ...hstack(8), flexWrap: 'wrap' }}>{children}</span>
+      <span className="row">{children}</span>
     </>
   );
 }

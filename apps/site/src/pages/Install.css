@@ -1,0 +1,18 @@
+/* Where a download lands (Install.tsx): three steps under the heading */
+
+.site .install-page .steps {
+  margin-top: 40px;
+  text-align: left;
+}
+.site .install-page .step p {
+  font-size: 1rem;
+  color: var(--color-text-strong);
+}
+.site .install-again {
+  margin-top: 28px;
+  font-size: var(--text-body);
+  color: var(--color-text-muted);
+}
+.site .install-again a {
+  color: var(--color-text-strong);
+}

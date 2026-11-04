@@ -10,8 +10,7 @@ import { PersonCardHere } from '../Person';
 import { RecordFinder } from '../RecordFinder';
 import { saveFile } from '../../files';
 import { isObject } from '../../derive/schema-ui';
-import { styles, palette } from '../../styles';
-import { QuietButton } from '../Buttons';
+import styles from './ScreenFrame.module.css';
 
 /** How long after a screen is written in it fades in: its first paint, not its data */
 const REVEAL_MS = 80;
@@ -211,27 +210,19 @@ export function ScreenFrame({
 
   if (stopped) {
     return (
-      <div
-        style={{
-          ...styles.errorBox,
-          margin: 16,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 8,
-        }}
-      >
-        <p style={styles.error}>This screen tried to open another page, so it was stopped.</p>
-        <p style={styles.errorHint}>It can't reach your data from there. Reload it to try again.</p>
-        <QuietButton onClick={() => setGeneration((n) => n + 1)} style={{ alignSelf: 'flex-start' }}>
+      <aside data-tone="danger" className={`stack ${styles.stopped}`}>
+        <p role="alert">This screen tried to open another page, so it was stopped.</p>
+        <small>It can't reach your data from there. Reload it to try again.</small>
+        <button type="button" data-intent="ghost" onClick={() => setGeneration((n) => n + 1)}>
           Reload the screen
-        </QuietButton>
-      </div>
+        </button>
+      </aside>
     );
   }
 
   // It takes whatever height it is given: the app is the whole window (`.space-content[data-fill]`).
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+    <div className={styles.screen}>
       <iframe
         ref={frame}
         title={title}
@@ -242,17 +233,7 @@ export function ScreenFrame({
         referrerPolicy="no-referrer"
         // A new frame for each run: the bridge goes with the run, and only a frame that loads says ready.
         key={run}
-        style={{
-          width: '100%',
-          flex: 1,
-          // No floor: on a phone with the keyboard up, what is left can be less than any we'd pick.
-          minHeight: 0,
-          border: 'none',
-          // The page's own colour, which a screen's page is drawn on, so nothing lighter shows while it loads.
-          background: palette.surface.page,
-          opacity: drawn ? 1 : 0,
-          transition: 'opacity .15s ease',
-        }}
+        data-drawn={drawn || undefined}
       />
       {person && <PersonCardHere did={person} onClose={() => setPerson(null)} />}
       {picking && <SharePicker spaceId={spaceId} app={title} text={picking.text} onDone={picking.done} />}
@@ -278,7 +259,7 @@ function SharePicker({
   const collections = useLive(spaceId, (n) => n.collections.list(spaceId), [spaceId]) ?? [];
   return (
     <Modal title={`Share with ${app}`} onClose={() => onDone(null)}>
-      <p style={{ ...styles.quiet, lineHeight: 1.5 }}>{app} gets only the one you choose.</p>
+      <small>{app} gets only the one you choose.</small>
       <RecordFinder
         spaceId={spaceId}
         collections={collections}

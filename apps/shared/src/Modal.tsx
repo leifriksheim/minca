@@ -1,16 +1,15 @@
-import { useEffect, useRef, type ReactNode } from 'react';
-import { styles } from './styles';
+import { useLayoutEffect, useRef, type MouseEvent, type ReactNode } from 'react';
+import styles from './Modal.module.css';
 
 /**
- * A dialog over the page.
+ * A dialog over the page: the browser's own `<dialog>`, as the kit's Modal
+ * is, so focus, Escape and what lies behind are its business.
  *
  * Used where a choice has enough parts that inlining it would crowd the thing
  * it is about — creating a list needs a name and two decisions, which is more
  * than belongs permanently under a list of lists.
  *
- * Closes on Escape, on a click outside and on the ✕ at its top right, moves focus in on open and back out
- * on close, and holds focus inside while open, so it behaves the way a dialog
- * is expected to whether or not someone is using a mouse.
+ * Closes on Escape, on a click beside it and on the ✕ at its top right.
  */
 export function Modal({
   title,
@@ -24,74 +23,46 @@ export function Modal({
   /** Wider than the default, for a dialog with more to it */
   width?: number;
 }) {
-  const card = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const returnTo = globalThis.document.activeElement;
-
-    const focusable = card.current?.querySelectorAll<HTMLElement>(
-      'input, button, select, textarea, [tabindex]:not([tabindex="-1"])',
+  const box = useRef<HTMLDialogElement>(null);
+  const close = useRef<HTMLButtonElement>(null);
+  useLayoutEffect(() => {
+    const dialog = box.current;
+    dialog?.showModal();
+    // The first field or button, never the ✕, which would make Enter close it.
+    const first = [...(dialog?.querySelectorAll<HTMLElement>('input, select, textarea, button') ?? [])].find(
+      (one) => one !== close.current,
     );
-    // The first field, or the dialog itself when it has none: never the ✕, which would make Enter close it.
-    ([...(focusable ?? [])].find((one) => !one.hasAttribute('data-close')) ?? card.current)?.focus();
-
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
-        return;
-      }
-
-      // Without this, tabbing walks out of the dialog and into the page behind,
-      // which is still there and still clickable-looking.
-      if (event.key !== 'Tab' || !focusable?.length) return;
-      const first = focusable[0]!;
-      const last = focusable[focusable.length - 1]!;
-      const active = globalThis.document.activeElement;
-
-      if (event.shiftKey && active === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && active === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    globalThis.document.addEventListener('keydown', onKey);
-    return () => {
-      globalThis.document.removeEventListener('keydown', onKey);
-      if (returnTo instanceof HTMLElement || returnTo instanceof SVGElement) returnTo.focus();
-    };
-  }, [onClose]);
-
+    first?.focus();
+    return () => dialog?.close();
+  }, []);
+  // A click on the dialog itself, outside its box, landed on the backdrop.
+  const beside = (event: MouseEvent<HTMLDialogElement>) => {
+    const at = box.current?.getBoundingClientRect();
+    if (!at || event.target !== box.current) return;
+    const { clientX: x, clientY: y } = event;
+    if (x < at.left || x > at.right || y < at.top || y > at.bottom) onClose();
+  };
   return (
-    <div
-      className="modal-backdrop"
-      style={styles.backdrop}
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+    <dialog
+      ref={box}
+      aria-label={title}
+      className={styles.modal}
+      // eslint-disable-next-line react/forbid-dom-props -- the width a caller asks for
+      style={width ? { maxWidth: width } : undefined}
+      onClick={beside}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
       }}
     >
-      <div
-        ref={card}
-        role="dialog"
-        aria-modal
-        aria-label={title}
-        tabIndex={-1}
-        className="modal"
-        style={width ? { ...styles.modal, maxWidth: width } : styles.modal}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <h2 style={{ ...styles.modalTitle, flex: 1, minWidth: 0 }}>{title}</h2>
-          <button type="button" onClick={onClose} aria-label="Close" data-close style={styles.closeButton}>
-            <svg width={16} height={16} viewBox="0 0 16 16" aria-hidden>
-              <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" />
-            </svg>
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
+      <header>
+        <h2>{title}</h2>
+        <button ref={close} type="button" data-intent="ghost" data-icon aria-label="Close" onClick={onClose}>
+          ✕
+        </button>
+      </header>
+      {children}
+    </dialog>
   );
 }
 
@@ -108,21 +79,21 @@ export function Choice<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <div>
-      <p style={styles.fieldLabel}>{label}</p>
-      <div style={styles.segmented} role="group" aria-label={label}>
+    <fieldset>
+      <legend>{label}</legend>
+      <div role="tablist" aria-label={label}>
         {options.map((option) => (
           <button
             key={option.value}
             type="button"
+            role="tab"
             onClick={() => onChange(option.value)}
-            aria-pressed={option.value === value}
-            style={option.value === value ? styles.segmentActive : styles.segment}
+            aria-selected={option.value === value}
           >
             {option.label}
           </button>
         ))}
       </div>
-    </div>
+    </fieldset>
   );
 }

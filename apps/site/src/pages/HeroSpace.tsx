@@ -3,8 +3,9 @@ import { Loader } from '@minca/app-shared/Loader';
 import { Mark } from '@minca/app-shared/Wordmark';
 import { Shape } from '@minca/app-shared/shapes';
 import { APP_SHAPES, type ShapeKind } from '@minca/ui/shapes';
-import { shapeColours, type ShapeColour } from '@minca/ui/tokens';
+import type { ShapeColour } from '@minca/ui/tokens';
 import { EventHead, Face } from './demos';
+import './HeroSpace.css';
 
 /**
  * The front page's hero: many hands making one small app, inside Minca as it
@@ -196,14 +197,10 @@ const TAKEN: Readonly<Record<string, Who>> = { Anna: 'anna', Sam: 'sam', Maya: '
 /** Each person is their face, ringed in their colour, with their name beside it, the way a shared canvas shows who is where */
 function Pointer({ who }: { who: Who }) {
   const person = PEOPLE[who];
-  const fill = shapeColours[person.colour];
   return (
     <>
-      <img className="cursor-face" src={`/faces/${who}.jpg`} alt="" style={{ borderColor: fill }} />
-      <span
-        className="cursor-name"
-        style={{ background: fill, color: person.inkLabel ? 'var(--ink)' : '#fff' }}
-      >
+      <img className={`cursor-face c-${person.colour}`} src={`/faces/${who}.jpg`} alt="" />
+      <span className={`cursor-name c-${person.colour}`} data-ink={person.inkLabel || undefined}>
         {person.name}
       </span>
     </>
@@ -313,7 +310,7 @@ export function HeroSpace() {
             <span className="w-rail-add">+</span>
           </nav>
 
-          <aside className="w-side">
+          <div className="w-side">
             <div className="w-space">
               <SpaceBadge letter="R" kind="clover" colour="cobalt" />
               <span>
@@ -336,10 +333,10 @@ export function HeroSpace() {
             <SideApp label="Hosting" quiet>
               <span className="w-online" title="Online" />
             </SideApp>
-          </aside>
+          </div>
 
-          <main className="w-main">
-            <header className="w-main-bar">
+          <div className="w-main">
+            <div className="w-main-bar">
               {made ? (
                 <>
                   <Shape kind="clover" colour="coral" size={18} />
@@ -348,7 +345,7 @@ export function HeroSpace() {
               ) : (
                 <b>New app</b>
               )}
-            </header>
+            </div>
             <div className="canvas-stack">
               {step.app === 'none' ? null : (
                 <div className="canvas-app" key={`app-${at.round}`}>
@@ -403,7 +400,7 @@ export function HeroSpace() {
                 </div>
               )}
             </div>
-          </main>
+          </div>
 
           {WHO.map((who) => (
             <div
@@ -511,7 +508,7 @@ function SpaceBadge({
   return (
     <span className={on ? 'w-badge is-on' : 'w-badge'}>
       <Shape kind={kind} colour={colour} />
-      <b style={{ color: colour === 'peach' || colour === 'sage' ? 'var(--ink)' : '#fff' }}>{letter}</b>
+      <b data-ink={colour === 'peach' || colour === 'sage' || undefined}>{letter}</b>
     </span>
   );
 }

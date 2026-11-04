@@ -21,20 +21,17 @@ import { nameOf, peopleFrom } from '../derive/people';
 import { ago } from '@minca/ui/time';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { Modal } from '@minca/app-shared/Modal';
-import { styles, palette, ui } from '../styles';
 import { message, useAction, useCopy } from '@minca/app-shared/action';
-import { Loading } from './Loading';
-import { AddButton, LinkButton, QuietButton } from './Buttons';
+import { Loader } from '@minca/app-shared/Loader';
 import { confirmThen } from '../confirm';
-import { Icon } from './Icon';
+import { Icon } from '@minca/app-shared/Icon';
 import { AddDialog, Handle, Notice, PersonRow, RowMenu, SpaceInvites } from './PeopleParts';
 import { SpaceCount } from './SpaceList';
 import { RingButton } from './calls/Calls';
 import { onlineAccounts } from '../derive/network';
 import { InviteToSpace } from './InvitePeople';
 import { shortUsername, useUsernameLookup } from '@minca/app-shared/usernames';
-
-const { ink, surface, accent } = palette;
+import { Info } from '@minca/app-shared/Info';
 
 /** Checks inbox codes as they are typed */
 const provider = createP256Provider();
@@ -99,12 +96,8 @@ export function ContactsView({
   const asking = requests.length + knocks.length;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {error && (
-        <div style={{ ...styles.errorBox, marginTop: 0 }}>
-          <p style={styles.error}>{error}</p>
-        </div>
-      )}
+    <div className="stack" data-gap="loose">
+      {error && <aside data-tone="danger">{error}</aside>}
       {notice && <Notice text={notice} onDismiss={() => setNotice(null)} />}
 
       <KnockFromLink
@@ -132,26 +125,22 @@ export function ContactsView({
       />
 
       {asking > 0 && (
-        <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }} aria-label="Wants to connect">
-          <h2 style={styles.sectionTitle}>Wants to connect</h2>
-          <ul style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 0 }}>
+        <section className="stack" aria-label="Wants to connect">
+          <h2>Wants to connect</h2>
+          <ul role="list">
             {knocks.map((knock) => (
               <PersonRow
                 key={knock.id}
-                tone="card"
                 face={knock.from}
                 name={knock.name}
                 detail={knock.note ? `“${knock.note}”` : `Asked ${ago(knock.at)}`}
               >
-                <AddButton onClick={() => void act(() => node.inbox.accept(knock.id))} style={{ height: 34 }}>
+                <button data-intent="primary" onClick={() => void act(() => node.inbox.accept(knock.id))}>
                   Accept
-                </AddButton>
-                <QuietButton
-                  onClick={() => void act(() => node.inbox.dismiss(knock.id))}
-                  style={{ height: 34 }}
-                >
+                </button>
+                <button data-intent="ghost" onClick={() => void act(() => node.inbox.dismiss(knock.id))}>
                   Not now
-                </QuietButton>
+                </button>
                 <RowMenu
                   label={`More for ${knock.name}`}
                   items={[
@@ -169,7 +158,6 @@ export function ContactsView({
               return (
                 <PersonRow
                   key={`${request.space}/${request.key}`}
-                  tone="card"
                   face={request.from}
                   name={name}
                   detail={
@@ -178,12 +166,12 @@ export function ContactsView({
                       : `From ${spaceName(request.space)} · ${ago(request.createdAt)}`
                   }
                 >
-                  <AddButton
+                  <button
+                    data-intent="primary"
                     onClick={() => void act(() => node.contacts.accept(request.space, request.key))}
-                    style={{ height: 34 }}
                   >
                     Accept
-                  </AddButton>
+                  </button>
                   <RowMenu
                     label={`More for ${name}`}
                     items={[
@@ -205,19 +193,19 @@ export function ContactsView({
 
       {/* Searching, only contacts that match: the search box says the rest. */}
       {!(q && matching.length === 0) && (
-        <section style={{ display: 'flex', flexDirection: 'column', gap: 4 }} aria-label="Contacts">
-          <h2 style={styles.sectionTitle}>
+        <section className="stack" aria-label="Contacts">
+          <h2>
             {q ? 'In your contacts' : 'Contacts'}
-            {!q && listed.length > 0 && (
-              <span style={{ color: ink.faint, fontWeight: 500 }}> {listed.length}</span>
-            )}
+            {!q && listed.length > 0 && <small> {listed.length}</small>}
           </h2>
           {contacts === undefined ? (
-            <Loading label="Loading" style={styles.todoMeta} />
+            <small>
+              <Loader label="Loading" showLabel />
+            </small>
           ) : listed.length === 0 && sent.length === 0 ? (
             <EmptyContacts hasName={!!inbox?.username} />
           ) : (
-            <ul className="rows" style={ui.list}>
+            <ul role="list">
               {matching.map((contact) => (
                 <ContactRow
                   key={contact.did}
@@ -254,27 +242,30 @@ export function ContactsView({
         </section>
       )}
 
-      <details style={{ borderTop: `1px solid ${surface.line}`, paddingTop: 16 }}>
-        <summary style={{ fontSize: 14, fontWeight: 600, color: ink.body }}>Other ways to connect</summary>
+      <details>
+        <summary>Other ways to connect</summary>
         <Inbox inbox={inbox} act={act} onKnocked={setNotice} />
       </details>
 
       {blocked.length > 0 && (
         <details>
-          <summary style={{ ...styles.todoMeta, cursor: 'pointer' }}>Blocked ({blocked.length})</summary>
-          <ul className="rows" style={{ ...ui.list, marginTop: 8 }}>
+          <summary>
+            <small>Blocked ({blocked.length})</small>
+          </summary>
+          <ul role="list">
             {blocked.map((contact) => (
               <PersonRow
                 key={contact.did}
                 face={contact.did}
                 name={contact.name === contact.did ? nameOf(contact.did, nobody) : contact.name}
               >
-                <LinkButton
+                <button
+                  data-intent="ghost"
                   onClick={() => void act(() => node.contacts.remove(contact.did))}
                   title="They can ask or knock again"
                 >
                   Unblock
-                </LinkButton>
+                </button>
               </PersonRow>
             ))}
           </ul>
@@ -317,20 +308,8 @@ function FindPeople({
   const yours = lookup.status === 'found' && inbox?.username === lookup.username;
 
   return (
-    <section aria-label="Find people" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <label
-        className="pill-field"
-        style={{
-          ...styles.input,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          height: 48,
-          padding: '0 16px',
-          background: surface.card,
-        }}
-      >
-        <Icon name="search" size={16} />
+    <section aria-label="Find people" className="stack">
+      <div className="row">
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
@@ -344,39 +323,17 @@ function FindPeople({
           autoCapitalize="none"
           autoComplete="off"
           spellCheck={false}
-          style={{
-            flex: 1,
-            minWidth: 0,
-            height: '100%',
-            border: 'none',
-            background: 'transparent',
-            fontSize: 15,
-            color: ink.strong,
-            outline: 'none',
-          }}
         />
         {query && (
-          <button
-            onClick={() => setQuery('')}
-            aria-label="Clear"
-            style={{
-              border: 'none',
-              background: 'none',
-              color: ink.faint,
-              fontSize: 18,
-              lineHeight: 1,
-              padding: 4,
-            }}
-          >
+          <button data-intent="ghost" data-icon onClick={() => setQuery('')} aria-label="Clear">
             ×
           </button>
         )}
-      </label>
+      </div>
 
       {lookup.status === 'found' && (
-        <ul style={{ padding: 0, margin: 0 }}>
+        <ul role="list">
           <PersonRow
-            tone="card"
             face={known?.did ?? lookup.username}
             name={known?.name ?? lookup.found.inbox.name ?? `@${shortUsername(lookup.username)}`}
             detail={
@@ -387,38 +344,33 @@ function FindPeople({
             }
           >
             {known?.space ? (
-              <QuietButton onClick={() => onOpen(known.space!)} style={{ height: 34 }}>
+              <button data-intent="ghost" onClick={() => onOpen(known.space!)}>
                 Open
-              </QuietButton>
+              </button>
             ) : !yours && !waiting ? (
-              <AddButton
+              <button
+                data-intent="primary"
                 onClick={() =>
                   setAdding({
                     username: lookup.username,
                     ...(lookup.found.inbox.name ? { name: lookup.found.inbox.name } : {}),
                   })
                 }
-                style={{ height: 34 }}
               >
                 Add
-              </AddButton>
+              </button>
             ) : null}
           </PersonRow>
         </ul>
       )}
       {lookup.status === 'looking' && matches === 0 && (
-        <p style={{ fontSize: 13, color: ink.faint, padding: '0 4px' }}>
-          Looking for @{shortUsername(lookup.username)}…
-        </p>
+        <small>Looking for @{shortUsername(lookup.username)}…</small>
       )}
-      {lookup.status === 'invalid' && matches === 0 && (
-        <p style={{ fontSize: 13, color: ink.muted, padding: '0 4px' }}>No contact called that.</p>
-      )}
+      {lookup.status === 'invalid' && matches === 0 && <small>No contact called that.</small>}
       {lookup.status === 'nobody' && matches === 0 && (
-        <p style={{ fontSize: 13, color: ink.muted, padding: '0 4px' }}>
-          Nobody is called <strong style={{ color: ink.strong }}>@{shortUsername(lookup.username)}</strong>{' '}
-          yet.
-        </p>
+        <small>
+          Nobody is called <strong>@{shortUsername(lookup.username)}</strong> yet.
+        </small>
       )}
       {adding && (
         <AddDialog
@@ -437,15 +389,13 @@ function FindPeople({
 
 function EmptyContacts({ hasName }: { hasName: boolean }) {
   return (
-    <div
-      style={{ ...styles.emptyState, display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}
-    >
-      <strong style={{ color: ink.strong, fontSize: 15 }}>No contacts yet</strong>
-      <span>
+    <div className="empty">
+      <strong>No contacts yet</strong>
+      <p>
         {hasName
           ? 'Search for someone’s username above, or share yours from New.'
           : 'Search for someone’s username above. To be found by yours, pick one in your account.'}
-      </span>
+      </p>
     </div>
   );
 }
@@ -495,7 +445,7 @@ function ContactRow({
         {...(joined ? { onOpen: () => onOpen(contact.space!) } : {})}
         detail={
           others.length > 0 ? (
-            <span style={{ color: accent.danger }}>
+            <span data-tone="danger">
               {others.length === 1 ? 'Someone else is' : `${others.length} others are`} in your space for two
             </span>
           ) : standing === 'waiting' ? (
@@ -513,15 +463,15 @@ function ContactRow({
         {joined && space && <SpaceCount space={space} />}
         {/* Messaging them is a tap on the row too, which isn't plain to see: a button says so. */}
         {joined && (
-          <QuietButton
+          <button
+            data-intent="ghost"
+            data-icon
             onClick={() => onOpen(contact.space!)}
             aria-label={`Message ${contact.name}`}
             title={`Message ${contact.name}`}
-            data-round
-            style={{ width: 34, height: 34 }}
           >
             <Icon name="chat" size={14} />
-          </QuietButton>
+          </button>
         )}
         {joined && space && standing === 'joined' && (
           <RingButton space={space} did={contact.did} name={contact.name} />
@@ -603,7 +553,7 @@ function Rename({
   return (
     <Modal title={`Rename ${contact.name}`} onClose={onClose}>
       <form
-        style={styles.form}
+        className="stack"
         onSubmit={(event) => {
           event.preventDefault();
           const next = name.trim();
@@ -616,13 +566,12 @@ function Rename({
           onChange={(event) => setName(event.target.value)}
           maxLength={200}
           aria-label={`What you call ${contact.name}`}
-          style={styles.input}
           autoFocus
         />
-        <p style={{ fontSize: 13, color: ink.muted }}>Only you see what you call them.</p>
-        <AddButton type="submit" style={{ marginTop: 8, height: 40 }}>
+        <small>Only you see what you call them.</small>
+        <button data-intent="primary" type="submit">
           Save
-        </AddButton>
+        </button>
       </form>
     </Modal>
   );
@@ -647,29 +596,38 @@ function Inbox({
   const { copied, copy } = useCopy();
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 14 }}>
-      <p style={{ fontSize: 13, lineHeight: 1.5, color: ink.muted }}>
-        Your username leads to your inbox. You can also hand out its link, which works without a username, or
-        knock with a code someone gave you. Replace the inbox and old links lead nowhere; your contacts stay.
-      </p>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+    <div className="stack">
+      <small>
+        Your username leads to your inbox.
+        <Info label="About your inbox">
+          You can also hand out its link, which works without a username, or knock with a code someone gave
+          you. Replace the inbox and old links lead nowhere; your contacts stay.
+        </Info>
+      </small>
+      <div className="row">
         {inbox ? (
-          <QuietButton onClick={() => copy(inboxLink(inbox.code))}>
+          <button data-intent="ghost" onClick={() => copy(inboxLink(inbox.code))}>
             {copied ? 'Copied' : 'Copy inbox link'}
-          </QuietButton>
+          </button>
         ) : (
-          <QuietButton onClick={() => void act(() => node.inbox.open())}>Open your inbox</QuietButton>
+          <button data-intent="ghost" onClick={() => void act(() => node.inbox.open())}>
+            Open your inbox
+          </button>
         )}
-        <QuietButton onClick={() => setKnocking(true)}>Use a link or code</QuietButton>
+        <button data-intent="ghost" onClick={() => setKnocking(true)}>
+          Use a link or code
+        </button>
         {inbox && (
           <>
-            <LinkButton
+            <button
+              data-intent="ghost"
               onClick={() => void act(() => node.inbox.clear())}
               title="Clear every knock waiting, for an inbox someone is flooding"
             >
               Clear waiting requests
-            </LinkButton>
-            <LinkButton
+            </button>
+            <button
+              data-intent="danger"
               onClick={() =>
                 confirmThen(
                   'Links you shared stop working everywhere. Your username moves to the new inbox.',
@@ -677,10 +635,9 @@ function Inbox({
                   () => act(() => node.inbox.rotate()),
                 )
               }
-              style={{ color: accent.danger }}
             >
               Replace inbox
-            </LinkButton>
+            </button>
           </>
         )}
       </div>
@@ -719,54 +676,46 @@ function KnockDialog({
   return (
     <Modal title={name ? `Add ${name}` : 'Add someone with a link'} onClose={onClose}>
       <form
-        style={styles.form}
+        className="stack"
         onSubmit={(event) => {
           event.preventDefault();
           if (code.trim() && !problem) onKnock(code.trim(), note.trim());
         }}
       >
         {initial && name && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+          <div className="row">
             <Avatar did={initial} size={48} round />
-            <div style={{ fontWeight: 600, fontSize: 16, color: ink.strong }}>{name}</div>
+            <strong>{name}</strong>
           </div>
         )}
         {!initial && (
           <>
-            <label style={styles.fieldLabel} htmlFor="inbox-code">
+            <label>
               Their inbox link or code
+              <input value={code} onChange={(event) => setCode(event.target.value)} />
             </label>
-            <input
-              id="inbox-code"
-              value={code}
-              onChange={(event) => setCode(event.target.value)}
-              style={styles.input}
-            />
-            {problem && <p style={styles.bad}>{problem}</p>}
+            {problem && <p role="alert">{problem}</p>}
           </>
         )}
-        <label style={{ ...styles.fieldLabel, marginTop: 8 }} htmlFor="knock-note">
-          Say who you are <span style={{ color: ink.faint, fontWeight: 400 }}>(optional)</span>
+        <label>
+          <span>
+            Say who you are <small>(optional)</small>
+          </span>
+          <textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={500} rows={3} />
         </label>
-        <textarea
-          id="knock-note"
-          value={note}
-          onChange={(event) => setNote(event.target.value)}
-          maxLength={500}
-          rows={3}
-          style={styles.textarea}
-        />
-        <p style={{ fontSize: 13, lineHeight: 1.5, color: ink.muted }}>
-          They see your name and note, and choose whether to accept. The name a link shows is the owner’s to
-          choose, so be sure it came from them.
-        </p>
-        <AddButton
+        <small>
+          They see your name and note, and choose whether to accept.
+          <Info label="Is this link theirs?">
+            The name a link shows is the owner’s to choose, so be sure it came from them.
+          </Info>
+        </small>
+        <button
+          data-intent="primary"
           type="submit"
           disabled={!text || inbox.status !== 'done' || !inbox.value}
-          style={{ marginTop: 12, height: 40 }}
         >
           Send request
-        </AddButton>
+        </button>
       </form>
     </Modal>
   );

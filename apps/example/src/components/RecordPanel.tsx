@@ -32,12 +32,11 @@ import { Tags } from './std/Tags';
 import { Comments } from './std/Comments';
 import { Attachments } from './std/Attachments';
 import { LinkPicker } from './LinkPicker';
-import { styles, palette, ui, hstack, stack } from '../styles';
+import styles from './RecordPanel.module.css';
 import { useAction } from '@minca/app-shared/action';
 import { Person } from './Person';
 import { useDraft } from './useDraft';
 import { Loading } from './Loading';
-import { QuietButton } from './Buttons';
 import { confirmThen } from '../confirm';
 
 /** Standard collections with a place of their own on every record, so not offered as "+ Add …" */
@@ -169,143 +168,117 @@ export function RecordPanel({
   };
 
   return (
-    <>
-      <div
-        className={scrim ? 'modal-backdrop' : undefined}
-        style={scrim ? styles.backdrop : undefined}
-        onMouseDown={(event) => scrim && event.target === event.currentTarget && onClose()}
+    <div
+      className={scrim ? styles.backdrop : undefined}
+      onMouseDown={(event) => scrim && event.target === event.currentTarget && onClose()}
+    >
+      <dialog
+        open
+        aria-modal={scrim || undefined}
+        aria-label={record ? recordLabel(record, schema) : 'Record'}
+        className={scrim ? styles.dialog : styles.panel}
       >
-        <section
-          role="dialog"
-          aria-modal={scrim || undefined}
-          aria-label={record ? recordLabel(record, schema) : 'Record'}
-          className={scrim ? 'modal' : undefined}
-          style={scrim ? dialog : panel}
-        >
-          <header style={dialogHead}>
-            <span style={kindChip}>
+        <header>
+          <div>
+            <span className="tag">
               {collection ? collectionLabel(collection) : (record?.collection ?? 'Record')}
             </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {openWith && (
-                <button onClick={openWith} style={styles.smallButton}>
-                  Open with…
-                </button>
-              )}
-              <button onClick={onClose} aria-label="Close" data-close style={styles.closeButton}>
-                <svg width={16} height={16} viewBox="0 0 16 16" aria-hidden>
-                  <path
-                    d="M4 4l8 8M12 4l-8 8"
-                    stroke="currentColor"
-                    strokeWidth={1.6}
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </button>
-            </span>
-          </header>
+          </div>
+          {openWith && <button onClick={openWith}>Open with…</button>}
+          <button onClick={onClose} aria-label="Close" data-intent="ghost" data-icon>
+            ✕
+          </button>
+        </header>
 
-          {!data ? (
-            <Loading label="Opening" style={{ ...styles.emptyState, margin: 20 }} />
-          ) : !record ? (
-            <p style={{ ...styles.emptyState, margin: 20 }}>
-              This record is gone — deleted, or not here yet.
-            </p>
-          ) : (
-            <div style={dialogBody}>
-              <div style={stack(10)}>
-                {title && editable ? (
-                  <InlineText
-                    value={textOf(body[title] ?? '')}
-                    onSave={(v) => save(title, v)}
-                    ariaLabel="Title"
-                    big
-                  />
-                ) : (
-                  <h2 style={bigTitle}>{recordLabel(record, schema)}</h2>
-                )}
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    fontSize: 13,
-                    color: palette.ink.muted,
-                  }}
-                >
-                  <PersonFace did={record.createdBy ?? record.root ?? record.author} size={20} />
-                  <span>
-                    {onWriter ? (
-                      <button
-                        type="button"
-                        data-variant="quiet"
-                        onClick={() => onWriter(record.createdBy ?? record.root ?? record.author)}
-                        style={{ padding: 0, font: 'inherit', color: palette.ink.body, fontWeight: 500 }}
-                      >
-                        {nameOf(record.createdBy ?? record.root, people)}
-                      </button>
-                    ) : (
-                      <Person did={record.createdBy ?? record.root} />
-                    )}
-                    {record.recordsOnly && record.seq === 0 && ' via agent'}
-                  </span>
-                  <span>· {ago(record.createdAt)}</span>
-                  {record.seq > 0 && (
-                    <span>
-                      · edited {ago(record.updatedAt)}
-                      {record.recordsOnly && ' via agent'}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {uses(reaction.name) && (
-                <Reactions
-                  space={space}
-                  target={record.key}
-                  targetAuthor={record.root}
-                  reactions={linked.filter((r) => r.collection === reaction.name)}
+        {!data ? (
+          <Loading label="Opening" />
+        ) : !record ? (
+          <p className="empty">This record is gone — deleted, or not here yet.</p>
+        ) : (
+          <>
+            <div className="stack">
+              {title && editable ? (
+                <InlineText
+                  value={textOf(body[title] ?? '')}
+                  onSave={(v) => save(title, v)}
+                  ariaLabel="Title"
+                  big
                 />
+              ) : (
+                <h1>{recordLabel(record, schema)}</h1>
               )}
+              <small className="row">
+                <PersonFace did={record.createdBy ?? record.root ?? record.author} size={20} />
+                <span>
+                  {onWriter ? (
+                    <button
+                      type="button"
+                      onClick={() => onWriter(record.createdBy ?? record.root ?? record.author)}
+                      data-intent="inline"
+                    >
+                      {nameOf(record.createdBy ?? record.root, people)}
+                    </button>
+                  ) : (
+                    <Person did={record.createdBy ?? record.root} />
+                  )}
+                  {record.recordsOnly && record.seq === 0 && ' via agent'}
+                </span>
+                <span>· {ago(record.createdAt)}</span>
+                {record.seq > 0 && (
+                  <span>
+                    · edited {ago(record.updatedAt)}
+                    {record.recordsOnly && ' via agent'}
+                  </span>
+                )}
+              </small>
+            </div>
 
-              <dl style={{ margin: 0, ...stack(14) }}>
-                {fields
-                  .filter((f) => editable || !blank(body[f.name]))
-                  .map((f) => (
-                    <Property key={f.name} label={f.label}>
-                      <FieldEditor
-                        field={f}
-                        value={body[f.name]}
-                        linked={linkedHere}
-                        editable={editable}
-                        onSave={(v) => save(f.name, v)}
-                      />
-                    </Property>
-                  ))}
-                {extra.map((name) => (
-                  <Property key={name} label={humanize(name)}>
-                    <Value value={body[name]} />
+            {uses(reaction.name) && (
+              <Reactions
+                space={space}
+                target={record.key}
+                targetAuthor={record.root}
+                reactions={linked.filter((r) => r.collection === reaction.name)}
+              />
+            )}
+
+            <dl className="stack" data-gap="loose">
+              {fields
+                .filter((f) => editable || !blank(body[f.name]))
+                .map((f) => (
+                  <Property key={f.name} label={f.label}>
+                    <FieldEditor
+                      field={f}
+                      value={body[f.name]}
+                      linked={linkedHere}
+                      editable={editable}
+                      onSave={(v) => save(f.name, v)}
+                    />
                   </Property>
                 ))}
-                {computed
-                  .filter((f) => !blank(valueOf({ body, computed: data.computed }, f)))
-                  .map((f) => (
-                    <Property key={f.name} label={`${f.label} ƒ`}>
-                      <span
-                        title={`Worked out by this device from what it holds — no one wrote it.\n${collection?.computed?.[f.name] ?? ''}`}
-                      >
-                        <Value
-                          field={f}
-                          value={valueOf({ body, computed: data.computed }, f)}
-                          linked={linkedHere}
-                        />
-                      </span>
-                    </Property>
-                  ))}
-                {/* Each kind of link the definition allows, with what this record points at in it */}
-                {[
-                  ...new Set([...Object.keys(collection?.links ?? {}), ...record.links.map((l) => l.rel)]),
-                ].map((rel) => {
+              {extra.map((name) => (
+                <Property key={name} label={humanize(name)}>
+                  <Value value={body[name]} />
+                </Property>
+              ))}
+              {computed
+                .filter((f) => !blank(valueOf({ body, computed: data.computed }, f)))
+                .map((f) => (
+                  <Property key={f.name} label={`${f.label} ƒ`}>
+                    <span
+                      title={`Worked out by this device from what it holds — no one wrote it.\n${collection?.computed?.[f.name] ?? ''}`}
+                    >
+                      <Value
+                        field={f}
+                        value={valueOf({ body, computed: data.computed }, f)}
+                        linked={linkedHere}
+                      />
+                    </span>
+                  </Property>
+                ))}
+              {/* Each kind of link the definition allows, with what this record points at in it */}
+              {[...new Set([...Object.keys(collection?.links ?? {}), ...record.links.map((l) => l.rel)])].map(
+                (rel) => {
                   const here = data.targets.map((t, i) => ({ ...t, i })).filter((t) => t.link.rel === rel);
                   const declared = collection?.links[rel];
                   const full = declared?.cardinality === 'one' && here.length > 0;
@@ -313,22 +286,23 @@ export function RecordPanel({
                   if (here.length === 0 && !(editable && declared)) return null;
                   return (
                     <Property key={rel} label={humanize(rel)}>
-                      <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                      <span className={styles.links}>
                         {here.map(({ link, target, i }) => (
-                          <span key={link.to} style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                          <span key={link.to} className="row">
                             {target ? (
-                              <button onClick={() => onOpen(target)} style={linkish}>
+                              <button onClick={() => onOpen(target)} data-intent="inline">
                                 {recordLabel(target, schemaOf(target.collection))} →
                               </button>
                             ) : (
-                              <span style={{ color: palette.ink.faint, paddingTop: 6 }}>not here yet</span>
+                              <small>not here yet</small>
                             )}
                             {editable && (
                               <button
                                 onClick={() => void unlink(i)}
                                 aria-label={`Remove ${humanize(rel).toLowerCase()} link`}
                                 title="Remove this link"
-                                style={{ ...iconButton, fontSize: 12 }}
+                                data-intent="ghost"
+                                data-icon
                               >
                                 ✕
                               </button>
@@ -337,9 +311,9 @@ export function RecordPanel({
                         ))}
                         {editable && declared && linking !== rel && (
                           <button
+                            data-intent="ghost"
                             onClick={() => setLinking(rel)}
                             title={declared.description}
-                            style={addChip}
                           >
                             {full ? 'Change…' : here.length ? '+ Add another' : '+ Add'}
                           </button>
@@ -347,211 +321,167 @@ export function RecordPanel({
                       </span>
                     </Property>
                   );
-                })}
-                {uses(tag.name) && (
-                  <Property label="Tags">
-                    <Tags
-                      space={space}
-                      target={record.key}
-                      tags={linked.filter((r) => r.collection === tag.name)}
-                    />
-                  </Property>
-                )}
-              </dl>
-
-              {editable && collection && linking && (
-                <LinkPicker
-                  key={linking}
-                  space={space}
-                  record={record}
-                  collection={collection}
-                  collections={collections}
-                  initialRel={linking}
-                  onDone={() => setLinking(null)}
-                />
+                },
               )}
-
-              {record.conforms === false && (
-                <p style={{ ...styles.errorHint, color: palette.accent.danger }}>
-                  Doesn't fit its definition: {record.issues?.map((i) => i.message).join('; ')}
-                </p>
+              {uses(tag.name) && (
+                <Property label="Tags">
+                  <Tags
+                    space={space}
+                    target={record.key}
+                    tags={linked.filter((r) => r.collection === tag.name)}
+                  />
+                </Property>
               )}
-              {error && <p style={styles.error}>{error}</p>}
+            </dl>
 
-              {[...pointing].map(([group, records]) => {
-                const [name = '', rel = ''] = group.split('|');
-                const c = collections.find((x) => x.name === name);
-                const counted = c ? tally(c, records, record) : null;
-                const labelFor = (r: NodeRecord) =>
-                  (counted
-                    ? labelOf(counted.field, bodyOf(r)[counted.field.name], {
-                        [choicesFrom(counted.field.schema)!.rel]: record,
-                      })
-                    : null) ?? recordLabel(r, schemaOf(r.collection));
-                return (
-                  <section
-                    key={group}
-                    aria-label={`${c ? collectionLabel(c) : name} pointing here`}
-                    style={stack(8)}
-                  >
-                    <h3 style={styles.sectionTitle}>
-                      {c ? collectionLabel(c) : name}
-                      {rel && rel !== 'about' && (
-                        <span style={{ color: palette.ink.muted, fontWeight: 400 }}>
-                          {' '}
-                          · {humanize(rel).toLowerCase()} this
-                        </span>
-                      )}{' '}
-                      <span style={{ color: palette.ink.faint, fontWeight: 400 }}>{records.length}</span>
-                    </h3>
-                    {counted && (
-                      <div aria-label="Tally" style={stack(6)}>
-                        {counted.counts.map(({ label, count }) => (
-                          <div
-                            key={label}
-                            style={{
-                              display: 'grid',
-                              gridTemplateColumns: '110px 1fr 24px',
-                              alignItems: 'center',
-                              gap: 10,
-                              fontSize: 13,
-                            }}
-                          >
-                            <span>{label}</span>
-                            <span
-                              style={{
-                                height: 6,
-                                borderRadius: palette.radius.pill,
-                                background: palette.surface.sunken,
-                                overflow: 'hidden',
-                              }}
-                            >
-                              <span
-                                style={{
-                                  display: 'block',
-                                  height: '100%',
-                                  width: `${(count / Math.max(1, records.length)) * 100}%`,
-                                  background: palette.accent.base,
-                                }}
-                              />
-                            </span>
-                            <span style={{ color: palette.ink.muted, textAlign: 'right' }}>{count}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      {records.map((r) => (
-                        <button key={r.key} data-row onClick={() => onOpen(r)} style={miniRow}>
+            {editable && collection && linking && (
+              <LinkPicker
+                key={linking}
+                space={space}
+                record={record}
+                collection={collection}
+                collections={collections}
+                initialRel={linking}
+                onDone={() => setLinking(null)}
+              />
+            )}
+
+            {record.conforms === false && (
+              <p role="alert">
+                Doesn't fit its definition: {record.issues?.map((i) => i.message).join('; ')}
+              </p>
+            )}
+            {error && <p role="alert">{error}</p>}
+
+            {[...pointing].map(([group, records]) => {
+              const [name = '', rel = ''] = group.split('|');
+              const c = collections.find((x) => x.name === name);
+              const counted = c ? tally(c, records, record) : null;
+              const labelFor = (r: NodeRecord) =>
+                (counted
+                  ? labelOf(counted.field, bodyOf(r)[counted.field.name], {
+                      [choicesFrom(counted.field.schema)!.rel]: record,
+                    })
+                  : null) ?? recordLabel(r, schemaOf(r.collection));
+              return (
+                <section key={group} aria-label={`${c ? collectionLabel(c) : name} pointing here`}>
+                  <h3>
+                    {c ? collectionLabel(c) : name}
+                    {rel && rel !== 'about' && <small> · {humanize(rel).toLowerCase()} this</small>}{' '}
+                    <small>{records.length}</small>
+                  </h3>
+                  {counted && (
+                    <div aria-label="Tally" className="stack">
+                      {counted.counts.map(({ label, count }) => (
+                        <div key={label} className={styles.tally}>
+                          <span>{label}</span>
+                          <progress value={count} max={Math.max(1, records.length)} />
+                          <small>{count}</small>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <ul role="list">
+                    {records.map((r) => (
+                      <li key={r.key}>
+                        <button data-intent="open" onClick={() => onOpen(r)} className="row">
                           <PersonFace did={r.root ?? r.author} size={18} />
-                          <span style={{ ...ui.ellipsis, flex: 1, minWidth: 0 }}>{labelFor(r)}</span>
-                          <span style={styles.faint}>
+                          <span className="truncate">{labelFor(r)}</span>
+                          <small>
                             {writerOf(r, people)} · {ago(r.createdAt)}
-                          </span>
+                          </small>
                         </button>
-                      ))}
-                    </div>
-                  </section>
-                );
-              })}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              );
+            })}
 
-              {space.writable &&
-                (adding ? (
-                  <section style={stack(10)}>
-                    <h3 style={styles.sectionTitle}>
-                      New {collectionLabel(adding.collection).toLowerCase()}
-                    </h3>
-                    <SchemaForm
-                      schema={adding.collection.schema}
-                      linked={{ [adding.rel]: record }}
-                      submitLabel="Add"
-                      onCancel={() => setAdding(null)}
-                      onSubmit={async (next) => {
-                        await node.records.put(space.id, adding.collection.name, next, {
-                          links: [{ rel: adding.rel, to: record.key }],
-                        });
-                        setAdding(null);
-                      }}
-                    />
-                  </section>
-                ) : (
-                  addable.length > 0 && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                      {addable.map((a) => (
-                        <QuietButton
-                          key={`${a.collection.name}-${a.rel}`}
-                          onClick={() => setAdding(a)}
-                          title={a.collection.links[a.rel]?.description}
-                        >
-                          + Add {collectionLabel(a.collection).toLowerCase()}
-                          {/* One kind added two ways, like a task under a column or a project, says which */}
-                          {addable.filter((b) => b.collection.name === a.collection.name).length > 1 &&
-                            ` · ${humanize(a.rel).toLowerCase()}`}
-                        </QuietButton>
-                      ))}
-                    </div>
-                  )
-                ))}
-
-              {uses(file.name) && (
-                <>
-                  <div style={{ height: 1, background: palette.surface.line }} />
-                  <Attachments
-                    space={space}
-                    target={record.key}
-                    attachments={linked.filter((r) => r.collection === file.name)}
+            {space.writable &&
+              (adding ? (
+                <section>
+                  <h3>New {collectionLabel(adding.collection).toLowerCase()}</h3>
+                  <SchemaForm
+                    schema={adding.collection.schema}
+                    linked={{ [adding.rel]: record }}
+                    submitLabel="Add"
+                    onCancel={() => setAdding(null)}
+                    onSubmit={async (next) => {
+                      await node.records.put(space.id, adding.collection.name, next, {
+                        links: [{ rel: adding.rel, to: record.key }],
+                      });
+                      setAdding(null);
+                    }}
                   />
-                </>
-              )}
+                </section>
+              ) : (
+                addable.length > 0 && (
+                  <div className="row">
+                    {addable.map((a) => (
+                      <button
+                        key={`${a.collection.name}-${a.rel}`}
+                        onClick={() => setAdding(a)}
+                        title={a.collection.links[a.rel]?.description}
+                      >
+                        + Add {collectionLabel(a.collection).toLowerCase()}
+                        {/* One kind added two ways, like a task under a column or a project, says which */}
+                        {addable.filter((b) => b.collection.name === a.collection.name).length > 1 &&
+                          ` · ${humanize(a.rel).toLowerCase()}`}
+                      </button>
+                    ))}
+                  </div>
+                )
+              ))}
 
-              {uses(comment.name) && (
-                <>
-                  <div style={{ height: 1, background: palette.surface.line }} />
-                  <Comments
-                    space={space}
-                    target={record.key}
-                    targetAuthor={record.root}
-                    comments={linked.filter((r) => r.collection === comment.name)}
-                  />
-                </>
-              )}
+            {uses(file.name) && (
+              <>
+                <hr />
+                <Attachments
+                  space={space}
+                  target={record.key}
+                  attachments={linked.filter((r) => r.collection === file.name)}
+                />
+              </>
+            )}
 
-              <footer
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 12,
-                  paddingTop: 8,
-                  fontSize: 12,
-                  color: palette.ink.faint,
-                }}
-              >
-                <span>
-                  {record.verified ? 'Signature verified' : 'Not verified'}
-                  {record.encrypted && ' · encrypted'}
-                  {record.seq > 0 && ` · version ${record.seq + 1}`}
-                </span>
-                {may?.delete && (
-                  <QuietButton
-                    onClick={() =>
-                      confirmThen(
-                        'It is deleted for everyone in the space.',
-                        { title: 'Delete this?', yes: 'Delete' },
-                        () => node.records.delete(space.id, record.key).then(onClose),
-                      )
-                    }
-                    style={{ color: palette.accent.danger }}
-                  >
-                    Delete
-                  </QuietButton>
-                )}
-              </footer>
-            </div>
-          )}
-        </section>
-      </div>
-    </>
+            {uses(comment.name) && (
+              <>
+                <hr />
+                <Comments
+                  space={space}
+                  target={record.key}
+                  targetAuthor={record.root}
+                  comments={linked.filter((r) => r.collection === comment.name)}
+                />
+              </>
+            )}
+
+            <footer className="row" data-spread>
+              <small>
+                {record.verified ? 'Signature verified' : 'Not verified'}
+                {record.encrypted && ' · encrypted'}
+                {record.seq > 0 && ` · version ${record.seq + 1}`}
+              </small>
+              {may?.delete && (
+                <button
+                  data-intent="danger"
+                  onClick={() =>
+                    confirmThen(
+                      'It is deleted for everyone in the space.',
+                      { title: 'Delete this?', yes: 'Delete' },
+                      () => node.records.delete(space.id, record.key).then(onClose),
+                    )
+                  }
+                >
+                  Delete
+                </button>
+              )}
+            </footer>
+          </>
+        )}
+      </dialog>
+    </div>
   );
 }
 
@@ -562,9 +492,11 @@ const blank = (value: unknown): boolean =>
 /** One field of the form: its name above, what it holds, or the field to change it, under it */
 function Property({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div style={stack(6)}>
-      <dt style={styles.fieldLabel}>{label}</dt>
-      <dd style={{ margin: 0, fontSize: 15, minWidth: 0, color: palette.ink.strong }}>{children}</dd>
+    <div className="stack" data-gap="tight">
+      <dt>
+        <small>{label}</small>
+      </dt>
+      <dd>{children}</dd>
     </div>
   );
 }
@@ -602,14 +534,14 @@ function FieldEditor({
 
   if (field.kind === 'boolean') {
     return (
-      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+      <label>
         <input
           type="checkbox"
           checked={value === true}
           onChange={(e) => void onSave(e.target.checked)}
           aria-label={field.label}
         />
-        <span style={styles.quiet}>{value === true ? 'Yes' : 'No'}</span>
+        <small>{value === true ? 'Yes' : 'No'}</small>
       </label>
     );
   }
@@ -629,7 +561,7 @@ function FieldEditor({
     const immediate = field.kind === 'choice';
     return (
       <div
-        className="inline-field"
+        className={styles.bare}
         onBlur={() => !immediate && draft !== value && void onSave(draft)}
         onKeyDown={(e) => e.key === 'Enter' && !immediate && void onSave(draft)}
       >
@@ -646,26 +578,19 @@ function FieldEditor({
     );
   }
   return editing ? (
-    <div style={stack(8)}>
+    <div className="stack">
       <FieldInput field={bare} value={draft} linked={linked} onChange={setDraft} />
-      <div style={hstack(6)}>
-        <button
-          onClick={() => void onSave(draft).then(() => setEditing(false))}
-          data-variant="primary"
-          style={styles.darkSmall}
-        >
+      <div className="row">
+        <button data-intent="primary" onClick={() => void onSave(draft).then(() => setEditing(false))}>
           Save
         </button>
-        <QuietButton onClick={() => setEditing(false)}>Cancel</QuietButton>
+        <button data-intent="ghost" onClick={() => setEditing(false)}>
+          Cancel
+        </button>
       </div>
     </div>
   ) : (
-    <button
-      data-editable
-      onClick={() => setEditing(true)}
-      style={{ ...editable_, textAlign: 'left' }}
-      aria-label={`Edit ${field.label}`}
-    >
+    <button data-intent="open" onClick={() => setEditing(true)} aria-label={`Edit ${field.label}`}>
       <Value field={field} value={value} linked={linked} />
     </button>
   );
@@ -696,13 +621,7 @@ function InlineText({
     onBlur: commit,
     // What goes there, for a field still empty: "Add description"
     placeholder: big ? 'Untitled' : `Add ${ariaLabel.toLowerCase()}`,
-    'data-editable': true,
-    style: {
-      ...(big ? { ...editable_, ...titleEditable, ...bigTitle } : editable_),
-      width: '100%',
-      resize: 'vertical' as const,
-      fontFamily: 'inherit',
-    },
+    className: big ? styles.title : undefined,
   };
   return multiline ? (
     <textarea {...common} rows={3} onKeyDown={(e) => e.key === 'Escape' && setDraft(value)} />
@@ -722,131 +641,3 @@ function groupBy<T>(items: ReadonlyArray<T>, key: (item: T) => string): Map<stri
   for (const item of items) groups.set(key(item), [...(groups.get(key(item)) ?? []), item]);
   return groups;
 }
-
-/** The dialog: a card in the middle, wider than a question's, its head fixed and the rest scrolling */
-const dialog = {
-  ...styles.modal,
-  maxWidth: 560,
-  maxHeight: 'min(760px, calc(100dvh - 40px))',
-  padding: 0,
-  gap: 0,
-  overflow: 'hidden',
-} as const;
-const dialogHead = {
-  flexShrink: 0,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  gap: 12,
-  padding: '16px 18px 4px 22px',
-} as const;
-const dialogBody = {
-  flex: 1,
-  minHeight: 0,
-  overflowY: 'auto',
-  padding: '8px 22px 24px',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 22,
-} as const;
-/** What kind of record it is, as a small pill above its title */
-const kindChip = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  height: 26,
-  padding: '0 12px',
-  borderRadius: palette.radius.pill,
-  background: palette.surface.sunken,
-  color: palette.ink.muted,
-  fontSize: 12.5,
-  fontWeight: 500,
-} as const;
-/** "+ Add" for a link: a small quiet pill */
-const addChip = {
-  height: 32,
-  padding: '0 12px',
-  border: `1px dashed ${palette.surface.lineStrong}`,
-  borderRadius: palette.radius.pill,
-  background: 'none',
-  color: palette.ink.muted,
-  fontSize: 13,
-} as const;
-const panel = {
-  position: 'fixed' as const,
-  top: 0,
-  right: 0,
-  bottom: 0,
-  width: 'min(560px, 100vw)',
-  background: palette.surface.card,
-  borderLeft: `1px solid ${palette.surface.rule}`,
-  zIndex: 31,
-  display: 'flex',
-  flexDirection: 'column' as const,
-  animation: 'minca-slide .16s ease',
-};
-const bigTitle = {
-  fontFamily: palette.display,
-  fontSize: 22,
-  fontWeight: 700,
-  letterSpacing: '-0.04em',
-  color: palette.ink.strong,
-  lineHeight: 1.3,
-};
-/** A circle whatever the symbol in it, so ✕ in any font doesn't make it an oval */
-const iconButton = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  width: 28,
-  height: 28,
-  flexShrink: 0,
-  border: 'none',
-  background: 'none',
-  color: palette.ink.muted,
-  fontSize: 14,
-  padding: 0,
-  borderRadius: palette.radius.pill,
-};
-const linkish = {
-  border: 'none',
-  background: 'none',
-  padding: '6px 0 0',
-  color: palette.ink.strong,
-  textDecoration: 'underline',
-  textUnderlineOffset: 3,
-  fontSize: 14,
-};
-const miniRow = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 10,
-  padding: '8px 6px',
-  border: 'none',
-  borderRadius: palette.radius.md,
-  background: 'none',
-  textAlign: 'left' as const,
-  fontSize: 14,
-  width: '100%',
-};
-/** The title is the heading until it is clicked: no box of its own, as a document's title */
-const titleEditable = {
-  border: '1px solid transparent',
-  background: 'none',
-  padding: '2px 8px',
-  margin: '0 -9px',
-  width: 'calc(100% + 18px)',
-  minHeight: 0,
-} as const;
-/** What can be changed looks like a field: a box with a hairline, as the form's inputs are */
-const editable_ = {
-  border: `1px solid ${palette.surface.line}`,
-  borderRadius: palette.radius.md,
-  background: palette.surface.page,
-  padding: '9px 12px',
-  margin: 0,
-  fontSize: 15,
-  color: palette.ink.strong,
-  outline: 'none',
-  width: '100%',
-  minHeight: 42,
-};

@@ -1,0 +1,16 @@
+/* A dialog the page is dimmed behind, as wide as it asks (520px unless it says) */
+.modal {
+  width: calc(100% - 32px);
+  max-width: 520px;
+
+  &::backdrop {
+    background: var(--color-scrim);
+  }
+
+  /* On a phone it rises from the bottom edge, where a thumb can reach it. */
+  @media (max-width: 640px) {
+    width: 100%;
+    margin: auto auto 0;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  }
+}

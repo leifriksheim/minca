@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import type { NodeCollection } from '@minca/core';
 import { useQuery } from '@minca/react';
 import {
@@ -12,9 +12,6 @@ import {
 import { nameOf, type People } from '../../derive/people';
 import { recordLabel } from '../../derive/schema-ui';
 import { noun, type Within } from '../../automations';
-import { styles, palette, stack } from '../../styles';
-import { Icon } from '../Icon';
-import { AddButton } from '../Buttons';
 
 /** One choice inside a sentence, drawn as a word you can change */
 export function Pill<T extends string>({
@@ -22,13 +19,11 @@ export function Pill<T extends string>({
   options,
   onChange,
   label,
-  strong = true,
 }: {
   value: T;
   options: ReadonlyArray<{ value: T; label: string; disabled?: boolean }>;
   onChange: (value: T) => void;
   label: string;
-  strong?: boolean;
 }) {
   return (
     <select
@@ -38,8 +33,6 @@ export function Pill<T extends string>({
         const picked = options.find((option) => option.value === event.target.value);
         if (picked) onChange(picked.value);
       }}
-      data-pill
-      style={{ ...pill, fontWeight: strong ? 600 : 500 }}
     >
       {options.map((option) => (
         <option key={option.value} value={option.value} disabled={option.disabled}>
@@ -122,7 +115,6 @@ export function ValueInput({
             onChange(event.target.value === '' ? { value: undefined } : { value: Number(event.target.value) })
           }
           placeholder="0"
-          style={{ ...box, width: 88 }}
         />
       );
     case 'date':
@@ -132,7 +124,6 @@ export function ValueInput({
           type="date"
           value={typeof clause.value === 'string' ? clause.value : ''}
           onChange={(event) => onChange({ value: event.target.value || undefined })}
-          style={{ ...box, width: 150 }}
         />
       );
     default:
@@ -142,7 +133,6 @@ export function ValueInput({
           value={typeof clause.value === 'string' ? clause.value : ''}
           onChange={(event) => onChange({ value: event.target.value })}
           placeholder="some text"
-          style={{ ...box, width: 160 }}
         />
       );
   }
@@ -173,17 +163,15 @@ export function ClauseList({
   const suggestions = suggest && clauses.length === 0 ? suggestionsFor(fields) : [];
 
   return (
-    <div style={stack(8)}>
-      {clauses.length === 0 && empty && <p style={styles.quiet}>{empty}</p>}
+    <div className="stack">
+      {clauses.length === 0 && empty && <small>{empty}</small>}
       {clauses.map((clause, i) => {
         const field = fields.find((f) => f.name === clause.field);
         if (!field) return null;
         const ops = opsFor(field.kind);
         return (
-          <div key={`${clause.field}-${i}`} style={clauseRow}>
-            <span style={{ fontSize: 13, color: palette.ink.faint, width: 34, flexShrink: 0 }}>
-              {i === 0 ? 'where' : 'and'}
-            </span>
+          <aside key={`${clause.field}-${i}`} className="row" data-gap="tight">
+            <small>{i === 0 ? 'where' : 'and'}</small>
             <Pill
               label={`Condition ${i + 1}: field`}
               value={clause.field}
@@ -196,13 +184,12 @@ export function ClauseList({
             {ops.length > 1 ? (
               <Pill
                 label={`Condition ${i + 1}: comparison`}
-                strong={false}
                 value={clause.op}
                 options={ops.map((o) => ({ value: o.op, label: o.label }))}
                 onChange={(op) => set(i, { ...clause, op })}
               />
             ) : (
-              <span style={{ fontSize: 14, color: palette.ink.muted }}>is</span>
+              <span>is</span>
             )}
             {needsValue(clause.op) && (
               <ValueInput
@@ -220,45 +207,35 @@ export function ClauseList({
               type="button"
               onClick={() => onChange(clauses.filter((_, j) => j !== i))}
               aria-label={`Remove condition ${i + 1}`}
-              data-variant="ghost"
-              style={{ ...styles.rowAction, marginLeft: 'auto' }}
+              data-intent="ghost"
+              data-icon
             >
               ✕
             </button>
-          </div>
+          </aside>
         );
       })}
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+      <div className="row" data-gap="tight">
         {fields.length > 0 && (
-          <label style={{ position: 'relative', display: 'inline-flex' }}>
-            <span style={addButton}>{add}</span>
-            <select
-              aria-label="Add a condition on"
-              value=""
-              onChange={(event) => {
-                const field = fields.find((f) => f.name === event.target.value);
-                if (field) onChange([...clauses, clauseOn(field)]);
-              }}
-              style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
-            >
-              <option value="">Add a condition on…</option>
-              {fields.map((f) => (
-                <option key={f.name} value={f.name}>
-                  {f.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <select
+            aria-label="Add a condition on"
+            value=""
+            onChange={(event) => {
+              const field = fields.find((f) => f.name === event.target.value);
+              if (field) onChange([...clauses, clauseOn(field)]);
+            }}
+          >
+            <option value="">{add}</option>
+            {fields.map((f) => (
+              <option key={f.name} value={f.name}>
+                {f.label}
+              </option>
+            ))}
+          </select>
         )}
         {suggestions.map((clause) => (
-          <button
-            key={clauseWords(clause, fields)}
-            type="button"
-            onClick={() => onChange([clause])}
-            data-variant="quiet"
-            style={chip}
-          >
+          <button key={clauseWords(clause, fields)} type="button" onClick={() => onChange([clause])}>
             {clauseWords(clause, fields)}
           </button>
         ))}
@@ -285,178 +262,24 @@ function suggestionsFor(fields: ReadonlyArray<ClauseField>): ReadonlyArray<Claus
   return [...mine, ...choice].slice(0, 3);
 }
 
-/** A numbered step of a builder: a short label on the left, what is picked on the right */
+/** A step of a builder: its short name over what is picked */
 export function Step({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div
-      style={{ display: 'grid', gridTemplateColumns: '64px minmax(0, 1fr)', gap: 12, alignItems: 'start' }}
-    >
-      <span style={stepLabel}>{label}</span>
-      <div style={{ ...stack(10), minWidth: 0 }}>{children}</div>
-    </div>
+    <fieldset className="stack">
+      <legend>{label}</legend>
+      {children}
+    </fieldset>
   );
 }
 
 /** Text with pills inside it, wrapping like a sentence */
 export function Sentence({ children }: { children: ReactNode }) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexWrap: 'wrap',
-        alignItems: 'center',
-        gap: 6,
-        fontSize: 15,
-        lineHeight: 1.6,
-      }}
-    >
+    <div className="row" data-gap="tight">
       {children}
     </div>
   );
 }
-
-/** Where a builder's parts sit: one card */
-export const card: CSSProperties = {
-  ...styles.tile,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 16,
-  padding: 16,
-};
-
-/** What an automation or notification would have caught, under the builder */
-export const previewBox: CSSProperties = {
-  padding: '12px 14px',
-  borderRadius: palette.radius.md,
-  background: palette.surface.sunken,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 6,
-  fontSize: 13,
-  color: palette.ink.body,
-};
-
-const pill: CSSProperties = {
-  height: 32,
-  padding: '0 26px 0 12px',
-  borderRadius: palette.radius.pill,
-  border: `1px solid ${palette.surface.lineStrong}`,
-  background: palette.surface.card,
-  color: palette.ink.strong,
-  fontSize: 14,
-  maxWidth: '100%',
-  cursor: 'pointer',
-};
-
-const box: CSSProperties = {
-  height: 32,
-  padding: '0 12px',
-  borderRadius: palette.radius.pill,
-  border: `1px solid ${palette.surface.lineStrong}`,
-  background: palette.surface.card,
-  color: palette.ink.strong,
-  fontSize: 14,
-};
-
-const clauseRow: CSSProperties = {
-  display: 'flex',
-  flexWrap: 'wrap',
-  alignItems: 'center',
-  gap: 6,
-  padding: '6px 6px 6px 10px',
-  borderRadius: palette.radius.lg,
-  background: palette.surface.sunken,
-};
-
-const addButton: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  height: 30,
-  padding: '0 12px',
-  borderRadius: palette.radius.pill,
-  border: `1px dashed ${palette.surface.lineStrong}`,
-  color: palette.ink.muted,
-  fontSize: 13,
-  fontWeight: 500,
-};
-
-/** A small rounded button, for a suggestion or an option */
-export const chip: CSSProperties = {
-  ...styles.smallButton,
-  height: 30,
-  borderRadius: palette.radius.pill,
-  fontSize: 13,
-  color: palette.ink.muted,
-};
-
-const stepLabel: CSSProperties = {
-  fontSize: 13,
-  fontWeight: 500,
-  color: palette.ink.muted,
-  paddingTop: 8,
-};
-
-/** What a list of automations or notifications is made of, headed and empty alike */
-export function SectionHead({
-  title,
-  about,
-  action,
-  onAction,
-  disabled,
-}: {
-  title: string;
-  about: string;
-  action: string;
-  onAction: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
-      <div style={{ flex: 1, minWidth: 200 }}>
-        <h3 style={{ ...styles.sectionTitle, fontSize: 16 }}>{title}</h3>
-        <p style={{ ...styles.quiet, marginTop: 2 }}>{about}</p>
-      </div>
-      <AddButton
-        onClick={onAction}
-        disabled={disabled}
-        style={{ height: 34, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}
-      >
-        <Icon name="plus" size={13} /> {action}
-      </AddButton>
-    </div>
-  );
-}
-
-export function Empty({ children }: { children: ReactNode }) {
-  return (
-    <p
-      style={{
-        padding: '18px 16px',
-        borderRadius: palette.radius.lg,
-        border: `1px dashed ${palette.surface.lineStrong}`,
-        color: palette.ink.muted,
-        fontSize: 13.5,
-        textAlign: 'center',
-      }}
-    >
-      {children}
-    </p>
-  );
-}
-
-export const section = stack(12);
-export const list = styles.todoList;
-export const iconDot = {
-  width: 28,
-  height: 28,
-  borderRadius: palette.radius.sm,
-  flexShrink: 0,
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  background: palette.surface.sunken,
-  color: palette.ink.body,
-} as const;
 
 /** "in any channel", or one of them: where an automation's or notification's records must be */
 export function PlacePill({
@@ -483,7 +306,6 @@ export function PlacePill({
       <span>in</span>
       <Pill
         label={`Which ${noun(collections, place.to)}`}
-        strong={picked !== null}
         value={picked?.to ?? ''}
         options={[{ value: '', label: `any ${noun(collections, place.to)}` }, ...options]}
         onChange={(key) => {

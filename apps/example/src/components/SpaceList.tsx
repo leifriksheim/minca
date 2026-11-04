@@ -7,14 +7,14 @@ import { Info } from '@minca/app-shared/Info';
 import { Shape } from '@minca/app-shared/shapes';
 import { markFor } from '@minca/ui/shapes';
 import type { ShapeColour } from '@minca/ui/tokens';
-import { styles, palette, stack, ui } from '../styles';
+import { Loader } from '@minca/app-shared/Loader';
 import { useSpaceUnread } from '../seen';
-import { Loading } from './Loading';
 import { useSpaceFace } from '../pictures';
 import { useFileUrl } from '../files';
 import { Count } from './apps/AppIcon';
 import { Options, type Option } from './Options';
-import { LinkButton, PrimaryButton } from './Buttons';
+import styles from './SpaceList.module.css';
+import steps from './ConnectScreen.module.css';
 
 /** How a space is described once it exists: who can read it, and what you are in it. */
 function spaceBadges(space: Pick<SpaceSummary, 'visibility' | 'role' | 'joining'>): string {
@@ -33,45 +33,18 @@ export function SpaceMark({ space, size = 40 }: { space: Pick<SpaceSummary, 'id'
   const avatar = useSpaceFace(space.id)?.avatar;
   const picture = useFileUrl(space.id, avatar);
   const shape = markFor(space.id);
-  if (picture)
-    return (
-      <img
-        src={picture}
-        alt=""
-        width={size}
-        height={size}
-        style={{ width: size, height: size, flexShrink: 0, objectFit: 'cover', borderRadius: size / 4 }}
-      />
-    );
+  if (picture) return <img src={picture} alt="" width={size} height={size} className={styles.picture} />;
   const letter = [...space.name.trim()][0]?.toUpperCase() ?? '·';
-  const navy = LIGHT.has(shape.colour);
   return (
     <span
       aria-hidden
-      style={{
-        position: 'relative',
-        width: size,
-        height: size,
-        flexShrink: 0,
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
+      className={styles.mark}
+      data-light={LIGHT.has(shape.colour) || undefined}
+      // eslint-disable-next-line react/forbid-dom-props -- the letter scales with the mark's size
+      style={{ fontSize: size }}
     >
-      <Shape {...shape} size={size} style={{ position: 'absolute', inset: 0 }} />
-      <span
-        style={{
-          position: 'relative',
-          fontFamily: palette.display,
-          fontSize: Math.round(size * 0.42),
-          fontWeight: 700,
-          letterSpacing: '-0.04em',
-          lineHeight: 1,
-          color: navy ? palette.ink.strong : palette.surface.card,
-        }}
-      >
-        {letter}
-      </span>
+      <Shape {...shape} size={size} />
+      <span>{letter}</span>
     </span>
   );
 }
@@ -143,24 +116,26 @@ export function SpaceList({
   return (
     <>
       {loading && spaces.length === 0 ? (
-        <Loading label="Opening your groups" style={styles.emptyState} />
+        <p className="empty">
+          <Loader label="Opening your groups" showLabel />
+        </p>
       ) : spaces.length === 0 ? (
-        <div style={{ ...styles.emptyState, ...stack(10), alignItems: 'center' }}>
-          <strong style={{ color: palette.ink.strong, fontSize: 15 }}>No groups yet</strong>
-          <span>A group starts as a chat. Add people, then any app it needs: a board, a poll, a list.</span>
-          <PrimaryButton onClick={onNew} style={{ marginTop: 6 }}>
+        <div className="empty">
+          <strong>No groups yet</strong>
+          <p>A group starts as a chat. Add people, then any app it needs: a board, a poll, a list.</p>
+          <button data-intent="primary" onClick={onNew}>
             New group
-          </PrimaryButton>
+          </button>
         </div>
       ) : (
-        <ul className="rows" style={ui.list}>
+        <ul role="list">
           {spaces.map((space) => (
             <GroupRow key={space.id} space={space} detail={spaceBadges(space)} onOpen={() => onOpen(space)} />
           ))}
         </ul>
       )}
 
-      {error && <p style={{ ...styles.error, marginTop: 10 }}>{error}</p>}
+      {error && <p role="alert">{error}</p>}
     </>
   );
 }
@@ -176,12 +151,12 @@ export function GroupRow({
   onOpen: () => void;
 }) {
   return (
-    <li data-tile style={{ position: 'relative', listStyle: 'none' }}>
-      <button onClick={onOpen} style={row}>
+    <li>
+      <button data-intent="open" onClick={onOpen} className="row">
         <SpaceMark space={space} size={44} />
-        <span style={{ ...stack(2), minWidth: 0, flex: 1 }}>
-          <span style={groupName}>{space.name}</span>
-          <span style={{ ...ui.ellipsis, fontSize: 13, color: palette.ink.muted }}>{detail}</span>
+        <span className="stack truncate" data-gap="tight">
+          <strong className="truncate">{space.name}</strong>
+          <small className="truncate">{detail}</small>
         </span>
         <SpaceCount space={space} />
       </button>
@@ -196,26 +171,6 @@ export function GroupRow({
 export function SpaceCount({ space }: { space: SpaceSummary }) {
   return <Count unread={useSpaceUnread(space)} />;
 }
-
-const row = {
-  width: '100%',
-  display: 'flex',
-  alignItems: 'center',
-  gap: 14,
-  padding: '14px 16px',
-  border: 'none',
-  background: 'none',
-  textAlign: 'left' as const,
-};
-/** A group goes by its name in the display face, as its sidebar has it */
-const groupName = {
-  ...ui.ellipsis,
-  fontFamily: palette.display,
-  fontSize: 17,
-  fontWeight: 700,
-  letterSpacing: '-0.03em',
-  color: palette.ink.strong,
-};
 
 /** Making a group, or joining one from a link, in one dialog */
 export function SpaceDialog({
@@ -260,30 +215,29 @@ export function SpaceDialog({
   if (mode === 'join') {
     return (
       <Modal title="Join a group" onClose={onClose}>
-        <form onSubmit={join} style={styles.form}>
+        <form onSubmit={join} className="stack">
           <input
             type="text"
             value={invite}
             onChange={(event) => setInvite(event.target.value)}
             placeholder="Paste an invite link"
-            style={styles.input}
             spellCheck={false}
             aria-label="Invite link"
           />
-          <p style={styles.errorHint}>
+          <small>
             Paste a link someone shared with you.
             <Info label="What an invite link carries">
               The space itself and, for a private one, the key that opens it — in the part after the{' '}
               <code>#</code>, which browsers never send to a server. So it reaches you without passing through
               whatever is hosting the page.
             </Info>
-          </p>
-          <PrimaryButton type="submit" disabled={!invite.trim()}>
+          </small>
+          <button data-intent="primary" type="submit" disabled={!invite.trim()}>
             Join
-          </PrimaryButton>
-          <LinkButton type="button" onClick={() => setMode('new')} style={{ alignSelf: 'center' }}>
+          </button>
+          <button data-intent="ghost" type="button" onClick={() => setMode('new')}>
             Make a new group instead
-          </LinkButton>
+          </button>
         </form>
       </Modal>
     );
@@ -294,7 +248,7 @@ export function SpaceDialog({
       title={step === 'name' ? 'New group' : step === 'run' ? 'How is it run?' : 'Who can read it?'}
       onClose={onClose}
     >
-      <form onSubmit={next} style={styles.form}>
+      <form onSubmit={next} className="stack">
         {step === 'name' && (
           <>
             <input
@@ -302,55 +256,46 @@ export function SpaceDialog({
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="Family, Book club, Trip…"
-              style={styles.input}
               aria-label="Group name"
               autoFocus
             />
-            <p style={{ ...styles.errorHint, marginTop: 0 }}>It starts with a chat. You add people after.</p>
+            <small>It starts with a chat. You add people after.</small>
           </>
         )}
         {step === 'run' && (
           <>
             <Options label="How it's run" options={RUNS} picked={run} onPick={setRun} />
-            <p style={{ ...styles.errorHint, marginTop: 0 }}>Roles can be changed later, under Roles.</p>
+            <small>Roles can be changed later, under Roles.</small>
           </>
         )}
         {step === 'read' && (
           <>
             <Options label="Who can read it" options={READS} picked={visibility} onPick={setVisibility} />
-            <p style={{ ...styles.errorHint, marginTop: 0 }}>This one can't be changed later.</p>
+            <small>This one can't be changed later.</small>
           </>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
+        <div className="row">
           {step === 'name' ? (
-            <LinkButton type="button" onClick={() => setMode('join')}>
+            <button data-intent="ghost" type="button" onClick={() => setMode('join')}>
               Have an invite link?
-            </LinkButton>
+            </button>
           ) : (
-            <LinkButton type="button" onClick={back}>
+            <button data-intent="ghost" type="button" onClick={back}>
               Back
-            </LinkButton>
+            </button>
           )}
-          <span style={{ flex: 1, display: 'flex', justifyContent: 'center', gap: 6 }} aria-hidden>
+          {/* Where in the steps you are: a dot for each, the one you're on longer */}
+          <span className={steps.dots} aria-hidden>
             {STEPS.map((one) => (
-              <span key={one} style={one === step ? progressOn : progress} />
+              <span key={one} aria-current={one === step ? 'step' : undefined} />
             ))}
           </span>
-          <PrimaryButton type="submit" disabled={!name.trim()} style={{ width: 'auto', padding: '0 22px' }}>
+          <button data-intent="primary" type="submit" disabled={!name.trim()}>
             {step === 'read' ? 'Create group' : 'Next'}
-          </PrimaryButton>
+          </button>
         </div>
       </form>
     </Modal>
   );
 }
-
-/** Where in the steps you are: a dot for each, the one you're on longer */
-const progress = {
-  width: 6,
-  height: 6,
-  borderRadius: palette.radius.pill,
-  background: palette.surface.lineStrong,
-} as const;
-const progressOn = { ...progress, width: 18, background: palette.accent.base } as const;

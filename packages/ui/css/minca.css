@@ -1,0 +1,13 @@
+/*
+ * Minca's look, the one stylesheet every UI loads: the apps, the site, and
+ * every app's screen (src/bundle.ts writes it into the kit). Inside one layer,
+ * so any stylesheet of the page's own wins over it without fighting.
+ */
+@layer minca;
+@import './tokens.css' layer(minca);
+@import './base.css' layer(minca);
+@import './layout.css' layer(minca);
+@import './controls.css' layer(minca);
+@import './content.css' layer(minca);
+@import './overlay.css' layer(minca);
+@import './kit.css' layer(minca);

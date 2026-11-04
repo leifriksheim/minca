@@ -7,14 +7,11 @@ import { useCopy } from '@minca/app-shared/action';
 import { shortUsername } from '@minca/app-shared/usernames';
 import { inboxLink, usernameLink } from '../contacts';
 import { useWorkspace } from '../workspace';
-import { palette, styles } from '../styles';
-import { AddButton, QuietButton } from './Buttons';
+import styles from './NewSheet.module.css';
 import type { ShapeKind } from '@minca/ui/shapes';
 import { Options } from './Options';
 import { SpaceDialog } from './SpaceList';
 import { openAccountHome } from './AccountMenu';
-
-const { ink, surface, radius } = palette;
 
 /** Shares a username the way a phone shares anything; elsewhere its link is copied */
 async function shareUsername(username: string, copy: (text: string) => void): Promise<void> {
@@ -82,44 +79,38 @@ function ShareMe({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="Share your link" onClose={onClose}>
       {found.status === 'loading' ? null : link ? (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
-          <div style={{ padding: 12, borderRadius: radius.lg, border: `1px solid ${surface.rule}` }}>
+        <div className={`stack ${styles.share}`}>
+          <article>
             <QrCode text={link} label="QR code to add you" size={184} />
-          </div>
-          {username && (
-            <strong style={{ ...styles.appTitle, fontSize: 22 }}>{shortUsername(username)}</strong>
+          </article>
+          {username && <h2>{shortUsername(username)}</h2>}
+          <p>Anyone who scans it or opens the link can ask to be your contact. You choose who gets in.</p>
+          {username ? (
+            <button data-intent="primary" onClick={() => void shareUsername(username, copy)}>
+              {copied ? 'Link copied' : 'Share link'}
+            </button>
+          ) : (
+            <button data-intent="primary" onClick={() => copy(link)}>
+              {copied ? 'Copied' : 'Copy link'}
+            </button>
           )}
-          <p style={{ fontSize: 14, color: ink.muted, textAlign: 'center', lineHeight: 1.5 }}>
-            Anyone who scans it or opens the link can ask to be your contact. You choose who gets in.
-          </p>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {username ? (
-              <AddButton onClick={() => void shareUsername(username, copy)} style={{ height: 40 }}>
-                {copied ? 'Link copied' : 'Share link'}
-              </AddButton>
-            ) : (
-              <AddButton onClick={() => copy(link)} style={{ height: 40 }}>
-                {copied ? 'Copied' : 'Copy link'}
-              </AddButton>
-            )}
-          </div>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <p style={{ fontSize: 14, color: ink.muted, lineHeight: 1.5 }}>
+        <>
+          <p>
             Pick a username first: it’s what your link leads to, and what people type to find you. It’s kept
             with your account, so every app finds you by it.
           </p>
-          <QuietButton
+          <button
+            data-intent="ghost"
             onClick={() => {
               onClose();
               openAccountHome(state.home, account.did);
             }}
-            style={{ alignSelf: 'flex-start' }}
           >
             Pick a username
-          </QuietButton>
-        </div>
+          </button>
+        </>
       )}
     </Modal>
   );

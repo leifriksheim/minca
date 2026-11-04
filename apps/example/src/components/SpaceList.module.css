@@ -1,0 +1,31 @@
+/* A space's mark: its shape, with the first letter of its name in the middle. Its font size is its size. */
+.mark {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 1em;
+  height: 1em;
+
+  & > svg {
+    position: absolute;
+    inset: 0;
+  }
+
+  & > span {
+    position: relative;
+    color: var(--color-surface);
+    font: 700 0.42em / 1 var(--font-display);
+  }
+
+  /* A light shape carries navy rather than paper */
+  &[data-light] > span {
+    color: var(--color-text-strong);
+  }
+}
+
+/* The space's own picture, cornered like a shape */
+.picture {
+  object-fit: cover;
+  border-radius: 25%;
+}

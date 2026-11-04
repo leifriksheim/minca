@@ -1,6 +1,6 @@
 /**
  * How a move between pages looks (`defaultViewTransition` in `router.tsx`, the animations in
- * `styles.ts`): going in, from home to a space or from an app to the space's own pages, slides forward;
+ * `app.css`): going in, from home to a space or from an app to the space's own pages, slides forward;
  * coming back slides back; the home's tabs, and one app for another, cross-fade. A change that keeps
  * the page, like a record opened beside it, moves nothing.
  */

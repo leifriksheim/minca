@@ -10,8 +10,7 @@ import { fileRefOf, moneyText, safeHref, whenText } from '../derive/kinds';
 import { isObject } from '../derive/schema-ui';
 import { saveFile, useFileUrl } from '../files';
 import { Person, useSpaceHere } from './Person';
-import { palette } from '../styles';
-import { LinkButton } from './Buttons';
+import styles from './KindValue.module.css';
 
 /** A value as its kind says to show it, or null to show it plainly */
 export function byKind(kind: string, value: unknown, compact: boolean): ReactNode | null {
@@ -33,7 +32,7 @@ export function byKind(kind: string, value: unknown, compact: boolean): ReactNod
           rel="noopener noreferrer"
           // Opening the link isn't editing the field it sits in.
           onClick={(e) => e.stopPropagation()}
-          style={{ wordBreak: 'break-all' }}
+          className={styles.url}
         >
           {compact ? new URL(href).host : href}
         </a>
@@ -94,26 +93,21 @@ export function FileValue({
         src={url}
         alt={alt}
         title={alt || name}
-        style={{
-          display: 'block',
-          maxWidth: compact ? 32 : 240,
-          maxHeight: compact ? 32 : 240,
-          borderRadius: palette.radius.md,
-          objectFit: 'cover',
-        }}
+        className={styles.picture}
+        data-compact={compact || undefined}
       />
     );
   const save = async () => {
     if (space) saveFile(await node.records.readFile(space.id, value), name, value.mime);
   };
   return (
-    <span style={{ display: 'inline-flex', gap: 6, alignItems: 'baseline' }}>
+    <span className="row" data-gap="tight">
       <span>{name}</span>
-      <span style={{ color: palette.ink.muted, fontSize: 12 }}>{sizeOf(value.size)}</span>
+      <small>{sizeOf(value.size)}</small>
       {!compact && space && (
-        <LinkButton type="button" onClick={() => void save()}>
+        <button type="button" data-intent="inline" onClick={() => void save()}>
           Save
-        </LinkButton>
+        </button>
       )}
     </span>
   );

@@ -4,6 +4,7 @@ import type { ShapeKind } from '@minca/ui/shapes';
 import type { ShapeColour } from '@minca/ui/tokens';
 import { Face } from './demos';
 import { Tabs } from './Site';
+import './trust.css';
 
 /**
  * The front page's two pictures of trust: a message locked on one device,
@@ -134,6 +135,7 @@ function Used({ label, used, of, share }: { label: string; used: string; of: str
         </b>
       </span>
       <div className="hosting-meter">
+        {/* eslint-disable-next-line react/forbid-dom-props -- the share of the fund used */}
         <span style={{ width: `${share * 100}%` }} />
       </div>
     </div>
@@ -162,7 +164,9 @@ const GROUP_CARD = (
         <b>$6 in the fund</b>
         <small>Ready for when you grow</small>
       </span>
-      <span className="btn btn-secondary hosting-chip-in">Chip in</span>
+      <button type="button" tabIndex={-1} className="hosting-chip-in">
+        Chip in
+      </button>
     </div>
   </div>
 );

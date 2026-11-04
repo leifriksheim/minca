@@ -8,14 +8,11 @@ import { message } from '@minca/app-shared/action';
 import { Shape } from '@minca/app-shared/shapes';
 import { shapeFor } from '@minca/ui/shapes';
 import { ago } from '@minca/ui/time';
-import { palette, styles } from '../styles';
 import { NOT_CARRIED, useSpaceInvites, withChat } from '../contacts';
 import { shortUsername } from '@minca/app-shared/usernames';
-import { AddButton, LinkButton } from './Buttons';
-import { Icon } from './Icon';
+import { Icon } from '@minca/app-shared/Icon';
 import { usePopover } from './usePopover';
-
-const { ink, surface, radius } = palette;
+import styles from './PeopleParts.module.css';
 
 /**
  * One person in a list: their face, their name, a quieter line under it, and
@@ -27,7 +24,6 @@ export function PersonRow({
   name,
   detail,
   children,
-  tone,
   online,
   onOpen,
 }: {
@@ -36,8 +32,6 @@ export function PersonRow({
   name: ReactNode;
   detail?: ReactNode;
   children?: ReactNode;
-  /** A card of its own, for someone asking or found, rather than a row in the list */
-  tone?: 'card';
   /** Online now: a dot on their face, as Members shows it */
   online?: boolean;
   /** A tap anywhere on their face or name: opens your chat with them, or ticks them in a picker */
@@ -45,65 +39,34 @@ export function PersonRow({
 }) {
   const who = (
     <>
-      <span style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
+      <span className={styles.face}>
         <PersonFace did={face} size={40} round />
-        {online && <span title="Online now" style={onlineDot} />}
+        {online && <span title="Online now" className={styles.online} />}
       </span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 15, fontWeight: 600, color: ink.strong, ...ellipsis }}>{name}</div>
-        {detail && <div style={{ fontSize: 13, color: ink.muted, marginTop: 1, ...ellipsis }}>{detail}</div>}
-      </div>
+      <span className="stack truncate" data-gap="tight">
+        <strong className="truncate">{name}</strong>
+        {detail && <small className="truncate">{detail}</small>}
+      </span>
     </>
   );
   return (
-    <li
-      data-tile={onOpen ? '' : undefined}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        padding: tone === 'card' ? '12px 14px' : '11px 14px',
-        // In a list, the list draws the lines between rows (`className="rows"`).
-        ...(tone === 'card'
-          ? { border: `1px solid ${surface.rule}`, borderRadius: radius.lg, background: surface.card }
-          : {}),
-        listStyle: 'none',
-      }}
-    >
+    // In a list, the list draws the lines between rows.
+    <li className="row">
       {onOpen ? (
-        <button onClick={onOpen} style={opens}>
+        <button data-intent="open" onClick={onOpen} className="row truncate">
           {who}
         </button>
       ) : (
         who
       )}
-      {children && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>{children}</div>
-      )}
+      {children && <div className="row">{children}</div>}
     </li>
   );
 }
 
-const ellipsis = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as const;
-const opens = {
-  flex: 1,
-  minWidth: 0,
-  display: 'flex',
-  alignItems: 'center',
-  gap: 12,
-  padding: 0,
-  border: 'none',
-  background: 'none',
-  textAlign: 'left',
-} as const;
-
 /** A username as it reads in a list: just the name when it is at this app's domain */
 export function Handle({ username }: { username: string }) {
-  return (
-    <span title={username} style={{ fontFamily: 'inherit' }}>
-      @{shortUsername(username)}
-    </span>
-  );
+  return <span title={username}>@{shortUsername(username)}</span>;
 }
 
 /** The lesser things to do with a row, behind one button */
@@ -116,57 +79,34 @@ export function RowMenu({
 }) {
   const { open, setOpen, close, root } = usePopover();
   return (
-    <div ref={root} style={{ position: 'relative' }}>
+    <div ref={root} className={styles.anchor}>
       <button
         aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((was) => !was)}
-        data-variant="quiet"
-        data-round
-        style={{ ...styles.smallButton, width: 34, height: 34 }}
+        data-intent="ghost"
+        data-icon
       >
         <Icon name="menu" size={14} />
       </button>
       {open && (
-        <div
-          role="menu"
-          style={{
-            position: 'absolute',
-            right: 0,
-            top: 40,
-            zIndex: 20,
-            width: 200,
-            padding: 6,
-            ...styles.float,
-            animation: 'minca-fade .1s ease',
-          }}
-        >
+        <menu role="menu">
           {items.map((item) => (
-            <button
-              key={item.label}
-              role="menuitem"
-              data-menu-item
-              onClick={() => {
-                close();
-                item.onClick();
-              }}
-              style={{
-                width: '100%',
-                height: 36,
-                padding: '0 10px',
-                border: 'none',
-                borderRadius: radius.md,
-                background: 'none',
-                textAlign: 'left',
-                fontSize: 14,
-                color: item.danger ? palette.accent.danger : ink.body,
-              }}
-            >
-              {item.label}
-            </button>
+            <li key={item.label}>
+              <button
+                role="menuitem"
+                data-intent={item.danger ? 'danger' : undefined}
+                onClick={() => {
+                  close();
+                  item.onClick();
+                }}
+              >
+                {item.label}
+              </button>
+            </li>
           ))}
-        </div>
+        </menu>
       )}
     </div>
   );
@@ -208,40 +148,40 @@ export function AddDialog({
   return (
     <Modal title={`Add ${who}`} onClose={onClose}>
       <form
-        style={styles.form}
+        className="stack"
         onSubmit={(event) => {
           event.preventDefault();
           void send();
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+        <div className="row">
           <Avatar did={username} size={48} round />
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 600, fontSize: 16, color: ink.strong }}>{who}</div>
-            <div style={{ fontSize: 13, color: ink.muted }}>@{shortUsername(username)}</div>
-          </div>
+          <span className="stack" data-gap="tight">
+            <strong>{who}</strong>
+            <small>@{shortUsername(username)}</small>
+          </span>
         </div>
-        <label style={styles.fieldLabel} htmlFor="add-note">
-          Say who you are <span style={{ color: ink.faint, fontWeight: 400 }}>(optional)</span>
+        <label>
+          <span>
+            Say who you are <small>(optional)</small>
+          </span>
+          <textarea
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            maxLength={500}
+            rows={3}
+            placeholder="Hi! We met at…"
+            autoFocus
+          />
         </label>
-        <textarea
-          id="add-note"
-          value={note}
-          onChange={(event) => setNote(event.target.value)}
-          maxLength={500}
-          rows={3}
-          placeholder="Hi! We met at…"
-          style={styles.textarea}
-          autoFocus
-        />
-        <p style={{ fontSize: 13, lineHeight: 1.5, color: ink.muted, marginTop: 8 }}>
+        <small>
           {who} sees your name and note, and chooses whether to accept. If they do, you get a private space
           for the two of you.
-        </p>
-        {error && <p style={styles.bad}>{error}</p>}
-        <AddButton type="submit" disabled={sending} style={{ marginTop: 12, height: 40 }}>
+        </small>
+        {error && <p role="alert">{error}</p>}
+        <button data-intent="primary" type="submit" disabled={sending}>
           {sending ? 'Sending…' : 'Send request'}
-        </AddButton>
+        </button>
       </form>
     </Modal>
   );
@@ -280,39 +220,25 @@ export function SpaceInvites({
     }
   };
   return (
-    <section aria-label="Invites to spaces" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <h2 style={styles.sectionTitle}>Invited to</h2>
-      <ul style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 0 }}>
+    <section aria-label="Invites to spaces" data-gap="tight">
+      <h2>Invited to</h2>
+      <ul role="list">
         {invites.map((invite) => (
-          <li
-            key={`${invite.pairSpace}/${invite.space}`}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              padding: '12px 14px',
-              border: `1px solid ${surface.rule}`,
-              borderRadius: radius.lg,
-              background: surface.card,
-              listStyle: 'none',
-            }}
-          >
+          <li key={`${invite.pairSpace}/${invite.space}`} className="row">
             <Shape kind={shapeFor(invite.space).kind} colour={shapeFor(invite.space).colour} size={40} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 15, fontWeight: 600, color: ink.strong, ...ellipsis }}>
-                {invite.name}
-              </div>
-              <div style={{ fontSize: 13, color: ink.muted, ...ellipsis }}>
+            <span className="stack truncate" data-gap="tight">
+              <strong className="truncate">{invite.name}</strong>
+              <small className="truncate">
                 {names.get(invite.from) ?? 'A contact'} invited you · {ago(invite.createdAt)}
-              </div>
-            </div>
-            <AddButton onClick={() => void join(invite)} disabled={joining !== null} style={{ height: 34 }}>
+              </small>
+            </span>
+            <button data-intent="primary" onClick={() => void join(invite)} disabled={joining !== null}>
               {joining === invite.space ? 'Joining…' : 'Join'}
-            </AddButton>
+            </button>
           </li>
         ))}
       </ul>
-      {error && <p style={styles.bad}>{error}</p>}
+      {error && <p role="alert">{error}</p>}
     </section>
   );
 }
@@ -320,35 +246,11 @@ export function SpaceInvites({
 /** A quiet line that says what just happened, and goes when dismissed */
 export function Notice({ text, onDismiss }: { text: string; onDismiss: () => void }) {
   return (
-    <div
-      role="status"
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        padding: '10px 14px',
-        borderRadius: radius.lg,
-        background: palette.accent.goodSoft,
-        color: palette.accent.good,
-        fontSize: 14,
-      }}
-    >
-      <span style={{ flex: 1 }}>{text}</span>
-      <LinkButton onClick={onDismiss} style={{ color: palette.accent.good }}>
+    <aside role="status" data-tone="good" className="row" data-spread>
+      <span>{text}</span>
+      <button data-intent="ghost" onClick={onDismiss}>
         OK
-      </LinkButton>
-    </div>
+      </button>
+    </aside>
   );
 }
-
-/** Online now, on the corner of a face */
-export const onlineDot = {
-  position: 'absolute',
-  right: -1,
-  bottom: -1,
-  width: 12,
-  height: 12,
-  borderRadius: palette.radius.pill,
-  background: palette.accent.good,
-  boxShadow: `0 0 0 2px ${palette.surface.card}`,
-} as const;

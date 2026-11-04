@@ -1,0 +1,27 @@
+/* It takes whatever height it is given: the app is the whole window */
+.screen {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+
+  & > iframe {
+    flex: 1;
+    width: 100%;
+    /* No floor: on a phone with the keyboard up, what is left can be less than any we'd pick. */
+    min-height: 0;
+    border: none;
+    /* The page's own colour, which a screen's page is drawn on, so nothing lighter shows while it loads. */
+    background: var(--color-page);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+
+    &[data-drawn] {
+      opacity: 1;
+    }
+  }
+}
+
+.stopped {
+  margin: var(--space-loose);
+}

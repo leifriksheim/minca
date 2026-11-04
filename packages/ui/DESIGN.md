@@ -11,78 +11,99 @@ screen.** Retro in the shapes and the type, clean everywhere else.
 
 ## Where it lives
 
-Plain data, here in `@minca/ui`, so any UI can draw with it, React or not:
+**`css/minca.css` is the look**, and the one stylesheet every UI loads: the
+apps and the site import it, and the kit writes it into every app's screen.
+`reference.html` shows every piece; open it after changing anything here.
 
-| File            |                                                                                                     |
-| --------------- | --------------------------------------------------------------------------------------------------- |
-| `src/tokens.ts` | Every colour, face, corner and shadow, as values and as `--minca-*` CSS custom properties           |
-| `src/shapes.ts` | The shapes' paths, and which shape each app and space has                                           |
-| `src/round.ts`  | The round shapes as formulas, for the shapes, the avatar and the morph between them                 |
-| `src/avatar.ts` | An account's avatar, two round shapes blended by its DID, as data and as an SVG element             |
-| `src/frame/`    | The kit an app's screen draws with: Preact, people's faces and Minca's look (`src/frame/styles.ts`) |
+| File               |                                                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------------------------- |
+| `css/tokens.css`   | The palette, and the names everything reads: `--color-*`, `--space-*`, `--text-*`, `--radius-*`         |
+| `css/base.css`     | The page and its text                                                                                   |
+| `css/layout.css`   | `main`, `header`, `section`, `.row`, `.stack`, `.grid`, `.lanes`                                        |
+| `css/controls.css` | Buttons by `data-intent`, fields, switches, tabs                                                        |
+| `css/content.css`  | `article`, lists, `figure`, a month, `.tag`, `aside`, `.empty`, `data-tone`, `data-hue`, `data-actions` |
+| `css/overlay.css`  | `dialog`, `menu`                                                                                        |
+| `css/kit.css`      | The kit's own parts, which only its components use                                                      |
+| `src/shapes.ts`    | The shapes' paths, and which shape each app and space has                                               |
+| `src/icons.ts`     | Action icons, Lucide's drawings copied in: what a button does, never what Minca or an app is            |
+| `src/round.ts`     | The round shapes as formulas, for the shapes, the avatar and the morph                                  |
+| `src/avatar.ts`    | An account's avatar, two round shapes blended by its DID                                                |
+| `src/frame/`       | The kit an app's screen draws with: Preact, people's faces, comments, places                            |
 
-React components on top of it, in `apps/shared` (`@minca/app-shared`):
+`src/tokens.ts` holds only the colours JavaScript draws with itself (shapes,
+avatars, the extension's badge), the same values as `css/tokens.css`. React
+components the apps share are in `apps/shared`; each one's own layout is a CSS
+module beside it, on the tokens. Inline styles are refused by the linter except
+for a value computed from data, said so on its line.
 
-| File               |                                                                                                  |
-| ------------------ | ------------------------------------------------------------------------------------------------ |
-| `src/shapes.tsx`   | A shape (`Shape`), and the morph between them (`Morph`)                                          |
-| `src/Avatar.tsx`   | An account's avatar, or the picture they chose                                                   |
-| `src/Loader.tsx`   | The loader: five shapes hopping in turn, for anything on its way                                 |
-| `src/Wordmark.tsx` | The mark (a four-band rainbow) and the wordmark; `src/mark.ts` has its bands for non-React pages |
-| `src/styles.ts`    | Inline styles and base CSS for React UIs, built from the tokens                                  |
+## The rules
 
-React UIs import the tokens and styles. Stylesheets use the custom
-properties: `baseCss` puts them on `:root`, and a page without it injects
-`tokenCss` itself. Never copy a hex value into a UI; add a token instead.
-
-Reach for the pieces in `styles.ts` before writing your own, so the same
-thing looks the same everywhere: `tile` (a card on the page), `frame` (a big
-frame), `float` (a menu, popover or panel over the page), `chip` and
-`chipOn`, `input` (one line, a pill) and `textarea` (many), `note`,
-`smallButton` (secondary), `button` and `darkSmall` (the one thing to do),
-`segmented`, `row`, `modal`. `baseCss` gives every page `.page` and
-`.space-layout`. A component that needs something none of these is adds it
-there, not beside itself.
+- **Semantic HTML first.** An element is styled by what it is: `button`,
+  `input`, `label`, `article`, `section`, `dialog`, `small`. A class only where
+  HTML has no element for the role: `.row`, `.stack`, `.grid`, `.tag`,
+  `.empty`, `.lanes`, `.truncate`.
+- **Intent, never appearance.** Variants say why a thing is there:
+  `data-intent="primary|subtle|ghost|danger|inline|open"` (none is secondary), `data-tone="good|warn|danger"`,
+  `data-hue="1"`…`"5"`, `data-gap="tight|loose"`. Nothing names a colour or a
+  size, so a redesign changes `css/` and no markup.
+- **No knobs.** One control height (and a larger one for a page's opening
+  calls to action, `.lead`), three gaps, the headings' sizes and no
+  other, no free colours. What a screen can't build from the pieces, the system
+  gets, once, for everyone. `src/guide.ts` lists everything an agent may use;
+  a piece is added there and in `reference.html` in the same change.
+- **Tokens by purpose.** The palette (`--paper`, `--navy`, `--cobalt`…) is
+  private to `tokens.css`. Everything else reads `--color-text`,
+  `--color-action`, `--color-outline` and the rest.
+- **One layer.** Everything sits in `@layer minca`, so a page's own CSS (an
+  app's CSS modules) wins over it without `!important`.
+- Only a game or a drawing styles itself, inside `<main data-wide>`, on the tokens.
 
 ## Colour
 
-- **Page** is paper (`surface.page`), never white. Cards and inputs sit on it in
-  `surface.card`; a band set back from the page is `surface.sunken`.
-- **Ink** is navy, in four strengths: `strong` for headings and what must be
-  read, `body`, `muted` for the things you skim, `faint` for timestamps and ids.
-- **Cobalt** (`accent.base`) is the one colour for actions: the primary
+- **Page** is paper (`--color-page`), never white. Cards and fields sit on it
+  in `--color-surface`; a band set back from the page is `--color-sunken`.
+- **Text** is navy, in three strengths: `--color-text-strong` for headings and
+  what must be read, `--color-text`, and `--color-text-muted` for what you skim.
+- **Cobalt** (`--color-action`) is the one colour for acting: the main
   button, focus, the selected thing. It turns navy on hover.
-- **The shape colours** (cobalt, coral, peach, sage, lilac) are for shapes and
-  marks, never for text. They take turns in that order. The one surface they
-  colour is a colour tile's ground, mixed into the paper (below).
-- **Danger and good** are for state, sparingly: an error, a check that passed.
+- **The hues** (cobalt, coral, peach, sage, lilac, as `--color-hue-1`…`5`) are
+  for shapes and for telling things apart, never for text. They take turns in
+  that order. The one surface they colour is a tint mixed into the paper.
+- **Good, warn and danger** are for state, sparingly: an error, a check that passed.
 
 ## Type
 
-- **Bricolage Grotesque** (`display`) for page titles, section headings, dialog
+- **Bricolage Grotesque** (`--font-display`) for page titles, section headings, dialog
   titles and the wordmark: weight 700, tight tracking (`-0.04em`).
-- **Geist** (`font`) for everything else, **Geist Mono** (`mono`) for code and ids.
-- `FONTS_HREF` is the stylesheet that loads all three; every web page links it.
+- **Geist** (`--font-body`) for everything else, **Geist Mono** (`--font-mono`) for code and ids.
+- **Five sizes**: `--text-small` for meta and hints, `--text-body`, and
+  `--text-heading-3` to `--text-heading-1`. Text takes one of them, never a
+  size of its own; only a glyph, a badge or a page's display type picks one.
+- **Sizes are rem**, type and space alike, so text grows with the reader's own
+  setting. Lines, corners and shadows stay in pixels.
+- Every web page links the Google Fonts stylesheet for all three in its `index.html`.
   The extension bundles its own copies instead (`apps/extension/static/fonts/`),
   so it never calls Google when the popup opens.
 
 ## Shape and line
 
-- **Every corner is round, on one scale** (`radius`): `sm` for tags and code
-  chips, `md` for rows, inputs and cards inside a surface, `lg` for surfaces
-  (cards, panels, menus, dialogs), `xl` for the big frames on a page. Nothing
+- **Every corner is round, on one scale**: `--radius-small` for marks and
+  code chips, `--radius` for rows, fields and things inside a surface,
+  `--radius-surface` for surfaces (cards, lists, menus, dialogs),
+  `--radius-frame` for the big frames on a page. Nothing
   is square, and nothing picks a size off the scale.
-- **Controls are pills**: buttons, inputs that ask for one line, segmented
-  controls, chips, the nav.
-- **One line for edges.** The navy rule (`surface.rule`), one pixel, draws the
+- **Things you press are pills**: buttons, tabs, toggles, tags, the nav.
+  Fields to type or choose in (inputs, selects, text boxes) take a row's
+  corner (`--radius`).
+- **One line for edges.** The navy rule (`--color-outline`), one pixel, draws the
   edge of anything that stands on the page: a card, a frame, the nav, a
-  secondary button, the footer. **Hairlines** (`surface.line`) only separate
+  secondary button, the footer. **Hairlines** (`--color-divider`) only separate
   things _inside_ a surface, like rows in a list.
 - **Ruled grids** set things side by side: cells share navy rules, with no
   gaps, inside one rounded frame. A cell may carry a small italic number
   (`01`, `v2`).
 - **Shadows are soft and rare.** Only what floats over the page (a menu, a
-  dialog, a popover) has one (`shadow.float`, `shadow.small`). Nothing blurs
+  dialog, a popover) has one (`--shadow-float`). Nothing blurs
   what is behind it.
 
 ## Colour tiles
@@ -93,8 +114,8 @@ tile: one shape colour mixed into the paper, the navy rule round it, the `xl`
 corner, and that colour's shape, big, half off one corner, turning a little
 on hover.
 
-- The ground is the colour at `--minca-tint-tile` (28%) for a tile, or
-  `--minca-tint-panel` (14%) for a wide panel with words to read on it.
+- The ground is the colour mixed into the paper at 28% for a tile, or 14%
+  for a wide panel with words to read on it (`article[data-hue]` is the latter).
 - Text on a tile is navy, as on the page. Never white, and never on solid
   colour: the front page's panel used to be cobalt, and is a tile now.
 - One shape per tile, the same colour as its ground. Tiles side by side take
@@ -106,7 +127,7 @@ on hover.
 
 The look is 70s print, kept clean: flat colour on paper, and room around it.
 
-- **Grid paper**: a faint `surface.line` grid behind a hero or a frame, fading
+- **Grid paper**: a faint `--color-divider` grid behind a hero or a frame, fading
   out at its edges. Never behind text that has to be read at length.
 - **The rainbow**: the mark's four bands, as big arcs rising from the edge of
   a panel. Once per page.
@@ -152,11 +173,7 @@ The shapes are the brand. A space is a grid, and each tool in it is a shape.
 Small and calm. Shapes may turn a little on hover; controls only change
 colour, they don't move.
 
-A button's look is its inline style; its hover is its `data-variant`
-(`hoverCss`). They are separate, so give each button the pair that match:
-`primary` with `button` or `darkSmall`, `quiet` with `smallButton`, `danger`
-with `smallButton` in `accent.danger`, `ghost` with `linkButton`. A white
-button marked `primary` turns cobalt only under the pointer. Demos play on their own, and stop under
+Demos play on their own, and stop under
 `prefers-reduced-motion`, where they show their final state.
 
 ## Words

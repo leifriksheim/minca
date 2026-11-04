@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Band, EXTERNAL, GITHUB, Page, Points, SPEC } from './Site';
+import './Protocol.css';
 
 /**
  * How it works, for people who want the design before the code: one section
@@ -537,11 +538,11 @@ export function Protocol() {
             <code>@minca/core</code> packs it into one library, so people and agents can build social apps
             with no server in the middle.
           </p>
-          <div className="actions">
-            <a href={SPEC} {...EXTERNAL} className="btn btn-primary">
+          <div className="actions lead">
+            <a href={SPEC} {...EXTERNAL} data-intent="primary">
               Read the spec
             </a>
-            <Link to="/developers" className="btn btn-secondary">
+            <Link to="/developers" data-intent="secondary">
               Build with it
             </Link>
           </div>
@@ -598,10 +599,10 @@ export function Protocol() {
             each rule.
           </p>
           <div className="actions">
-            <a href={SPEC} {...EXTERNAL} className="btn btn-primary">
+            <a href={SPEC} {...EXTERNAL} data-intent="primary">
               Read the spec
             </a>
-            <Link to="/developers" className="btn btn-secondary">
+            <Link to="/developers" data-intent="secondary">
               For developers
             </Link>
           </div>

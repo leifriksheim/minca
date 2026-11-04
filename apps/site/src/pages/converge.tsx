@@ -1,5 +1,6 @@
 import { shapeColours } from '@minca/ui/tokens';
 import { LOGOS } from './converge-logos';
+import './converge.css';
 
 /**
  * The apps a group juggles, a stream of logos drifting in from the edge along

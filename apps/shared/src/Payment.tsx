@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { message, useAction, useCopy } from './action';
 import type { FundOffer, FundPayment, PayAnswer } from '@minca/core';
-import { Glyph } from './Feature';
+import { Icon } from './Icon';
 import { QrCode } from './QrCode';
-import { styles, palette, hstack, stack } from './styles';
+import styles from './Payment.module.css';
 
 type Request = Extract<PayAnswer, { request: unknown }>['request'];
 
@@ -68,27 +68,14 @@ function PayingSteps({ paying, onDone }: { paying: ReturnType<typeof usePaying>;
   const { step, setStep } = paying;
   if (step === 'done')
     return (
-      <div
-        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '12px 0' }}
-      >
-        <span
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 22,
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: palette.accent.goodSoft,
-            color: palette.accent.good,
-          }}
-        >
-          <Glyph name="check" size={22} style={{ strokeWidth: 2 }} />
+      <div className="empty">
+        <span data-tone="good">
+          <Icon name="check" size={22} />
         </span>
-        <p style={{ fontSize: 16, fontWeight: 600, color: palette.ink.strong }}>Payment received</p>
-        <p style={styles.quiet}>Thank you. It's already working.</p>
+        <h3>Payment received</h3>
+        <p>Thank you. It's already working.</p>
         {onDone && (
-          <button onClick={onDone} data-variant="primary" style={{ ...styles.button, marginTop: 8 }}>
+          <button onClick={onDone} data-intent="primary">
             Done
           </button>
         )}
@@ -155,37 +142,15 @@ export function ChipIn({
   const bots = rate?.bots ?? [];
 
   if (paying.step !== 'choose') return <PayingSteps paying={paying} onDone={onDone} />;
-  const chip = (on: boolean) => ({
-    flex: 1,
-    height: 44,
-    borderRadius: 10,
-    fontSize: 15,
-    fontWeight: 600,
-    background: on ? palette.surface.sunken : palette.surface.card,
-    color: palette.ink.strong,
-    border: `1px solid ${on ? palette.ink.strong : palette.surface.line}`,
-    boxShadow: on ? `0 0 0 1px ${palette.ink.strong}` : 'none',
-  });
   return (
-    <div style={stack(14)}>
-      <div role="radiogroup" aria-label="Amount" style={hstack(8)}>
+    <div className="stack" data-gap="loose">
+      <div role="group" aria-label="Amount" className="row">
         {AMOUNTS.map((dollars) => (
-          <button
-            key={dollars}
-            role="radio"
-            aria-checked={preset === dollars}
-            onClick={() => setPreset(dollars)}
-            style={chip(preset === dollars)}
-          >
+          <button key={dollars} aria-pressed={preset === dollars} onClick={() => setPreset(dollars)}>
             ${dollars}
           </button>
         ))}
-        <button
-          role="radio"
-          aria-checked={preset === 'other'}
-          onClick={() => setPreset('other')}
-          style={{ ...chip(preset === 'other'), fontWeight: 500 }}
-        >
+        <button aria-pressed={preset === 'other'} onClick={() => setPreset('other')}>
           Other
         </button>
       </div>
@@ -197,45 +162,20 @@ export function ChipIn({
           placeholder={`Dollars, at least ${fund.min}`}
           aria-label="Amount in dollars"
           autoFocus
-          style={styles.input}
         />
       )}
       {fund.methods.length > 1 && (
-        <div
-          role="radiogroup"
-          aria-label="Pay with"
-          style={{ display: 'flex', padding: 3, borderRadius: 10, background: palette.surface.sunken }}
-        >
+        <div role="group" aria-label="Pay with" className="row">
           {fund.methods.map((known) => (
-            <button
-              key={known}
-              role="radio"
-              aria-checked={method === known}
-              onClick={() => setMethod(known)}
-              style={{
-                flex: 1,
-                height: 34,
-                borderRadius: 8,
-                border: 'none',
-                fontSize: 13,
-                fontWeight: 500,
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-                background: method === known ? palette.surface.card : 'transparent',
-                color: method === known ? palette.ink.strong : palette.ink.muted,
-                boxShadow: method === known ? palette.shadow.small : 'none',
-              }}
-            >
-              <Glyph name={known === 'checkout' ? 'card' : 'wallet'} size={14} />
+            <button key={known} aria-pressed={method === known} onClick={() => setMethod(known)}>
+              <Icon name={known === 'checkout' ? 'card' : 'wallet'} size={14} />
               {known === 'checkout' ? 'Card' : 'Crypto'}
             </button>
           ))}
         </div>
       )}
       {fund.recurring && method === 'checkout' && (
-        <label style={{ ...hstack(8), alignItems: 'center', fontSize: 13, color: palette.ink.body }}>
+        <label>
           <input type="checkbox" checked={monthly} onChange={(event) => setMonthly(event.target.checked)} />
           Add this every month
         </label>
@@ -247,14 +187,13 @@ export function ChipIn({
           )
         }
         disabled={paying.busy || !valid}
-        data-variant="primary"
-        style={styles.button}
+        data-intent="primary"
       >
         {paying.busy
           ? 'One moment…'
           : `Add ${valid ? `$${amount}` : ''}${monthly && method === 'checkout' ? ' a month' : ''}`}
       </button>
-      <p style={{ ...styles.faint, textAlign: 'center' }}>
+      <small>
         {valid && owed > 0
           ? Number(amount) * 1e6 <= owed
             ? `Pays ${dollars(Number(amount) * 1e6)} of the ${dollars(owed)} owed: it turns on past that.`
@@ -266,8 +205,8 @@ export function ChipIn({
                 ? `Lasts about ${lastsFor(months)} at the current rate, with ${bots.map((bot) => bot.name).join(' and ')}.`
                 : `Keeps it online for about ${lastsFor(months)}.`
             : `At least $${fund.min}.`}
-      </p>
-      {paying.problem && <p style={styles.dangerText}>{paying.problem}</p>}
+      </small>
+      {paying.problem && <p role="alert">{paying.problem}</p>}
     </div>
   );
 }
@@ -296,13 +235,11 @@ export function dollars(micros: number): string {
 
 function Waiting({ title, detail, onBack }: { title: string; detail: string; onBack: () => void }) {
   return (
-    <div
-      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '16px 0' }}
-    >
+    <div className="empty">
       <Pulse />
-      <p style={{ fontSize: 15, fontWeight: 600, color: palette.ink.strong }}>{title}</p>
-      <p style={{ ...styles.quiet, textAlign: 'center' }}>{detail}</p>
-      <button onClick={onBack} style={{ ...styles.linkButton, marginTop: 4 }}>
+      <h3>{title}</h3>
+      <p>{detail}</p>
+      <button onClick={onBack} data-intent="ghost">
         Choose another way to pay
       </button>
     </div>
@@ -311,18 +248,7 @@ function Waiting({ title, detail, onBack }: { title: string; detail: string; onB
 
 /** A dot that breathes while waiting for the host */
 function Pulse() {
-  return (
-    <span
-      aria-hidden
-      style={{
-        width: 10,
-        height: 10,
-        borderRadius: 5,
-        background: palette.accent.good,
-        animation: 'minca-fade 0.9s ease-in-out infinite alternate',
-      }}
-    />
-  );
+  return <span aria-hidden className={styles.pulse} />;
 }
 
 /**
@@ -335,10 +261,10 @@ export function RemindMe({ remind }: { remind: (email: string) => Promise<void> 
   const [email, setEmail] = useState('');
   const [asked, setAsked] = useState(false);
   const { run, busy, error: problem } = useAction();
-  if (asked) return <p style={styles.quiet}>Check your inbox for a link to confirm.</p>;
+  if (asked) return <small>Check your inbox for a link to confirm.</small>;
   if (!open)
     return (
-      <button onClick={() => setOpen(true)} style={{ ...styles.linkButton, padding: 0 }}>
+      <button onClick={() => setOpen(true)} data-intent="ghost">
         Email me before it runs out
       </button>
     );
@@ -348,9 +274,9 @@ export function RemindMe({ remind }: { remind: (email: string) => Promise<void> 
         event.preventDefault();
         void run(() => remind(email.trim()).then(() => setAsked(true)));
       }}
-      style={stack(6)}
+      className="stack"
     >
-      <div style={hstack(8)}>
+      <div className="row">
         <input
           type="email"
           value={email}
@@ -359,18 +285,12 @@ export function RemindMe({ remind }: { remind: (email: string) => Promise<void> 
           aria-label="Email for reminders"
           autoComplete="email"
           autoFocus
-          style={{ ...styles.input, flex: 1, height: 36 }}
         />
-        <button
-          type="submit"
-          disabled={busy || !email.trim()}
-          data-variant="quiet"
-          style={{ ...styles.smallButton, height: 36 }}
-        >
+        <button type="submit" disabled={busy || !email.trim()}>
           Remind me
         </button>
       </div>
-      {problem && <p style={styles.dangerText}>{problem}</p>}
+      {problem && <p role="alert">{problem}</p>}
     </form>
   );
 }
@@ -402,48 +322,23 @@ function PaymentRequest({ request, onBack }: { request: Request; onBack: () => v
   const to = request.evm?.to;
 
   return (
-    <div style={stack(16)}>
-      <div style={{ ...hstack(20), alignItems: 'center', flexWrap: 'wrap' }}>
-        <div
-          style={{
-            padding: 8,
-            border: `1px solid ${palette.surface.rule}`,
-            background: palette.ink.inverse,
-            lineHeight: 0,
-          }}
-        >
-          <QrCode text={request.uri} label="QR code for the payment" />
-        </div>
-        <div style={{ flex: 1, minWidth: 180, ...stack(4) }}>
-          <span
-            style={{ fontSize: 12, color: palette.ink.muted, textTransform: 'uppercase', letterSpacing: 0.5 }}
-          >
-            Send exactly
-          </span>
-          <span
-            style={{ fontSize: 24, fontWeight: 600, letterSpacing: '-0.02em', color: palette.ink.strong }}
-          >
-            {amount}
-          </span>
-          {network && <span style={styles.quiet}>on {network}</span>}
+    <div className="stack" data-gap="loose">
+      <div className="row" data-gap="loose">
+        <QrCode text={request.uri} label="QR code for the payment" />
+        <div className="stack" data-gap="tight">
+          <small>Send exactly</small>
+          <h2>{amount}</h2>
+          {network && <small>on {network}</small>}
           {to && (
-            <button
-              onClick={() => copy(to)}
-              style={{ ...styles.linkButton, padding: 0, marginTop: 6, textAlign: 'left', fontSize: 12 }}
-            >
+            <button onClick={() => copy(to)} data-intent="inline">
               To <code>{`${to.slice(0, 6)}…${to.slice(-4)}`}</code> · {copied ? 'Copied' : 'Copy address'}
             </button>
           )}
         </div>
       </div>
-      <div style={stack(8)}>
+      <div className="stack">
         {wallet && request.evm && (
-          <button
-            onClick={() => void send()}
-            disabled={sending !== 'idle'}
-            data-variant="primary"
-            style={styles.button}
-          >
+          <button onClick={() => void send()} disabled={sending !== 'idle'} data-intent="primary">
             {sending === 'sending'
               ? 'Confirm in your wallet…'
               : sending === 'sent'
@@ -451,30 +346,18 @@ function PaymentRequest({ request, onBack }: { request: Request; onBack: () => v
                 : 'Pay with your browser wallet'}
           </button>
         )}
-        <a
-          href={request.uri}
-          data-variant="quiet"
-          style={{
-            ...styles.button,
-            background: palette.surface.card,
-            color: palette.ink.strong,
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            textDecoration: 'none',
-          }}
-        >
+        <a href={request.uri} data-intent>
           Open in a wallet app
         </a>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
+      <p className="row">
         <Pulse />
-        <span style={styles.quiet}>
+        <small>
           {sending === 'sent' ? 'Sent. ' : ''}Waiting for it to arrive. The last digits mark it as yours.
-        </span>
-      </div>
-      {problem && <p style={{ ...styles.dangerText, textAlign: 'center' }}>{problem}</p>}
-      <button onClick={onBack} style={{ ...styles.linkButton, alignSelf: 'center' }}>
+        </small>
+      </p>
+      {problem && <p role="alert">{problem}</p>}
+      <button onClick={onBack} data-intent="ghost">
         Choose another way to pay
       </button>
     </div>

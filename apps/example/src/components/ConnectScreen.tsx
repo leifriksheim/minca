@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { useConnection } from '@minca/react';
 import { Wordmark } from '@minca/app-shared/Wordmark';
-import { styles, palette } from '../styles';
-import { LinkButton, PrimaryButton } from './Buttons';
 import { Intro } from './Intro';
+import css from './ConnectScreen.module.css';
 import { useRemembered } from '../kept';
 
 /** Before the app is connected: one button that opens the account home, where the person signs in */
@@ -28,84 +27,82 @@ export function ConnectScreen() {
     );
 
   return (
-    <div className="page">
-      <div style={styles.card}>
-        <div style={{ marginBottom: 40 }}>
-          <Wordmark compact />
-        </div>
-        <h1 style={styles.title}>{expired ? 'Connect again' : 'Your spaces, in this app'}</h1>
-        <p style={styles.subtitle}>
+    <main className={css.screen}>
+      <Wordmark compact />
+      <section>
+        <h1>{expired ? 'Connect again' : 'Your spaces, in this app'}</h1>
+        <p>
           {expired
             ? `This app's access to ${state.grant?.name ?? 'your account'} ran out. Your account home will ask you to allow it again.`
             : 'Sign in with your Minca account to see your groups and people here.'}
         </p>
+      </section>
 
-        {own === null ? (
-          <>
-            <PrimaryButton onClick={() => void connection.connect()} disabled={waiting}>
+      {own === null ? (
+        <section>
+          <p>
+            <button data-intent="primary" onClick={() => void connection.connect()} disabled={waiting}>
               {state.status === 'starting'
                 ? 'Opening your account…'
                 : state.status === 'connecting'
                   ? 'Waiting for your account home…'
                   : 'Connect with Minca'}
-            </PrimaryButton>
-            <p style={{ ...styles.errorHint, marginTop: 16 }}>
-              Opens <strong style={{ color: palette.ink.strong }}>{home}</strong>. This app never sees your
-              password.
-            </p>
-            <div style={styles.linkRow}>
-              <LinkButton onClick={() => setOwn('')} style={{ paddingLeft: 0 }}>
-                Use your own home
-              </LinkButton>
-              <LinkButton onClick={() => setIntro(true)}>What’s Minca?</LinkButton>
-              {/* Another account connected here works now, without the home. */}
-              {state.status !== 'starting' &&
-                others.map((other) => (
-                  <LinkButton key={other.did} onClick={() => void connection.use(other.did)}>
-                    Use {other.name}
-                  </LinkButton>
-                ))}
-            </div>
-          </>
-        ) : (
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              // Straight from the submit, so the browser lets the window open.
-              void connection.connect(own);
-            }}
-            style={styles.form}
-          >
-            <input
-              value={own}
-              onChange={(event) => setOwn(event.target.value)}
-              placeholder="home.example.com"
-              aria-label="Your account home's address"
-              autoFocus
-              spellCheck={false}
-              autoCapitalize="off"
-              style={styles.input}
-            />
-            <PrimaryButton type="submit" disabled={waiting || !own.trim()}>
-              {state.status === 'connecting' ? 'Waiting for your account home…' : 'Connect'}
-            </PrimaryButton>
-            <p style={{ ...styles.errorHint, marginTop: 8 }}>
-              The address of the Minca home you run yourself. This app remembers it.
-            </p>
-            <div style={styles.linkRow}>
-              <LinkButton type="button" onClick={() => setOwn(null)} style={{ paddingLeft: 0 }}>
-                Use {home} instead
-              </LinkButton>
-            </div>
-          </form>
-        )}
-
-        {state.error && (
-          <div style={styles.errorBox}>
-            <p style={styles.error}>{state.error}</p>
+            </button>
+          </p>
+          <small>
+            Opens <strong>{home}</strong>. This app never sees your password.
+          </small>
+          <div className="row" data-gap="tight">
+            <button data-intent="ghost" onClick={() => setOwn('')}>
+              Use your own home
+            </button>
+            <button data-intent="ghost" onClick={() => setIntro(true)}>
+              What’s Minca?
+            </button>
+            {/* Another account connected here works now, without the home. */}
+            {state.status !== 'starting' &&
+              others.map((other) => (
+                <button data-intent="ghost" key={other.did} onClick={() => void connection.use(other.did)}>
+                  Use {other.name}
+                </button>
+              ))}
           </div>
-        )}
-      </div>
-    </div>
+        </section>
+      ) : (
+        <form
+          className="stack"
+          onSubmit={(event) => {
+            event.preventDefault();
+            // Straight from the submit, so the browser lets the window open.
+            void connection.connect(own);
+          }}
+        >
+          <input
+            value={own}
+            onChange={(event) => setOwn(event.target.value)}
+            placeholder="home.example.com"
+            aria-label="Your account home's address"
+            autoFocus
+            spellCheck={false}
+            autoCapitalize="off"
+          />
+          <button data-intent="primary" type="submit" disabled={waiting || !own.trim()}>
+            {state.status === 'connecting' ? 'Waiting for your account home…' : 'Connect'}
+          </button>
+          <small>The address of the Minca home you run yourself. This app remembers it.</small>
+          <div className="row">
+            <button data-intent="ghost" type="button" onClick={() => setOwn(null)}>
+              Use {home} instead
+            </button>
+          </div>
+        </form>
+      )}
+
+      {state.error && (
+        <aside data-tone="danger" role="alert">
+          {state.error}
+        </aside>
+      )}
+    </main>
   );
 }

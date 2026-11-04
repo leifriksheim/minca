@@ -1,10 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { useNode } from '@minca/react';
 import { message } from './action';
-import { palette, styles } from './styles';
 import { NAMES_DOMAIN, OWN_DOMAIN_HELP, shortUsername, useAvailability } from './usernames';
-
-const { ink, surface, accent } = palette;
 
 /**
  * Picking a username: checked as it is typed, claimed with a few seconds of
@@ -56,22 +53,21 @@ export function UsernamePicker({
     }
   };
 
-  const status: { text: ReactNode; tone: string } =
+  const status: { text: ReactNode; tone?: 'good' | 'danger' } =
     availability.status === 'invalid'
       ? {
           text: typedName.endsWith('@')
             ? 'Your domain, like you@yourname.com'
             : 'Letters, numbers, dots, dashes and underscores; start and end with a letter or number',
-          tone: ink.muted,
         }
       : availability.status === 'checking'
-        ? { text: 'Checking…', tone: ink.faint }
+        ? { text: 'Checking…' }
         : availability.status === 'free'
-          ? { text: `${shortUsername(availability.username)} is free`, tone: accent.good }
+          ? { text: `${shortUsername(availability.username)} is free`, tone: 'good' }
           : availability.status === 'taken'
             ? {
                 text: mine ? 'That one is already yours' : 'Someone has that one. Try another?',
-                tone: mine ? ink.muted : accent.danger,
+                ...(mine ? {} : { tone: 'danger' as const }),
               }
             : availability.status === 'unknown'
               ? own
@@ -79,89 +75,39 @@ export function UsernamePicker({
                     text: (
                       <>
                         {domain} doesn’t give out Minca usernames yet.{' '}
-                        <a
-                          href={OWN_DOMAIN_HELP}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{ color: 'inherit' }}
-                        >
+                        <a href={OWN_DOMAIN_HELP} target="_blank" rel="noopener noreferrer">
                           Set it up
                         </a>
                       </>
                     ),
-                    tone: ink.muted,
                   }
-                : { text: `Couldn’t reach ${NAMES_DOMAIN} just now. Try again in a moment.`, tone: ink.muted }
-              : { text: 'Like a phone number, but one you choose.', tone: ink.muted };
+                : { text: `Couldn’t reach ${NAMES_DOMAIN} just now. Try again in a moment.` }
+              : { text: 'Like a phone number, but one you choose.' };
 
   return (
-    <form
-      onSubmit={(event) => void claim(event)}
-      style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
-    >
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <label className="pill-field" style={field}>
-          <span
-            style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}
-          >
-            Username
-          </span>
-          <input
-            value={text}
-            onChange={(event) => setTyped(event.target.value)}
-            placeholder="yourname"
-            autoComplete="off"
-            autoCapitalize="none"
-            spellCheck={false}
-            maxLength={320}
-            disabled={claiming}
-            autoFocus
-            style={fieldInput}
-          />
-        </label>
-        <button
-          type="submit"
-          data-variant="primary"
-          disabled={!wanted || claiming}
-          style={{ ...styles.addButton, height: 44, padding: '0 20px' }}
-        >
+    <form onSubmit={(event) => void claim(event)} className="stack">
+      <div className="row">
+        <input
+          value={text}
+          onChange={(event) => setTyped(event.target.value)}
+          placeholder="yourname"
+          aria-label="Username"
+          autoComplete="off"
+          autoCapitalize="none"
+          spellCheck={false}
+          maxLength={320}
+          disabled={claiming}
+          autoFocus
+        />
+        <button type="submit" data-intent="primary" disabled={!wanted || claiming}>
           {claiming ? 'Claiming…' : 'Claim it'}
         </button>
         {children}
       </div>
-      <p aria-live="polite" style={{ ...hint, color: claiming ? ink.muted : status.tone }}>
+      <small aria-live="polite" data-tone={claiming ? undefined : status.tone}>
         {claiming ? 'Doing a few seconds of work, so bots can’t grab every name…' : status.text}
-      </p>
-      {error && <p style={styles.error}>{error}</p>}
+      </small>
+      {error && <p role="alert">{error}</p>}
     </form>
   );
 }
-
-const hint = { fontSize: 13, lineHeight: 1.5, minHeight: 20, maxWidth: 460, margin: 0 } as const;
-
-/** One pill: the name typed, and the domain it will be at */
-const field = {
-  ...styles.input,
-  position: 'relative',
-  display: 'flex',
-  alignItems: 'center',
-  flex: '1 1 260px',
-  maxWidth: 420,
-  height: 44,
-  padding: 0,
-  background: surface.card,
-} as const;
-
-const fieldInput = {
-  flex: 1,
-  minWidth: 0,
-  height: '100%',
-  border: 'none',
-  outline: 'none',
-  background: 'transparent',
-  padding: '0 18px',
-  fontSize: 16,
-  fontWeight: 500,
-  color: ink.strong,
-  boxShadow: 'none',
-} as const;

@@ -9,13 +9,12 @@ import { FeatureIcon } from '@minca/app-shared/Feature';
 import { useWorkspace } from '../workspace';
 import { ConnectAgent } from './ConnectAgent';
 import { HOOD, settingsPagesOf, type SpaceScreen } from './SpaceView';
-import { cardText, cardTitle, rowButton, sectionHeading } from './rows';
-import { Icon, type IconName } from './Icon';
-import { palette, stack, styles, ui } from '../styles';
+import { Icon, type IconName } from '@minca/app-shared/Icon';
 import { useSpaceFace } from '../pictures';
 import { shrinkImage } from '../files';
 import { SpaceMark } from './SpaceList';
-import { LinkButton, PrimaryButton } from './Buttons';
+import list from './SpaceList.module.css';
+import marks from './InvitePeople.module.css';
 
 /** A space's Settings: how it presents itself, its agents, where it is kept, what runs on its own, what is under the hood, and leaving */
 export function SpaceSettings({ space, go, mayDefine }: Pick<SpaceScreen, 'space' | 'go' | 'mayDefine'>) {
@@ -29,12 +28,12 @@ export function SpaceSettings({ space, go, mayDefine }: Pick<SpaceScreen, 'space
   const mayPresent = useCan(space.id, 'create', spaceProfile.name) || mayDefine;
 
   return (
-    <div style={stack(32)}>
+    <>
       {!pair && mayPresent && <GroupProfile space={space} />}
 
-      <section aria-label="Agents" style={stack(12)}>
-        <h2 style={sectionHeading}>Agents</h2>
-        <ol className="rows" style={ui.list}>
+      <section aria-label="Agents">
+        <h2>Agents</h2>
+        <ol role="list">
           {mayAddBot && (
             <SettingsRow
               icon={<FeatureIcon kind="bot" size={36} />}
@@ -52,9 +51,9 @@ export function SpaceSettings({ space, go, mayDefine }: Pick<SpaceScreen, 'space
         </ol>
       </section>
 
-      <section aria-label={pair ? 'Chat' : 'Group'} style={stack(12)}>
-        <h2 style={sectionHeading}>{pair ? 'Chat' : 'Group'}</h2>
-        <ol className="rows" style={ui.list}>
+      <section aria-label={pair ? 'Chat' : 'Group'}>
+        <h2>{pair ? 'Chat' : 'Group'}</h2>
+        <ol role="list">
           {settingsPagesOf(pair).map((section) => (
             <SettingsRow
               key={section.to}
@@ -63,23 +62,19 @@ export function SpaceSettings({ space, go, mayDefine }: Pick<SpaceScreen, 'space
               onClick={() => go(section.to)}
             />
           ))}
-          <li data-tile style={{ listStyle: 'none' }}>
-            <button onClick={() => forget(space.id)} style={rowButton}>
-              <span style={{ ...lineIcon, color: palette.accent.danger }}>
-                <Icon name="arrowLeft" size={18} />
-              </span>
-              <strong style={{ ...cardTitle, color: palette.accent.danger }}>
-                {pair ? 'Leave this chat' : 'Leave group'}
-              </strong>
+          <li>
+            <button data-intent="open" onClick={() => forget(space.id)} className="row" data-tone="danger">
+              <LineIcon name="arrowLeft" />
+              {pair ? 'Leave this chat' : 'Leave group'}
             </button>
           </li>
         </ol>
       </section>
 
       {/* The views for the curious: what the space holds and how it travels. */}
-      <section aria-label="Under the hood" style={stack(12)}>
-        <h2 style={sectionHeading}>Under the hood</h2>
-        <ol className="rows" style={ui.list}>
+      <section aria-label="Under the hood">
+        <h2>Under the hood</h2>
+        <ol role="list">
           {HOOD.map((view) => (
             <SettingsRow
               key={view.id}
@@ -103,7 +98,7 @@ export function SpaceSettings({ space, go, mayDefine }: Pick<SpaceScreen, 'space
         />
       )}
       {connecting && <ConnectAgent onClose={() => setConnecting(false)} />}
-    </div>
+    </>
   );
 }
 
@@ -147,63 +142,51 @@ function GroupProfile({ space }: { space: SpaceSummary }) {
   };
 
   return (
-    <section aria-label="Group profile" style={stack(12)}>
-      <h2 style={sectionHeading}>Profile</h2>
-      <form onSubmit={save} style={{ ...styles.tile, ...stack(12), padding: 16 }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer' }}>
-          {picked ? (
-            <img
-              src={picked.url}
-              alt=""
-              width={64}
-              height={64}
-              style={{ objectFit: 'cover', borderRadius: 16, flexShrink: 0 }}
+    <section aria-label="Group profile">
+      <h2>Profile</h2>
+      <article>
+        <form onSubmit={save} className="stack">
+          <label className="row">
+            {picked ? (
+              <img src={picked.url} alt="" width={64} height={64} className={list.picture} />
+            ) : (
+              <SpaceMark space={space} size={64} />
+            )}
+            <span>{face?.avatar || picked ? 'Change picture' : 'Add a picture'}</span>
+            <input
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+                if (file) setPicked({ file, url: URL.createObjectURL(file) });
+              }}
             />
-          ) : (
-            <SpaceMark space={space} size={64} />
-          )}
-          <LinkButton type="button" style={{ pointerEvents: 'none', paddingLeft: 0 }}>
-            {face?.avatar || picked ? 'Change picture' : 'Add a picture'}
-          </LinkButton>
+          </label>
           <input
-            type="file"
-            accept="image/*"
-            hidden
-            onChange={(event) => {
-              const file = event.currentTarget.files?.[0];
-              if (file) setPicked({ file, url: URL.createObjectURL(file) });
-            }}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            maxLength={100}
+            placeholder="The group's name"
+            aria-label="The group's name"
           />
-        </label>
-        <input
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          maxLength={100}
-          placeholder="The group's name"
-          aria-label="The group's name"
-          style={styles.input}
-        />
-        <textarea
-          value={bio}
-          onChange={(event) => setBio(event.target.value)}
-          maxLength={2000}
-          rows={3}
-          placeholder="What the group is about"
-          aria-label="What the group is about"
-          style={styles.textarea}
-        />
-        {error && <p style={styles.error}>{error}</p>}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12 }}>
-          {saved && !busy && <span style={styles.quiet}>Saved</span>}
-          <PrimaryButton
-            type="submit"
-            disabled={busy || !name.trim()}
-            style={{ width: 'auto', padding: '0 20px' }}
-          >
-            {busy ? 'Saving…' : 'Save'}
-          </PrimaryButton>
-        </div>
-      </form>
+          <textarea
+            value={bio}
+            onChange={(event) => setBio(event.target.value)}
+            maxLength={2000}
+            rows={3}
+            placeholder="What the group is about"
+            aria-label="What the group is about"
+          />
+          {error && <p role="alert">{error}</p>}
+          <div className="row">
+            {saved && !busy && <small>Saved</small>}
+            <button data-intent="primary" type="submit" disabled={busy || !name.trim()}>
+              {busy ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </form>
+      </article>
     </section>
   );
 }
@@ -221,16 +204,14 @@ function SettingsRow({
   onClick: () => void;
 }) {
   return (
-    <li data-tile style={{ listStyle: 'none' }}>
-      <button onClick={onClick} style={rowButton}>
+    <li>
+      <button data-intent="open" onClick={onClick} className="row">
         {icon}
-        <span style={{ ...stack(2), flex: 1, minWidth: 0 }}>
-          <strong style={cardTitle}>{title}</strong>
-          {detail && <span style={cardText}>{detail}</span>}
+        <span className="stack truncate" data-gap="tight">
+          <strong>{title}</strong>
+          {detail && <small>{detail}</small>}
         </span>
-        <span style={{ display: 'inline-flex', color: palette.ink.faint }}>
-          <Icon name="chevron" size={14} />
-        </span>
+        <Icon name="chevron" size={14} />
       </button>
     </li>
   );
@@ -239,19 +220,8 @@ function SettingsRow({
 /** A line icon on the same tile an app's shape takes */
 function LineIcon({ name }: { name: IconName }) {
   return (
-    <span style={lineIcon}>
+    <span className={marks.mark}>
       <Icon name={name} size={18} />
     </span>
   );
 }
-
-const lineIcon = {
-  width: 36,
-  height: 36,
-  flexShrink: 0,
-  display: 'grid',
-  placeItems: 'center',
-  borderRadius: palette.radius.md,
-  background: palette.surface.sunken,
-  color: palette.ink.body,
-} as const;
