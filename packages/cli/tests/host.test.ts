@@ -171,7 +171,13 @@ describe('a host', () => {
     for (const id of [a, b]) await node.extend(id, nowSeconds() + YEAR);
     await node.attach(a, alice.did, (await aliceNode.carriers.add({ did: node.did, name: 'Host' })).invite);
     await node.attach(b, bob.did, (await bobNode.carriers.add({ did: node.did, name: 'Host' })).invite);
-    await until(carries(node, shared.id), 5000, 'the shared space to be carried');
+    // Each account's pass for it arrives on its own: both must have before one stops paying.
+    for (const id of [a, b])
+      await until(
+        async () => (await node.spacesOf(id)).includes(shared.id),
+        5000,
+        'both to carry the shared space',
+      );
     assert.equal((await node.spaces()).filter((space) => space.id === shared.id).length, 1);
 
     await node.detach(a);
