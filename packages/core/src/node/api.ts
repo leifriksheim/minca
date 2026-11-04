@@ -86,7 +86,7 @@ export const API = Object.freeze({
     setAvatar: "change the account's picture",
     picture: 'pass',
     revoke: 'revoke notes',
-    space: 'pass',
+    space: 'own',
   },
   carriers: {
     list: 'pass',

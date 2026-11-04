@@ -188,6 +188,19 @@ describe('an agent acting for a person', () => {
     await assert.rejects(() => helper.records.put(other, 'app.note', { text: 'x' }), /not given this space/);
   });
 
+  test("it isn't told where the account's own spaces are, unless its note names them", async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const alice = await person(hub, { accountKey: true });
+    const { id: space } = await alice.node.spaces.create({ name: 'Climbing', ...team, visibility: 'public' });
+    const agent = await agentFor(alice, [space]);
+    const helper = await alice.node.asAgent({ keys: agent.keys, note: agent.note });
+    assert.ok(await alice.node.account.space(), 'the account itself knows its registry');
+    // Their ids are where the account's devices meet: knowing one tells when they are about.
+    assert.equal(await helper.account.space(), null);
+    assert.equal(await helper.contacts.space(), null);
+    await alice.node.close();
+  });
+
   test('it can see who can be written to directly, but neither sends nor reads direct messages', async () => {
     const { alice, bob, space } = await setup();
     const agent = await agentFor(alice, [space]);
