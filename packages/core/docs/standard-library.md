@@ -92,8 +92,10 @@ Five rules keep the choice obvious.
 - Link roles: `about` (what an annotation is on), `replyTo` and `root`
   (threads), `parent` (trees), `in` (member of a list, album, calendar,
   document or account), `shares` (quotes).
-- What only one person should see, like blocks, mutes, reminders and
-  settings, goes in that person's own space.
+- What only one person should see is kept where only they read it: a block
+  on the contact ([contacts](contacts.md)), and their own settings and
+  reminders in the account registry, `node.account.space()`
+  ([the node](node.md#records-and-the-account)).
 
 See [spec 02 §4.3 and §7.3](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md).
 

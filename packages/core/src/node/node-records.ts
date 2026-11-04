@@ -221,7 +221,7 @@ export async function startAgent(
   ctx: NodeContext,
 ): Promise<P2PNode> {
   const { spaces, records, hosting, contacts, direct } = node;
-  const { contactsSpaceId } = ctx;
+  const { contactsSpaceId, accountSpaceId } = ctx;
   const agentDid = await didOf(agent.keys.publicKey, ctx.provider);
   const checked = await verifyNote(agent.note, ctx.provider);
   if (!checked.valid) throw new Error(`The agent's note does not check out: ${checked.reason}`);
@@ -270,6 +270,10 @@ export async function startAgent(
         return hosting.space(spaceId);
       },
       over: async (spaceId) => (allowed(spaceId) ? hosting.over(spaceId) : []),
+    },
+    // The account's own spaces are found only by those given them: their ids are where its devices meet.
+    account: {
+      space: async () => (accountSpaceId !== null && allowed(accountSpaceId) ? accountSpaceId : null),
     },
     contacts: {
       space: async () => (contactsGiven() ? contactsSpaceId : null),

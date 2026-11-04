@@ -5,7 +5,8 @@
 dialog {
   width: min(520px, 100% - 32px);
   max-height: calc(100% - 80px);
-  margin: 40px auto auto;
+  /* In the middle of the screen, as the browser places a modal; a phone's rises from the bottom (Modal) */
+  margin: auto;
   padding: 20px;
   border: 1px solid var(--color-field);
   border-radius: var(--radius-surface);

@@ -17,6 +17,8 @@ import { memoryStores } from './helpers/memory-stores.js';
 import { createMemoryDirectory } from './helpers/memory-directory.js';
 import { folderStores, type StoreFactory } from '../src/node/stores.js';
 import { team } from '../src/space/presets.js';
+import * as z from 'zod';
+import { collection } from '../src/schema/collection-def.js';
 import { hold } from './helpers/hold.js';
 import { until } from './helpers/until.js';
 
@@ -100,6 +102,39 @@ describe('the account name', () => {
     const node = await createNode({ signer: me.signer, stores: memoryStores(), watchIntervalMs: 0 });
     open.push(node);
     await assert.rejects(node.account.setName('x'), /account key/);
+  });
+});
+
+describe("the account's own space", () => {
+  test('records an app keeps in the registry, in a collection of its own, reach every device', async () => {
+    const me = await account();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const laptop = await device(me, memoryStores(), hub);
+    const phone = await device(me, memoryStores(), hub);
+    const space = await laptop.account.space();
+    assert.ok(space);
+    assert.equal(await phone.account.space(), space, 'every device finds the same one');
+
+    const theme = collection({
+      name: 'app.theme',
+      schema: z.object({ theme: z.string() }),
+      rules: { onePer: ['@author'] },
+    });
+    await laptop.collections.define(space, theme);
+    await laptop.records.put(space, theme, { theme: 'dark' });
+    const themeOn = async (node: P2PNode) =>
+      (await node.records.query(space, { collection: theme })).records[0]?.body.theme;
+    await until(async () => (await themeOn(phone)) === 'dark', 3000, 'the record to reach the phone');
+
+    await phone.records.put(space, theme, { theme: 'light' });
+    await until(async () => (await themeOn(laptop)) === 'light', 3000, 'the change to reach the laptop');
+  });
+
+  test('is none without the account key', async () => {
+    const me = await account();
+    const node = await createNode({ signer: me.signer, stores: memoryStores(), watchIntervalMs: 0 });
+    open.push(node);
+    assert.equal(await node.account.space(), null);
   });
 });
 

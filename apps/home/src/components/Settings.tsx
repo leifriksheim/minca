@@ -27,6 +27,7 @@ import { Hosting } from './Hosting';
 import { Notifications } from './Notifications';
 import styles from './Settings.module.css';
 import type { TabId } from '../tabs';
+import { ThemePicker } from '@minca/app-shared/theme';
 import { Icon } from '@minca/app-shared/Icon';
 
 /**
@@ -161,6 +162,11 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
             openTab={openTab}
           />
           <Username />
+          <ul role="list">
+            <Row label="Theme" detail="For Minca on every device.">
+              <ThemePicker />
+            </Row>
+          </ul>
         </>
       )}
       {tab === 'security' && (

@@ -207,6 +207,10 @@ describe('screens', () => {
       ),
       'a doctype, so the screen is drawn in standards mode, then the policy before any script',
     );
+    // A screen draws in its host's theme, and only a theme there is: it is written into a script.
+    assert.match(screenDocument('<p>Hi</p>', [], '', 'system'), /dataset\.theme = 'system'/);
+    assert.doesNotMatch(screenDocument('<p>Hi</p>', [], '', "dark';alert(1)//"), /alert\(1\)/);
+    assert.doesNotMatch(screenDocument('<p>Hi</p>'), /dataset\.theme/);
   });
 
   test("the bridge answers for its app's collections only, as the person looking, under the rules", async () => {

@@ -1910,7 +1910,9 @@ lists and no others, and **SHOULD** keep each membership's invite carrying the
 space's current key, so a new device joins with it. How the library does this
 is in [06](06-nodes-and-sessions.md) §1.3. The registry holds other records
 of the library's own too, such as the account's name
-([docs](../packages/core/docs/spaces.md#profiles)). What a `sys.automation`
+([docs](../packages/core/docs/spaces.md#profiles)), and apps keep the
+person's own settings there, by convention
+([docs](../packages/core/docs/node.md#records-and-the-account)). What a `sys.automation`
 body says is the library's ([automations](../packages/core/docs/automations.md#the-accounts-own));
 peers check only that a member of the registry wrote it, and the library
 counts only the account's own. It is a system collection so that

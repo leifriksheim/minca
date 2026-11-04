@@ -6,9 +6,6 @@ import { createScreenBridge, screenDocument, useAccount, useNode } from '@minca/
 let kit: Promise<string> | null = null;
 const loadKit = () => (kit ??= fetch('/minca-ui.js').then((response) => response.text()));
 
-/** Turns the design system's night side on in the screen, as data-theme does on this page */
-const DARK = `<script>document.documentElement.dataset.theme = 'dark';</script>\n`;
-
 const isLoadRequest = (data: unknown): boolean =>
   typeof data === 'object' && data !== null && 'minca' in data && data.minca === 'ready';
 
@@ -54,8 +51,8 @@ export function ScreenRun({
         target.postMessage(
           {
             minca: 'load',
-            // The kit's own tokens, at night, as the page around it is.
-            document: screenDocument(DARK + screen, [], ui),
+            // Drawn as this page is: at night.
+            document: screenDocument(screen, [], ui, document.documentElement.dataset.theme),
             me: { did: node.did, name: account.name },
             collections: names.split('|'),
             settings: {},

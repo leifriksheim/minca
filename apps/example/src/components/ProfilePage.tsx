@@ -17,6 +17,7 @@ import { usePopover } from './usePopover';
 import { shrinkImage } from '@minca/app-shared/images';
 import { ConnectAgent } from './ConnectAgent';
 import { Icon } from '@minca/app-shared/Icon';
+import { ThemePicker } from '@minca/app-shared/theme';
 import styles from './ProfilePage.module.css';
 
 /**
@@ -59,6 +60,10 @@ export function ProfilePage() {
           )}
         </li>
         <AccountActions onConnectAgent={() => setConnecting(true)} />
+        <li className="row" data-spread>
+          <span>Theme</span>
+          <ThemePicker />
+        </li>
       </ul>
       {connecting && <ConnectAgent onClose={() => setConnecting(false)} />}
     </section>

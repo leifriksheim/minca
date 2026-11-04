@@ -185,7 +185,12 @@ export function ScreenFrame({
       target.postMessage(
         {
           minca: 'load',
-          document: screenDocument(screen, allowed ? allowed.split(' ') : [], ui),
+          document: screenDocument(
+            screen,
+            allowed ? allowed.split(' ') : [],
+            ui,
+            document.documentElement.dataset.theme,
+          ),
           me: { did: node.did, name: account.name },
           collections: list,
           settings: settingsNow.current,

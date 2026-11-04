@@ -23,6 +23,7 @@
     "./useDismiss": "./src/useDismiss.ts",
     "./action": "./src/action.ts",
     "./places": "./src/places.ts",
+    "./theme": "./src/theme.tsx",
     "./screens": "./src/screens.ts",
     "./images": "./src/images.ts",
     "./Payment": "./src/Payment.tsx",

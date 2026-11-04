@@ -31,6 +31,7 @@
   --night-dark: #0a1029;
   --night-line: #2a3460;
   --night-field: #3d4878;
+  --night-outline: #4a5583;
   --cream-body: #d8d4cc;
   --cream-muted: #9a9fb8;
   --cobalt-light: #8a9bff;
@@ -38,41 +39,43 @@
   --green-light: #74c99a;
   --amber-light: #f2b863;
 
-  color-scheme: light;
+  /* Each colour holds its day and its night value, light-dark(day, night):
+     color-scheme, set below, says which a part of the page shows. */
 
   /* Grounds */
-  --color-page: var(--paper);
-  --color-surface: var(--paper-light);
-  --color-sunken: var(--paper-dark);
-  --color-scrim: rgb(19 33 74 / 0.35);
+  --color-page: light-dark(var(--paper), var(--night));
+  --color-surface: light-dark(var(--paper-light), var(--night-light));
+  --color-sunken: light-dark(var(--paper-dark), var(--night-dark));
+  --color-scrim: light-dark(rgb(19 33 74 / 0.35), rgb(5 8 20 / 0.6));
 
   /* Lines: the outline of anything that stands on the page, the divider
      between things inside it, and the edge of a field to type in. */
-  --color-outline: var(--navy);
-  --color-divider: var(--sand);
-  --color-field: var(--sand-dark);
+  --color-outline: light-dark(var(--navy), var(--night-outline));
+  --color-divider: light-dark(var(--sand), var(--night-line));
+  --color-field: light-dark(var(--sand-dark), var(--night-field));
 
   /* Text */
-  --color-text-strong: var(--navy);
-  --color-text: var(--navy-body);
-  --color-text-muted: var(--navy-muted);
+  --color-text-strong: light-dark(var(--navy), var(--paper));
+  --color-text: light-dark(var(--navy-body), var(--cream-body));
+  --color-text-muted: light-dark(var(--navy-muted), var(--cream-muted));
 
   /* The one colour for acting: the main action, focus, what is selected. */
-  --color-action: var(--cobalt);
-  --color-action-hover: var(--navy);
-  --color-action-soft: var(--cobalt-soft);
-  --color-on-action: #fff;
+  --color-action: light-dark(var(--cobalt), var(--cobalt-light));
+  --color-action-hover: light-dark(var(--navy), var(--paper));
+  --color-action-soft: light-dark(var(--cobalt-soft), rgb(138 155 255 / 0.14));
+  --color-on-action: light-dark(#fff, var(--night));
 
   /* State, used sparingly */
-  --color-good: var(--green);
-  --color-good-soft: var(--green-soft);
-  --color-warn: var(--amber);
-  --color-warn-soft: var(--amber-soft);
-  --color-danger: var(--red);
-  --color-danger-soft: var(--red-soft);
+  --color-good: light-dark(var(--green), var(--green-light));
+  --color-good-soft: light-dark(var(--green-soft), rgb(116 201 154 / 0.14));
+  --color-warn: light-dark(var(--amber), var(--amber-light));
+  --color-warn-soft: light-dark(var(--amber-soft), rgb(242 184 99 / 0.14));
+  --color-danger: light-dark(var(--red), var(--red-light));
+  --color-danger-soft: light-dark(var(--red-soft), rgb(255 138 112 / 0.14));
 
-  /* Five hues for telling things apart: people, labels, a chart's series. In this order. */
-  --color-hue-1: var(--cobalt);
+  /* Five hues for telling things apart: people, labels, a chart's series. In
+     this order. They keep their colours at night; cobalt lightens to be read on navy. */
+  --color-hue-1: light-dark(var(--cobalt), var(--cobalt-light));
   --color-hue-2: var(--coral);
   --color-hue-3: var(--peach);
   --color-hue-4: var(--sage);
@@ -106,43 +109,31 @@
   --reading-width: 40rem;
 
   /* Only what floats over the page casts a shadow. */
-  --shadow-float: 0 1px 2px rgb(19 33 74 / 0.06), 0 16px 40px -12px rgb(19 33 74 / 0.22);
+  --shadow-float:
+    0 1px 2px light-dark(rgb(19 33 74 / 0.06), rgb(0 0 0 / 0.3)),
+    0 16px 40px -12px light-dark(rgb(19 33 74 / 0.22), rgb(0 0 0 / 0.6));
 }
 
 /*
- * The same names at night: the navy is the ground and the paper the ink. The
- * shapes keep their colours; cobalt lightens to be read on navy. A page or a
- * part of one turns dark with data-theme="dark".
+ * Day or night. A page is light unless it says otherwise: data-theme="dark"
+ * turns it, or a part of it, to the night side; data-theme="system" follows
+ * the device. Every colour above holds both. The one number that differs is
+ * --tint, how much of a hue a tinted ground takes (a tile, a tag, a card):
+ * at night less, or the hue goes to mud in the navy.
  */
+:root {
+  color-scheme: light;
+  --tint: 28%;
+}
 [data-theme='dark'] {
   color-scheme: dark;
-
-  --color-page: var(--night);
-  --color-surface: var(--night-light);
-  --color-sunken: var(--night-dark);
-  --color-scrim: rgb(5 8 20 / 0.6);
-
-  --color-outline: var(--cream-muted);
-  --color-divider: var(--night-line);
-  --color-field: var(--night-field);
-
-  --color-text-strong: var(--paper);
-  --color-text: var(--cream-body);
-  --color-text-muted: var(--cream-muted);
-
-  --color-action: var(--cobalt-light);
-  --color-action-hover: var(--paper);
-  --color-action-soft: rgb(138 155 255 / 0.14);
-  --color-on-action: var(--night);
-
-  --color-good: var(--green-light);
-  --color-good-soft: rgb(116 201 154 / 0.14);
-  --color-warn: var(--amber-light);
-  --color-warn-soft: rgb(242 184 99 / 0.14);
-  --color-danger: var(--red-light);
-  --color-danger-soft: rgb(255 138 112 / 0.14);
-
-  --color-hue-1: var(--cobalt-light);
-
-  --shadow-float: 0 1px 2px rgb(0 0 0 / 0.3), 0 16px 40px -12px rgb(0 0 0 / 0.6);
+  --tint: 18%;
+}
+[data-theme='system'] {
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  [data-theme='system'] {
+    --tint: 18%;
+  }
 }

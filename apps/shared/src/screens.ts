@@ -338,16 +338,29 @@ export function screenPolicy(network: ReadonlyArray<string> = []): string {
   ].join('; ');
 }
 
+/** The themes a screen may be drawn in (`data-theme` in `@minca/ui`'s tokens) */
+const THEMES = new Set(['light', 'dark', 'system']);
+
 /**
- * The document a host page writes into its frame: its policy, the client,
- * the kit, then the screen.
+ * The document a host page writes into its frame: its policy, its theme, the
+ * client, the kit, then the screen.
  * @param network The origins the app may reach; none keeps it sealed
  * @param ui The kit as one script (`bundleUi` in `@minca/ui/bundle`), which sets up `ui` over `minca`
+ * @param theme The host page's own `data-theme`, so the screen draws as the page around it does
  */
-export function screenDocument(screen: string, network: ReadonlyArray<string> = [], ui = ''): string {
+export function screenDocument(
+  screen: string,
+  network: ReadonlyArray<string> = [],
+  ui = '',
+  theme?: string,
+): string {
   // A doctype, or the browser draws the screen in quirks mode (a form gets a margin below it, and more).
-  // The policy first, so it is in force before any script runs; `minca` next, then `ui` on it, so both are there when the screen's run.
-  return `<!doctype html>\n<meta http-equiv="Content-Security-Policy" content="${screenPolicy(network)}">\n<script>${SCREEN_CLIENT}</script>\n<script>${ui}</script>\n${screen}`;
+  // The policy first, so it is in force before any script runs; the theme, `minca`, then `ui` on it, so all are there when the screen's run.
+  const themed =
+    theme && THEMES.has(theme)
+      ? `<script>document.documentElement.dataset.theme = '${theme}';</script>\n`
+      : '';
+  return `<!doctype html>\n<meta http-equiv="Content-Security-Policy" content="${screenPolicy(network)}">\n${themed}<script>${SCREEN_CLIENT}</script>\n<script>${ui}</script>\n${screen}`;
 }
 
 const toScreen = (
