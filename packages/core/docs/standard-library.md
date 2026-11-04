@@ -93,7 +93,8 @@ Five rules keep the choice obvious.
   (threads), `parent` (trees), `in` (member of a list, album, calendar,
   document or account), `shares` (quotes).
 - What only one person should see, like blocks, mutes, reminders and
-  settings, goes in that person's own space.
+  settings, goes in the account's own space, `node.account.space()`
+  ([the node](node.md#records-and-the-account)).
 
 See [spec 02 §4.3 and §7.3](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md).
 

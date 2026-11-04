@@ -71,6 +71,26 @@ for a value computed from data, said so on its line.
   that order. The one surface they colour is a tint mixed into the paper.
 - **Good, warn and danger** are for state, sparingly: an error, a check that passed.
 
+### Day and night
+
+Every colour token holds a day and a night value (`light-dark()` in
+`css/tokens.css`), so there is one palette to change, not two. At night the
+navy is the ground and the paper the ink; the hues keep their colours, and
+cobalt lightens to be read on navy.
+
+- A page is light unless its `<html>` says otherwise: `data-theme="dark"` (as
+  minca.dev is) or `data-theme="system"`, which follows the device. The same
+  attribute on an element turns just that part.
+- The Minca app and the account home are light until the person chooses,
+  once for the account (`ThemePicker` in `apps/shared/src/theme.tsx`). It is
+  one of the account's own settings (`node.account.setting`), kept in its
+  registry, so every device and both apps follow.
+- A hue tints a ground (a tile, a tag, a card) by `--tint`, mixed `in oklab`:
+  28% by day, 18% at night, where more goes to mud.
+- Draw only with the tokens and it follows by itself. A shape takes its colour
+  from them too; a QR code stays dark on light whatever the theme.
+- A screen draws as the page around it does: its host passes its theme in.
+
 ## Type
 
 - **Bricolage Grotesque** (`--font-display`) for page titles, section headings, dialog

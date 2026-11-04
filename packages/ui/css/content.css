@@ -323,12 +323,12 @@ aside {
 }
 
 .tag[data-hue] {
-  background: color-mix(in srgb, var(--hue) 28%, var(--color-page));
+  background: color-mix(in oklab, var(--hue) var(--tint), var(--color-page));
   color: var(--color-text-strong);
 }
 
 article[data-hue] {
-  background: color-mix(in srgb, var(--hue) 14%, var(--color-page));
+  background: color-mix(in oklab, var(--hue) calc(var(--tint) / 2), var(--color-page));
 }
 
 progress,

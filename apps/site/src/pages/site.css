@@ -1,5 +1,5 @@
 /* The site's own furniture, on top of the design system (@minca/ui/minca.css), which styles the
-   elements and holds the tokens: the bar and footer, bands, grid paper, colour tiles, code, and
+   elements and holds the tokens: the bar and footer, bands, grid paper, colour tiles, and
    what several pages share. What only one page or drawing uses lives beside it (castle.tsx,
    castle.css). packages/ui/DESIGN.md says how to use the tokens; the site's look is stronger than
    the apps': colour tiles, grid paper, the pill nav.
@@ -319,13 +319,13 @@
   padding: 36px;
   border: 1px solid var(--color-outline);
   border-radius: var(--radius-frame);
-  background: color-mix(in srgb, var(--c) 28%, var(--color-page));
+  background: color-mix(in oklab, var(--c) var(--tint), var(--color-page));
 }
 
 /* A wide panel with words to read on it takes less of the colour */
 .site .tile-panel {
   padding: 56px;
-  background: color-mix(in srgb, var(--c) 14%, var(--color-page));
+  background: color-mix(in oklab, var(--c) calc(var(--tint) / 2), var(--color-page));
 }
 
 /* The shape, big, half off the tile's corner; it turns a little on hover */
@@ -493,44 +493,6 @@
   border-radius: var(--radius-small);
   background: var(--color-sunken);
   color: var(--color-text);
-}
-.site .code {
-  overflow: hidden;
-  border-radius: var(--radius-surface);
-  /* The code blocks: deep navy, a calm night theme */
-  --code-ink: #dfe4f2;
-  --code-dim: #8b93b3;
-  --code-line: rgba(255, 255, 255, 0.1);
-  background: var(--color-text-strong);
-  color: var(--code-ink);
-  --sh-keyword: #a3a8ec; /* periwinkle: import, const, await */
-  --sh-entity: #8fb4ff; /* blue, italic: functions being called */
-  --sh-class: #ffb48a; /* warm orange: numbers and Types */
-  --sh-identifier: #dfe4f2;
-  --sh-property: #c6cfe8;
-  --sh-string: #ffd08a; /* amber: strings */
-  --sh-jsxliterals: #ffd08a;
-  --sh-sign: #8b93b3;
-  --sh-comment: #6f7899;
-  --sh-break: #dfe4f2;
-  --sh-space: #dfe4f2;
-}
-.site .code pre {
-  margin: 0;
-  padding: 20px;
-  overflow-x: auto;
-  font-size: var(--text-small);
-  line-height: 1.7;
-}
-.site .code .sh__token--entity,
-.site .code .sh__token--comment {
-  font-style: italic;
-}
-.site .code pre code {
-  padding: 0;
-  background: none;
-  font-size: inherit;
-  color: inherit;
 }
 .site .split {
   display: grid;

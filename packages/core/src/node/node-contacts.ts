@@ -164,6 +164,7 @@ export function createNodeContacts(ctx: NodeContext) {
       const avatar = image ? { ...(await registryRt.addFile(image.bytes)), mime: image.mime } : null;
       return writeProfile(registryRt, { name, ...(avatar ? { avatar } : {}) });
     },
+    space: () => Promise.resolve(accountSpaceId),
     async picture() {
       const avatar = (await ownProfile())?.avatar;
       if (!avatar || !accountSpaceId) return null;

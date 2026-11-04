@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { ROUND, radial, type RoundKind } from '@minca/ui/round';
 import { PATHS, type ShapeKind } from '@minca/ui/shapes';
-import { shapeColours, type ShapeColour } from '@minca/ui/tokens';
+import type { ShapeColour } from '@minca/ui/tokens';
 import styles from './shapes.module.css';
 
 /**
@@ -13,6 +13,20 @@ import styles from './shapes.module.css';
  * Give a shape a `colour` from the tokens, or leave it out and it fills with
  * the CSS custom property `--c`, as the site's colour classes set it.
  */
+
+/**
+ * A shape colour as the page draws it: from the tokens, so it follows the
+ * page's day or night. Ink and paper are the page's own text and ground.
+ */
+const FILL: Readonly<Record<ShapeColour, string>> = {
+  cobalt: 'var(--color-hue-1)',
+  coral: 'var(--color-hue-2)',
+  peach: 'var(--color-hue-3)',
+  sage: 'var(--color-hue-4)',
+  lilac: 'var(--color-hue-5)',
+  ink: 'var(--color-text-strong)',
+  paper: 'var(--color-page)',
+};
 
 /** One shape, in one of the shapes' colours, or in `--c` when no colour is given */
 export function Shape({
@@ -38,7 +52,7 @@ export function Shape({
       height={size}
       aria-hidden
     >
-      <path d={path ?? PATHS[kind]} fill={colour ? shapeColours[colour] : 'var(--c, currentColor)'} />
+      <path d={path ?? PATHS[kind]} fill={colour ? FILL[colour] : 'var(--c, currentColor)'} />
     </svg>
   );
 }
@@ -66,7 +80,7 @@ export function Morph({
     const first = steps[0];
     if (!first || !path.current) return;
     path.current.setAttribute('d', PATHS[first.kind]);
-    path.current.style.fill = shapeColours[first.colour];
+    path.current.style.fill = FILL[first.colour];
     const still = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
     if (still || steps.length < 2) return;
 
@@ -81,7 +95,7 @@ export function Morph({
       if (from && to && elapsed > HOLD_MS) {
         if (!turned) {
           turned = true;
-          if (path.current) path.current.style.fill = shapeColours[to.colour];
+          if (path.current) path.current.style.fill = FILL[to.colour];
         }
         const t = Math.min(1, (elapsed - HOLD_MS) / MELT_MS);
         const k = ease(t);

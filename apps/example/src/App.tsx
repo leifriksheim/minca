@@ -35,6 +35,7 @@ import { addChat } from './components/apps/entries';
 import { takeBack } from './contacts';
 import css from './App.module.css';
 import { ask } from '@minca/app-shared/Ask';
+import { AccountTheme } from '@minca/app-shared/theme';
 import {
   Notices,
   rememberHome,
@@ -151,6 +152,7 @@ function Workspace() {
         <SpaceFaces value={faces}>
           <Outlet />
           <CallLayer spaces={spaces} onGoTo={(space) => openSpace(space.id)} />
+          <AccountTheme />
         </SpaceFaces>
       </Pictures>
     </WorkspaceContext>

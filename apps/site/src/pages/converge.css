@@ -1,6 +1,8 @@
 /* A stream of apps into one prism, Minca's colours out (converge.tsx) */
 
 .site .converge-tile {
+  /* A brand's logo keeps the light ground it was drawn for, at night too */
+  color-scheme: light;
   fill: var(--color-surface);
   stroke: var(--color-outline);
   stroke-width: 1.5;

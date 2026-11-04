@@ -809,6 +809,11 @@ export interface NodeAccount {
   picture(): Promise<{ bytes: Uint8Array; mime: string } | null>;
   /** Revokes one of this account's keys in the account registry. Needs an account key. */
   revoke(key: string, options?: RevokeOptions): Promise<boolean>;
+  /**
+   * The account registry's space id, or null without an account key: where to keep what is the
+   * person's own across their devices, like an app's settings, as records in a collection of yours
+   */
+  space(): Promise<string | null>;
 }
 
 /** Someone in the account's contact list */

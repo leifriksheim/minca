@@ -8,6 +8,7 @@ import { SignIn } from './components/SignIn';
 import { HostingDue } from './components/Hosting';
 import { Wordmark } from '@minca/app-shared/Wordmark';
 import { TABS, useTab } from './tabs';
+import { AccountTheme } from '@minca/app-shared/theme';
 import styles from './App.module.css';
 
 /** The account home: sign in, then the account and everything about it, a tab at a time. */
@@ -48,6 +49,7 @@ export function App() {
         <AccountNotices />
         <HostingDue />
         <Settings tab={tab} openTab={openTab} />
+        <AccountTheme />
       </main>
     </>
   );

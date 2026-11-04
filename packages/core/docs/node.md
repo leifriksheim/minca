@@ -605,6 +605,12 @@ this, since it sends nothing afterwards.
   space. `setAvatar({ bytes, mime } | null, { name? })` and `picture()` do the
   same for the account's picture ([spaces](spaces.md)). `revoke` revokes one
   of the account's keys in the registry.
+- `account.space()` is the registry's id. Keep what is the person's own
+  across their devices there, like an app's settings: define a collection of
+  yours and write records, as in any space. Every device of the account and
+  every app given the whole account reads them. Leave the `sys.*` records
+  alone; they are the account's. An app given only some spaces has no
+  registry: it keeps its settings in a space it was given, or on the device.
 - `node.contacts` ([contacts](contacts.md)). `ask` and `accept` make a space
   for two, so they need whole-account access (`/account/write`).
 - `node.direct` ([direct messages](direct-messages.md)): `reachable`, `send`
