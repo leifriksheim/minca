@@ -10,6 +10,7 @@ apps/desktop/parts
 apps/docs/content
 apps/docs/.api
 apps/docs/.examples
+apps/docs/.minca
 apps/docs/public
 apps/docs/.next
 apps/docs/out

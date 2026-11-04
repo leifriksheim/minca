@@ -5,8 +5,10 @@
   command = "cd ../.. && npm ci && npm run build -w apps/docs"
   publish = "out"
   # Netlify skips a build when nothing under the base directory changed, but
-  # this is built from the docs, the spec, the tokens and the mark too. Exit 1 builds.
-  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ../../packages/core/docs ../../packages/calls/README.md ../../spec ../../packages/ui/src/tokens.ts ../shared/src/mark.ts ../shared/src/Wordmark.tsx ../../package.json ../../package-lock.json"
+  # this is built from the packages (their docs, the API reference, the
+  # playground's code, the design system and the screen kit), the spec,
+  # apps/shared, and the example app's screen frame too. Exit 1 builds.
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ../../packages ../../spec ../shared ../example/public/screen.html ../../package.json ../../package-lock.json"
 
 [build.environment]
   NODE_VERSION = "22"
