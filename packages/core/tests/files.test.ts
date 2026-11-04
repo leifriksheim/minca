@@ -623,6 +623,17 @@ describe('what a peer refuses', () => {
     assert.equal(await b.adapter.get(`f/${large.hash}/1`), null);
   });
 
+  test('a file larger than a device keeps is never fetched unread, whatever its limit ahead', async () => {
+    const { a, b, files, counts, meet } = apart({ limits: () => ({ ahead: Infinity, keep: CHUNK }) });
+    const large = await files.a.add(bytesOf(2 * CHUNK));
+    await name(a.storage, large);
+    await name(b.storage, large);
+    meet();
+    await files.b.fetchMissing();
+    assert.equal(counts.asked, 0);
+    assert.deepEqual(await files.b.open(large), bytesOf(2 * CHUNK));
+  });
+
   test('past its limit a device drops what others wrote and was used longest ago, never its own, and fetches it again only when read', async () => {
     const { a, b, files, counts, meet } = apart({ limits: () => ({ ahead: CHUNK, keep: (5 * CHUNK) / 2 }) });
     meet();

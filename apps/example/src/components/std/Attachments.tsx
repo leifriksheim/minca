@@ -4,7 +4,7 @@ import type { FileRef, NodeRecord, SpaceSummary } from '@minca/core';
 import { file as fileCollection } from '@minca/core/schemas';
 import { bodyOf } from '../../derive/schema-ui';
 import { fileRefOf } from '../../derive/kinds';
-import { fitImage, thumbnailOf } from '@minca/ui/image';
+import { fitImage, showsThumbnail, thumbnailOf } from '@minca/ui/image';
 import { sizeOf } from '@minca/ui/size';
 import { saveFile, useFileUrl } from '../../files';
 import styles from './Attachments.module.css';
@@ -96,10 +96,10 @@ function AttachmentView({ space, record }: { space: SpaceSummary; record: NodeRe
   const body = bodyOf(record);
   const file = fileOf(record);
   const name = typeof body.name === 'string' ? body.name : 'File';
-  const thumbnail = fileRefOf(body.thumbnail);
-  const picture = (file?.mime.startsWith('image/') ?? false) || !!thumbnail;
-  // The thumbnail; the picture itself only in older records, which have none. The file comes when saved.
-  const url = useFileUrl(space.id, thumbnail ?? (picture ? file : null));
+  const picture = file?.mime.startsWith('image/') ?? false;
+  // Its thumbnail; the picture itself when it has none. The file comes when saved.
+  const thumbnail = showsThumbnail(body.mime, body.thumbnail) ? fileRefOf(body.thumbnail) : null;
+  const url = useFileUrl(space.id, picture ? (thumbnail ?? file) : null);
   const [saving, setSaving] = useState(false);
 
   const save = async () => {

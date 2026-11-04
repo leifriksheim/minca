@@ -622,7 +622,10 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
     for (const [hash, sizes] of named) {
       if (closed) return;
       const waited = waiting.has(hash);
-      const ahead = sizes.filter((file) => file.size <= (limits?.ahead ?? Infinity));
+      // A file larger than this device keeps would be dropped as soon as it came: never fetched unread.
+      const ahead = sizes.filter(
+        (file) => file.size <= Math.min(limits?.ahead ?? Infinity, limits?.keep ?? Infinity),
+      );
       const dropped = async () => !!(await adapter.get(usedKey(hash))) && !(await adapter.get(listKey(hash)));
       if (!waited && (ahead.length === 0 || (await dropped()))) continue;
       const recent = Date.now() - (unfound.get(hash) ?? 0) < RETRY_MS;

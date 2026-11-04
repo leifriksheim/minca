@@ -6,7 +6,7 @@
  * a file itself only when it is opened or played. A screen whose app names
  * `std.file` among its collections can use it.
  */
-import { fitImage, thumbnailOf } from '../image';
+import { fitImage, showsThumbnail, thumbnailOf } from '../image';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { RefObject } from 'preact';
 import { sizeOf } from '../size';
@@ -89,7 +89,7 @@ export function Playable({ record }: { record: ScreenRecord<AttachmentBody> }) {
   const box = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
   const url = useBlob(record.key, playing ? blob : null);
-  const still = useFile(record.key, useSeen(box) ? thumbnail : null);
+  const still = useFile(record.key, useSeen(box) && showsThumbnail(mime, thumbnail) ? thumbnail : null);
   const video = mime.startsWith('video/');
   return html`<div
     ref=${box}
@@ -122,7 +122,8 @@ function Attachment({ record }: { record: ScreenRecord<AttachmentBody> }) {
   // A GIF shows whole, since the smaller one made to show in the list is a still of its first frame.
   const moving = mime === 'image/gif';
   // Its thumbnail when it has one; the picture itself only in older records, which have none.
-  const still = useFile(record.key, mime.startsWith('image/') && !moving ? (thumbnail ?? blob) : null);
+  const shown = showsThumbnail(mime, thumbnail) ? thumbnail : blob;
+  const still = useFile(record.key, mime.startsWith('image/') && !moving ? shown : null);
   const [open, setOpen] = useState(false);
   // Opened, the whole picture, not the one made smaller to show in the list
   const whole = useBlob(record.key, open || moving ? blob : null);

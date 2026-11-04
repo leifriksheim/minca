@@ -7,6 +7,7 @@
 import type { ComponentChildren } from 'preact';
 import { sizeOf } from '../size';
 import { shortWhen } from '../when';
+import { showsThumbnail } from '../image';
 import { useFile } from './hooks';
 import { html } from './html';
 import type { ScreenRecord } from './minca';
@@ -29,10 +30,14 @@ const refOf = (file: unknown) =>
 /** A file's picture, or the mark for its kind */
 function FileFace({ record }: { record: ScreenRecord }) {
   const { mime, blob, thumbnail } = record.body;
-  // Its thumbnail, a picture's or a video's; the picture itself in older records, which have none.
+  // Its thumbnail, a picture's or a video's; the picture itself when it has none.
   const picture = useFile(
     record.key,
-    refOf(thumbnail) ?? (typeof mime === 'string' && mime.startsWith('image/') ? refOf(blob) : null),
+    showsThumbnail(mime, thumbnail)
+      ? refOf(thumbnail)
+      : typeof mime === 'string' && mime.startsWith('image/')
+        ? refOf(blob)
+        : null,
   );
   if (picture) return html`<img class="record-face" src=${picture} alt="" />`;
   const kind = typeof mime === 'string' ? mime.split('/')[0] : '';

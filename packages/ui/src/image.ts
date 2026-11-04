@@ -8,6 +8,8 @@ const DRAWN = ['image/jpeg', 'image/png', 'image/webp'];
 const THUMB_SIDE = 480;
 /** A picture this small is its own thumbnail */
 const THUMB_ENOUGH = 64 * 1000;
+/** The largest thumbnail an app fetches: the thumbnail is its writer's word, and one larger than ours is no thumbnail */
+const THUMB_MAX = 256 * 1024;
 /** A video whose first frame hasn't drawn by now gets no thumbnail */
 const FRAME_MS = 5_000;
 
@@ -55,8 +57,8 @@ export async function fitImage(file: File): Promise<File> {
  * A small still of a picture or a video, to show in its place until it is
  * opened: `std.file`'s `thumbnail`. It is small enough that every device
  * fetches it ahead, while the file itself may wait until someone opens it.
- * Null for a picture already that small, for other files, and where the
- * browser can't draw one.
+ * Null for a picture already that small, for other files, where the browser
+ * can't draw one, and where it can't make one small enough.
  */
 export async function thumbnailOf(file: File): Promise<File | null> {
   try {
@@ -65,17 +67,14 @@ export async function thumbnailOf(file: File): Promise<File | null> {
       const bitmap = await createImageBitmap(file);
       const blob = await drawn(bitmap, bitmap.width, bitmap.height, THUMB_SIDE);
       bitmap.close();
-      return blob.size < file.size ? named(blob, file.name, '-thumb') : null;
+      return blob.size < file.size && blob.size <= THUMB_MAX ? named(blob, file.name, '-thumb') : null;
     }
     if (file.type.startsWith('video/') && typeof document !== 'undefined') {
       const url = URL.createObjectURL(file);
       try {
         const video = await frameOf(url);
-        return named(
-          await drawn(video, video.videoWidth, video.videoHeight, THUMB_SIDE),
-          file.name,
-          '-thumb',
-        );
+        const blob = await drawn(video, video.videoWidth, video.videoHeight, THUMB_SIDE);
+        return blob.size <= THUMB_MAX ? named(blob, file.name, '-thumb') : null;
       } finally {
         URL.revokeObjectURL(url);
       }
@@ -109,4 +108,16 @@ function frameOf(url: string): Promise<HTMLVideoElement> {
     video.preload = 'auto';
     video.src = url;
   });
+}
+
+/**
+ * Whether to show a `std.file`'s thumbnail in its place: only for a picture
+ * or a video, so another kind of file never looks like one, and only a
+ * thumbnail small enough to fetch ahead.
+ */
+export function showsThumbnail(mime: unknown, thumbnail: unknown): boolean {
+  if (typeof mime !== 'string' || !/^(image|video)\//.test(mime)) return false;
+  const size: unknown =
+    typeof thumbnail === 'object' && thumbnail !== null ? Reflect.get(thumbnail, 'size') : null;
+  return typeof size === 'number' && size <= THUMB_MAX;
 }
