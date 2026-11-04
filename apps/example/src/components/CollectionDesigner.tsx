@@ -20,6 +20,7 @@ import { SchemaForm } from './SchemaForm';
 import styles from './CollectionDesigner.module.css';
 import { confirmThen } from '../confirm';
 import { Info } from '@minca/app-shared/Info';
+import { Icon } from '@minca/app-shared/Icon';
 
 type LinkDeclaration = NonNullable<DefineCollection['links']>[string];
 
@@ -349,26 +350,26 @@ export function CollectionEditor({
             {fields.map((field, i) => (
               <li key={field.id} className="stack">
                 <div className="row">
-                  <div className="stack" data-gap="tight">
-                    <button
-                      type="button"
-                      onClick={() => move(field.id, -1)}
-                      disabled={i === 0}
-                      aria-label={`Move ${field.label || 'field'} up`}
-                      data-intent="inline"
-                    >
-                      ▲
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => move(field.id, 1)}
-                      disabled={i === fields.length - 1}
-                      aria-label={`Move ${field.label || 'field'} down`}
-                      data-intent="inline"
-                    >
-                      ▼
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => move(field.id, -1)}
+                    disabled={i === 0}
+                    aria-label={`Move ${field.label || 'field'} up`}
+                    data-intent="ghost"
+                    data-icon
+                  >
+                    <Icon name="raise" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => move(field.id, 1)}
+                    disabled={i === fields.length - 1}
+                    aria-label={`Move ${field.label || 'field'} down`}
+                    data-intent="ghost"
+                    data-icon
+                  >
+                    <Icon name="down" />
+                  </button>
                   {field.type === null ? (
                     <span className="tag" title="A shape this editor doesn't offer: kept exactly as it is">
                       {'{}'} as it is
@@ -461,10 +462,12 @@ export function CollectionEditor({
                   )}
               </li>
             ))}
+            <li>
+              <button type="button" data-intent="open" onClick={addField}>
+                + Add a field
+              </button>
+            </li>
           </ol>
-          <button type="button" onClick={addField}>
-            + Add a field
-          </button>
         </section>
 
         <section>

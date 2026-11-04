@@ -124,6 +124,7 @@ export const ICONS = {
   chevron: [['path', { d: 'm9 18 6-6-6-6' }]],
   back: [['path', { d: 'm15 18-6-6 6-6' }]],
   down: [['path', { d: 'm6 9 6 6 6-6' }]],
+  raise: [['path', { d: 'm18 15-6-6-6 6' }]],
   up: [
     [
       'path',
