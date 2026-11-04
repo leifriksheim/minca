@@ -60,8 +60,7 @@
 
 /* An app on the rail: a ghost button, its shape beside its name, across the rail */
 .item {
-  justify-content: flex-start;
-  width: 100%;
+  flex-wrap: nowrap;
   min-height: 0;
   padding: var(--space-tight) var(--space) var(--space-tight) var(--space-tight);
 }

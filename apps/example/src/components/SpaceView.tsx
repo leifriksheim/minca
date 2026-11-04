@@ -620,7 +620,7 @@ function SpaceMenu({
         aria-label={name}
         title={name}
         data-intent="ghost"
-        className={css.item}
+        className={`row ${css.item}`}
       >
         <SpaceFace space={space} pair={pair} size={36} />
         <strong className="truncate">{name}</strong>
@@ -721,7 +721,7 @@ function AppSwitcher({
                 onClick={then(() => openApp(app.id))}
                 aria-current={open?.id === app.id ? 'page' : undefined}
                 data-intent="ghost"
-                className={css.item}
+                className={`row ${css.item}`}
               >
                 <span className={css.icon}>
                   <AppIcon app={app} size={36} />
@@ -739,7 +739,7 @@ function AppSwitcher({
                 onClick={then(() => go('/spaces/$spaceId/new'))}
                 aria-current={onNew ? 'page' : undefined}
                 data-intent="ghost"
-                className={css.item}
+                className={`row ${css.item}`}
               >
                 {/* On the same tile an app's shape takes, so its name lines up with theirs. */}
                 <span className={css.icon}>
@@ -777,7 +777,7 @@ function RailItem({
       aria-current={on ? 'page' : undefined}
       title={label}
       data-intent="ghost"
-      className={css.item}
+      className={`row ${css.item}`}
     >
       <span className={css.icon}>
         {icon}

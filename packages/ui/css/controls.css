@@ -68,6 +68,14 @@ a[data-intent] {
       background: color-mix(in srgb, var(--color-text-strong) 7%, transparent);
       color: var(--color-text-strong);
     }
+
+    /* Laid out as a row, it is a row of a list (a place, an action): across, from the start, a list's corners, not a pill's */
+    &.row {
+      justify-content: flex-start;
+      width: 100%;
+      border-radius: var(--radius);
+      text-align: start;
+    }
   }
 
   /* Deletes something, or can't be undone */

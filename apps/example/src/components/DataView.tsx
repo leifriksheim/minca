@@ -119,6 +119,7 @@ export function DataView({
           {space.writable && (
             <button
               data-intent="ghost"
+              className="row"
               onClick={() => onPlace({ collection: NEW, key: null })}
               aria-current={selected === NEW ? 'page' : undefined}
             >
