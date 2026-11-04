@@ -26,7 +26,7 @@ export function Download() {
         <div className="wrap">
           <h1>Get Minca.</h1>
           <p>Your people, your plans, one click away.</p>
-          <div className="actions">
+          <div className="actions lead">
             {ownDownload ? (
               <Link {...downloadLink(ownDownload.kind)} data-intent="primary">
                 <DownloadMark />

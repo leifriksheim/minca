@@ -101,6 +101,8 @@
   --radius-surface: 16px;
   --radius-frame: 28px;
   --control-height: 2.5rem;
+  /* The calls to action a page opens with (.lead), and nothing else */
+  --control-height-lead: 3.125rem;
   --reading-width: 40rem;
 
   /* Only what floats over the page casts a shadow. */

@@ -294,7 +294,8 @@ input[type='checkbox'][role='switch'] {
 [role='tablist'] {
   display: flex;
   gap: 2px;
-  align-self: flex-start;
+  /* As wide as its tabs, in a block or a flex column alike */
+  width: fit-content;
   max-width: 100%;
   padding: 4px;
   overflow-x: auto;
@@ -314,5 +315,19 @@ input[type='checkbox'][role='switch'] {
       background: var(--color-sunken);
       color: var(--color-text-strong);
     }
+  }
+}
+
+/* The calls to action a page opens with, beside its h1: the one place a control is larger */
+.lead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-loose);
+
+  & > :is(button, a[data-intent]) {
+    min-height: var(--control-height-lead);
+    padding: 0 26px;
+    font-size: 1rem;
   }
 }

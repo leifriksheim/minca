@@ -82,7 +82,7 @@ export function Extension() {
               </div>
               <h1>Your spaces, awake while Chrome is.</h1>
               <p>Everything keeps moving with every app closed, and you hear when something happens.</p>
-              <div className="actions">
+              <div className="actions lead">
                 <Link {...downloadLink('chrome')} data-intent="primary">
                   <ChromeMark />
                   Download for Chrome

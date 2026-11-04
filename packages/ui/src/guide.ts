@@ -92,6 +92,7 @@ Write plain HTML from this list, no CSS, <style> or style="": say what a thing i
     <div aria-roledescription="carousel"> pictures swiped through; <div role="grid"> of role="gridcell" a month
   <div data-actions> buttons shown when what holds them is pointed at; aria-grabbed="true" dragged; <hr data-drop> lands here
   class="row" | "stack", data-gap="tight" | "loose", data-spread (row: first at the start, the rest at the end)
+  class="lead": the buttons a page opens with, beside its h1, drawn larger; nowhere else
   data-tone="good|warn|danger" colours text, and a tag's or aside's ground; data-hue="1"…"5" a category's colour: a tint on a tag or article, var(--hue)
 Nothing else exists. Only a game or drawing styles itself, in <main data-wide>, with var(--color-*, --text-*, --space-*, --hue), sizes in rem.
 Fonts from URLs never load.`;

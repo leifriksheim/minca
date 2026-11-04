@@ -594,7 +594,7 @@ export function Protocol() {
             <code>@minca/core</code> packs it into one library, so people and agents can build social apps
             with no server in the middle.
           </p>
-          <div className="actions">
+          <div className="actions lead">
             <a href={SPEC} {...EXTERNAL} data-intent="primary">
               Read the spec
             </a>
