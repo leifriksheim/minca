@@ -25,14 +25,15 @@
   }
 }
 
-/* Where the next app goes: an empty tile, dashed, as on the rail */
+/* Adding an app: a round button's look, as on the rail */
 .slot {
   display: grid;
   flex-shrink: 0;
   place-items: center;
   width: 36px;
   height: 36px;
-  border: 1.5px dashed var(--color-field);
-  border-radius: var(--radius);
-  color: var(--color-text-muted);
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text-strong);
 }
