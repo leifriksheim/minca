@@ -137,3 +137,38 @@
     --tint: 18%;
   }
 }
+
+/*
+ * The WebKit of macOS 14.0 to 14.4 (Safari before 17.5), where the desktop app
+ * also runs, reads no light-dark(): every colour above would be empty, so the
+ * page had no ground and black text. There it is always day.
+ */
+@supports not (color: light-dark(#000, #fff)) {
+  :root,
+  [data-theme] {
+    color-scheme: light;
+    --tint: 28%;
+    --color-page: var(--paper);
+    --color-surface: var(--paper-light);
+    --color-sunken: var(--paper-dark);
+    --color-scrim: rgb(19 33 74 / 0.35);
+    --color-outline: var(--navy);
+    --color-divider: var(--sand);
+    --color-field: var(--sand-dark);
+    --color-text-strong: var(--navy);
+    --color-text: var(--navy-body);
+    --color-text-muted: var(--navy-muted);
+    --color-action: var(--cobalt);
+    --color-action-hover: var(--navy);
+    --color-action-soft: var(--cobalt-soft);
+    --color-on-action: #fff;
+    --color-good: var(--green);
+    --color-good-soft: var(--green-soft);
+    --color-warn: var(--amber);
+    --color-warn-soft: var(--amber-soft);
+    --color-danger: var(--red);
+    --color-danger-soft: var(--red-soft);
+    --color-hue-1: var(--cobalt);
+    --shadow-float: 0 1px 2px rgb(19 33 74 / 0.06), 0 16px 40px -12px rgb(19 33 74 / 0.22);
+  }
+}
