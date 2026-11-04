@@ -328,7 +328,8 @@ test('a note that ran out says expired, and renewing from the menu bar asks for 
     home: HOME,
     request: { name: 'Minca', access: 'write', scope: 'account' },
   });
-  await grantFrom(node, who, 1);
+  // A note good for a few seconds: one second, whole seconds rounded down, could run out before the node is ready on a busy machine.
+  await grantFrom(node, who, 5);
   await node.next(isState('ready'));
   const running = latest();
   await node.next(isState('expired'));

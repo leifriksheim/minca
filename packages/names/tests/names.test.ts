@@ -1,7 +1,7 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, type Server } from 'node:http';
-import { chmodSync, mkdtempSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -339,14 +339,16 @@ describe('a name service, against what anyone can send', () => {
 
   test('a claim it cannot write is refused, and the service goes on', async () => {
     const names = await startNames();
-    chmodSync(names.dir, 0o500);
+    // A directory where the write goes: it fails for any user, root too, where a read-only folder wouldn't.
+    const inTheWay = join(names.dir, 'leif.json.tmp');
+    mkdirSync(inTheWay);
     try {
       const leif = await someone(names.at('leif'));
       await assert.rejects(claimUsername(names.at('leif'), leif.contact, leif.code), /went wrong/);
-      chmodSync(names.dir, 0o700);
+      rmSync(inTheWay, { recursive: true });
       await claimUsername(names.at('leif'), leif.contact, leif.code);
     } finally {
-      chmodSync(names.dir, 0o700);
+      rmSync(inTheWay, { recursive: true, force: true });
       names.close();
     }
   });

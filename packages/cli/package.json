@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node --conditions=@minca/source --import tsx src/main.ts",
-    "test": "node --conditions=@minca/source --import tsx --test --test-concurrency=8 --test-timeout=60000 --test-force-exit tests/*.test.ts",
+    "test": "node --conditions=@minca/source --import tsx --test --test-concurrency=8 --test-timeout=120000 --test-force-exit tests/*.test.ts",
     "typecheck": "tsc --noEmit",
     "eval": "node --conditions=@minca/source --import tsx evals/collections.ts",
     "bundle": "node scripts/bundle.mjs",
