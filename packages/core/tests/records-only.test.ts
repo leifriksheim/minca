@@ -209,6 +209,13 @@ describe('an agent acting for a person', () => {
     await assert.rejects(() => helper.direct.list(space), /Ask the person/);
   });
 
+  test("it cannot change what the person's device downloads", async () => {
+    const { alice, space } = await setup();
+    const agent = await agentFor(alice, [space]);
+    const helper = await alice.node.asAgent({ keys: agent.keys, note: agent.note });
+    await assert.rejects(() => helper.setFileLimits({ ahead: 0, keep: 0 }), /Ask the person/);
+  });
+
   test('it cannot define collections, change roles, invite, or join — those need a person', async () => {
     const { alice, bob, space } = await setup();
     const agent = await agentFor(alice, [space]);

@@ -8,6 +8,8 @@ import { usePopover } from './usePopover';
 import { useCopy } from '@minca/app-shared/action';
 import { useNavigate } from '@tanstack/react-router';
 import { ConnectAgent } from './ConnectAgent';
+import { DownloadsView } from './DownloadsView';
+import { useDownloads } from '../downloads';
 import { shortAccount } from '../account-address';
 import styles from './AccountMenu.module.css';
 import rail from './SpaceView.module.css';
@@ -24,6 +26,7 @@ export function AccountMenu() {
   const navigate = useNavigate();
   const { open, setOpen, close, root } = usePopover();
   const [connecting, setConnecting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   return (
     // The menu opens above your row at the foot of the rail.
@@ -61,10 +64,15 @@ export function AccountMenu() {
               close();
               setConnecting(true);
             }}
+            onDownloads={() => {
+              close();
+              setDownloading(true);
+            }}
           />
         </menu>
       )}
       {connecting && <ConnectAgent onClose={() => setConnecting(false)} />}
+      {downloading && <DownloadsView onClose={() => setDownloading(false)} />}
     </div>
   );
 }
@@ -98,14 +106,18 @@ function MenuHeader({ picture }: { picture: string | null }) {
 export function AccountActions({
   onDone,
   onConnectAgent,
+  onDownloads,
 }: {
   /** After something that leaves, like switching account */
   onDone?: () => void;
   onConnectAgent: () => void;
+  onDownloads: () => void;
 }) {
   const account = useAccount();
   const { connection, state } = useConnection();
   const navigate = useNavigate();
+
+  const [downloads] = useDownloads();
 
   const home = new URL(state.home).host;
   const others = state.accounts.filter((other) => other.did !== account.did);
@@ -137,6 +149,9 @@ export function AccountActions({
         </Item>
         <Item onClick={onConnectAgent} hint="Claude, ChatGPT, Cursor">
           Connect an agent
+        </Item>
+        <Item onClick={onDownloads} hint={DOWNLOADS[downloads.ahead]}>
+          Downloads
         </Item>
       </Section>
 
@@ -186,6 +201,13 @@ export function AccountActions({
 export function openAccountHome(home: string, did: string) {
   globalThis.open(accountHomeLink(home, did), 'minca-account', popupFeatures(720, 820));
 }
+
+/** What this device downloads before a file is opened, in a word or two */
+const DOWNLOADS = {
+  thumbnails: 'Thumbnails first',
+  photos: 'Photos ahead',
+  everything: 'Everything ahead',
+} as const;
 
 /** A group of the menu's rows, under a line */
 function Section({ children }: { children: ReactNode }) {

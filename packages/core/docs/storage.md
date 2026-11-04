@@ -67,6 +67,21 @@ Because the limit is per space, a device in many spaces holds more. A node
 with `fetchFiles: 'all'`, such as a carrier or host, fetches and keeps every
 file.
 
+A person can choose other limits for their device, such as fewer downloads on
+a phone. Give them to the node each time it starts, since it keeps none:
+
+```ts
+// Only thumbnails and other small files come ahead; up to 1 GiB kept per space.
+await node.setFileLimits({ ahead: 256 * 1024, keep: 1024 * 1024 * 1024 });
+```
+
+`Infinity` fetches or keeps everything. New limits take effect in every
+open space within a few seconds: past `keep`, files go at once, and raising
+`ahead` fetches what now fits. A file dropped earlier still waits until it is
+read. Pictures and videos carry a small `thumbnail` (see the
+[standard library](standard-library.md)) so that a device fetching only
+small files still shows them.
+
 About 2 s after records change, files no record names are dropped. A file
 added here in the last 24 hours, and not yet named, is kept. Files of
 records that don't stand are not kept.

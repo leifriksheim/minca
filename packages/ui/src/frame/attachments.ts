@@ -1,11 +1,12 @@
 /**
  * Files on a record: each kept in the space (`minca.addFile`) with a
- * `std.file` record about the record. Pictures show, and open
- * larger when clicked; videos and sound play where they are; other files are
- * saved to the person's device. A screen whose app names `std.file`
- * among its collections can use it.
+ * `std.file` record about the record. Pictures show as their thumbnail, and
+ * open whole when clicked; videos show theirs, and play where they are when
+ * clicked; other files are saved to the person's device. A screen asks for
+ * a file itself only when it is opened or played. A screen whose app names
+ * `std.file` among its collections can use it.
  */
-import { fitImage } from '../image';
+import { fitImage, thumbnailOf } from '../image';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { RefObject } from 'preact';
 import { sizeOf } from '../size';
@@ -29,22 +30,29 @@ interface AttachmentBody {
   readonly mime: string;
   readonly size: number;
   readonly blob: FileRef;
+  readonly thumbnail?: FileRef;
 }
+
+/** A File kept in the space, as `minca.addFile` gives it */
+const keep = async (file: File, mime: string) =>
+  minca.addFile(new Uint8Array(await file.arrayBuffer()), { name: file.name, mime });
 
 /**
  * Adds files to a record, each kept in the space with a `std.file` about the
- * record, or about nothing when `about` is null; large pictures made smaller.
- * Gives the files written.
+ * record, or about nothing when `about` is null; large pictures made smaller,
+ * and pictures and videos given a thumbnail. Gives the files written.
  */
 export async function attach(about: string | null, files: Iterable<File>): Promise<ScreenRecord[]> {
   const written: ScreenRecord[] = [];
   for (const file of await Promise.all([...files].map(fitImage))) {
     const mime = file.type || 'application/octet-stream';
-    const blob = await minca.addFile(new Uint8Array(await file.arrayBuffer()), { name: file.name, mime });
+    const blob = await keep(file, mime);
+    const still = await thumbnailOf(file);
+    const thumbnail = still ? await keep(still, still.type) : null;
     written.push(
       await minca.put(
         FILE,
-        { name: file.name, mime, size: file.size, blob },
+        { name: file.name, mime, size: file.size, blob, ...(thumbnail ? { thumbnail } : {}) },
         about ? { links: [{ rel: 'about', to: about }] } : {},
       ),
     );
@@ -72,14 +80,16 @@ export function useSeen(element: RefObject<Element>): boolean {
 }
 
 /**
- * A video or a sound that plays where it is: its whole file is fetched once it
- * comes into view, so a video shows its first frame without every one in a
- * long chat being fetched at once.
+ * A video or a sound that plays where it is. Its thumbnail shows until it is
+ * clicked; only then is the whole file fetched, so scrolling past videos
+ * costs nothing but their stills.
  */
 export function Playable({ record }: { record: ScreenRecord<AttachmentBody> }) {
-  const { name, mime, size, blob } = record.body;
+  const { name, mime, size, blob, thumbnail } = record.body;
   const box = useRef<HTMLDivElement>(null);
-  const url = useBlob(record.key, useSeen(box) ? blob : null);
+  const [playing, setPlaying] = useState(false);
+  const url = useBlob(record.key, playing ? blob : null);
+  const still = useFile(record.key, useSeen(box) ? thumbnail : null);
   const video = mime.startsWith('video/');
   return html`<div
     ref=${box}
@@ -88,27 +98,31 @@ export function Playable({ record }: { record: ScreenRecord<AttachmentBody> }) {
   >
     ${
       !url
-        ? html`<small>${video ? '▶' : '♪'} ${name} · ${sizeOf(size)}</small>`
+        ? html`<button type="button" class="play" disabled=${playing} onClick=${() => setPlaying(true)}>
+            ${still && html`<img src=${still} alt="" />`}
+            <small>${playing ? 'Loading…' : `${video ? '▶' : '♪'} ${name} · ${sizeOf(size)}`}</small>
+          </button>`
         : video
-          ? // #t: the first frame shows before it plays, in Safari too.
-            html`<video
-              src=${`${url}#t=0.1`}
+          ? html`<video
+              src=${url}
               controls
+              autoplay
               playsinline
-              preload="metadata"
+              poster=${still ?? undefined}
               aria-label=${name}
             ></video>`
-          : html`<audio src=${url} controls preload="metadata" aria-label=${name}></audio>`
+          : html`<audio src=${url} controls autoplay aria-label=${name}></audio>`
     }
   </div>`;
 }
 
 /** One attachment: the picture, opened larger when clicked, or the file's name and size, saved when clicked */
 function Attachment({ record }: { record: ScreenRecord<AttachmentBody> }) {
-  const { name, mime, size, blob } = record.body;
+  const { name, mime, size, blob, thumbnail } = record.body;
   // A GIF shows whole, since the smaller one made to show in the list is a still of its first frame.
   const moving = mime === 'image/gif';
-  const still = useFile(record.key, mime.startsWith('image/') && !moving ? blob : null);
+  // Its thumbnail when it has one; the picture itself only in older records, which have none.
+  const still = useFile(record.key, mime.startsWith('image/') && !moving ? (thumbnail ?? blob) : null);
   const [open, setOpen] = useState(false);
   // Opened, the whole picture, not the one made smaller to show in the list
   const whole = useBlob(record.key, open || moving ? blob : null);

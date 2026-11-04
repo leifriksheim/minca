@@ -49,7 +49,7 @@ import { ACCESS_COLLECTIONS, rolesOf, type AccessState } from '../space/roles.js
 import { FOUNDER } from '../space/space-manager.js';
 import { PROFILE_COLLECTION, type AvatarRef } from '../space/account-registry.js';
 import { SYNC_PROTOCOL_VERSION } from '../sync/sync-messages.js';
-import { createSpaceFiles, DEVICE_LIMITS, type SealedFile } from '../files/space-files.js';
+import { createSpaceFiles, DEVICE_LIMITS, type FileLimits, type SealedFile } from '../files/space-files.js';
 import { CATALOG_COLLECTION, toJsonSchema, type StoredCollection } from '../schema/collection-def.js';
 import { unref } from '../utils/guards.js';
 import type { StoreFactory } from './stores.js';
@@ -120,8 +120,8 @@ export interface SpaceRuntimeDeps {
   readonly cache?: CacheConfig;
   /** Told of every version a peer sent that was taken in — what a carrier matches subscriptions against */
   readonly onArrived?: (version: Version) => void;
-  /** Fetch and keep every file the space's records name, as a keeper does, rather than within a device's limits (spec 05 §16.6) */
-  readonly fetchFiles?: 'all';
+  /** The limits on others' files as they are now; null fetches and keeps every file named, as a keeper does (spec 05 §16.6). Absent: a device's. */
+  readonly fileLimits?: () => FileLimits | null;
 }
 
 /** One open space, as `openSpaceRuntime` gives it */
@@ -304,7 +304,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     mirrors: mirrors.all,
     stands: async (version) => storable(await standing.standingOf(version)),
     // Files follow records: every file a version kept whole names is fetched, within a device's limits.
-    ...(deps.fetchFiles === 'all' ? {} : { limits: DEVICE_LIMITS }),
+    limits: deps.fileLimits ?? (() => DEVICE_LIMITS),
   });
 
   let filesTimer: ReturnType<typeof setTimeout> | null = null;
@@ -439,6 +439,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     addFile: (bytes: Uint8Array): Promise<SealedFile> => files.add(bytes),
     /** The bytes of a file a body refers to: held here, or fetched from peers or mirrors */
     readFile: (ref: SealedFile): Promise<Uint8Array> => files.open(ref),
+    /** For the node itself: its limits on files changed, so they are soon kept, dropped and fetched to match */
+    filesChanged,
 
     /** For the node itself: writes the next version of a record in a collection `put` refuses, like the profile */
     upsertSystem: writing.upsert,

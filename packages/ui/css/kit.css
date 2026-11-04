@@ -281,6 +281,40 @@ button.person {
       display: block;
       width: 268px;
     }
+
+    /* Before it plays: the thumbnail, with the name and size over it */
+    & .play {
+      display: grid;
+      place-items: center;
+      width: 100%;
+      min-height: 40px;
+      padding: 0;
+      border: 0;
+      background: none;
+      color: inherit;
+
+      & img,
+      & small {
+        grid-area: 1 / 1;
+      }
+
+      & img {
+        width: 280px;
+        max-height: 220px;
+        object-fit: cover;
+      }
+
+      & img + small {
+        padding: 2px 8px;
+        border-radius: var(--radius);
+        background: rgb(0 0 0 / 0.6);
+        color: #fff;
+      }
+    }
+
+    &.video .play small {
+      color: #fff;
+    }
   }
 }
 

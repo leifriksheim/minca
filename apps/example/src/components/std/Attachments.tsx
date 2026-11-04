@@ -4,7 +4,7 @@ import type { FileRef, NodeRecord, SpaceSummary } from '@minca/core';
 import { file as fileCollection } from '@minca/core/schemas';
 import { bodyOf } from '../../derive/schema-ui';
 import { fileRefOf } from '../../derive/kinds';
-import { fitImage } from '@minca/ui/image';
+import { fitImage, thumbnailOf } from '@minca/ui/image';
 import { sizeOf } from '@minca/ui/size';
 import { saveFile, useFileUrl } from '../../files';
 import styles from './Attachments.module.css';
@@ -13,21 +13,24 @@ import { useAction } from '@minca/app-shared/action';
 /** The file an attachment names, when its body holds one */
 const fileOf = (record: NodeRecord): FileRef | null => fileRefOf(bodyOf(record).blob);
 
-/** Adds files to a record as `std.file`s about it; large pictures made smaller */
+/** Adds files to a record as `std.file`s about it; large pictures made smaller, pictures and videos given a thumbnail */
 async function attachFiles(
   node: ReturnType<typeof useNode>,
   spaceId: string,
   target: string,
   files: Iterable<File>,
 ): Promise<void> {
+  const keep = async (file: File, mime: string) =>
+    node.records.addFile(spaceId, new Uint8Array(await file.arrayBuffer()), { mime, name: file.name });
   for (const file of await Promise.all([...files].map(fitImage))) {
-    const bytes = new Uint8Array(await file.arrayBuffer());
     const mime = file.type || 'application/octet-stream';
-    const blob = await node.records.addFile(spaceId, bytes, { mime, name: file.name });
+    const blob = await keep(file, mime);
+    const still = await thumbnailOf(file);
+    const thumbnail = still ? await keep(still, still.type) : null;
     await node.records.put(
       spaceId,
       fileCollection.name,
-      { name: file.name, mime, size: file.size, blob },
+      { name: file.name, mime, size: file.size, blob, ...(thumbnail ? { thumbnail } : {}) },
       { links: [{ rel: 'about', to: target }] },
     );
   }
@@ -93,8 +96,10 @@ function AttachmentView({ space, record }: { space: SpaceSummary; record: NodeRe
   const body = bodyOf(record);
   const file = fileOf(record);
   const name = typeof body.name === 'string' ? body.name : 'File';
-  const picture = file?.mime.startsWith('image/') ?? false;
-  const url = useFileUrl(space.id, picture ? file : null);
+  const thumbnail = fileRefOf(body.thumbnail);
+  const picture = (file?.mime.startsWith('image/') ?? false) || !!thumbnail;
+  // The thumbnail; the picture itself only in older records, which have none. The file comes when saved.
+  const url = useFileUrl(space.id, thumbnail ?? (picture ? file : null));
   const [saving, setSaving] = useState(false);
 
   const save = async () => {

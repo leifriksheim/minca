@@ -592,7 +592,7 @@ describe('what a peer refuses', () => {
   });
 
   test('a device fetches unread only the files its limit lets come ahead; a larger one when read', async () => {
-    const { a, b, files, counts, meet } = apart({ limits: { ahead: CHUNK, keep: 10 * CHUNK } });
+    const { a, b, files, counts, meet } = apart({ limits: () => ({ ahead: CHUNK, keep: 10 * CHUNK }) });
     const small = await files.a.add(bytesOf(300));
     const large = await files.a.add(bytesOf(2 * CHUNK));
     for (const ref of [small, large]) {
@@ -606,8 +606,25 @@ describe('what a peer refuses', () => {
     assert.deepEqual(await files.b.open(large), bytesOf(2 * CHUNK));
   });
 
+  test('limits are read on every pass: raised, a larger file comes ahead; lowered, what is past keep goes', async () => {
+    let limits = { ahead: CHUNK, keep: 10 * CHUNK };
+    const { a, b, files, meet } = apart({ limits: () => limits });
+    const large = await files.a.add(bytesOf(2 * CHUNK));
+    await name(a.storage, large);
+    await name(b.storage, large);
+    meet();
+    await files.b.fetchMissing();
+    assert.equal(await b.adapter.get(`f/${large.hash}/0`), null);
+    limits = { ahead: Infinity, keep: Infinity };
+    await files.b.fetchMissing();
+    assert.ok(await b.adapter.get(`f/${large.hash}/1`));
+    limits = { ahead: 0, keep: 0 };
+    await files.b.fetchMissing();
+    assert.equal(await b.adapter.get(`f/${large.hash}/1`), null);
+  });
+
   test('past its limit a device drops what others wrote and was used longest ago, never its own, and fetches it again only when read', async () => {
-    const { a, b, files, counts, meet } = apart({ limits: { ahead: CHUNK, keep: (5 * CHUNK) / 2 } });
+    const { a, b, files, counts, meet } = apart({ limits: () => ({ ahead: CHUNK, keep: (5 * CHUNK) / 2 }) });
     meet();
     const theirs: SealedFile[] = [];
     for (const n of [1, 2, 3]) {
@@ -647,7 +664,7 @@ describe('what a peer refuses', () => {
 
   test('a flood of small files fetched in one pass leaves a device within its limit', async () => {
     const keep = 2 * CHUNK;
-    const { a, b, files, meet } = apart({ limits: { ahead: CHUNK, keep } });
+    const { a, b, files, meet } = apart({ limits: () => ({ ahead: CHUNK, keep }) });
     meet();
     for (let n = 0; n < 12; n++) {
       const ref = await files.a.add(bytesOf(CHUNK - 200 - n));
@@ -662,7 +679,7 @@ describe('what a peer refuses', () => {
 
   test('a file named at a smaller size, read, still counts at its own size', async () => {
     const keep = 2 * CHUNK;
-    const { a, b, files, meet } = apart({ limits: { ahead: CHUNK, keep } });
+    const { a, b, files, meet } = apart({ limits: () => ({ ahead: CHUNK, keep }) });
     meet();
     for (let n = 0; n < 3; n++) {
       const ref = await files.a.add(bytesOf(3 * CHUNK + n));
@@ -682,7 +699,7 @@ describe('what a peer refuses', () => {
   });
 
   test('a limit counts files at their size: a flood of tiny ones drops nobody else’s', async () => {
-    const { a, b, files, meet } = apart({ limits: { ahead: CHUNK, keep: 2 * CHUNK } });
+    const { a, b, files, meet } = apart({ limits: () => ({ ahead: CHUNK, keep: 2 * CHUNK }) });
     meet();
     const photo = await files.a.add(bytesOf(CHUNK - 100));
     await name(a.storage, photo);
@@ -703,7 +720,7 @@ describe('what a peer refuses', () => {
     const keep = 2 * CHUNK;
     // The last chunk of each never comes.
     const { a, b, files, meet } = apart(
-      { limits: { ahead: 4 * CHUNK, keep } },
+      { limits: () => ({ ahead: 4 * CHUNK, keep }) },
       (to, message) => !(to === 'b' && message.type === 'file' && message.chunk === 2),
     );
     meet();
@@ -719,14 +736,17 @@ describe('what a peer refuses', () => {
 
   test('a file dropped and read again while a pass runs is not dropped from under the read', async () => {
     let armed = false;
-    const { a, b, files, meet } = apart({ limits: { ahead: CHUNK, keep: 2 * CHUNK } }, (to, message) => {
-      // Records arrive mid-fetch: the pass tidies while the read fetches.
-      if (armed && to === 'b' && message.type === 'file' && message.chunk === 1 && message.at === 0) {
-        armed = false;
-        void files.b.fetchMissing();
-      }
-      return true;
-    });
+    const { a, b, files, meet } = apart(
+      { limits: () => ({ ahead: CHUNK, keep: 2 * CHUNK }) },
+      (to, message) => {
+        // Records arrive mid-fetch: the pass tidies while the read fetches.
+        if (armed && to === 'b' && message.type === 'file' && message.chunk === 1 && message.at === 0) {
+          armed = false;
+          void files.b.fetchMissing();
+        }
+        return true;
+      },
+    );
     meet();
     const ref = await files.a.add(bytesOf(3 * CHUNK));
     await name(a.storage, ref);

@@ -34,6 +34,7 @@ import { meshFor } from './space-peers.js';
 import type { ActiveSession } from './space-versions.js';
 import { createServerAuth } from '../network/peer-auth.js';
 import { DEFAULT_ICE_SERVERS } from '../network/rtc-transport.js';
+import { DEVICE_LIMITS, type FileLimits } from '../files/space-files.js';
 import { generateLinkSecret, linkInviteSecret } from '../space/invite-link.js';
 import { checkInvitation } from '../space/invitation.js';
 import type { LooseSigner } from '../records/loose.js';
@@ -169,6 +170,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   const registryStore = await config.stores('registry', { seal: true });
   const registry = createSpaceManager(registryStore, provider);
   const runtimes = new Map<string, Promise<SpaceRuntime>>();
+  /** What this node fetches ahead and keeps of others' files; null, all of them, as a keeper does */
+  let fileLimits: FileLimits | null = config.fetchFiles === 'all' ? null : DEVICE_LIMITS;
   /** Spaces with no invite waiting: every change to them would otherwise read the registry to find that out */
   const noInviteWaiting = new Set<string>();
   /**
@@ -308,7 +311,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       // The account's own spaces are always held whole: every device needs all of them.
       ...(config.cache && !kind ? { cache: config.cache } : {}),
       watchIntervalMs: config.watchIntervalMs ?? 2000,
-      ...(config.fetchFiles ? { fetchFiles: config.fetchFiles } : {}),
+      fileLimits: () => fileLimits,
       emit: fromRuntime,
       onRole: (role) => {
         // Holding a role now, perhaps just joined: the space may hear who this is.
@@ -787,6 +790,15 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     delegation: () => current,
 
     iceServers: async () => (mesh ? mesh.iceServers() : (config.network?.iceServers ?? DEFAULT_ICE_SERVERS)),
+
+    async setFileLimits(limits: FileLimits) {
+      const { ahead, keep } = limits;
+      if (![ahead, keep].every((bytes) => typeof bytes === 'number' && bytes >= 0))
+        throw new Error('File limits are byte counts, 0 or more');
+      fileLimits = Object.freeze({ ahead, keep });
+      // Every open space keeps, drops and fetches to match; one opened later starts with them.
+      for (const spaceId of runtimes.keys()) whenOpen(spaceId, async (_, rt) => rt.filesChanged());
+    },
 
     network: Object.freeze({
       status: () => mesh?.status() ?? { relays: [], links: [], connecting: [], turn: false },

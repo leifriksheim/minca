@@ -361,6 +361,10 @@ export type { ProtocolError, ProtocolErrorCode } from './utils/errors.js';
 export { createEmitter } from './utils/events.js';
 export type { Emitter } from './utils/events.js';
 
+// Files: how much of others' files a device fetches ahead and keeps
+export { DEVICE_LIMITS } from './files/space-files.js';
+export type { FileLimits } from './files/space-files.js';
+
 // Node: identity + spaces + sync, behind one API
 export {
   createNode,

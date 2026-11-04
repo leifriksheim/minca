@@ -13,6 +13,7 @@ import { forgetPicture } from '@minca/app-shared/rememberedPictures';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { shortUsername } from '@minca/app-shared/usernames';
 import { AccountActions, openAccountHome } from './AccountMenu';
+import { DownloadsView } from './DownloadsView';
 import { usePopover } from './usePopover';
 import { shrinkImage } from '@minca/app-shared/images';
 import { ConnectAgent } from './ConnectAgent';
@@ -32,6 +33,7 @@ export function ProfilePage() {
   const found = useAsync(() => node.inbox.get(), [node]);
   const username = found.status === 'done' ? found.value?.username : undefined;
   const [connecting, setConnecting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   return (
     <section>
@@ -59,13 +61,14 @@ export function ProfilePage() {
             )
           )}
         </li>
-        <AccountActions onConnectAgent={() => setConnecting(true)} />
+        <AccountActions onConnectAgent={() => setConnecting(true)} onDownloads={() => setDownloading(true)} />
         <li className="row" data-spread>
           <span>Theme</span>
           <ThemePicker />
         </li>
       </ul>
       {connecting && <ConnectAgent onClose={() => setConnecting(false)} />}
+      {downloading && <DownloadsView onClose={() => setDownloading(false)} />}
     </section>
   );
 }
