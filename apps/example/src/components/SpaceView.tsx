@@ -310,7 +310,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
   useLookingAt(space.id, open?.id, open ? unreadOf(unread, open.id).count : 0);
 
   // Proposed apps others, or an agent, wrote since All apps was last looked at.
-  const proposalsSeen = Date.parse(seenAt(seen, space.id, PROPOSALS));
+  const proposalsSeen = seenAt(seen, space.id, PROPOSALS);
   const newProposals: Unread = {
     count: apps.proposed.filter(
       (proposed) =>
