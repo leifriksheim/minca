@@ -36,12 +36,3 @@
   border-radius: var(--radius);
   color: var(--color-text-muted);
 }
-
-/* An app's moves: the chevron turned up, or down */
-.up svg {
-  rotate: -90deg;
-}
-
-.down svg {
-  rotate: 90deg;
-}

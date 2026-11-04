@@ -10,6 +10,7 @@ import type { AppEntry, useSpaceApps } from './entries';
 import { AppIcon, Count } from './AppIcon';
 import { Proposals } from './MadeApps';
 import { copyApp, moveApp, outdated, removeApp, updateTemplate } from './launcher';
+import { useDragOrder } from '../../drag-order';
 import { TEMPLATES } from './templates';
 import { AppSettings } from './AppSettings';
 import { Icon } from '@minca/app-shared/Icon';
@@ -72,10 +73,12 @@ export function AppsView({
       for (const { app, template } of stale) await updateTemplate(node, space.id, app.record, template);
     });
 
-  const move = (app: AppEntry, by: number) => {
-    const at = apps.placed.findIndex((record) => record.key === app.record.key);
-    void arrange.run(() => moveApp(node, space.id, apps.placed, app.record.key, at + by));
-  };
+  // Dropped on another app, an app takes its place on the launcher.
+  const dragRow = useDragOrder((from, to) => {
+    const key = apps.ready[from]?.record.key;
+    const at = apps.placed.findIndex((record) => record.key === apps.ready[to]?.record.key);
+    if (key && at >= 0) void arrange.run(() => moveApp(node, space.id, apps.placed, key, at));
+  }, arranging && !arrange.busy);
   const remove = (app: AppEntry) =>
     confirmThen(
       app.record.body?.template
@@ -127,13 +130,10 @@ export function AppsView({
                 app={app}
                 unread={unreadOf(unread, app.id)}
                 onOpen={() => onOpenApp(app.id)}
+                drag={dragRow(at)}
                 arrange={
                   arranging
                     ? {
-                        busy: arrange.busy,
-                        first: at === 0,
-                        last: at === apps.ready.length - 1,
-                        onMove: (by) => move(app, by),
                         menu: [
                           ...(app.record.body?.settings?.length
                             ? [{ label: 'Settings', onClick: () => setSetting(app) }]
@@ -208,17 +208,16 @@ function AppRow({
   app,
   unread,
   onOpen,
+  drag,
   arrange,
 }: {
   app: AppEntry;
   unread: Unread;
   onOpen: () => void;
+  /** What makes the row draggable while arranging (`useDragOrder`) */
+  drag: ReturnType<ReturnType<typeof useDragOrder>>;
   arrange:
     | {
-        readonly busy: boolean;
-        readonly first: boolean;
-        readonly last: boolean;
-        readonly onMove: (by: number) => void;
         /** What else can be done to it: its settings, copying it to another group, and taking it off */
         readonly menu: ReadonlyArray<{ label: string; onClick: () => void; danger?: boolean }>;
       }
@@ -243,33 +242,12 @@ function AppRow({
         </button>
       </li>
     );
-  // One line on every screen: the app, its moves, and the rest behind a menu.
+  // One line on every screen: a grip to drag it by, the app, and the rest behind a menu.
   return (
-    <li className="row">
+    <li className="row" {...drag}>
+      <Icon name="grip" />
       <AppIcon app={app} size={32} />
       <strong className="truncate">{app.title}</strong>
-      <button
-        type="button"
-        data-intent="ghost"
-        data-icon
-        className={styles.up}
-        onClick={() => arrange.onMove(-1)}
-        disabled={arrange.busy || arrange.first}
-        aria-label={`Move ${app.title} up`}
-      >
-        <Icon name="chevron" size={14} />
-      </button>
-      <button
-        type="button"
-        data-intent="ghost"
-        data-icon
-        className={styles.down}
-        onClick={() => arrange.onMove(1)}
-        disabled={arrange.busy || arrange.last}
-        aria-label={`Move ${app.title} down`}
-      >
-        <Icon name="chevron" size={14} />
-      </button>
       <RowMenu label={`More for ${app.title}`} items={arrange.menu} />
     </li>
   );

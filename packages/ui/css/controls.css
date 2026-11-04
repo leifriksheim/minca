@@ -61,10 +61,11 @@ a[data-intent] {
     background: none;
     color: var(--color-text-muted);
 
-    /* The page you're on looks as a hover does */
+    /* The page you're on, or the menu it opened, looks as a hover does: a tint of the ink, so it shows on any ground */
     &:hover:not(:disabled),
-    &[aria-current='page'] {
-      background: var(--color-sunken);
+    &[aria-current='page'],
+    &[aria-expanded='true'] {
+      background: color-mix(in srgb, var(--color-text-strong) 7%, transparent);
       color: var(--color-text-strong);
     }
   }

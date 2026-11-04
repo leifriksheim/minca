@@ -6,11 +6,6 @@
   align-items: start;
 }
 
-.nav > [aria-current] {
-  background: var(--color-sunken);
-  color: var(--color-text-strong);
-}
-
 /* On a phone the side comes apart: the collections become a row of pills above the list, scrolled across */
 @media (max-width: 760px) {
   .layout {
