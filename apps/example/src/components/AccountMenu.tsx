@@ -33,7 +33,8 @@ export function AccountMenu() {
         aria-expanded={open}
         aria-label="Account"
         title={name}
-        className={rail.item}
+        data-intent="ghost"
+        className={`row ${rail.item}`}
       >
         <Avatar did={account.did} size={32} round src={picture} />
         <strong className="truncate">{name}</strong>
