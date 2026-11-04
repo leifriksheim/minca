@@ -32,12 +32,11 @@
 
 /* A row, in the menu or on the profile page: a label, and a quieter line at its end */
 .item {
-  justify-content: flex-start;
-  width: 100%;
   color: var(--color-text-strong);
   font-weight: 400;
 
   & > small {
     margin-left: auto;
+    text-align: end;
   }
 }

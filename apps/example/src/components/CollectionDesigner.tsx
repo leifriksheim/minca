@@ -20,6 +20,8 @@ import { SchemaForm } from './SchemaForm';
 import styles from './CollectionDesigner.module.css';
 import { confirmThen } from '../confirm';
 import { Info } from '@minca/app-shared/Info';
+import { Icon } from '@minca/app-shared/Icon';
+import { moved, useDragOrder } from '../drag-order';
 
 type LinkDeclaration = NonNullable<DefineCollection['links']>[string];
 
@@ -214,15 +216,7 @@ export function CollectionEditor({
     setFields((all) => all.map((f) => (f.id === fid ? { ...f, ...patch } : f)));
   const setLink = (lid: number, patch: Partial<LinkDraft>) =>
     setLinks((all) => all.map((l) => (l.id === lid ? { ...l, ...patch } : l)));
-  const move = (fid: number, by: -1 | 1) =>
-    setFields((all) => {
-      const at = all.findIndex((f) => f.id === fid);
-      const to = at + by;
-      if (at < 0 || to < 0 || to >= all.length) return all;
-      const next = [...all];
-      [next[at], next[to]] = [next[to]!, next[at]!];
-      return next;
-    });
+  const dragRow = useDragOrder((from, to) => setFields((all) => moved(all, from, to)));
   const addField = () => {
     const fresh: FieldDraft = { id: id(), label: '', type: 'text', options: [], required: false };
     setFields((all) => [...all, fresh]);
@@ -347,28 +341,9 @@ export function CollectionEditor({
           <Heading title="Fields" about={`What every ${thing} has.`} />
           <ol role="list">
             {fields.map((field, i) => (
-              <li key={field.id} className="stack">
+              <li key={field.id} className="stack" {...dragRow(i)}>
                 <div className="row">
-                  <div className="stack" data-gap="tight">
-                    <button
-                      type="button"
-                      onClick={() => move(field.id, -1)}
-                      disabled={i === 0}
-                      aria-label={`Move ${field.label || 'field'} up`}
-                      data-intent="inline"
-                    >
-                      ▲
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => move(field.id, 1)}
-                      disabled={i === fields.length - 1}
-                      aria-label={`Move ${field.label || 'field'} down`}
-                      data-intent="inline"
-                    >
-                      ▼
-                    </button>
-                  </div>
+                  <Icon name="grip" />
                   {field.type === null ? (
                     <span className="tag" title="A shape this editor doesn't offer: kept exactly as it is">
                       {'{}'} as it is
@@ -461,10 +436,12 @@ export function CollectionEditor({
                   )}
               </li>
             ))}
+            <li>
+              <button type="button" data-intent="open" onClick={addField}>
+                + Add a field
+              </button>
+            </li>
           </ol>
-          <button type="button" onClick={addField}>
-            + Add a field
-          </button>
         </section>
 
         <section>

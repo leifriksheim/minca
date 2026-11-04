@@ -170,34 +170,46 @@ export function Settings({
 
   return (
     <div className="stack">
-      {setup.permission === 'denied' ? (
+      {setup.permission === 'denied' && (
         <small>
           Notifications are blocked for this site. Allow them from the icon left of the address, then come
           back here.
         </small>
-      ) : setup.permission === 'default' ? (
-        // Its own step: a browser prompt opened with the home's window easily goes unseen behind it.
-        <Action
-          onClick={setup.allow}
-          title="Allow notifications in this browser"
-          hint={
-            setup.on > 0
-              ? `${setup.on} on in your account`
-              : `First, let ${globalThis.location.host} show them`
-          }
-        />
-      ) : (
-        setup.on === 0 && (
+      )}
+      <ul role="list">
+        {setup.permission === 'default' ? (
+          // Its own step: a browser prompt opened with the home's window easily goes unseen behind it.
           <Action
-            onClick={setup.turnOn}
-            disabled={setup.asking}
-            title={setup.asking ? 'Asking your account home…' : 'Turn on notifications'}
+            onClick={setup.allow}
+            title="Allow notifications in this browser"
             hint={
-              setup.asking ? 'Answer in your account home' : 'Messages, polls and contacts, in every space'
+              setup.on > 0
+                ? `${setup.on} on in your account`
+                : `First, let ${globalThis.location.host} show them`
             }
           />
-        )
-      )}
+        ) : (
+          setup.permission !== 'denied' &&
+          setup.on === 0 && (
+            <Action
+              onClick={setup.turnOn}
+              disabled={setup.asking}
+              title={setup.asking ? 'Asking your account home…' : 'Turn on notifications'}
+              hint={
+                setup.asking ? 'Answer in your account home' : 'Messages, polls and contacts, in every space'
+              }
+            />
+          )
+        )}
+        {onBuild && (
+          <Action
+            onClick={onBuild}
+            title="Something specific…"
+            hint={here ? `Pick what, and when, in ${here.name}` : 'Pick a space, then what, and when'}
+          />
+        )}
+        <Action onClick={setup.manage} title="Pause or remove, in your account ↗" />
+      </ul>
       {setup.error && <p role="alert">{setup.error}</p>}
 
       {watches.length > 0 && (
@@ -220,16 +232,6 @@ export function Settings({
           </ul>
         </>
       )}
-
-      <hr />
-      {onBuild && (
-        <Action
-          onClick={onBuild}
-          title="Something specific…"
-          hint={here ? `Pick what, and when, in ${here.name}` : 'Pick a space, then what, and when'}
-        />
-      )}
-      <Action onClick={setup.manage} title="Pause or remove, in your account ↗" quiet />
     </div>
   );
 }
@@ -241,25 +243,24 @@ export function Builder({ space, onClose }: { space: SpaceSummary; onClose: () =
   return <WatchBuilder space={space} collections={collections} onClose={onClose} />;
 }
 
+/** One thing to do, as a row of the list */
 function Action({
   onClick,
   title,
   hint,
   disabled,
-  quiet,
 }: {
   onClick: () => void;
   title: string;
   hint?: string;
   disabled?: boolean;
-  quiet?: boolean;
 }) {
   return (
-    <button data-intent={quiet ? 'ghost' : 'open'} onClick={onClick} disabled={disabled}>
-      <span className="stack" data-gap="tight">
+    <li>
+      <button data-intent="open" onClick={onClick} disabled={disabled}>
         <strong>{title}</strong>
         {hint && <small>{hint}</small>}
-      </span>
-    </button>
+      </button>
+    </li>
   );
 }

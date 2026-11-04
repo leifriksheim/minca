@@ -8,6 +8,12 @@
   background: var(--color-sunken);
 }
 
+/* In something coloured, the mark is that colour */
+[data-hue] > .mark {
+  background: var(--hue);
+  color: var(--color-page);
+}
+
 /* The link's words take the room its button leaves; not cut short, so the roles' menu can open out */
 .grow {
   flex: 1;

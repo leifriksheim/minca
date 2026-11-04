@@ -124,6 +124,14 @@ export const ICONS = {
   chevron: [['path', { d: 'm9 18 6-6-6-6' }]],
   back: [['path', { d: 'm15 18-6-6 6-6' }]],
   down: [['path', { d: 'm6 9 6 6 6-6' }]],
+  grip: [
+    ['circle', { cx: '9', cy: '5', r: '1' }],
+    ['circle', { cx: '9', cy: '12', r: '1' }],
+    ['circle', { cx: '9', cy: '19', r: '1' }],
+    ['circle', { cx: '15', cy: '5', r: '1' }],
+    ['circle', { cx: '15', cy: '12', r: '1' }],
+    ['circle', { cx: '15', cy: '19', r: '1' }],
+  ],
   up: [
     [
       'path',

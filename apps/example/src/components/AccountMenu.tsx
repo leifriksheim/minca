@@ -33,7 +33,8 @@ export function AccountMenu() {
         aria-expanded={open}
         aria-label="Account"
         title={name}
-        className={rail.item}
+        data-intent="ghost"
+        className={`row ${rail.item}`}
       >
         <Avatar did={account.did} size={32} round src={picture} />
         <strong className="truncate">{name}</strong>
@@ -146,7 +147,7 @@ export function AccountActions({
               role="menuitem"
               data-intent="ghost"
               onClick={() => switchTo(other.did)}
-              className={`${styles.item} truncate`}
+              className={`row ${styles.item} truncate`}
             >
               <Avatar did={other.did} size={24} round src={rememberedPicture(other.did)} />
               <span className="truncate">{other.name}</span>
@@ -194,7 +195,7 @@ function Section({ children }: { children: ReactNode }) {
 /** One row of the menu: a label, and optionally a quieter line on the right */
 function Item({ children, hint, onClick }: { children: ReactNode; hint?: string; onClick: () => void }) {
   return (
-    <button role="menuitem" data-intent="ghost" onClick={onClick} className={styles.item}>
+    <button role="menuitem" data-intent="ghost" onClick={onClick} className={`row ${styles.item}`}>
       <span>{children}</span>
       {hint && <small className="truncate">{hint}</small>}
     </button>

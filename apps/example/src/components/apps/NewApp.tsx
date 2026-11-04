@@ -60,7 +60,7 @@ export function NewApp({
   return (
     <div className="stack" data-gap="loose">
       {space.writable && (
-        <button type="button" data-intent="open" className="row" onClick={onOwn}>
+        <button type="button" data-intent="open" data-hue="1" className="row" onClick={onOwn}>
           <span className={marks.mark}>
             <Icon name="sparkle" size={18} />
           </span>
@@ -91,7 +91,6 @@ export function NewApp({
               {mayDefine && (
                 <button
                   type="button"
-                  data-intent="ghost"
                   onClick={() => add(app)}
                   disabled={busy}
                   aria-label={`Add ${app.title}`}

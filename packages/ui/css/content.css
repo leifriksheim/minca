@@ -29,6 +29,17 @@ ol[role='list'] {
       border-top: 1px solid var(--color-divider);
     }
 
+    /* A row put in order by dragging: it lifts while it moves, and a line shows where it lands */
+    &[draggable='true'] {
+      cursor: grab;
+    }
+    &[data-moving] {
+      opacity: 0.4;
+    }
+    &[data-landing] {
+      box-shadow: inset 0 2px 0 var(--color-action);
+    }
+
     &:has(> button[data-intent='open']:only-child) {
       padding: 0;
     }
@@ -329,6 +340,17 @@ aside {
 
 article[data-hue] {
   background: color-mix(in oklab, var(--hue) calc(var(--tint) / 2), var(--color-page));
+}
+
+/* A whole thing to open, in a category's colour: the way in a page leads with */
+button[data-intent='open'][data-hue] {
+  border-color: var(--hue);
+  background: color-mix(in srgb, var(--hue) 14%, var(--color-page));
+
+  &:hover:not(:disabled) {
+    border-color: var(--hue);
+    background: color-mix(in srgb, var(--hue) 22%, var(--color-page));
+  }
 }
 
 progress,

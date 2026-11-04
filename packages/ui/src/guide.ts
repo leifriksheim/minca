@@ -65,7 +65,7 @@ ui has:
   <\${Shape} kind colour? size? />  one of Minca's shapes; <\${Cover} seed colour size? wide?>…</\${Cover}> a thing's picture
     (colour: cobalt, coral, peach, sage or lilac)
   <\${Icon} name size? />  what a button does, never a picture of a thing: plus close check pencil send reply chevron
-    back down arrow search settings menu trash copy attach upload download link lock calendar clock
+    back down grip arrow search settings menu trash copy attach upload download link lock calendar clock
   <\${PlaceField} value onChange coarse? near? placeholder />  find a place by name, or use where the person is
   <\${NearButton} near onChange />  "Within 5 km of …", from useNear(): [near, setNear], remembered on this device
   placeLabel(place), distanceText(near, place), inReach(near, place), nearWhere(near)  for showing and finding places nearby

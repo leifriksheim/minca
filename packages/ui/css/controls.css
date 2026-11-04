@@ -61,11 +61,20 @@ a[data-intent] {
     background: none;
     color: var(--color-text-muted);
 
-    /* The page you're on looks as a hover does */
+    /* The page you're on, or the menu it opened, looks as a hover does: sand, which shows on a sunken ground too */
     &:hover:not(:disabled),
-    &[aria-current='page'] {
-      background: var(--color-sunken);
+    &[aria-current='page'],
+    &[aria-expanded='true'] {
+      background: var(--color-divider);
       color: var(--color-text-strong);
+    }
+
+    /* Laid out as a row, it is a row of a list (a place, an action): across, from the start, a list's corners, not a pill's */
+    &.row {
+      justify-content: flex-start;
+      width: 100%;
+      border-radius: var(--radius);
+      text-align: start;
     }
   }
 
