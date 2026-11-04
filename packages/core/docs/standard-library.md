@@ -137,7 +137,7 @@ How to read the tables:
 Who may add, change and remove records isn't up to the definition, but to
 the space's grants. In the `community` template, members change only what
 they made, moderators change anything, and only moderators and admins write
-in the collections in `STAFF_COLLECTIONS` ([spaces](spaces.md#presets)).
+in the collections in `STAFF_COLLECTIONS` ([spaces](permissions.md#presets)).
 
 The tables are made from the definitions in `@minca/core/schemas` each time
 [minca.dev](https://minca.dev/collections/standard-library/#the-definitions)

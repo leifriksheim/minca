@@ -42,7 +42,7 @@ import {
   type DraftCollection,
 } from '@minca/core/schemas';
 import type { ShapeColour } from '@minca/ui/tokens';
-import { checkScreenNetwork, MAX_SCREEN_BYTES, SCREEN_GUIDE, offLimits } from './screens';
+import { checkScreenNetwork, MAX_SCREEN_BYTES, SCREEN_GUIDE, offLimits } from '@minca/app-shared/screens';
 
 export interface LauncherApp {
   readonly title?: string;

@@ -71,7 +71,7 @@ judge), [§2.1](../03-spaces.md#21-the-top-founders-and-founding-roles)
 [§2.7](../03-spaces.md#27-successor-spaces) (successor spaces) and §4 (the
 replay). The library's side, presets as constitution templates, stepping
 down, successors and what an app shows, is in
-[the library's docs](../../packages/core/docs/spaces.md#presets). Its
+[the library's docs](../../packages/core/docs/permissions.md#presets). Its
 threat-model changes are in [the threat model](../threat-model.md) §3.1,
 §3.2 and §3.5.
 

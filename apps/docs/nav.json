@@ -6,57 +6,129 @@
       "title": "Understand Minca",
       "icon": "Compass"
     },
-    { "page": "building-an-app", "title": "Build an app", "icon": "Rocket" },
-    { "page": "agents", "title": "Build with agents", "icon": "Bot" }
+    {
+      "page": "building-an-app",
+      "title": "Build an app",
+      "icon": "Rocket"
+    },
+    {
+      "page": "agents",
+      "title": "Build with agents",
+      "icon": "Bot"
+    }
   ],
   "topics": [
     {
-      "slug": "sign-in",
-      "title": "Sign-in",
-      "blurb": "Accounts, access and usernames",
+      "slug": "identity",
+      "title": "Identity",
+      "blurb": "Accounts people own, keys apps borrow",
       "icon": "KeyRound",
+      "pitch": "Accounts people bring with them. No user table, no passwords to store, no sign-up flow to build.",
+      "enables": [
+        "One account for every Minca app, opened with a passkey or a password",
+        "Apps and agents get a key of their own: scoped, time-limited and revocable",
+        "People find each other by username, like leif@minca.social",
+        "A new device restores everything from a recovery code, with no server to ask"
+      ],
       "pages": ["sign-in", "usernames"]
     },
     {
+      "slug": "spaces",
+      "title": "Spaces",
+      "blurb": "A group’s own shared data",
+      "icon": "Users",
+      "pitch": "A group’s data, kept on its members’ devices and synced between them. The backend you’d otherwise build, once per group.",
+      "enables": [
+        "A team workspace, a club, a household or a chat for two, each with data of its own",
+        "Invite links, and members who leave with their own copy",
+        "Reach someone you don’t share a space with yet, through their inbox",
+        "Contacts that work across every app"
+      ],
+      "pages": ["spaces", "contacts", "inbox", "warrants"]
+    },
+    {
       "slug": "records",
-      "title": "Records and queries",
+      "title": "Records",
       "blurb": "Signed JSON, read live",
       "icon": "Database",
+      "pitch": "Signed JSON that syncs. Write a record and everyone in the space has it; query it and your screen stays live.",
+      "enables": [
+        "Collaborative, real-time apps with no sockets or sync code of your own",
+        "Offline first: write now, sync when back online",
+        "Who wrote what, and every version of it, on every record",
+        "Messages sealed for a few members of a space"
+      ],
       "pages": ["records-and-queries", "query-format", "direct-messages"]
     },
     {
       "slug": "collections",
       "title": "Collections",
-      "blurb": "Schemas, rules and the standard library",
+      "blurb": "Schemas and the standard library",
       "icon": "Puzzle",
-      "pages": [
-        "collections",
-        "standard-library",
-        "proposing-collections",
-        "blueprints-and-guides",
-        "computed",
-        "contracts"
-      ]
+      "pitch": "Say what your data is, once, in the space. Every app and agent that opens it then knows how to read and write it.",
+      "enables": [
+        "Schemas in Zod or JSON Schema, checked on every device",
+        "Read what other apps wrote: messages, events, tasks and files from the standard library",
+        "New features in a live space with no deploy, by proposing collections",
+        "Apps with a screen of their own, kept in the space"
+      ],
+      "pages": ["collections", "standard-library", "proposing-collections", "blueprints-and-guides"]
     },
     {
-      "slug": "spaces",
-      "title": "Spaces",
-      "blurb": "Members, roles, contacts and invites",
-      "icon": "Users",
-      "pages": ["spaces", "contacts", "inbox", "warrants"]
+      "slug": "permissions",
+      "title": "Permissions",
+      "blurb": "Roles every device enforces",
+      "icon": "Shield",
+      "pitch": "Who may do what, decided by the group and enforced by every device. No admin backend to secure.",
+      "enables": [
+        "Admins, moderators and members, as in a Discord server",
+        "Teams that each write only their own data, like HR and engineering",
+        "A co-op with nobody at the top",
+        "Agents that may write records but never change the rules"
+      ],
+      "pages": ["permissions"]
+    },
+    {
+      "slug": "contracts",
+      "title": "Contracts",
+      "blurb": "Rules everyone agrees on",
+      "icon": "Scale",
+      "pitch": "Rules every device checks the same way, so a result is a fact and not one app’s say-so. Like a smart contract, without a blockchain.",
+      "enables": [
+        "Games nobody can cheat at: only legal moves count",
+        "Mutual credit, where nobody can spend the same balance twice",
+        "Proposals that pass only with enough votes",
+        "A hall of fame that needs five different people’s 🙂",
+        "Chores that count as done once two people nod, with computed fields"
+      ],
+      "pages": ["contracts", "computed"]
     },
     {
       "slug": "automations",
       "title": "Automations and bots",
       "blurb": "Things that happen on their own",
       "icon": "Workflow",
+      "pitch": "Things that happen by themselves: when records look a certain way, at set times, or when someone asks a bot.",
+      "enables": [
+        "Close a poll once it has ten votes",
+        "A bot that answers in chat and works on your GitHub",
+        "Reminders at set times",
+        "Every node operation as a CLI command, an MCP tool and a WebMCP tool"
+      ],
       "pages": ["automations", "bots", "actions"]
     },
     {
       "slug": "node",
-      "title": "Node and storage",
+      "title": "Nodes and storage",
       "blurb": "Running it, and where data lives",
       "icon": "HardDrive",
+      "pitch": "The whole engine in one object: identity, storage, sync and encryption. The same node runs in a tab, a terminal, a server or an agent.",
+      "enables": [
+        "Minca in the browser, Node or Bun, with no server of your own",
+        "Spaces kept online while devices sleep, by a host that can’t read them",
+        "Data in IndexedDB, a folder the person picks, or S3 for files",
+        "Scripts, servers and tests that hold an account’s keys themselves"
+      ],
       "pages": ["node", "storage"]
     },
     {
@@ -64,6 +136,12 @@
       "title": "Calls",
       "blurb": "Voice and video in a space",
       "icon": "Phone",
+      "pitch": "Voice and video in any space. No call server: devices talk directly.",
+      "enables": [
+        "Group calls anyone in the space can join",
+        "Ring one person",
+        "Each pair of devices talks directly; a relay only introduces them"
+      ],
       "pages": ["../../calls/README"]
     }
   ]

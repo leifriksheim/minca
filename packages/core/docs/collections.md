@@ -176,7 +176,7 @@ import type { CollectionRules } from '@minca/core';
 const rules: CollectionRules = { fixed: ['options'] };
 ```
 
-Rules don't say who may write. That belongs to the space's [roles](#roles).
+Rules don't say who may write. That belongs to the space's [roles](permissions.md).
 A definition with `create`, `edit`, `delete` or `check` in its rules is
 invalid: every peer treats it as no definition at all, and your node refuses
 to write it.
@@ -209,35 +209,8 @@ body would have, so you can read the record without searching for it.
 
 ## Roles
 
-Who may write lives in the space, not in your code or in a definition. A
-role holds grants, and each grant is a command with a policy over its
-arguments. "Hosts may delete any poll" is:
-
-```typescript
-import { RECORD_DELETE } from '@minca/core';
-
-await node.spaces.defineRole(space.id, {
-  name: 'host',
-  title: 'Host',
-  grants: [{ cmd: RECORD_DELETE, pol: [['==', '.collection', 'app.poll']] }],
-  nests: ['member'], // a host holds what a member holds too
-});
-await node.spaces.assign(space.id, did, 'host');
-```
-
-- `/record/write` and `/record/delete` see `collection` and `byCreator`, and
-  a write also sees `body`. `byCreator` is whether the writer's account made
-  the record's first version, and is true for a new record. So
-  `['==', '.byCreator', true]` means "only your own".
-- `/collection/define` adds or changes collections. It also needs a note that
-  grants `/collection/define`, and an agent's note doesn't.
-- You can't grant what you don't hold.
-- The space's founders, if it has any, hold every command.
-
-To ask before acting, `node.spaces.may(space.id, cmd, args)` says whether
-this account may do something now, and `node.records.can(space, action, target)`
-asks it for a record. Assigning, removing and roles that define roles are
-covered in [spec 03](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md).
+Who may write lives in the space, not in a definition: in its roles. See
+[Permissions](permissions.md).
 
 ## Contracts
 

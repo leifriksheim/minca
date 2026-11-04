@@ -14,7 +14,7 @@ import {
   screenDocument,
   screenPolicy,
   type ScreenHost,
-} from '../src/components/apps/screens';
+} from '@minca/app-shared/screens';
 import type { NodeRecord, P2PNode } from '@minca/core';
 import {
   file as fileCollection,

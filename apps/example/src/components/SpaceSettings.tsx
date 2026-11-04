@@ -11,7 +11,7 @@ import { ConnectAgent } from './ConnectAgent';
 import { HOOD, settingsPagesOf, type SpaceScreen } from './SpaceView';
 import { Icon, type IconName } from '@minca/app-shared/Icon';
 import { useSpaceFace } from '../pictures';
-import { shrinkImage } from '../files';
+import { shrinkImage } from '@minca/app-shared/images';
 import { SpaceMark } from './SpaceList';
 import list from './SpaceList.module.css';
 import marks from './InvitePeople.module.css';

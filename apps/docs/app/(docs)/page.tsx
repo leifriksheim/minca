@@ -18,9 +18,13 @@ export default function Home() {
   return (
     <main className="home">
       <header className="hero">
-        <h1>Build it together</h1>
-        <p>Apps whose data lives in people’s shared spaces. Signed, synced, no backend.</p>
+        <h1>A backend that runs nowhere.</h1>
+        <p>
+          Your users’ devices keep the data, check the rules and sync with each other. No servers to run, and
+          nothing in the middle that can read it.
+        </p>
         <nav className="actions">
+          <Link href="/playground/">Try it in the playground</Link>
           <Link href="/building-an-app/">Build an app</Link>
           <Link href="/understand/">Understand Minca</Link>
           <Link href="/spec/">The protocol</Link>
@@ -28,10 +32,10 @@ export default function Home() {
       </header>
 
       <section className="topics">
-        {nav.topics.map((topic) => {
+        {nav.topics.map((topic, i) => {
           const Icon = iconByName.get(topic.icon);
           return (
-            <Link key={topic.slug} href={`/${topic.slug}/`} className="topic">
+            <Link key={topic.slug} href={`/${topic.slug}/`} className="topic" data-hue={(i % 5) + 1}>
               <span className="topic-icon">{Icon && <Icon strokeWidth={1.25} />}</span>
               <span>
                 <strong>{topic.title}</strong>

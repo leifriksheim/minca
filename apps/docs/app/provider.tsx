@@ -32,5 +32,9 @@ function Search(props: SharedProps) {
 }
 
 export function Provider({ children }: { children: ReactNode }) {
-  return <RootProvider search={{ SearchDialog: Search }}>{children}</RootProvider>;
+  return (
+    <RootProvider theme={{ enabled: false }} search={{ SearchDialog: Search }}>
+      {children}
+    </RootProvider>
+  );
 }

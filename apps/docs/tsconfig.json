@@ -6,9 +6,12 @@
     "allowJs": true,
     "allowImportingTsExtensions": true,
     "customConditions": ["@minca/source"],
-    "paths": { "@/*": ["./*"] },
+    "paths": {
+      "@/*": ["./*"],
+      "@minca/playground": ["./components/playground/lib.ts"]
+    },
     "plugins": [{ "name": "next" }]
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "include": ["next-env.d.ts", "../shared/src/vite-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
   "exclude": ["node_modules", "out", "examples.ts"]
 }

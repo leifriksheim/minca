@@ -145,3 +145,11 @@
     text-align: left;
   }
 }
+
+/* How Minca compares: a plain table, scrolling sideways on its own on a phone */
+.site .table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-surface);
+  background: var(--color-surface);
+}

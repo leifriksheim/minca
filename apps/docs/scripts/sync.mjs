@@ -4,7 +4,8 @@
  * GitHub and in node_modules.
  *
  * nav.json beside this folder says how the library's pages are grouped: a
- * few to get started, then topics, each a folder whose first page opens it.
+ * few to get started, then topics, each a folder that opens on an overview
+ * of what it is for (written here from nav.json).
  * The spec's parts follow, in the order of the table in spec/README.md.
  *
  * Each page is written twice: into the content folder with frontmatter (its
@@ -69,23 +70,12 @@ for (const item of nav.start) {
   pages.push({ source, url: `/${slug}/`, file: `${slug}.md`, group: 'start', ...item });
 }
 for (const topic of nav.topics) {
-  topic.pages.forEach((page, i) => {
+  // A topic opens on an overview of its own (below), and its pages sit under it.
+  for (const page of topic.pages) {
     const source = librarySource(page);
-    // A topic opens on its first page; a topic of one page is just that page.
-    const [url, file] =
-      topic.pages.length === 1
-        ? [`/${topic.slug}/`, `${topic.slug}.md`]
-        : i === 0
-          ? [`/${topic.slug}/`, `${topic.slug}/index.md`]
-          : [`/${topic.slug}/${slugOf(source)}/`, `${topic.slug}/${slugOf(source)}.md`];
-    pages.push({
-      source,
-      url,
-      file,
-      group: 'topics',
-      icon: topic.pages.length === 1 ? topic.icon : undefined,
-    });
-  });
+    const slug = slugOf(source);
+    pages.push({ source, url: `/${topic.slug}/${slug}/`, file: `${topic.slug}/${slug}.md`, group: 'topics' });
+  }
 }
 const specSources = [
   'spec/README.md',
@@ -263,6 +253,50 @@ const written = pages.map((page) => {
   return { ...page, title, description, plain };
 });
 
+// Each topic's overview: what it is for, what it lets you build, then its
+// pages. nav.json holds the words; app/(docs)/[...slug]/page.tsx draws the
+// list of what it enables above the page.
+for (const topic of nav.topics) {
+  const inTopic = written.filter((page) => page.url.startsWith(`/${topic.slug}/`));
+  const list = (link) =>
+    inTopic.map(
+      (page) => `- [${page.title}](${link(page.url)})${page.description ? `: ${page.description}` : ''}`,
+    );
+  const frontmatter = [
+    `title: ${JSON.stringify(topic.title)}`,
+    `description: ${JSON.stringify(topic.pitch)}`,
+    `icon: ${topic.icon}`,
+  ];
+  write(
+    join(content, topic.slug, 'index.md'),
+    `---\n${frontmatter.join('\n')}\n---\n\n## In this section\n\n${list((url) => url).join('\n')}\n`,
+  );
+  const plain = [
+    `# ${topic.title}`,
+    '',
+    topic.pitch,
+    '',
+    '## What it enables',
+    '',
+    ...topic.enables.map((item) => `- ${item}`),
+    '',
+    '## In this section',
+    '',
+    ...list((url) => site + markdownUrl(url)),
+    '',
+  ].join('\n');
+  write(join(pub, markdownUrl(`/${topic.slug}/`)), plain);
+  // Listed before its pages, in llms.txt too.
+  const first = written.findIndex((page) => page.url.startsWith(`/${topic.slug}/`));
+  written.splice(first, 0, {
+    url: `/${topic.slug}/`,
+    group: 'topics',
+    title: topic.title,
+    description: topic.pitch,
+    plain,
+  });
+}
+
 // The sidebar: headed groups, the topics as folders, the spec's parts spread flat.
 write(
   join(content, 'meta.json'),
@@ -279,13 +313,13 @@ write(
     ],
   }),
 );
-for (const topic of nav.topics.filter((topic) => topic.pages.length > 1)) {
+for (const topic of nav.topics) {
   write(
     join(content, topic.slug, 'meta.json'),
     json({
       title: topic.title,
       icon: topic.icon,
-      pages: topic.pages.slice(1).map((page) => slugOf(librarySource(page))),
+      pages: topic.pages.map((page) => slugOf(librarySource(page))),
     }),
   );
 }
@@ -341,4 +375,24 @@ write(
     .join('\n---\n\n'),
 );
 
-console.log(`Synced ${written.length} pages, and llms.txt`);
+// The playground runs a screen as the Minca app does: in the example app's
+// frame page, with the kit the example app bundles in front of every screen.
+const { bundleUi } = await import('@minca/ui/bundle');
+// What the playground uses of Minca, as plain JavaScript Turbopack can load (components/playground/lib.ts).
+const { build } = await import('esbuild');
+await build({
+  entryPoints: [fileURLToPath(new URL('../components/playground/lib.ts', import.meta.url))],
+  outfile: fileURLToPath(new URL('../.minca/playground.js', import.meta.url)),
+  bundle: true,
+  format: 'esm',
+  platform: 'browser',
+  target: 'es2022',
+  conditions: ['@minca/source'],
+  // One React for the page and the hooks.
+  external: ['react', 'react-dom', 'react/jsx-runtime'],
+  logLevel: 'warning',
+});
+write(join(pub, 'minca-ui.js'), (await bundleUi()).script);
+write(join(pub, 'screen.html'), read('apps/example/public/screen.html'));
+
+console.log(`Synced ${written.length} pages, llms.txt, and the playground's screen kit`);

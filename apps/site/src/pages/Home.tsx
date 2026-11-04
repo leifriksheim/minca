@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import { APP, Band, ChromeMark, DownloadMark, EXTERNAL, Marked, Page } from './Site';
+import { APP, Band, ChromeMark, DEVELOPERS, DownloadMark, EXTERNAL, Marked, Page } from './Site';
 import { Converge } from './converge';
 import { Castle, Middle } from './castle';
 import { PHOTO_CREDITS, Pens, Tower } from './pens';
@@ -355,9 +355,9 @@ export function Home() {
               everyone turns up and builds it.
             </p>
             <HeroActions />
-            <Link to="/developers" className="aside-link">
+            <a href={DEVELOPERS} {...EXTERNAL} className="aside-link">
               Building apps? Minca is an open protocol too →
-            </Link>
+            </a>
             <Rainbow />
           </div>
         </div>

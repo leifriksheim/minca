@@ -25,6 +25,20 @@
   --green-soft: #e3f0e8;
   --amber: #9a5a0b;
   --amber-soft: #fbefd9;
+  /* The night side: the navy ink as the ground, the paper as the ink. */
+  --night: #0e1633;
+  --night-light: #151f42;
+  --night-dark: #0a1029;
+  --night-line: #2a3460;
+  --night-field: #3d4878;
+  --cream-body: #d8d4cc;
+  --cream-muted: #9a9fb8;
+  --cobalt-light: #8a9bff;
+  --red-light: #ff8a70;
+  --green-light: #74c99a;
+  --amber-light: #f2b863;
+
+  color-scheme: light;
 
   /* Grounds */
   --color-page: var(--paper);
@@ -91,4 +105,42 @@
 
   /* Only what floats over the page casts a shadow. */
   --shadow-float: 0 1px 2px rgb(19 33 74 / 0.06), 0 16px 40px -12px rgb(19 33 74 / 0.22);
+}
+
+/*
+ * The same names at night: the navy is the ground and the paper the ink. The
+ * shapes keep their colours; cobalt lightens to be read on navy. A page or a
+ * part of one turns dark with data-theme="dark".
+ */
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --color-page: var(--night);
+  --color-surface: var(--night-light);
+  --color-sunken: var(--night-dark);
+  --color-scrim: rgb(5 8 20 / 0.6);
+
+  --color-outline: var(--cream-muted);
+  --color-divider: var(--night-line);
+  --color-field: var(--night-field);
+
+  --color-text-strong: var(--paper);
+  --color-text: var(--cream-body);
+  --color-text-muted: var(--cream-muted);
+
+  --color-action: var(--cobalt-light);
+  --color-action-hover: var(--paper);
+  --color-action-soft: rgb(138 155 255 / 0.14);
+  --color-on-action: var(--night);
+
+  --color-good: var(--green-light);
+  --color-good-soft: rgb(116 201 154 / 0.14);
+  --color-warn: var(--amber-light);
+  --color-warn-soft: rgb(242 184 99 / 0.14);
+  --color-danger: var(--red-light);
+  --color-danger-soft: rgb(255 138 112 / 0.14);
+
+  --color-hue-1: var(--cobalt-light);
+
+  --shadow-float: 0 1px 2px rgb(0 0 0 / 0.3), 0 16px 40px -12px rgb(0 0 0 / 0.6);
 }

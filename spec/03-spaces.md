@@ -154,7 +154,7 @@ random nonce, and for a private space generates a space key (§8.1) and
 derives its read key (§8.4). Then it computes the id. Nothing is written into
 the space at creation: the constitution alone makes its founders, and the
 accounts it assigns roles to, members. (The library's constitution templates
-are in [its docs](../packages/core/docs/spaces.md#presets).)
+are in [its docs](../packages/core/docs/permissions.md#presets).)
 
 _Source: `packages/core/src/space/constitution.ts` (`constitutionOf`, `spaceIdOf`, `constitutionProblem`, `checkSpace`, `accessGenesisOf`), `packages/core/src/space/grants.ts` (`checkFoundingRoles`), `packages/core/src/space/space-manager.ts` (`create`, `readSpace`), `packages/core/src/space/roles.ts` (`RESOLVERS`, `replayAccess`), `packages/core/src/types.ts` (`Space`, `SpaceRole`, `SpaceTop`). Tests: `packages/core/tests/constitution.test.ts` ("the constitution examples", "what a constitution may say", "a constitution a peer does not know is not judged"), `packages/core/tests/space.test.ts`, `packages/core/tests/space-access.test.ts` ("the space vouches for itself")._
 
@@ -190,7 +190,7 @@ with `top: "none"`, can end up with no member who may change roles. Members
 keep what their roles allow; once no member holds a command (changing roles
 or the key, say), nobody can run it, and the constitution can't change. The
 way on is a successor space (§2.7). How the library tells, and what an app
-shows, is in [its docs](../packages/core/docs/spaces.md#the-top-and-founders).
+shows, is in [its docs](../packages/core/docs/permissions.md#the-top-and-founders).
 
 The constitution's `roles` are the **founding roles**:
 
@@ -432,7 +432,7 @@ can assign it to her second account. That account is a member holding `hr`,
 visible as one and unassignable like any other.
 
 The library's constitution templates are in
-[its docs](../packages/core/docs/spaces.md#presets); the protocol reads
+[its docs](../packages/core/docs/permissions.md#presets); the protocol reads
 whatever a constitution names and never looks at a template's name.
 
 ### 2.7 Successor spaces

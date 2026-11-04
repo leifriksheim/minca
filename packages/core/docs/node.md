@@ -298,7 +298,7 @@ private space's key changes. Leaving needs no grant. Then it deletes the
 space's `sys.joined` record, closes the space and forgets it with its keys.
 
 A founder who leaves is a founder no more, for good. To stay without being
-one, use [`spaces.stepDown`](spaces.md#the-top-and-founders).
+one, use [`spaces.stepDown`](permissions.md#the-top-and-founders).
 
 - The removal waits up to 5 seconds for a peer of another account to have
   it. With nobody reachable, the node leaves anyway.
@@ -569,7 +569,7 @@ for the first role by name the inviter may give, or view-only with none
 - `access(id)` gives a [`SpaceAccess`](https://minca.dev/api/core/interfaces/SpaceAccess/):
   the roles with their current definitions, the members, invites, founders,
   successors, keepers and more
-  ([the top and founders](spaces.md#the-top-and-founders)).
+  ([the top and founders](permissions.md#the-top-and-founders)).
 - `may(id, cmd, args?, account?)` asks whether an account may run a command
   with these arguments now. Apps use it to show what someone can do. Peers
   still judge each version on its own.

@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
-import { Link } from '@tanstack/react-router';
-import { Band, EXTERNAL, GITHUB, Page, Points, SPEC } from './Site';
+import { Band, DEVELOPERS, EXTERNAL, GITHUB, Page, Points, SPEC } from './Site';
 import './Protocol.css';
 
 /**
@@ -11,6 +10,63 @@ import './Protocol.css';
  */
 
 const specPart = (file: string) => `${GITHUB}/blob/main/spec/${file}`;
+
+const PROTOCOLS = ['Minca', 'AT Protocol (Bluesky)', 'Nostr', 'Solid'] as const;
+
+/** One row per question: the question, then an answer for each protocol, in order */
+const COMPARISON: ReadonlyArray<readonly [string, string, string, string, string]> = [
+  [
+    'Built for',
+    'Private and shared app data',
+    'Public social media',
+    'Public messages that can’t be censored',
+    'Personal data stores',
+  ],
+  [
+    'Where data lives',
+    'On the user’s devices, or a folder they own',
+    'A personal data server, usually hosted',
+    'Relays the user publishes to',
+    'A pod server',
+  ],
+  [
+    'Servers you need',
+    'None. Relays only introduce devices',
+    'Data servers, relays and app views',
+    'Relays, which store and serve everything',
+    'A pod server per user or provider',
+  ],
+  [
+    'Private data',
+    'Encrypted end to end by default',
+    'Public by design',
+    'Public, with encrypted direct messages',
+    'Access control on the server',
+  ],
+  ['Works offline', 'Yes, local-first', 'No', 'Reading from cache', 'No'],
+  [
+    'Several people editing the same data',
+    'Yes, shared spaces',
+    'No, each user writes their own',
+    'No, each user writes their own',
+    'Yes, through permissions',
+  ],
+  [
+    'Account',
+    'A password or passkey the user keeps',
+    'A DID and a handle, with a server holding the keys',
+    'A key pair, and losing it is final',
+    'A login with an identity provider',
+  ],
+  [
+    'Who enforces the rules',
+    'Every device, and they all agree',
+    'Each app’s servers and moderation services',
+    'Each relay and client, separately',
+    'The pod server',
+  ],
+  ['Public feeds at global scale', 'Not the goal', 'Yes, that’s its strength', 'Yes, across relays', 'No'],
+];
 
 interface Point {
   readonly title: string;
@@ -542,9 +598,9 @@ export function Protocol() {
             <a href={SPEC} {...EXTERNAL} data-intent="primary">
               Read the spec
             </a>
-            <Link to="/developers" data-intent="secondary">
+            <a href={DEVELOPERS} {...EXTERNAL} data-intent="secondary">
               Build with it
-            </Link>
+            </a>
           </div>
         </div>
       </section>
@@ -565,6 +621,43 @@ export function Protocol() {
       {PARTS.map((part) => (
         <Section key={part.file} part={part} />
       ))}
+
+      <Band
+        id="compared"
+        kicker="Compared"
+        title="Where Minca fits."
+        intro={
+          <p>
+            Other open protocols give people their data back too. Here’s how they differ. Minca is for apps
+            where data is private, shared between a few people, and works offline.
+          </p>
+        }
+      >
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th />
+                {PROTOCOLS.map((name) => (
+                  <th key={name} scope="col">
+                    {name}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {COMPARISON.map(([row, ...cells]) => (
+                <tr key={row}>
+                  <th scope="row">{row}</th>
+                  {cells.map((cell, i) => (
+                    <td key={PROTOCOLS[i]}>{cell}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Band>
 
       <Band
         id="tradeoffs"
@@ -602,9 +695,9 @@ export function Protocol() {
             <a href={SPEC} {...EXTERNAL} data-intent="primary">
               Read the spec
             </a>
-            <Link to="/developers" data-intent="secondary">
+            <a href={DEVELOPERS} {...EXTERNAL} data-intent="secondary">
               For developers
-            </Link>
+            </a>
           </div>
         </div>
       </section>

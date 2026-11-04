@@ -258,7 +258,7 @@ page's tools can already click through the page. It isn't offered
 person adds them. Anything that changes a space's people, or hands out its
 key, asks the person first. An app an agent makes may bring its own screen,
 which the example runs in a sandboxed frame with no network (the launcher's
-guide, `src/components/apps/launcher.ts`, and `src/components/apps/screens.ts`).
+guide, `src/components/apps/launcher.ts`, and `apps/shared/src/screens.ts`).
 
 **On your computer (Claude Code, Codex, Cursor's agent, …).** "Connect an
 agent", in the account menu, shows one command: `npx @minca/cli connect`.
@@ -275,7 +275,7 @@ against the kit every screen gets (`@minca/ui`: Preact, people's faces,
 comments, places, Minca's look), and adding one copies it into the space,
 which then changes its copy like any other app. What the frame can't do (find
 a place, open a page, save a file) the app does for it when asked
-(`src/components/apps/screens.ts`).
+(`apps/shared/src/screens.ts`).
 
 Liquid, an app for an assembly that votes and delegates, is an app of its own:
 [apps/liquid](../liquid/README.md).

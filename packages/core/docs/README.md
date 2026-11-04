@@ -65,6 +65,7 @@ syncs, but can't read what the others wrote.
 | [inbox.md](inbox.md)                                 | The inbox, and how a knock becomes a contact                             |
 | [usernames.md](usernames.md)                         | `leif@minca.social`: looking up and claiming usernames                   |
 | [spaces.md](spaces.md)                               | Making spaces, invites, profiles, the space manager                      |
+| [permissions.md](permissions.md)                     | Roles, grants, presets, and who sits at the top                          |
 | [warrants.md](warrants.md)                           | `std.warrant`: proof that an account broke the protocol's rules          |
 | [storage.md](storage.md)                             | Sync pacing, storage adapters, IndexedDB, data folders, blob stores      |
 
