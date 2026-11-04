@@ -1,0 +1,43 @@
+/* You, at the foot of a space's rail, taking the room the bell beside you leaves; the menu opens above */
+.account {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.menu {
+  left: 0;
+  bottom: calc(100% + 8px);
+  width: 280px;
+  padding: 0;
+
+  & > li + li {
+    border-top: 1px solid var(--color-divider);
+  }
+
+  & > li:first-child {
+    padding: 14px;
+  }
+}
+
+/* A group of rows: in the menu, or on the profile page's card */
+.section {
+  padding: 6px;
+
+  & > small {
+    display: block;
+    padding: var(--space-tight) 10px;
+  }
+}
+
+/* A row, in the menu or on the profile page: a label, and a quieter line at its end */
+.item {
+  justify-content: flex-start;
+  width: 100%;
+  color: var(--color-text-strong);
+  font-weight: 400;
+
+  & > small {
+    margin-left: auto;
+  }
+}

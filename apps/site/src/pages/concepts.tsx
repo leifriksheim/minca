@@ -5,6 +5,7 @@
 import type { ReactNode } from 'react';
 import type { ShapeKind } from '@minca/ui/shapes';
 import type { ShapeColour } from '@minca/ui/tokens';
+import './concepts.css';
 
 export interface Concept {
   /** Its tab's id */

@@ -1,0 +1,28 @@
+/* Your picture, with a badge that says it can be changed, and the menu that does it under it */
+.picture {
+  position: relative;
+
+  & > button {
+    position: relative;
+    padding: 0;
+    border: none;
+    background: none;
+
+    & > span {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--color-action);
+      color: var(--color-on-action);
+    }
+  }
+
+  & > menu {
+    top: calc(100% + 6px);
+  }
+}

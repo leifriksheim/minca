@@ -1,0 +1,52 @@
+/* Home, Activity and You: a pill along the top of a wide screen, floating over the foot of a phone's */
+.bar {
+  display: flex;
+  gap: 2px;
+  align-self: center;
+  margin-bottom: var(--space-loose);
+  padding: var(--space-tight);
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  view-transition-name: tabbar;
+
+  & > a {
+    position: relative;
+  }
+
+  /* The page shows through it, blurred, under the page's bars (z-index 8) */
+  @media (max-width: 640px) {
+    position: fixed;
+    z-index: 7;
+    inset: auto 16px calc(10px + env(safe-area-inset-bottom));
+    height: 64px;
+    margin: 0;
+    background: color-mix(in srgb, var(--color-surface) 82%, transparent);
+    backdrop-filter: blur(18px) saturate(1.4);
+    box-shadow: var(--shadow-float);
+
+    & > a {
+      flex: 1 1 0;
+      flex-direction: column;
+      gap: 2px;
+      height: auto;
+      font-size: 0.6875rem;
+    }
+
+    & .dot {
+      left: calc(50% + 6px);
+    }
+  }
+}
+
+/* Something new behind a tab, on its icon's corner */
+.dot {
+  position: absolute;
+  top: 6px;
+  left: 24px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-danger);
+  box-shadow: 0 0 0 2px var(--color-surface);
+}

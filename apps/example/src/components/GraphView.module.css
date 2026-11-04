@@ -1,0 +1,115 @@
+.explore {
+  min-width: 0;
+
+  /* A collection taken off the map */
+  & button[data-off] {
+    opacity: 0.55;
+  }
+}
+
+/* A collection's colour, as a dot; the standard ones stay grey, so they read as notes on records */
+.hue {
+  color: var(--hue, var(--color-text-muted));
+}
+
+.canvas {
+  position: relative;
+  height: min(600px, 65dvh);
+  overflow: hidden;
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-frame);
+  background: var(--color-sunken);
+
+  & > svg {
+    touch-action: none;
+    cursor: grab;
+    user-select: none;
+
+    &[data-panning] {
+      cursor: grabbing;
+    }
+  }
+
+  & marker path {
+    fill: var(--color-field);
+  }
+
+  & marker path[data-on],
+  & [data-on] line {
+    fill: var(--color-text);
+    stroke: var(--color-text);
+  }
+
+  & line {
+    stroke: var(--color-field);
+  }
+
+  /* Labels sit on a halo of the map's ground, so lines don't run through them */
+  & text {
+    fill: var(--color-text);
+    stroke: var(--color-sunken);
+    paint-order: stroke;
+    pointer-events: none;
+  }
+}
+
+.line[data-dim],
+.dot[data-dim] {
+  opacity: 0.15;
+}
+
+.dot {
+  cursor: pointer;
+
+  & circle {
+    fill: var(--hue, var(--color-text-muted));
+    stroke: var(--color-surface);
+    stroke-width: 1.5;
+  }
+
+  /* A record deleted since: an empty ring */
+  & circle[data-gone] {
+    fill: var(--color-surface);
+    stroke: var(--hue, var(--color-text-muted));
+  }
+
+  & circle[data-ring],
+  & rect {
+    fill: var(--color-surface);
+    stroke: var(--color-text-strong);
+  }
+
+  & circle[data-ring] {
+    fill: none;
+  }
+
+  &[data-picked] text {
+    font-weight: 600;
+  }
+}
+
+/* What a dot pointed at is, and a picked person, floating over the map */
+.tooltip,
+.panel {
+  position: absolute;
+  box-shadow: var(--shadow-float);
+}
+
+.tooltip {
+  z-index: 2;
+  max-width: 240px;
+  pointer-events: none;
+}
+
+.count {
+  position: absolute;
+  left: 12px;
+  bottom: 10px;
+}
+
+.panel {
+  z-index: 3;
+  inset: 12px 12px 12px auto;
+  width: min(320px, calc(100% - 24px));
+  overflow-y: auto;
+}

@@ -1,24 +1,17 @@
-import type { CSSProperties, ReactNode } from 'react';
-import { palette, styles } from '../styles';
+import type { ReactNode } from 'react';
 
 const REPO = 'https://github.com/leifriksheim/minca/blob/main/';
 
 /** A line on what is going on underneath, and the page that explains the rest */
-export function DocsNote({
-  path,
-  style,
-  children,
-}: {
-  path: string;
-  style?: CSSProperties;
-  children: ReactNode;
-}) {
+export function DocsNote({ path, children }: { path: string; children: ReactNode }) {
   return (
-    <p style={{ ...styles.quiet, lineHeight: 1.6, margin: 0, ...style }}>
-      {children}{' '}
-      <a href={REPO + path} target="_blank" rel="noreferrer" style={{ color: palette.ink.body }}>
-        How it works
-      </a>
+    <p>
+      <small>
+        {children}{' '}
+        <a href={REPO + path} target="_blank" rel="noreferrer">
+          How it works
+        </a>
+      </small>
     </p>
   );
 }

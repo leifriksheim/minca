@@ -7,6 +7,7 @@ import { AppLogo, type AppLogoName } from '@minca/app-shared/AppLogo';
 import { Terminal } from '@minca/app-shared/Terminal';
 import { type ShapeKind } from '@minca/ui/shapes';
 import { Band, Page, Tabs } from './Site';
+import './Mcp.css';
 
 /**
  * Connecting an AI to your spaces over MCP. Most apps connect to Minca's MCP
@@ -133,7 +134,7 @@ function Clients() {
           <h3>{client.name}</h3>
           <p>{client.how}</p>
           {client.link ? (
-            <a href={client.link.href} className="btn btn-primary btn-lg" target="_blank" rel="noreferrer">
+            <a href={client.link.href} data-intent="primary" target="_blank" rel="noreferrer">
               {client.link.label}
             </a>
           ) : (
@@ -309,12 +310,14 @@ export function Mcp() {
                 Connect Claude, ChatGPT or any AI that speaks MCP to your spaces. Ask it what’s happening at
                 the club, or tell it to take the last seat.
               </p>
-              <Terminal text={MCP_URL} style={{ maxWidth: 440, marginBottom: 24 }} />
+              <div className="mcp-url">
+                <Terminal text={MCP_URL} />
+              </div>
               <div className="actions">
-                <a href={addToClaude()} className="btn btn-primary btn-lg" target="_blank" rel="noreferrer">
+                <a href={addToClaude()} data-intent="primary" target="_blank" rel="noreferrer">
                   Add to Claude ↗
                 </a>
-                <a href="#clients" className="btn btn-secondary btn-lg">
+                <a href="#clients" data-intent="secondary">
                   Other AI apps ↘
                 </a>
               </div>

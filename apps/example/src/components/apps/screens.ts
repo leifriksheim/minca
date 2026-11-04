@@ -24,7 +24,6 @@ import {
   type P2PNode,
 } from '@minca/core';
 import type { FoundPlace } from '@minca/app-shared/places';
-import { accent, radius } from '@minca/ui/tokens';
 import { UI_GUIDE } from '@minca/ui/guide';
 import { shrinkImage } from '../../files';
 
@@ -233,10 +232,12 @@ export const SCREEN_CLIENT = `(() => {
   const report = (message) => {
     let bar = document.getElementById('__minca-error');
     if (!bar) {
-      bar = document.createElement('div');
+      // A notice in the system's danger tone (minca.css is in every screen), pinned to the bottom edge
+      bar = document.createElement('aside');
       bar.id = '__minca-error';
       bar.setAttribute('role', 'alert');
-      bar.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;z-index:2147483647;padding:8px 10px;border-radius:${radius.sm}px;background:${accent.dangerSoft};color:${accent.danger};border:1px solid ${accent.danger};font:12px/1.4 system-ui,sans-serif;white-space:pre-wrap';
+      bar.setAttribute('data-tone', 'danger');
+      bar.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;z-index:2147483647;white-space:pre-wrap';
       (document.body || document.documentElement).appendChild(bar);
     }
     bar.textContent = 'This screen hit an error: ' + message;
@@ -343,8 +344,9 @@ export function screenPolicy(network: ReadonlyArray<string> = []): string {
  * @param ui The kit as one script (`bundleUi` in `@minca/ui/bundle`), which sets up `ui` over `minca`
  */
 export function screenDocument(screen: string, network: ReadonlyArray<string> = [], ui = ''): string {
+  // A doctype, or the browser draws the screen in quirks mode (a form gets a margin below it, and more).
   // The policy first, so it is in force before any script runs; `minca` next, then `ui` on it, so both are there when the screen's run.
-  return `<meta http-equiv="Content-Security-Policy" content="${screenPolicy(network)}">\n<script>${SCREEN_CLIENT}</script>\n<script>${ui}</script>\n${screen}`;
+  return `<!doctype html>\n<meta http-equiv="Content-Security-Policy" content="${screenPolicy(network)}">\n<script>${SCREEN_CLIENT}</script>\n<script>${ui}</script>\n${screen}`;
 }
 
 const toScreen = (

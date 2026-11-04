@@ -31,17 +31,17 @@ import { SchemaForm } from './SchemaForm';
 import { CollectionEditor, useMayRedefine } from './CollectionDesigner';
 import { Value } from './Value';
 import { reactionSummary } from './std/Reactions';
-import { chip, tagLabel } from './std/Tags';
-import { styles, palette, ui, hstack, stack } from '../styles';
+import { tagLabel } from './std/Tags';
 import { useAction } from '@minca/app-shared/action';
-import { Lane, Card } from './Lane';
+import { Lane } from './Lane';
 import { Person } from './Person';
 import { useDraft } from './useDraft';
 import { useRemembered } from '../kept';
 import { QueryBuilder, PAGE_SIZES } from './QueryBuilder';
 import { NEWEST_FIRST, type Sort } from '../derive/filters';
 import { clauseFields, whereOf, type Clause } from '../derive/conditions';
-import { AddButton, QuietButton } from './Buttons';
+import styles from './CollectionView.module.css';
+import table from './table.module.css';
 
 const LAYOUTS = ['list', 'table', 'board'] as const;
 type Layout = (typeof LAYOUTS)[number];
@@ -172,49 +172,26 @@ export function CollectionView({
   }
 
   return (
-    <section aria-label={label} style={{ ...stack(16), minWidth: 0 }}>
-      <header
-        style={{
-          display: 'flex',
-          alignItems: 'flex-end',
-          justifyContent: 'space-between',
-          gap: 16,
-          flexWrap: 'wrap',
-        }}
-      >
-        <div>
-          <h2 style={{ ...styles.appTitle, fontSize: 22 }}>{label}</h2>
-          <p style={{ ...styles.quiet, marginTop: 4 }}>
-            {collection?.description ?? <code style={{ fontSize: 12 }}>{name}</code>}
-          </p>
+    <section aria-label={label}>
+      <header className={styles.head}>
+        <div className="stack" data-gap="tight">
+          <h2>{label}</h2>
+          <small>{collection?.description ?? <code>{name}</code>}</small>
         </div>
-        <div className="collection-tools">
+        <div className={`row ${styles.tools}`}>
           {title && (
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search"
               aria-label={`Search ${label}`}
-              className="collection-search"
-              style={{ ...styles.input, width: undefined, height: 32, fontSize: 13 }}
+              className={styles.search}
             />
           )}
           {layout === 'board' && groups.length > 1 && group && (
-            <label
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                fontSize: 13,
-                color: palette.ink.muted,
-              }}
-            >
+            <label className="row">
               Columns by
-              <select
-                value={group.name}
-                onChange={(e) => setGroupName(e.target.value)}
-                style={{ ...styles.input, height: 32, fontSize: 13, width: 'auto' }}
-              >
+              <select value={group.name} onChange={(e) => setGroupName(e.target.value)}>
                 {groups.map((f) => (
                   <option key={f.name} value={f.name}>
                     {f.label}
@@ -224,16 +201,15 @@ export function CollectionView({
             </label>
           )}
           {collection?.schema && (
-            <QuietButton
+            <button
               onClick={() => setDefining(true)}
               disabled={!redefine.may}
               title={redefine.may ? 'Change its fields and the kinds of links it has' : redefine.reason}
-              style={{ height: 32 }}
             >
               Edit definition
-            </QuietButton>
+            </button>
           )}
-          <div role="tablist" aria-label="Layout" className="segmented">
+          <div role="tablist" aria-label="Layout">
             {LAYOUTS.map((l) => (
               <button key={l} role="tab" aria-selected={layout === l} onClick={() => setLayout(l)}>
                 {l[0]!.toUpperCase() + l.slice(1)}
@@ -243,19 +219,12 @@ export function CollectionView({
         </div>
       </header>
 
-      {onOthers && (
-        <p style={styles.quiet}>These are added on the record they're about — open any record to add one.</p>
-      )}
+      {onOthers && <small>These are added on the record they're about — open any record to add one.</small>}
 
       {mayCreate &&
         !onOthers &&
         (adding ? (
-          <div
-            style={{
-              ...styles.tile,
-              padding: 16,
-            }}
-          >
+          <article>
             <SchemaForm
               schema={schema}
               initial={adding}
@@ -263,7 +232,7 @@ export function CollectionView({
               onCancel={() => setAdding(null)}
               onSubmit={add}
             />
-          </div>
+          </article>
         ) : (
           <QuickAdd label={label} schema={schema} onAdd={add} onMore={(prefill) => setAdding(prefill)} />
         ))}
@@ -284,13 +253,13 @@ export function CollectionView({
       )}
 
       {rows && visible.length === 0 && (
-        <p style={styles.emptyState}>{filtered ? 'Nothing matches.' : `No ${label.toLowerCase()} yet.`}</p>
+        <p className="empty">{filtered ? 'Nothing matches.' : `No ${label.toLowerCase()} yet.`}</p>
       )}
 
       {visible.length > 0 && layout === 'list' && <ListLayout {...shown} />}
       {visible.length > 0 && layout === 'table' && <TableLayout {...shown} />}
       {layout === 'board' && !group && (
-        <p style={styles.emptyState}>
+        <p className="empty">
           A board makes a column for each option of a choice field — like a status of To do, Doing and Done.{' '}
           {label} has no field like that yet{redefine.may ? ' — add one with Edit definition' : ''}.
         </p>
@@ -298,25 +267,25 @@ export function CollectionView({
       {visible.length > 0 && layout === 'board' && group && <BoardLayout {...shown} field={group} />}
 
       {page && (cursors.length > 1 || page.next) && (
-        <nav
-          aria-label="Pages"
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}
-        >
-          <span style={styles.quiet}>
+        <nav aria-label="Pages" className="row" data-spread>
+          <small>
             {visible.length ? `${from + 1}–${from + visible.length}` : 'None'}
             {!filtered && collection ? ` of ${collection.records}` : ''}
-          </span>
-          <div style={hstack(8)}>
-            <QuietButton onClick={() => setCursors(cursors.slice(0, -1))} disabled={cursors.length <= 1}>
-              ← Previous
-            </QuietButton>
-            <QuietButton
-              onClick={() => page.next && setCursors([...cursors, page.next])}
-              disabled={!page.next}
-            >
-              Next →
-            </QuietButton>
-          </div>
+          </small>
+          <button
+            data-intent="ghost"
+            onClick={() => setCursors(cursors.slice(0, -1))}
+            disabled={cursors.length <= 1}
+          >
+            ← Previous
+          </button>
+          <button
+            data-intent="ghost"
+            onClick={() => page.next && setCursors([...cursors, page.next])}
+            disabled={!page.next}
+          >
+            Next →
+          </button>
         </nav>
       )}
     </section>
@@ -341,7 +310,11 @@ function QuickAdd({
   const noun = label.toLowerCase();
 
   if (!title) {
-    return <AddButton onClick={() => onMore({})}>+ New {noun}</AddButton>;
+    return (
+      <button data-intent="primary" className={styles.start} onClick={() => onMore({})}>
+        + New {noun}
+      </button>
+    );
   }
   return (
     <form
@@ -358,25 +331,20 @@ function QuickAdd({
           setText('');
         });
       }}
-      style={stack(6)}
+      className="stack"
     >
-      <div style={hstack(8)}>
+      <div className="row">
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder={`Add ${noun}…`}
           aria-label={`Add ${noun}`}
-          style={{ ...styles.input, flex: 1 }}
         />
-        <QuietButton
-          type="button"
-          onClick={() => onMore(text.trim() ? { [title]: text.trim() } : {})}
-          style={{ height: 40 }}
-        >
+        <button type="button" onClick={() => onMore(text.trim() ? { [title]: text.trim() } : {})}>
           More fields
-        </QuietButton>
+        </button>
       </div>
-      {error && <p style={styles.error}>{error}</p>}
+      {error && <p role="alert">{error}</p>}
     </form>
   );
 }
@@ -399,32 +367,12 @@ function ListLayout({ rows, schema, computed, people, space, onOpen }: Shown) {
   const check = checkField(schema) ?? computed.find((f) => f.kind === 'boolean') ?? null;
   const meta = [...metaFields(schema), ...shortOf(computed).filter((f) => f !== check)];
   return (
-    <div
-      role="list"
-      style={{
-        border: `1px solid ${palette.surface.rule}`,
-        borderRadius: palette.radius.lg,
-        overflow: 'hidden',
-      }}
-    >
-      {rows.map(({ record, linked }, i) => {
+    <ul role="list">
+      {rows.map(({ record, linked }) => {
         const body = bodyOf(record);
         const done = check ? valueOf(record, check) === true : false;
         return (
-          <div
-            key={record.key}
-            role="listitem"
-            data-row
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              padding: '12px 16px',
-              borderTop: i === 0 ? 'none' : `1px solid ${palette.surface.line}`,
-              cursor: 'pointer',
-            }}
-            onClick={() => onOpen(record)}
-          >
+          <li key={record.key} className="row">
             {check && (
               <Check
                 checked={done}
@@ -435,25 +383,17 @@ function ListLayout({ rows, schema, computed, people, space, onOpen }: Shown) {
                 }
               />
             )}
-            <div style={{ flex: 1, minWidth: 0, ...stack(4) }}>
-              <span
-                style={{
-                  ...ui.ellipsis,
-                  fontSize: 14,
-                  fontWeight: 500,
-                  color: done ? palette.ink.faint : palette.ink.strong,
-                  textDecoration: done ? 'line-through' : 'none',
-                }}
-              >
-                {recordLabel(record, schema)}
+            <button data-intent="open" className="row" data-spread onClick={() => onOpen(record)}>
+              <span className="stack" data-gap="tight">
+                <strong>{done ? <s>{recordLabel(record, schema)}</s> : recordLabel(record, schema)}</strong>
+                <Meta record={record} fields={meta} linked={linked} />
               </span>
-              <Meta record={record} fields={meta} linked={linked} />
-            </div>
-            <Signals record={record} people={people} />
-          </div>
+              <Signals record={record} people={people} />
+            </button>
+          </li>
         );
       })}
-    </div>
+    </ul>
   );
 }
 
@@ -482,7 +422,6 @@ function Check({
         setShown(next);
         void onChange(next).catch(() => setShown(!next));
       }}
-      style={{ width: 16, height: 16, accentColor: palette.accent.base, flexShrink: 0 }}
     />
   );
 }
@@ -490,47 +429,40 @@ function Check({
 function TableLayout({ rows, schema, computed, onOpen }: Shown) {
   const columns = [...columnsOf(schema), ...shortOf(computed)];
   return (
-    <div style={ui.tableBox}>
-      <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 14 }}>
+    <div className={table.table}>
+      <table>
         <thead>
           <tr>
             {columns.length ? (
               columns.map((c) => (
-                <th key={c.name} style={ui.th} title={isComputed(c) ? COMPUTED_HINT : undefined}>
+                <th key={c.name} title={isComputed(c) ? COMPUTED_HINT : undefined}>
                   {c.label}
-                  {isComputed(c) && <span style={{ color: palette.ink.faint, fontWeight: 400 }}> ƒ</span>}
+                  {isComputed(c) && ' ƒ'}
                 </th>
               ))
             ) : (
-              <th style={ui.th}>Record</th>
+              <th>Record</th>
             )}
-            <th style={ui.th}>By</th>
-            <th style={{ ...ui.th, textAlign: 'right' }}>Added</th>
+            <th>By</th>
+            <th>Added</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className={table.opens}>
           {rows.map(({ record, linked }) => (
-            <tr
-              key={record.key}
-              onClick={() => onOpen(record)}
-              style={{ cursor: 'pointer' }}
-              aria-label={recordLabel(record, schema)}
-            >
+            <tr key={record.key} onClick={() => onOpen(record)} aria-label={recordLabel(record, schema)}>
               {columns.length ? (
                 columns.map((c) => (
-                  <td key={c.name} style={ui.td}>
+                  <td key={c.name}>
                     <Value field={c} value={valueOf(record, c)} linked={linked} compact />
                   </td>
                 ))
               ) : (
-                <td style={ui.td}>{recordLabel(record, schema)}</td>
+                <td>{recordLabel(record, schema)}</td>
               )}
-              <td style={{ ...ui.td, color: palette.ink.muted, whiteSpace: 'nowrap' }}>
+              <td>
                 <Person did={record.createdBy ?? record.root} />
               </td>
-              <td style={{ ...ui.td, color: palette.ink.muted, textAlign: 'right', whiteSpace: 'nowrap' }}>
-                {ago(record.createdAt)}
-              </td>
+              <td>{ago(record.createdAt)}</td>
             </tr>
           ))}
         </tbody>
@@ -564,16 +496,7 @@ function BoardLayout({ rows, schema, computed, field, people, space, onOpen }: S
   };
 
   return (
-    <div
-      style={{
-        display: 'grid',
-        gridAutoFlow: 'column',
-        gridAutoColumns: 'minmax(220px, 1fr)',
-        gap: 12,
-        overflowX: 'auto',
-        paddingBottom: 4,
-      }}
-    >
+    <div className="lanes">
       {columns
         .filter((c) => c.id !== 'none' || rows.some((r) => columnOf(r) === 'none'))
         .map((column) => {
@@ -582,7 +505,7 @@ function BoardLayout({ rows, schema, computed, field, people, space, onOpen }: S
             <Lane
               key={column.id}
               aria-label={`Column ${column.label}`}
-              name={<span>{column.label}</span>}
+              name={column.label}
               count={cards.length}
               over={over === column.id}
               onDragOver={(e) => {
@@ -596,22 +519,21 @@ function BoardLayout({ rows, schema, computed, field, people, space, onOpen }: S
                 setOver(null);
                 move(e.dataTransfer.getData('text/plain'), column.value);
               }}
-              style={{ minHeight: 120 }}
             >
               {cards.map(({ record, linked }) => (
-                <Card
+                <button
                   key={record.key}
+                  type="button"
+                  data-intent="open"
                   draggable={space.writable}
                   onDragStart={(e) => e.dataTransfer.setData('text/plain', record.key)}
                   onClick={() => onOpen(record)}
                   aria-label={recordLabel(record, schema)}
                 >
-                  <span style={{ fontWeight: 500, color: palette.ink.strong }}>
-                    {recordLabel(record, schema)}
-                  </span>
+                  <strong>{recordLabel(record, schema)}</strong>
                   <Meta record={record} fields={meta} linked={linked} />
                   <Signals record={record} people={people} />
-                </Card>
+                </button>
               ))}
             </Lane>
           );
@@ -650,23 +572,20 @@ function Meta({
       continue;
     const shown = labelOf(f, value, linked) ?? (Array.isArray(value) ? value.join(', ') : textOf(value));
     parts.push(
-      <span key={f.name} style={{ fontSize: 12, color: palette.ink.muted }}>
-        <span style={{ color: palette.ink.faint }} title={isComputed(f) ? COMPUTED_HINT : undefined}>
-          {f.label}
-        </span>{' '}
-        {shown}
-      </span>,
+      <small key={f.name}>
+        <span title={isComputed(f) ? COMPUTED_HINT : undefined}>{f.label}</span> {shown}
+      </small>,
     );
   }
   for (const t of tags) {
     parts.push(
-      <span key={t.key} style={{ ...chip, height: 20, fontSize: 11 }}>
+      <span key={t.key} className="tag">
         #{tagLabel(t)}
       </span>,
     );
   }
   if (parts.length === 0) return null;
-  return <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>{parts}</div>;
+  return <span className="row">{parts}</span>;
 }
 
 /** Reactions, comment count, who and when — the right-hand side of a row */
@@ -674,25 +593,13 @@ function Signals({ record, people }: { record: QueryRecord; people: People }) {
   const reactions = reactionSummary(record.included?.reactions);
   const comments = typeof record.included?.comments === 'number' ? record.included.comments : 0;
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        fontSize: 12,
-        color: palette.ink.muted,
-        flexShrink: 0,
-      }}
-    >
+    <small className="row">
       {reactions && <span>{reactions}</span>}
       {comments > 0 && <span aria-label={`${comments} comments`}>💬 {comments}</span>}
-      <span
-        style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-        title={nameOf(record.createdBy ?? record.root, people)}
-      >
+      <span className="row" data-gap="tight" title={nameOf(record.createdBy ?? record.root, people)}>
         <PersonFace did={record.createdBy ?? record.root ?? record.author} size={18} />
         {ago(record.createdAt)}
       </span>
-    </div>
+    </small>
   );
 }

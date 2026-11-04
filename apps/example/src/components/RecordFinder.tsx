@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import type { NodeCollection, NodeRecord } from '@minca/core';
 import { useLive } from '@minca/react';
 import { collectionLabel, recordLabel } from '../derive/schema-ui';
-import { styles, palette, ui } from '../styles';
 
 /**
  * Records in a space to choose one of, newest first, found by what they say
@@ -65,41 +64,23 @@ export function RecordFinder({
         }}
         placeholder={placeholder}
         aria-label="Find a record"
-        style={styles.input}
       />
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <div className="stack" data-gap="tight">
         {candidates.map((r) => (
           <button
             key={r.key}
             type="button"
+            data-intent="open"
             disabled={disabled}
             onClick={() => onPick(r)}
-            data-row
-            style={pickRow}
+            className="row"
           >
-            <span style={{ ...styles.faint, ...ui.ellipsis, width: 90, flexShrink: 0 }}>
-              {kindOf(r.collection)}
-            </span>
-            <span style={{ ...ui.ellipsis, flex: 1, minWidth: 0 }}>{labelOf(r)}</span>
+            <small>{kindOf(r.collection)}</small>
+            <span className="truncate">{labelOf(r)}</span>
           </button>
         ))}
-        {candidates.length === 0 && (
-          <span style={{ fontSize: 13, color: palette.ink.faint, padding: 6 }}>Nothing found.</span>
-        )}
+        {candidates.length === 0 && <small>Nothing found.</small>}
       </div>
     </>
   );
 }
-
-const pickRow = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 10,
-  padding: '8px 6px',
-  border: 'none',
-  borderRadius: palette.radius.md,
-  background: 'none',
-  textAlign: 'left' as const,
-  fontSize: 14,
-  width: '100%',
-};

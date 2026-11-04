@@ -1,0 +1,42 @@
+/* A small info icon in the text it explains, and what it opens floating under it */
+.info {
+  position: relative;
+
+  & > button {
+    display: inline-grid;
+    width: 22px;
+    min-height: 22px;
+    margin-left: 2px;
+    vertical-align: middle;
+
+    & > svg {
+      width: 15px;
+      height: 15px;
+    }
+  }
+
+  & > [role='note'] {
+    position: absolute;
+    z-index: 30;
+    top: 22px;
+    left: 0;
+    width: 260px;
+    /* A hint's own type, whether the "i" sits in a heading or a line of small print */
+    color: var(--color-text);
+    font: 400 var(--text-small) / 1.5 var(--font-body);
+    letter-spacing: normal;
+    text-align: left;
+    padding: 12px 14px;
+    border: 1px solid var(--color-outline);
+    border-radius: var(--radius);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-float);
+
+    /* Anchored near an edge it could run off a phone: pinned to the bottom, it always fits. */
+    @media (max-width: 640px) {
+      position: fixed;
+      inset: auto 16px calc(16px + env(safe-area-inset-bottom));
+      width: auto;
+    }
+  }
+}

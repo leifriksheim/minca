@@ -1,6 +1,6 @@
 import { createRootRoute, createRoute, createRouter, Outlet, redirect } from '@tanstack/react-router';
 import { Home } from './pages/Home';
-import { Developers } from './pages/Site';
+import { Developers } from './pages/Developers';
 import { Protocol } from './pages/Protocol';
 import { Extension } from './pages/Extension';
 import { Download } from './pages/Download';

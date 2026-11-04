@@ -5,10 +5,9 @@ import { Modal } from '@minca/app-shared/Modal';
 import type { Assembly, MyDelegation, TopicView } from './model';
 import { EVERYTHING, delegation } from './schema';
 import { follow, type DelegationEdge, type Next } from './tally';
-import { PartyChip, PartyMark, PathView, Problem, TopicChip, Who, decidesText } from './ui';
+import { Faces, PartyChip, PartyMark, PathView, Problem, TopicChip, Who, decidesText } from './ui';
 import { useAction } from '@minca/app-shared/action';
-import { styles, hstack, stack } from '@minca/app-shared/styles';
-import { palette } from './styles';
+import styles from './Delegations.module.css';
 
 /** Where someone's vote would go on a topic if nobody voted: the chain of trust alone */
 function chainFor(
@@ -47,19 +46,17 @@ export function Delegations({ a, writable }: { a: Assembly; writable: boolean })
   const [picking, setPicking] = useState<{ topic: string; label: string } | null>(null);
 
   return (
-    <div style={stack(28)}>
-      <section className="lq-rise" style={stack(6)}>
-        <h2 className="lq-display" style={{ fontSize: 26 }}>
-          Who votes when you don’t
-        </h2>
-        <p className="lq-muted" style={{ fontSize: 14.5, lineHeight: 1.55, maxWidth: 600 }}>
+    <div className="stack" data-gap="loose">
+      <section className="stack">
+        <h2>Who votes when you don’t</h2>
+        <p>
           Trust someone with a topic. When they vote on a proposal you haven’t, your device casts the same
           vote for you, signed by you. Vote first and yours counts instead. Votes are final, but you can move
           or take back your trust at any time, for proposals still to come.
         </p>
       </section>
 
-      <section className="lq-card">
+      <ul role="list">
         {topicRows(a).map(({ key, topic }) => (
           <TrustRow
             key={key}
@@ -70,7 +67,7 @@ export function Delegations({ a, writable }: { a: Assembly; writable: boolean })
             onPick={() => setPicking({ topic: key, label: topic?.name ?? 'everything' })}
           />
         ))}
-      </section>
+      </ul>
 
       <TrustedBy a={a} />
 
@@ -107,31 +104,19 @@ function TrustRow({
   const outcome = chainFor(a, a.me, topic ? topicKey : null);
 
   return (
-    <div className="lq-row" style={{ alignItems: 'flex-start', padding: '16px 18px', flexWrap: 'wrap' }}>
-      <div style={{ width: 150, flexShrink: 0, paddingTop: 2 }}>
-        {topic ? (
-          <TopicChip topic={topic} />
-        ) : (
-          <span
-            className="lq-chip"
-            style={{ fontWeight: 600, borderColor: palette.surface.rule, color: palette.ink.strong }}
-          >
-            Everything
-          </span>
-        )}
+    <li className={styles.trust}>
+      <div className={styles.topic}>
+        {topic ? <TopicChip topic={topic} /> : <span className="tag">Everything</span>}
       </div>
-      <div style={{ flex: 1, minWidth: 200, ...stack(6) }}>
+      <div className="stack">
         {mine ? (
           <Target a={a} d={mine} />
         ) : fallback ? (
-          <span
-            className="lq-muted"
-            style={{ fontSize: 13.5, display: 'inline-flex', gap: 6, alignItems: 'center' }}
-          >
+          <span className="row" data-gap="tight">
             Same as everything: <Target a={a} d={fallback} />
           </span>
         ) : (
-          <span className="lq-muted" style={{ fontSize: 13.5 }}>
+          <span>
             {topic ? 'Nobody. You vote on this yourself.' : 'Nobody. You vote on everything yourself.'}
           </span>
         )}
@@ -139,15 +124,11 @@ function TrustRow({
         <Problem>{action.error}</Problem>
       </div>
       {writable && (
-        <div style={hstack(6)}>
-          <button className="lq-btn" data-variant="quiet" data-size="sm" onClick={onPick}>
-            {mine ? 'Change' : 'Trust someone'}
-          </button>
+        <div className="row" data-gap="tight">
+          <button onClick={onPick}>{mine ? 'Change' : 'Trust someone'}</button>
           {mine && (
             <button
-              className="lq-btn"
-              data-variant="ghost"
-              data-size="sm"
+              data-intent="ghost"
               disabled={action.busy}
               onClick={() => void action.run(() => node.records.delete(a.spaceId, mine.key))}
             >
@@ -156,21 +137,21 @@ function TrustRow({
           )}
         </div>
       )}
-    </div>
+    </li>
   );
 }
 
 function Target({ a, d }: { a: Assembly; d: MyDelegation }) {
   if (d.kind === 'party') {
     const party = a.partyOf(d.to);
-    return party ? <PartyChip party={party} /> : <span className="lq-faint">A party that’s gone</span>;
+    return party ? <PartyChip party={party} /> : <small>A party that’s gone</small>;
   }
   const member = a.members.some((m) => m.did === d.to);
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 500 }}>
+    <span className="row">
       <Who did={d.to} a={a} size={22} />
       {!member && (
-        <span className="lq-chip" style={{ color: palette.accent.danger }}>
+        <span className="tag" data-tone="danger">
           left the assembly
         </span>
       )}
@@ -183,20 +164,18 @@ function ChainNote({ a, next }: { a: Assembly; next: Next }) {
   if (next.kind !== 'wait') return null;
   if (next.how === 'loop')
     return (
-      <div className="lq-note" data-tone="warn" style={{ fontSize: 12.5 }}>
-        <div style={stack(6)}>
-          <PathView path={next.path} a={a} from={a.me} />
-          <span>
-            This comes back round to you. Unless someone on it votes themselves, nobody does: nothing is ever
-            copied round a loop.
-          </span>
-        </div>
-      </div>
+      <aside className="stack" data-tone="warn">
+        <PathView path={next.path} a={a} from={a.me} />
+        <span>
+          This comes back round to you. Unless someone on it votes themselves, nobody does: nothing is ever
+          copied round a loop.
+        </span>
+      </aside>
     );
   if (next.path.length < 2) return null;
   return (
-    <div className="lq-muted" style={{ fontSize: 12.5, ...stack(4) }}>
-      <span>When they follow someone too, it goes on:</span>
+    <div className="stack" data-gap="tight">
+      <small>When they follow someone too, it goes on:</small>
       <PathView path={next.path} a={a} from={a.me} />
     </div>
   );
@@ -231,37 +210,31 @@ function TrustedBy({ a }: { a: Assembly }) {
   }, [a]);
 
   return (
-    <section style={stack(10)}>
-      <p className="lq-section-title">Who trusts you</p>
+    <section>
+      <h3>Who trusts you</h3>
       {rows.length === 0 ? (
-        <p className="lq-faint" style={{ fontSize: 13.5 }}>
-          Nobody’s vote comes to you yet. When someone trusts you with a topic, it shows here.
-        </p>
+        <small>Nobody’s vote comes to you yet. When someone trusts you with a topic, it shows here.</small>
       ) : (
-        <div className="lq-card">
+        <ul role="list">
           {rows.map((row) => (
-            <div key={row.key} className="lq-row" style={{ flexWrap: 'wrap' }}>
-              <div style={{ width: 150, flexShrink: 0 }}>
+            <li key={row.key} className="row">
+              <div className={styles.topic}>
                 {row.topic ? (
                   <TopicChip topic={row.topic} />
                 ) : (
-                  <span className="lq-chip">{rows.length > 1 ? 'Everything else' : 'Everything'}</span>
+                  <span className="tag">{rows.length > 1 ? 'Everything else' : 'Everything'}</span>
                 )}
               </div>
-              <span className="lq-stack">
-                {row.direct.slice(0, 6).map((did) => (
-                  <Avatar key={did} did={did} size={22} />
-                ))}
-              </span>
-              <span className="lq-muted lq-num" style={{ fontSize: 13 }}>
+              <Faces dids={row.direct.slice(0, 6)} />
+              <small>
                 {row.through} {row.through === 1 ? 'vote follows' : 'votes follow'} yours when they don’t vote
                 {row.through > row.direct.length
                   ? `, ${row.direct.length} from people who trust you directly`
                   : ''}
-              </span>
-            </div>
+              </small>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </section>
   );
@@ -302,27 +275,20 @@ function Picker({
 
   return (
     <Modal title={`Who do you trust with ${label}?`} onClose={onClose} width={480}>
-      <div role="tablist" style={styles.segmented}>
+      <div role="tablist">
         {(['person', 'party'] as const).map((k) => (
-          <button
-            key={k}
-            role="tab"
-            aria-selected={kind === k}
-            onClick={() => setKind(k)}
-            style={kind === k ? styles.segmentActive : styles.segment}
-          >
+          <button key={k} role="tab" aria-selected={kind === k} onClick={() => setKind(k)}>
             {k === 'person' ? `A person (${a.members.length - 1})` : `A party (${a.parties.length})`}
           </button>
         ))}
       </div>
       <input
-        className="lq-input"
         value={search}
         onChange={(event) => setSearch(event.target.value)}
         placeholder={kind === 'person' ? 'Search people' : 'Search parties'}
         aria-label="Search"
       />
-      <div style={{ ...stack(2), maxHeight: 340, overflowY: 'auto', margin: '0 -6px' }}>
+      <div className={styles.picks}>
         {kind === 'person' &&
           people.map((m) => {
             const n = trustCount(m.did);
@@ -331,15 +297,15 @@ function Picker({
             return (
               <button
                 key={m.did}
-                className="lq-pick"
-                aria-pressed={current?.kind === 'person' && current.to === m.did}
+                data-intent="open"
+                aria-current={current?.kind === 'person' && current.to === m.did}
                 disabled={action.busy}
                 onClick={() => pick(m.did)}
               >
                 <Avatar did={m.did} size={32} />
-                <span style={{ flex: 1, minWidth: 0, ...stack(2) }}>
-                  <span style={{ fontWeight: 500 }}>{a.name(m.did)}</span>
-                  <span className="lq-faint" style={{ fontSize: 12 }}>
+                <span className="stack" data-gap="tight">
+                  <strong>{a.name(m.did)}</strong>
+                  <small>
                     {[
                       loops ? 'trusts you back: a loop' : '',
                       theirParties.map((p) => p.name).join(', '),
@@ -347,7 +313,7 @@ function Picker({
                     ]
                       .filter(Boolean)
                       .join(' · ') || m.role}
-                  </span>
+                  </small>
                 </span>
               </button>
             );
@@ -356,40 +322,33 @@ function Picker({
           parties.map((p) => (
             <button
               key={p.key}
-              className="lq-pick"
-              aria-pressed={current?.kind === 'party' && current.to === p.key}
+              data-intent="open"
+              aria-current={current?.kind === 'party' && current.to === p.key}
               disabled={action.busy}
               onClick={() => pick(p.key)}
             >
               <PartyMark party={p} size={32} />
-              <span style={{ flex: 1, minWidth: 0, ...stack(2) }}>
-                <span style={{ fontWeight: 500 }}>{p.name}</span>
-                <span
-                  className="lq-faint"
-                  style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                >
+              <span className="stack" data-gap="tight">
+                <strong>{p.name}</strong>
+                <small className="truncate">
                   {decidesText(a, p)}
                   {p.platform ? ` · ${p.platform}` : ''}
-                </span>
+                </small>
               </span>
             </button>
           ))}
         {kind === 'person' && people.length === 0 && (
-          <p className="lq-faint" style={{ padding: 10, fontSize: 13 }}>
-            {q ? 'Nobody by that name.' : 'Nobody else is here yet. Invite someone first.'}
-          </p>
+          <small>{q ? 'Nobody by that name.' : 'Nobody else is here yet. Invite someone first.'}</small>
         )}
         {kind === 'party' && parties.length === 0 && (
-          <p className="lq-faint" style={{ padding: 10, fontSize: 13 }}>
-            {q ? 'No party by that name.' : 'No parties yet. Anyone can start one under People.'}
-          </p>
+          <small>{q ? 'No party by that name.' : 'No parties yet. Anyone can start one under People.'}</small>
         )}
       </div>
       {kind === 'party' && (
-        <p className="lq-faint" style={{ fontSize: 12, lineHeight: 1.5 }}>
+        <small>
           A party takes a position once enough of its members vote the same way themselves, or its
           representative votes, as the party decides. Your device then casts that vote for you.
-        </p>
+        </small>
       )}
       <Problem>{action.error}</Problem>
     </Modal>

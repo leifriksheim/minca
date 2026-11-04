@@ -189,7 +189,10 @@
     {
       "files": ["**/*.{jsx,tsx}"],
       "rules": {
-        "react/react-in-jsx-scope": "off"
+        "react/react-in-jsx-scope": "off",
+        // Looks live in CSS (packages/ui/css and each component's module), not inline. A value computed
+        // from data is the exception, said so on its line.
+        "react/forbid-dom-props": ["error", { "forbid": ["style"] }]
       },
       "plugins": ["react"]
     },

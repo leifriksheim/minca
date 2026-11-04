@@ -1,0 +1,362 @@
+/* The things a screen shows: one thing, a list of them, a label, a notice, nothing yet. */
+
+/* One thing (a record, a card) standing on the page, outlined */
+article {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+  padding: 14px 16px;
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-surface);
+  background: var(--color-surface);
+}
+
+/* A list of things: one surface, rows divided by lines. A row that opens something is a button with data-intent="open". */
+ul[role='list'],
+ol[role='list'] {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-surface);
+  background: var(--color-surface);
+
+  & > li {
+    padding: 10px 16px;
+
+    & + li {
+      border-top: 1px solid var(--color-divider);
+    }
+
+    &:has(> button[data-intent='open']:only-child) {
+      padding: 0;
+    }
+
+    /* Beside a tick or a face, a row's open button is its text, not a box of its own */
+    & :not(li) > button[data-intent='open'],
+    & > button[data-intent='open']:not(:only-child) {
+      padding: 0;
+      border: none;
+      background: none;
+    }
+
+    & > button[data-intent='open']:only-child {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 0;
+
+      &:hover:not(:disabled) {
+        background: var(--color-sunken);
+      }
+    }
+
+    /* A field in a row (adding one, renaming one) is the row's text: the row is its box */
+    & :is(input:not([type='checkbox'], [type='radio']), textarea) {
+      min-height: 0;
+      padding: 0;
+      border: none;
+      background: none;
+      outline: none;
+    }
+  }
+}
+
+/*
+ * A thing's picture, the same shape for every one (the kit's Cover draws one):
+ * a photo or video covers it, labels and buttons sit along its top, and an
+ * emoji alone sits in its middle. data-wide: a banner, twice as wide as tall.
+ */
+figure {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space);
+  aspect-ratio: 4 / 3;
+  margin: 0;
+  padding: var(--space);
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--color-sunken);
+
+  &[data-wide] {
+    aspect-ratio: 2 / 1;
+  }
+
+  & > :is(img, video) {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  & > :not(img, video, svg) {
+    position: relative;
+  }
+
+  & > span:only-child {
+    margin: auto;
+    font-size: var(--text-heading-1);
+  }
+
+  & > .tag:not([data-tone]) {
+    background: var(--color-surface);
+  }
+}
+
+/* Pictures swiped through one at a time */
+[aria-roledescription='carousel'] {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+
+  & > * {
+    flex: 0 0 100%;
+    scroll-snap-align: center;
+  }
+}
+
+/* A month: a week to a line, the days ruled apart, the one picked outlined. A day shows its tags where
+   there is room, and its .row (a dot for each) on a phone. */
+[role='grid'] {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-surface);
+  background: var(--color-divider);
+
+  & > * {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-tight);
+    min-width: 0;
+    padding: var(--space-tight);
+    background: var(--color-surface);
+  }
+}
+
+[role='gridcell'] {
+  aspect-ratio: 1;
+  cursor: pointer;
+
+  &[aria-selected='true'] {
+    box-shadow: inset 0 0 0 2px var(--color-action);
+  }
+
+  @media (max-width: 560px) {
+    & > .tag {
+      display: none;
+    }
+  }
+
+  @media (min-width: 561px) {
+    & > .row {
+      display: none;
+    }
+  }
+}
+
+/* What can be done to the thing it is in: shown while it is pointed at or focused, always on a touchscreen */
+[data-actions] {
+  display: flex;
+  gap: 2px;
+}
+
+@media (hover: hover) {
+  :has(> [data-actions]) {
+    position: relative;
+  }
+
+  [data-actions] {
+    position: absolute;
+    top: 0;
+    right: 0;
+    border-radius: var(--radius-control);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-float);
+  }
+
+  :not(:hover, :focus-within) > [data-actions] {
+    display: none;
+  }
+}
+
+/* A list inside a card or a dialog is part of it: rows divided by lines, no box of its own */
+:is(article, dialog) :is(ul, ol)[role='list'] {
+  border: none;
+  border-radius: 0;
+  background: none;
+
+  & > li {
+    padding-inline: 0;
+  }
+}
+
+/* Rows and columns of data: a header row, rows divided by lines */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-small);
+
+  & :is(th, td) {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--color-divider);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  /* A column's name; a row's name reads as the row does */
+  & thead th {
+    color: var(--color-text-muted);
+    font-size: var(--text-small);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+}
+
+/* Text kept as written: code, a query, a long value */
+pre {
+  margin: 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  border-radius: var(--radius);
+  background: var(--color-sunken);
+  font: var(--text-small) / 1.5 var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Something folded away: its summary opens it */
+details > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space);
+  list-style: none;
+  cursor: pointer;
+
+  &::-webkit-details-marker {
+    display: none;
+  }
+
+  &::after {
+    content: '›';
+    color: var(--color-text-muted);
+    transition: transform 0.15s ease;
+  }
+}
+
+details[open] > summary::after {
+  transform: rotate(90deg);
+}
+
+/* A short label: a count, a status, a category */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-tight);
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: var(--radius-control);
+  background: var(--color-sunken);
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* A notice beside the content */
+aside {
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: var(--color-sunken);
+  color: var(--color-text);
+}
+
+/* State: the text of anything, and the ground of a tag or a notice */
+[data-tone='good'] {
+  color: var(--color-good);
+}
+[data-tone='warn'] {
+  color: var(--color-warn);
+}
+[data-tone='danger'] {
+  color: var(--color-danger);
+}
+
+:is(.tag, aside) {
+  &[data-tone='good'] {
+    background: var(--color-good-soft);
+    color: var(--color-good);
+  }
+
+  &[data-tone='warn'] {
+    background: var(--color-warn-soft);
+    color: var(--color-warn);
+  }
+
+  &[data-tone='danger'] {
+    background: var(--color-danger-soft);
+    color: var(--color-danger);
+  }
+}
+
+/* A category's colour, 1 to 5: a tag or a card takes it as a tint, anything else reads var(--hue). */
+[data-hue='1'] {
+  --hue: var(--color-hue-1);
+}
+[data-hue='2'] {
+  --hue: var(--color-hue-2);
+}
+[data-hue='3'] {
+  --hue: var(--color-hue-3);
+}
+[data-hue='4'] {
+  --hue: var(--color-hue-4);
+}
+[data-hue='5'] {
+  --hue: var(--color-hue-5);
+}
+
+.tag[data-hue] {
+  background: color-mix(in srgb, var(--hue) 28%, var(--color-page));
+  color: var(--color-text-strong);
+}
+
+article[data-hue] {
+  background: color-mix(in srgb, var(--hue) 14%, var(--color-page));
+}
+
+progress,
+meter {
+  width: 100%;
+  height: 8px;
+  accent-color: var(--color-action);
+}
+
+/* Nothing here yet (the kit's Empty draws one with its shape) */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space);
+  padding: 48px 20px;
+  text-align: center;
+
+  & > svg {
+    margin-bottom: var(--space);
+  }
+
+  & > p:not([role]) {
+    max-width: 300px;
+    color: var(--color-text-muted);
+  }
+
+  & > :is(button, form) {
+    margin-top: var(--space);
+  }
+}

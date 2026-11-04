@@ -18,9 +18,9 @@ import {
   useOffer,
 } from './HostOffer';
 import { ChipIn, RemindMe, dollars, lastsFor, perReply } from './Payment';
-import { Benefit, FeatureIcon, Glyph, shortDate, timeLeft, type Tone } from './Feature';
+import { Icon } from './Icon';
+import { Benefit, FeatureIcon, shortDate, timeLeft, type Tone } from './Feature';
 import { useAction } from './action';
-import { styles, palette, hstack, stack } from './styles';
 
 /** A GB as hosts count it, 10⁹ bytes: a community's fund pays for one at least */
 const GB = 1e9;
@@ -147,19 +147,9 @@ export function SpaceHosting({ spaceId, writable }: { spaceId: string; writable:
     look();
   };
   return (
-    <section aria-label="Always online" style={stack(10)}>
-      <h3 style={styles.sectionTitle}>Always online</h3>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 14,
-          flexWrap: 'wrap',
-          padding: 14,
-          borderRadius: 12,
-          border: `1px solid ${palette.surface.line}`,
-        }}
-      >
+    <section aria-label="Always online" className="stack">
+      <h3>Always online</h3>
+      <article className="row" data-gap="loose">
         <HostStatusRow
           size={36}
           name={hosts === null ? 'Asking the host…' : host ? host.name : 'Online only while someone is'}
@@ -175,31 +165,30 @@ export function SpaceHosting({ spaceId, writable }: { spaceId: string; writable:
           }
         >
           {host?.error && (
-            <button onClick={look} disabled={looking} data-variant="quiet" style={styles.smallButton}>
+            <button onClick={look} disabled={looking}>
               {looking ? 'Asking…' : 'Try again'}
             </button>
           )}
           {host?.fund && (
             <button
               onClick={() => setDialog('keep')}
-              data-variant={needsFunding(host) ? 'primary' : 'quiet'}
-              style={needsFunding(host) ? styles.darkSmall : styles.smallButton}
+              data-intent={needsFunding(host) ? 'primary' : undefined}
             >
               {needsFunding(host) ? 'Add to the fund' : 'Chip in'}
             </button>
           )}
           {host && mayChoose && (
-            <button onClick={() => setDialog('stop')} data-variant="danger" style={styles.smallButton}>
+            <button onClick={() => setDialog('stop')} data-intent="danger">
               Remove
             </button>
           )}
           {hosts !== null && !host && mayChoose && (
-            <button onClick={() => setDialog('keep')} data-variant="primary" style={styles.darkSmall}>
+            <button onClick={() => setDialog('keep')} data-intent="primary">
               Turn on
             </button>
           )}
         </HostStatusRow>
-      </div>
+      </article>
       {outgrown.length > 0 && !funded && (
         <Outgrown
           over={outgrown}
@@ -250,38 +239,25 @@ function Outgrown({
   const first = over.reduce((soonest, one) => (one.over.until < soonest.over.until ? one : soonest));
   const ahead = stillFree(first.over);
   return (
-    <div
-      role="status"
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 14,
-        flexWrap: 'wrap',
-        padding: 14,
-        borderRadius: 12,
-        background: palette.surface.sunken,
-      }}
-    >
-      <div style={{ flex: 1, minWidth: 200, ...stack(4) }}>
-        <p style={{ fontSize: 14, fontWeight: 600, color: palette.ink.strong }}>
-          {ahead ? `Free until ${shortDate(first.over.until)}` : 'Outgrown free hosting'}
-        </p>
-        <p style={{ ...styles.quiet, lineHeight: 1.5 }}>
+    <aside role="status" className="row" data-gap="loose">
+      <div className="stack" data-gap="tight">
+        <strong>{ahead ? `Free until ${shortDate(first.over.until)}` : 'Outgrown free hosting'}</strong>
+        <small>
           {first.over.reasons.includes('writers')
             ? `More people write here than ${first.name} keeps for free.`
             : `This community is bigger than ${first.name} keeps for free.`}{' '}
           {ahead ? 'A fund keeps it online after that.' : 'A fund brings it back online.'}
           {usage ? ` ${usage.writers} wrote here in the last ${usage.windowDays} days.` : ''}
-        </p>
+        </small>
       </div>
       {mayStart ? (
-        <button onClick={onStart} data-variant="primary" style={styles.darkSmall}>
+        <button onClick={onStart} data-intent="primary">
           Start a fund
         </button>
       ) : (
-        <p style={styles.faint}>Whoever manages the space can start one.</p>
+        <small>Whoever manages the space can start one.</small>
       )}
-    </div>
+    </aside>
   );
 }
 
@@ -313,33 +289,30 @@ function StopHost({
   const newKey = mayManage && access?.key != null && (bots.length > 0 || handed);
   const balance = host.status?.balance ?? 0;
   const stop = () => void run(() => node.hosting.stopForSpace(spaceId, host.url).then(onStopped));
-  const said = { fontSize: 14, color: palette.ink.body, lineHeight: 1.5 };
   return (
-    <div style={stack(12)}>
-      <p style={said}>
+    <div className="stack">
+      <p>
         Members' devices stop handing this community to {host.name}, so it is reachable only while one of them
         is online.
       </p>
       {bots.length > 0 && (
-        <p style={said}>
+        <p>
           {mayManage
             ? `${botNames} ${bots.length === 1 ? 'is' : 'are'} removed from the community: ${host.name} runs ${bots.length === 1 ? 'it' : 'them'}.`
             : `${botNames} ${bots.length === 1 ? 'stays' : 'stay'} until someone who manages the space removes ${bots.length === 1 ? 'it' : 'them'}: ${host.name} reads what ${bots.length === 1 ? 'it' : 'they'} can read.`}
         </p>
       )}
       {host.error && (
-        <p style={said}>
-          {host.name} can't be asked which bots it runs here. If it runs any, remove them under People.
-        </p>
+        <p>{host.name} can't be asked which bots it runs here. If it runs any, remove them under People.</p>
       )}
       {newKey && (
-        <p style={said}>
+        <p>
           The community gets a new key, so {host.name} can't follow it from here on. View-only links made
           before stop working.
         </p>
       )}
       {host.status?.carrying && (
-        <p style={said}>
+        <p>
           {host.fund
             ? `What ${host.name} already has stays there, unreadable, until the fund runs out.`
             : `What ${host.name} already has stays unreadable.`}
@@ -347,17 +320,12 @@ function StopHost({
         </p>
       )}
       {host.fund?.recurring && (
-        <p style={said}>
+        <p>
           A card that adds every month keeps being charged until whoever set it up stops it
           {host.fund.manage ? (
             <>
               {' '}
-              <a
-                href={host.fund.manage}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: palette.ink.strong }}
-              >
+              <a href={host.fund.manage} target="_blank" rel="noopener noreferrer">
                 at the payment provider
               </a>
             </>
@@ -422,28 +390,24 @@ export function KeepOnline({
   const balance = host?.status?.balance ?? 0;
   const settling = chosen !== null && !host;
   return (
-    <div style={stack(18)}>
+    <div className="stack" data-gap="loose">
       {hero && !stopping && (
-        <div style={{ ...hstack(14), alignItems: 'center' }}>
+        <div className="row" data-gap="loose">
           <FeatureIcon kind="online" size={44} />
-          <div style={{ minWidth: 0 }}>
-            <p style={{ fontSize: 16, fontWeight: 600, color: palette.ink.strong }}>
-              {host ? host.name : 'Around the clock'}
-            </p>
-            <p style={{ ...styles.quiet, overflowWrap: 'anywhere' }}>
+          <div className="stack" data-gap="tight">
+            <h3>{host ? host.name : 'Around the clock'}</h3>
+            <small>
               {host ? standing(host).line : 'Paid from a fund anyone in the community can add to'}
-            </p>
+            </small>
           </div>
         </div>
       )}
 
       {hosts === null || settling ? (
-        <p role="status" style={styles.quiet}>
-          One moment…
-        </p>
+        <small role="status">One moment…</small>
       ) : host && stopping ? (
         <>
-          <p style={{ fontSize: 16, fontWeight: 600, color: palette.ink.strong }}>Stop using {host.name}?</p>
+          <h3>Stop using {host.name}?</h3>
           <StopHost
             spaceId={spaceId}
             host={host}
@@ -460,7 +424,7 @@ export function KeepOnline({
       ) : !host ? (
         <>
           {hero && (
-            <ul style={{ listStyle: 'none', ...stack(10) }}>
+            <ul role="list">
               <Benefit glyph="clock">
                 Reachable when everyone is offline, so new members get in at once
               </Benefit>
@@ -469,11 +433,9 @@ export function KeepOnline({
             </ul>
           )}
           {!mayChoose ? (
-            <p style={styles.quiet}>Whoever manages this community can turn it on.</p>
+            <small>Whoever manages this community can turn it on.</small>
           ) : !offerAsked ? (
-            <p role="status" style={styles.quiet}>
-              One moment…
-            </p>
+            <small role="status">One moment…</small>
           ) : (
             <HostOfferPicker
               offer={offer}
@@ -494,11 +456,11 @@ export function KeepOnline({
         </>
       ) : host.error ? (
         <>
-          <p style={{ fontSize: 14, color: palette.ink.body, lineHeight: 1.5 }}>
+          <p>
             {host.name} couldn't be asked just now, so nothing can be paid or checked there. The community
             stays on its members' devices either way.
           </p>
-          <button onClick={look} disabled={looking} data-variant="primary" style={styles.button}>
+          <button onClick={look} disabled={looking} data-intent="primary">
             {looking ? 'Asking…' : 'Try again'}
           </button>
         </>
@@ -525,17 +487,12 @@ export function KeepOnline({
             }}
             onDone={onClose}
           />
-          <div style={{ ...hstack(16), justifyContent: 'center', flexWrap: 'wrap' }}>
+          <div className="row">
             {host.reminds && (
               <RemindMe remind={(email) => node.hosting.remindForSpace(spaceId, host.url, email)} />
             )}
             {host.fund.manage && (
-              <a
-                href={host.fund.manage}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ ...styles.linkButton, padding: 0, textDecoration: 'none' }}
-              >
+              <a href={host.fund.manage} target="_blank" rel="noopener noreferrer">
                 Stop adding every month
               </a>
             )}
@@ -544,26 +501,17 @@ export function KeepOnline({
       ) : (
         <>
           {!host.free && (
-            <p style={{ fontSize: 14, color: palette.ink.body, lineHeight: 1.5 }}>
-              {host.name} takes no payments from communities, so it can't keep this one online.
-            </p>
+            <p>{host.name} takes no payments from communities, so it can't keep this one online.</p>
           )}
-          <button onClick={onClose} data-variant="primary" style={styles.button}>
+          <button onClick={onClose} data-intent="primary">
             Done
           </button>
         </>
       )}
 
-      {problem && (
-        <p role="alert" style={styles.dangerText}>
-          {problem}
-        </p>
-      )}
+      {problem && <p role="alert">{problem}</p>}
       {host && mayChoose && !stopping && !settling && (
-        <button
-          onClick={() => setStopping(true)}
-          style={{ ...styles.linkButton, alignSelf: 'center', fontSize: 12, color: palette.ink.faint }}
-        >
+        <button onClick={() => setStopping(true)} data-intent="ghost">
           Stop using {host.name}
         </button>
       )}
@@ -592,27 +540,15 @@ function FundPaysFor({
   adding?: string;
 }) {
   const line = (key: string, label: string, price: string, note?: string) => (
-    <li key={key} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 14 }}>
-      <span
-        style={{
-          width: 20,
-          height: 20,
-          borderRadius: 10,
-          flexShrink: 0,
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: palette.accent.goodSoft,
-          color: palette.accent.good,
-        }}
-      >
-        <Glyph name="check" size={12} style={{ strokeWidth: 2 }} />
+    <li key={key} className="row" data-spread>
+      <span className="stack" data-gap="tight">
+        <span className="row" data-gap="tight">
+          <Icon name="check" />
+          {label}
+        </span>
+        {note && <small>{note}</small>}
       </span>
-      <span style={{ flex: 1, minWidth: 0, color: palette.ink.body }}>
-        {label}
-        {note && <span style={{ display: 'block', fontSize: 12, color: palette.ink.faint }}>{note}</span>}
-      </span>
-      <span style={{ ...styles.quiet, textAlign: 'right' }}>{price}</span>
+      <small>{price}</small>
     </li>
   );
   const lines = fund.lines ?? [];
@@ -630,11 +566,9 @@ function FundPaysFor({
       .filter(Boolean)
       .join(' · ') || undefined;
   return (
-    <div style={{ padding: '12px 14px', borderRadius: 10, background: palette.surface.sunken }}>
-      <p style={{ fontSize: 12, fontWeight: 500, color: palette.ink.muted, marginBottom: 8 }}>
-        This fund pays for
-      </p>
-      <ul style={styles.todoList}>
+    <aside className="stack">
+      <small>This fund pays for</small>
+      <ul role="list">
         {line(
           'hosting',
           'Always online, encrypted end to end',
@@ -661,9 +595,7 @@ function FundPaysFor({
           .filter((one) => one.for !== 'hosting' && one.for !== 'bots')
           .map((one, index) => line(`line-${index}`, one.name, one.price))}
       </ul>
-      <p style={{ ...styles.faint, marginTop: 10 }}>
-        Anyone in the community can chip in, once or every month.
-      </p>
-    </div>
+      <small>Anyone in the community can chip in, once or every month.</small>
+    </aside>
   );
 }

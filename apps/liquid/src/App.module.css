@@ -1,0 +1,24 @@
+/* Connecting, and picking a space: one narrow column, set down the page */
+.narrow {
+  max-width: 380px;
+  padding-top: 120px;
+
+  & > button {
+    align-self: stretch;
+  }
+
+  & > button[data-intent='ghost'] {
+    align-self: flex-start;
+  }
+}
+
+/* An assembly: wide enough for a proposal beside its count */
+.wide {
+  max-width: 960px;
+  padding-top: var(--space-section);
+  gap: var(--space-loose);
+
+  & > button {
+    align-self: flex-start;
+  }
+}

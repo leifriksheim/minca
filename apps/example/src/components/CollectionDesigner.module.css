@@ -1,0 +1,24 @@
+/* The form, and beside it on a wide screen a preview of what filling one in looks like */
+.designer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-section);
+  align-items: start;
+
+  @media (min-width: 1500px) {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+}
+
+.preview {
+  position: sticky;
+  top: 0;
+}
+
+.tile[aria-selected='true'] {
+  border-color: var(--color-outline);
+}
+
+.end {
+  margin-left: auto;
+}

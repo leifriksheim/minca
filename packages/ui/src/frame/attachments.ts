@@ -13,6 +13,7 @@ import { useBlob, useFile, useRecords } from './hooks';
 import { html } from './html';
 import { Modal } from './modal';
 import type { ScreenRecord } from './minca';
+import { Icon } from './shapes';
 
 const FILE = 'std.file';
 
@@ -87,7 +88,7 @@ export function Playable({ record }: { record: ScreenRecord<AttachmentBody> }) {
   >
     ${
       !url
-        ? html`<span class="faint">${video ? '▶' : '♪'} ${name} · ${sizeOf(size)}</span>`
+        ? html`<small>${video ? '▶' : '♪'} ${name} · ${sizeOf(size)}</small>`
         : video
           ? // #t: the first frame shows before it plays, in Safari too.
             html`<video
@@ -122,16 +123,16 @@ function Attachment({ record }: { record: ScreenRecord<AttachmentBody> }) {
         open &&
         html`<${Modal} title=${name} width=${960} onClose=${() => setOpen(false)}>
           <img class="lightbox" src=${whole ?? picture} alt=${name} />
-          <div class="row" style="justify-content: flex-end">
-            <span class="faint" style="flex: 1">${sizeOf(size)}</span>
+          <div class="row" data-spread>
+            <small>${sizeOf(size)}</small>
             <button type="button" onClick=${save}>Download</button>
           </div>
         <//>`
       }`;
   return html`<button type="button" class="attachment" title="Save it" onClick=${save}>
-    <span aria-hidden="true">📎</span>
-    <span class="ellipsis">${name}</span>
-    <span class="faint">${sizeOf(size)}</span>
+    <${Icon} name="attach" size=${16} />
+    <span class="truncate">${name}</span>
+    <small>${sizeOf(size)}</small>
   </button>`;
 }
 

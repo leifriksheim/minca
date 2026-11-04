@@ -3,7 +3,6 @@ import { useCan, useNode } from '@minca/react';
 import type { NodeRecord, SpaceSummary } from '@minca/core';
 import { tag } from '@minca/core/schemas';
 import { bodyOf } from '../../derive/schema-ui';
-import { palette } from '../../styles';
 
 /** A tag's label, if the record is one */
 export function tagLabel(r: NodeRecord): string {
@@ -39,7 +38,7 @@ export function Tags({
   };
 
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }} aria-label="Tags">
+    <div className="row" data-gap="tight" aria-label="Tags">
       {tags.map((t) => (
         <TagChip key={t.key} space={space} tag={t} />
       ))}
@@ -58,21 +57,10 @@ export function Tags({
               onBlur={add}
               placeholder="tag"
               aria-label="New tag"
-              style={{
-                height: 26,
-                width: 110,
-                padding: '0 8px',
-                border: `1px solid ${palette.surface.lineStrong}`,
-                borderRadius: palette.radius.pill,
-                fontSize: 12,
-              }}
             />
           </form>
         ) : (
-          <button
-            onClick={() => setAdding(true)}
-            style={{ ...chip, color: palette.ink.muted, background: 'none', borderStyle: 'dashed' }}
-          >
+          <button data-intent="ghost" onClick={() => setAdding(true)}>
             + Tag
           </button>
         ))}
@@ -80,31 +68,18 @@ export function Tags({
   );
 }
 
-export const chip = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 6,
-  height: 24,
-  padding: '0 9px',
-  borderRadius: palette.radius.pill,
-  border: `1px solid ${palette.surface.line}`,
-  background: palette.surface.sunken,
-  color: palette.ink.body,
-  fontSize: 12,
-};
-
 /** One tag. Yours to remove — or anyone's, if your role here may moderate tags: the rules say, not this. */
 function TagChip({ space, tag: t }: { space: SpaceSummary; tag: NodeRecord }) {
   const node = useNode();
   const mayRemove = useCan(space.id, 'delete', t.key);
   return (
-    <span style={chip}>
+    <span className="tag">
       #{tagLabel(t)}
       {mayRemove && (
         <button
           onClick={() => void node.records.delete(space.id, t.key)}
           aria-label={`Remove tag ${tagLabel(t)}`}
-          style={{ border: 'none', background: 'none', padding: 0, color: palette.ink.faint, fontSize: 12 }}
+          data-intent="inline"
         >
           ✕
         </button>

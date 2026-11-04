@@ -50,7 +50,7 @@ export function mentionsIn(text: string, people: ReadonlyArray<Someone>): string
 export function MentionText({ text }: { text: string }) {
   const people = usePeople();
   return html`${splitMentions(text, people).map((segment) =>
-    segment.did ? html`<span class="mention">${segment.text}</span>` : segment.text,
+    segment.did ? html`<mark>${segment.text}</mark>` : segment.text,
   )}`;
 }
 

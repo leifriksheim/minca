@@ -1,0 +1,504 @@
+/* The front page's hero (HeroSpace.tsx): many hands making one small app in a mock window */
+
+.site .app-spots .app-face + .app-face {
+  margin-left: -6px;
+}
+.site .app-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 4px;
+  border-top: 1px solid var(--color-divider);
+}
+.site .app-row > span:first-child {
+  min-width: 0;
+}
+.site .app-row small {
+  display: block;
+  font-size: 0.71875rem;
+  color: var(--color-text-muted);
+}
+.site .app-row.is-new {
+  margin: 0 -8px;
+  padding: 9px 12px;
+  border-top-color: transparent;
+  border-radius: var(--radius);
+  background: var(--color-action-soft);
+  animation: rise 0.4s ease;
+}
+.site .app-row.is-new + .app-row {
+  border-top-color: transparent;
+}
+.site .app-spots {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.site .app-spot {
+  width: 24px;
+  height: 24px;
+  border: 1px dashed var(--color-field);
+  border-radius: var(--radius-control);
+}
+.site .app-pill {
+  flex: none;
+  padding: 2px 10px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+  animation: pop 0.35s ease;
+}
+.site .app-pill.free {
+  border-color: var(--color-outline);
+  color: var(--color-text-strong);
+}
+
+/* The canvas: one small app and the cursors of the people making it, on the hero's own grid paper */
+.site .canvas-wrap {
+  margin-top: 40px;
+}
+
+/* Minca's window on a laptop: the rail of spaces, the space's sidebar, and the app being made */
+.site .window {
+  container-type: inline-size;
+  max-width: 1040px;
+  margin: 0 auto;
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-frame);
+  background: var(--color-surface);
+  box-shadow: 0 40px 80px -48px color-mix(in srgb, var(--color-text-strong) 45%, transparent);
+  text-align: left;
+}
+.site .window-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--color-divider);
+}
+.site .window-dots {
+  display: flex;
+  gap: 7px;
+}
+.site .window-dots i {
+  width: 11px;
+  height: 11px;
+  border-radius: var(--radius-control);
+  background: var(--color-field);
+}
+.site .window-title {
+  position: absolute;
+  left: 50%;
+  font-size: var(--text-small);
+  font-weight: 500;
+  color: var(--color-text-muted);
+  transform: translateX(-50%);
+}
+.site .w-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 0;
+  border-right: 1px solid var(--color-divider);
+  border-bottom-left-radius: calc(var(--radius-frame) - 1px);
+  background: var(--color-sunken);
+}
+.site .w-rail-rule {
+  width: 24px;
+  height: 1px;
+  background: var(--color-field);
+}
+.site .w-badge {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+}
+.site .w-badge .shape {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.site .w-badge b {
+  position: relative;
+  color: var(--color-on-action);
+  font-family: var(--font-display);
+  font-size: var(--text-body);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+
+/* The pill on the rail's edge says which space you are in, as in the app */
+.site .w-badge.is-on::before {
+  content: '';
+  position: absolute;
+  left: -14px;
+  width: 4px;
+  height: 22px;
+  border-radius: 0 4px 4px 0;
+  background: var(--color-text-strong);
+}
+.site .w-rail-add {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px dashed var(--color-field);
+  border-radius: var(--radius-control);
+  color: var(--color-text-muted);
+}
+.site .w-side {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 14px 10px;
+  overflow: hidden;
+  border-right: 1px solid var(--color-divider);
+}
+.site .w-space {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 6px 10px;
+}
+.site .w-space > span {
+  min-width: 0;
+}
+.site .w-space .w-badge {
+  width: 32px;
+  height: 32px;
+}
+.site .w-space b {
+  display: block;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: var(--text-body);
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--color-text-strong);
+}
+.site .w-space small {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+.site .w-heading {
+  padding: 12px 8px 4px;
+  font-size: var(--text-small);
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+.site .w-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: var(--radius);
+  font-size: var(--text-body);
+  color: var(--color-text);
+}
+.site .w-item.is-quiet {
+  color: var(--color-text-muted);
+}
+.site .w-item.is-on {
+  background: var(--color-sunken);
+  font-weight: 500;
+  color: var(--color-text-strong);
+}
+.site .w-item.is-fresh {
+  animation: rise 0.4s ease;
+}
+.site .w-item-dot {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+}
+.site .w-item-dot::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-control);
+  background: var(--color-field);
+}
+.site .w-item-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.site .w-count,
+.site .w-new {
+  padding: 0 7px;
+  border-radius: var(--radius-control);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 18px;
+}
+.site .w-count {
+  background: var(--color-sunken);
+  color: var(--color-text-muted);
+}
+.site .w-new {
+  background: var(--color-action);
+  color: var(--color-on-action);
+  animation: pop 0.35s ease;
+}
+.site .w-online {
+  width: 8px;
+  height: 8px;
+  margin-right: 4px;
+  border-radius: var(--radius-control);
+  background: var(--color-good);
+  box-shadow: 0 0 0 3px var(--color-good-soft);
+}
+.site .w-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-bottom-right-radius: calc(var(--radius-frame) - 1px);
+  background-color: var(--color-page);
+  background-image:
+    linear-gradient(var(--color-divider) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-divider) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+.site .w-main-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--color-divider);
+  background: var(--color-surface);
+  font-size: var(--text-body);
+  color: var(--color-text-strong);
+}
+.site .w-main-bar b {
+  font-weight: 600;
+}
+.site .canvas-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: min(440px, calc(100% - 32px));
+  margin: 32px auto 0;
+}
+@container (max-width: 760px) {
+  .site .w-rail,
+  .site .w-side {
+    display: none;
+  }
+  .site .w-main {
+    border-bottom-left-radius: calc(var(--radius-frame) - 1px);
+  }
+  .site .canvas-stack {
+    margin-top: 20px;
+  }
+}
+
+/* The prompt box: the agent's, above the window, so asking happens outside
+   the app and what it makes appears inside */
+.site .prompt {
+  position: relative;
+  z-index: 1;
+  width: min(640px, calc(100% - 32px));
+  margin: 0 auto 28px;
+  padding: 18px 14px 12px 20px;
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-frame);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-float);
+  text-align: left;
+}
+.site .prompt-text {
+  min-height: 52px;
+  font-size: 1.0625rem;
+  line-height: 1.45;
+  color: var(--color-text-strong);
+}
+.site .prompt-hint {
+  color: var(--color-text-muted);
+}
+.site .prompt-building {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--text-body);
+  color: var(--color-text-muted);
+}
+.site .prompt-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.site .prompt-add {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-control);
+  font-size: 1.125rem;
+  line-height: 1;
+  color: var(--color-text-muted);
+}
+.site .prompt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px 0 10px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-control);
+  background: var(--color-sunken);
+  font-size: var(--text-small);
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--color-text);
+}
+.site .prompt-send {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  margin-left: auto;
+  border-radius: var(--radius-control);
+  background: var(--color-action);
+  color: var(--color-on-action);
+  transition: background-color 0.2s ease;
+}
+.site .prompt-send.pressed {
+  background: var(--color-text-strong);
+}
+.site .caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  margin-left: 2px;
+  vertical-align: -0.2em;
+  background: var(--color-action);
+  animation: blink 1s steps(1) infinite;
+}
+.site .canvas-app {
+  padding: 16px 18px 8px;
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-surface);
+  background: var(--color-surface);
+  animation: arrive 0.5s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+.site .canvas-app .app {
+  font-size: var(--text-body);
+}
+.site .cursor-face {
+  display: block;
+  width: 30px;
+  height: 30px;
+  /* The face's upper left edge, not its middle, touches what it points at, so it never hides it */
+  margin: -4px 0 0 -4px;
+  max-width: none;
+  border: 2.5px solid var(--c);
+  border-radius: var(--radius-control);
+  object-fit: cover;
+  box-shadow: var(--shadow-float);
+}
+.site .cursor-name {
+  position: absolute;
+  top: 22px;
+  left: 22px;
+  padding: 2px 9px;
+  border-radius: var(--radius-control);
+  font-size: var(--text-small);
+  font-weight: 500;
+  white-space: nowrap;
+  background: var(--c);
+  color: var(--color-on-action);
+}
+
+/* A light colour takes navy words */
+.site :is(.cursor-name, .w-badge b)[data-ink] {
+  color: var(--color-text-strong);
+}
+.site .cursor.is-flipped .cursor-name {
+  right: 8px;
+  left: auto;
+}
+.site .cursor.clicking .cursor-face {
+  animation: press 0.35s ease 0.1s;
+}
+.site .cursor.clicking::before {
+  content: '';
+  position: absolute;
+  top: -10px;
+  left: -10px;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--color-action);
+  border-radius: var(--radius-control);
+  opacity: 0;
+  animation: ripple 0.6s ease 0.1s;
+}
+@media (max-width: 860px) {
+  .site .canvas-wrap {
+    margin-top: 48px;
+  }
+  .site .prompt {
+    margin-bottom: 20px;
+    padding: 14px 10px 10px 16px;
+  }
+  .site .prompt-text {
+    min-height: 44px;
+    font-size: var(--text-body);
+  }
+
+  /* On a phone the space goes without saying; the agent picker stays */
+  .site .prompt-chip.is-space {
+    display: none;
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+}
+@keyframes press {
+  50% {
+    transform: rotate(24deg) scale(0.82);
+  }
+}
+@keyframes ripple {
+  from {
+    opacity: 0.6;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}

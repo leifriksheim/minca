@@ -1,0 +1,13 @@
+/* Room to drop a card on, even in an empty column; set back while a card is dragged over it */
+.lane {
+  min-height: 120px;
+  border-radius: var(--radius-surface);
+
+  &[data-over] {
+    background: var(--color-sunken);
+  }
+
+  & button[draggable='true'] {
+    cursor: grab;
+  }
+}

@@ -1,0 +1,179 @@
+/* The developers' concepts, each drawn beside its words (concepts.tsx) */
+
+/* A drawing: boxes and arrows in HTML, on grid paper */
+.site .viz {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 32px 20px;
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-surface);
+  font-size: var(--text-body);
+  line-height: 1.4;
+  background-color: var(--color-page);
+  background-image:
+    linear-gradient(var(--color-divider) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-divider) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.site .viz-row,
+.site .viz-flow {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+}
+.site .viz-row {
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+.site .viz-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.site .viz-box {
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+.site .viz-box.ink {
+  border-color: var(--color-outline);
+}
+.site .viz-box b {
+  display: block;
+  font-weight: 600;
+  color: var(--color-text-strong);
+}
+.site .viz-box small,
+.site .viz-caption,
+.site .viz-arrow small {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.71875rem;
+  color: var(--color-text-muted);
+}
+.site .viz-caption code {
+  font-size: inherit;
+  color: var(--color-text);
+}
+.site .viz-exchange {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+.site .viz-exchange-mid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.site .viz-exchange-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.71875rem;
+  color: var(--color-text-muted);
+}
+.site .viz-exchange-arrow > span[aria-hidden] {
+  display: inline-block;
+  font-size: var(--text-body);
+}
+.site .viz-exchange-arrow small {
+  font-size: inherit;
+  color: var(--color-text-muted);
+}
+.site .viz-pass,
+.site .viz-note {
+  padding: 3px 10px;
+  border: 1px dashed var(--color-field);
+  border-radius: var(--radius-small);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+.site .viz-pass {
+  text-align: center;
+  white-space: nowrap;
+}
+.site .viz-pass b {
+  display: block;
+  font-weight: 600;
+}
+.site .viz-note {
+  display: block;
+  margin-top: 6px;
+  font-size: var(--text-small);
+}
+.site .viz-note svg {
+  vertical-align: -2px;
+  margin-right: 4px;
+}
+.site .viz-arrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 1.125rem;
+  line-height: 1;
+  color: var(--color-text-muted);
+}
+.site .viz-arrow.down > span,
+.site .viz-flow .viz-arrow > span {
+  display: inline-block;
+}
+.site .viz-arrow.down > span {
+  transform: rotate(90deg);
+}
+.site .viz-arrow small.viz-lock {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+.site .viz-cites {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+.site .viz-cites span {
+  padding: 1px 8px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-small);
+  font-size: var(--text-small);
+}
+.site .viz-space {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-surface);
+  background: var(--color-surface);
+}
+.site .viz-space .viz-box {
+  background: var(--color-sunken);
+}
+@media (max-width: 860px) {
+  .site .viz-flow {
+    flex-direction: column;
+  }
+  .site .viz-flow + .viz-flow {
+    padding-top: 14px;
+    border-top: 1px dashed var(--color-field);
+  }
+  .site .viz-flow .viz-arrow > span,
+  .site .viz-exchange-arrow > span[aria-hidden] {
+    transform: rotate(90deg);
+  }
+  .site .viz-exchange {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+}

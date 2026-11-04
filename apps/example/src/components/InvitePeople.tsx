@@ -5,17 +5,14 @@ import { spaceInvite, type SpaceInviteRecord } from '@minca/core/schemas';
 import { Modal } from '@minca/app-shared/Modal';
 import { message, useCopy } from '@minca/app-shared/action';
 import { createInviteLink } from '../spaces';
-import { palette, styles, ui } from '../styles';
 import { invitableRoles, useContacts } from '../contacts';
 import { shortUsername, useUsernameLookup } from '@minca/app-shared/usernames';
-import { AddButton, QuietButton } from './Buttons';
-import { Icon } from './Icon';
+import { Icon } from '@minca/app-shared/Icon';
 import { AddDialog, Handle, PersonRow } from './PeopleParts';
 import { usePopover } from './usePopover';
 import { SpaceDialog, SpaceMark } from './SpaceList';
 import { useWorkspace } from '../workspace';
-
-const { ink, surface, radius } = palette;
+import styles from './InvitePeople.module.css';
 
 /** A role's name as people read it: `member` → Member */
 const titled = (role: string) => role.charAt(0).toUpperCase() + role.slice(1).replace(/-/g, ' ');
@@ -65,61 +62,35 @@ export function InviteToSpace({
     );
   return (
     <Modal title={`Add ${contact.name} to…`} onClose={onClose}>
-      <ul style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 0, margin: 0 }}>
-        <li style={{ listStyle: 'none' }}>
-          <button onClick={() => setMaking(true)} disabled={busy !== null} data-menu-item style={groupChoice}>
-            <span style={newMark} aria-hidden>
+      <ul role="list">
+        <li>
+          <button data-intent="open" onClick={() => setMaking(true)} disabled={busy !== null} className="row">
+            <span className={styles.mark} aria-hidden>
               <Icon name="plus" size={16} />
             </span>
-            <span style={{ flex: 1, fontSize: 15, fontWeight: 600, color: ink.strong }}>New group</span>
+            <strong className="truncate">New group</strong>
           </button>
         </li>
         {spaces.map((space) => (
-          <li key={space.id} style={{ listStyle: 'none' }}>
+          <li key={space.id}>
             <button
+              data-intent="open"
               onClick={() => void invite(space)}
               disabled={busy !== null}
-              data-menu-item
-              style={groupChoice}
+              className="row"
             >
               <SpaceMark space={space} size={34} />
-              <span style={{ flex: 1, fontSize: 15, fontWeight: 600, color: ink.strong }}>{space.name}</span>
-              <span style={{ fontSize: 13, color: palette.accent.base, fontWeight: 600 }}>
-                {busy === space.id ? 'Inviting…' : 'Invite'}
-              </span>
+              <strong className="truncate">{space.name}</strong>
+              <span className="tag">{busy === space.id ? 'Inviting…' : 'Invite'}</span>
             </button>
           </li>
         ))}
       </ul>
-      {error && <p style={{ ...styles.bad, marginTop: 10 }}>{error}</p>}
-      <p style={{ fontSize: 13, lineHeight: 1.5, color: ink.muted, marginTop: 12 }}>
-        The invite waits in your chat with {contact.name}.
-      </p>
+      {error && <p role="alert">{error}</p>}
+      <small>The invite waits in your chat with {contact.name}.</small>
     </Modal>
   );
 }
-
-const groupChoice = {
-  width: '100%',
-  display: 'flex',
-  alignItems: 'center',
-  gap: 12,
-  padding: '8px 10px',
-  border: `1px solid ${surface.line}`,
-  borderRadius: radius.md,
-  background: surface.card,
-  textAlign: 'left',
-} as const;
-const newMark = {
-  width: 34,
-  height: 34,
-  flexShrink: 0,
-  display: 'grid',
-  placeItems: 'center',
-  borderRadius: radius.pill,
-  background: surface.sunken,
-  color: ink.strong,
-} as const;
 
 /**
  * Adding people to a space the way a group chat does, as a dialog over the chat a new group opens in:
@@ -168,21 +139,20 @@ export function AddPeople({
         onInvited={onClose}
         beside={<JoinsAs offered={offered} role={role} onChange={setRole} />}
       />
-      <div style={{ height: 1, background: palette.surface.line, margin: '16px 0 4px' }} />
+      <hr />
       {/* Anyone who isn't a contact gets a link, made for one role, which it says. */}
-      <div style={linkRow}>
-        <span style={linkBadge} aria-hidden>
+      <div className="row">
+        <span className={styles.mark} aria-hidden>
           <Icon name="link" size={16} />
         </span>
-        <span style={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1, minWidth: 0 }}>
-          <strong style={{ fontSize: 15, fontWeight: 600, color: ink.strong }}>Invite with a link</strong>
-          <span style={{ fontSize: 13, color: ink.muted }}>
+        <span className={`stack ${styles.grow}`}>
+          <strong>Invite with a link</strong>
+          <small>
             {copied ? (
               'Copied. Send it to the people it is for.'
             ) : (
               <>
-                Joins as <strong style={{ color: ink.body }}>{linkRole ? titled(linkRole) : 'Viewer'}</strong>{' '}
-                ·{' '}
+                Joins as <strong>{linkRole ? titled(linkRole) : 'Viewer'}</strong> ·{' '}
                 <ChangeRole
                   offered={offered}
                   role={linkRole}
@@ -193,36 +163,19 @@ export function AddPeople({
                 />
               </>
             )}
-          </span>
+          </small>
         </span>
-        <button onClick={() => void copyLink()} disabled={making} data-variant="ghost" style={copyButton}>
+        <button data-intent="ghost" onClick={() => void copyLink()} disabled={making}>
           {making ? 'Making…' : copied ? 'Copied' : 'Copy'}
         </button>
       </div>
       {link && (
-        <input
-          readOnly
-          value={link}
-          onFocus={(event) => event.target.select()}
-          aria-label="Invite link"
-          style={{ ...styles.input, height: 38, fontSize: 13, marginTop: 8 }}
-        />
+        <input readOnly value={link} onFocus={(event) => event.target.select()} aria-label="Invite link" />
       )}
-      {error && <p style={{ ...styles.bad, marginTop: 10 }}>{error}</p>}
+      {error && <p role="alert">{error}</p>}
     </Modal>
   );
 }
-
-const linkRow = { display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0' } as const;
-const copyButton = {
-  flexShrink: 0,
-  padding: '6px 4px',
-  border: 'none',
-  background: 'none',
-  fontSize: 14,
-  fontWeight: 600,
-  color: palette.accent.base,
-} as const;
 
 /** A quiet "change" beside the role a link gives, which lists the roles to pick from */
 function ChangeRole({
@@ -237,74 +190,37 @@ function ChangeRole({
   const { open, setOpen, close, root } = usePopover();
   const choices: ReadonlyArray<string | null> = [...offered, null];
   return (
-    <span ref={root} style={{ position: 'relative' }}>
+    <span ref={root} className={styles.anchor}>
       <button
         onClick={() => setOpen((was) => !was)}
         aria-expanded={open}
         aria-haspopup="menu"
-        className="quiet-link"
+        data-intent="inline"
       >
         Change
       </button>
       {open && (
-        <span role="menu" style={roleMenu}>
+        <menu role="menu">
           {choices.map((choice) => (
-            <button
-              key={choice ?? ''}
-              role="menuitemradio"
-              aria-checked={choice === role}
-              data-menu-item
-              onClick={() => {
-                close();
-                onChange(choice);
-              }}
-              style={roleItem}
-            >
-              {choice ? titled(choice) : 'Viewer'}
-              {choice === role && <Icon name="check" size={14} />}
-            </button>
+            <li key={choice ?? ''}>
+              <button
+                role="menuitemradio"
+                aria-checked={choice === role}
+                onClick={() => {
+                  close();
+                  onChange(choice);
+                }}
+              >
+                {choice ? titled(choice) : 'Viewer'}
+                {choice === role && <Icon name="check" size={14} />}
+              </button>
+            </li>
           ))}
-        </span>
+        </menu>
       )}
     </span>
   );
 }
-
-const roleMenu = {
-  ...styles.float,
-  position: 'absolute',
-  left: 0,
-  // Upward: the row is the last thing in its dialog.
-  bottom: 'calc(100% + 6px)',
-  zIndex: 30,
-  width: 180,
-  padding: 6,
-  display: 'flex',
-  flexDirection: 'column',
-} as const;
-const roleItem = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  height: 36,
-  padding: '0 10px',
-  border: 'none',
-  borderRadius: radius.md,
-  background: 'none',
-  fontSize: 14,
-  color: ink.body,
-  textAlign: 'left',
-} as const;
-const linkBadge = {
-  width: 40,
-  height: 40,
-  flexShrink: 0,
-  display: 'grid',
-  placeItems: 'center',
-  borderRadius: radius.pill,
-  background: surface.sunken,
-  color: ink.strong,
-} as const;
 
 /** The roles you may give here, `member` first, and the one picked: the first, until another is; null to view only */
 export function useJoinsAs(space: SpaceSummary) {
@@ -328,23 +244,9 @@ export function JoinsAs({
   onChange: (role: string | null) => void;
 }) {
   return (
-    <label
-      style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: ink.muted, minWidth: 0 }}
-    >
+    <label className="row">
       Joins as
-      <select
-        value={role ?? ''}
-        onChange={(event) => onChange(event.target.value || null)}
-        style={{
-          ...styles.input,
-          width: 'auto',
-          flex: 'none',
-          height: 36,
-          minHeight: 36,
-          padding: '0 32px 0 14px',
-          fontSize: 14,
-        }}
-      >
+      <select value={role ?? ''} onChange={(event) => onChange(event.target.value || null)}>
         {offered.map((name) => (
           <option key={name} value={name}>
             {titled(name)}
@@ -455,7 +357,7 @@ export function ContactPicker({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div className="stack">
       <input
         value={query}
         onChange={(event) => setQuery(event.target.value)}
@@ -469,27 +371,26 @@ export function ContactPicker({
         autoComplete="off"
         spellCheck={false}
         autoFocus={autoFocus}
-        style={{ ...styles.input, height: 42 }}
       />
       {(found || shown.length > 0) && (
-        <ul className="rows" style={{ ...ui.list, maxHeight: 360, overflowY: 'auto' }}>
+        <ul role="list" className={styles.picks}>
           {found && (
             <PersonRow
               face={found.username}
               name={found.found.inbox.name ?? <Handle username={found.username} />}
               detail={<>@{shortUsername(found.username)} · not a contact yet</>}
             >
-              <AddButton
+              <button
+                data-intent="primary"
                 onClick={() =>
                   setAsking({
                     username: found.username,
                     ...(found.found.inbox.name ? { name: found.found.inbox.name } : {}),
                   })
                 }
-                style={{ height: 32 }}
               >
                 Add contact
-              </AddButton>
+              </button>
             </PersonRow>
           )}
           {shown.map((contact) => (
@@ -502,12 +403,12 @@ export function ContactPicker({
             >
               {/* Invited already: it waits in your space for two until they join, or you take it back. */}
               {invited.has(contact.did) ? (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 13, color: ink.muted }}>Invited</span>
-                  <QuietButton onClick={() => void takeBack(contact)} disabled={sending}>
+                <>
+                  <small>Invited</small>
+                  <button data-intent="ghost" onClick={() => void takeBack(contact)} disabled={sending}>
                     Take back
-                  </QuietButton>
-                </span>
+                  </button>
+                </>
               ) : (
                 <Tick
                   checked={picked.has(contact.did)}
@@ -520,7 +421,7 @@ export function ContactPicker({
         </ul>
       )}
       {contacts !== undefined && shown.length === 0 && !found && (
-        <p style={{ fontSize: 14, lineHeight: 1.5, color: ink.muted }}>
+        <small>
           {q
             ? lookup.status === 'looking'
               ? 'Looking…'
@@ -528,22 +429,17 @@ export function ContactPicker({
             : (contacts ?? []).some((c) => !c.blocked && c.space)
               ? 'Everyone in your contacts is here already. Type a username to add someone new.'
               : 'No contacts yet. Type a username to find someone, or send an invite link.'}
-        </p>
+        </small>
       )}
-      {done && <p style={{ fontSize: 14, lineHeight: 1.5, color: ink.strong }}>{done}</p>}
-      {error && <p style={styles.bad}>{error}</p>}
+      {done && <p>{done}</p>}
+      {error && <p role="alert">{error}</p>}
       {(candidates.length > 0 || beside) && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div className="row" data-spread>
           {beside}
-          <span style={{ flex: 1 }} />
           {candidates.length > 0 && (
-            <AddButton
-              onClick={() => void send()}
-              disabled={picked.size === 0 || sending}
-              style={{ height: 40 }}
-            >
+            <button data-intent="primary" onClick={() => void send()} disabled={picked.size === 0 || sending}>
               {sending ? 'Inviting…' : picked.size === 0 ? 'Invite' : `Invite ${picked.size}`}
-            </AddButton>
+            </button>
           )}
         </div>
       )}
@@ -606,7 +502,6 @@ function Tick({ checked, onChange, label }: { checked: boolean; onChange: () => 
       checked={checked}
       onChange={onChange}
       aria-label={label ? `Invite ${label}` : 'Invite'}
-      style={{ ...styles.checkbox, width: 20, height: 20 }}
     />
   );
 }

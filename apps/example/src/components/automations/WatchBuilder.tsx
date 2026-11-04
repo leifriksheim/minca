@@ -18,10 +18,8 @@ import { nameOf } from '../../derive/people';
 import { ago } from '@minca/ui/time';
 import { useAsk } from '../../notifications';
 import { usePeopleHere } from '../Person';
-import { styles, palette, hstack, stack } from '../../styles';
 import { places, type Within } from '../../automations';
-import { ClauseList, Pill, PlacePill, Sentence, Step, card, previewBox } from './parts';
-import { PrimaryButton, QuietButton } from '../Buttons';
+import { ClauseList, Pill, PlacePill, Sentence, Step } from './parts';
 
 type Who = 'others' | 'anyone';
 type Where = 'space' | 'all';
@@ -129,29 +127,30 @@ export function WatchBuilder({
   if (done)
     return (
       <Modal title="You'll be notified" onClose={onClose} width={560}>
-        <p style={{ ...styles.hint, marginBottom: 0 }}>
+        <p>
           “{shown}” is on. This app lets you know while it's open, in a tab or installed. You can pause or
           remove it any time in your account.
         </p>
-        <PrimaryButton onClick={onClose}>Done</PrimaryButton>
+        <button data-intent="primary" onClick={onClose}>
+          Done
+        </button>
       </Modal>
     );
 
   return (
     <Modal title="Notify me when…" onClose={onClose} width={620}>
-      <p style={{ fontSize: 14, color: palette.ink.muted, lineHeight: 1.5, marginTop: -6 }}>
-        Pick what's worth hearing about. Your account asks you to confirm it.
-      </p>
+      <p>Pick what's worth hearing about. Your account asks you to confirm it.</p>
 
       {offered.length === 0 ? (
-        <p style={styles.emptyState}>This space has nothing to be notified about yet.</p>
+        <div className="empty">
+          <p>This space has nothing to be notified about yet.</p>
+        </div>
       ) : (
-        <div style={card}>
+        <article>
           <Step label="When">
             <Sentence>
               <Pill
                 label="Who"
-                strong={false}
                 value={who}
                 options={[
                   { value: 'others', label: 'someone else' },
@@ -188,7 +187,6 @@ export function WatchBuilder({
               <span>in</span>
               <Pill
                 label="Where"
-                strong={false}
                 value={where}
                 options={[
                   { value: 'space', label: space.name },
@@ -216,65 +214,55 @@ export function WatchBuilder({
               }
             />
           </Step>
-        </div>
+        </article>
       )}
 
       {chosen && (
-        <div style={previewBox} aria-live="polite">
+        <aside className="stack" data-gap="tight" aria-live="polite">
           {preview === null ? (
             <Loader label="Looking at what's here" showLabel />
           ) : preview.matched.length === 0 ? (
-            <span style={{ color: palette.ink.muted }}>
+            <small>
               None of the last {preview.looked || 'few'} {thing.toLowerCase()}s here match. You'll hear about
               the next one that does.
-            </span>
+            </small>
           ) : (
             <>
-              <span style={{ color: palette.ink.muted }}>
+              <small>
                 Lately, this would have told you about {preview.matched.length} of the last {preview.looked}:
-              </span>
-              <ul style={{ listStyle: 'none', ...stack(4) }}>
+              </small>
+              <ul role="list">
                 {preview.matched.slice(0, 4).map((record) => (
-                  <li key={record.key} style={{ ...hstack(8), alignItems: 'baseline' }}>
-                    <span style={{ color: palette.ink.faint }}>●</span>
-                    <span style={{ flex: 1, minWidth: 0, color: palette.ink.strong }}>
-                      {recordLabel(record, chosen.schema)}
-                    </span>
-                    <span style={styles.faint}>{ago(record.createdAt)}</span>
+                  <li key={record.key} className="row">
+                    <span className="truncate">{recordLabel(record, chosen.schema)}</span>
+                    <small>{ago(record.createdAt)}</small>
                   </li>
                 ))}
               </ul>
             </>
           )}
-        </div>
+        </aside>
       )}
 
       {chosen && (
-        <label style={stack(6)}>
-          <span style={styles.fieldLabel}>The notification says</span>
-          <input
-            value={shown}
-            maxLength={120}
-            onChange={(event) => setLabel(event.target.value)}
-            style={styles.input}
-          />
+        <label>
+          The notification says
+          <input value={shown} maxLength={120} onChange={(event) => setLabel(event.target.value)} />
         </label>
       )}
 
       {permission === 'denied' && (
-        <p style={{ ...styles.errorHint, marginTop: 0 }}>
+        <p role="alert">
           Notifications are blocked for this site: allow them from the icon left of the address first.
         </p>
       )}
-      {error && <p style={{ ...styles.errorHint, marginTop: 0, color: palette.accent.danger }}>{error}</p>}
+      {error && <p role="alert">{error}</p>}
 
-      <div style={{ ...hstack(8), justifyContent: 'flex-end' }}>
-        <QuietButton onClick={onClose} style={{ height: 40 }}>
-          Cancel
-        </QuietButton>
-        <PrimaryButton onClick={submit} disabled={!chosen || asking} style={{ width: 'auto' }}>
+      <div className="row">
+        <button onClick={onClose}>Cancel</button>
+        <button data-intent="primary" onClick={submit} disabled={!chosen || asking}>
           {asking ? 'Confirm in your account…' : 'Notify me'}
-        </PrimaryButton>
+        </button>
       </div>
     </Modal>
   );

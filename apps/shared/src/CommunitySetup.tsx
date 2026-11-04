@@ -1,15 +1,16 @@
-import { useCallback, useEffect, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { COLLECTION_DEFINE, SPACE_KEEPERS, type SpaceHostingView } from '@minca/core';
 import { useCollections, useNode } from '@minca/react';
 import { useAssignable, useMay } from './may';
 import { activity, INSTRUCT, profile } from '@minca/core/schemas';
 import { Modal } from './Modal';
-import { Benefit, FeatureIcon, Glyph, StatusPill } from './Feature';
+import { Icon } from './Icon';
+import { Benefit, FeatureIcon, StatusPill } from './Feature';
 import { KeepOnline, onlineHost, useSpaceHosts } from './SpaceHosting';
 import { BotConnectors, BotInstructions } from './BotConnectors';
-import { message, useAction, useCopy } from './action';
+import { message, useAction } from './action';
 import { perReply } from './Payment';
-import { styles, palette, hstack, stack } from './styles';
+import { Terminal } from './Terminal';
 
 /** Where running a bot on a server is explained */
 const SERVER_GUIDE =
@@ -73,26 +74,24 @@ export function AddBotDialog({
 
   return (
     <Modal title="Add an AI helper" onClose={onClose} width={460}>
-      <div style={stack(18)}>
-        <div style={{ ...hstack(14), alignItems: 'center' }}>
+      <div className="stack" data-gap="loose">
+        <div className="row" data-gap="loose">
           <FeatureIcon kind="bot" size={44} />
           <div>
-            <p style={{ fontSize: 16, fontWeight: 600, color: palette.ink.strong }}>
-              {started ? started.name : called}
-            </p>
-            <p style={styles.quiet}>
+            <h3>{started ? started.name : called}</h3>
+            <small>
               {view === 'fund'
                 ? 'Runs from the community fund'
                 : host
                   ? `Runs at ${host.name}${host.fund ? `, from the community fund` : ', at no cost'}`
                   : 'Runs where the community is kept online'}
-            </p>
+            </small>
           </div>
         </div>
 
         {view === 'fund' && (
           <>
-            <p style={{ fontSize: 14, color: palette.ink.body, lineHeight: 1.5 }}>
+            <p>
               One fund keeps the community online and runs its bots. Add to it to start; anyone in the
               community can top it up.
             </p>
@@ -102,29 +101,24 @@ export function AddBotDialog({
 
         {view === 'add' && host && (
           <>
-            <ul style={{ listStyle: 'none', ...stack(10) }}>
+            <ul role="list">
               <Benefit glyph="chat">Answers when someone mentions it</Benefit>
               <Benefit glyph="clock">Posts summaries and reminders on a schedule</Benefit>
               <Benefit glyph="shield">Holds a role like any member, and can do only what it allows</Benefit>
             </ul>
-            <div style={hstack(10)}>
-              <label style={{ ...field, flex: 1 }}>
+            <div className="stack">
+              <label>
                 Name
                 <input
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   placeholder="Club Bot"
-                  style={styles.input}
                 />
               </label>
               {roles.length > 0 && (
-                <label style={field}>
+                <label>
                   Role
-                  <select
-                    value={chosen ?? ''}
-                    onChange={(event) => setRole(event.target.value)}
-                    style={{ ...styles.input, width: 'auto' }}
-                  >
+                  <select value={chosen ?? ''} onChange={(event) => setRole(event.target.value)}>
                     {roles.map((known) => (
                       <option key={known.name} value={known.name}>
                         {known.title ?? known.name}
@@ -134,24 +128,23 @@ export function AddBotDialog({
                 </label>
               )}
             </div>
-            <button onClick={() => void add()} disabled={busy} data-variant="primary" style={styles.button}>
+            <button onClick={() => void add()} disabled={busy} data-intent="primary">
               {busy ? 'Adding…' : `Add ${called}`}
             </button>
-            {problem && <p style={styles.dangerText}>{problem}</p>}
-            <p style={{ ...hstack(8), fontSize: 12, color: palette.ink.faint, lineHeight: 1.5 }}>
-              <Glyph name="lock" size={12} style={{ marginTop: 2 }} />
-              {host.fund
-                ? `Its AI use comes from the community fund${model ? `: ${model.name}` : ''}${host.fund.botTypical ? `, ${perReply(host.fund.botTypical)}` : ''}, up to $${cap ?? '1'} a day. `
-                : ''}
-              {host.name} runs the bot's account, so it can read what the bot can read
-              {host.connectors.length
-                ? `, and act for your community in the services you connect it to (${host.connectors.map((one) => one.name).join(', ')}).`
-                : '.'}
-            </p>
-            <button
-              onClick={() => setView('yourself')}
-              style={{ ...styles.linkButton, alignSelf: 'center', fontSize: 12 }}
-            >
+            {problem && <p role="alert">{problem}</p>}
+            <small className="row" data-gap="tight">
+              <Icon name="lock" size={12} />
+              <p>
+                {host.fund
+                  ? `Its AI use comes from the community fund${model ? `: ${model.name}` : ''}${host.fund.botTypical ? `, ${perReply(host.fund.botTypical)}` : ''}, up to $${cap ?? '1'} a day. `
+                  : ''}
+                {host.name} runs the bot's account, so it can read what the bot can read
+                {host.connectors.length
+                  ? `, and act for your community in the services you connect it to (${host.connectors.map((one) => one.name).join(', ')}).`
+                  : '.'}
+              </p>
+            </small>
+            <button onClick={() => setView('yourself')} data-intent="ghost">
               Run it on your own computer instead
             </button>
           </>
@@ -159,21 +152,12 @@ export function AddBotDialog({
 
         {view === 'done' && (
           <>
-            <p style={{ fontSize: 14, color: palette.ink.body, lineHeight: 1.5 }}>
+            <p>
               {started?.name ?? called} is in the community. Tell it what to do in Automations: answer when
               mentioned, sum up the week every Friday.
             </p>
             {!profiles && (
-              <div
-                style={{
-                  padding: 12,
-                  borderRadius: palette.radius.lg,
-                  background: palette.surface.sunken,
-                  fontSize: 13,
-                  color: palette.ink.muted,
-                  lineHeight: 1.5,
-                }}
-              >
+              <aside>
                 This community keeps no profiles yet, so nobody can see it's a bot or pick it under "Done by".{' '}
                 {mayDefine ? (
                   <button
@@ -182,28 +166,25 @@ export function AddBotDialog({
                         .define(spaceId, profile)
                         .catch((error: unknown) => setProblem(message(error)))
                     }
-                    style={{ ...styles.linkButton, padding: 0, color: palette.ink.strong }}
+                    data-intent="ghost"
                   >
                     Turn on profiles
                   </button>
                 ) : (
                   'Someone who may add collections can turn them on.'
                 )}
-              </div>
+              </aside>
             )}
             {onAutomations ? (
-              <button onClick={onAutomations} data-variant="primary" style={styles.button}>
+              <button onClick={onAutomations} data-intent="primary">
                 Open Automations
               </button>
             ) : (
-              <button onClick={onClose} data-variant="primary" style={styles.button}>
+              <button onClick={onClose} data-intent="primary">
                 Done
               </button>
             )}
-            <button
-              onClick={() => setView('add')}
-              style={{ ...styles.linkButton, alignSelf: 'center', fontSize: 12 }}
-            >
+            <button onClick={() => setView('add')} data-intent="ghost">
               Add another bot
             </button>
           </>
@@ -212,10 +193,7 @@ export function AddBotDialog({
         {view === 'yourself' && (
           <>
             <RunItYourself spaceId={spaceId} name={called} role={chosen} />
-            <button
-              onClick={() => setView('add')}
-              style={{ ...styles.linkButton, alignSelf: 'center', fontSize: 12 }}
-            >
+            <button onClick={() => setView('add')} data-intent="ghost">
               Let the community's host run it instead
             </button>
           </>
@@ -237,77 +215,27 @@ function RunItYourself({ spaceId, name, role }: { spaceId: string; name: string;
       setInvite(await node.spaces.invite(spaceId, role ? { role, short: true } : { short: true })),
     );
   return (
-    <div style={stack(10)}>
-      <p style={{ ...styles.quiet, lineHeight: 1.5 }}>
+    <div className="stack">
+      <p>
         Run {name} on your own computer or server, with your own AI key. It works while it runs; to keep it
         on,{' '}
-        <a
-          href={SERVER_GUIDE}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ color: palette.ink.strong }}
-        >
+        <a href={SERVER_GUIDE} target="_blank" rel="noopener noreferrer">
           run it on a server
         </a>
         .
       </p>
       {invite ? (
         <>
-          <Copyable text={`${CLI} agent --bot --name ${quoted(name)} --invite ${quoted(invite)}`} secret />
-          <p style={{ ...styles.faint, lineHeight: 1.5 }}>
+          <Terminal text={`${CLI} agent --bot --name ${quoted(name)} --invite ${quoted(invite)}`} />
+          <small>
             Paste it into a terminal. It asks for a password for the bot and an AI key, then joins. Keep it to
             yourself: whoever has it can join as the bot.
-          </p>
+          </small>
         </>
       ) : (
-        <button
-          onClick={() => void make()}
-          data-variant="quiet"
-          style={{ ...styles.smallButton, alignSelf: 'flex-start' }}
-        >
-          Make the command
-        </button>
+        <button onClick={() => void make()}>Make the command</button>
       )}
-      {problem && <p style={styles.dangerText}>{problem}</p>}
-    </div>
-  );
-}
-
-/** A line to copy, in full or, for a secret, shortened on screen */
-function Copyable({ text, secret = false }: { text: string; secret?: boolean }) {
-  const { copied, copy } = useCopy();
-  return (
-    <div
-      style={{
-        ...hstack(8),
-        alignItems: 'center',
-        padding: '6px 6px 6px 10px',
-        borderRadius: palette.radius.lg,
-        border: `1px solid ${palette.surface.line}`,
-        background: palette.surface.sunken,
-      }}
-    >
-      <code
-        style={{
-          flex: 1,
-          minWidth: 0,
-          fontSize: 12.5,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: secret ? 'nowrap' : 'normal',
-          overflowWrap: 'anywhere',
-          color: palette.ink.strong,
-        }}
-      >
-        {text}
-      </code>
-      <button
-        data-variant="quiet"
-        style={{ ...styles.smallButton, flexShrink: 0 }}
-        onClick={() => copy(text)}
-      >
-        {copied ? 'Copied' : 'Copy'}
-      </button>
+      {problem && <p role="alert">{problem}</p>}
     </div>
   );
 }
@@ -327,46 +255,28 @@ export function SpaceBots({
   const mayManage = useMay(spaceId, SPACE_KEEPERS) && writable;
   if (!listed.length && !mayManage) return null;
   return (
-    <section aria-label="AI helpers" style={stack(10)}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-        <h3 style={styles.sectionTitle}>AI helpers</h3>
-        {mayManage && (
-          <button onClick={() => setAdding(true)} data-variant="quiet" style={styles.smallButton}>
-            Add a bot
-          </button>
-        )}
-      </div>
+    <section aria-label="AI helpers" className="stack">
+      <header>
+        <h3>AI helpers</h3>
+        {mayManage && <button onClick={() => setAdding(true)}>Add a bot</button>}
+      </header>
       {listed.length === 0 ? (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 14,
-            padding: 14,
-            borderRadius: palette.radius.lg,
-            border: `1px dashed ${palette.surface.lineStrong}`,
-          }}
-        >
+        <aside className="row" data-gap="loose">
           <FeatureIcon kind="bot" size={36} />
-          <p style={{ ...styles.quiet, lineHeight: 1.45 }}>
-            A bot answers when mentioned, sums up long threads and posts reminders. It holds a role like any
-            member.
+          <p>
+            <small>
+              A bot answers when mentioned, sums up long threads and posts reminders. It holds a role like any
+              member.
+            </small>
           </p>
-        </div>
+        </aside>
       ) : (
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            borderRadius: palette.radius.lg,
-            border: `1px solid ${palette.surface.line}`,
-          }}
-        >
-          {listed.map((bot, i) => (
-            <div key={bot.did} style={{ borderTop: i ? `1px solid ${palette.surface.line}` : 'none' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px' }}>
+        <ul role="list">
+          {listed.map((bot) => (
+            <li key={bot.did} className="stack">
+              <div className="row">
                 <FeatureIcon kind="bot" size={28} />
-                <strong style={{ flex: 1, fontSize: 14, color: palette.ink.strong }}>{bot.name}</strong>
+                <strong className="truncate">{bot.name}</strong>
                 {bot.state === 'on' ? (
                   <StatusPill tone="good">Running</StatusPill>
                 ) : bot.state === 'waiting' ? (
@@ -379,9 +289,9 @@ export function SpaceBots({
               {bot.host && (
                 <BotConnectors spaceId={spaceId} bot={bot.did} host={bot.host} writable={writable} />
               )}
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
       {adding && (
         <AddBotDialog
@@ -461,5 +371,3 @@ async function botsIn(
       : [],
   );
 }
-
-const field: CSSProperties = { ...stack(6), fontSize: 12.5, color: palette.ink.muted };

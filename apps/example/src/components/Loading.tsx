@@ -1,10 +1,9 @@
-import type { CSSProperties } from 'react';
 import { Loader } from '@minca/app-shared/Loader';
 
 /** A line saying what is loading, where it will be */
-export function Loading({ label, style }: { label: string; style: CSSProperties }) {
+export function Loading({ label }: { label: string }) {
   return (
-    <p style={style}>
+    <p>
       <Loader label={label} showLabel />
     </p>
   );

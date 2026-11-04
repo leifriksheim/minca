@@ -11,13 +11,11 @@ import {
   type Field,
   type LinkedByRel,
 } from '../derive/schema-ui';
-import { FileInput, FileListInput, labelStyle, MoneyInput, WhenInput } from './KindInputs';
+import { FileInput, FileListInput, MoneyInput, WhenInput } from './KindInputs';
 import { fieldTypeOf } from '../derive/field-types';
 import { nameOf } from '../derive/people';
 import { usePeopleHere } from './Person';
-import { styles, palette, hstack } from '../styles';
 import { useAction } from '@minca/app-shared/action';
-import { AddButton, LinkButton } from './Buttons';
 
 /**
  * A form for a record, drawn from its collection's schema. Without a schema,
@@ -61,16 +59,11 @@ export function SchemaForm({
   };
 
   return (
-    <form onSubmit={(e) => void submit(e)} style={{ ...styles.form, gap: 12 }}>
+    <form onSubmit={(e) => void submit(e)} className="stack" data-gap="loose">
       {fields.length === 0 ? (
-        <label style={labelStyle}>
+        <label>
           <span>Body (JSON) — this collection has no schema</span>
-          <textarea
-            value={json}
-            onChange={(e) => setJson(e.target.value)}
-            rows={6}
-            style={{ ...styles.textarea, fontFamily: palette.mono }}
-          />
+          <textarea value={json} onChange={(e) => setJson(e.target.value)} rows={6} />
         </label>
       ) : (
         fields.map((field) => (
@@ -83,15 +76,15 @@ export function SchemaForm({
           />
         ))
       )}
-      {error && <p style={styles.error}>{error}</p>}
-      <div style={styles.linkRow}>
-        <AddButton type="submit" disabled={busy}>
+      {error && <p role="alert">{error}</p>}
+      <div className="row">
+        <button type="submit" data-intent="primary" disabled={busy}>
           {submitLabel}
-        </AddButton>
+        </button>
         {onCancel && (
-          <LinkButton type="button" onClick={onCancel}>
+          <button type="button" data-intent="ghost" onClick={onCancel}>
             Cancel
-          </LinkButton>
+          </button>
         )}
       </div>
     </form>
@@ -115,14 +108,12 @@ export function FieldInput({
     <span>
       {field.label}
       {field.required && ' *'}
-      {typeof field.schema.description === 'string' && (
-        <span style={{ opacity: 0.6 }}> — {field.schema.description}</span>
-      )}
+      {typeof field.schema.description === 'string' && <span> — {field.schema.description}</span>}
     </span>
   );
   /** One control under the field's label */
   const labelled = (control: ReactNode) => (
-    <label style={labelStyle}>
+    <label>
       {label}
       {control}
     </label>
@@ -140,12 +131,7 @@ export function FieldInput({
     return <FileListInput label={label} picture={items === 'image'} value={value} onChange={onChange} />;
   if (kind === 'day')
     return labelled(
-      <input
-        type="date"
-        value={text}
-        onChange={(e) => onChange(e.target.value || undefined)}
-        style={styles.input}
-      />,
+      <input type="date" value={text} onChange={(e) => onChange(e.target.value || undefined)} />,
     );
   if (kind === 'url')
     return labelled(
@@ -154,7 +140,6 @@ export function FieldInput({
         value={text}
         onChange={(e) => onChange(e.target.value || undefined)}
         placeholder="https://"
-        style={styles.input}
       />,
     );
   if ((type === 'person' || type === 'people') && here && here.people.size > 0) {
@@ -163,7 +148,7 @@ export function FieldInput({
       did === here.me ? `${nameOf(did, here.people)} (you)` : nameOf(did, here.people);
     if (type === 'person')
       return labelled(
-        <select value={text} onChange={(e) => onChange(e.target.value || undefined)} style={styles.input}>
+        <select value={text} onChange={(e) => onChange(e.target.value || undefined)}>
           <option value="">—</option>
           {everyone.map((did) => (
             <option key={did} value={did}>
@@ -174,11 +159,11 @@ export function FieldInput({
       );
     const picked: ReadonlyArray<unknown> = Array.isArray(value) ? value : [];
     return (
-      <fieldset style={{ ...labelStyle, border: 'none', padding: 0, margin: 0 }}>
-        <legend style={{ marginBottom: 4 }}>{label}</legend>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+      <fieldset>
+        <legend>{label}</legend>
+        <div className="row">
           {everyone.map((did) => (
-            <label key={did} style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 13 }}>
+            <label key={did}>
               <input
                 type="checkbox"
                 checked={picked.includes(did)}
@@ -197,7 +182,7 @@ export function FieldInput({
   switch (field.kind) {
     case 'boolean':
       return (
-        <label style={{ ...labelStyle, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <label>
           <input type="checkbox" checked={value === true} onChange={(e) => onChange(e.target.checked)} />
           {label}
         </label>
@@ -228,7 +213,6 @@ export function FieldInput({
           onChange={(e) =>
             onChange(e.target.value === '' ? undefined : choices[Number(e.target.value)]?.value)
           }
-          style={styles.input}
         >
           <option value="">—</option>
           {choices.map((choice, i) => (
@@ -247,13 +231,10 @@ export function FieldInput({
           step={field.kind === 'integer' ? 1 : 'any'}
           value={typeof value === 'number' ? value : ''}
           onChange={(e) => onChange(e.target.value === '' ? undefined : Number(e.target.value))}
-          style={styles.input}
         />,
       );
     case 'longText':
-      return labelled(
-        <textarea value={text} onChange={(e) => onChange(e.target.value)} rows={4} style={styles.textarea} />,
-      );
+      return labelled(<textarea value={text} onChange={(e) => onChange(e.target.value)} rows={4} />);
     case 'list':
       return (
         <ListInput
@@ -265,14 +246,7 @@ export function FieldInput({
       );
     case 'object':
       return (
-        <fieldset
-          style={{
-            ...labelStyle,
-            border: `1px solid ${palette.surface.line}`,
-            borderRadius: palette.radius.md,
-            padding: 10,
-          }}
-        >
+        <fieldset>
           <legend>{label}</legend>
           {fieldsOf(field.schema).map((sub) => (
             <FieldInput
@@ -287,9 +261,7 @@ export function FieldInput({
     case 'json':
       return <JsonInput label={label} value={value} onChange={onChange} />;
     default:
-      return labelled(
-        <input type="text" value={text} onChange={(e) => onChange(e.target.value)} style={styles.input} />,
-      );
+      return labelled(<input type="text" value={text} onChange={(e) => onChange(e.target.value)} />);
   }
 }
 
@@ -308,34 +280,33 @@ function ListInput({
   const numeric = (isObject(field.schema.items) ? field.schema.items.type : undefined) !== 'string';
   const parse = (raw: string) => (numeric ? Number(raw) : raw);
   return (
-    <div style={labelStyle}>
-      {label}
+    <fieldset>
+      <legend>{label}</legend>
       {value.map((item, index) => (
-        <div key={index} style={hstack(6)}>
+        <div key={index} className="row" data-gap="tight">
           <input
             aria-label={`${field.label} ${index + 1}`}
             type={numeric ? 'number' : 'text'}
             value={textOf(item ?? '')}
             onChange={(e) => onChange(value.map((old, i) => (i === index ? parse(e.target.value) : old)))}
-            style={{ ...styles.input, flex: 1 }}
           />
-          <LinkButton
+          <button
             type="button"
+            data-intent="ghost"
+            data-icon
             onClick={() => onChange(value.filter((_, i) => i !== index))}
             aria-label={`Remove ${field.label} ${index + 1}`}
           >
             ✕
-          </LinkButton>
+          </button>
         </div>
       ))}
-      <LinkButton
-        type="button"
-        onClick={() => onChange([...value, numeric ? 0 : ''])}
-        style={{ alignSelf: 'flex-start' }}
-      >
-        + Add {field.label.toLowerCase()}
-      </LinkButton>
-    </div>
+      <div>
+        <button type="button" data-intent="ghost" onClick={() => onChange([...value, numeric ? 0 : ''])}>
+          + Add {field.label.toLowerCase()}
+        </button>
+      </div>
+    </fieldset>
   );
 }
 
@@ -350,7 +321,7 @@ function JsonInput({
 }) {
   const [raw, setRaw] = useState(() => (value === undefined ? '' : JSON.stringify(value, null, 2)));
   return (
-    <label style={labelStyle}>
+    <label>
       {label}
       <textarea
         value={raw}
@@ -363,7 +334,6 @@ function JsonInput({
             /* keep typing */
           }
         }}
-        style={{ ...styles.input, fontFamily: 'monospace' }}
       />
     </label>
   );

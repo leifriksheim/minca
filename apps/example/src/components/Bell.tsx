@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import type { SpaceSummary } from '@minca/core';
 import { useAccount, useCollections, useHoldSpace } from '@minca/react';
 import { usePopover } from './usePopover';
@@ -6,10 +6,10 @@ import { markRead, useAlerts, useTabDot } from '../alerts';
 import { useAppNotifications, useOwnAutomations } from '../notifications';
 import { ago } from '@minca/ui/time';
 import { SpaceMark } from './SpaceList';
-import { Icon } from './Icon';
+import { Icon } from '@minca/app-shared/Icon';
 import { WatchBuilder } from './automations/WatchBuilder';
-import { palette, styles, hstack, stack } from '../styles';
 import { useSpaceName } from '../workspace';
+import styles from './Bell.module.css';
 
 type Tab = 'activity' | 'settings';
 
@@ -40,8 +40,9 @@ export function Bell({
 
   return (
     // At the foot of a space's rail, the panel opens beside the button, from its bottom edge.
-    <div ref={root} style={{ position: 'relative' }}>
+    <div ref={root} className={styles.bell}>
       <button
+        data-icon
         onClick={() => {
           if (!open) setTab(off && items.length === 0 ? 'settings' : 'activity');
           setOpen((was) => !was);
@@ -50,28 +51,27 @@ export function Bell({
         aria-expanded={open}
         aria-label={unread ? `Notifications, ${unread} new` : 'Notifications'}
         title="Notifications"
-        style={button}
       >
         <Icon name={off ? 'bell' : 'bellOn'} />
         {unread > 0 && (
-          <span style={badge} aria-hidden>
-            <span className="count">{unread > 99 ? '99+' : unread}</span>
+          <span className={styles.badge} aria-hidden>
+            {unread > 99 ? '99+' : unread}
           </span>
         )}
       </button>
 
       {open && (
-        <div role="dialog" aria-label="Notifications" className="drop" style={panel}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '10px 10px 6px 14px' }}>
-            <p style={{ flex: 1, fontWeight: 600, fontSize: 14, color: palette.ink.strong }}>Notifications</p>
-            <div role="tablist" aria-label="Notifications" style={hstack(2)}>
+        <dialog open aria-label="Notifications" className={styles.panel}>
+          <header>
+            <strong>Notifications</strong>
+            <div role="tablist" aria-label="Notifications">
               {(['activity', 'settings'] as const).map((one) => (
-                <TabButton key={one} on={tab === one} onClick={() => setTab(one)}>
+                <button key={one} role="tab" aria-selected={tab === one} onClick={() => setTab(one)}>
                   {one === 'activity' ? 'Activity' : 'Settings'}
-                </TabButton>
+                </button>
               ))}
             </div>
-          </div>
+          </header>
 
           {tab === 'activity' ? (
             <Activity
@@ -94,7 +94,7 @@ export function Bell({
               }}
             />
           )}
-        </div>
+        </dialog>
       )}
       {building && here && <Builder space={here} onClose={() => setBuilding(false)} />}
     </div>
@@ -119,29 +119,29 @@ export function Activity({
   const nameOf = useSpaceName();
   if (items.length === 0)
     return (
-      <div style={{ padding: '4px 14px 14px', fontSize: 13, lineHeight: 1.5, color: palette.ink.muted }}>
+      <div className="empty">
         <p>Nothing yet. What your notifications match shows up here, while this app is open.</p>
         {off && onSettings && (
-          <button onClick={onSettings} style={{ ...link, marginTop: 8 }}>
+          <button data-intent="ghost" onClick={onSettings}>
             Turn notifications on →
           </button>
         )}
       </div>
     );
   return (
-    <ul style={{ listStyle: 'none', padding: '0 6px 6px' }}>
+    <ul role="list">
       {items.map((item) => {
         const space = spaces.find((s) => s.id === item.space);
         return (
           <li key={item.record}>
-            <button data-menu-item style={row} onClick={() => onOpenSpace(item.space)}>
-              {space ? <SpaceMark space={space} size={28} /> : <span style={{ width: 28 }} />}
-              <span style={{ minWidth: 0, flex: 1, ...stack(2) }}>
-                <span style={{ fontSize: 13, fontWeight: 500, color: palette.ink.strong }}>{item.label}</span>
-                <span style={styles.faint}>
+            <button data-intent="open" className="row" onClick={() => onOpenSpace(item.space)}>
+              {space && <SpaceMark space={space} size={28} />}
+              <span className="stack" data-gap="tight">
+                <strong>{item.label}</strong>
+                <small>
                   {space ? `${nameOf(space.id) ?? space.name} · ` : ''}
                   {ago(item.at)}
-                </span>
+                </small>
               </span>
             </button>
           </li>
@@ -169,12 +169,12 @@ export function Settings({
       : spaceIds.map((id) => nameOf(id) ?? 'A space you left').join(', ');
 
   return (
-    <div style={{ padding: '0 6px 6px' }}>
+    <div className="stack">
       {setup.permission === 'denied' ? (
-        <p style={note}>
+        <small>
           Notifications are blocked for this site. Allow them from the icon left of the address, then come
           back here.
-        </p>
+        </small>
       ) : setup.permission === 'default' ? (
         // Its own step: a browser prompt opened with the home's window easily goes unseen behind it.
         <Action
@@ -185,7 +185,6 @@ export function Settings({
               ? `${setup.on} on in your account`
               : `First, let ${globalThis.location.host} show them`
           }
-          strong
         />
       ) : (
         setup.on === 0 && (
@@ -196,28 +195,25 @@ export function Settings({
             hint={
               setup.asking ? 'Answer in your account home' : 'Messages, polls and contacts, in every space'
             }
-            strong
           />
         )
       )}
-      {setup.error && <p style={{ ...note, color: palette.accent.danger }}>{setup.error}</p>}
+      {setup.error && <p role="alert">{setup.error}</p>}
 
       {watches.length > 0 && (
         <>
-          <p style={heading}>You hear about</p>
-          <ul style={{ listStyle: 'none', maxHeight: 260, overflowY: 'auto' }}>
+          <small>You hear about</small>
+          <ul role="list">
             {watches.map((sub) => (
-              <li key={sub.id} style={{ ...row, cursor: 'default', opacity: sub.paused ? 0.55 : 1 }}>
-                <span style={{ color: palette.ink.muted, display: 'inline-flex' }}>
-                  <Icon name={sub.paused ? 'bell' : 'bellOn'} size={14} />
-                </span>
-                <span style={{ minWidth: 0, flex: 1, ...stack(1) }}>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: palette.ink.strong }}>{sub.name}</span>
-                  <span style={styles.faint}>
+              <li key={sub.id} className="row">
+                <Icon name={sub.paused ? 'bell' : 'bellOn'} size={14} />
+                <span className="stack" data-gap="tight">
+                  <strong>{sub.name}</strong>
+                  <small>
                     {where(sub.spaces ?? 'all')}
                     {sub.when?.query.where !== undefined ? ' · with conditions' : ''}
                     {sub.paused ? ' · paused' : ''}
-                  </span>
+                  </small>
                 </span>
               </li>
             ))}
@@ -225,7 +221,7 @@ export function Settings({
         </>
       )}
 
-      <div style={{ height: 1, background: palette.surface.line, margin: '6px 4px' }} />
+      <hr />
       {onBuild && (
         <Action
           onClick={onBuild}
@@ -245,116 +241,25 @@ export function Builder({ space, onClose }: { space: SpaceSummary; onClose: () =
   return <WatchBuilder space={space} collections={collections} onClose={onClose} />;
 }
 
-function TabButton({ on, onClick, children }: { on: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      role="tab"
-      aria-selected={on}
-      onClick={onClick}
-      style={{
-        height: 26,
-        padding: '0 9px',
-        border: 'none',
-        borderRadius: palette.radius.pill,
-        background: on ? palette.surface.sunken : 'none',
-        color: on ? palette.ink.strong : palette.ink.muted,
-        fontSize: 12.5,
-        fontWeight: 500,
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
 function Action({
   onClick,
   title,
   hint,
   disabled,
-  strong,
   quiet,
 }: {
   onClick: () => void;
   title: string;
   hint?: string;
   disabled?: boolean;
-  strong?: boolean;
   quiet?: boolean;
 }) {
   return (
-    <button data-menu-item onClick={onClick} disabled={disabled} style={row}>
-      <span style={{ minWidth: 0, flex: 1, ...stack(1) }}>
-        <span
-          style={{
-            fontSize: 13,
-            fontWeight: strong ? 600 : 500,
-            color: quiet ? palette.ink.muted : palette.ink.strong,
-          }}
-        >
-          {title}
-        </span>
-        {hint && <span style={styles.faint}>{hint}</span>}
+    <button data-intent={quiet ? 'ghost' : 'open'} onClick={onClick} disabled={disabled}>
+      <span className="stack" data-gap="tight">
+        <strong>{title}</strong>
+        {hint && <small>{hint}</small>}
       </span>
     </button>
   );
 }
-
-const button = {
-  position: 'relative' as const,
-  width: 36,
-  height: 36,
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  border: `1px solid ${palette.surface.rule}`,
-  borderRadius: palette.radius.pill,
-  background: palette.surface.card,
-  color: palette.ink.strong,
-};
-const badge = {
-  position: 'absolute' as const,
-  top: -5,
-  right: -6,
-  pointerEvents: 'none' as const,
-  borderRadius: palette.radius.pill,
-  boxShadow: `0 0 0 2px ${palette.surface.card}`,
-};
-const panel = {
-  position: 'absolute' as const,
-  left: 'calc(100% + 10px)',
-  bottom: 0,
-  zIndex: 20,
-  width: 340,
-  maxWidth: 'calc(100vw - 24px)',
-  maxHeight: 'min(480px, calc(100dvh - 120px))',
-  ...styles.float,
-  animation: 'minca-fade .1s ease',
-  overflowY: 'auto' as const,
-};
-const row = {
-  width: '100%',
-  display: 'flex',
-  alignItems: 'center',
-  gap: 10,
-  padding: '8px',
-  border: 'none',
-  borderRadius: palette.radius.md,
-  background: 'none',
-  textAlign: 'left' as const,
-};
-const heading = {
-  padding: '8px 8px 2px',
-  fontSize: 12.5,
-  fontWeight: 500,
-  color: palette.ink.muted,
-};
-const note = { padding: '6px 8px', fontSize: 12.5, lineHeight: 1.45, color: palette.ink.muted };
-const link = {
-  border: 'none',
-  background: 'none',
-  padding: 0,
-  fontSize: 13,
-  fontWeight: 500,
-  color: palette.ink.strong,
-};

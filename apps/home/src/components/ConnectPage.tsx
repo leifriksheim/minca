@@ -18,7 +18,7 @@ import { rememberedPicture } from '@minca/app-shared/rememberedPictures';
 import { Shape } from '@minca/app-shared/shapes';
 import { shapeFor } from '@minca/ui/shapes';
 import { useAction } from '@minca/app-shared/action';
-import { styles, palette, stack } from '../styles';
+import styles from './ConnectPage.module.css';
 import { Loader } from '@minca/app-shared/Loader';
 import { relayUrls } from '@minca/app-shared/relay';
 import { connectCode as code } from '../minca';
@@ -70,7 +70,7 @@ export function ConnectPage() {
   if (answered)
     return (
       <Frame title={answered.allowed ? 'Connected' : 'Not connected'}>
-        <p style={styles.hint}>
+        <p>
           {answered.allowed
             ? 'You can close this tab and go back to your AI. It can use Minca now.'
             : 'Nothing was shared. You can close this tab.'}
@@ -81,7 +81,7 @@ export function ConnectPage() {
   if (incoming === undefined)
     return (
       <Frame>
-        <p style={styles.hint}>
+        <p>
           <Loader label={code ? 'Finding the program' : 'Waiting for the app'} showLabel />
         </p>
         {code ? null : <SlowApp />}
@@ -91,7 +91,7 @@ export function ConnectPage() {
   if (incoming === null && code) {
     return (
       <Frame title="This link was used, or has run out">
-        <p style={styles.hint}>
+        <p>
           The program that opened it isn’t waiting for it any more. Ask it to connect again for a new link. If
           it says it connected and you didn’t allow it here, it joined someone else’s account: disconnect it
           there with <code>minca disconnect</code>.
@@ -103,12 +103,8 @@ export function ConnectPage() {
   if (incoming === null) {
     return (
       <Frame title="Your account home">
-        <p style={styles.hint}>
-          Apps open this page to ask for access to your Minca account. Nothing has asked right now.
-        </p>
-        <a href="/" style={{ ...styles.linkButton, paddingLeft: 0 }}>
-          Your account
-        </a>
+        <p>Apps open this page to ask for access to your Minca account. Nothing has asked right now.</p>
+        <a href="/">Your account</a>
       </Frame>
     );
   }
@@ -183,59 +179,43 @@ function ChooseAccount({
   const named = (name: string) => state.accounts.filter((account) => account.name === name).length;
   return (
     <Frame title="Choose an account">
-      <p style={styles.subtitle}>
-        to continue to <strong style={{ color: palette.ink.strong }}>{asker(incoming.origin)}</strong>
+      <p>
+        to continue to <strong>{asker(incoming.origin)}</strong>
       </p>
-      <div style={{ ...stack(6), marginBottom: 16 }}>
+      <ul role="list">
         {state.accounts.map((account) => (
-          <button
-            key={account.id}
-            onClick={() => onChoose(account.id)}
-            disabled={state.busy}
-            data-choice
-            style={{ ...styles.choice, textAlign: 'left' }}
-          >
-            <Avatar did={account.did} size={32} round src={rememberedPicture(account.did)} />
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ display: 'block', fontWeight: 500 }}>{account.name}</span>
-              <span style={{ display: 'block', fontSize: 12, color: palette.ink.faint }}>
-                {account.id === current
-                  ? 'Signed in'
-                  : named(account.name) > 1
-                    ? `…${account.did.slice(-6)}`
-                    : 'Signed out'}
+          <li key={account.id}>
+            <button
+              onClick={() => onChoose(account.id)}
+              disabled={state.busy}
+              data-intent="open"
+              className="row"
+            >
+              <Avatar did={account.did} size={32} round src={rememberedPicture(account.did)} />
+              <span className="stack truncate" data-gap="tight">
+                <strong>{account.name}</strong>
+                <small>
+                  {account.id === current
+                    ? 'Signed in'
+                    : named(account.name) > 1
+                      ? `…${account.did.slice(-6)}`
+                      : 'Signed out'}
+                </small>
               </span>
-            </span>
-          </button>
+            </button>
+          </li>
         ))}
-        <button
-          onClick={() => onChoose(null)}
-          disabled={state.busy}
-          data-choice
-          style={{ ...styles.choice, textAlign: 'left' }}
-        >
-          <span style={plus} aria-hidden="true">
-            +
-          </span>
-          <span style={{ flex: 1 }}>Use another account</span>
-        </button>
-      </div>
-      <p style={styles.errorHint}>Next you confirm it’s you, then decide what it gets.</p>
+        <li>
+          <button onClick={() => onChoose(null)} disabled={state.busy} data-intent="open" className="row">
+            <span aria-hidden="true">+</span>
+            Use another account
+          </button>
+        </li>
+      </ul>
+      <small>Next you confirm it’s you, then decide what it gets.</small>
     </Frame>
   );
 }
-
-const plus = {
-  width: 32,
-  height: 32,
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  borderRadius: palette.radius.pill,
-  border: `1px solid ${palette.surface.rule}`,
-  color: palette.ink.strong,
-  fontSize: 16,
-} as const;
 
 /** After a few seconds: a phone may pause the app's tab while this one is in front */
 function SlowApp() {
@@ -245,9 +225,7 @@ function SlowApp() {
     return () => clearTimeout(timer);
   }, []);
   if (!slow) return null;
-  return (
-    <p style={styles.hint}>Taking a while? Switch back to the app's tab for a moment, then come back here.</p>
-  );
+  return <p>Taking a while? Switch back to the app's tab for a moment, then come back here.</p>;
 }
 
 /** Who is asking, by the address the browser reports — an extension has no host name worth showing */
@@ -261,17 +239,8 @@ function asker(origin: string): string {
 /** A small line above sign-in, so it is clear why this window opened */
 function Asking({ incoming, step = 'Sign in' }: { incoming: IncomingRequest; step?: string }) {
   return (
-    <p
-      style={{
-        ...styles.errorHint,
-        marginTop: 0,
-        marginBottom: 24,
-        padding: '10px 12px',
-        background: palette.surface.sunken,
-        borderRadius: palette.radius.md,
-      }}
-    >
-      <strong style={{ color: palette.ink.strong }}>
+    <aside>
+      <strong>
         {!isProposeRequest(incoming.request) && incoming.request.via === 'code'
           ? `A program calling itself “${incoming.request.name ?? 'a program'}”`
           : asker(incoming.origin)}
@@ -281,7 +250,7 @@ function Asking({ incoming, step = 'Sign in' }: { incoming: IncomingRequest; ste
         : 'wants to use your Minca account.'}{' '}
       {step} to decide
       {isProposeRequest(incoming.request) ? '.' : ' what it gets.'}
-    </p>
+    </aside>
   );
 }
 
@@ -347,11 +316,11 @@ function Approve({
   if (sent && incoming.check)
     return (
       <Frame title="Now give it the code">
-        <p style={styles.subtitle}>
+        <p>
           Type this into the terminal where you started it, or tell your AI, so it knows this is your account.
         </p>
         <CheckCode check={incoming.check} />
-        <p style={styles.hint}>
+        <p>
           <Loader label="Waiting for the program" showLabel />
         </p>
       </Frame>
@@ -359,7 +328,7 @@ function Approve({
 
   return (
     <Frame title={byCode ? `Connect “${request.name ?? 'a program'}”` : `Connect to ${host}`}>
-      <p style={styles.subtitle}>
+      <p>
         {byCode
           ? 'A program on your computer or a server, such as your AI, opened this page. '
           : request.name && <>It calls itself “{request.name}”, and </>}
@@ -371,7 +340,7 @@ function Approve({
       <WhichAccount label={byCode ? 'The account it will work in' : 'The account it will use'} busy={busy} />
 
       {incoming.check && (
-        <Note title="Its code" below={20}>
+        <Note title="Its code">
           It can use your account as soon as you allow it, so allow it only if something you started just now
           is asking for this code. Then give it the code, in its terminal or by telling your AI, so it knows
           this is your account.
@@ -381,7 +350,7 @@ function Approve({
 
       {recordsOnly && writes && (
         <>
-          <Note title="What it can do" below={12}>
+          <Note title="What it can do">
             Read {whole ? 'every space, including ones you make later' : 'the spaces you pick'}, write records
             in them as you, and propose new collections and apps there. Everything it writes shows as yours,
             and apps can tell it came from a key that may only write records.
@@ -408,10 +377,10 @@ function Approve({
       )}
 
       {choosing && (
-        <section style={{ marginBottom: 20 }}>
-          <p style={styles.fieldLabel}>{byCode ? 'Which spaces it may work in' : 'Which spaces'}</p>
-          {offered.length === 0 && <p style={styles.errorHint}>You have no spaces it could use.</p>}
-          <div style={stack(6)}>
+        <fieldset>
+          <legend>{byCode ? 'Which spaces it may work in' : 'Which spaces'}</legend>
+          {offered.length === 0 && <small>You have no spaces it could use.</small>}
+          <ul role="list">
             {offered.map((space) => (
               <Tick
                 key={space.id}
@@ -423,38 +392,40 @@ function Approve({
                 {space.name}
               </Tick>
             ))}
-          </div>
-        </section>
+          </ul>
+        </fieldset>
       )}
 
       {creating.length > 0 && (
-        <section style={{ marginBottom: 20 }}>
-          <p style={styles.fieldLabel}>New spaces for it</p>
-          <div style={stack(6)}>
+        <fieldset>
+          <legend>New spaces for it</legend>
+          <ul role="list">
             {creating.map((space, index) => (
-              <div key={index} style={{ ...styles.choice, flexWrap: 'wrap', cursor: 'default' }}>
-                <span style={{ flex: 1 }}>{space.name}</span>
-                <span style={styles.faint}>
-                  {space.visibility} · {constitution(space, session.did)}
+              <li key={index} className="stack" data-gap="tight">
+                <span className="row" data-spread>
+                  {space.name}
+                  <small>
+                    {space.visibility} · {constitution(space, session.did)}
+                  </small>
                 </span>
                 {space.top !== 'none' && cofoundersOf(space, session.did).length > 0 && (
-                  <span style={{ ...styles.errorHint, flexBasis: '100%' }}>
+                  <small>
                     Also founders, who hold everything there and can't be removed:{' '}
                     {cofoundersOf(space, session.did).join(', ')}
-                  </span>
+                  </small>
                 )}
-              </div>
+              </li>
             ))}
-          </div>
-          <p style={styles.errorHint}>Made in your account, so your other devices and apps see them too.</p>
-        </section>
+          </ul>
+          <small>Made in your account, so your other devices and apps see them too.</small>
+        </fieldset>
       )}
 
-      <p style={{ ...styles.errorHint, marginBottom: 20 }}>
+      <small>
         Stays in sync for {lasts(request.days ?? 7)}, then asks again. What it changes, and what it sets up to
         run, counts until you disconnect it in your account.
         {(whole || privateChosen) && ' Reading the private spaces it gets can’t be taken back yet.'}
-      </p>
+      </small>
 
       <Answer
         error={error}
@@ -466,11 +437,11 @@ function Approve({
         onDeny={() => incoming.deny()}
       />
 
-      <p style={{ ...styles.errorHint, marginTop: 20 }}>
+      <small>
         {byCode ? 'The program' : 'The app'} gets a note signed by your account, for its own key. It never
         sees your password.
         {byCode && ' You can disconnect it any time, in your account.'}
-      </p>
+      </small>
     </Frame>
   );
 }
@@ -541,7 +512,7 @@ function ApproveCarrier({ incoming, request }: { incoming: IncomingRequest; requ
 
   return (
     <Frame title="Keep your spaces online">
-      <p style={styles.subtitle}>
+      <p>
         {/* Where it asks from, always: a name is only what the asker calls itself (spec 06 §2.3). */}
         {request.name ? (
           <>
@@ -556,19 +527,17 @@ function ApproveCarrier({ incoming, request }: { incoming: IncomingRequest; requ
       <WhichAccount label="The account it will keep online" busy={busy} />
 
       {elsewhere.length > 0 && (
-        <div style={{ ...styles.errorBox, marginTop: 0, marginBottom: 12 }}>
-          <p style={{ ...styles.todoText }}>
-            It keeps {elsewhere.map((account) => `“${account.name}”`).join(' and ')} online now
-          </p>
-          <p style={styles.errorHint}>
+        <aside data-tone="danger" className="stack">
+          <strong>It keeps {elsewhere.map((account) => `“${account.name}”`).join(' and ')} online now</strong>
+          <p>
             It keeps one account online at a time. Allowing it here switches it to {session.account.name}, and{' '}
             {elsewhere.length === 1 ? 'that account stops' : 'those accounts stop'} being kept online. Wanted
             the other one? Choose “Use another account” above.
           </p>
-        </div>
+        </aside>
       )}
 
-      <Note title="What it can do" below={12}>
+      <Note title="What it can do">
         Hold your spaces as they travel, with private ones still locked, and pass them on to your other
         devices and the people you share with.
         {pod ? ` Keep your pod, “${pod}”, up to date — it asks you to pick the folder next.` : ''}
@@ -578,10 +547,10 @@ function ApproveCarrier({ incoming, request }: { incoming: IncomingRequest; requ
         space's key.
       </Note>
 
-      <p style={{ ...styles.errorHint, marginBottom: 20 }}>
+      <small>
         Like a relay, it can see who wrote something and when, but not what it says. You can disconnect it any
         time in your account.
-      </p>
+      </small>
 
       <Answer
         error={error}
@@ -633,16 +602,12 @@ function ApproveProposal({ incoming, request }: { incoming: IncomingRequest; req
   if (!connection) {
     return (
       <Frame title="Not connected here">
-        <p style={styles.subtitle}>
+        <p>
           {asker(origin)} suggested what to notify you about, but it isn't connected to your account,{' '}
           {session.account.name}, in this home. Connect it first — or, if it keeps another account, switch to
           that one.
         </p>
-        <button
-          onClick={() => incoming.deny('It is not connected to this account here. Connect it first.')}
-          data-variant="quiet"
-          style={{ ...styles.button, background: palette.surface.card, color: palette.ink.strong }}
-        >
+        <button onClick={() => incoming.deny('It is not connected to this account here. Connect it first.')}>
           Close
         </button>
       </Frame>
@@ -651,13 +616,13 @@ function ApproveProposal({ incoming, request }: { incoming: IncomingRequest; req
 
   return (
     <Frame title="Notify you when…">
-      <p style={styles.subtitle}>
-        “{who}” suggests these for your account,{' '}
-        <strong style={{ color: palette.ink.strong }}>{session.account.name}</strong>. Keep the ones you want.
+      <p>
+        “{who}” suggests these for your account, <strong>{session.account.name}</strong>. Keep the ones you
+        want.
       </p>
 
-      <section style={{ marginBottom: 20 }}>
-        <div style={stack(6)}>
+      <section className="stack">
+        <ul role="list">
           {request.automations.map((proposal, index) => (
             <Tick
               key={index}
@@ -668,11 +633,11 @@ function ApproveProposal({ incoming, request }: { incoming: IncomingRequest; req
               {proposal.name}
             </Tick>
           ))}
-        </div>
-        <p style={styles.errorHint}>
+        </ul>
+        <small>
           {who} lets you know itself, while it is open. You can pause or remove these any time in your
           account.
-        </p>
+        </small>
       </section>
 
       <Answer
@@ -701,11 +666,13 @@ function Tick({
   children: ReactNode;
 }) {
   return (
-    <label data-choice style={styles.choice}>
-      <input type="checkbox" checked={on} onChange={onToggle} style={{ ...styles.checkbox, marginTop: 0 }} />
-      <span style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10 }}>{children}</span>
-      <span style={styles.faint}>{note}</span>
-    </label>
+    <li>
+      <label>
+        <input type="checkbox" checked={on} onChange={onToggle} />
+        <span className="row truncate">{children}</span>
+        <small>{note}</small>
+      </label>
+    </li>
   );
 }
 
@@ -749,18 +716,13 @@ function WhichAccount({ label, busy, onSwitch }: { label: string; busy: boolean;
   const session = useSession();
   const picture = useAccountPicture();
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+    <div className="row">
       <Avatar did={session.did} size={32} src={picture} />
-      <div style={{ flex: 1 }}>
-        <p style={{ ...styles.todoText, margin: 0 }}>{session.account.name}</p>
-        <p style={{ ...styles.errorHint, margin: 0 }}>{label}</p>
+      <div className="stack truncate" data-gap="tight">
+        <strong>{session.account.name}</strong>
+        <small>{label}</small>
       </div>
-      <button
-        onClick={onSwitch ?? chooseAgain}
-        disabled={busy}
-        data-variant="ghost"
-        style={{ ...styles.linkButton, fontSize: 13 }}
-      >
+      <button onClick={onSwitch ?? chooseAgain} disabled={busy} data-intent="ghost">
         Use another account
       </button>
     </div>
@@ -768,12 +730,12 @@ function WhichAccount({ label, busy, onSwitch }: { label: string; busy: boolean;
 }
 
 /** A boxed explanation: what something may do, or may not */
-function Note({ title, below = 20, children }: { title: string; below?: number; children: ReactNode }) {
+function Note({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div style={{ ...styles.note, marginBottom: below }}>
-      <p style={styles.todoText}>{title}</p>
-      <p style={styles.errorHint}>{children}</p>
-    </div>
+    <aside className="stack" data-gap="tight">
+      <strong>{title}</strong>
+      <small>{children}</small>
+    </aside>
   );
 }
 
@@ -819,27 +781,12 @@ function Answer({
   const allow = () => (proveTo && !auth.mayGrant() ? setProving(true) : void onAllow());
   return (
     <>
-      {error && (
-        <div style={{ ...styles.errorBox, marginBottom: 16 }}>
-          <p style={styles.error}>{error}</p>
-        </div>
-      )}
-      <div style={stack(8)}>
-        <button onClick={allow} disabled={busy || blocked} data-variant="primary" style={styles.button}>
+      {error && <aside data-tone="danger">{error}</aside>}
+      <div className="stack">
+        <button onClick={allow} disabled={busy || blocked} data-intent="primary">
           {allowLabel}
         </button>
-        <button
-          onClick={onDeny}
-          disabled={busy}
-          data-variant="quiet"
-          // The secondary of the two: the card's white and the navy rule, at the primary's size.
-          style={{
-            ...styles.button,
-            background: palette.surface.card,
-            color: palette.ink.strong,
-            borderColor: palette.surface.rule,
-          }}
-        >
+        <button onClick={onDeny} disabled={busy}>
           {denyLabel}
         </button>
       </div>
@@ -873,17 +820,7 @@ function constitution(space: NewSpace, me: string): string {
 /** The six digits a program connected by code needs, in two groups: "482 913" */
 function CheckCode({ check }: { check: string }) {
   return (
-    <span
-      style={{
-        display: 'block',
-        margin: '12px 0 4px',
-        fontFamily: palette.mono,
-        fontSize: 28,
-        fontWeight: 600,
-        letterSpacing: '0.12em',
-        color: palette.ink.strong,
-      }}
-    >
+    <span className={styles.check}>
       {check.slice(0, 3)} {check.slice(3)}
     </span>
   );
@@ -898,14 +835,10 @@ function lasts(days: number): string {
 /** The page around it, under Minca's mark; the sign-in element's own is hidden in the home's styles */
 function Frame({ title, children }: { title?: ReactNode; children: ReactNode }) {
   return (
-    <div className="page" style={{ paddingTop: 32 }}>
-      <div style={{ ...styles.card, paddingTop: 0 }}>
-        <div style={{ marginBottom: 32 }}>
-          <Wordmark compact />
-        </div>
-        {title && <h1 style={styles.title}>{title}</h1>}
-        {children}
-      </div>
-    </div>
+    <main className={styles.frame}>
+      <Wordmark />
+      {title && <h1>{title}</h1>}
+      {children}
+    </main>
   );
 }

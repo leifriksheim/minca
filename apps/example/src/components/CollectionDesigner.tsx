@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
+import { useRef, useState, type KeyboardEvent } from 'react';
 import { useMayDefine } from '@minca/app-shared/may';
 import type { DefineCollection, JsonSchema, NodeCollection, SpaceSummary } from '@minca/core';
 import { useAccount, useCollections, useNode, useProfiles } from '@minca/react';
@@ -17,9 +17,9 @@ import {
   type FieldTypeName,
 } from '../derive/field-types';
 import { SchemaForm } from './SchemaForm';
-import { styles, palette, ui, hstack, stack } from '../styles';
-import { PrimaryButton, QuietButton } from './Buttons';
+import styles from './CollectionDesigner.module.css';
 import { confirmThen } from '../confirm';
+import { Info } from '@minca/app-shared/Info';
 
 type LinkDeclaration = NonNullable<DefineCollection['links']>[string];
 
@@ -310,40 +310,31 @@ export function CollectionEditor({
     );
 
   const designer = (
-    <div className="designer" style={{ display: 'grid', gap: 28, alignItems: 'start' }}>
-      <div style={{ ...stack(28), minWidth: 0 }}>
-        <section style={section}>
+    <div className={styles.designer}>
+      <div className="stack" data-gap="loose">
+        <section>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder={making ? 'What are you keeping track of? A book, a chore, an idea…' : 'Name'}
             aria-label="Name"
             autoFocus={making}
-            style={{ ...styles.input, height: 48, fontSize: 18, fontWeight: 600 }}
           />
           <input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="A sentence on what it is (optional)"
             aria-label="Description"
-            style={styles.input}
           />
           {making && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-              <span style={{ fontSize: 12.5, color: palette.ink.faint, marginRight: 2 }}>Start from</span>
+            <div className="row" data-gap="tight">
+              <small>Start from</small>
               {TEMPLATES.map((t) => (
                 <button
                   key={t.title}
                   type="button"
                   onClick={() => applyTemplate(t)}
                   aria-pressed={template === t.title}
-                  data-variant="quiet"
-                  style={{
-                    ...chip,
-                    ...(template === t.title
-                      ? { borderColor: palette.ink.strong, color: palette.ink.strong }
-                      : {}),
-                  }}
                 >
                   {t.title}
                 </button>
@@ -352,28 +343,19 @@ export function CollectionEditor({
           )}
         </section>
 
-        <section style={section}>
+        <section>
           <Heading title="Fields" about={`What every ${thing} has.`} />
-          <ol
-            style={{
-              listStyle: 'none',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8,
-              padding: 0,
-              margin: 0,
-            }}
-          >
+          <ol role="list">
             {fields.map((field, i) => (
-              <li key={field.id} style={fieldCard}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <li key={field.id} className="stack">
+                <div className="row">
+                  <div className="stack" data-gap="tight">
                     <button
                       type="button"
                       onClick={() => move(field.id, -1)}
                       disabled={i === 0}
                       aria-label={`Move ${field.label || 'field'} up`}
-                      style={nudge}
+                      data-intent="inline"
                     >
                       ▲
                     </button>
@@ -382,18 +364,14 @@ export function CollectionEditor({
                       onClick={() => move(field.id, 1)}
                       disabled={i === fields.length - 1}
                       aria-label={`Move ${field.label || 'field'} down`}
-                      style={nudge}
+                      data-intent="inline"
                     >
                       ▼
                     </button>
                   </div>
                   {field.type === null ? (
-                    <span
-                      title="A shape this editor doesn't offer: kept exactly as it is"
-                      style={{ ...typeButton, cursor: 'default' }}
-                    >
-                      <span style={mark}>{'{}'}</span>
-                      <span>as it is</span>
+                    <span className="tag" title="A shape this editor doesn't offer: kept exactly as it is">
+                      {'{}'} as it is
                     </span>
                   ) : (
                     <button
@@ -401,11 +379,9 @@ export function CollectionEditor({
                       onClick={() => setPicking(picking === field.id ? null : field.id)}
                       aria-expanded={picking === field.id}
                       aria-label={`Type of ${field.label || 'field'}: ${field.type}`}
-                      style={typeButton}
                     >
-                      <span style={mark}>{FIELD_TYPE_INFO[field.type].mark}</span>
-                      <span>{field.type}</span>
-                      <span style={{ color: palette.ink.faint, fontSize: 10 }}>▾</span>
+                      <span className="tag">{FIELD_TYPE_INFO[field.type].mark}</span>
+                      {field.type} ▾
                     </button>
                   )}
                   <input
@@ -424,9 +400,8 @@ export function CollectionEditor({
                     placeholder="What is it called?"
                     aria-label={`Field ${i + 1} name`}
                     title={storedName(field) ? `Stored as ${storedName(field)}` : undefined}
-                    style={{ ...styles.input, flex: '1 1 180px', width: 'auto', minWidth: 0, height: 36 }}
                   />
-                  <label style={toggle} title="Every one must have this filled in">
+                  <label title="Every one must have this filled in">
                     <input
                       type="checkbox"
                       checked={field.required}
@@ -438,15 +413,15 @@ export function CollectionEditor({
                     type="button"
                     onClick={() => setFields((all) => all.filter((f) => f.id !== field.id))}
                     aria-label={`Remove ${field.label || `field ${i + 1}`}`}
-                    data-variant="ghost"
-                    style={styles.rowAction}
+                    data-intent="ghost"
+                    data-icon
                   >
                     ✕
                   </button>
                 </div>
 
                 {picking === field.id && (
-                  <div role="listbox" aria-label="Field type" style={typeGrid}>
+                  <div role="listbox" aria-label="Field type" className="grid">
                     {Object.keys(FIELD_TYPES)
                       .filter(isFieldType)
                       .map((type) => (
@@ -459,28 +434,13 @@ export function CollectionEditor({
                             setField(field.id, { type });
                             setPicking(null);
                           }}
-                          style={{
-                            ...typeTile,
-                            ...(field.type === type
-                              ? {
-                                  borderColor: palette.ink.strong,
-                                  boxShadow: `0 0 0 1px ${palette.ink.strong}`,
-                                }
-                              : {}),
-                          }}
+                          data-intent="open"
+                          className={`row ${styles.tile}`}
                         >
-                          <span style={{ ...mark, width: 30, height: 30, fontSize: 13 }}>
-                            {FIELD_TYPE_INFO[type].mark}
-                          </span>
-                          <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                            <strong
-                              style={{ fontSize: 13, color: palette.ink.strong, textTransform: 'capitalize' }}
-                            >
-                              {type}
-                            </strong>
-                            <span style={{ fontSize: 11.5, color: palette.ink.muted, lineHeight: 1.35 }}>
-                              {FIELD_TYPE_INFO[type].hint}
-                            </span>
+                          <span className="tag">{FIELD_TYPE_INFO[type].mark}</span>
+                          <span className="stack" data-gap="tight">
+                            <strong>{type}</strong>
+                            <small>{FIELD_TYPE_INFO[type].hint}</small>
                           </span>
                         </button>
                       ))}
@@ -494,71 +454,71 @@ export function CollectionEditor({
                   field.original &&
                   field.type !== null &&
                   field.type !== fieldTypeOf(field.original) && (
-                    <p style={{ fontSize: 12, color: palette.ink.muted, paddingLeft: 30 }}>
+                    <small>
                       What's already written stays as it is; entries that don't fit the new type show as not
                       fitting.
-                    </p>
+                    </small>
                   )}
               </li>
             ))}
           </ol>
-          <button type="button" onClick={addField} style={addField_}>
+          <button type="button" onClick={addField}>
             + Add a field
           </button>
         </section>
 
-        <section style={section}>
+        <section>
           <Heading
             title="Connections"
             about={`What one ${thing} can point at: the poll a vote is about, the project a task is part of.`}
           />
-          {links.map((link) => (
-            <div key={link.id} style={fieldCard}>
-              <div style={{ ...hstack(8), alignItems: 'center', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 14, color: palette.ink.muted }}>Each {thing} is</span>
-                <input
-                  aria-label="Connection name"
-                  value={link.label}
-                  onChange={(e) => setLink(link.id, { label: e.target.value })}
-                  placeholder="about, in, part of…"
-                  style={{ ...styles.input, width: 150, height: 34 }}
-                />
-                <select
-                  aria-label="How many"
-                  value={link.many ? 'many' : 'one'}
-                  onChange={(e) => setLink(link.id, { many: e.target.value === 'many' })}
-                  style={{ ...styles.input, width: 'auto', height: 34 }}
-                >
-                  <option value="one">one</option>
-                  <option value="many">any number of</option>
-                </select>
-                <select
-                  aria-label="What it points at"
-                  value={link.to.length === 1 ? link.to[0] : link.to.length === 0 ? '*' : 'several'}
-                  onChange={(e) => setLink(link.id, { to: e.target.value === '*' ? [] : [e.target.value] })}
-                  style={{ ...styles.input, width: 'auto', height: 34 }}
-                >
-                  <option value="*">anything</option>
-                  {link.to.length > 1 && <option value="several">{link.to.length} kinds</option>}
-                  {targets.map((c) => (
-                    <option key={c.name} value={c.name}>
-                      {collectionLabel(c).toLowerCase()}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={() => setLinks((all) => all.filter((l) => l.id !== link.id))}
-                  aria-label={`Remove connection ${link.label}`}
-                  data-variant="ghost"
-                  style={{ ...styles.rowAction, marginLeft: 'auto' }}
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-          ))}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {links.length > 0 && (
+            <ul role="list">
+              {links.map((link) => (
+                <li key={link.id} className="row">
+                  <span>Each {thing} is</span>
+                  <input
+                    aria-label="Connection name"
+                    value={link.label}
+                    onChange={(e) => setLink(link.id, { label: e.target.value })}
+                    placeholder="about, in, part of…"
+                  />
+                  <select
+                    aria-label="How many"
+                    value={link.many ? 'many' : 'one'}
+                    onChange={(e) => setLink(link.id, { many: e.target.value === 'many' })}
+                  >
+                    <option value="one">one</option>
+                    <option value="many">any number of</option>
+                  </select>
+                  <select
+                    aria-label="What it points at"
+                    value={link.to.length === 1 ? link.to[0] : link.to.length === 0 ? '*' : 'several'}
+                    onChange={(e) => setLink(link.id, { to: e.target.value === '*' ? [] : [e.target.value] })}
+                  >
+                    <option value="*">anything</option>
+                    {link.to.length > 1 && <option value="several">{link.to.length} kinds</option>}
+                    {targets.map((c) => (
+                      <option key={c.name} value={c.name}>
+                        {collectionLabel(c).toLowerCase()}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setLinks((all) => all.filter((l) => l.id !== link.id))}
+                    aria-label={`Remove connection ${link.label}`}
+                    data-intent="ghost"
+                    data-icon
+                    className={styles.end}
+                  >
+                    ✕
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="row" data-gap="tight">
             {SUGGESTED_LINKS.filter((s) => !links.some((l) => relFrom(l.label) === s.rel)).map((s) => (
               <button
                 key={s.rel}
@@ -576,8 +536,6 @@ export function CollectionEditor({
                     },
                   ])
                 }
-                data-variant="quiet"
-                style={chip}
               >
                 + {humanize(s.rel).toLowerCase()}
               </button>
@@ -585,13 +543,13 @@ export function CollectionEditor({
           </div>
         </section>
 
-        <section style={section}>
+        <section>
           <Heading
             title="What it keeps to"
             about="Every device in the space enforces this. Who may add or change records is the space's roles."
           />
           {making && about && (
-            <label style={{ ...toggle, fontSize: 13.5 }}>
+            <label>
               <input type="checkbox" checked={onePer} onChange={(e) => setOnePer(e.target.checked)} />
               One per person, per{' '}
               {collectionLabel(
@@ -601,7 +559,7 @@ export function CollectionEditor({
             </label>
           )}
           {!making && collection?.rules.onePer && (
-            <p style={styles.quiet}>
+            <p>
               One per{' '}
               {collection.rules.onePer
                 .map((part) =>
@@ -614,41 +572,46 @@ export function CollectionEditor({
         </section>
 
         {!making && (
-          <p style={{ fontSize: 12.5, color: palette.ink.faint, lineHeight: 1.5 }}>
-            Changes reach everyone in the space and apply to what's written from now on. Nothing already
-            written is changed or deleted. Stored as <code>{name}</code>.
-          </p>
+          <small>
+            Stored as <code>{name}</code>
+            <Info label="Who this changes">
+              Changes reach everyone in the space and apply to what's written from now on. Nothing already
+              written is changed or deleted.
+            </Info>
+          </small>
         )}
-        {error && <p style={styles.error}>{error}</p>}
-        <div style={{ ...hstack(8), alignItems: 'center', flexWrap: 'wrap' }}>
-          <PrimaryButton type="button" onClick={() => void save()} disabled={busy} style={{ width: 'auto' }}>
-            {busy ? 'Saving…' : making ? `Create ${title.trim() || 'collection'}` : 'Save changes'}
-          </PrimaryButton>
-          <QuietButton type="button" onClick={() => onDone(null)} style={{ height: 40 }}>
-            Cancel
-          </QuietButton>
-          {collection && (
-            <button
-              type="button"
-              onClick={() => remove(collection)}
-              disabled={busy || !!cannotDelete}
-              title={cannotDelete ?? undefined}
-              data-variant="danger"
-              style={{ ...styles.smallButton, height: 40, color: palette.accent.danger, marginLeft: 'auto' }}
-            >
-              Delete
+        {error && <p role="alert">{error}</p>}
+        <div className="stack">
+          <div className="row">
+            <button type="button" data-intent="primary" onClick={() => void save()} disabled={busy}>
+              {busy ? 'Saving…' : making ? `Create ${title.trim() || 'collection'}` : 'Save changes'}
             </button>
-          )}
+            <button type="button" data-intent="ghost" onClick={() => onDone(null)}>
+              Cancel
+            </button>
+            {collection && (
+              <button
+                type="button"
+                onClick={() => remove(collection)}
+                disabled={busy || !!cannotDelete}
+                title={cannotDelete ?? undefined}
+                data-intent="danger"
+                className={styles.end}
+              >
+                Delete
+              </button>
+            )}
+          </div>
+          {cannotDelete && <small>{cannotDelete}</small>}
         </div>
-        {cannotDelete && <p style={{ ...styles.faint, marginTop: -16 }}>{cannotDelete}</p>}
       </div>
 
-      <aside aria-label="Preview" className="designer-preview" style={preview}>
-        <p style={{ ...styles.fieldLabel, marginBottom: 2 }}>Preview</p>
-        <p style={{ fontSize: 12.5, color: palette.ink.muted, marginBottom: 12 }}>
-          The form for adding {title.trim() ? `a ${thing}` : 'one'}.
-        </p>
-        <fieldset disabled style={{ border: 'none', padding: 0, margin: 0, minWidth: 0 }}>
+      <aside aria-label="Preview" className={`stack ${styles.preview}`}>
+        <div className="stack" data-gap="tight">
+          <strong>Preview</strong>
+          <small>The form for adding {title.trim() ? `a ${thing}` : 'one'}.</small>
+        </div>
+        <fieldset disabled>
           <SchemaForm
             key={JSON.stringify(schema)}
             schema={schema}
@@ -661,13 +624,13 @@ export function CollectionEditor({
   );
   if (!collection) return designer;
   return (
-    <section aria-label={`Edit what ${label} is`} style={stack(20)}>
-      <header style={stack(4)}>
-        <h2 style={{ ...styles.appTitle, fontSize: 22 }}>Edit {label}</h2>
-        <p style={{ ...styles.quiet, lineHeight: 1.5 }}>
+    <section aria-label={`Edit what ${label} is`}>
+      <div className="stack" data-gap="tight">
+        <h2>Edit {label}</h2>
+        <small>
           What every {label.toLowerCase()} is. Every device in the space checks new ones against it.
-        </p>
-      </header>
+        </small>
+      </div>
       {designer}
     </section>
   );
@@ -699,15 +662,15 @@ function Options({
     }
   };
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', paddingLeft: 30 }}>
+    <div className="row" data-gap="tight">
       {options.map((option) => (
-        <span key={option} style={optionChip}>
+        <span key={option} className="tag">
           {option}
           <button
             type="button"
             onClick={() => onChange(options.filter((o) => o !== option))}
             aria-label={`Remove ${option}`}
-            style={{ border: 'none', background: 'none', padding: 0, color: palette.ink.faint, fontSize: 12 }}
+            data-intent="inline"
           >
             ✕
           </button>
@@ -720,7 +683,6 @@ function Options({
         onBlur={add}
         placeholder={options.length ? 'Add another…' : 'Type an option, then Enter'}
         aria-label="Add an option"
-        style={{ ...styles.input, height: 30, width: 190, fontSize: 13 }}
       />
     </div>
   );
@@ -728,104 +690,9 @@ function Options({
 
 function Heading({ title, about }: { title: string; about: string }) {
   return (
-    <div>
-      <h3 style={{ ...styles.sectionTitle, fontSize: 15 }}>{title}</h3>
-      <p style={{ ...styles.quiet, marginTop: 2 }}>{about}</p>
+    <div className="stack" data-gap="tight">
+      <h3>{title}</h3>
+      <small>{about}</small>
     </div>
   );
 }
-
-const section: CSSProperties = stack(10);
-const fieldCard: CSSProperties = { ...stack(10), padding: 8, ...styles.tile };
-const nudge: CSSProperties = {
-  border: 'none',
-  background: 'none',
-  color: palette.ink.faint,
-  fontSize: 8,
-  lineHeight: 1,
-  padding: '2px 4px',
-};
-const typeButton: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 8,
-  height: 36,
-  padding: '0 14px 0 4px',
-  borderRadius: palette.radius.pill,
-  border: `1px solid ${palette.surface.line}`,
-  background: palette.surface.sunken,
-  color: palette.ink.body,
-  fontSize: 13,
-  whiteSpace: 'nowrap',
-  flexShrink: 0,
-  minWidth: 138,
-};
-const mark: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  width: 28,
-  height: 28,
-  borderRadius: palette.radius.pill,
-  background: palette.surface.card,
-  border: `1px solid ${palette.surface.line}`,
-  fontSize: 12,
-  fontWeight: 600,
-  color: palette.ink.strong,
-  flexShrink: 0,
-};
-const typeGrid: CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))',
-  gap: 6,
-  padding: 6,
-  borderRadius: palette.radius.lg,
-  background: palette.surface.sunken,
-};
-const typeTile: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 10,
-  padding: 8,
-  borderRadius: palette.radius.md,
-  border: `1px solid ${palette.surface.line}`,
-  background: palette.surface.card,
-  textAlign: 'left',
-};
-const toggle: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 6,
-  fontSize: 12.5,
-  color: palette.ink.muted,
-  whiteSpace: 'nowrap',
-};
-const chip: CSSProperties = { ...ui.chip, padding: '0 12px' };
-const optionChip: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 6,
-  height: 26,
-  padding: '0 8px 0 10px',
-  borderRadius: palette.radius.pill,
-  background: palette.surface.sunken,
-  border: `1px solid ${palette.surface.line}`,
-  fontSize: 13,
-  color: palette.ink.strong,
-};
-const addField_: CSSProperties = {
-  height: 40,
-  borderRadius: palette.radius.pill,
-  border: `1px dashed ${palette.surface.lineStrong}`,
-  background: 'none',
-  color: palette.ink.muted,
-  fontSize: 13.5,
-  fontWeight: 500,
-};
-const preview: CSSProperties = {
-  position: 'sticky',
-  top: 0,
-  padding: 16,
-  borderRadius: palette.radius.lg,
-  background: palette.surface.sunken,
-};

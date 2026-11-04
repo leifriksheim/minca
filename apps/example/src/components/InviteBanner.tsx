@@ -1,8 +1,6 @@
 import type { SpaceSummary } from '@minca/core';
 import { useInviteLink, useMyName } from '@minca/react';
 import { NameField } from './NameField';
-import { styles } from '../styles';
-import { AddButton, LinkButton } from './Buttons';
 
 /** Offered when the page was opened from a share link: join the space, or not now. */
 export function InviteBanner({ onJoin }: { onJoin: (invite: string) => Promise<SpaceSummary | null> }) {
@@ -18,14 +16,16 @@ export function InviteBanner({ onJoin }: { onJoin: (invite: string) => Promise<S
     : 'This invite could not be read.';
 
   return (
-    <div style={styles.inviteBanner}>
-      <p style={styles.todoText}>You were invited to {description}</p>
-      <p style={styles.todoMeta}>{detail}</p>
-      <div style={{ marginTop: 12, maxWidth: 320 }}>
-        <NameField value={me.name} onChange={me.setName} />
+    <aside className="stack">
+      <div>
+        <strong>You were invited to {description}</strong>
+        <br />
+        <small>{detail}</small>
       </div>
-      <div style={styles.linkRow}>
-        <AddButton
+      <NameField value={me.name} onChange={me.setName} />
+      <div className="row" data-gap="tight">
+        <button
+          data-intent="primary"
           onClick={() =>
             void me
               .save()
@@ -34,9 +34,11 @@ export function InviteBanner({ onJoin }: { onJoin: (invite: string) => Promise<S
           }
         >
           Join this space
-        </AddButton>
-        <LinkButton onClick={dismiss}>Not now</LinkButton>
+        </button>
+        <button data-intent="ghost" onClick={dismiss}>
+          Not now
+        </button>
       </div>
-    </div>
+    </aside>
   );
 }

@@ -16,6 +16,7 @@ import { AddMenu, EmojiPicker } from './menus';
 import { Avatar, Person } from './people';
 import { recordTitle } from './record';
 import { Shared, Sharing, useShare } from './share';
+import { Icon } from './shapes';
 
 const COMMENT = 'std.comment';
 const FILE = 'std.file';
@@ -67,16 +68,16 @@ export function Comments({ about }: { about: Pick<ScreenRecord, 'key' | 'created
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
   };
 
-  return html`<section class="stack comments" aria-label="Comments" style="gap: 14px">
-    <h3>Comments ${comments?.length ? html`<span class="faint">${comments.length}</span>` : ''}</h3>
+  return html`<section aria-label="Comments">
+    <h3>Comments ${comments?.length ? html`<small>${comments.length}</small>` : ''}</h3>
     ${(comments ?? []).map(
       (c) =>
-        html`<div class="row" key=${c.key} style="align-items: flex-start; gap: 10px">
+        html`<div class="comment" key=${c.key}>
           <${Avatar} did=${c.createdBy ?? ''} size=${26} round />
-          <div style="min-width: 0">
+          <div>
             <div>
               <${Person} did=${c.createdBy ?? ''} face=${false} />
-              <span class="faint">· ${ago(c.createdAt)}</span>
+              <small>· ${ago(c.createdAt)}</small>
             </div>
             <p class="comment-text"><${MentionText} text=${c.body.text ?? ''} /></p>
             <${Shared} from=${c} />
@@ -88,7 +89,7 @@ export function Comments({ about }: { about: Pick<ScreenRecord, 'key' | 'created
       mayComment &&
       html`<form
         class="stack"
-        style="gap: 6px"
+        data-gap="tight"
         onSubmit=${(event: Event) => {
           event.preventDefault();
           send();
@@ -96,51 +97,51 @@ export function Comments({ about }: { about: Pick<ScreenRecord, 'key' | 'created
       >
         ${
           (share.sharing || files.length > 0) &&
-          html`<div class="row" style="flex-wrap: wrap">
+          html`<div class="row">
             ${share.sharing && html`<${Sharing} share=${share} />`}
             ${files.map(
               (file, i) =>
-                html`<span class="chip row" key=${i}>
-                  <span class="ellipsis">${file.name}</span>
+                html`<span class="tag" key=${i}>
+                  <span class="truncate">${file.name}</span>
                   <button
                     type="button"
-                    data-variant="ghost"
+                    data-intent="ghost"
                     data-icon
                     aria-label=${`Don't attach ${file.name}`}
                     onClick=${() => setFiles(files.filter((_, j) => j !== i))}
                   >
-                    ✕
+                    <${Icon} name="close" />
                   </button>
                 </span>`,
             )}
           </div>`
         }
-        <div class="row">
-          <div class="composer">
-            <${AddMenu}
-              onShare=${() => void share.pick()}
-              onFiles=${mayAttach ? (picked: File[]) => setFiles([...files, ...picked]) : null}
-            />
-            <${MentionInput}
-              value=${draft}
-              onChange=${(next: string) => setDraft(share.typed(draft, next))}
-              placeholder="Write a comment…"
-              aria-label="Write a comment"
-            />
-            <div class="composer-end">
-              <${EmojiPicker} onPick=${(emoji: string) => setDraft(draft + emoji)} />
-            </div>
+        <div class="composer">
+          <${AddMenu}
+            onShare=${() => void share.pick()}
+            onFiles=${mayAttach ? (picked: File[]) => setFiles([...files, ...picked]) : null}
+          />
+          <${MentionInput}
+            value=${draft}
+            onChange=${(next: string) => setDraft(share.typed(draft, next))}
+            placeholder="Write a comment…"
+            aria-label="Write a comment"
+          />
+          <div class="composer-end">
+            <${EmojiPicker} onPick=${(emoji: string) => setDraft(draft + emoji)} />
+            <button
+              type="submit"
+              data-intent="primary"
+              data-icon
+              aria-label="Send"
+              disabled=${!draft.trim() && !share.sharing && files.length === 0}
+            >
+              <${Icon} name="send" />
+            </button>
           </div>
-          <button
-            type="submit"
-            data-variant="primary"
-            disabled=${!draft.trim() && !share.sharing && files.length === 0}
-          >
-            Send
-          </button>
         </div>
       </form>`
     }
-    ${(error ?? share.error) && html`<p class="error">${error ?? share.error}</p>`}
+    ${(error ?? share.error) && html`<p role="alert">${error ?? share.error}</p>`}
   </section>`;
 }

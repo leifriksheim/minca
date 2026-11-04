@@ -1,0 +1,15 @@
+/* The bar along the top of the site and the account home: one outlined pill, as wide as the page's column */
+.bar {
+  width: 100%;
+  max-width: 880px;
+  height: 56px;
+  margin-inline: auto;
+  padding: 0 8px 0 20px;
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-control);
+  background: var(--color-page);
+
+  @media (max-width: 640px) {
+    padding: 0 6px 0 16px;
+  }
+}

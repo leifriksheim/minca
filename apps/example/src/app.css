@@ -1,0 +1,44 @@
+/*
+ * Moving between pages (transitions.ts), short and soft: forward, the new page comes in from a little
+ * to the right as the old one leaves to the left; back, the other way; a cross-fade between tabs or
+ * apps. The bars and the rail stay put (each names its own view-transition-name).
+ */
+::view-transition-old(root) {
+  animation: page-out 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+::view-transition-new(root) {
+  animation: page-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+html:active-view-transition-type(forward) {
+  --page-out: -16px 0;
+  --page-in: 16px 0;
+}
+html:active-view-transition-type(back) {
+  --page-out: 16px 0;
+  --page-in: -16px 0;
+}
+html:active-view-transition-type(fade) {
+  --page-in: 0 4px;
+}
+
+@keyframes page-out {
+  to {
+    opacity: 0;
+    translate: var(--page-out, 0);
+  }
+}
+@keyframes page-in {
+  from {
+    opacity: 0;
+    translate: var(--page-in, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}

@@ -6,9 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
-  type ReactElement,
 } from 'react';
 import { useLive, useNode, useProfiles } from '@minca/react';
 import type { NodeCollection, NodeRecord, SpaceSummary } from '@minca/core';
@@ -16,10 +14,10 @@ import { collectionLabel, humanize, recordLabel } from '../derive/schema-ui';
 import { nameOf, peopleFrom } from '../derive/people';
 import { ago } from '@minca/ui/time';
 import { RecordPanel } from './RecordPanel';
-import { SHAPE_CYCLE } from '@minca/ui/tokens';
-import { styles, palette, ui, stack } from '../styles';
 import { Person } from './Person';
-import { Loading } from './Loading';
+import { Loader } from '@minca/app-shared/Loader';
+import styles from './GraphView.module.css';
+import { Info } from '@minca/app-shared/Info';
 
 /** A dot on the map: a record, or — when people are shown — a person */
 interface Dot {
@@ -28,7 +26,8 @@ interface Dot {
   readonly did?: string;
   readonly collection: string;
   readonly label: string;
-  readonly color: string;
+  /** Its collection's colour: a hue, "1" to "5", or a grey, "g0" to "g2" (data-hue) */
+  readonly hue: string;
   readonly r: number;
 }
 
@@ -88,16 +87,14 @@ const writerOf = (record: NodeRecord) => record.createdBy ?? record.root ?? reco
  * the shapes' colours in turn.
  */
 function coloursFor(names: ReadonlyArray<string>): Map<string, string> {
-  const greys = [palette.ink.faint, palette.surface.lineStrong, palette.ink.muted];
   const map = new Map<string, string>();
-  let grey = 0;
   let hue = 0;
-  for (const name of names) {
-    if (name.startsWith('std.')) map.set(name, greys[grey++ % greys.length]!);
-    else map.set(name, palette.shapes[SHAPE_CYCLE[hue++ % SHAPE_CYCLE.length] ?? 'cobalt']);
-  }
+  for (const name of names) if (!name.startsWith('std.')) map.set(name, String((hue++ % 5) + 1));
   return map;
 }
+
+/** A collection's data-hue: none, grey */
+const NO_HUE = '';
 
 /** One step of d3-force's recipe: springs, an all-pairs push (why the map caps its dots), a pull to the middle. */
 function tick(places: ReadonlyArray<Place>, springs: ReadonlyArray<Spring>, alpha: number): void {
@@ -293,7 +290,7 @@ export function GraphView({
       record: r,
       collection: r.collection,
       label: recordLabel(r, schemaOf(r.collection)),
-      color: colours.get(r.collection) ?? palette.ink.faint,
+      hue: colours.get(r.collection) ?? NO_HUE,
       r: 5 + Math.min(7, Math.sqrt(degree.get(r.key) ?? 0) * 1.6),
     }));
     if (showPeople) {
@@ -308,7 +305,7 @@ export function GraphView({
             did,
             collection: '',
             label: nameOf(did, people),
-            color: palette.ink.strong,
+            hue: NO_HUE,
             r: 11,
           });
         }
@@ -619,25 +616,33 @@ export function GraphView({
     });
 
   if (records === undefined)
-    return <Loading label="Loading" style={{ fontSize: 13, color: palette.ink.faint }} />;
+    return (
+      <small>
+        <Loader label="Loading" showLabel />
+      </small>
+    );
 
   const header = (
-    <header>
-      <h2 style={{ ...styles.appTitle, fontSize: 22 }}>Explore</h2>
-      <p style={{ ...styles.quiet, marginTop: 4, lineHeight: 1.6 }}>
-        The records in this space, with a line wherever one points at another. Drag to move around, scroll to
-        zoom, and click a dot to see what it is and follow its lines.
-      </p>
-    </header>
+    <div className="stack" data-gap="tight">
+      <h2>
+        Explore
+        <Info label="How to explore">
+          The records in this space, with a line wherever one points at another. Drag to move around, scroll
+          to zoom, and click a dot to see what it is and follow its lines.
+        </Info>
+      </h2>
+    </div>
   );
 
   if (!hasGraph) {
     return (
-      <section aria-label="Explore" style={{ ...stack(16), minWidth: 0 }}>
+      <section aria-label="Explore" className={styles.explore}>
         {header}
-        <div style={styles.emptyState}>
-          Nothing here yet. Once records are added to this space, they show up here — joined by a line
-          wherever one points at another.
+        <div className="empty">
+          <p>
+            Nothing here yet. Once records are added to this space, they show up here — joined by a line
+            wherever one points at another.
+          </p>
         </div>
       </section>
     );
@@ -650,14 +655,13 @@ export function GraphView({
   const hoverAt = hover ? drawn.get(hover.id) : undefined;
 
   return (
-    <section aria-label="Explore" style={{ ...stack(16), minWidth: 0 }}>
+    <section aria-label="Explore" className={styles.explore}>
       {header}
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+      <div className="row" data-gap="tight">
         {counts.map(([name, count]) => {
           const off = chosen !== null && !chosen.has(name);
           const picked = chosen?.has(name) ?? false;
-          const colour = colours.get(name) ?? palette.ink.faint;
           return (
             <button
               key={name}
@@ -670,46 +674,28 @@ export function GraphView({
                     : 'Add these to the map'
               }
               onClick={() => toggle(name)}
-              style={{
-                ...ui.chip,
-                opacity: off ? 0.55 : 1,
-                ...(picked ? { borderColor: palette.ink.strong, color: palette.ink.strong } : {}),
-              }}
+              data-off={off || undefined}
             >
-              <span
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: palette.radius.pill,
-                  background: off ? 'transparent' : colour,
-                  border: `1.5px solid ${colour}`,
-                  flexShrink: 0,
-                }}
-              />
+              <span className={styles.hue} data-hue={colours.get(name)}>
+                ●
+              </span>
               {nameOfCollection(name)}
-              <span style={{ color: palette.ink.faint, fontVariantNumeric: 'tabular-nums' }}>{count}</span>
+              <small>{count}</small>
             </button>
           );
         })}
         {chosen !== null && (
-          <button onClick={() => choose(() => null)} style={{ ...ui.chip, color: palette.ink.muted }}>
+          <button data-intent="ghost" onClick={() => choose(() => null)}>
             Show everything
           </button>
         )}
-        <span style={{ flex: 1 }} />
-        <button
-          aria-pressed={showPeople}
-          onClick={() => setShowPeople((v) => !v)}
-          style={{ ...ui.chip, ...(showPeople ? ui.chipOn : {}) }}
-        >
+        <button aria-pressed={showPeople} onClick={() => setShowPeople((v) => !v)}>
           Show people
         </button>
-        <button onClick={() => fit()} style={ui.chip}>
-          Fit to screen
-        </button>
+        <button onClick={() => fit()}>Fit to screen</button>
       </div>
 
-      <p style={{ fontSize: 12.5, color: palette.ink.muted, margin: '-6px 0 0', lineHeight: 1.6 }}>
+      <small>
         {chosen === null
           ? 'Click a collection to see only it, then click others to add them.'
           : `Showing ${chosen.size} of ${counts.length} collections.`}
@@ -721,7 +707,7 @@ export function GraphView({
             {budget < BUDGET_MAX && (
               <button
                 onClick={() => setBudget((b) => Math.min(BUDGET_MAX, b + BUDGET_STEP))}
-                style={{ ...plain, color: palette.ink.strong, textDecoration: 'underline', fontSize: 12.5 }}
+                data-intent="inline"
               >
                 show more
               </button>
@@ -729,19 +715,9 @@ export function GraphView({
             {budget >= BUDGET_MAX && chosen === null && ' Pick collections to see more of each.'}
           </>
         )}
-      </p>
+      </small>
 
-      <div
-        ref={wrapRef}
-        className="graph-canvas"
-        style={{
-          position: 'relative',
-          border: `1px solid ${palette.surface.rule}`,
-          borderRadius: palette.radius.xl,
-          background: palette.surface.sunken,
-          overflow: 'hidden',
-        }}
-      >
+      <div ref={wrapRef} className={styles.canvas}>
         <svg
           ref={svgRef}
           width="100%"
@@ -752,12 +728,7 @@ export function GraphView({
           onPointerMove={onMove}
           onPointerUp={onUp}
           onPointerCancel={onUp}
-          style={{
-            display: 'block',
-            touchAction: 'none',
-            cursor: dragging === 'pan' ? 'grabbing' : 'grab',
-            userSelect: 'none',
-          }}
+          data-panning={dragging === 'pan' || undefined}
         >
           <defs>
             {(['base', 'lit'] as const).map((tone) => (
@@ -771,10 +742,7 @@ export function GraphView({
                 markerHeight={6}
                 orient="auto-start-reverse"
               >
-                <path
-                  d="M0,1 L9,5 L0,9 z"
-                  fill={tone === 'lit' ? palette.ink.body : palette.surface.lineStrong}
-                />
+                <path d="M0,1 L9,5 L0,9 z" data-on={tone === 'lit' || undefined} />
               </marker>
             ))}
           </defs>
@@ -795,13 +763,12 @@ export function GraphView({
               const x2 = b.x - (dx / d) * (db.r + 2);
               const y2 = b.y - (dy / d) * (db.r + 2);
               return (
-                <g key={l.id} opacity={dim ? 0.12 : 1}>
+                <g key={l.id} className={styles.line} data-on={on || undefined} data-dim={dim || undefined}>
                   <line
                     x1={x1}
                     y1={y1}
                     x2={x2}
                     y2={y2}
-                    stroke={on ? palette.ink.body : palette.surface.lineStrong}
                     strokeWidth={(on ? 1.4 : 1) / Math.max(k, 0.6)}
                     strokeDasharray={l.from.startsWith(PERSON) ? `${3 / k} ${3 / k}` : undefined}
                     markerEnd={`url(#${uid}-${on ? 'lit' : 'base'})`}
@@ -813,11 +780,7 @@ export function GraphView({
                       textAnchor="middle"
                       dy={-3 / k}
                       fontSize={10 / k}
-                      fill={on ? palette.ink.body : palette.ink.faint}
-                      stroke={palette.surface.sunken}
                       strokeWidth={3 / k}
-                      paintOrder="stroke"
-                      style={{ pointerEvents: 'none' }}
                     >
                       {l.label}
                     </text>
@@ -836,30 +799,17 @@ export function GraphView({
                 <g
                   key={dot.id}
                   transform={`translate(${p.x},${p.y})`}
-                  opacity={dim ? 0.15 : 1}
+                  className={styles.dot}
+                  data-dim={dim || undefined}
+                  data-picked={isPicked || undefined}
                   onPointerDown={(e) => onDotDown(e, dot.id)}
                   onPointerEnter={() => setHovered(dot.id)}
                   onPointerLeave={() => setHovered((h) => (h === dot.id ? null : h))}
-                  style={{ cursor: 'pointer' }}
                 >
-                  {isPicked && (
-                    <circle
-                      r={dot.r + 4}
-                      fill="none"
-                      stroke={palette.ink.strong}
-                      strokeWidth={1.5 / Math.max(k, 0.6)}
-                    />
-                  )}
+                  {isPicked && <circle r={dot.r + 4} data-ring strokeWidth={1.5 / Math.max(k, 0.6)} />}
                   {dot.did ? (
                     <g transform={`translate(${-dot.r},${-dot.r})`}>
-                      <rect
-                        width={dot.r * 2}
-                        height={dot.r * 2}
-                        rx={dot.r / 2}
-                        fill={palette.surface.card}
-                        stroke={palette.ink.strong}
-                        strokeWidth={1}
-                      />
+                      <rect width={dot.r * 2} height={dot.r * 2} rx={dot.r / 2} />
                       <g transform="translate(2,2)">
                         <PersonFace did={dot.did} size={dot.r * 2 - 4} />
                       </g>
@@ -867,23 +817,12 @@ export function GraphView({
                   ) : (
                     <circle
                       r={dot.r}
-                      fill={dot.record?.body === null ? palette.surface.card : dot.color}
-                      stroke={dot.record?.body === null ? dot.color : palette.surface.card}
-                      strokeWidth={1.5}
+                      data-hue={dot.hue || undefined}
+                      data-gone={dot.record?.body === null || undefined}
                     />
                   )}
                   {showLabel && (
-                    <text
-                      x={dot.r + 5 / k}
-                      dy="0.35em"
-                      fontSize={11 / k}
-                      fontWeight={isPicked ? 600 : 400}
-                      fill={palette.ink.body}
-                      stroke={palette.surface.sunken}
-                      strokeWidth={3 / k}
-                      paintOrder="stroke"
-                      style={{ pointerEvents: 'none' }}
-                    >
+                    <text x={dot.r + 5 / k} dy="0.35em" fontSize={11 / k} strokeWidth={3 / k}>
                       {short(dot.label)}
                     </text>
                   )}
@@ -894,28 +833,22 @@ export function GraphView({
         </svg>
 
         {hover && hoverAt && hover.record && !dragging && (
-          <div
+          <article
+            className={styles.tooltip}
+            // Beside the dot pointed at, kept inside the map
+            // eslint-disable-next-line react/forbid-dom-props -- the tooltip sits where the pointer is
             style={{
-              ...tooltip,
               left: clamp(view.x + hoverAt.x * k + 14, 8, Math.max(8, size.w - 240)),
               top: clamp(view.y + hoverAt.y * k + 14, 8, size.h - 70),
             }}
           >
-            <div style={{ fontWeight: 600, color: palette.ink.strong }}>{short(hover.label, 60)}</div>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                marginTop: 4,
-                color: palette.ink.muted,
-              }}
-            >
+            <strong>{short(hover.label, 60)}</strong>
+            <small className="row" data-gap="tight">
               <PersonFace did={writerOf(hover.record)} size={14} />
               {nameOf(writerOf(hover.record), people)} · {nameOfCollection(hover.collection)} ·{' '}
               {ago(hover.record.createdAt)}
-            </div>
-          </div>
+            </small>
+          </article>
         )}
 
         {pick?.did && (
@@ -923,7 +856,7 @@ export function GraphView({
             did={pick.did}
             label={pick.label}
             records={all}
-            colourOf={(name) => colours.get(name) ?? palette.ink.faint}
+            hueOf={(name) => colours.get(name) ?? NO_HUE}
             collectionName={nameOfCollection}
             labelOf={(r) => recordLabel(r, schemaOf(r.collection))}
             onWalk={walkTo}
@@ -943,19 +876,10 @@ export function GraphView({
         )}
 
         {!pick && (
-          <p
-            style={{
-              position: 'absolute',
-              left: 12,
-              bottom: 10,
-              fontSize: 12,
-              color: palette.ink.faint,
-              pointerEvents: 'none',
-            }}
-          >
+          <small className={styles.count}>
             {graph.dots.length} {graph.dots.length === 1 ? 'record' : 'records'} · {graph.lines.length}{' '}
             {graph.lines.length === 1 ? 'line' : 'lines'}
-          </p>
+          </small>
         )}
       </div>
     </section>
@@ -967,7 +891,7 @@ function Details({
   did,
   label,
   records,
-  colourOf,
+  hueOf,
   collectionName,
   labelOf,
   onWalk,
@@ -976,7 +900,7 @@ function Details({
   did: string;
   label: string;
   records: ReadonlyArray<NodeRecord>;
-  colourOf: (collection: string) => string;
+  hueOf: (collection: string) => string;
   collectionName: (collection: string) => string;
   labelOf: (record: NodeRecord) => string;
   onWalk: (id: string, record?: NodeRecord) => void;
@@ -984,121 +908,47 @@ function Details({
 }) {
   const wrote = records.filter((r) => writerOf(r) === did);
   return (
-    <aside aria-label={label} style={panel}>
-      <header
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '10px 12px 10px 16px',
-          borderBottom: `1px solid ${palette.surface.line}`,
-          fontSize: 12.5,
-          color: palette.ink.muted,
-        }}
-      >
-        Person
-        <button onClick={onClose} aria-label="Close" style={{ ...styles.rowAction, fontSize: 13 }}>
+    <article aria-label={label} className={styles.panel}>
+      <header>
+        <small>Person</small>
+        <button onClick={onClose} aria-label="Close" data-intent="ghost" data-icon>
           ✕
         </button>
       </header>
-      <div style={panelBody}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <PersonFace did={did} size={32} />
-          <div>
-            <h3 style={{ ...styles.appTitle, fontSize: 16 }}>
-              <Person did={did} />
-            </h3>
-            <p style={styles.faint}>
-              Wrote {wrote.length} {wrote.length === 1 ? 'record' : 'records'} on the map
-            </p>
-          </div>
+      <div className="row">
+        <PersonFace did={did} size={32} />
+        <div>
+          <h3>
+            <Person did={did} />
+          </h3>
+          <small>
+            Wrote {wrote.length} {wrote.length === 1 ? 'record' : 'records'} on the map
+          </small>
         </div>
-        <Group title="Wrote">
-          {wrote.map((r) => (
-            <li key={r.key}>
-              <button
-                onClick={() => onWalk(r.key, r)}
-                data-row
-                style={{ ...styles.row, padding: '7px 8px', gap: 8, alignItems: 'flex-start' }}
-              >
-                <span
-                  style={{
-                    width: 8,
-                    height: 8,
-                    marginTop: 5,
-                    borderRadius: palette.radius.pill,
-                    flexShrink: 0,
-                    background: colourOf(r.collection),
-                  }}
-                />
-                <span style={{ minWidth: 0, flex: 1 }}>
-                  <span style={{ ...ui.ellipsis, display: 'block', fontSize: 13, color: palette.ink.strong }}>
-                    {labelOf(r)}
-                  </span>
-                  <span style={{ display: 'block', fontSize: 11.5, color: palette.ink.faint }}>
-                    {collectionName(r.collection)}
-                  </span>
-                </span>
-              </button>
-            </li>
-          ))}
-        </Group>
       </div>
-    </aside>
-  );
-}
-
-function Group({ title, children }: { title: string; children: ReadonlyArray<ReactElement> }) {
-  return (
-    <div>
-      <h4 style={{ margin: '0 0 4px', fontSize: 12, fontWeight: 600, color: palette.ink.muted }}>
-        {title}
-        {children.length > 0 && (
-          <span style={{ color: palette.ink.faint, fontWeight: 400 }}> · {children.length}</span>
+      <div className="stack" data-gap="tight">
+        <small>
+          <strong>Wrote</strong>
+          {wrote.length > 0 && ` · ${wrote.length}`}
+        </small>
+        {wrote.length > 0 && (
+          <ul role="list">
+            {wrote.map((r) => (
+              <li key={r.key}>
+                <button onClick={() => onWalk(r.key, r)} data-intent="open" className="row">
+                  <span className={styles.hue} data-hue={hueOf(r.collection) || undefined}>
+                    ●
+                  </span>
+                  <span className="stack truncate">
+                    <strong>{labelOf(r)}</strong>
+                    <small>{collectionName(r.collection)}</small>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
-      </h4>
-      {children.length > 0 && <ul style={{ listStyle: 'none', margin: '0 -8px' }}>{children}</ul>}
-    </div>
+      </div>
+    </article>
   );
 }
-
-const plain: CSSProperties = {
-  border: 'none',
-  background: 'none',
-  padding: 0,
-  font: 'inherit',
-  color: 'inherit',
-};
-const tooltip: CSSProperties = {
-  position: 'absolute',
-  maxWidth: 240,
-  padding: '8px 10px',
-  borderRadius: palette.radius.md,
-  background: palette.surface.card,
-  border: `1px solid ${palette.surface.rule}`,
-  boxShadow: palette.shadow.small,
-  fontSize: 12,
-  lineHeight: 1.4,
-  pointerEvents: 'none',
-  zIndex: 2,
-};
-const panel: CSSProperties = {
-  position: 'absolute',
-  top: 12,
-  right: 12,
-  bottom: 12,
-  width: `min(${PANEL}px, calc(100% - 24px))`,
-  display: 'flex',
-  flexDirection: 'column',
-  ...styles.float,
-  animation: 'minca-fade .12s ease',
-  zIndex: 3,
-};
-const panelBody: CSSProperties = {
-  flex: 1,
-  overflowY: 'auto',
-  padding: 16,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 18,
-};

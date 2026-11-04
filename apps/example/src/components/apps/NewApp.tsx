@@ -6,9 +6,8 @@ import type { useSpaceApps } from './entries';
 import { AppIcon } from './AppIcon';
 import { addTemplate, DIRECT } from './launcher';
 import { useWorkspace } from '../../workspace';
-import { Icon } from '../Icon';
-import { styles, palette, stack } from '../../styles';
-import { QuietButton } from '../Buttons';
+import { Icon } from '@minca/app-shared/Icon';
+import marks from '../InvitePeople.module.css';
 
 /**
  * Adding an app to a space: first one of your own, asked of an agent
@@ -59,60 +58,59 @@ export function NewApp({
   };
 
   return (
-    <div style={stack(14)}>
+    <div className="stack" data-gap="loose">
       {space.writable && (
-        <button onClick={onOwn} style={ownCard}>
-          <span style={ownIcon}>
+        <button type="button" data-intent="open" className="row" onClick={onOwn}>
+          <span className={marks.mark}>
             <Icon name="sparkle" size={18} />
           </span>
-          <span style={{ ...stack(2), flex: 1, minWidth: 0 }}>
-            <strong style={{ ...styles.appTitle, fontSize: 17 }}>Add your own</strong>
-            <span style={{ fontSize: 13, lineHeight: 1.45, color: palette.ink.body }}>
-              Say what {space.name} needs, and your agent builds it.
-            </span>
+          <span className="stack truncate" data-gap="tight">
+            <strong>Add your own</strong>
+            <small>Say what {space.name} needs, and your agent builds it.</small>
           </span>
-          <span style={{ display: 'inline-flex', color: palette.accent.base }}>
-            <Icon name="chevron" size={14} />
-          </span>
+          <Icon name="chevron" size={14} />
         </button>
       )}
-      <h2 style={{ ...styles.sectionTitle, marginTop: 18 }}>Ready-made</h2>
-      <p style={styles.quiet}>
-        {ready.length === 0
-          ? `${space.name} has every ready-made app.`
-          : mayDefine
-            ? 'Ready-made. Adding one adds every collection it uses, which hold ordinary records.'
-            : 'Someone whose role lets them add collections can add these.'}
-      </p>
-      <div className="app-list">
+      <section>
+        <h2>Ready-made</h2>
+        <small>
+          {ready.length === 0
+            ? `${space.name} has every ready-made app.`
+            : mayDefine
+              ? 'Ready-made. Adding one adds every collection it uses, which hold ordinary records.'
+              : 'Someone whose role lets them add collections can add these.'}
+        </small>
         {ready.map((app) => (
-          <div key={app.id} style={addRow}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <article key={app.id}>
+            <div className="row">
               <AppIcon app={app} size={40} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <strong style={cardTitle}>{app.title}</strong>
-                <p style={cardText}>{app.description}</p>
+              <div className={`stack ${marks.grow}`}>
+                <strong>{app.title}</strong>
+                <small>{app.description}</small>
               </div>
               {mayDefine && (
-                <QuietButton
+                <button
+                  type="button"
+                  data-intent="ghost"
                   onClick={() => add(app)}
                   disabled={busy}
                   aria-label={`Add ${app.title}`}
-                  style={{ flexShrink: 0 }}
                 >
                   {busy && adding?.id === app.id ? 'Adding…' : 'Add'}
-                </QuietButton>
+                </button>
               )}
             </div>
-            <details style={{ marginTop: 6 }}>
-              <summary style={{ ...styles.faint, paddingLeft: 52 }}>What it stores</summary>
+            <details>
+              <summary>
+                <small>What it stores</small>
+              </summary>
               <SchemaList app={app} collections={collections} />
             </details>
-          </div>
+          </article>
         ))}
-      </div>
+      </section>
       {error && (
-        <p style={styles.error}>
+        <p role="alert">
           Could not add {adding?.title}: {error}
         </p>
       )}
@@ -137,67 +135,20 @@ function SchemaList({ app, collections }: { app: Ready; collections: ReadonlyArr
     ...(app.uses ?? []).map((s) => ({ s, optional: true })),
   ];
   return (
-    <ul
-      style={{
-        listStyle: 'none',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 4,
-        marginTop: 8,
-        paddingTop: 8,
-        borderTop: `1px solid ${palette.surface.line}`,
-      }}
-    >
+    <ul role="list">
       {rows.map(({ s, optional }) => {
         const here = collections.some((c) => c.name === s.name && c.version !== null);
         return (
-          <li
-            key={s.name}
-            style={{
-              display: 'flex',
-              alignItems: 'baseline',
-              justifyContent: 'space-between',
-              gap: 8,
-              fontSize: 12,
-            }}
-          >
-            <span style={{ color: palette.ink.body }}>
-              {s.title} <code style={{ fontSize: 11, color: palette.ink.faint }}>{s.name}</code>
+          <li key={s.name} className="row" data-spread>
+            <span>
+              {s.title} <code>{s.name}</code>
             </span>
-            <span style={{ color: here ? palette.accent.good : palette.ink.faint, whiteSpace: 'nowrap' }}>
+            <small data-tone={here ? 'good' : undefined}>
               {here ? 'in this space' : optional ? 'will be added, for when it is used' : 'will be added'}
-            </span>
+            </small>
           </li>
         );
       })}
     </ul>
   );
 }
-
-const cardTitle = { fontSize: 15, fontWeight: 600, color: palette.ink.strong };
-const cardText = { fontSize: 13, lineHeight: 1.45, color: palette.ink.muted };
-const addRow = { ...styles.tile, padding: 12 } as const;
-const ownCard = {
-  ...styles.tile,
-  display: 'flex',
-  alignItems: 'center',
-  gap: 14,
-  padding: '14px 16px',
-  background: palette.accent.soft,
-  borderColor: palette.accent.base,
-  font: 'inherit',
-  color: 'inherit',
-  textAlign: 'left',
-  cursor: 'pointer',
-} as const;
-const ownIcon = {
-  width: 40,
-  height: 40,
-  flexShrink: 0,
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  borderRadius: palette.radius.lg,
-  background: palette.accent.base,
-  color: palette.ink.inverse,
-} as const;

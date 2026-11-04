@@ -22,7 +22,6 @@ import { DataView } from './components/DataView';
 import { GraphView } from './components/GraphView';
 import { QueryPlayground } from './components/QueryPlayground';
 import { NetworkView } from './components/NetworkView';
-import { styles } from './styles';
 import { transitionTypes } from './transitions';
 
 /**
@@ -102,7 +101,7 @@ const app = createRoute({
     open ? (
       <OpenApp key={open.id} app={open} />
     ) : (
-      !apps.loading && <p style={styles.emptyState}>This app isn't in the space any more.</p>
+      !apps.loading && <p className="empty">This app isn't in the space any more.</p>
     ),
   ),
 });

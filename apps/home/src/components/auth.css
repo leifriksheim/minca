@@ -1,0 +1,70 @@
+/*
+ * The sign-in element from @minca/core dressed as Minca, through the custom
+ * properties it reads. Its sheet is adopted after this one, so each rule
+ * starts at html to win; minca.css styles bare buttons, so what the element
+ * leaves unsaid of those is said here.
+ */
+html minca-auth {
+  --minca-ink: var(--color-text-strong);
+  --minca-body: var(--color-text);
+  --minca-muted: var(--color-text-muted);
+  --minca-faint: var(--color-text-muted);
+  --minca-surface: var(--color-surface);
+  --minca-sunken: var(--color-sunken);
+  --minca-line: var(--color-divider);
+  --minca-line-strong: var(--color-field);
+  --minca-accent: var(--color-action);
+  --minca-accent-hover: var(--color-action-hover);
+  --minca-on-accent: var(--color-on-action);
+  --minca-danger: var(--color-danger);
+  --minca-danger-soft: var(--color-danger-soft);
+  --minca-warn: var(--color-warn);
+  --minca-good: var(--color-good);
+  --minca-radius: var(--radius);
+  --minca-font: var(--font-body);
+  --minca-mono: var(--font-mono);
+
+  & button {
+    min-height: 0;
+    white-space: normal;
+  }
+
+  /* The page draws Minca's mark above the element, so its own goes. */
+  & .wa-wordmark {
+    display: none;
+  }
+
+  & .wa-title {
+    font: 700 var(--text-heading-1) / 1.2 var(--font-display);
+  }
+
+  & :is(.wa-button, .wa-secondary) {
+    min-height: var(--control-height);
+    border-radius: var(--radius-control);
+  }
+
+  /* A field shows focus by its edge, as the page's do; a username's edge is the box round it. */
+  & :is(input:focus, .wa-username:focus-within) {
+    border-color: var(--color-action);
+    box-shadow: none;
+  }
+
+  & input:focus-visible {
+    outline: none;
+  }
+
+  & :is(.wa-options, .wa-account, .wa-secondary) {
+    border-color: var(--color-outline);
+  }
+
+  /* SignIn.tsx gives each kind of choice its shape and hue */
+  & .wa-option-icon {
+    background: var(--hue);
+    mask: center / contain no-repeat;
+  }
+
+  & .wa-account-row {
+    border: none;
+    background: none;
+  }
+}

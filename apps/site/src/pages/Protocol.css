@@ -1,0 +1,147 @@
+/* The protocol page (Protocol.tsx): its contents, set like a paper's, and the pieces drawn */
+
+.site .spec-link {
+  display: inline-block;
+  margin-top: 40px;
+  font-size: var(--text-body);
+  font-weight: 500;
+  text-decoration: none;
+  color: var(--color-text-strong);
+}
+.site .spec-link:hover {
+  text-decoration: underline;
+}
+
+/* What a part of the spec stands on: each standard, and what it is used for */
+.site .built-on {
+  margin-top: 32px;
+}
+.site .built-on h3 {
+  margin: 0 0 12px;
+  font-size: var(--text-small);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+.site .built-on ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.site .built-on li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  max-width: 100%;
+  padding: 7px 14px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  font-size: var(--text-small);
+}
+.site .built-on a {
+  flex: none;
+  font-weight: 600;
+  color: var(--color-text-strong);
+  text-decoration: none;
+}
+.site .built-on a:hover {
+  color: var(--color-action);
+}
+.site .built-on span {
+  min-width: 0;
+  color: var(--color-text-muted);
+}
+@media (max-width: 640px) {
+  /* One to a line, so a long reason wraps inside its own row */
+  .site .built-on ul {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .site .built-on li {
+    border-radius: var(--radius-surface);
+  }
+}
+
+/* The protocol page's contents, set like a paper's: numbered parts, a dotted
+   leader, and the standards each part stands on */
+.site .toc {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 2px solid var(--color-text-strong);
+  border-bottom: 2px solid var(--color-text-strong);
+}
+.site .toc li + li {
+  border-top: 1px solid var(--color-divider);
+}
+.site .toc a {
+  display: grid;
+  grid-template-columns: 56px minmax(0, auto) minmax(24px, 1fr) minmax(0, auto);
+  align-items: baseline;
+  gap: 16px;
+  padding: 18px 4px;
+  color: inherit;
+  text-decoration: none;
+}
+.site .toc-num {
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+.site .toc-name b {
+  font-family: var(--font-display);
+  font-size: 1.1875rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--color-text-strong);
+}
+.site .toc-name small {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--text-body);
+  font-style: italic;
+  color: var(--color-text-muted);
+}
+.site .toc-leader {
+  align-self: center;
+  border-bottom: 1px dotted var(--color-field);
+}
+.site .toc-std {
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  text-align: right;
+  color: var(--color-text-muted);
+}
+@media (hover: hover) {
+  .site .toc a:hover .toc-name b {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    text-decoration-thickness: 1px;
+  }
+}
+.site .toc-head {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: var(--text-small);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+@media (max-width: 640px) {
+  .site .toc a {
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 4px 12px;
+  }
+  .site .toc-leader {
+    display: none;
+  }
+  .site .toc-std {
+    grid-column: 2;
+    text-align: left;
+  }
+}

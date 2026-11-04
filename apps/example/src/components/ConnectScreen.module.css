@@ -1,0 +1,55 @@
+/* Before connecting, and the intro before that: a narrow column with room above */
+.screen {
+  max-width: 412px;
+  padding-top: 64px;
+}
+
+/* An intro card's colour tile, its shape off the corner as on the site */
+.tile {
+  position: relative;
+  height: 180px;
+  overflow: hidden;
+  border-radius: var(--radius-surface);
+  background: color-mix(in srgb, var(--hue) 28%, var(--color-page));
+
+  & > :first-child {
+    position: absolute;
+    right: -50px;
+    bottom: -60px;
+  }
+
+  & > :last-child {
+    position: absolute;
+    left: 28px;
+    top: 28px;
+  }
+}
+
+/* Room for the longest card's words, so the button under them stays put */
+.body {
+  min-height: 90px;
+}
+
+/* Where in the steps you are (an intro's cards, a new group's): a dot each, the one you're on longer */
+.dots {
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  gap: var(--space);
+
+  & > * {
+    width: 8px;
+    height: 8px;
+    min-height: 0;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: var(--color-field);
+
+    &[aria-current] {
+      width: 20px;
+      border-radius: var(--radius-control);
+      background: var(--color-text-strong);
+    }
+  }
+}

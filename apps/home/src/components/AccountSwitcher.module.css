@@ -1,0 +1,39 @@
+/* Who is signed in, as a pill with their face; under it, a panel floating from its right edge */
+.switcher {
+  position: relative;
+
+  & > button {
+    padding-left: 3px;
+    color: var(--color-text-strong);
+  }
+
+  & > menu {
+    top: calc(100% + 8px);
+    right: 0;
+    width: min(300px, 100vw - 32px);
+    padding: 0;
+  }
+}
+
+/* The account signed in: its face, name and ID, and what to do with them */
+.me {
+  align-items: center;
+  padding: 20px;
+}
+
+/* The other accounts, and adding one or signing out: rows to press, a round + where a face would be */
+.items {
+  padding: 6px;
+  border-top: 1px solid var(--color-divider);
+}
+
+.plus {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  &:not(:empty) {
+    outline: 1px solid var(--color-outline);
+  }
+}

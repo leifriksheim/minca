@@ -3,6 +3,7 @@ import { PATHS, type ShapeKind } from '@minca/ui/shapes';
 import { shapeColours, type ShapeColour } from '@minca/ui/tokens';
 import { Card } from './converge';
 import { CLAUDE, LOGOS } from './converge-logos';
+import './castle.css';
 
 /**
  * Where the AI stands. Elsewhere it sits between you and every app, and

@@ -56,7 +56,7 @@ export function accountLine(account: NonNullable<CarrierStatus['account']>, acti
       'div',
       { class: 'who' },
       h('strong', {}, account.name),
-      h('span', { class: 'faint' }, `through ${new URL(account.home).host}`),
+      h('small', {}, `through ${new URL(account.home).host}`),
     ),
     action ?? null,
   );
@@ -72,8 +72,8 @@ export function spaceList(status: CarrierStatus): HTMLElement {
   // Every account passes on at least its list of spaces, so none at all means no device has handed them over yet.
   if (spaces.length === 0) {
     return h(
-      'p',
-      { class: 'hint' },
+      'small',
+      {},
       status.state === 'starting'
         ? 'Starting…'
         : 'Waiting to hear from one of your devices. Open Minca on any of them, and your spaces arrive here.',
@@ -123,12 +123,7 @@ export function podLine(state: Exclude<PodState, 'none'>, folder: string | null)
       : state === 'needs-permission'
         ? `Chrome wants a click before this writes to “${folder}” again. Until then, your pod catches up later.`
         : `Your account lives in a pod, “${folder}”. Choose that folder, and this keeps it up to date while your apps are closed.`;
-  return h(
-    'p',
-    { class: 'hint' },
-    h('span', { class: `dot ${state === 'writing' ? 'good' : 'warn'}` }),
-    said,
-  );
+  return h('small', {}, h('span', { class: `dot ${state === 'writing' ? 'good' : 'warn'}` }), said);
 }
 
 /**

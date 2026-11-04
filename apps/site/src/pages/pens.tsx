@@ -1,5 +1,6 @@
 import { useEffect, useRef, type RefObject } from 'react';
 import { shapeColours, type ShapeColour } from '@minca/ui/tokens';
+import './pens.css';
 
 /**
  * Companies start over, groups build on each other. Each tech billionaire
@@ -218,7 +219,7 @@ function Person({ who, x }: { who: string; x: number }) {
       <clipPath id={`${who}-head`}>
         <ellipse cx={0} cy={-HEAD * CHIN * 0.5} rx={HEAD * 0.4} ry={HEAD * CHIN * 0.52} />
       </clipPath>
-      <Body top={TOPS[who] ?? 'var(--card)'} />
+      <Body top={TOPS[who] ?? 'var(--color-surface)'} />
       <image
         href={`/faces/cut/${who}.png`}
         x={-HEAD / 2}
@@ -371,7 +372,7 @@ export function Tower() {
                   width={BRICK.width}
                   height={BRICK.height}
                   rx={6}
-                  fill={`color-mix(in srgb, ${shapeColours[brick.colour]} 70%, var(--card))`}
+                  fill={`color-mix(in srgb, ${shapeColours[brick.colour]} 70%, var(--color-surface))`}
                 />
                 <text className="pens-brick">{brick.adds}</text>
               </g>

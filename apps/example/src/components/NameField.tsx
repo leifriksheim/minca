@@ -1,10 +1,8 @@
-import { styles, stack } from '../styles';
-
 /** The name others see, asked when making or joining a space */
 export function NameField({ value, onChange }: { value: string; onChange: (name: string) => void }) {
   return (
-    <label style={stack(4)}>
-      <span style={styles.factLabel}>What should people call you?</span>
+    <label>
+      What should people call you?
       <input
         type="text"
         value={value}
@@ -12,7 +10,6 @@ export function NameField({ value, onChange }: { value: string; onChange: (name:
         placeholder="Your name"
         maxLength={64}
         autoComplete="name"
-        style={styles.input}
       />
     </label>
   );

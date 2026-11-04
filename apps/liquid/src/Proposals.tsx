@@ -38,7 +38,7 @@ import {
   ago,
 } from './ui';
 import { useAction } from '@minca/app-shared/action';
-import { palette, tone, hstack, stack } from './styles';
+import styles from './Proposals.module.css';
 
 type Sort = 'top' | 'new' | 'decided';
 
@@ -61,9 +61,9 @@ export function Proposals({ a, writable }: { a: Assembly; writable: boolean }) {
     );
 
   return (
-    <div style={stack(16)}>
-      <div className="lq-toolbar" style={{ justifyContent: 'space-between' }}>
-        <div role="group" aria-label="Sort" style={hstack(4)}>
+    <div className="stack" data-gap="loose">
+      <div className="row" data-spread>
+        <div role="group" aria-label="Sort" className="row" data-gap="tight">
           {(
             [
               ['top', 'Top'],
@@ -71,32 +71,21 @@ export function Proposals({ a, writable }: { a: Assembly; writable: boolean }) {
               ['decided', 'Decided'],
             ] as const
           ).map(([id, label]) => (
-            <button
-              key={id}
-              className="lq-chip"
-              data-filter
-              aria-pressed={sort === id}
-              onClick={() => setSort(id)}
-            >
+            <button key={id} aria-pressed={sort === id} onClick={() => setSort(id)}>
               {label}
             </button>
           ))}
         </div>
         {writable && (
-          <button className="lq-btn" onClick={() => setComposing(true)}>
+          <button data-intent="primary" onClick={() => setComposing(true)}>
             New proposal
           </button>
         )}
       </div>
 
       {a.topics.length > 0 && (
-        <div className="lq-scroll-x" role="group" aria-label="Topic">
-          <button
-            className="lq-chip"
-            data-filter
-            aria-pressed={filter === null}
-            onClick={() => setFilter(null)}
-          >
+        <div className={styles.scroll} role="group" aria-label="Topic">
+          <button aria-pressed={filter === null} onClick={() => setFilter(null)}>
             All topics
           </button>
           <TopicPicker
@@ -111,26 +100,15 @@ export function Proposals({ a, writable }: { a: Assembly; writable: boolean }) {
         <Empty title={sort === 'decided' ? 'Nothing decided yet' : 'No open proposals'}>
           {sort !== 'decided' && writable && (
             <>
-              <p style={{ fontSize: 13.5 }}>
-                Put something to the assembly. Anyone can support it, so the important ones rise.
-              </p>
-              <button className="lq-btn" data-variant="quiet" onClick={() => setComposing(true)}>
-                Write a proposal
-              </button>
+              <p>Put something to the assembly. Anyone can support it, so the important ones rise.</p>
+              <button onClick={() => setComposing(true)}>Write a proposal</button>
             </>
           )}
         </Empty>
       ) : (
-        <div style={stack(10)}>
-          {shown.map((p, i) => (
-            <ProposalCard
-              key={p.key}
-              a={a}
-              p={p}
-              writable={writable}
-              index={i}
-              onOpen={() => setOpenKey(p.key)}
-            />
+        <div className="stack">
+          {shown.map((p) => (
+            <ProposalCard key={p.key} a={a} p={p} writable={writable} onOpen={() => setOpenKey(p.key)} />
           ))}
         </div>
       )}
@@ -174,13 +152,11 @@ function ProposalCard({
   a,
   p,
   writable,
-  index,
   onOpen,
 }: {
   a: Assembly;
   p: ProposalView;
   writable: boolean;
-  index: number;
   onOpen: () => void;
 }) {
   const totals = a.countOf(p);
@@ -188,37 +164,25 @@ function ProposalCard({
 
   return (
     <article
-      className="lq-card lq-proposal lq-rise"
-      data-interactive
-      style={{ animationDelay: `${Math.min(index, 8) * 25}ms` }}
+      className={styles.card}
       onClick={onOpen}
       onKeyDown={(event) => event.key === 'Enter' && onOpen()}
       tabIndex={0}
       aria-label={p.title}
     >
       <Support a={a} p={p} writable={writable} />
-      <div style={{ ...stack(10), minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12.5 }}>
+      <div className="stack">
+        <div className="row">
           {topic && <TopicChip topic={topic} />}
-          <span className="lq-faint">
+          <small>
             {a.name(p.createdBy)} · {ago(p.createdAt)}
-          </span>
+          </small>
           <Verdict result={p.result} />
         </div>
-        <h3
-          className="lq-display"
-          style={{
-            fontSize: 19,
-            lineHeight: 1.2,
-            wordBreak: 'break-word',
-          }}
-        >
-          {p.title}
-        </h3>
+        <h2>{p.title}</h2>
         <Meter tally={totals} />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 12.5 }}>
+        <div className="row" data-spread>
           <Numbers tally={totals} />
-          <span style={{ flex: 1 }} />
           {writable && <MyVotePill a={a} p={p} />}
         </div>
       </div>
@@ -229,42 +193,32 @@ function ProposalCard({
 function Numbers({ tally }: { tally: Tally }) {
   const voters = tally.for + tally.against + tally.abstain + tally.uncast;
   return (
-    <span className="lq-num lq-muted" style={{ display: 'inline-flex', gap: 10, flexWrap: 'wrap' }}>
+    <small className={styles.numbers}>
       <span>
-        <b style={{ color: tone.for, fontWeight: 600 }}>{tally.for}</b> for
+        <b data-choice="for">{tally.for}</b> for
       </span>
       <span>
-        <b style={{ color: tone.against, fontWeight: 600 }}>{tally.against}</b> against
+        <b data-choice="against">{tally.against}</b> against
       </span>
       {tally.abstain > 0 && <span>{tally.abstain} abstain</span>}
-      <span className="lq-faint">
+      <span>
         of {voters} {voters === 1 ? 'voter' : 'voters'}
       </span>
-    </span>
+    </small>
   );
 }
 
-const VERDICT: Readonly<
-  Record<Exclude<Result, 'open'>, { label: string; color: string; bg: string; line: string }>
-> = {
-  passed: { label: 'Passed', color: tone.for, bg: palette.accent.goodSoft, line: tone.for },
-  rejected: { label: 'Rejected', color: tone.against, bg: palette.accent.dangerSoft, line: tone.against },
-  disputed: {
-    label: 'Disputed',
-    color: palette.accent.warn,
-    bg: palette.surface.sunken,
-    line: palette.accent.warn,
-  },
+const VERDICT: Readonly<Record<Exclude<Result, 'open'>, { label: string; tone: string }>> = {
+  passed: { label: 'Passed', tone: 'good' },
+  rejected: { label: 'Rejected', tone: 'danger' },
+  disputed: { label: 'Disputed', tone: 'warn' },
 };
 
 function Verdict({ result }: { result: Result }) {
   if (result === 'open') return null;
   const v = VERDICT[result];
   return (
-    <span
-      className="lq-chip"
-      style={{ background: v.bg, borderColor: v.line, color: v.color, fontWeight: 600 }}
-    >
+    <span className="tag" data-tone={v.tone}>
       {v.label}
     </span>
   );
@@ -273,18 +227,9 @@ function Verdict({ result }: { result: Result }) {
 /** Where your vote stands on a proposal, in a few words */
 function MyVotePill({ a, p }: { a: Assembly; p: ProposalView }) {
   const mine = p.votes.get(a.me);
-  if (!p.voters.includes(a.me))
-    return (
-      <span className="lq-chip" style={{ color: palette.ink.muted }}>
-        Not a voter
-      </span>
-    );
+  if (!p.voters.includes(a.me)) return <span className="tag">Not a voter</span>;
   if (!mine)
-    return (
-      <span className="lq-chip" style={{ color: palette.ink.muted }}>
-        {p.result === 'open' ? 'You haven’t voted' : 'You didn’t vote'}
-      </span>
-    );
+    return <span className="tag">{p.result === 'open' ? 'You haven’t voted' : 'You didn’t vote'}</span>;
   const last = trail(a.me, p.votes)[0];
   const via = !last
     ? null
@@ -292,8 +237,8 @@ function MyVotePill({ a, p }: { a: Assembly; p: ProposalView }) {
       ? a.name(last.did)
       : (a.partyOf(last.key)?.name ?? 'a party');
   return (
-    <span className="lq-chip" style={{ borderColor: palette.surface.lineStrong }}>
-      <span className="lq-dot" style={{ background: tone[mine.choice] }} />
+    <span className="tag" data-choice={mine.choice}>
+      <span className={styles.dot} />
       {via ? `${CHOICE_LABEL[mine.choice]} via ${via}` : `You: ${CHOICE_LABEL[mine.choice]}`}
     </span>
   );
@@ -322,59 +267,28 @@ function ProposalPage({
     });
 
   return (
-    <div className="lq-fade" style={stack(20)}>
-      <button
-        className="lq-btn"
-        data-variant="ghost"
-        onClick={onBack}
-        style={{ alignSelf: 'flex-start', marginLeft: -8 }}
-      >
+    <div className="stack" data-gap="loose">
+      <button className={styles.back} data-intent="ghost" onClick={onBack}>
         ← All proposals
       </button>
-      <div className="lq-two">
-        <div style={{ ...stack(20), minWidth: 0 }}>
-          <div style={hstack(14)}>
+      <div className={styles.two}>
+        <div className="stack" data-gap="loose">
+          <div className={styles.head}>
             <Support a={a} p={p} writable={writable} />
-            <div style={{ ...stack(8), minWidth: 0 }}>
-              <div
-                style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12.5 }}
-              >
+            <div className="stack">
+              <div className="row">
                 {topic && <TopicChip topic={topic} />}
                 <Verdict result={p.result} />
               </div>
-              <h1
-                className="lq-display"
-                style={{
-                  fontSize: 32,
-                  lineHeight: 1.08,
-                  wordBreak: 'break-word',
-                }}
-              >
-                {p.title}
-              </h1>
+              <h1>{p.title}</h1>
               {p.createdBy && (
-                <span
-                  className="lq-faint"
-                  style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
-                >
+                <small className="row" data-gap="tight">
                   <Who did={p.createdBy} a={a} size={18} /> · {ago(p.createdAt)}
-                </span>
+                </small>
               )}
             </div>
           </div>
-          {p.body && (
-            <p
-              style={{
-                fontSize: 15,
-                lineHeight: 1.65,
-                color: palette.ink.body,
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-              }}
-            >
-              {p.body}
-            </p>
-          )}
+          {p.body && <p className={styles.body}>{p.body}</p>}
 
           {p.result === 'disputed' && <Disputes a={a} p={p} />}
           {writable && <VotePanel a={a} p={p} busy={action.busy} onPick={setConfirming} />}
@@ -383,9 +297,9 @@ function ProposalPage({
           <Breakdown a={a} p={p} />
         </div>
 
-        <aside className="lq-aside" style={stack(12)}>
+        <div className={styles.side}>
           <Results a={a} p={p} />
-        </aside>
+        </div>
       </div>
 
       {confirming && (
@@ -394,15 +308,15 @@ function ProposalPage({
           onClose={() => setConfirming(null)}
           width={420}
         >
-          <p className="lq-muted" style={{ fontSize: 13.5, lineHeight: 1.55 }}>
+          <p>
             Votes are final. Once cast, you can’t change it or take it back, so that a result, once reached,
             stays reached on every device.
           </p>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <button className="lq-btn" data-variant="ghost" onClick={() => setConfirming(null)}>
+          <div className={`row ${styles.actions}`}>
+            <button data-intent="ghost" onClick={() => setConfirming(null)}>
               Cancel
             </button>
-            <button className="lq-btn" disabled={action.busy} onClick={() => cast(confirming)}>
+            <button data-intent="primary" disabled={action.busy} onClick={() => cast(confirming)}>
               Vote {CHOICE_LABEL[confirming].toLowerCase()}
             </button>
           </div>
@@ -431,34 +345,28 @@ function VotePanel({
 
   if (!voter)
     return (
-      <div className="lq-note">
+      <aside>
         You’re not one of its {p.voters.length} voters. They were picked from the members when it was
         proposed, and stay fixed.
-      </div>
+      </aside>
     );
 
   return (
-    <section className="lq-card" style={{ padding: 18, ...stack(14) }}>
-      <p className="lq-display" style={{ fontSize: 19 }}>
-        Your vote
-      </p>
-      <div className="lq-votes" role="group" aria-label="Cast your vote">
+    <article>
+      <h2>Your vote</h2>
+      <div className={styles.votes} role="group" aria-label="Cast your vote">
         {CHOICES.map((choice) => {
           const pressed = mine?.choice === choice;
           return (
             <button
               key={choice}
-              className="lq-vote"
               data-choice={choice}
               aria-pressed={pressed}
               disabled={busy || mine !== null || p.result !== 'open'}
               onClick={() => onPick(choice)}
             >
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <span
-                  className="lq-dot"
-                  style={{ background: pressed ? palette.surface.card : tone[choice] }}
-                />
+              <span className="row" data-gap="tight">
+                <span className={styles.dot} />
                 {CHOICE_LABEL[choice]}
               </span>
               <small>{pressed ? (mine?.via ? 'Followed' : 'Your vote') : ' '}</small>
@@ -473,7 +381,7 @@ function VotePanel({
       ) : (
         <NextNote a={a} next={a.nextFor(p)} topicName={topic?.name ?? null} />
       )}
-    </section>
+    </article>
   );
 }
 
@@ -490,21 +398,15 @@ function PathNote({
   children: string;
 }) {
   return (
-    <div className="lq-note" data-tone={warn ? 'warn' : undefined}>
-      <div style={stack(8)}>
-        <PathView path={path} a={a} from={a.me} />
-        <span>{children}</span>
-      </div>
-    </div>
+    <aside className="stack" data-tone={warn ? 'warn' : undefined}>
+      <PathView path={path} a={a} from={a.me} />
+      <span>{children}</span>
+    </aside>
   );
 }
 
 function Quiet({ children }: { children: ReactNode }) {
-  return (
-    <p className="lq-muted" style={{ fontSize: 13, lineHeight: 1.5 }}>
-      {children}
-    </p>
-  );
+  return <small>{children}</small>;
 }
 
 /** The vote you cast, and the way it came */
@@ -564,32 +466,27 @@ const NEXT_SAYS = {
 /** Who said two things, and what that means */
 function Disputes({ a, p }: { a: Assembly; p: ProposalView }) {
   return (
-    <div className="lq-note" data-tone="warn" style={{ fontSize: 13, lineHeight: 1.55 }}>
-      <div style={stack(8)}>
-        <span>
-          <b>Disputed.</b> Someone signed two different versions of something this proposal counts. Every
-          device shows it as disputed, whatever the count says:
+    <aside className="stack" data-tone="warn">
+      <span>
+        <b>Disputed.</b> Someone signed two different versions of something this proposal counts. Every device
+        shows it as disputed, whatever the count says:
+      </span>
+      {p.conflicts.map((c) => (
+        <span key={c.record} className="row" data-gap="tight">
+          {c.voter ? (
+            <>
+              <Who did={c.voter} a={a} size={18} /> voted two ways.
+            </>
+          ) : c.party && a.partyOf(c.party) ? (
+            <>
+              <PartyChip party={a.partyOf(c.party)!} /> froze two different member lists.
+            </>
+          ) : (
+            'A vote or a party’s members, written two ways.'
+          )}
         </span>
-        {p.conflicts.map((c) => (
-          <span
-            key={c.record}
-            style={{ display: 'inline-flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}
-          >
-            {c.voter ? (
-              <>
-                <Who did={c.voter} a={a} size={18} /> voted two ways.
-              </>
-            ) : c.party && a.partyOf(c.party) ? (
-              <>
-                <PartyChip party={a.partyOf(c.party)!} /> froze two different member lists.
-              </>
-            ) : (
-              'A vote or a party’s members, written two ways.'
-            )}
-          </span>
-        ))}
-      </div>
-    </div>
+      ))}
+    </aside>
   );
 }
 
@@ -603,57 +500,45 @@ function Results({ a, p }: { a: Assembly; p: ProposalView }) {
   const own = p.votes.size - followed;
   const comingCount = coming.for + coming.against + coming.abstain;
   return (
-    <section className="lq-card" style={{ padding: 18, ...stack(14) }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-        <p className="lq-display" style={{ fontSize: 17 }}>
-          {p.result === 'open' ? 'Standing now' : 'Result'}
-        </p>
-        <span className="lq-faint lq-num" style={{ fontSize: 12 }}>
+    <article>
+      <div className="row" data-spread>
+        <h3>{p.result === 'open' ? 'Standing now' : 'Result'}</h3>
+        <small>
           {voters} {voters === 1 ? 'voter' : 'voters'}, as of {ago(p.createdAt)}
-        </span>
+        </small>
       </div>
-      <div className="lq-muted lq-num" style={{ fontSize: 12.5 }}>
+      <small>
         To pass:{' '}
         <b>
           {p.toPass} of {voters}
         </b>{' '}
         for{ruleName(p.toPass, voters) && ` (${ruleName(p.toPass, voters)?.toLowerCase()})`}
-      </div>
+      </small>
       <Meter tally={shown} size="lg" />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+      <div className={styles.counts}>
         {CHOICES.map((c) => (
-          <div key={c}>
-            <p
-              className="lq-num lq-display"
-              style={{
-                fontSize: 26,
-                color: c === 'abstain' ? palette.ink.body : tone[c],
-              }}
-            >
-              {shown[c]}
-            </p>
-            <p className="lq-faint" style={{ fontSize: 12 }}>
-              {CHOICE_LABEL[c]}
-            </p>
+          <div key={c} data-choice={c}>
+            <strong>{shown[c]}</strong>
+            <small>{CHOICE_LABEL[c]}</small>
           </div>
         ))}
       </div>
-      <p className="lq-muted lq-num" style={{ fontSize: 12.5, lineHeight: 1.5 }}>
+      <small>
         {own} voted themselves, {followed} by following someone, {shown.uncast} not yet.
         {comingCount > 0 && ` ${comingCount} more will follow once their devices are online.`}
-      </p>
+      </small>
       {p.result === 'open' && voters > 0 && (
-        <p className="lq-muted lq-num" style={{ fontSize: 12.5, lineHeight: 1.5 }}>
+        <small>
           Passes with {need.toPass} more for. Fails with {need.toFail} more against or abstaining. Until one
           of those happens it stays open: there’s no deadline.
-        </p>
+        </small>
       )}
       {p.result === 'passed' || p.result === 'rejected' ? (
-        <div className="lq-note" data-tone="good" style={{ fontSize: 12.5 }}>
+        <aside data-tone="good">
           ✓ Settled, with a proof every device checks. No later vote can change it.
-        </div>
+        </aside>
       ) : null}
-    </section>
+    </article>
   );
 }
 
@@ -665,20 +550,17 @@ function PartyStands({ a, p }: { a: Assembly; p: ProposalView }) {
   });
   if (rolls.length === 0) return null;
   return (
-    <section style={stack(10)}>
-      <p className="lq-section-title">Parties</p>
-      <div className="lq-card">
+    <section>
+      <h3>Parties</h3>
+      <ul role="list">
         {rolls.map(({ party, roll, stand }) => (
-          <div key={party.key} className="lq-row" style={{ flexWrap: 'wrap' }}>
+          <li key={party.key} className="row">
             <PartyChip party={party} />
-            <span className="lq-faint lq-num" style={{ fontSize: 12.5 }}>
-              {standText(a, roll, stand, p.votes)}
-            </span>
-            <span style={{ flex: 1 }} />
+            <small>{standText(a, roll, stand, p.votes)}</small>
             {stand && stand !== 'disputed' && <ChoicePill choice={stand} />}
-          </div>
+          </li>
         ))}
-      </div>
+      </ul>
     </section>
   );
 }
@@ -704,36 +586,27 @@ function Breakdown({ a, p }: { a: Assembly; p: ProposalView }) {
     .map(([did, cast]) => ({ did, cast, path: trail(did, p.votes) }))
     .sort((x, y) => x.path.length - y.path.length || a.name(x.did).localeCompare(a.name(y.did)));
 
-  if (rows.length === 0)
-    return (
-      <p className="lq-faint" style={{ fontSize: 13 }}>
-        Nobody has voted yet.
-      </p>
-    );
+  if (rows.length === 0) return <small>Nobody has voted yet.</small>;
 
   return (
-    <section style={stack(10)}>
-      <p className="lq-section-title">How the votes came in</p>
-      <div className="lq-card">
+    <section>
+      <h3>How the votes came in</h3>
+      <ul role="list">
         {rows.map(({ did, cast, path }) => (
-          <div key={did} className="lq-row" style={{ flexWrap: 'wrap' }}>
+          <li key={did} className="row">
             {path.length > 0 ? <PathView path={path} a={a} from={did} /> : <Who did={did} a={a} />}
-            <span style={{ flex: 1 }} />
             <ChoicePill choice={cast.choice} />
-          </div>
+          </li>
         ))}
-      </div>
+      </ul>
     </section>
   );
 }
 
 function ChoicePill({ choice }: { choice: Choice }) {
   return (
-    <span
-      className="lq-chip"
-      style={{ fontWeight: 600, color: choice === 'abstain' ? palette.ink.muted : tone[choice] }}
-    >
-      <span className="lq-dot" style={{ background: tone[choice] }} />
+    <span className={`tag ${styles.choice}`} data-choice={choice}>
+      <span className={styles.dot} />
       {CHOICE_LABEL[choice]}
     </span>
   );
@@ -795,7 +668,8 @@ function Compose({
   return (
     <Modal title="New proposal" onClose={onClose} width={560}>
       <form
-        style={stack(16)}
+        className="stack"
+        data-gap="loose"
         onSubmit={(event) => {
           event.preventDefault();
           if (!title.trim() || problem) return;
@@ -815,10 +689,9 @@ function Compose({
           });
         }}
       >
-        <label className="lq-label">
+        <label>
           What should the assembly decide?
           <input
-            className="lq-input"
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             placeholder="Install bike racks by the entrance"
@@ -827,26 +700,22 @@ function Compose({
           />
         </label>
         {a.topics.length > 0 && (
-          <div>
-            <p className="lq-label" style={{ marginBottom: 8 }}>
-              Topic
-            </p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <fieldset>
+            <legend>Topic</legend>
+            <div className="row" data-gap="tight">
               <TopicPicker
                 topics={a.topics}
                 on={(t) => topicKey === t.key}
                 onToggle={(t) => setTopicKey(topicKey === t.key ? null : t.key)}
               />
             </div>
-            <p className="lq-faint" style={{ fontSize: 12, marginTop: 8 }}>
-              People who don’t vote themselves follow whoever they trust with this topic.
-            </p>
-          </div>
+            <small>People who don’t vote themselves follow whoever they trust with this topic.</small>
+          </fieldset>
         )}
-        <label className="lq-label">
+        <label>
           Details
           <textarea
-            className="lq-textarea"
+            rows={5}
             value={body}
             onChange={(event) => setBody(event.target.value)}
             placeholder="Why it matters, what it costs, what happens if it passes."
@@ -854,77 +723,58 @@ function Compose({
           />
         </label>
 
-        <div>
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-            <p className="lq-label">
+        <fieldset>
+          <header>
+            <legend>
               Who votes · {n} of {a.members.length}
-            </p>
-            <span style={{ display: 'inline-flex', gap: 4 }}>
-              <button
-                type="button"
-                className="lq-btn"
-                data-variant="ghost"
-                data-size="sm"
-                onClick={() => {
-                  setLeft(new Set());
-                  setAdded(new Set());
-                }}
-              >
-                Everyone but bots
-              </button>
-              <button
-                type="button"
-                className="lq-btn"
-                data-variant="ghost"
-                data-size="sm"
-                onClick={() => {
-                  setLeft(new Set(people));
-                  setAdded(new Set());
-                }}
-              >
-                Nobody
-              </button>
-            </span>
-          </div>
-          <div className="lq-card" style={{ marginTop: 8, maxHeight: 240, overflowY: 'auto' }}>
+            </legend>
+            <button
+              type="button"
+              data-intent="ghost"
+              onClick={() => {
+                setLeft(new Set());
+                setAdded(new Set());
+              }}
+            >
+              Everyone but bots
+            </button>
+            <button
+              type="button"
+              data-intent="ghost"
+              onClick={() => {
+                setLeft(new Set(people));
+                setAdded(new Set());
+              }}
+            >
+              Nobody
+            </button>
+          </header>
+          <ul role="list" className={styles.voters}>
             {people.map((did) => (
               <VoterRow key={did} a={a} did={did} on={picks(did)} onToggle={() => toggle(did)} />
             ))}
             {bots.length > 0 && (
-              <p className="lq-row lq-faint" style={{ fontSize: 12, padding: '8px 16px' }}>
-                Bots don’t vote unless you add them.
-              </p>
+              <li>
+                <small>Bots don’t vote unless you add them.</small>
+              </li>
             )}
             {bots.map((did) => (
               <VoterRow key={did} a={a} did={did} bot on={picks(did)} onToggle={() => toggle(did)} />
             ))}
-          </div>
-          <p className="lq-faint" style={{ fontSize: 12, marginTop: 8 }}>
-            Fixed once proposed. People who join later vote on later proposals.
-          </p>
-        </div>
+          </ul>
+          <small>Fixed once proposed. People who join later vote on later proposals.</small>
+        </fieldset>
 
-        <div>
-          <p className="lq-label" style={{ marginBottom: 8 }}>
-            What it takes to pass
-          </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }} role="group" aria-label="Rule">
+        <fieldset>
+          <legend>What it takes to pass</legend>
+          <div className="row" data-gap="tight" role="group" aria-label="Rule">
             {RULES.map((r) => (
-              <button
-                key={r.id}
-                type="button"
-                className="lq-chip"
-                data-filter
-                aria-pressed={rule === r.id}
-                onClick={() => setRule(r.id)}
-              >
+              <button key={r.id} type="button" aria-pressed={rule === r.id} onClick={() => setRule(r.id)}>
                 {r.label}
               </button>
             ))}
             <button
               type="button"
-              className="lq-chip"
-              data-filter
               aria-pressed={rule === 'custom'}
               onClick={() => {
                 setCustom(toPass);
@@ -934,37 +784,36 @@ function Compose({
               A number
             </button>
             {rule === 'custom' && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+              <span className="row" data-gap="tight">
                 <input
-                  className="lq-input"
+                  className={styles.number}
                   type="number"
                   min={1}
                   max={Math.max(1, n)}
                   value={custom}
                   onChange={(event) => setCustom(Math.round(Number(event.target.value)) || 1)}
-                  style={{ width: 72, height: 30 }}
                   aria-label="Votes for it needs"
                 />
-                <span className="lq-muted">of {n}</span>
+                <small>of {n}</small>
               </span>
             )}
           </div>
           {n > 0 && (
-            <p className="lq-muted lq-num" style={{ fontSize: 12.5, lineHeight: 1.5, marginTop: 8 }}>
+            <small>
               Passes once {toPass} of the {n} {n === 1 ? 'voter votes' : 'voters vote'} for. Fails once{' '}
               {n - toPass + 1} vote against or abstain, since it can no longer pass. Until then it stays open:
               there’s no deadline.
               {toPass * 2 <= n && ' Fewer than half can pass it.'}
-            </p>
+            </small>
           )}
-        </div>
+        </fieldset>
 
         <Problem>{problem ?? action.error}</Problem>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button type="button" className="lq-btn" data-variant="ghost" onClick={onClose}>
+        <div className={`row ${styles.actions}`}>
+          <button type="button" data-intent="ghost" onClick={onClose}>
             Cancel
           </button>
-          <button className="lq-btn" disabled={!title.trim() || action.busy || problem !== null}>
+          <button data-intent="primary" disabled={!title.trim() || action.busy || problem !== null}>
             {action.busy ? 'Proposing…' : 'Propose'}
           </button>
         </div>
@@ -988,10 +837,12 @@ function VoterRow({
   onToggle: () => void;
 }) {
   return (
-    <label className="lq-row" style={{ cursor: 'pointer', padding: '8px 16px' }}>
-      <input type="checkbox" checked={on} onChange={onToggle} />
-      <Who did={did} a={a} size={22} />
-      {bot && <span className="lq-chip">bot</span>}
-    </label>
+    <li>
+      <label>
+        <input type="checkbox" checked={on} onChange={onToggle} />
+        <Who did={did} a={a} size={22} />
+        {bot && <span className="tag">bot</span>}
+      </label>
+    </li>
   );
 }

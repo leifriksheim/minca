@@ -1,7 +1,7 @@
 /** What this app's notifications matched lately, for the bell and the dot on the tab's icon; kept in this browser only. */
 import { useEffect } from 'react';
 import { MARK_BANDS } from '@minca/app-shared/mark';
-import { accent, surface } from '@minca/ui/tokens';
+import { state } from '@minca/ui/tokens';
 import { accountStore } from './kept';
 
 export interface Alert {
@@ -72,7 +72,7 @@ export function useAlerts(did: string): { items: ReadonlyArray<Alert>; unread: n
 
 /** Minca's mark, as the tab's icon: the rainbow (`@minca/app-shared/mark`), lowered to sit in a square */
 const MARK = `<g transform="translate(0 5.5)">${MARK_BANDS.map(({ d, fill }) => `<path fill="${fill}" d="${d}"/>`).join('')}</g>`;
-const DOT = `<circle cx="20" cy="5" r="4.5" fill="${accent.danger}" stroke="${surface.page}" stroke-width="1.5"/>`;
+const DOT = `<circle cx="20" cy="5" r="4.5" fill="${state.danger}" stroke="${state.paper}" stroke-width="1.5"/>`;
 const icon = (dot: boolean) =>
   `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${MARK}${dot ? DOT : ''}</svg>`)}`;
 

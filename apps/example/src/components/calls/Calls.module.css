@@ -1,0 +1,158 @@
+/* Calls float over every page, never part of one. */
+.panel,
+.card,
+.incoming {
+  box-shadow: var(--shadow-float);
+}
+
+/* The call you're in, in a corner; on the stage, over the whole window, dark so faces stand out */
+.panel {
+  position: fixed;
+  z-index: 30;
+  right: 20px;
+  bottom: 20px;
+  width: 340px;
+
+  &[data-stage] {
+    top: 20px;
+    left: 20px;
+    width: auto;
+    background: var(--color-text-strong);
+    color: var(--color-page);
+
+    & small:not([data-tone]) {
+      color: inherit;
+    }
+
+    & .tiles {
+      flex: 1;
+    }
+  }
+
+  & > footer {
+    display: flex;
+    justify-content: center;
+    gap: var(--space);
+  }
+
+  @media (max-width: 760px) {
+    left: 12px;
+    right: 12px;
+    width: auto;
+    /* Above the tab bar along the bottom of a phone */
+    bottom: calc(86px + env(safe-area-inset-bottom));
+
+    &[data-stage] {
+      top: 12px;
+    }
+  }
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space);
+
+  &[data-count='1'] {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* A person: their picture, or their face in the middle, their name along the bottom */
+.tile {
+  align-items: center;
+  justify-content: center;
+  background: var(--color-text);
+
+  [data-stage] &,
+  .pip & {
+    aspect-ratio: auto;
+  }
+
+  & > video[data-mirror] {
+    transform: scaleX(-1);
+  }
+
+  & > video[data-off] {
+    opacity: 0;
+  }
+
+  & > figcaption {
+    position: absolute;
+    left: 6px;
+    bottom: 6px;
+  }
+}
+
+/* The tiles in a picture-in-picture window of their own */
+.pipBody {
+  margin: 0;
+  background: var(--color-text-strong);
+}
+
+.pip {
+  display: flex;
+  height: 100vh;
+  padding: 6px;
+
+  & > .tiles {
+    flex: 1;
+  }
+}
+
+/* Notices along the top right: a call to rejoin */
+.stack {
+  position: fixed;
+  z-index: 31;
+  top: 16px;
+  right: 20px;
+  width: 320px;
+  pointer-events: none;
+
+  @media (max-width: 760px) {
+    left: 12px;
+    width: auto;
+  }
+}
+
+.card {
+  pointer-events: auto;
+}
+
+/* Someone calling, over everything */
+.overlay {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: var(--space);
+  padding: var(--space-loose);
+  /* An image, not a colour, so Safari on iOS doesn't tint its status bar with it */
+  background-image: linear-gradient(var(--color-scrim), var(--color-scrim));
+}
+
+.incoming {
+  width: min(340px, 100%);
+  align-items: center;
+  text-align: center;
+}
+
+.ringing {
+  border-radius: 50%;
+  animation: ring 1.2s ease-out infinite;
+}
+
+@keyframes ring {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-good) 45%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 12px transparent;
+  }
+}
+
+/* A call is going: green, so joining it is plain (beside the Overview's own rule for its row) */
+button.going {
+  color: var(--color-good);
+}

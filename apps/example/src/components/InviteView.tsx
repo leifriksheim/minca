@@ -7,10 +7,8 @@ import type { ShapeKind } from '@minca/ui/shapes';
 import { createInviteLink, madeLinks } from '../spaces';
 import { confirmThen } from '../confirm';
 import { ContactPicker, JoinsAs, useJoinsAs } from './InvitePeople';
-import { AddButton, PrimaryButton, QuietButton } from './Buttons';
-import { Loading } from './Loading';
+import { Loader } from '@minca/app-shared/Loader';
 import { Options, type Option } from './Options';
-import { palette, stack, styles, ui } from '../styles';
 
 /**
  * `/spaces/<id>/invite`: bringing people in. Your contacts get the invite in your space for two,
@@ -21,12 +19,17 @@ export function InviteView({ space }: { space: SpaceSummary }) {
   const access = useAccess(space.id);
   const { offered, role, setRole } = useJoinsAs(space);
   const [making, setMaking] = useState(false);
-  if (!access) return <Loading label="Loading who's here" style={styles.emptyState} />;
+  if (!access)
+    return (
+      <p className="empty">
+        <Loader label="Loading who's here" showLabel />
+      </p>
+    );
   const members = new Set(access.members.map((member) => member.did));
   const titleOf = (name: string) => access.roles.find((r) => r.name === name)?.title ?? titled(name);
 
   return (
-    <div style={stack(36)}>
+    <div className="stack" data-gap="loose">
       <Section title="Your contacts" action={<JoinsAs offered={offered} role={role} onChange={setRole} />}>
         <ContactPicker space={space} members={members} role={role} />
       </Section>
@@ -34,14 +37,12 @@ export function InviteView({ space }: { space: SpaceSummary }) {
       <Section
         title="Invite links"
         action={
-          <AddButton onClick={() => setMaking(true)} style={{ height: 36 }}>
+          <button data-intent="primary" onClick={() => setMaking(true)}>
             Create link
-          </AddButton>
+          </button>
         }
       >
-        <p style={{ ...styles.quiet, lineHeight: 1.5 }}>
-          For anyone who isn't a contact yet. Anyone with the link can join, until you close it.
-        </p>
+        <small>For anyone who isn't a contact yet. Anyone with the link can join, until you close it.</small>
         <OpenLinks
           space={space}
           open={access.invites.filter((invite) => invite.open)}
@@ -119,32 +120,32 @@ function MakeLink({
   if (link)
     return (
       <Modal title="Your invite link" onClose={onClose}>
-        <div style={stack(12)}>
-          <p style={{ fontSize: 14, lineHeight: 1.5, color: palette.ink.body }}>
+        <>
+          <p>
             {copied ? 'Copied. ' : ''}Send it to the people it is for. They join as{' '}
             <strong>{picked === VIEW ? 'Viewer' : titleOf(picked)}</strong>.
             {space.visibility === 'private' && ' It carries the space’s key, so keep it to them.'}
           </p>
-          <code style={{ ...styles.token, margin: 0 }}>{link}</code>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <QuietButton onClick={() => copy(link)}>{copied ? 'Copied' : 'Copy link'}</QuietButton>
-            <AddButton onClick={onClose} style={{ height: 36 }}>
+          <pre>{link}</pre>
+          <div className="row">
+            <button data-intent="ghost" onClick={() => copy(link)}>
+              {copied ? 'Copied' : 'Copy link'}
+            </button>
+            <button data-intent="primary" onClick={onClose}>
               Done
-            </AddButton>
+            </button>
           </div>
-        </div>
+        </>
       </Modal>
     );
 
   return (
     <Modal title="Who is this link for?" onClose={onClose}>
-      <div style={stack(14)}>
-        <Options label="They join as" options={options} picked={picked} onPick={setPicked} />
-        {error && <p style={styles.error}>{error}</p>}
-        <PrimaryButton onClick={() => void make()} disabled={busy}>
-          {busy ? 'Making a link…' : 'Create link'}
-        </PrimaryButton>
-      </div>
+      <Options label="They join as" options={options} picked={picked} onPick={setPicked} />
+      {error && <p role="alert">{error}</p>}
+      <button data-intent="primary" onClick={() => void make()} disabled={busy}>
+        {busy ? 'Making a link…' : 'Create link'}
+      </button>
     </Modal>
   );
 }
@@ -174,33 +175,34 @@ function OpenLinks({
   if (open.length === 0) return null;
   return (
     <>
-      <ul className="rows" style={ui.list}>
+      <ul role="list">
         {open.map((invite) => {
           const link = links[invite.key];
           const mayClose = offered.includes(invite.role);
           return (
-            <li key={invite.key} style={row}>
-              <span style={{ ...stack(1), flex: 1, minWidth: 0 }}>
-                <span style={{ fontSize: 14, color: palette.ink.strong }}>
+            <li key={invite.key} className="row" data-spread>
+              <span className="stack" data-gap="tight">
+                <span>
                   Joins as <strong>{titleOf(invite.role)}</strong>
                 </span>
-                <span style={styles.faint}>
+                <small>
                   {link ? 'Made on this device' : 'Made elsewhere: close it, or make a new one to share'}
-                </span>
+                </small>
               </span>
               {link && <CopyButton text={link} />}
-              <QuietButton
+              <button
+                data-intent="ghost"
                 onClick={() => close(invite.key)}
                 disabled={!mayClose}
                 title={mayClose ? undefined : 'Closing it takes a grant of /role/assign for its role'}
               >
                 Close
-              </QuietButton>
+              </button>
             </li>
           );
         })}
       </ul>
-      {error && <p style={styles.error}>{error}</p>}
+      {error && <p role="alert">{error}</p>}
     </>
   );
 }
@@ -208,34 +210,22 @@ function OpenLinks({
 /** Copies a link, and says so for a moment */
 function CopyButton({ text }: { text: string }) {
   const { copied, copy } = useCopy();
-  return <QuietButton onClick={() => copy(text)}>{copied ? 'Copied' : 'Copy link'}</QuietButton>;
+  return (
+    <button data-intent="ghost" onClick={() => copy(text)}>
+      {copied ? 'Copied' : 'Copy link'}
+    </button>
+  );
 }
 
 /** A section's title, with what is done in it on the right */
 function Section({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <section aria-label={title} style={stack(12)}>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-        }}
-      >
-        <h2 style={{ ...styles.appTitle, fontSize: 20 }}>{title}</h2>
+    <section aria-label={title}>
+      <header>
+        <h2>{title}</h2>
         {action}
-      </div>
+      </header>
       {children}
     </section>
   );
 }
-
-const row = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 10,
-  padding: '12px 14px',
-  listStyle: 'none',
-} as const;

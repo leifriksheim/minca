@@ -1,0 +1,5 @@
+/* Its corner and ground come from the account; it never squeezes beside a name. */
+.avatar {
+  flex-shrink: 0;
+  object-fit: cover;
+}

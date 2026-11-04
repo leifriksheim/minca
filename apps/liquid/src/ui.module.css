@@ -1,0 +1,108 @@
+/* The three answers, in the colours every bar, dot and button uses: whatever carries data-choice reads var(--choice). */
+[data-choice='for'] {
+  --choice: var(--color-good);
+}
+[data-choice='against'] {
+  --choice: var(--color-danger);
+}
+[data-choice='abstain'] {
+  --choice: var(--color-text-muted);
+}
+
+/* A party's shape, with its initial in the middle: paper on the dark colours, navy on the light ones */
+.mark {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: var(--size);
+  height: var(--size);
+  color: var(--color-surface);
+  font: 700 calc(var(--size) * 0.42) var(--font-display);
+  letter-spacing: -0.02em;
+
+  &[data-light] {
+    color: var(--color-text-strong);
+  }
+
+  & > svg {
+    position: absolute;
+    inset: 0;
+  }
+
+  & > span {
+    position: relative;
+  }
+}
+
+.who {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space);
+  min-width: 0;
+}
+
+.faces {
+  display: flex;
+
+  & > * {
+    border-radius: var(--radius-small);
+    box-shadow: 0 0 0 2px var(--color-surface);
+  }
+
+  & > * + * {
+    margin-left: -6px;
+  }
+}
+
+/* Where a vote went: You → Ada → Greens */
+.path {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-small);
+}
+
+/* For, against and abstain along one bar */
+.meter {
+  display: flex;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-small);
+  background: var(--color-divider);
+
+  &[data-size='lg'] {
+    height: 10px;
+  }
+
+  & > span {
+    height: 100%;
+    background: var(--choice);
+    transition: width 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+}
+
+/* Support for a proposal: a tall pill with its count */
+.upvote {
+  flex-direction: column;
+  gap: 1px;
+  width: 48px;
+  height: 56px;
+  padding: 0;
+  color: var(--color-text-muted);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+
+  &[aria-pressed='true'],
+  &[aria-pressed='true']:hover:not(:disabled) {
+    border-color: var(--color-action);
+    background: var(--color-action);
+  }
+
+  @media (max-width: 640px) {
+    width: 42px;
+    height: 50px;
+  }
+}

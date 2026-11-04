@@ -18,17 +18,21 @@ const openWelcome = () =>
   void chrome.tabs.create({ url: chrome.runtime.getURL('welcome.html') }).then(() => window.close());
 
 function render(): void {
-  if (!status) return app.replaceChildren(mark(), h('p', { class: 'hint' }, 'Starting…'));
+  if (!status) return app.replaceChildren(mark(), h('small', {}, 'Starting…'));
 
   if (status.state === 'not-connected') {
     return app.replaceChildren(
       mark(),
       h(
-        'p',
-        { class: 'hint' },
+        'small',
+        {},
         status.removed ? 'Your account disconnected this extension.' : 'Not connected to your account yet.',
       ),
-      h('div', { class: 'actions' }, h('button', { class: 'wide', onClick: openWelcome }, 'Set up')),
+      h(
+        'div',
+        { class: 'actions' },
+        h('button', { 'data-intent': 'primary', class: 'wide', onClick: openWelcome }, 'Set up'),
+      ),
     );
   }
 
@@ -37,7 +41,7 @@ function render(): void {
   const parts: Array<Node | null> = [
     mark(),
     status.account ? h('section', {}, accountLine(status.account)) : null,
-    h('section', {}, h('p', { class: 'hint' }, summary(status)), spaceList(status)),
+    h('section', {}, h('small', {}, summary(status)), spaceList(status)),
     pod.state === 'none'
       ? null
       : h(
@@ -49,16 +53,12 @@ function render(): void {
             ? h(
                 'div',
                 { class: 'actions' },
-                h('button', { class: 'small', onClick: openWelcome }, 'Resume pod sync'),
+                h('button', { 'data-intent': 'primary', onClick: openWelcome }, 'Resume pod sync'),
               )
             : null,
         ),
-    status.state === 'error' ? h('p', { class: 'error' }, status.error ?? 'Something went wrong.') : null,
-    h(
-      'div',
-      { class: 'actions' },
-      h('button', { class: 'quiet wide small', onClick: openWelcome }, 'Open Minca'),
-    ),
+    status.state === 'error' ? h('p', { role: 'alert' }, status.error ?? 'Something went wrong.') : null,
+    h('div', { class: 'actions' }, h('button', { class: 'wide', onClick: openWelcome }, 'Open Minca')),
   ];
   app.replaceChildren(...parts.filter((node): node is Node => node !== null));
 }

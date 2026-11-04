@@ -2,6 +2,7 @@ import { Shape } from '@minca/app-shared/shapes';
 import { shapeFor } from '@minca/ui/shapes';
 import type { Unread } from '../../seen';
 import type { AppEntry } from './entries';
+import styles from './AppIcon.module.css';
 
 /**
  * An app as its shape, the same wherever it appears: the icon its record gives it, or else a built-in
@@ -23,7 +24,7 @@ export function AppIcon({
       path={app.icon?.path}
       colour={app.icon?.colour ?? colour}
       size={size}
-      className={className ? `app-shape ${className}` : 'app-shape'}
+      className={className}
     />
   );
 }
@@ -39,12 +40,12 @@ export function Count({ unread }: { unread: Unread }) {
   if (unread.count <= 0) return null;
   if (unread.forMe > 0)
     return (
-      <span className="count" aria-label={`${unread.forMe} for you, ${unread.count} new`}>
+      <span className={styles.count} aria-label={`${unread.forMe} for you, ${unread.count} new`}>
         @{upTo99(unread.forMe)}
       </span>
     );
   return (
-    <span className="count" data-quiet aria-label={`${unread.count} new`}>
+    <span className={styles.count} data-quiet aria-label={`${unread.count} new`}>
       {upTo99(unread.count)}
     </span>
   );

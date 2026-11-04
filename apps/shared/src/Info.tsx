@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState, type ReactNode } from 'react';
-import { styles } from './styles';
+import { Icon } from './Icon';
+import styles from './Info.module.css';
 import { useDismiss } from './useDismiss';
 
 /**
@@ -25,22 +26,18 @@ export function Info({ label, children }: { label: string; children: ReactNode }
   );
 
   return (
-    <span ref={root} style={{ position: 'relative', display: 'inline' }}>
+    <span ref={root} className={styles.info}>
       <button
         type="button"
+        data-intent="ghost"
+        data-icon
         onClick={() => setOpen((was) => !was)}
         aria-expanded={open}
         aria-label={open ? `Hide: ${label}` : label}
-        data-variant="quiet"
-        style={styles.infoButton}
       >
-        i
+        <Icon name="info" />
       </button>
-      {open && (
-        <span role="note" className="popover" style={styles.popover}>
-          {children}
-        </span>
-      )}
+      {open && <span role="note">{children}</span>}
     </span>
   );
 }

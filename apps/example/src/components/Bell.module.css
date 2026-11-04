@@ -1,0 +1,27 @@
+/* The bell, with how many are new on its corner, and its panel opening beside it from its bottom edge */
+.bell {
+  position: relative;
+}
+
+.badge {
+  composes: count from './apps/AppIcon.module.css';
+  position: absolute;
+  top: -5px;
+  right: -6px;
+}
+
+.panel {
+  inset: auto auto 0 calc(100% + 10px);
+  z-index: 20;
+  width: 340px;
+  max-height: min(480px, calc(100dvh - 120px));
+  margin: 0;
+  overflow-y: auto;
+
+  /* Anchored to the button it could run off the screen: a phone spans it under the bar */
+  @media (max-width: 640px) {
+    position: fixed;
+    inset: calc(64px + env(safe-area-inset-top)) 12px auto;
+    width: auto;
+  }
+}

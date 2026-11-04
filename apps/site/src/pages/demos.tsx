@@ -1,3 +1,5 @@
+import './demos.css';
+
 /**
  * The tiny working apps the front page shows: tools a group made for itself,
  * drawn as the app would draw them. Each takes what has happened so far, so a

@@ -12,6 +12,7 @@ import { type ShapeKind } from '@minca/ui/shapes';
 import type { ShapeColour } from '@minca/ui/tokens';
 import { usePlatform } from './downloads';
 import { downloadLink } from './Install';
+import './Home.css';
 
 /**
  * The front page, for community builders who are tired of billionaires
@@ -116,10 +117,10 @@ function HeroActions() {
   if (platform === 'mobile') {
     return (
       <div className="actions">
-        <a href={APP} className="btn btn-primary btn-lg">
+        <a href={APP} data-intent="primary">
           Start a minca
         </a>
-        <a href="#why" className="btn btn-secondary btn-lg">
+        <a href="#why" data-intent="secondary">
           Why this matters
         </a>
       </div>
@@ -130,12 +131,12 @@ function HeroActions() {
     <>
       <div className="actions">
         {desktop ? (
-          <Link {...downloadLink(desktop)} className="btn btn-primary btn-lg">
+          <Link {...downloadLink(desktop)} data-intent="primary">
             <DownloadMark />
             {desktop === 'mac' ? 'Download for Mac' : 'Download for Windows'}
           </Link>
         ) : null}
-        <a href={APP} {...EXTERNAL} className={`btn btn-lg ${desktop ? 'btn-secondary' : 'btn-primary'}`}>
+        <a href={APP} {...EXTERNAL} data-intent={desktop ? 'secondary' : 'primary'}>
           Open Minca in your browser
         </a>
       </div>
@@ -347,7 +348,7 @@ export function Home() {
       <section className="cta">
         <div className="wrap">
           <div className="cta-panel">
-            <Loader decorative size={34} style={{ marginBottom: 28 }} />
+            <Loader decorative size={34} />
             <h2>Call your people.</h2>
             <p className="cta-minka">
               <i>Minka</i> is the Quechua word for work done together. When something would help everyone,
