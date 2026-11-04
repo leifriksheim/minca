@@ -245,11 +245,14 @@
     const onTab = new Map();
     for (const i of items) if (!onTab.has(linkOf(i, 'about'))) onTab.set(linkOf(i, 'about'), linkOf(i, 'in'));
     const tabOf = (record) => onTab.get(record.key) ?? null;
-    // An expense opened from elsewhere opens on its tab, once it has arrived.
+    // A tab opened from elsewhere, like one shared in a chat, opens; an expense opens on its tab,
+    // once it has arrived.
     const [openKey, setOpenKey] = useState(null);
     useEffect(() => {
       if (!asked || handled.current === asked || !allExpenses || !lists || !allItems) return;
       handled.current = asked;
+      const shared = tabs.find((t) => t.key === asked.key);
+      if (shared) return go(shared.key, titleOf(shared));
       const tab = tabs.find((t) => t.key === onTab.get(asked.key));
       if (tab) go(tab.key, titleOf(tab));
       else if (expenses.some((e) => e.key === asked.key)) go(EARLIER, 'Earlier');

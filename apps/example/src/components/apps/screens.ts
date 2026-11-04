@@ -103,7 +103,7 @@ Forms work: handle "submit", call event.preventDefault() and save with minca.put
 Keep state in records, never in the page.
 
 If it truly needs the network — weather, a map, a timetable — give the record "network": the exact origins it may
-fetch from and load images from, like ["https://api.open-meteo.com"] (https:// or wss://, a host, no path; at most 8).
+fetch from, load images from and embed in an iframe, like ["https://api.open-meteo.com"] (https:// or wss://, a host, no path; at most 8).
 Nothing else is reachable, and fonts never are. Each origin is named when the app is reviewed, and whoever adds it
 decides for everyone. Ask for no more than it needs.
 
@@ -133,7 +133,7 @@ Inside it, window.minca is:
   await minca.open({ record: key, link: 'about' })   opens what that record links to with that role, of any collection:
                                     the message a file was shared on, say
   minca.shown()                     the key of the record this app was last asked to show, or null; minca.onShow(callback)
-                                    calls back with each new one: a record of a collection in "shows", opened from anywhere
+                                    calls back with each new one: a record "shows" names, opened from anywhere
   await minca.file(key, ref)        a picture one of these records refers to ({ hash, mime, … } in its body), as a data: URL,
                                     made smaller when it is large; null if it isn't a picture or can't be shown
   await minca.blob(key, ref)        the whole file one of these records refers to, as a Blob of its type: for video, audio,
@@ -313,19 +313,21 @@ export const SCREEN_CLIENT = `(() => {
 
 /**
  * The security policy a screen runs under: inline scripts and styles, and
- * the network only to `network`'s exact origins, which whoever added the
- * app agreed to for everyone. A host page's own frame policy may allow more
+ * the network and embedded pages only from `network`'s exact origins, which
+ * whoever added the app agreed to for everyone. A host page's own frame policy may allow more
  * (any `https:`); this one is always written too, and a page under two
  * policies gets only what both allow. Origins that don't check out give none.
  */
 export function screenPolicy(network: ReadonlyArray<string> = []): string {
   const origins = checkScreenNetwork(network, true) === null ? network : [];
-  const images = origins.filter((origin) => origin.startsWith('https://'));
+  const pages = origins.filter((origin) => origin.startsWith('https://')).join(' ');
   return [
     "default-src 'none'",
     "script-src 'unsafe-inline'",
     "style-src 'unsafe-inline'",
-    `img-src data: blob:${images.map((origin) => ` ${origin}`).join('')}`,
+    `img-src data: blob: ${pages}`.trim(),
+    // An embed, like a route or a video: it runs in this frame's sandbox, so with no cookies or storage of its own.
+    `frame-src ${pages || "'none'"}`,
     `connect-src ${origins.length ? origins.join(' ') : "'none'"}`,
     'font-src data:',
     'media-src data: blob:',

@@ -13,7 +13,7 @@ import './Mcp.css';
  * Connecting an AI to your spaces over MCP. Most apps connect to Minca's MCP
  * service by its address (packages/cli/README.md, `minca mcp-server`), in one
  * click where the app has an install link (`@minca/app-shared/mcp`). On your
- * own computer, `minca connect` runs `minca mcp` instead. Laid out as a
+ * own computer, an agent with a shell runs the CLI instead. Laid out as a
  * reference: set up by app, every tool the agent gets, then questions.
  */
 
@@ -118,7 +118,7 @@ const CLIENTS: ReadonlyArray<{
     id: 'computer',
     name: 'On your computer',
     logo: 'terminal',
-    how: 'Rather keep it on your own machine? Run this there. It adds Minca to every AI app it finds, for all your spaces.',
+    how: 'Rather keep it on your own machine? Run this there, and an AI with a terminal, like Claude Code or Codex, uses Minca through the minca command.',
     code: COMMAND,
     then: 'Your account home opens so you can allow it, and shows six digits to type into the terminal.',
   },
@@ -159,7 +159,6 @@ const SAYS: Readonly<Record<string, string>> = {
   collections_standard: 'The kinds of things every Minca app understands.',
   collections_propose: 'Suggest a new tool for the group. Someone who’s allowed adds it.',
   collections_proposals: 'The tools people have suggested.',
-  records_list: 'Everything in a collection.',
   records_query: 'Find things, like open jobs or this week’s games.',
   records_get: 'Read one thing.',
   records_history: 'Earlier versions of something.',

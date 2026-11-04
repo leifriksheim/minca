@@ -1,8 +1,8 @@
 /**
  * The terminal as an agent: `minca connect` opens the account home with a
  * one-time code and gets a records-only note from it there, signed to a key
- * made here that never leaves (`packages/core/src/session/connect-code.ts`). Then `minca mcp`
- * and `minca agent` run a node of their own as the agent, under that note.
+ * made here that never leaves (`packages/core/src/session/connect-code.ts`). Then the
+ * commands an agent runs, and `minca agent`, run a node of their own as the agent, under that note.
  *
  * A key signs in one process at a time, or its log forks (spec 02 §4.10), so
  * each session that runs at once has a key of its own: a numbered slot,

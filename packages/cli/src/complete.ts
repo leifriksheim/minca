@@ -60,7 +60,7 @@ async function pickRecord(node: P2PNode, space: string): Promise<string> {
   return ask.select({
     flag: 'key',
     message: 'Which record?',
-    hint: `Keys are in \`minca records list --space ${space}\`.`,
+    hint: `Keys are in \`minca records query --space ${space} --collection <name>\`.`,
     options: records.map((record) => ({
       value: record.key,
       label: summary(record.body) || record.key,

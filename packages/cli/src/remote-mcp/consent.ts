@@ -147,7 +147,7 @@ export function createConsent(options: ConsentOptions) {
     } catch (error) {
       return sendJson(res, 400, { error: messageOf(error) });
     }
-    // Kept only until the app collects its token, which then carries it (`oauth.ts`).
+    // Kept as it is only until the app collects its token, then sealed under a key the token carries (`oauth.ts`).
     const id = await options.oauth.pend(granted);
     // Signing in and consenting are one step here: the person consented at their home. So the grant
     // covers what the app asked for, which can only be this endpoint's scope (`oauth.ts` refuses any

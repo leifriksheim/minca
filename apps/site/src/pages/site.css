@@ -137,7 +137,10 @@
   align-items: center;
   gap: 4px;
 }
-
+/* GitHub, which on a phone moves from the bar into the menu */
+.site .nav-links a.nav-menu-only {
+  display: none;
+}
 /* GitHub's mark alone, a round button like the menu's */
 .site .nav-icon {
   display: inline-flex;
@@ -825,7 +828,12 @@
   .site .nav-toggle {
     display: inline-flex;
   }
-
+  .site .nav-icon {
+    display: none;
+  }
+  .site .nav-links a.nav-menu-only {
+    display: inline-flex;
+  }
   /* Under the bar, in the same frame */
   .site .nav-links:popover-open {
     position: fixed;

@@ -204,10 +204,16 @@ space gave it.
 
 **Opening a record where it belongs.** A `launcher.app` may name, among its
 `collections`, the ones it `shows`: the ones whose records it is the place
-to open (`shows: ["std.message"]` for a chat). Whatever asks the example app
-to open a record, a screen's `open` or a link beside a record, goes to the
-app that shows that record's collection: the one open, if it does, else the
-only one, else the one the person picks when asked, and that app's
+to open (`shows: ["std.message"]` for a chat). An entry may name a kind of
+one too, `collection:kind`, for the records of that collection whose `kind`
+field holds it: `std.list:tab` for Bills' tabs, `std.work:book` for a
+reading app, or a `kind` in an app's own collection. Lists are folders,
+albums and tabs as well as checklists, and each belongs in a different app. Whatever asks the example app to open a record, a screen's
+`open` or a link beside a record, goes to the app that shows it, those
+naming its kind before those naming only its collection: the one open, if
+it does, else the only one, else the one the person picks when asked. So
+a Bills tab shared in a chat opens in Bills, a Files category in Files, and
+any other list in Lists. That app's
 screen is handed the record's key (`minca.shown`, `minca.onShow`, the kit's
 `useShown`) to scroll to or open, but only of a collection it shows, which
 it could list anyway. That app does learn which of those records the person
@@ -277,7 +283,7 @@ defines its collections and writes a copy of it, naming where it came from
 (`template: "kanban"`), and from then on the space changes its copy like any
 other app.
 
-_Source: `apps/example/src/components/apps/launcher.ts` (`addTemplate`, `iconOf`, `saveSettings`, `settingsOf`), `apps/example/src/components/apps/entries.ts` (`addChat`), `apps/example/src/contacts.ts` (`withChat`), `apps/example/src/components/apps/screens.ts`, `apps/example/src/components/apps/ScreenFrame.tsx`, `apps/example/src/components/apps/AppSettings.tsx`, `apps/example/src/components/apps/templates/`, `apps/example/public/screen.html`, `packages/ui/src/frame/`, `packages/ui/src/guide.ts`. Tests: `apps/example/tests/launcher.test.ts` ("an app's own icon is drawn only as path data in a shape colour, and outlives an update of its ready-made app", "adding a ready-made app copies it into the space once, with its collections and first records", "settings filled in once stand for everyone, survive a new version of the app, and stay in their space"), `apps/example/tests/screens.test.ts` ("an app's settings come with the screen, and the screen can't change them", "a screen checks, shows faces and opens things only within its app and its space", "what the page does for a screen, it does only as asked properly", "a screen can’t point a link out of its app, so it can’t probe for keys or reach what no one shared", "a record someone shared is read through the link to it, and only through that", "a screen links out only to what the person picked for it, and is handed what they picked", "the space’s own records are never picked for a screen", "a screen hears the same app's screens on other devices, as who sent it, and no other app's")._
+_Source: `apps/example/src/components/apps/launcher.ts` (`addTemplate`, `iconOf`, `showsRecord`, `saveSettings`, `settingsOf`), `apps/example/src/components/apps/entries.ts` (`addChat`), `apps/example/src/contacts.ts` (`withChat`), `apps/example/src/components/apps/screens.ts`, `apps/example/src/components/apps/ScreenFrame.tsx`, `apps/example/src/components/apps/AppSettings.tsx`, `apps/example/src/components/apps/templates/`, `apps/example/public/screen.html`, `packages/ui/src/frame/`, `packages/ui/src/guide.ts`. Tests: `apps/example/tests/launcher.test.ts` ("an app's own icon is drawn only as path data in a shape colour, and outlives an update of its ready-made app", "adding a ready-made app copies it into the space once, with its collections and first records", "settings filled in once stand for everyone, survive a new version of the app, and stay in their space"), `apps/example/tests/screens.test.ts` ("an app's settings come with the screen, and the screen can't change them", "a record opens in the apps that name it most closely: its kind, then its collection", "a screen checks, shows faces and opens things only within its app and its space", "what the page does for a screen, it does only as asked properly", "a screen can’t point a link out of its app, so it can’t probe for keys or reach what no one shared", "a record someone shared is read through the link to it, and only through that", "a screen links out only to what the person picked for it, and is handed what they picked", "the space’s own records are never picked for a screen", "a screen hears the same app's screens on other devices, as who sent it, and no other app's")._
 
 ## Describing a collection
 

@@ -1,8 +1,8 @@
 /**
  * `minca agent`: the connected agent, thinking for itself.
  *
- * `minca mcp` lends the node's tools to a chat client someone has open.
- * This runs the model loop here instead, with the person's own API key, at
+ * A chat app reaches the same tools through the MCP service, and an agent with
+ * a shell through the minca command. This runs the model loop here instead, with the person's own API key, at
  * Anthropic or any server that speaks OpenAI's Chat Completions
  * (`agent-openai.ts`): the same tools (`NODE_ACTIONS` less what needs a person), the same
  * instructions, the same note on everything it writes. For now it chats in

@@ -102,7 +102,7 @@ test('with every device of theirs offline, a chat app reads and writes through t
 
   await until(
     async () =>
-      (await callTool(issuer, token, 'records_list', { space: space.id, collection: 'app.note' })).includes(
+      (await callTool(issuer, token, 'records_query', { space: space.id, collection: 'app.note' })).includes(
         'Soup on Friday',
       ),
     20_000,
@@ -125,7 +125,7 @@ test('with every device of theirs offline, a chat app reads and writes through t
   service = await startMcpServer(settings);
   await until(
     async () =>
-      (await callTool(issuer, token, 'records_list', { space: space.id, collection: 'app.note' })).includes(
+      (await callTool(issuer, token, 'records_query', { space: space.id, collection: 'app.note' })).includes(
         'Bread too',
       ),
     20_000,
@@ -180,7 +180,7 @@ test('with every device of theirs offline, a chat app reads and writes through t
   // that node stops (found by adversarial review).
   assert.ok(await phone.revokeKey(agent, { waitMs: 5000 }), 'a peer took the revoke in');
   const refused = async () =>
-    callTool(issuer, token, 'records_list', { space: space.id, collection: 'app.note' }).then(
+    callTool(issuer, token, 'records_query', { space: space.id, collection: 'app.note' }).then(
       (read) => {
         assert.ok(!read.includes('Secret plan'), 'it read what she wrote after it was refused');
         return false;
@@ -257,7 +257,7 @@ test('given no nodes of its own, the service reaches a space through the host he
   });
   await until(
     async () =>
-      (await callTool(issuer, token, 'records_list', { space: space.id, collection: 'app.note' })).includes(
+      (await callTool(issuer, token, 'records_query', { space: space.id, collection: 'app.note' })).includes(
         'Soup on Friday',
       ),
     30_000,
@@ -318,7 +318,7 @@ test('with no host at all, a chat app writes to her open tab through a relay, an
   });
   await until(
     async () =>
-      (await callTool(issuer, token, 'records_list', { space: space.id, collection: 'app.note' })).includes(
+      (await callTool(issuer, token, 'records_query', { space: space.id, collection: 'app.note' })).includes(
         'Soup on Friday',
       ),
     40_000,

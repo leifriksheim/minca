@@ -1,7 +1,7 @@
 /**
  * What a chat app acts with, and the node it acts through. The key and the
- * records-only note a person's account home signed travel inside the app's
- * access token, sealed under a key only the service holds (`oauth.ts`). Each
+ * records-only note a person's account home signed are kept by the service,
+ * sealed under a key only the app's access token carries (`oauth.ts`). Each
  * call opens them, and the node they start runs while the app is using it,
  * holding its spaces in memory. A write is done once the space's keepers have
  * it. What outlives the node is only where its key has signed (`places`): a
@@ -10,11 +10,12 @@
 import { didOf, noteSpaces, type NodeConfig, type P2PNode, type StoreFactory } from '@minca/core';
 import { checkGrant, usableGrant, type Grant } from '@minca/core/session';
 import { startGrantedAgent } from '../agent.js';
+import { catchUp } from '../level.js';
 import { isRecord, messageOf } from '../json.js';
 import { importKeyJwk } from '../writer-keys.js';
 import { boundedMemory } from './memory.js';
 
-/** What a token carries: a key, and the note made out to it */
+/** What a token opens: a key, and the note made out to it */
 export interface Granted {
   /** The key the note is made out to, as JWK */
   readonly key: { readonly privateKey: JsonWebKey; readonly publicKey: JsonWebKey };
@@ -78,8 +79,6 @@ const RUNNING = 32;
 /** How long a start waits for room before giving up */
 const ROOM_WAIT_MS = 30_000;
 
-/** How long a call waits for its node to be level with an always-on node in its space */
-const CATCH_UP_MS = 15_000;
 interface Started {
   readonly node: P2PNode;
   /** The spaces it was given */
@@ -95,37 +94,6 @@ async function unkept(started: Started): Promise<boolean> {
   for (const space of started.spaces)
     if ((await started.node.spaces.status(space).catch(() => null))?.pending) return true;
   return false;
-}
-
-/**
- * Waits up to `waitMs` for the node to be level with the space's keepers
- * connected now, and at least one: nothing in flight either way, so it holds
- * what they hold. Only keepers count, the nodes the space names to keep it
- * whole: any member may connect and never answer. In a space that names
- * none, any one peer that is level will do. False when it wasn't, in time.
- */
-async function levelIn(node: P2PNode, space: string, waitMs: number): Promise<boolean> {
-  const deadline = Date.now() + waitMs;
-  for (;;) {
-    const left = deadline - Date.now();
-    if (left <= 0) return false;
-    const [peers, keepers] = await Promise.all([
-      node.spaces.status(space).then(
-        (status) => status.peers,
-        () => [],
-      ),
-      node.spaces.access(space).then(
-        (access) => new Set(access.keepers.map((keeper) => keeper.did)),
-        () => new Set<string>(),
-      ),
-    ]);
-    const asked = keepers.size > 0 ? peers.filter((peer) => keepers.has(peer)) : peers;
-    const level = await Promise.all(
-      asked.map((peer) => node.spaces.reached(space, peer, Math.min(2000, left)).catch(() => false)),
-    );
-    if (keepers.size > 0 ? level.length > 0 && level.every(Boolean) : level.some(Boolean)) return true;
-    await new Promise((resolve) => setTimeout(resolve, Math.min(250, left)));
-  }
 }
 
 interface Running {
@@ -295,10 +263,7 @@ export function createSessions(options: {
         // A node starts from nothing: one that answered sooner would say a record isn't
         // there, and write a first version in a line that has one, which ends it (09 §7.5).
         // Checked on every call, since a link that drops leaves it behind again.
-        if (space !== undefined && !(await levelIn(started.node, space, CATCH_UP_MS)))
-          throw new Error(
-            'This space can’t be reached through the always-on nodes right now. Try again in a moment.',
-          );
+        if (space !== undefined) await catchUp(started.node, space);
         return await work(started.node);
       } finally {
         one.busy -= 1;

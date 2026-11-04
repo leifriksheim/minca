@@ -52,7 +52,8 @@ export interface LauncherApp {
   readonly collections?: ReadonlyArray<string>;
   /**
    * Of those, the ones whose records it is where to open: a message anywhere
-   * opens in the app that shows `std.message`, at that message.
+   * opens in the app that shows `std.message`, at that message. `std.list:tab`
+   * names only the records of that `kind`, as Bills' tabs are lists (`showsRecord`).
    */
   readonly shows?: ReadonlyArray<string>;
   /** What in it is worth hearing about */
@@ -171,6 +172,25 @@ export const launcherApp = fragments.typed<LauncherApp>()({
   },
 });
 
+/**
+ * How closely an app's `shows` names a record: 2 for its collection and `kind`
+ * (`std.list:tab`), 1 for the collection alone, 0 not at all. A record opens in
+ * the apps that name it most closely, so a Bills tab opens in Bills and any
+ * other list in Lists, though both keep lists.
+ */
+export function showsRecord(
+  shows: ReadonlyArray<string> | undefined,
+  record: Pick<NodeRecord, 'collection' | 'body'>,
+): 0 | 1 | 2 {
+  const { body } = record;
+  const kind =
+    typeof body === 'object' && body !== null && 'kind' in body && typeof body.kind === 'string'
+      ? body.kind
+      : null;
+  if (kind !== null && shows?.includes(`${record.collection}:${kind}`)) return 2;
+  return shows?.includes(record.collection) ? 1 : 0;
+}
+
 /** Why this can't be a launcher record, or null */
 export function checkLauncherApp(body: LauncherApp): string | null {
   if (!body.title?.trim()) return 'An app needs a title';
@@ -179,7 +199,7 @@ export function checkLauncherApp(body: LauncherApp): string | null {
   // Its screen writes these as whoever looks: the launcher's own would let it add apps.
   const kept = [...names].find(offLimits);
   if (kept) return `${kept} is the space's own, not an app's to show`;
-  const stray = body.shows?.find((name) => !names.has(name));
+  const stray = body.shows?.find((name) => !names.has(name.split(':')[0] ?? name));
   if (stray) return `shows: ${stray} is not one of its collections`;
   if (body.screen !== undefined) {
     const bytes = new TextEncoder().encode(body.screen).length;
@@ -320,8 +340,9 @@ const LAUNCHER_GUIDE = `To make an app for this space that people open from its 
    with links [{ "rel": "blueprint", "to": "<the blueprint's key>" }].
    "collections" names every collection it shows. "shows" is optional: of those, the ones whose records it is the
    place to open, like ["std.message"] for a chat; a record of one opened anywhere opens in this app, which its
-   screen hears through minca.onShow. "notify" is optional: what is worth hearing about, each a name and
-   the query whose new records it tells of, in one of its collections. A "where" naming "$me" keeps it to records that
+   screen hears through minca.onShow. "std.list:tab" names only lists of that kind, like Bills' tabs.
+   "notify" is optional: what is worth hearing about, each a name and the query whose new records it tells of,
+   in one of its collections. A "where" naming "$me" keeps it to records that
    name the person it would tell, as the second one does.
 3. If plain lists and forms can't show it (a game board, a whiteboard), add "screen": its own HTML UI, one
    document, and, only if it must reach the network, "network": the exact origins. The screen is described below.

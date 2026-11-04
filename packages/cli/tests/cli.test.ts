@@ -15,7 +15,7 @@ import { openFsDirectory } from '../src/fs-directory.js';
 import { openHome, createAccount, unlock, chooseAccount, localPath, nodeFor } from '../src/home.js';
 import { startDaemon, type Daemon } from '../src/daemon.js';
 import { enableWebRTC, holdEverySpace } from '../src/agent.js';
-import { CONNECT, connectWaiting, handleMcpMessage, waitingMcp } from '../src/mcp.js';
+import { mcpTools, toolInstructions } from '../src/mcp.js';
 import { aNode, tempDir } from './helpers/nodes.js';
 import { loadModelSetting } from '../src/guide.js';
 import { createNode } from '../../core/src/node/node.js';
@@ -422,285 +422,22 @@ describe('the daemon', () => {
   });
 });
 
-describe('MCP', () => {
-  const info = { name: 'minca', version: 'test' };
-
-  test('initialises, lists the node actions as tools, and calls them', async () => {
-    const node = await aNode(3);
-
-    const init = await handleMcpMessage(
-      node,
-      { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18' } },
-      info,
-    );
-    assert.equal(at(init, 'result', 'protocolVersion'), '2025-06-18');
-    assert.ok(at(init, 'result', 'capabilities', 'tools'));
-    assert.equal(
-      await handleMcpMessage(node, { jsonrpc: '2.0', method: 'notifications/initialized' }, info),
-      null,
-    );
-
-    const tools = at(
-      await handleMcpMessage(node, { jsonrpc: '2.0', id: 2, method: 'tools/list' }, info),
-      'result',
-      'tools',
-    );
-    assert.ok(Array.isArray(tools));
+describe('MCP tools', () => {
+  test('every node action is a tool, with its title and what it may change', () => {
+    const tools = mcpTools();
     assert.equal(tools.length, NODE_ACTIONS.length);
-    const recordsList: unknown = tools.find((tool: unknown) => at(tool, 'name') === 'records_list');
-    assert.equal(at(recordsList, 'annotations', 'readOnlyHint'), true);
-
-    const call = async (name: string, args: unknown) =>
-      at(
-        await handleMcpMessage(
-          node,
-          { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name, arguments: args } },
-          info,
-        ),
-        'result',
-      );
-
-    const space = await call('spaces_create', { name: 'Agent made this', visibility: 'public' });
-    assert.equal(at(space, 'isError'), false);
-    const put = await call('records_put', {
-      space: at(space, 'structuredContent', 'id'),
-      collection: 'app.agent.idea',
-      body: { idea: 'polls' },
-    });
-    assert.equal(at(put, 'isError'), false);
-
-    const bad = await call('records_put', { space: at(space, 'structuredContent', 'id') });
-    assert.equal(at(bad, 'isError'), true);
-    assert.match(String(at(bad, 'content', 0, 'text')), /Missing "collection"/);
-
-    const unknown = await handleMcpMessage(node, { jsonrpc: '2.0', id: 4, method: 'no/such' }, info);
-    assert.equal(at(unknown, 'error', 'code'), -32601);
+    const query = tools.find((tool) => tool.name === 'records_query');
+    assert.equal(query?.annotations.readOnlyHint, true);
+    assert.equal(query?.title, 'Find records');
+    assert.equal(tools.find((tool) => tool.name === 'records_delete')?.annotations.destructiveHint, true);
   });
 
-  test('an agent is not offered what needs a person, and is told to propose apps instead', async () => {
-    const node = await aNode(4);
+  test('an agent is not offered what needs a person, and is told to propose apps instead', () => {
     const agent = { agent: true };
-
-    const init = await handleMcpMessage(
-      node,
-      { jsonrpc: '2.0', id: 1, method: 'initialize', params: {} },
-      info,
-      agent,
-    );
-    assert.match(String(at(init, 'result', 'instructions')), /collections_propose/);
-    const tools = at(
-      await handleMcpMessage(node, { jsonrpc: '2.0', id: 2, method: 'tools/list' }, info, agent),
-      'result',
-      'tools',
-    );
-    assert.ok(Array.isArray(tools));
-    const names = tools.map((tool: unknown) => at(tool, 'name'));
+    assert.match(toolInstructions({ did: 'did:key:z' }, agent), /collections_propose/);
+    const names = mcpTools(agent).map((tool) => tool.name);
     for (const name of PERSON_ONLY) assert.ok(!names.includes(name), `${name} is not offered`);
     assert.ok(names.includes('collections_propose') && names.includes('records_put'));
-
-    const refused = await handleMcpMessage(
-      node,
-      {
-        jsonrpc: '2.0',
-        id: 3,
-        method: 'tools/call',
-        params: { name: 'spaces_create', arguments: { name: 'x', visibility: 'public' } },
-      },
-      info,
-      agent,
-    );
-    assert.match(String(at(refused, 'error', 'message')), /Unknown tool/);
-  });
-
-  test('while other sessions use Minca, it says each needs its own connection, and offers agent_connect for this one', async () => {
-    const server = waitingMcp(
-      connectWaiting({
-        accountHome: 'home.minca.social',
-        others: true,
-        connect: () => Promise.reject(new Error('not asked')),
-        tryStart: async () => null,
-        account: () => null,
-      }),
-      info,
-      { agent: true },
-      () => {},
-    );
-    try {
-      const init = await server.handle({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
-      assert.match(String(at(init, 'result', 'instructions')), /other sessions/);
-      const listed = at(
-        await server.handle({ jsonrpc: '2.0', id: 2, method: 'tools/list' }),
-        'result',
-        'tools',
-      );
-      assert.deepEqual(Array.isArray(listed) && listed.map((tool: unknown) => at(tool, 'name')), [CONNECT]);
-    } finally {
-      server.stop();
-    }
-  });
-
-  test('not connected yet, agent_connect opens the account home, takes the code it shows from the user, then serves the tools', async () => {
-    const node = await aNode(10);
-    let browser = true;
-    const person: { given?: Promise<void> } = {};
-    let allowed = false;
-    const server = waitingMcp(
-      connectWaiting({
-        accountHome: 'home.minca.social',
-        connect: async (check) => {
-          // The home has the program's question, and shows 482 913.
-          person.given = check((typed) => typed.replace(/\D/g, '') === '482913');
-          return { opened: browser, url: 'https://home.minca.social/connect#mc_secret' };
-        },
-        tryStart: async () => (allowed ? node : null),
-        account: () => (allowed ? { name: 'Ada', did: 'did:key:zAda' } : null),
-      }),
-      info,
-      { agent: true },
-      () => {},
-    );
-    const call = (args: Record<string, unknown> = {}) =>
-      server.handle({
-        jsonrpc: '2.0',
-        id: 3,
-        method: 'tools/call',
-        params: { name: CONNECT, arguments: args },
-      });
-    const said = async (args: Record<string, unknown> = {}) =>
-      String(at(await call(args), 'result', 'content', 0, 'text'));
-    try {
-      const init = await server.handle({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
-      assert.match(String(at(init, 'result', 'instructions')), /isn't connected/);
-      const listed = at(
-        await server.handle({ jsonrpc: '2.0', id: 2, method: 'tools/list' }),
-        'result',
-        'tools',
-      );
-      assert.deepEqual(Array.isArray(listed) && listed.map((tool: unknown) => at(tool, 'name')), [CONNECT]);
-      // The model can't point it at another home: it takes only the code.
-      const properties: unknown = Array.isArray(listed) && at(listed[0], 'inputSchema', 'properties');
-      assert.deepEqual(typeof properties === 'object' && properties !== null ? Object.keys(properties) : [], [
-        'code',
-      ]);
-
-      assert.match(await said({ code: '482913' }), /hasn't heard/, 'no code before it has asked');
-      const opened = await said();
-      assert.match(opened, /home\.minca\.social/);
-      assert.doesNotMatch(opened, /mc_secret/, 'the link stays out of the model while the browser opened');
-      assert.match(await said({ code: '111 111' }), /isn't the code/);
-      assert.match(await said({ code: '482 913' }), /That's the code/);
-      await person.given;
-
-      browser = false;
-      assert.match(await said(), /mc_secret/, 'given only when no browser opened');
-
-      allowed = true;
-      const tools = at(
-        await server.handle({ jsonrpc: '2.0', id: 5, method: 'tools/list' }),
-        'result',
-        'tools',
-      );
-      assert.ok(Array.isArray(tools) && tools.length > 1);
-      assert.equal(server.node(), node);
-      // Asked again, it says whose account it joined, for the person to check.
-      assert.match(await said(), /“Ada” \(did:key:zAda\)/);
-    } finally {
-      server.stop();
-    }
-  });
-
-  test('a waiting server starts by itself once the agent can run here', async () => {
-    const node = await aNode(6);
-    let otherRunning = true;
-    const server = waitingMcp(
-      connectWaiting({
-        accountHome: 'home.minca.social',
-        connect: () => Promise.reject(new Error('not asked')),
-        tryStart: async () => (otherRunning ? null : node),
-        account: () => null,
-      }),
-      info,
-      { agent: true },
-      () => {},
-    );
-    try {
-      otherRunning = false;
-      const tools = at(
-        await server.handle({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
-        'result',
-        'tools',
-      );
-      assert.ok(Array.isArray(tools) && tools.length > 1);
-      assert.equal(server.node(), node);
-    } finally {
-      server.stop();
-    }
-  });
-
-  test('once started, a waiting server follows the node the agent runs now: a reconnect starts a new one', async () => {
-    const first = await aNode(7);
-    const second = await aNode(8);
-    let current = first;
-    const server = waitingMcp(
-      connectWaiting({
-        accountHome: 'home.minca.social',
-        connect: () => Promise.reject(new Error('not asked')),
-        tryStart: async () => first,
-        current: () => current,
-        account: () => null,
-      }),
-      info,
-      { agent: true },
-      () => {},
-    );
-    try {
-      await server.handle({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
-      assert.equal(server.node(), first);
-      current = second;
-      assert.equal(server.node(), second);
-      const call = await server.handle({
-        jsonrpc: '2.0',
-        id: 2,
-        method: 'tools/call',
-        params: { name: 'node_info', arguments: {} },
-      });
-      assert.match(String(at(call, 'result', 'content', 0, 'text')), new RegExp(second.did));
-    } finally {
-      server.stop();
-    }
-  });
-
-  test('a tool that fails says what the model can’t see, such as a revoked key; one that works says nothing more', async () => {
-    const node = await aNode(9);
-    const options = {
-      agent: true,
-      trouble: () => 'This agent was disconnected. Ask them to connect it again.',
-    };
-    const failed = await handleMcpMessage(
-      node,
-      {
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'tools/call',
-        params: { name: 'records_get', arguments: { space: 'no-such-space', key: 'k' } },
-      },
-      info,
-      options,
-    );
-    assert.equal(at(failed, 'result', 'isError'), true);
-    assert.match(
-      String(at(failed, 'result', 'content', 0, 'text')),
-      /disconnected\. Ask them to connect it again/,
-    );
-
-    const worked = await handleMcpMessage(
-      node,
-      { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'node_info', arguments: {} } },
-      info,
-      options,
-    );
-    assert.equal(at(worked, 'result', 'isError'), false);
-    assert.doesNotMatch(String(at(worked, 'result', 'content', 0, 'text')), /disconnected/);
   });
 });
 
@@ -722,8 +459,10 @@ describe('the minca command', () => {
     const space = at(created, 'id');
     assert.ok(typeof space === 'string');
     await minca('records', 'put', '--space', space, '--collection', 'app.note', '--body', '{"text":"hi"}');
-    const listed: unknown = JSON.parse((await minca('records', 'list', '--space', space)).stdout);
-    assert.equal(at(listed, 0, 'body', 'text'), 'hi');
+    const listed: unknown = JSON.parse(
+      (await minca('records', 'query', '--space', space, '--collection', 'app.note')).stdout,
+    );
+    assert.equal(at(listed, 'records', 0, 'body', 'text'), 'hi');
 
     await assert.rejects(minca('records', 'put', '--space', space, '--nonsense', 'x'), /has no --nonsense/);
   });
@@ -831,9 +570,10 @@ describe('the minca command', () => {
     );
 
     // Something that can't be undone still runs without asking, as it always has: the agent or script said so.
-    const listed: unknown = JSON.parse((await minca('records', 'list', '--space', space)).stdout);
-    assert.ok(Array.isArray(listed));
-    const key = at(listed, 0, 'key');
+    const listed: unknown = JSON.parse(
+      (await minca('records', 'query', '--space', space, '--collection', 'std.automation')).stdout,
+    );
+    const key = at(listed, 'records', 0, 'key');
     assert.ok(typeof key === 'string');
     await minca('records', 'delete', '--space', space, '--key', key);
   });

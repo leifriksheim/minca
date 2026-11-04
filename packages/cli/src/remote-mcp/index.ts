@@ -11,12 +11,13 @@
  *        /oauth/...                                    registering, signing in, tokens (`oauth.ts`)
  *        /oauth/interaction/:uid                       where the person allows the app (`consent.ts`)
  *
- * Each token carries an agent of the person's account: a key, with a
+ * Each token opens an agent of the person's account: a key, with a
  * records-only note their account home signed for the spaces they picked
  * (`sessions.ts`). It writes as them, "via agent", and can't add collections
- * or change who is in a space. The tools are `NODE_ACTIONS`, as `minca mcp`
- * offers them (`mcp.ts`). The token holds the key; the service holds a
- * copy of the spaces only while their node runs (`sessions.ts`).
+ * or change who is in a space. The tools are `NODE_ACTIONS`, less what needs
+ * a person (`mcpTools` in `mcp.ts`). The service keeps the key sealed under one only the
+ * token carries, and a copy of the spaces only while their node runs
+ * (`sessions.ts`).
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
@@ -43,7 +44,8 @@ import {
 import type { Grant } from '@minca/core/session';
 import { createSessions, type Granted } from './sessions.js';
 import { isRecord, messageOf } from '../json.js';
-import { mcpTools, toolInstructions } from '../mcp.js';
+import { MINCA_ICONS, mcpTools, toolInstructions } from '../mcp.js';
+import { keptAfter } from '../level.js';
 import { createConsent } from './consent.js';
 import { createOAuth, MCP_SCOPE } from './oauth.js';
 import { mayRedirect } from './redirects.js';
@@ -54,7 +56,7 @@ const MCP_PATH = '/mcp';
 /** The authorization server's paths, as `oauth.ts` names them: a sign-in resumes at `authorize/<uid>` */
 const PROVIDER_PATH = /^\/oauth\/(authorize|authorize\/[A-Za-z0-9_-]{1,64}|token|register|jwks)$/;
 
-/** What a connection may do: an agent's tools, as `minca mcp` offers them to a connected agent */
+/** What a connection may do: an agent's tools, less what needs a person */
 const AGENT = { agent: true } as const;
 
 /**
@@ -81,9 +83,6 @@ function objectOf(value: unknown): JSONObject {
   const copied = json(value);
   return copied !== null && typeof copied === 'object' && !Array.isArray(copied) ? copied : {};
 }
-
-/** How long a call that writes waits for the space's keepers to have what it wrote */
-const KEPT_MS = 10_000;
 
 export interface RemoteMcpOptions {
   /** The service's address as people reach it, https://: the issuer, and where the endpoint is */
@@ -202,7 +201,7 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- checked by checkGranted in oauth.verify
       const granted = (authInfo?.extra?.granted ?? null) as Granted | null;
       const server = new Server(
-        { name: 'minca', version: options.version },
+        { name: 'minca', version: options.version, icons: MINCA_ICONS },
         {
           capabilities: { tools: {} },
           // Who it acts for, from the grant: said without starting the agent.
@@ -232,20 +231,8 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
             const since = Date.now();
             const done = await callAction(node, name, args);
             if (done.isError) return done;
-            const by = await node.spaces.kept(space, KEPT_MS, since);
-            if (by === 'keepers') return done;
-            if (by === 'peer')
-              return {
-                ...done,
-                text:
-                  `${done.text}\n\nKept by a device of this space that is online now, not by an always-on ` +
-                  'host: it reaches the others when that device syncs with them. Say so if it matters.',
-              };
-            throw new Error(
-              'Written, but not yet kept elsewhere: the space’s always-on nodes haven’t all confirmed it, or, if ' +
-                'it names none, no member online has it. It is sent when they are reachable, while this ' +
-                'connection is up: read it back before writing it again.',
-            );
+            const said = await keptAfter(node, space, since);
+            return said ? { ...done, text: `${done.text}\n\n${said}` } : done;
           });
         } catch (error) {
           return { content: [{ type: 'text', text: messageOf(error) }], isError: true };

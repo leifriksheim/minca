@@ -414,7 +414,7 @@ describe('a host’s MCP endpoint', () => {
       async () =>
         textOf(
           await client.callTool({
-            name: 'records_list',
+            name: 'records_query',
             arguments: { space: space.id, collection: 'app.note' },
           }),
         ).includes('Soup on Friday'),
@@ -682,6 +682,34 @@ describe('a host’s MCP endpoint', () => {
     const tail = parts[3]!;
     parts[3] = `${tail.slice(0, -2)}${tail.endsWith('AA') ? 'BB' : 'AA'}`;
     assert.equal((await call(one.resource, parts.join('.'))).status, 401, 'one changed on the way');
+  });
+
+  test('a token stays small however many spaces were picked, so the app can send it', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    // The most a chat app may be given: each invite is a few kilobytes, and a token that held
+    // them all would pass 16 KB, which Node's server, like most, refuses as a header (431).
+    for (let n = 1; n <= 8; n++) await ada.node.spaces.create({ name: `Space ${n}`, visibility: 'private' });
+    const host = await aHost(hub);
+    const app = await anApp(host.resource);
+    const { tokens } = await signIn(app, host.resource, (audience) => ada.grantFor(audience));
+    assert.ok(tokens.access_token.length < 1024, `${tokens.access_token.length} bytes`);
+    const client = await mcpClient(host.resource, tokens.access_token);
+    assert.equal((await client.callTool({ name: 'spaces_list', arguments: {} })).isError, false);
+  });
+
+  test('what a sign-in leaves on the service goes when its note runs out', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    await ada.node.spaces.create({ name: 'Club', visibility: 'private' });
+    const host = await aHost(hub);
+    const app = await anApp(host.resource);
+    // Anyone can make an account and sign in: what it leaves lasts as long as her note, not the token's 30 days.
+    await signIn(app, host.resource, (audience) => ada.grantFor(audience));
+    const sealed = (await host.kept()).split('\n').find((line) => line.startsWith('oauth:Granted:'));
+    assert.ok(sealed, 'the sealed grant is kept');
+    const expiresAt = Number(/"expiresAt":(\d+)/.exec(sealed)?.[1]);
+    assert.ok(expiresAt <= Date.now() / 1000 + 3600, 'gone when the one-hour note runs out');
   });
 
   test('a sign-in is answered once, and never for the whole account', async () => {

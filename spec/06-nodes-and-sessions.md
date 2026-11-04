@@ -747,8 +747,8 @@ Home                                                  Program
   SHOULD show the person `grant.did` beside `grant.name`, which is only what
   the answer says.
 
-What the reference home shows, the program's timeouts, how the CLI picks the
-home and keeps its key and grant, and the MCP server's `agent_connect` are in
+What the reference home shows, the program's timeouts, and how the CLI picks
+the home and keeps its key and grant are in
 [agents](../packages/core/docs/agents.md#connecting-at-your-account-home).
 
 > Rationale: the relay introduces the two sides and could sit between them,

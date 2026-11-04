@@ -593,6 +593,21 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     the key. Members keep what their roles allow, and the way on is a
     successor (03 §2.1, §2.7; `constitution.test.ts`, "the last founder steps
     down…").
+  - A member who may write `std.guide` can put text in front of other
+    people's agents: `collections_list` points at every guide about a
+    collection, whoever wrote it, and the tools tell agents to read a guide
+    before writing there and go by it. A guide's name is a shared key, so,
+    as at any shared key, a member can start a chain of their own there and
+    replace a guide an app already wrote, and `writeGuide` leaves it, so the
+    app can't restore it. An agent so steered holds a records note, and can
+    replace guides in turn. The only check is the note marking what a tool
+    returns as data from others, not instructions. Showing only guides
+    from members who may define collections needs a check the node itself
+    makes, not one read off the grants, and guides keyed per author
+    (`guidesOf`, `writeGuide` in `packages/core/src/schemas/guides.ts`;
+    `collections_list` in `packages/core/src/node/actions.ts`;
+    [#382](https://github.com/leifriksheim/minca/issues/382)). Not
+    protocol: a layer the library and its apps keep.
 - **By design.**
   - Whoever may define roles is trusted to. A definer can write power into a
     role it keeps, or nest it in a role it defines, and keep it after losing
@@ -951,7 +966,7 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     and a file where a space's directory belongs stops every client pushing
     or pulling that space through the folder, until it is removed (05 §14.5,
     §16.4; [#33](https://github.com/leifriksheim/minca/issues/33)).
-  - `minca agent` and `minca mcp` keep each session's key, grant and stores
+  - `minca agent` and the commands an agent runs keep each session's key, grant and stores
     together in a slot of the CLI home (`<home>/agent/<n>`). One process signs
     with a slot's key at a time only while the slot's lock holds: numbered
     files, each linked into place whole, the highest the lock, no number used
@@ -1011,10 +1026,13 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     there. Only the account's own keys and apps can; apps should choose names
     that include their collection (02 §4.1). By design.
   - An MCP service a person connects a chat app through (`minca mcp-server`)
-    is such an app, holding its key inside the app's access token, sealed
-    under a key of its own: on its disk only between the person allowing it
-    and the app collecting the token, twenty minutes at most, and in memory
-    while a node runs. While the app uses it, a node of its holds the spaces
+    is such an app. It keeps its key and note on its disk sealed under a key
+    only the app's access token carries, itself sealed under a key of the
+    service's own, so neither the disk nor a token alone opens them; unsealed
+    only between the person allowing it and the app collecting the token,
+    twenty minutes at most, and in memory while a node runs. A disconnect the
+    service sees drops the sealed copy, and with it the token; losing its
+    data folder ends every connection. While the app uses it, a node of its holds the spaces
     the person picked in memory, reads them and writes records there "via
     agent", as the app's model asks; and whoever holds its sealing key and a
     token can do the same until the note runs out or the person disconnects
@@ -1080,6 +1098,8 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     app then acts in their spaces, unless it ties OAuth's `state` to the
     browser that started it; the service can't tell. What a stranger can make
     it keep or do is an app's registration, gone after a day unless used;
+    each sign-in's sealed grant, up to the 64 KB a consent post may be,
+    until its note runs out, at most a month;
     nodes that run while called, each with up to 8 spaces those always-on
     nodes carry, in memory, and up to an hour after for writes their keepers
     don't have; each a few bytes of places for a key that wrote, for a
@@ -1091,6 +1111,18 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     and make honest calls wait, then fail
     ([#33](https://github.com/leifriksheim/minca/issues/33)). None of this is
     protocol: a dishonest service need not run that code.
+  - The CLI on a computer `minca connect` set up is such a program too: a
+    `minca spaces …` or `minca records …` command an agent's shell runs is
+    a node of the agent's for that command, under the MCP service's rule
+    above, so it refuses a space it can't catch up with rather than write
+    behind, and a write fails until a keeper or member has it. Those act as
+    the agent unless an account is named. The commands that open the account
+    itself (`minca run`, `minca agent --bot`, `minca init --existing`) unlock
+    it with whatever passphrase or recovery code the environment holds, so a
+    shell that holds one is the account, whatever the note says (`withNode` in
+    `packages/cli/src/main.ts`, `packages/cli/src/level.ts`;
+    `packages/cli/tests/cli-agent.test.ts`). By design: keep the account's
+    secrets out of an agent's environment.
 
 _Source: 01 §7.5, §8, §11; 06 §2, §3; 05 §14, §15; 02 §4.1. Tests: `packages/core/tests/live.test.ts` ("a records-only key cannot shed its label by passing its note on"), `packages/core/tests/inbox.test.ts` ("opens only with its inbox…"), `packages/core/tests/record-keys.test.ts` ("a key in another collection"), `packages/core/tests/connect.test.ts` ("an app can only ask for a key it holds, and none the home already uses for something else", "a request with a field it does not know is refused…"), `packages/core/tests/records-only.test.ts`, `packages/core/tests/connect-code.test.ts`, `packages/core/tests/ucan.test.ts`, `packages/core/tests/account-vault.test.ts` ("the account key does not open the registry store's sealed entries", "a wrap from another account does not open as this one", "a passphrase wrap edited to fewer rounds, another salt or another id does not open")._
 
