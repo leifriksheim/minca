@@ -1,22 +1,60 @@
 # Automations
 
-"When a channel has more than 100 messages, say so in it." "When a poll has
-10 votes, close it." "When someone mentions the bot, answer them." An automation
-finds records with a query, keeps those a filter matches, and does one
-thing for each, once; or does it at set times.
+An automation does something when records in a space look a certain way.
+"When a poll has 10 votes, close it." "When someone mentions the bot, answer
+them." "When a channel passes 100 messages, say so in it."
 
-One kind of record for all of these, whoever runs it: a person's app, their
-agent, or a bot a community added.
-
-> Not protocol. A peer that has never heard of automations syncs, stores and judges
-> `std.automation` and `std.automation-run` like any other record. These are not the
-> `rules` of a definition ([collections.md](collections.md#rules)), which
-> every peer enforces and which can only refuse a version; these act.
+Your app can run automations for a person, so can their agent, and so can a
+bot a community adds. Unlike a collection's [rules](collections.md#rules),
+which every peer enforces and which can only refuse a write, an automation
+acts.
 
 ## An automation
 
-An automation is a `std.automation` record, so everyone in the space sees what runs and
-who made it:
+An automation is a `std.automation` record. Everyone in the space sees what
+runs and who made it. Here is one that tells you when someone mentions you:
+
+```json
+{
+  "name": "Mentioned",
+  "when": {
+    "query": { "collection": "std.message", "where": { "mentions": { "$contains": "$me" } } }
+  },
+  "then": { "kind": "notify", "text": "Someone mentioned you" },
+  "since": "2026-09-29T12:00:00Z"
+}
+```
+
+`when` holds a query in [the query format](query-format.md). Each record it
+finds sets the automation off, once. `then` says what to do. `$me` is whoever
+runs the automation.
+
+`since` is when it starts. A record that already matched before then is left
+alone. That counts the record's last change, the newest record any `include`
+found, and the newest record its computed fields read.
+
+You save an automation like any other record:
+
+```ts
+import { automation } from '@minca/core/schemas';
+
+await node.records.put(space.id, automation, {
+  name: 'Mentioned',
+  when: { query: { collection: 'std.message', where: { mentions: { $contains: '$me' } } } },
+  then: { kind: 'notify', text: 'Someone mentioned you' },
+  since: new Date().toISOString(),
+});
+```
+
+The space must have `std.automation` and `std.automation-run` defined.
+Without them, nothing runs.
+
+## Counting with `holds`
+
+`holds` is a second filter, run over each result. It can read
+`include:<name>`: what the query's `include` of that name found. That is a
+number for an include with `count`, and a list of records otherwise. Use it
+for what a query's own `where` can't say, like "more than 100 messages":
 
 ```json
 {
@@ -38,116 +76,149 @@ who made it:
 }
 ```
 
-| Field    | Meaning                                                                                                                                                                              |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `name`   | What people call it                                                                                                                                                                  |
-| `when`   | `query`: a query in [the query format](query-format.md). `holds`, optional: a filter each result must match. `from` and `others`, optional: below.                                   |
-| `every`  | Optional. Five cron fields, minute hour day month weekday, in the runner's local time: the automation also runs by itself then. An automation has `when`, `every`, or both.          |
-| `then`   | What it does, below                                                                                                                                                                  |
-| `by`     | Optional. The DID of the bot that runs it; without it, its maker's own devices and agent do ([Who runs an automation](#who-runs-an-automation))                                      |
-| `picked` | Optional. How an app's builder showed the automation, so it can show it in words and open it again. Never read to run it.                                                            |
-| `paused` | Optional. Kept, but not run.                                                                                                                                                         |
-| `since`  | Nothing that came to hold before this sets it off: a record whose last change, the newest record any include found, and the newest its computed fields read are older is left alone. |
+What points at a record is counted by following links. So a relation must be
+a [link](collections.md#links) to be counted.
 
-`"$me"`, anywhere in `query` or `holds`, is whoever runs the automation: its maker,
-or the bot in `by`. So "a message mentioning me" is `{ "mentions":
-{ "$contains": "$me" } }` for a person and for a bot alike. `from` lists role
-names; only records written by someone holding one of them set the automation off,
-and `"member"` is any member at all, the founders included. With `others`,
-only records someone other than its runner wrote set it off. What sets it off
-is the record, or, when a computed field its filter names made it hold, the
-record that field read whose coming made it hold: Bob's 👍 that made Alice's
-todo done is Bob's, so `others` lets it through and `from` asks Bob's roles.
-A 😡 after it changes nothing, so it sets nothing off, and a todo done before
-the automation was made never does. Which came last goes by the writers'
-clocks, so of two people whose 👍s made it done, either can claim to have
-been the last.
+## Who sets it off
 
-`every` uses `*`, a number, a range `a-b`, a step `/n` and lists with commas;
-weekday 0 or 7 is Sunday; a day and a weekday both given means either. At
-those times the automation acts once, about no record: `$it` links nothing and
-`{title}` stays as written, so an automation that changes a record needs a `when`.
+`$me` works anywhere in `query` or `holds`. It is the automation's maker, or
+the bot in `by`. So `{ "mentions": { "$contains": "$me" } }` means "mentions
+me" for a person and for a bot alike.
 
-`holds` is a filter in [the query format](query-format.md) over each result,
-which may also read `include:<name>`: what the query's `include` of that name
-found for the record, a number for an include with `count`, else the list of
-records. Use it for what a query's own `where` can't say, like "more than 100
-messages".
+Two more fields in `when` narrow who can set it off:
 
-Anything a query can find, an automation can act on. What points at a record is
-counted by following links, so a relation must be a link to be counted
-([collections.md](collections.md#links)).
+- `from` lists role names. Only records written by someone holding one of
+  them count. `"member"` is any member, founders included.
+- `others: true` lets through only records someone other than the runner
+  wrote.
+
+When a computed field in the filter made a record match, the record that set
+it off is the one the field read. Say Bob's 👍 makes Alice's to-do done. That
+was Bob's doing, so `others` lets it through and `from` asks about Bob's
+roles. A 😡 after it changes nothing, so it sets nothing off. A to-do done
+before the automation existed never does.
+
+Which came last goes by the writers' clocks. Of two people whose 👍s made a
+to-do done, either can claim to have been last.
+
+## At set times
+
+`every` runs an automation by itself, on a schedule. It takes five cron
+fields, minute hour day month weekday, in the runner's local time:
+
+```json
+{
+  "name": "Weekly reminder",
+  "every": "0 9 * * 1",
+  "then": { "kind": "notify", "text": "Plan the week" },
+  "since": "2026-09-29T12:00:00Z"
+}
+```
+
+Each field takes `*`, a number, a range `a-b`, a step `/n`, or a list with
+commas. Weekday 0 or 7 is Sunday. When you give both a day and a weekday,
+either one matches.
+
+At those times the automation acts once, about no record. `$it` links nothing
+and `{title}` stays as written. So an automation that changes a record needs a
+`when`. An automation has `when`, `every`, or both.
 
 ## What it does
 
-| `then.kind` | Fields                                | Does                                                                                        |
-| ----------- | ------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `notify`    | `text`                                | Shows a notification on the device that runs it, through the runner's `notify`              |
-| `add`       | `collection`, `text`, `links`         | Adds a record to `collection`, made from `text` alone (`quickAddBody`), carrying `links`    |
-| `set`       | `field`, `value` (text, number, bool) | Sets one field of the record, when its maker may edit it                                    |
-| `ask`       | `text`                                | Gives `text`, in the maker's words, to an agent that runs automations, with what set it off |
+`then.kind` picks one of four actions:
 
-`add` works with any collection whose records one line of text can make: its
-naming field (`title`, `name`, `text`, …) is filled with `text`, and every
-other field must have an empty value, a `default`, `false` or `[]`, or not be
-required. A message, a comment and a task are all added this way, and so is a
-collection someone defined yesterday. Each of `links` is `{ "rel", "to" }`,
-where `to` is a record's key or `"$it"`, the record the automation holds for: a
-message posted in a channel the automation is about links `channel` to `"$it"`, one
-that shares it links `shares`.
+| `then.kind` | Fields                        | Does                                                   |
+| ----------- | ----------------------------- | ------------------------------------------------------ |
+| `notify`    | `text`                        | Shows a notification on the device that runs it        |
+| `add`       | `collection`, `text`, `links` | Adds a record made from `text`, carrying `links`       |
+| `set`       | `field`, `value`              | Sets one field of the record, if its maker may edit it |
+| `ask`       | `text`                        | Hands `text` to an agent, with what set it off         |
 
-In `text`, `{title}` is what the record is called (its `title`, `name`,
-`question` or `text`, or the runner's `title`), and `{<include>}` how many
-that include found: `{messages}` above.
+`notify` goes through the runner's `notify`. `set` takes text, a number or a
+boolean.
 
-`ask` is for an agent: `minca agent`, or a bot. It is told the automation's words
-as its maker's, and what set it off as data, never as instructions, with one
-exception: when whoever wrote that record may instruct it (for a bot, the
-automation's maker or any member granted `/std.automation/instruct` in the space, and
-only one who holds every grant of the bot's roles, so nobody reaches past
-their own grants through it; for a person's own agent, only the person),
-the runner says so, and what they ask
-in it may be done. What it quotes, and the messages before it, stay data. A
-runner without one leaves automations that ask to one that has.
+### Adding a record
 
-Holding every grant of the bot's roles is not holding what the bot can do
-with them. `.byCreator` reads whose record it is, and when the bot acts, its
-own records are the ones it wrote: a reply, a summary, an app it made for
-someone. So whoever may instruct a bot can have it edit or delete a record
-it wrote for someone else, though their own `.byCreator` grant would never
-reach that record.
+`add` works with any collection whose records one line of text can make
+(`quickAddBody`). Its naming field (`title`, `name`, `text`, …) gets `text`.
+Every other field must have an empty value, a `default`, `false` or `[]`, or
+not be required. A message, a comment and a task all work this way, and so
+does a collection someone defined yesterday.
 
-_Source:_ `packages/cli/src/agent-automations.ts` (`triggerPrompt`, `ruleContext`,
-`writerInstructs`); `packages/cli/tests/agent-automations.test.ts`.
+Each of `links` is `{ "rel", "to" }`. `to` is a record's key, or `"$it"`, the
+record the automation is about. A message posted in a channel links `in` to
+`"$it"`. One that shares the record links `shares`.
+
+In `text`, `{title}` is what the record is called: its `title`, `name`,
+`question` or `text`, or the runner's `title`. `{<include>}` is how many that
+include found, like `{messages}` above.
+
+### Asking an agent
+
+`ask` is for an agent: `minca agent`, or a bot. A runner without one leaves
+these automations to one that has.
+
+The agent gets the automation's words as its maker's. What set it off comes as
+data, never as instructions. The one exception is a writer who may instruct
+the agent:
+
+- For a bot, that is the automation's maker, or a member granted
+  `/std.automation/instruct` in the space who also holds every grant of the
+  bot's roles. Nobody reaches past their own grants through a bot.
+- For a person's own agent, only the person.
+
+Then the runner says so, and what they ask may be done. What their record
+quotes, and the messages before it, stay data.
+
+Holding every grant of a bot's roles is not the same as holding what the bot
+can do. `.byCreator` grants read whose record it is, and the bot's own records
+are the ones it wrote: a reply, a summary, an app it made for someone. So
+whoever may instruct a bot can have it edit or delete a record it wrote for
+someone else, though their own `.byCreator` grant would never reach it.
 
 ## Running
 
-For each record an automation newly holds for, the runner first writes a
-`std.automation-run`, then acts, then says in the run what it did, and the key of
-the record it added (`made`). A run is one per automation per record (`onePer:
-['link:automation', 'link:about']`), which is how an automation acts once for each record
-however often, and by however many devices, it is looked at; it is the automation's
-history for anyone in the space.
+For each record an automation newly matches, the runner writes a
+`std.automation-run` first, then acts, then fills in the run: what it did, and
+the key of any record it added (`made`).
 
-A runner that asks a model, which takes seconds, also says so where people
-look: its `std.activity` about the record that set the automation off (or the
-automation, for one set off by the time) is `waiting` while it is queued behind
-another, `working` while it runs, then `done` or `failed`. The space must
-keep `std.activity`; where it doesn't, nothing is shown and the automation runs as
-before ([standard library](standard-library.md)).
+There is one run per automation per record (`onePer: ['link:automation',
+'link:about']`). That's how an automation acts once for each record, however
+often and by however many devices it is looked at. The runs are its history,
+for anyone in the space to see.
 
-Nothing an automation added sets off an automation: a record some run names in `made` is
-left alone. Without that, "when a message is added, add a message" would
-answer itself forever, and two automations could answer each other. Nor does
-anything the runner's agent, or the bot, wrote itself, so an agent asked to
-act can't set itself off.
+A runner that asks a model takes seconds, so it shows its progress in a
+`std.activity` about the record that set it off, or about the automation when
+it ran on a schedule. The state is `waiting` while queued, `working` while it
+runs, then `done` or `failed`. In a space without `std.activity`, nothing is
+shown and the automation runs as before ([standard
+library](standard-library.md)).
 
-Whatever an automation writes is written as its runner, so an automation can do nothing its
-runner couldn't do by hand. Who may change or delete one is the space's
-grants, as for any record: in `community`, its maker, the moderators and the
-admins.
+### No loops
 
-A bot answering mentions, from anyone holding a role, run by the bot:
+Nothing an automation added sets off an automation: a record some run names
+in `made` is left alone. Otherwise "when a message is added, add a message"
+would answer itself forever. Nothing the runner's agent or bot wrote itself
+sets one off either, so an agent can't set itself off.
+
+### Permissions
+
+An automation writes as its runner, so it can do nothing its runner couldn't
+do by hand. Who may change or delete one is up to the space's grants, as for
+any record. In `community`, that is its maker, the moderators and the admins.
+
+### Who runs an automation
+
+Without `by`, its maker does:
+
+- `runAutomations(node, space, maker)` runs them once.
+- `startAutomations(node, { account })` runs them in every space the node
+  follows, again after each change, and at the times they name.
+
+The example app runs them while it is open, but not those that ask or run on a
+schedule (`timed: false`). `minca agent` runs all of them.
+
+With `by`, only that bot runs it. Here a bot answers mentions from any member:
 
 ```json
 {
@@ -162,41 +233,35 @@ A bot answering mentions, from anyone holding a role, run by the bot:
 }
 ```
 
-### Who runs an automation
+The bot runs it only while the maker may invoke `/std.automation/instruct` in
+the space (`INSTRUCT`). A space grants that to a role like any other grant,
+and the founders hold it. Peers never check it: it is the library's own
+command ([spec 03 §2](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)).
+See [bots](bots.md) for more.
 
-- Without `by`, its maker: `runAutomations(node, space, maker)` once, or
-  `startAutomations(node, { account })`, which runs them in every space the node
-  follows, again after each change, and at the times they name. The example
-  app runs them while it is open, but not those that ask or run at set times
-  (`timed: false`); `minca agent` runs all of them.
-- With `by`, only that bot, and only while the maker may invoke
-  `/std.automation/instruct` in the space (`INSTRUCT`): a grant held by a role says
-  who may direct a bot there. It is a command of the library's own: peers
-  never check it, and a space grants it like any other, to a role
-  ([spec 03 §2](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)).
-  The space's founders hold it.
-- An automation whose current version was written under a records-only note
-  (`recordsOnly`, an agent's) runs nowhere: an agent may suggest one, and it
-  waits until the person saves it themselves.
+An automation whose current version an agent wrote, under a records-only note
+(`recordsOnly`), runs nowhere. An agent may suggest one, and it waits until
+the person saves it themselves.
 
-Two runners of one account, an app and an agent, may both claim a record
-before either hears the other. `startAutomations` waits `claimMs` after claiming;
-the earlier claim acts, and the later is taken back. Nothing runs while every
-runner is closed: to keep automations running with every device off, run
-`minca agent --no-chat`, or a bot on a host.
+Two runners of one account, say an app and an agent, may both claim a record
+before either hears of the other. `startAutomations` waits `claimMs` after
+claiming. The earlier claim acts and the later one is taken back.
 
-_Source: `packages/core/src/schemas/automations.ts` (`automation`, `automationRun`, `checkAutomation`, `matching`, `act`, `automationsFor`, `runAutomations`, `startAutomations`, `fillAutomationText`, `IT`, `ME`), `packages/core/src/schemas/cron.ts`, `packages/core/src/schema/quick-add.ts` (`quickAddBody`), `packages/core/src/query/filter.ts` (`checkFilter`, `matches`), `packages/cli/src/main.ts` (`runAgent`), `packages/cli/src/agent-automations.ts` (`triggerPrompt`), `apps/example/src/automations.ts` (`compile`, `useRunAutomations`). Tests: `packages/core/tests/automation-records.test.ts`, `packages/core/tests/automation-runners.test.ts` (all)._
+Nothing runs while every runner is closed. To keep automations running with
+every device off, run `minca agent --no-chat`, or a bot on a host.
+
+### Fields
+
+Every field of an automation is listed under
+[`Automation`](https://minca.dev/api/schemas/interfaces/Automation/), and how
+a runner is set up under
+[`startAutomations`](https://minca.dev/api/schemas/functions/startAutomations/).
 
 ## The account's own
 
 "Let me know when someone mentions me, in any of my spaces." An automation
-kept in the account registry rather than in a space is the account's own:
-nobody else sees it, and it looks at the spaces it names. Its body is a
-`std.automation`'s, with three more fields, kept as `sys.automation` at
-`automation:<id>` ([spec 03 §13.2](../../../spec/03-spaces.md)). A system
-collection has no definition, so no key of the account, an app given all of
-it included, can redefine it to stop the person pausing or removing one. For
-now it only notifies:
+kept in the account registry, not in a space, is the account's own. Nobody
+else sees it, and it looks at the spaces it names. For now it only notifies:
 
 ```json
 {
@@ -213,71 +278,98 @@ now it only notifies:
 }
 ```
 
-| Field    | Meaning                                                                                      |
-| -------- | -------------------------------------------------------------------------------------------- |
-| `spaces` | `"all"`, every space of the account, or a list of space ids                                  |
-| `open`   | Optional. Where clicking its notification goes, an `https://` address. Default: the home.    |
-| `app`    | Optional. The app that proposed it, `{ origin, name? }`, by the origin the browser reported. |
+It is a `std.automation` body with three more fields: `spaces`, the spaces it
+looks at, `open`, where its notification leads, and `app`, the app that
+proposed it ([`Automation`](https://minca.dev/api/schemas/interfaces/Automation/)).
 
-It must check out as one (`checkOwnAutomation`): `then.kind` is `notify`; no
-`every` and no `by`, since the account runs it as records are written;
-`when.query` is one collection and, optionally, a `where` over each record
-alone (its body, its [computed fields](computed.md), `link:<role>`, `@key`,
-`@collection`, `@createdBy`, `@createdAt`), with no `include`, and no
-`holds` or `from`. `$me` is the account.
+It is kept as `sys.automation` at `automation:<id>`. A system collection has
+no definition, so no key of the account can redefine it to stop the person
+pausing or removing one. That includes an app given all of it.
 
-It notifies about a record when the record **comes to match**: when it is
-written, or, for a `where` that names a computed field, when something that
-field reads is, as a 👍 can make a todo done. Once per record: one edited
-out of matching and back in is not news again, so no one can notify the
-account over and over with one record. What sets it off must be written
-after `since` and within the last day, and with `others`, by someone else.
-"Newest" and "within the last day" go by the clock of whoever wrote it.
+It must pass `checkOwnAutomation`:
 
-**Apps propose them**, the person says yes in the account home, and the home
-writes them, naming the app ([spec 06 §2.11](../../../spec/06-nodes-and-sessions.md), whose `Proposal` is the shape below).
-An app describes what it can notify about with `notifyOn`:
+- `then.kind` is `notify`.
+- No `every` and no `by`: the account runs it as records are written.
+- `when.query` names one collection, with no `include`. It may have a `where`
+  over each record alone: its body, its [computed fields](computed.md),
+  `link:<role>`, `@key`, `@collection`, `@createdBy` and `@createdAt`.
+- No `holds` and no `from`. `$me` is the account.
 
-```ts
+It notifies about a record when the record **comes to match**. That is when
+the record is written, or, for a `where` that names a computed field, when
+something the field reads is written, the way a 👍 can make a to-do done. It
+notifies once per record. A record edited out of matching and back in is not
+news again, so nobody can notify the account over and over with one record.
+
+What sets it off must be written after `since` and within the last day, and,
+with `others`, by someone else. Both go by the clock of whoever wrote it.
+
+[Spec 03 §13.2](../../../spec/03-spaces.md).
+
+### Proposing one from an app
+
+Apps propose these, the person says yes in the account home, and the home
+writes them, naming the app. Describe what your app can notify about with
+`notifyOn`:
+
+```tsx
 import { notifyOn } from '@minca/core/schemas';
+import { useConnection } from '@minca/react';
 
-connection.propose([
-  notifyOn('Mentioned', 'std.message', { mentions: { $contains: '$me' } }),
-  { ...notifyOn('New message in Club', 'std.message'), spaces: [club] },
-]);
+function NotifyMe() {
+  const { connection } = useConnection();
+  const propose = () =>
+    connection.propose([
+      notifyOn('Mentioned', 'std.message', { mentions: { $contains: '$me' } }),
+      { ...notifyOn('New message here', 'std.message'), spaces: [space.id] },
+    ]);
+  return <button onClick={propose}>Notify me</button>;
+}
 ```
 
-A proposal leaves out what the home fills in: `then` defaults to notifying
-with its name, `when.others` to true, `spaces` to all the app may reach,
-`open` to the app's address, and `since` to now. The app shows what they
-match itself, while it runs (`watchNotifications`), and
-`node.automations` lists, pauses and removes them where the account key is.
+`propose` opens the home, so call it from a click.
 
-**Carriers wake an app for them.** A carrier can't read, so each device with
-the account key copies each one into every carry space as a wake (`sys.wake`,
-[spec 03 §15](../../../spec/03-spaces.md)): the collection, the spaces,
-`others`, and in each space, the tags of the values its `where` requires of
-a topic. A condition requires values when it is on a field the space's
-definition declares a topic and is at the top of `where`, or in an `$and`
-there: `field: value`, `$eq`, `$contains` or `$in`. The first such
-condition gives the tags: one per value, so "near me" as
-`{ "place.cells": { "$in": [nine cells] } }` is nine tags. A space where
-`where` requires no topic value gets no tags, so any new record of the
-collection wakes the app, which then turns down what `where` doesn't match.
-A private space whose key the device lacks gets an empty list, and wakes
-nothing.
+A proposal leaves out what the home fills in. `then` notifies with the
+proposal's name, `when.others` is true, `spaces` is every space the app may
+reach, `open` is the app's address, and `since` is now. An `open` you give
+must be on your app's own site. One request takes 1 to 8 proposals.
+
+While your app runs, it shows what they match itself (`watchNotifications`).
+`node.automations` lists, pauses and removes them wherever the account key is.
+
+[Spec 06 §2.11](../../../spec/06-nodes-and-sessions.md) defines the
+`Proposal` shape.
+
+### Waking an app through a carrier
+
+A carrier can't read, so it can't tell which records match. Instead, each
+device with the account key copies each automation into every carry space as
+a wake (`sys.wake`). A wake holds the collection, the spaces, `others`, and,
+in each space, the tags of the topic values its `where` requires. When a
+matching record arrives, the carrier wakes the app, and the app judges it.
+
+A condition requires values when it is on a field the space declares a topic,
+at the top of `where` or in an `$and` there: `field: value`, `$eq`,
+`$contains` or `$in`. The first such condition gives the tags, one per value.
+So "near me" as `{ "place.cells": { "$in": [nine cells] } }` is nine tags.
+
+- A space where `where` requires no topic value gets no tags. Any new record
+  of the collection wakes the app, which turns down what `where` doesn't
+  match.
+- A private space whose key the device lacks gets an empty list, and wakes
+  nothing.
 
 A `where` that names a computed field changes when what the field reads is
-written, so each device also writes a wake for each collection that field
-reads (`wake:<id>:<collection>`), with no tags but the empty lists: any new 👍
-in those spaces wakes the app, which works the field out and judges. Only
-the fields the `where` names count, and a filter whose fields read more than
-four collections gets no more wakes than its own, so a definition can't make
-every member's devices write a wake per name it lists.
+written. So each device also writes a wake for each collection that field
+reads (`wake:<id>:<collection>`), with no tags. Any new 👍 in those spaces
+wakes the app, which works the field out and judges. Only the fields the
+`where` names count. A filter whose fields read more than four collections
+gets no more wakes than its own, so a definition can't make every member's
+devices write a wake per name it lists.
 
 A wake can only let through more than the app would, never less, with one
-exception: `$contains` on a text field matches part of it, and a tag only a
+exception. `$contains` on a text field matches part of it, and a tag only a
 whole value. Mark as topics only fields that hold whole values: people,
 links, cells.
 
-_Source: `packages/core/src/space/own-automations.ts` (`checkOwnAutomation`, `notifyOn`, `checkProposal`, `fromProposal`, `wakeFor`, `linkedWakes`, `holdsFor`, `setsOff`), `packages/core/src/query/computed.ts` (`linkedReads`, `lastRead`), `packages/core/src/node/node-carriers.ts` (`automations`, `syncPasses`), `packages/core/src/node/watch-notifications.ts`, `packages/core/src/schemas/automations.ts` (`matching`). Tests: `packages/core/tests/topics.test.ts` ("an automation of the account’s own: its where"), `packages/core/tests/carrier.test.ts` ("notifications through a carrier"), `packages/core/tests/connect.test.ts` ("an app proposing automations", "an app showing its own notifications"), `packages/core/tests/watch-notifications.test.ts`, `packages/core/tests/computed.test.ts` ("computed: what watches a filter on them"), `packages/core/tests/geo.test.ts`._
+[Spec 03 §15](../../../spec/03-spaces.md).

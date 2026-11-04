@@ -42,6 +42,7 @@ implement and less to get wrong, not more.
 | `apps/home`, `apps/example`, `apps/extension` | The account home, the app, the Chrome extension                                                |
 | `apps/liquid`                                 | Liquid: liquid democracy as an app of its own, a reference for what can be built on Minca      |
 | `apps/site`                                   | The website, minca.social                                                                      |
+| `apps/docs`                                   | minca.dev: `packages/core/docs` and `spec/` as a docs site, with llms.txt for agents           |
 | `apps/shared`                                 | What the apps share: React components on the design system, relay settings                     |
 | `scenarios`                                   | Kinds of community written as tests: grants, contracts and their attacks (`npm run scenarios`) |
 
@@ -108,8 +109,10 @@ two implementations must read it the same way.
   an issue that says which.
 - A change to a standard collection, the query format, the node's interface
   or an app convention changes its page in `packages/core/docs/` instead, in
-  the same PR, with a _Source:_ line and tests in the same way. Those pages
-  say "must" in plain words, not RFC 2119 capitals.
+  the same PR, with tests. Those pages say "must" in plain words, not RFC
+  2119 capitals, and read like Vue's guide: one idea per section, plain
+  sentences, then the code. They don't name source files or restate types:
+  the API reference on minca.dev is generated from the code.
 - Follow the conventions in `spec/README.md`: RFC 2119 words only where they
   are meant, exact formats with an example, and a _Source:_ line naming the
   files and tests for each section.
@@ -282,6 +285,15 @@ mcp-server` (`packages/cli/src/remote-mcp/oauth.ts`):
   for a wallet to scan when paying a host, or a friend to scan to add you. QR encoding (ISO 18004) is a spec
   with a long tail; this one has no dependencies, has been released since
   2014, and is used very widely. Apps only, never `packages/core`.
+- `fumadocs-core`, `fumadocs-ui` and `fumadocs-mdx` 16 on `next` 16, with
+  Tailwind 4, in `apps/docs` (`apps/docs/next.config.mjs`): minca.dev,
+  exported as static pages. Navigation, search, dark mode, code
+  highlighting and accessible layouts for documentation, which together
+  are a site generator's worth of work. Next has been released since 2016
+  and Fumadocs since 2023, and both are very widely used for docs. They
+  bring hundreds of packages, far over the bar, accepted because none of
+  it ships: the build runs on Netlify and serves plain HTML and a little
+  React. Never imported outside `apps/docs`.
 - `electrobun` 1.18, a dev dependency of `apps/desktop`, which it builds and
   runs (`apps/desktop/src/bun/index.ts`): native windows, a menu bar icon and
   a Bun main process, on the system's WebKit. Writing that is a native

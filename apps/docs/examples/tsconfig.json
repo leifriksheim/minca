@@ -1,0 +1,11 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "customConditions": ["@minca/source"],
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
+  "include": ["given.ts", "pages/*.tsx"]
+}

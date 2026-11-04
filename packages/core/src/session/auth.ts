@@ -99,7 +99,7 @@ import {
 export interface MincaAuthConfig {
   /** What passkey prompts call this app. Default "Minca". */
   readonly appName?: string;
-  /** Relays and always-on nodes the signed-in node connects to. Omit to stay offline. */
+  /** Relays, always-on nodes and hosts the signed-in node connects to. Omit to stay offline. */
   readonly network?: NodeNetworkConfig;
   /** The site passkeys belong to. Default: this page's hostname. */
   readonly rpId?: string;
@@ -125,7 +125,7 @@ export interface MincaAuthConfig {
    * Runs the node in a worker, off the page's main thread
    * (`@minca/core/node-worker`). Called once per sign-in; the worker
    * ends when the node closes. Not with `browser.stores`, which a worker
-   * can't be handed.
+   * can't be handed. Default: the node runs on the page.
    */
   readonly worker?: () => WorkerLike;
   /**
@@ -146,6 +146,7 @@ export interface MincaAuthConfig {
 /** The username a new account asked for, while it is claimed and after */
 export interface UsernameClaim {
   readonly username: string;
+  /** `claiming` while it runs, then `claimed` once the name is the account's, or `failed` */
   readonly status: 'claiming' | 'claimed' | 'failed';
   /** Why it failed: the name was taken meanwhile, or the service was down */
   readonly error?: string;
@@ -154,6 +155,7 @@ export interface UsernameClaim {
 /**
  * Which screen the flow is on.
  *
+ * `starting` — looking for accounts and a kept sign-in, until `start()` is done.
  * `welcome` — the place holds no accounts: new here, or not?
  * `existing` — "I already have one": open a pod, use the recovery code, or add this device from another.
  * `signIn` — choose an account and unlock it.
@@ -244,9 +246,11 @@ export interface Connection {
   readonly scope: 'spaces' | 'account';
   /** A carrier's carry space — what disconnecting takes away */
   readonly carrySpace?: string;
+  /** The spaces it was given, by id and name */
   readonly spaces: ReadonlyArray<{ readonly id: string; readonly name: string }>;
+  /** When it was connected, ISO */
   readonly grantedAt: string;
-  /** Unix seconds */
+  /** When its grant runs out, Unix seconds; 0 for a carrier, which never expires */
   readonly expiresAt: number;
   /** `code` for a program connected by code, at the home's own `origin`: kept by its key */
   readonly via?: 'code';

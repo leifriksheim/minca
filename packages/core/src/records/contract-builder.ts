@@ -244,14 +244,18 @@ export interface ContractContext<B> {
   readonly body: Expr<B>;
   /** The version before, or null on a first version: `prev.eq(null)` */
   readonly prev: VersionExpr<B>;
+  /** This version's links, each `{ rel, to }` */
   readonly links: ListExpr<LinkValue>;
+  /** The record's key */
   readonly key: StrExpr;
+  /** This version's place in the record, an int */
   readonly seq: IntExpr;
   readonly collection: StrExpr;
   /** The writer's account */
   readonly author: StrExpr;
   /** The account that wrote the record's first version */
   readonly creator: StrExpr;
+  /** What the writer's clock said, which nothing checks */
   readonly createdAt: StrExpr;
   /**
    * The versions cited by these ids that are in `collection`, typed from its
@@ -270,12 +274,17 @@ export interface ContractContext<B> {
   readonly link: (rel: string) => StrExpr;
   /** Whether an account is a member, as of this version */
   readonly member: (did: StringLike) => BoolExpr;
+  /** The content id of a value's canonical JSON; of a body, its `bodyHash`. For commit-then-reveal */
   readonly hash: (value: Operand) => StrExpr;
   /** `has(body.note)`: whether a field is there */
   readonly has: (field: CelExpr) => BoolExpr;
   /** `test ? then : otherwise` */
   readonly when: <R extends CelExpr>(test: BoolLike, then: R | Literal, otherwise: R | Literal) => R;
-  /** CEL written by hand, for what the builder doesn't cover. Its type is yours to say */
+  /**
+   * CEL written by hand, for what the builder doesn't cover: map literals,
+   * `math.greatest`, `string()`, `uint` values. Its type is yours to say, as
+   * in `raw<boolean>('…')`
+   */
   readonly raw: <T = unknown>(cel: string) => Expr<T>;
 }
 
@@ -624,7 +633,11 @@ export type RolesTo<L, N extends string> = L extends string
       [K in keyof LinksOf<L> & string]: PointsAt<LinksOf<L>[K], N> extends true ? K : never;
     }[keyof LinksOf<L> & string];
 
-/** What a computed field reads of its record, and the functions it calls */
+/**
+ * What a computed field reads of its record, and the functions it calls. It
+ * can't read `prev`, `versions` or `member`: those are a contract's, since
+ * what a contract reads must be the same on every node.
+ */
 export interface ComputedContext<B, N extends string = string> {
   readonly body: Expr<B>;
   readonly links: ListExpr<LinkValue>;
@@ -640,14 +653,17 @@ export interface ComputedContext<B, N extends string = string> {
   /** When this version was written, by its writer's clock */
   readonly updatedAt: StrExpr;
   /**
-   * The records of `collection` that link to this one with role `rel`, as
-   * this node holds them: `linked(reaction, 'on')`. Pass the definition, and
-   * `rel` is one of its link roles that may point here, and each record's
-   * body is typed from its schema.
+   * The records of `collection` that link to this one with role `rel`,
+   * current and readable on this node: `linked(reaction, 'on')`. Each has
+   * `key`, `author` (the account, else the signing key), `createdAt`, `body` and `links`. Pass the
+   * definition, and `rel` is one of its link roles that may point here, and
+   * each record's body is typed from its schema. Each lookup runs once per
+   * record, however many fields use it.
    */
   readonly linked: <L extends Linking>(collection: L, rel: RolesTo<L, N>) => ListExpr<Cited<BodyIn<L>>>;
   /** What this record's first link with that role points at, or null */
   readonly link: (rel: string) => StrExpr;
+  /** The content id of a value's canonical JSON; of a body, its `bodyHash` */
   readonly hash: (value: Operand) => StrExpr;
   /** `has(body.note)`: whether a field is there */
   readonly has: (field: CelExpr) => BoolExpr;

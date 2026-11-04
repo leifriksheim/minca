@@ -2,19 +2,22 @@ import { TopBar } from '@minca/app-shared/TopBar';
 import { useId, useRef, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Mark } from '@minca/app-shared/Wordmark';
+import { Icon } from '@minca/app-shared/Icon';
 import { Shape } from '@minca/app-shared/shapes';
 import { type ShapeKind } from '@minca/ui/shapes';
 import { SHAPE_CYCLE, type ShapeColour } from '@minca/ui/tokens';
 
-/** The site's pages (`/`, `/developers`, `/protocol`, `/extension`, `/download`, `/install/*`), on the same design system as the app */
+/** The site's pages (`/`, `/protocol`, `/extension`, `/download`, `/install/*`), on the same design system as the app */
 export const GITHUB = 'https://github.com/leifriksheim/minca';
 export const SPEC = `${GITHUB}/tree/main/spec`;
+/** Building on Minca: the docs and the playground, a site of their own (apps/docs) */
+export const DEVELOPERS = 'https://minca.dev';
 /** Links off the site open in a tab of their own */
 export const EXTERNAL = { target: '_blank', rel: 'noreferrer' } as const;
 /** The app, a site of its own (`apps/example`), which every "Open Minca" opens */
 export const APP = import.meta.env.VITE_MINCA_APP ?? 'https://app.minca.social';
 
-type PageName = 'home' | 'developers' | 'protocol' | 'extension' | 'download' | 'mcp';
+type PageName = 'home' | 'protocol' | 'extension' | 'download' | 'mcp';
 
 /** GitHub's mark, in the colour of the text beside it */
 function GitHubMark() {
@@ -79,13 +82,12 @@ function MenuMark() {
 
 /** The links in the bar: the same ones whether they sit in it or, on a phone, drop from the menu */
 const NAV_LINKS: ReadonlyArray<{
-  readonly to: '/download' | '/mcp' | '/developers' | '/protocol';
+  readonly to: '/download' | '/mcp' | '/protocol';
   readonly page: PageName;
   readonly label: string;
 }> = [
   { to: '/download', page: 'download', label: 'Download' },
   { to: '/mcp', page: 'mcp', label: 'MCP' },
-  { to: '/developers', page: 'developers', label: 'Developers' },
   { to: '/protocol', page: 'protocol', label: 'Protocol' },
 ];
 
@@ -115,6 +117,10 @@ function Nav({ page }: { page: PageName }) {
               {link.label}
             </Link>
           ))}
+          <a href={DEVELOPERS} {...EXTERNAL}>
+            Developers
+            <Icon name="external" size={14} />
+          </a>
           <a href={GITHUB} {...EXTERNAL} className="nav-menu-only">
             <GitHubMark />
             GitHub
@@ -153,7 +159,9 @@ function Footer() {
         </span>
         <span className="footer-links">
           <Link to="/">Communities</Link>
-          <Link to="/developers">Developers</Link>
+          <a href={DEVELOPERS} {...EXTERNAL}>
+            Developers
+          </a>
           <Link to="/protocol">Protocol</Link>
           <Link to="/mcp">MCP</Link>
           <Link to="/download">Download</Link>

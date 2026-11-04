@@ -60,7 +60,8 @@ describe('Package docs', () => {
   test('every action the agent guide names exists', () => {
     const names = new Set(NODE_ACTIONS.map((action) => action.name));
     const named = [...read('agents.md').matchAll(/`([a-z]+_[a-z_]+)`/g)].map(([, name]) => name!);
-    assert.ok(named.length > 10);
+    // The guide names a few by example; the full list is generated (actions.md).
+    assert.ok(named.length > 0, 'agents.md names no actions: has the pattern stopped matching?');
     for (const name of named) assert.ok(names.has(name), `agents.md names ${name}, which is not an action`);
   });
 });

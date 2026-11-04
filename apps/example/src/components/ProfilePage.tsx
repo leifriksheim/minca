@@ -14,7 +14,7 @@ import { Avatar } from '@minca/app-shared/Avatar';
 import { shortUsername } from '@minca/app-shared/usernames';
 import { AccountActions, openAccountHome } from './AccountMenu';
 import { usePopover } from './usePopover';
-import { shrinkImage } from '../files';
+import { shrinkImage } from '@minca/app-shared/images';
 import { ConnectAgent } from './ConnectAgent';
 import { Icon } from '@minca/app-shared/Icon';
 import styles from './ProfilePage.module.css';

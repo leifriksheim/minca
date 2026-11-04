@@ -5,7 +5,13 @@ import { Modal } from '@minca/app-shared/Modal';
 import ui from 'virtual:minca-ui';
 import { placeAt, searchPlaces, whereAmI } from '@minca/app-shared/places';
 import { showsRecord } from './launcher';
-import { createScreenBridge, offLimits, screenDocument, type ScreenBridge, type ScreenHost } from './screens';
+import {
+  createScreenBridge,
+  offLimits,
+  screenDocument,
+  type ScreenBridge,
+  type ScreenHost,
+} from '@minca/app-shared/screens';
 import { PersonCardHere } from '../Person';
 import { RecordFinder } from '../RecordFinder';
 import { saveFile } from '../../files';

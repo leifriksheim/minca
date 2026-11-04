@@ -1,114 +1,107 @@
-# Building on Minca
+# Understanding Minca
 
-Short guides for building an app with `@minca/core`. They ship in the
-package, so they always match the version installed: an agent working in an
-app's repository finds them at `node_modules/@minca/core/docs/`.
+Minca apps keep their data in spaces that people own, not on a server you
+run. This page explains the few ideas everything else builds on. Read it
+first, then [build a small app](building-an-app.md).
 
-The repository's README (https://github.com/leifriksheim/minca) gives the
-whole picture, and where each thing is described. The protocol
-itself (what goes over the wire, what is signed, what every peer checks) is
-specified in `spec/` in the repository: https://github.com/leifriksheim/minca/tree/main/spec
+These docs ship inside `@minca/core`, so they always match the version you
+have installed. An agent working in your app's repository finds them at
+`node_modules/@minca/core/docs/`.
 
 ## The model in ten lines
 
-- An **account** is a seed the person keeps. Apps never need it.
-- A **node** (`createNode`) is the whole stack in one object: it signs, stores,
-  encrypts, checks and syncs. Everything below goes through it.
-- A **space** is a shared place: its members, their roles, and its data.
-  Its first record is its constitution: its founders, if any, and the roles
-  it starts with. Private spaces are encrypted end to end.
-- A **collection** is a named kind of record in a space, like `app.todo.item`.
-  Its definition (a JSON Schema, links, rules) is stored in the space itself.
-- A **record** is a signed JSON body with a key that stays the same across
-  edits. Every edit is a new version.
-- **Grants** say who may do what: each role holds commands like
-  `/record/write`, narrowed by a policy, and accounts get them by being
-  assigned a role. A collection's **rules** say what its records must keep
-  to. Every device checks every record that arrives against both, so there
-  is no server to write. **Contracts** say what a record must be, citing
-  other records as evidence; every reader counts only records that pass
-  them (spec 09).
-- **Computed fields** are values a collection's definition works out from
-  what links to a record, like a todo done once two people react 👍. Each
-  device works them out from what it holds: a view, where a contract is a
-  verdict.
-- **Queries** are plain JSON: Mongo-style filters, sorting, paging, and
-  `include` to follow links. Name the collection by its definition and
-  `where` and `sort` are typed: a misspelled field is a compile error.
+- An **account** is a person. Its keys stay with them, and your app never sees them.
+- A **space** is a shared place: who is in it, what each of them may do, and
+  the data. Private spaces are encrypted end to end.
+- A **collection** is a kind of record in a space, like `app.todo.item`.
+- A **record** is a signed piece of JSON. Editing it makes a new version.
+- A **role** says what its members may write. Every device checks every
+  record it receives, so there is no server to trust.
+- A **node** (`createNode`) does all of this for you: it signs, stores, checks and syncs.
+
+That's the whole model. A few more ideas build on it, and each has its own
+page when you need it:
+
+- **Rules** and **contracts** say what a collection's records must keep to,
+  like whose turn it is. See [Collections](collections.md) and
+  [Contracts](contracts.md).
+- **Computed fields** are values worked out from what links to a record,
+  like "done once two people react 👍". See [Computed fields](computed.md).
+- **Queries** are plain JSON, and typed when you pass a collection. See
+  [Records and queries](records-and-queries.md).
 
 ## Guides
 
-| Guide                                                | Read it to                                                          |
-| ---------------------------------------------------- | ------------------------------------------------------------------- |
-| [building-an-app.md](building-an-app.md)             | Get a node: sign-in, the account home, React                        |
-| [collections.md](collections.md)                     | Say what your data is and who may do what with it                   |
-| [records-and-queries.md](records-and-queries.md)     | Write, edit, delete, query and watch records                        |
-| [proposing-collections.md](proposing-collections.md) | Grow a space's collections, and say how to use them, with no deploy |
-| [agents.md](agents.md)                               | Let an agent read and write as the person, from a terminal or MCP   |
+| Guide                                                | Read it to                                   |
+| ---------------------------------------------------- | -------------------------------------------- |
+| [building-an-app.md](building-an-app.md)             | Build a small to-do app                      |
+| [collections.md](collections.md)                     | Say what your data is, and who may change it |
+| [records-and-queries.md](records-and-queries.md)     | Write, edit, delete, query and watch records |
+| [proposing-collections.md](proposing-collections.md) | Add collections to a space with no deploy    |
+| [agents.md](agents.md)                               | Let an agent read and write as the person    |
 
 ## Reference
 
-What the library does, in full. None of it is protocol: no peer checks it,
-and another implementation may do it differently and still sync with this
-one. Some of it is a convention apps share, like `std.*` bodies and direct
-messages: an app that does it differently still syncs, but can't read what
-the others wrote.
+What the library does, in full. None of it is protocol, so another
+implementation may do it differently and still sync. Some of it, like the
+`std.*` collections, is a convention apps share: an app that ignores it still
+syncs, but can't read what the others wrote.
 
-| Page                                                 | Covers                                                                                                                                                                                   |
-| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [node.md](node.md)                                   | `createNode`: configuration, root signers and session notes, stores, holding spaces, following the account, events, the network, the app-side client, carriers and hosting, doors, React |
-| [sign-in.md](sign-in.md)                             | `createMincaAuth`: places, account stores, ways in, passkeys, staying signed in, pods, pairing, the account home's side                                                                  |
-| [actions.md](actions.md)                             | The node's actions, and the CLI, MCP and WebMCP tools made of them                                                                                                                       |
-| [query-format.md](query-format.md)                   | The JSON query format: filters, operators, sort and cursor, include                                                                                                                      |
-| [standard-library.md](standard-library.md)           | Every `std.*` collection, and the conventions they follow                                                                                                                                |
-| [direct-messages.md](direct-messages.md)             | `std.direct` and `node.direct`: text sealed for some members of a space                                                                                                                  |
-| [blueprints-and-guides.md](blueprints-and-guides.md) | `std.blueprint` and `std.guide`: proposing collections, the review, updates, guides, compatibility                                                                                       |
-| [computed.md](computed.md)                           | `computed`: values every app derives the same way from what links to a record, like done once two people react 👍                                                                        |
-| [contracts.md](contracts.md)                         | `contract` (`check` and `line`): how the library runs contracts (spec 09), counts only versions that pass, and refuses its own failing ones                                              |
-| [automations.md](automations.md)                     | `std.automation`: when a query finds records, or at set times, do something: in an app, an agent or a bot; and the account's own, which notify it                                        |
-| [bots.md](bots.md)                                   | Who may configure a bot, its instructions, connecting one to a service a host offers, writing a connector, and GitHub                                                                    |
-| [calls](../../calls/README.md)                       | Voice and video calls in a space: the `call.*` messages, ringing, joining, leaving                                                                                                       |
-| [contacts.md](contacts.md)                           | `std.contact`: the list, asking in a shared space, `node.contacts`                                                                                                                       |
-| [inbox.md](inbox.md)                                 | The inbox kept as a record, and how a knock becomes a contact: `std.inbox`, `std.knock`                                                                                                  |
-| [usernames.md](usernames.md)                         | `leif@minca.social`: looking a username up, claiming one, and the name service minca.social runs                                                                                         |
-| [spaces.md](spaces.md)                               | Constitution templates, invite defaults, key upkeep, profiles, the space manager                                                                                                         |
-| [warrants.md](warrants.md)                           | `std.warrant`: proof that an account broke the protocol's rules, written by members and checked by every node before it shows a flag                                                     |
-| [storage.md](storage.md)                             | Pacing sync, the store in memory, storage adapters, IndexedDB, data folders, blob stores and mirrors                                                                                     |
+| Page                                                 | Covers                                                                   |
+| ---------------------------------------------------- | ------------------------------------------------------------------------ |
+| [node.md](node.md)                                   | `createNode`: configuration, stores, events, the network, hosting, React |
+| [sign-in.md](sign-in.md)                             | `createMincaAuth`: accounts, passkeys, staying signed in, pairing        |
+| [actions.md](actions.md)                             | The node's actions, and the CLI, MCP and WebMCP tools made from them     |
+| [query-format.md](query-format.md)                   | The JSON query format: filters, sort, paging, `include`                  |
+| [standard-library.md](standard-library.md)           | Every `std.*` collection                                                 |
+| [direct-messages.md](direct-messages.md)             | `std.direct`: text sealed for some members of a space                    |
+| [blueprints-and-guides.md](blueprints-and-guides.md) | `std.blueprint` and `std.guide`: proposing, reviewing, updating          |
+| [computed.md](computed.md)                           | Values every app works out the same way from what links to a record      |
+| [contracts.md](contracts.md)                         | What a record must be to count, checked by every reader                  |
+| [automations.md](automations.md)                     | `std.automation`: do something when records change, or at set times      |
+| [bots.md](bots.md)                                   | Bots: who configures them, their instructions, connectors, GitHub        |
+| [calls](../../calls/README.md)                       | Voice and video calls in a space                                         |
+| [contacts.md](contacts.md)                           | `std.contact` and `node.contacts`                                        |
+| [inbox.md](inbox.md)                                 | The inbox, and how a knock becomes a contact                             |
+| [usernames.md](usernames.md)                         | `leif@minca.social`: looking up and claiming usernames                   |
+| [spaces.md](spaces.md)                               | Making spaces, invites, profiles, the space manager                      |
+| [permissions.md](permissions.md)                     | Roles, grants, presets, and who sits at the top                          |
+| [warrants.md](warrants.md)                           | `std.warrant`: proof that an account broke the protocol's rules          |
+| [storage.md](storage.md)                             | Sync pacing, storage adapters, IndexedDB, data folders, blob stores      |
+
+The protocol itself, what goes over the wire and what every peer checks, is
+in the [spec](https://github.com/leifriksheim/minca/tree/main/spec).
 
 ## Rules of thumb
 
-- Import only from the package's entry points: `@minca/core`, and
-  `/react`, `/session`, `/schemas`, `/elements` for those parts.
-- Name your collections reverse-DNS style, `app.<yours>.<thing>`. `sys.*` is
-  the protocol's own, and `std.*` is the shared library in `/schemas`.
-- Check the standard library (`@minca/core/schemas`) before defining a
-  reaction, comment, tag, message, task or poll of your own. Using the same
-  one is how two apps see each other's data.
-- Never keep state outside records if other people should see it. Records are
-  what syncs.
+- Import only from the package's entry points: `@minca/core` and its
+  `/session`, `/schemas`, `/elements`, `/storage` and `/inbox`, and
+  `@minca/react` for React.
+- Name your collections `app.<yours>.<thing>`. `sys.*` belongs to the
+  protocol and `std.*` to the standard library.
+- Before you define a reaction, comment, tag, message, task or poll, look in
+  the standard library (`@minca/core/schemas`). Using the same one is how two
+  apps see each other's data.
+- Keep anything other people should see in records. Records are what syncs.
 - A refused write throws with the reason in plain words. Show it, or check
   first with `node.records.can` and hide the button.
 
 ## Planned in the library
 
-What the protocol still has planned is in [the spec](https://github.com/leifriksheim/minca/blob/main/spec/README.md),
-under **Planned** in each part. Library work that isn't protocol:
+The protocol's own plans are in [the spec](https://github.com/leifriksheim/minca/blob/main/spec/README.md).
+In the library:
 
-- **Typed queries, further.** Typed `where` inside an `include`, a
-  misspelled collection name as a compile error, types generated from a
-  space's stored definitions, and a dev-time warning when declared schemas
-  differ from the space's catalogue.
-- **Computed fields, further.** On `records.get` and `records.list`, not
-  only queries; and a `linked()` that follows a record's own links out.
-- **Typed handles.** `collection()` already emits the schema, the rules and
-  the types from one builder; what's left is a handle bound to a space,
-  `node.use(space, Poll)`.
-- **Definitions that update themselves.** `useSchemas` and `applyBlueprint` applying
-  harmless changes, with `differences()` in `packages/core/src/schemas/blueprints.ts`
-  replaced by the planned `compare` ([02](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md),
-  compatible definitions).
-- **Asking for what a version cites.** A version pending on a cited version
-  from a collection this node doesn't hold, asking for it
+- **More typed queries.** Typed `where` inside an `include`, a misspelled
+  collection name as a compile error, types generated from a space's stored
+  definitions, and a warning in development when your schemas differ from
+  the space's.
+- **More computed fields.** On `records.get` and `records.list`, and a
+  `linked()` that follows a record's own links.
+- **Typed handles.** A collection bound to a space: `node.use(space, Poll)`.
+- **Definitions that update themselves.** `useSchemas` and `applyBlueprint`
+  applying harmless changes on their own.
+- **Asking for what a version cites**, when it comes from a collection this
+  node doesn't hold
   ([spec 09 §9](../../../spec/09-contracts.md#9-planned-asking-for-what-a-version-cites),
   [#138](https://github.com/leifriksheim/minca/issues/138)).
-- **Web components** for the standard schemas.
+- **Web components** for the standard collections.

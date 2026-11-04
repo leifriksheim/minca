@@ -1,12 +1,11 @@
 import { useState, type ReactNode } from 'react';
-import { Link } from '@tanstack/react-router';
 import { offeredActions, type NodeAction } from '@minca/core';
 import { Shape } from '@minca/app-shared/shapes';
 import { MCP_URL, addToClaude, addToCursor } from '@minca/app-shared/mcp';
 import { AppLogo, type AppLogoName } from '@minca/app-shared/AppLogo';
 import { Terminal } from '@minca/app-shared/Terminal';
 import { type ShapeKind } from '@minca/ui/shapes';
-import { Band, Page, Tabs } from './Site';
+import { Band, DEVELOPERS, EXTERNAL, Page, Tabs } from './Site';
 import './Mcp.css';
 
 /**
@@ -291,7 +290,11 @@ const QUESTIONS: ReadonlyArray<{ q: string; a: ReactNode }> = [
     q: 'I’m building something with it.',
     a: (
       <>
-        Every tool is a plain JSON action. <Link to="/developers">The developer guide</Link> has the details.
+        Every tool is a plain JSON action.{' '}
+        <a href={`${DEVELOPERS}/automations/actions/`} {...EXTERNAL}>
+          The developer docs
+        </a>{' '}
+        have the details.
       </>
     ),
   },

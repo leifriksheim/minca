@@ -86,17 +86,21 @@ export interface AutomationApp {
   readonly name?: string;
 }
 
+/** The body of a `std.automation` record, or of an account's own automation */
 export interface Automation {
+  /** What people call it */
   readonly name: string;
   /** What records set it off. An automation has this, `every`, or both. */
   readonly when?: AutomationWhen;
   /** When it runs by itself: five cron fields, minute hour day month weekday, in the runner's local time */
   readonly every?: string;
+  /** What it does */
   readonly then: AutomationAction;
-  /** The bot that runs it, when its maker may instruct bots here; else its maker's own devices and agent */
+  /** The DID of the bot that runs it, when its maker may instruct bots here; else its maker's own devices and agent */
   readonly by?: string;
   /** How an app's builder showed it, so it can be shown and changed again. Never read to run it. */
   readonly picked?: Readonly<Record<string, unknown>>;
+  /** Kept, but not run */
   readonly paused?: boolean;
   /** Nothing that came to hold before this sets it off */
   readonly since: string;
@@ -105,7 +109,7 @@ export interface Automation {
    * than in a space (`space/own-automations.ts`)
    */
   readonly spaces?: AutomationSpaces;
-  /** Where clicking its notification goes: an app's address. Default: the account home. */
+  /** Where clicking its notification goes: an app's `https://` address. Default: the account home. */
   readonly open?: string;
   /** The app that proposed it. Absent: the person made it themselves. */
   readonly app?: AutomationApp;

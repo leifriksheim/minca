@@ -195,7 +195,7 @@ async function doWork(username: Username, key: string, at: number, bits: number)
  * name as parsed, so every device and every spelling signs with the same one.
  * @param contactKey The contact key's private scalar
  * @returns When the name lapses unless claimed again, ms
- * @throws When the domain names no name service, or the service refuses
+ * @throws When the text isn't a username, the code isn't this account's, the domain names no name service, or the service refuses
  */
 export async function claimUsername(
   text: string,

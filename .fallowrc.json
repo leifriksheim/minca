@@ -8,8 +8,11 @@
     "bump.config.ts",
     "packages/cli/tests/bench/**/*.ts",
     "packages/cli/tests/helpers/*-child.ts",
-    "packages/core/tests/bench/**/*.ts"
+    "packages/core/tests/bench/**/*.ts",
+    "apps/docs/examples/given.ts",
+    "apps/docs/scripts/catalogues.ts"
   ],
   "usedClassMembers": ["connectedCallback", "disconnectedCallback", "attributeChangedCallback"],
-  "ignoreUnresolvedImports": ["./offscreen.js", "./popup.js", "./welcome.js", "./minca.css"]
+  "ignoreUnresolvedImports": ["./offscreen.js", "./popup.js", "./welcome.js", "./minca.css"],
+  "ignoreDependencies": ["typedoc-plugin-markdown"]
 }

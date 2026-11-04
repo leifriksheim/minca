@@ -23,6 +23,8 @@
     "./useDismiss": "./src/useDismiss.ts",
     "./action": "./src/action.ts",
     "./places": "./src/places.ts",
+    "./screens": "./src/screens.ts",
+    "./images": "./src/images.ts",
     "./Payment": "./src/Payment.tsx",
     "./QrCode": "./src/QrCode.tsx",
     "./CommunitySetup": "./src/CommunitySetup.tsx",

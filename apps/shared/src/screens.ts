@@ -1,5 +1,6 @@
 /**
- * Screens: a made app's own UI, kept on its launcher record and run sealed.
+ * Screens: a made app's own UI, run sealed. The example app keeps them on its launcher
+ * records; minca.dev's playground runs one beside its code.
  *
  * A launcher record (`launcher.ts`) may carry a `screen`: one HTML document,
  * scripts and styles inline. It runs only once someone who may define
@@ -23,9 +24,9 @@ import {
   type NodeRecord,
   type P2PNode,
 } from '@minca/core';
-import type { FoundPlace } from '@minca/app-shared/places';
+import type { FoundPlace } from './places';
 import { UI_GUIDE } from '@minca/ui/guide';
-import { shrinkImage } from '../../files';
+import { shrinkImage } from './images';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);

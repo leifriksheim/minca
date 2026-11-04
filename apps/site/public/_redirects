@@ -1,2 +1,4 @@
 /.well-known/minca.json  https://usernames.minca.social/.well-known/minca.json  200
+# The developers' page moved to its own site
+/developers  https://minca.dev  301
 /*  /index.html  200

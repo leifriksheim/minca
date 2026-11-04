@@ -6,3 +6,12 @@ packages/cli/pay/dist
 # The desktop app's build, and the parts it is built from
 apps/desktop/build
 apps/desktop/parts
+# Copied in by apps/docs/scripts/sync.mjs, and Next's build
+apps/docs/content
+apps/docs/.api
+apps/docs/examples/pages
+apps/docs/.minca
+apps/docs/public
+apps/docs/.next
+apps/docs/out
+apps/docs/next-env.d.ts

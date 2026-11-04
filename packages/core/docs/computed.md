@@ -1,16 +1,23 @@
 # Computed fields
 
-"A todo is done once two people have reacted 👍." A collection's definition
-can say this once, as a computed field, and every app that reads the
-collection works it out the same way, from the records its node holds. No
-one writes `done`, and no one signs a claim.
+A computed field is a value every app works out from the records it holds,
+instead of one somebody writes. Use one for counts, tallies and flags that
+follow from other records, like "a to-do is done once two people have
+reacted 👍".
 
-> Not protocol. Peers keep the definition's `computed` member and never read
-> it, as they keep `contract`: a peer that has never heard of computed fields
-> syncs, stores and judges every record the same way
-> ([#247](https://github.com/leifriksheim/minca/issues/247)).
+Computed fields are a library convention. Peers store a definition's
+`computed` member and never read it
+([#247](https://github.com/leifriksheim/minca/issues/247)).
+
+## An example
+
+Say it once, in the collection's definition, then query on it like any
+field:
 
 ```ts
+import * as z from 'zod';
+import { collection } from '@minca/core';
+
 const reaction = collection({
   name: 'app.reaction',
   schema: z.object({ emoji: z.string() }),
@@ -30,7 +37,7 @@ const todo = collection({
   },
 });
 
-const { records } = await node.records.query(space, {
+const { records } = await node.records.query(space.id, {
   collection: todo,
   where: { done: false },
   sort: { thumbs: 'desc' },
@@ -39,58 +46,57 @@ records[0]?.body.text; // what was written
 records[0]?.computed.done; // what this node works out: boolean | null
 ```
 
+No one writes `done`, and no one signs a claim about it.
+
 ## A view, not a verdict
 
 Each node works computed fields out from what it holds. Two nodes holding
-different records read different values until they have synced: Bob reads
-`done` as soon as he has reacted, and Alice only once his reaction reaches
-her. A withdrawn reaction turns `done` back, as does a removed member's,
-where the removal keeps nothing of theirs (spec 03 §6.3). A node
-holding only some collections counts only what it holds.
+different records see different values until they have synced. Bob sees
+`done` as soon as he reacts. Alice sees it once his reaction reaches her.
+
+Withdraw a reaction and `done` turns back. The same happens when a member is
+removed and the removal keeps nothing of theirs. A node that holds only some
+collections counts only what it holds.
 
 That is right for what an app shows: done flags, like counts, tallies,
-leaderboards. It is wrong for what something else builds on or can't take
-back: a payment, a proposal that moves money, a move the next move depends
-on. Those need a verdict that is the same on every node and stays fixed,
-which is what a [contract](contracts.md) gives: the writer cites the
-evidence, and every reader judges exactly that.
+leaderboards. It is wrong for anything that can't be taken back, like a
+payment, or a move the next move depends on. Those need a verdict that is the
+same on every node and stays fixed. That is what a [contract](contracts.md)
+gives: the writer cites the evidence, and every reader judges exactly that.
 
 The two are written the same way. Where a computed field searches with
-`linked(reaction, 'on')`, a contract's condition reads what a claim cites with
-`cited(body.reactions, reaction)`; the rest of the expression is the same.
+`linked(reaction, 'on')`, a contract reads what a claim cites with
+`cited(body.reactions, reaction)`. The rest of the expression is the same.
 
 ## Writing them
 
-`computed` is a function that gets the record's names and gives an object:
-each field, and how it is worked out. It is built into CEL, the language
-contracts use, when the collection is defined.
+`computed` is a function that gets the record's names and returns an object
+of fields. It is turned into CEL, the language contracts use, when you define
+the collection.
 
-- **`linked(collection, rel)`**: the records of `collection` that link to
-  this one with role `rel`, current and readable here, as versions: `key`,
-  `author` (the account), `createdAt`, `body`, `links`. Pass the definition,
-  and `rel` completes from its link roles that may point at this collection;
-  a role it lacks, or one that points elsewhere, is a type error. Each
-  record's `body` is typed from its schema.
-- **What else it reads:** `body`, `links`, `key`, `seq`, `collection`,
-  `author`, `creator`, `createdAt`, `updatedAt`, and `link(rel)`, `hash(x)`,
-  `has(field)`, `when(test, then, otherwise)` and `raw(cel)`. Not `prev`,
-  `versions` or `member`: those are a contract's.
-- **Methods** are a contract's ([contracts.md](contracts.md#writing-one-in-typescript)):
-  `where`, `map`, `distinct`, `count`, `sum`, `exists`, `all`, comparisons and
-  arithmetic. A balance is `linked(payment, 'to').map((p) => p.body.amount).sum()`.
-- **One field from another**: give one a name with `const`, and use it in the
-  next, as `done` uses `thumbs`. Each lookup of what links here is done once
-  per record, however many fields use it.
+What it can read and call is on
+[`ComputedContext`](https://minca.dev/api/core/interfaces/ComputedContext/).
+The one a contract lacks is `linked(collection, rel)`, the records that link
+to this one. Pass the definition, and a role it lacks, or one that points
+elsewhere, is a type error.
+
+- **Methods** are a contract's
+  ([Contracts](contracts.md#writing-one-in-typescript)): `where`, `map`,
+  `distinct`, `count`, `sum`, `exists`, `all`, comparisons and arithmetic. A
+  balance is `linked(payment, 'to').map((p) => p.body.amount).sum()`.
+- **One field can use another.** Name it with `const` and use it in the next,
+  as `done` uses `thumbs`. Each `linked()` lookup runs once per record,
+  however many fields use it.
 
 A field's type follows from its expression: a count is a `number`, a
-comparison a `boolean`. Each is `null` for a record it can't be worked out
-for, as when a body lacks a field it reads, or it runs past the limits
+comparison a `boolean`. A field is `null` for a record it can't be worked out
+for, such as when the body lacks a field it reads, or it runs past the limits
 contracts have.
 
 ## As data
 
-A definition stores each field's CEL, and an agent or another language
-writes the same:
+A definition stores each field as CEL, so an agent or another language can
+write the same thing:
 
 ```json
 "computed": {
@@ -99,60 +105,77 @@ writes the same:
 }
 ```
 
-`collections.define` refuses, saying where:
+## What `define` refuses
 
-- more than 16 fields, a name that isn't lower camel case, or an expression
-  over 4,000 characters or 2,000 parts in all;
-- anything outside the subset contracts have (spec 09 §5), and `prev`,
-  `versions` and `member`;
+`collections.define` refuses these, saying where:
+
+- more than 16 fields;
+- a name that isn't lower camel case;
+- an expression over 4,000 characters, or over 2,000 parts in all;
+- anything outside the CEL subset contracts have
+  ([spec 09 §5](https://github.com/leifriksheim/minca/blob/main/spec/09-contracts.md)),
+  or `prev`, `versions` or `member`;
 - `linked()` with anything but a literal collection name and link role;
 - a field named like a field of the body's schema;
 - a field that misreads the schemas: a body field that isn't there, a string
-  compared with a number, `linked()` of a collection that isn't defined in
-  the space, doesn't declare that role, or whose role points at other
-  collections. A `std.*` collection the space doesn't define is read untyped.
+  compared with a number, or `linked()` of a collection the space doesn't
+  define, that doesn't declare that role, or whose role points at other
+  collections.
 
-A contract can't call `linked()`: what it reads must be the same on every
+A `std.*` collection the space doesn't define is read untyped. A contract
+can't call `linked()`, since what a contract reads must be the same on every
 node.
 
-Whatever reads them reads a definition another implementation wrote, or one
-written by hand, as having none when its `computed` is malformed, too large,
-or names a field the body's schema declares. A body member the schema
-doesn't declare can still share a computed field's name, and a query reads
-the computed field: whoever defines the collection decides both anyway.
+A definition may come from another implementation, or be written by hand.
+When its `computed` is malformed, too large, or names a field the body's
+schema declares, readers treat it as having no computed fields.
 
 ## Reading them
 
-- **Every record a query gives** has `computed` beside `body`: its
-  collection's fields, or `{}` without any. Included records have theirs too.
-  `body` stays what its author signed, so writing `{ ...record.body, text }`
-  back never writes a computed value.
-- **`where` and `sort` name a computed field as they name a body field**:
-  `{ done: false }`. A computed field may not share a name with a field of
-  the body's schema, so a name means one thing, and a body member with a
-  computed field's name (in a schema that lets bodies hold more) is never
-  read in its place. With a typed collection, a name it has neither of is a
-  type error. An include's `where` reads the computed fields of what it
-  finds.
-- **Whatever watches a filter on them watches what they read.** A record
-  comes to match `{ done: true }` when it is written, or when a record its
-  computed fields read is: Bob's 👍 makes the todo done without changing
-  it. So an [automation](automations.md) sets off when that 👍 is written
-  (after its `since`), an app's own notifications say so then, once, and a
-  carrier wakes the app on a new 👍 as well as on a new todo. Every one of
-  them filters query results, so they read what a query works out.
-- Filtering or sorting on one works it out for every candidate; otherwise only
-  for the page returned. A `linked()` lookup follows the link index, once per
-  record, so keep fields to what a screen shows.
-- Worked out by the definition as it is now, not as of each record.
+Every record a query gives has `computed` beside `body`, with its
+collection's fields, or `{}` without any. Included records have theirs too.
+`body` stays what its author signed, so writing `{ ...record.body, text }`
+back never writes a computed value.
 
-An app that shows records from their definitions, as the example's data
-view does, gets each computed field as JSON Schema from
-`computedSchemas(definition, definitionOf)`: a count is an `integer`, a
-comparison a `boolean`, each marked `readOnly`. Show them beside the
+`where` and `sort` name a computed field the way they name a body field:
+`{ done: false }`. An include's `where` reads the computed fields of what it
+finds. With a typed collection, a name that is neither a body field nor a
+computed field is a type error.
+
+A computed field always wins over a body member of the same name. A schema
+that lets bodies hold extra members can't make a query read one in its place.
+Whoever defines the collection decides both anyway.
+
+Fields are worked out by the definition as it is now, not as it was when each
+record was written.
+
+## Watching them
+
+A record can come to match `{ done: true }` without changing. Bob's 👍 makes
+the to-do done, so anything that watches a filter on a computed field also
+watches what it reads:
+
+- an [automation](automations.md) sets off when the 👍 is written (after its
+  `since`);
+- an app's own notifications say so then, once;
+- a carrier wakes the app on a new 👍 as well as on a new to-do.
+
+## Cost
+
+Filtering or sorting on a computed field works it out for every candidate.
+Otherwise it is worked out only for the page returned. A `linked()` lookup
+follows the link index once per record, so keep fields to what a screen
+shows.
+
+## Showing them in a form
+
+An app that draws records from their definitions, as the example's data view
+does, gets each computed field as JSON Schema from
+`computedSchemas(definition, definitionOf)`. A count is an `integer`, a
+comparison a `boolean`, and each is marked `readOnly`. Show them beside the
 body's fields, marked as worked out here, and leave them out of forms.
 
-Not yet: computed fields on `records.get` and `list`, and a `linked()` that
-follows a record's own links out.
+## Not yet
 
-_Source: `packages/core/src/query/computed.ts` (`checkComputed`, `checkComputedTypes`, `computedSchemas`, `computeValues`, `readsComputed`), `packages/core/src/query/filter.ts` (`fieldValue`), `packages/core/src/records/contract-builder.ts` (`buildComputed`, `storedComputed`, `ComputedContext`), `packages/core/src/records/cel.ts` (`checkCel`, `evaluateCel`: `linked`), `packages/core/src/records/cel-types.ts` (`typeOfCel`), `packages/core/src/query/engine.ts` (`runQuery`), `packages/core/src/query/types.ts` (`FilterOf`, `ComputedIn`), `packages/core/src/node/space-runtime.ts` (`define`, `computed`). Tests: `packages/core/tests/computed.test.ts`, `packages/core/tests/typed-query.test.ts`._
+- Computed fields on `records.get` and `records.list`.
+- A `linked()` that follows a record's own links out.

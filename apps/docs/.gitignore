@@ -1,0 +1,12 @@
+# Copied in by scripts/sync.mjs from packages/core/docs and spec/
+content/
+.api/
+public/*
+!public/favicon.*
+# Next's build
+.next/
+out/
+next-env.d.ts
+examples/pages/
+# The playground's Minca code, bundled by scripts/sync.mjs
+.minca/

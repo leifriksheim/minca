@@ -252,11 +252,19 @@ export interface SyncState {
   readonly remoteRoot: string; // MST root hash
 }
 
-/** Storage adapter interface */
+/**
+ * Where a store keeps its bytes: entries by string key, and version bodies by
+ * id. Write one to keep a node's data somewhere new. The optional methods
+ * only save round trips.
+ */
 export interface StorageAdapter {
+  /** The entry's bytes, or null */
   get(key: string): Promise<Uint8Array | null>;
+  /** Sets an entry */
   put(key: string, value: Uint8Array): Promise<void>;
+  /** Removes an entry; absent is fine */
   delete(key: string): Promise<void>;
+  /** Every key starting with `prefix`, in any order */
   list(prefix?: string): Promise<string[]>;
   /** Store a version */
   putVersion(version: Version): Promise<void>;
@@ -264,8 +272,9 @@ export interface StorageAdapter {
   getVersion(id: string): Promise<Version | null>;
   /** Delete a version by ID */
   deleteVersion(id: string): Promise<void>;
-  /** Batch operations */
+  /** Applies these puts and deletes; should be atomic */
   batch(ops: ReadonlyArray<BatchOp>): Promise<void>;
+  /** Releases it */
   close(): Promise<void>;
   /** Optional: every entry under a prefix with its value, in one read. Without it, `list` then `get` each. */
   entries?(prefix: string): Promise<ReadonlyArray<readonly [string, Uint8Array]>>;

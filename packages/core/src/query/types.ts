@@ -162,6 +162,7 @@ export interface QueryRecord<T = unknown, I = AnyIncluded, C = ComputedValues> e
   NodeRecord<T>,
   'body'
 > {
+  /** Never null: a query leaves out records this node can't open */
   readonly body: T;
   /** What each `include` found: records, or a number when it asked for a count. Empty without `include`. */
   readonly included: I;
