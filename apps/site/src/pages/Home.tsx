@@ -116,7 +116,7 @@ function HeroActions() {
   const platform = usePlatform();
   if (platform === 'mobile') {
     return (
-      <div className="actions">
+      <div className="actions lead">
         <a href={APP} data-intent="primary">
           Start a minca
         </a>
@@ -129,7 +129,7 @@ function HeroActions() {
   const desktop = platform === 'mac' || platform === 'windows' ? platform : null;
   return (
     <>
-      <div className="actions">
+      <div className="actions lead">
         {desktop ? (
           <Link {...downloadLink(desktop)} data-intent="primary">
             <DownloadMark />

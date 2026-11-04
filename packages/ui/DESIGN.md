@@ -46,7 +46,8 @@ for a value computed from data, said so on its line.
   `data-intent="primary|subtle|ghost|danger|inline|open"` (none is secondary), `data-tone="good|warn|danger"`,
   `data-hue="1"`…`"5"`, `data-gap="tight|loose"`. Nothing names a colour or a
   size, so a redesign changes `css/` and no markup.
-- **No knobs.** One control height, three gaps, the headings' sizes and no
+- **No knobs.** One control height (and a larger one for a page's opening
+  calls to action, `.lead`), three gaps, the headings' sizes and no
   other, no free colours. What a screen can't build from the pieces, the system
   gets, once, for everyone. `src/guide.ts` lists everything an agent may use;
   a piece is added there and in `reference.html` in the same change.

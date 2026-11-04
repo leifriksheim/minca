@@ -313,7 +313,7 @@ export function Mcp() {
               <div className="mcp-url">
                 <Terminal text={MCP_URL} />
               </div>
-              <div className="actions">
+              <div className="actions lead">
                 <a href={addToClaude()} data-intent="primary" target="_blank" rel="noreferrer">
                   Add to Claude ↗
                 </a>
