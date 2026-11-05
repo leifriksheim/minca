@@ -202,7 +202,6 @@ const network = {
   hosts: listed(runtime?.hosts),
 };
 
-// Minca's rainbow, in one colour: a template image, which macOS tints like the other icons in the bar (assets/tray.swift).
 // Updates: the version running now, against the latest release's.
 const updates = createUpdates({
   updater: Updater,
@@ -210,6 +209,7 @@ const updates = createUpdates({
   changed: () => showMenu(),
 });
 
+// Minca's rainbow, in one colour: a template image, which macOS tints like the other icons in the bar (assets/tray.swift).
 const tray = new Tray({ image: 'views://tray.png', template: true, width: 22, height: 12 });
 let carrierState: CarrierState = { state: 'starting' };
 // What the account asked to hear about, as the carrier sees it arrive: shown by the system, app open or not.
