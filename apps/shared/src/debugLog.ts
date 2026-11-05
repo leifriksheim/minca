@@ -1,7 +1,8 @@
 /**
- * What this page or worker says to the console, kept in memory for debug mode
- * (`?debug`, see `DebugMode.tsx`), so it can show what was said before it was
- * opened. Importing this starts keeping it: import it before anything else.
+ * What this page or worker says to the console, and the steps core marks as it
+ * starts a node, kept in memory for debug mode (`?debug`, see `DebugMode.tsx`)
+ * so it can show what came before it was opened. Importing this starts keeping
+ * it: import it before anything else.
  *
  * A worker's console can't be read from the page, and the node's worker may be
  * ended before anyone looks, so workers send each line to the pages as they
@@ -38,9 +39,9 @@ function add(entry: LogEntry): void {
   if (dropped) seen.delete(idOf(dropped));
 }
 
-function keep(level: string, args: ReadonlyArray<unknown>): void {
+function keep(level: string, args: ReadonlyArray<unknown>, at = Date.now()): void {
   const text = args.map(show).join(' ').slice(0, 4000);
-  const entry = Object.freeze({ at: Date.now(), from: self, level, text });
+  const entry = Object.freeze({ at, from: self, level, text });
   add(entry);
   if (worker) channel?.postMessage({ entries: [entry] });
 }
@@ -86,6 +87,17 @@ for (const level of LEVELS) {
     keep(level, args);
     original(...args);
   };
+}
+
+// The steps core marks as it starts (`markStep`), timed when they happened, not when heard.
+try {
+  new PerformanceObserver((list) => {
+    for (const mark of list.getEntries())
+      if (mark.name.startsWith('minca '))
+        keep('step', [mark.name.slice('minca '.length)], Math.round(performance.timeOrigin + mark.startTime));
+  }).observe({ type: 'mark', buffered: true });
+} catch {
+  // No performance timeline here: the console is all there is.
 }
 
 globalThis.addEventListener?.('error', (event: Event) => {

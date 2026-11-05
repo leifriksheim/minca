@@ -25,6 +25,7 @@ import { createNode } from './node.js';
 import { remoteNode, remoteSigner, serveNode, serveSigner } from './remote.js';
 import { workerStores, writerKeysFor, type StoreFactory, type WorkerStores } from './stores.js';
 import type { NodeConfig, NodeNetworkConfig, P2PNode } from './types.js';
+import { markStep } from '../utils/step.js';
 
 /**
  * What a worker needs to start a node: `NodeConfig`, less what can't be sent
@@ -104,7 +105,7 @@ export async function startNodeInWorker(
     worker.terminate?.();
   };
 
-  console.debug('[minca] worker: asking it to start the node');
+  markStep('worker: asking it to start the node');
   const started = startedOn(nodes.port1, worker, startTimeoutMs);
   worker.postMessage({ [TAG]: true, kind: 'start', tab, config: sent }, [
     nodes.port2,
@@ -114,7 +115,7 @@ export async function startNodeInWorker(
 
   try {
     await started;
-    console.debug('[minca] worker: the node started there');
+    markStep('worker: the node started there');
     const node = await remoteNode(nodes.port1);
     return Object.freeze({
       ...node,
@@ -282,13 +283,11 @@ export function runNodeWorker(
     let entry: Held | undefined;
     try {
       if (!isWorkerNodeConfig(sent)) throw new Error('The page sent no node config');
-      console.debug('[minca] worker: a tab asks for the node');
+      markStep('worker: a tab asks for the node');
       const signer = await remoteSigner(signerPort);
       const sessionDid = sent.sessionKey ? await didOf(sent.sessionKey.publicKey) : undefined;
       const key = nodeKey(signer.did, sent.stores, sessionDid);
-      console.debug(
-        `[minca] worker: ${held.has(key) ? 'sharing the node already running' : 'starting a node'}`,
-      );
+      markStep(`worker: ${held.has(key) ? 'sharing the node already running' : 'starting a node'}`);
       entry = held.get(key) ?? start(key, sent, signer);
       const own = entry;
       own.signers.add(tab, signer);

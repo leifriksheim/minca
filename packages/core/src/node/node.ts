@@ -67,6 +67,7 @@ import { createNodeCarriers } from './node-carriers.js';
 import { createNodeHosting } from './node-hosting.js';
 import { createNodeContacts } from './node-contacts.js';
 import { createNodeDirect, createNodeRecords, startAgent } from './node-records.js';
+import { markStep } from '../utils/step.js';
 
 /** Everything a session key may do: every command, about the whole account */
 export const SESSION_COMMAND = ALL_COMMAND;
@@ -496,7 +497,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       } else if (membership.deleted && held.has(spaceId)) left.push(spaceId);
     }
     // The account left them, on some device: off this one's list now, all at once.
-    if (left.length > 0) console.debug(`[minca] node: dropping ${left.length} spaces the account left`);
+    if (left.length > 0) markStep(`node: dropping ${left.length} spaces the account left`);
     await Promise.all(left.map(followLeave));
     if (left.length > 0) changed = true;
 
@@ -779,12 +780,12 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   // With an account key, start following the registry at once: it is how this
   // node learns which spaces it belongs to.
   if (accountSpaceId) {
-    console.debug('[minca] node: opening the account space');
+    markStep('node: opening the account space');
     await runtime(accountSpaceId);
-    console.debug('[minca] node: account space open, following its list of spaces');
+    markStep('node: account space open, following its list of spaces');
     await reconcile();
   }
-  console.debug('[minca] node: started');
+  markStep('node: started');
 
   async function anyoneOnline(): Promise<boolean> {
     for (const open of runtimes.values()) {
