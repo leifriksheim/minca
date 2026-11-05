@@ -26,6 +26,16 @@ that touches it, and a version tag puts it on a GitHub Release as
 `Minca-windows-x64.zip` (`.github/workflows/build.yml`). The version is bumped
 with the packages (`bump.config.ts`).
 
+The app updates itself from the latest release (`release.baseUrl` in
+`electrobun.config.ts`, `src/bun/updates.ts`). A minute after launch and every
+six hours it fetches `stable-macos-arm64-update.json`; when the version there
+differs, it downloads the whole app (`stable-macos-arm64-Minca.app.tar.zst`)
+in the background, then shows "Restart to update to 0.1.19" and the dot in the
+menu bar. It never restarts on its own, since the carrier keeps spaces online.
+"Check for updates" in the menu bar looks at once. Pre-releases aren't
+`latest`, so they reach no one. It trusts what GitHub serves over HTTPS, as
+the first download does.
+
 Neither is signed with a Developer ID yet, so the site tells people how to open
 it the first time. On the Mac, `scripts/sign-adhoc.ts` (Electrobun's `postWrap`
 hook) signs the app ad hoc before it goes into the `.dmg`. Unsigned, its

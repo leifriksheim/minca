@@ -100,14 +100,21 @@ jobs:
         env:
           BUILT: ${{ matrix.built }}
           FILE: ${{ matrix.file }}
+          PREVIEW: ${{ matrix.preview }}
         run: |
           shopt -s nullglob
           built=($BUILT)
           if [[ ${#built[@]} -ne 1 ]]; then echo "Expected one $BUILT, found: ${built[*]:-none}"; exit 1; fi
           mkdir -p "$RUNNER_TEMP/out"
           cp "${built[0]}" "$RUNNER_TEMP/out/$FILE"
+          # What the app updates itself from (src/bun/updates.ts): the version's
+          # update.json and the whole app, under the names Electrobun gives them.
+          # A preview build without them still ships its installer.
+          update=(apps/desktop/artifacts/*-update.json apps/desktop/artifacts/*.tar.zst)
+          if [[ ${#update[@]} -eq 2 ]]; then cp "${update[@]}" "$RUNNER_TEMP/out/"
+          elif [[ $PREVIEW != true ]]; then echo "Expected an update.json and a .tar.zst, found: ${update[*]:-none}"; exit 1; fi
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ matrix.file }}
-          path: ${{ runner.temp }}/out/${{ matrix.file }}
+          path: ${{ runner.temp }}/out/
           if-no-files-found: error
