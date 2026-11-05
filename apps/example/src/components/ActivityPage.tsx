@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { SpaceSummary } from '@minca/core';
-import { useAccount } from '@minca/react';
+
 import { Modal } from '@minca/app-shared/Modal';
-import { markRead, useAlerts } from '../alerts';
+import { useAlerts, useReadingAlerts } from '../alerts';
 import { useAppNotifications } from '../notifications';
 import { useSpaceName, useWorkspace } from '../workspace';
 import { Activity, Builder, Settings } from './Bell';
@@ -17,16 +17,13 @@ import { Icon } from '@minca/app-shared/Icon';
 export function ActivityPage() {
   const { spaces, openSpace } = useWorkspace();
   const nameOf = useSpaceName();
-  const { did } = useAccount();
-  const { items, unread } = useAlerts(did);
+  const { items } = useAlerts();
   const setup = useAppNotifications();
   const [managing, setManaging] = useState(false);
   // Something specific is picked in one space: which, then what.
   const [picking, setPicking] = useState(false);
   const [building, setBuilding] = useState<SpaceSummary | null>(null);
-  useEffect(() => {
-    if (unread > 0) markRead(did);
-  }, [did, unread]);
+  useReadingAlerts(true);
   const off = setup.on === 0 && items.length === 0;
 
   return (

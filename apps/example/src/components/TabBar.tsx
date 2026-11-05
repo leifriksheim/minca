@@ -13,7 +13,7 @@ import css from './TabBar.module.css';
 export function TabBar() {
   const account = useAccount();
   const picture = useAccountPicture();
-  const { unread } = useAlerts(account.did);
+  const { unread } = useAlerts();
   useTabDot(unread > 0);
   const path = useRouterState({ select: (state) => state.location.pathname });
   const onHome = path === '/' || path.startsWith('/groups') || path.startsWith('/people');

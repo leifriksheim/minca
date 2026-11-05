@@ -466,6 +466,13 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     `packages/core/tests/computed.test.ts`, "what made it hold sets it off,
     not whatever came after", `scenarios/tests/chores.test.ts`). By design,
     as times are the writer's everywhere else.
+  - The account's own notifications, and an app's activity list, look at the
+    newest records of a collection by those same clocks: a member who dates
+    enough records ahead hides real matches from them until those dates
+    pass, and one who edits a record that made a match hold dates it again
+    (`recentKeys` and `triggerOf` in
+    `packages/core/src/node/watch-notifications.ts`)
+    ([#397](https://github.com/leifriksheim/minca/issues/397)).
   - Which changes a peer holds can differ for good, and verdicts depend on a
     peer's keys, or the order it runs checks in ([#10](https://github.com/leifriksheim/minca/issues/10)).
   - Peers on different releases can disagree: a definition with a schema

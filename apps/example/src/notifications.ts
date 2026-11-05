@@ -15,7 +15,7 @@ import { TEMPLATES } from './components/apps/templates';
 import { madeNotify } from './components/apps/entries';
 import { launcherApp, sortLauncher, type LauncherApp } from './components/apps/launcher';
 import { message } from '@minca/app-shared/action';
-import { addAlert } from './alerts';
+import { labelOf, setActivity } from './alerts';
 
 /** Offered whatever apps a space has */
 const CONTACTS: AutomationProposal = notifyOn('Someone asks to be your contact', 'std.contact-request');
@@ -188,7 +188,6 @@ export function useShowNotifications(openSpace: (id: string) => void) {
     >();
     const show = (key: string, label: string, spaceId: string) => {
       waiting.delete(key);
-      addAlert(did, { record: key, space: spaceId, label, at: new Date().toISOString() });
       if (!supported() || Notification.permission !== 'granted' || globalThis.document.hasFocus()) return;
       void node.spaces.get(spaceId).then((space) => {
         const shown = new Notification(label, { body: space ? `In ${space.name}` : '', tag: key });
@@ -200,9 +199,10 @@ export function useShowNotifications(openSpace: (id: string) => void) {
       });
     };
     const stop = watchNotifications(node, {
+      onActivity: setActivity,
       onNotify: ({ automation, record }) => {
         const particular = automation.when?.query.where !== undefined;
-        const label = automation.then.kind === 'notify' ? automation.then.text : automation.name;
+        const label = labelOf({ automation });
         const before = waiting.get(record.key);
         if (before && (before.particular || !particular)) return;
         if (before) clearTimeout(before.timer);
@@ -212,6 +212,7 @@ export function useShowNotifications(openSpace: (id: string) => void) {
     });
     return () => {
       stop();
+      setActivity([]);
       for (const { timer } of waiting.values()) clearTimeout(timer);
     };
   }, [node, did]);
