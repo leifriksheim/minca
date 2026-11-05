@@ -53,8 +53,8 @@ within a month of the name lapsing, so this is rare.
 
 ## At sign-up
 
-Pass `usernames` to `createMincaAuth`, and the create screen of
-`<minca-auth>` becomes one field: the username.
+Pass `usernames` to `createMincaAuth`, and the account is made with a
+username: the create screen asks for one.
 
 ```ts
 import { createMincaAuth } from '@minca/core/session';

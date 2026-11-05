@@ -1153,28 +1153,15 @@ a [`KnockView`](https://minca.dev/api/core/interfaces/KnockView/). Knocking and 
 These aren't protocol. Another client may draw sign-in and
 [calls](../../calls/README.md) however it likes.
 
-`<minca-auth>` draws the [sign-in](sign-in.md) flow into its own light DOM,
-so password managers find its forms.
-
-```html
-<minca-auth app-name="Todo" relays="wss://relay.minca.social"></minca-auth>
-```
-
-- Attributes: `app-name`, and `relays` and `nodes`, comma-separated.
-- It fires `minca-session` with `detail: { session }`, or `null` when signed
-  out. The event bubbles and is composed.
-- A page can give it its own flow with `element.auth = createMincaAuth(…)`.
-- It sizes to its container, so it fits a page, a modal or a side panel, and
-  draws nothing once someone is in.
-- Colours, font and radius are custom properties (`--minca-accent`,
-  `--minca-font`, …).
+Sign-in has no drawn screens in the library: a page draws its own on
+[`createMincaAuth`](sign-in.md), as the account home does.
 
 ## React
 
 `@minca/react` follows sign-in or the connection, and keeps what you read
 live. `MincaProvider` goes at the top, given an `auth` or a `connection`;
 `useMinca`, `useAuth`, `useSession`, `useConnection` and `useAccount` read
-it, and `<MincaAuth>` draws the sign-in. Below it, hooks such as `useNode`,
+it. Below it, hooks such as `useNode`,
 `useSpaces`, `useQuery`, `useRecord` and `useCan` read and keep current what
 you show, with `useLive` and `useWatched` for anything else. Each one, and what
 it gives, is in the [React reference](https://minca.dev/api/react/).

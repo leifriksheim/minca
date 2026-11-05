@@ -97,7 +97,6 @@ const modules = [
   { dir: 'core/src/node', slug: 'node', title: '@minca/core/node' },
   { dir: 'core/src/storage', slug: 'storage', title: '@minca/core/storage' },
   { dir: 'core/src/inbox', slug: 'inbox', title: '@minca/core/inbox' },
-  { dir: 'core/src/elements', slug: 'elements', title: '@minca/core/elements' },
   { dir: 'react/src', slug: 'react', title: '@minca/react' },
   { dir: 'calls/src/react', slug: 'calls-react', title: '@minca/calls/react' },
   { dir: 'calls/src', slug: 'calls', title: '@minca/calls' },

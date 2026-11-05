@@ -9,6 +9,7 @@
 import { base64UrlDecode, base64UrlEncode, remoteNode, type P2PNode } from '@minca/core';
 import {
   homeAddress,
+  openAccountHome,
   proposeToHome,
   type Grant,
   type MincaConnection,
@@ -217,6 +218,7 @@ export function desktopConnection(
       channel.send({ kind: 'connect', home: address, request: config.request });
       await until();
     },
+    openHome: (section) => openAccountHome(state, section),
     async use(did) {
       if (state.grant?.did !== did)
         throw new Error('The desktop app acts for one account. Disconnect it to use another.');

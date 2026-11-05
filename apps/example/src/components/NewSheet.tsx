@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { useAccount, useAsync, useConnection, useNode } from '@minca/react';
+import { useAsync, useConnection, useNode } from '@minca/react';
 import { Modal } from '@minca/app-shared/Modal';
 import { QrCode } from '@minca/app-shared/QrCode';
 import { useCopy } from '@minca/app-shared/action';
@@ -11,7 +11,6 @@ import styles from './NewSheet.module.css';
 import type { ShapeKind } from '@minca/ui/shapes';
 import { Options } from './Options';
 import { SpaceDialog } from './SpaceList';
-import { openAccountHome } from './AccountMenu';
 
 /** Shares a username the way a phone shares anything; elsewhere its link is copied */
 async function shareUsername(username: string, copy: (text: string) => void): Promise<void> {
@@ -68,8 +67,7 @@ export function NewSheet({ on, onClose }: { on: 'people' | 'groups'; onClose: ()
 /** Your link to hand out, and its QR code to scan: your username's when you have one, else your inbox's */
 function ShareMe({ onClose }: { onClose: () => void }) {
   const node = useNode();
-  const account = useAccount();
-  const { state } = useConnection();
+  const { connection } = useConnection();
   const found = useAsync(() => node.inbox.get(), [node]);
   const inbox = found.status === 'done' ? found.value : null;
   const { copied, copy } = useCopy();
@@ -105,7 +103,7 @@ function ShareMe({ onClose }: { onClose: () => void }) {
             data-intent="ghost"
             onClick={() => {
               onClose();
-              openAccountHome(state.home, account.did);
+              connection.openHome();
             }}
           >
             Pick a username

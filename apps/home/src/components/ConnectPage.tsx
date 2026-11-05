@@ -14,7 +14,6 @@ import {
 import { useAccountPicture, useAuth, useSession, useMinca, useWatched } from '@minca/react';
 import { Wordmark } from '@minca/app-shared/Wordmark';
 import { Avatar } from '@minca/app-shared/Avatar';
-import { rememberedPicture } from '@minca/app-shared/rememberedPictures';
 import { Shape } from '@minca/app-shared/shapes';
 import { shapeFor } from '@minca/ui/shapes';
 import { useAction } from '@minca/app-shared/action';
@@ -191,7 +190,7 @@ function ChooseAccount({
               data-intent="open"
               className="row"
             >
-              <Avatar did={account.did} size={32} round src={rememberedPicture(account.did)} />
+              <Avatar did={account.did} size={32} round />
               <span className="stack truncate" data-gap="tight">
                 <strong>{account.name}</strong>
                 <small>

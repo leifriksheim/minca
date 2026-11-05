@@ -1,7 +1,7 @@
 /**
  * @module react
- * React bindings: follow the sign-in flow, draw it, and keep what you read from
- * a space live as records sync in.
+ * React bindings: follow the sign-in flow, and keep what you read from a space
+ * live as records sync in.
  *
  * ```tsx
  * const auth = createMincaAuth({ network: { relays } });
@@ -11,8 +11,8 @@
  * }
  *
  * function App() {
- *   const { state } = useMinca();
- *   if (state?.stage !== 'ready') return <MincaAuth auth={auth} />;
+ *   const { auth, state } = useMinca();
+ *   if (state?.stage !== 'ready') return <SignIn auth={auth} state={state} />;   // your screens
  *   return <Todos space={…} />;
  * }
  *
@@ -36,8 +36,6 @@ export {
   useNode,
 } from './context.js';
 export type { MincaProviderProps } from './context.js';
-export { MincaAuth } from './minca-auth.js';
-export type { MincaAuthProps } from './minca-auth.js';
 export { useAsync } from './use-async.js';
 export type { AsyncState } from './use-async.js';
 export { useLive } from './use-live.js';

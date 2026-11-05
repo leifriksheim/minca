@@ -1,7 +1,13 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { useNode } from '@minca/react';
 import { message } from './action';
-import { NAMES_DOMAIN, OWN_DOMAIN_HELP, shortUsername, useAvailability } from './usernames';
+import {
+  NAMES_DOMAIN,
+  OWN_DOMAIN_HELP,
+  shortUsername,
+  useAvailability,
+  type Availability,
+} from './usernames';
 
 /**
  * Picking a username: checked as it is typed, claimed with a few seconds of
@@ -31,11 +37,8 @@ export function UsernamePicker({
 
   // A bare name is at this build's domain; one with its own domain is checked there.
   const typedName = text.trim().toLowerCase();
-  const own = typedName.includes('@');
   const availability = useAvailability(typedName);
   const wanted = availability.status === 'free' ? availability.username : null;
-  const mine = availability.status === 'taken' && availability.username === current;
-  const domain = own ? typedName.slice(typedName.indexOf('@') + 1) : NAMES_DOMAIN;
 
   const claim = async (event: FormEvent) => {
     event.preventDefault();
@@ -53,36 +56,7 @@ export function UsernamePicker({
     }
   };
 
-  const status: { text: ReactNode; tone?: 'good' | 'danger' } =
-    availability.status === 'invalid'
-      ? {
-          text: typedName.endsWith('@')
-            ? 'Your domain, like you@yourname.com'
-            : 'Letters, numbers, dots, dashes and underscores; start and end with a letter or number',
-        }
-      : availability.status === 'checking'
-        ? { text: 'Checking…' }
-        : availability.status === 'free'
-          ? { text: `${shortUsername(availability.username)} is free`, tone: 'good' }
-          : availability.status === 'taken'
-            ? {
-                text: mine ? 'That one is already yours' : 'Someone has that one. Try another?',
-                ...(mine ? {} : { tone: 'danger' as const }),
-              }
-            : availability.status === 'unknown'
-              ? own
-                ? {
-                    text: (
-                      <>
-                        {domain} doesn’t give out Minca usernames yet.{' '}
-                        <a href={OWN_DOMAIN_HELP} target="_blank" rel="noopener noreferrer">
-                          Set it up
-                        </a>
-                      </>
-                    ),
-                  }
-                : { text: `Couldn’t reach ${NAMES_DOMAIN} just now. Try again in a moment.` }
-              : { text: 'Like a phone number, but one you choose.' };
+  const status = usernameStatus(availability, typedName, current);
 
   return (
     <form onSubmit={(event) => void claim(event)} className="stack">
@@ -110,4 +84,44 @@ export function UsernamePicker({
       {error && <p role="alert">{error}</p>}
     </form>
   );
+}
+
+/** What the line under a username field says about `typed`, and in what tone */
+export function usernameStatus(
+  availability: Availability,
+  typed: string,
+  current: string | null = null,
+): { text: ReactNode; tone?: 'good' | 'danger' } {
+  const own = typed.includes('@');
+  const domain = own ? typed.slice(typed.indexOf('@') + 1) : NAMES_DOMAIN;
+  const mine = availability.status === 'taken' && availability.username === current;
+  return availability.status === 'invalid'
+    ? {
+        text: typed.endsWith('@')
+          ? 'Your domain, like you@yourname.com'
+          : 'Letters, numbers, dots, dashes and underscores; start and end with a letter or number',
+      }
+    : availability.status === 'checking'
+      ? { text: 'Checking…' }
+      : availability.status === 'free'
+        ? { text: `${shortUsername(availability.username)} is free`, tone: 'good' }
+        : availability.status === 'taken'
+          ? {
+              text: mine ? 'That one is already yours' : 'Someone has that one. Try another?',
+              ...(mine ? {} : { tone: 'danger' as const }),
+            }
+          : availability.status === 'unknown'
+            ? own
+              ? {
+                  text: (
+                    <>
+                      {domain} doesn’t give out Minca usernames yet.{' '}
+                      <a href={OWN_DOMAIN_HELP} target="_blank" rel="noopener noreferrer">
+                        Set it up
+                      </a>
+                    </>
+                  ),
+                }
+              : { text: `Couldn’t reach ${NAMES_DOMAIN} just now. Try again in a moment.` }
+            : { text: 'Like a phone number, but one you choose.' };
 }

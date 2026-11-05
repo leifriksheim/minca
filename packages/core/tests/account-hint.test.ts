@@ -8,9 +8,10 @@ import assert from 'node:assert/strict';
 import { accountHomeLink, clearAccountHint, readAccountHint } from '../src/session/account-hint.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
+import { createMincaConnection, openAccountHome } from '../src/session/connection.js';
 
 const scope: Record<string, unknown> = globalThis;
-const before = { location: scope.location, history: scope.history };
+const before = { location: scope.location, history: scope.history, open: scope.open };
 afterEach(() => Object.assign(scope, before));
 
 /** A page opened at `href`, whose address `replaceState` changes */
@@ -50,5 +51,59 @@ describe('the account hint', () => {
       openedAt(`https://home.example/${hash}`);
       assert.equal(readAccountHint(), null, hash);
     }
+  });
+});
+
+describe('opening the account home from an app', () => {
+  /** Where `openHome` sends the browser, and in what window */
+  function opened(section?: string) {
+    const calls: unknown[][] = [];
+    scope.open = (...args: unknown[]) => calls.push(args);
+    const values = new Map<string, string>();
+    const connection = createMincaConnection({
+      home: 'https://home.example/minca/connect',
+      request: { name: 'Todo', access: 'read' },
+      storage: {
+        getItem: (key) => values.get(key) ?? null,
+        setItem: (key, value) => void values.set(key, value),
+        removeItem: (key) => void values.delete(key),
+      },
+    });
+    connection.openHome(section);
+    return calls;
+  }
+
+  test('before any account is connected it opens the account page, naming none', () => {
+    const [[url, name, features] = []] = opened();
+    assert.equal(url, 'https://home.example/minca/');
+    assert.equal(name, 'minca-account');
+    assert.match(String(features), /^popup,width=720,height=820/);
+  });
+
+  test('at a section, the section is the fragment', () => {
+    const [[url] = []] = opened('notifications');
+    assert.equal(url, 'https://home.example/minca/#notifications');
+  });
+
+  test('for a connected account, at the home it was connected at, naming it', async () => {
+    const { did } = await createIdentityManager().fromSeed(generateSeed());
+    const calls: unknown[][] = [];
+    scope.open = (...args: unknown[]) => calls.push(args);
+    openAccountHome(
+      { home: 'https://default.example/connect', grant: { home: 'https://mine.example/connect', did } },
+      'notifications',
+    );
+    const [[url] = []] = calls;
+    const location = openedAt(String(url));
+    assert.equal(new URL(String(url)).origin, 'https://mine.example');
+    assert.equal(readAccountHint(), did);
+    clearAccountHint();
+    assert.equal(location.hash, '#notifications');
+  });
+
+  test('a section cannot add a hint of its own', () => {
+    const [[url] = []] = opened('x&account=did:key:zDnaeOther');
+    openedAt(String(url));
+    assert.equal(readAccountHint(), null);
   });
 });

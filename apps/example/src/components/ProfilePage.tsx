@@ -10,13 +10,13 @@ import {
   useObjectUrl,
 } from '@minca/react';
 import { message, useCopy } from '@minca/app-shared/action';
-import { forgetPicture, rememberedPicture } from '@minca/app-shared/rememberedPictures';
+import { forgetPicture } from '@minca/app-shared/rememberedPictures';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { FeatureIcon } from '@minca/app-shared/Feature';
 import { shortUsername } from '@minca/app-shared/usernames';
 import { shrinkImage } from '@minca/app-shared/images';
 import { ThemePicker } from '@minca/app-shared/theme';
-import { DOWNLOADS, openAccountHome, useAccounts } from './AccountMenu';
+import { DOWNLOADS, useAccounts } from './AccountMenu';
 import { ConnectAgent } from './ConnectAgent';
 import { DownloadsView } from './DownloadsView';
 import { LineIcon, SettingsRow } from './SettingsRow';
@@ -62,8 +62,7 @@ export function ProfilePage() {
 
 /** How this app works for you: its look, this device's downloads, agents, and the account's security */
 export function SettingsPage() {
-  const { state } = useConnection();
-  const account = useAccount();
+  const { connection } = useConnection();
   const [downloads] = useDownloads();
   const [connecting, setConnecting] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -103,7 +102,7 @@ export function SettingsPage() {
             icon={<LineIcon name="shield" />}
             title="Security and devices"
             detail="Keys, devices and backups"
-            onClick={() => openAccountHome(state.home, account.did)}
+            onClick={() => connection.openHome()}
             away
           />
         </ol>
@@ -170,12 +169,11 @@ function NameField() {
 /** The username people find you by, picked and changed in the account home */
 function Username() {
   const node = useNode();
-  const account = useAccount();
-  const { state } = useConnection();
+  const { connection } = useConnection();
   const found = useAsync(() => node.inbox.get(), [node]);
   if (found.status !== 'done') return null;
   const username = found.value?.username;
-  const open = () => openAccountHome(state.home, account.did);
+  const open = () => connection.openHome();
   return (
     <div className="stack" data-gap="tight">
       <span className={styles.label}>Username</span>
@@ -229,7 +227,7 @@ function Accounts() {
         {others.map((other) => (
           <li key={other.did} className="row">
             <button data-intent="open" onClick={() => accounts.switchTo(other.did)} className="row truncate">
-              <Avatar did={other.did} size={36} round src={rememberedPicture(other.did)} />
+              <Avatar did={other.did} size={36} round />
               <strong className="truncate">{other.name}</strong>
             </button>
             {/* Takes the account off this app only; it and its other apps carry on. */}

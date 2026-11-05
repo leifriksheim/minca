@@ -73,7 +73,7 @@ export const avatarRadius = (size: number, round = false): string => (round ? '5
 export const avatarFit = (round = false): string | undefined =>
   round ? 'translate(50 50) scale(0.74) translate(-50 -50)' : undefined;
 
-/** The avatar as an SVG element, for pages and elements drawn without React (`<minca-auth>`'s `avatar`) */
+/** The avatar as an SVG element, for pages drawn without React (the extension's popup) */
 export function avatarElement(did: string, size: number, round = false): SVGSVGElement {
   const { d, fill, ground } = avatarShape(did);
   const ns = 'http://www.w3.org/2000/svg';
