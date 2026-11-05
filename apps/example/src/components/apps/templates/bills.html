@@ -338,6 +338,14 @@
       );
       await minca.remove(tab.key);
     };
+    if (renaming)
+      return html`<li class="row">
+        <${NameField}
+          initial=${title}
+          onDone=${() => setRenaming(false)}
+          onSave=${(next) => minca.update(tab.key, { ...tab.body, title: next })}
+        />
+      </li>`;
     return html`<li class="row">
       <button data-intent="open" class="truncate" onClick=${() => go(tab.key, title)}>
         <strong class="truncate">${tab.body.icon ? `${tab.body.icon} ` : ''}${title}</strong>
@@ -355,34 +363,47 @@
           },
         ]}
       />
-      ${
-        renaming &&
-        html`<${Rename}
-          title=${title}
-          onClose=${() => setRenaming(false)}
-          onSave=${(next) => minca.update(tab.key, { ...tab.body, title: next })}
-        />`
-      }
     </li>`;
   }
 
-  /** Naming something again, in a dialog: Save keeps it, and closes it */
-  function Rename({ title, onClose, onSave }) {
-    const [text, setText] = useState(title);
-    return html`<${Modal} title="Rename" onClose=${onClose}>
-      <form
-        class="stack"
-        onSubmit=${async (e) => {
-          e.preventDefault();
-          const next = text.trim();
-          if (next && next !== title) await onSave(next);
-          onClose();
+  /**
+   * A row's name, typed over in place: Enter or leaving it saves, Escape keeps what was there.
+   * The row's own field, as adding one is, so renaming looks like the list it is in.
+   */
+  function NameField({ initial, onSave, onDone }) {
+    const [text, setText] = useState(initial);
+    const field = useRef(null);
+    const kept = useRef(false);
+    useEffect(() => {
+      field.current?.focus();
+      field.current?.select();
+    }, []);
+    const save = () => {
+      if (kept.current) return;
+      kept.current = true;
+      const next = text.trim();
+      onDone();
+      if (next && next !== initial) onSave(next);
+    };
+    return html`<span class="stack truncate" data-gap="tight">
+      <input
+        ref=${field}
+        value=${text}
+        aria-label="Name"
+        maxlength="200"
+        enterkeyhint="done"
+        onInput=${(e) => setText(e.currentTarget.value)}
+        onBlur=${save}
+        onKeyDown=${(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur();
+          if (e.key === 'Escape') {
+            kept.current = true;
+            onDone();
+          }
         }}
-      >
-        <input value=${text} aria-label="Name" maxlength="200" autofocus onInput=${(e) => setText(e.currentTarget.value)} />
-        <button type="submit" data-intent="primary" disabled=${!text.trim()}>Save</button>
-      </form>
-    </${Modal}>`;
+      />
+      <small>Enter to save, Esc to leave it</small>
+    </span>`;
   }
 
   /**

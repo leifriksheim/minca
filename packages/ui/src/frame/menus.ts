@@ -207,8 +207,9 @@ export function RowMenu({
     }
     ${
       asking &&
-      html`<${Modal} title=${asking.confirm ?? ''} onClose=${() => setAsking(null)}>
+      html`<${Modal} title=${asking.confirm ?? ''} width=${400} onClose=${() => setAsking(null)}>
         <div class="row" data-spread>
+          <small>It can't be undone.</small>
           <button type="button" data-intent="ghost" onClick=${() => setAsking(null)}>Keep it</button>
           <button
             type="button"

@@ -66,6 +66,11 @@ ol[role='list'] {
       padding: 0;
       border: none;
       background: none;
+
+      /* The row lights up instead (above), not a box around the text */
+      &:hover:not(:disabled) {
+        background: none;
+      }
     }
 
     & > button[data-intent='open']:only-child {
