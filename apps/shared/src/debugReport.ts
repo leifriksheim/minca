@@ -1,8 +1,8 @@
 /**
  * Debug mode's report: this browser, its storage, what the app says about
  * itself, and the log, as plain text to paste into an issue or a chat. Holds
- * no secrets: stored values are listed by name and size only, and the app's
- * own details are its to keep clean.
+ * no secrets: stored values are listed by name and size only, DIDs by their
+ * end, and the app's own details are its to keep clean.
  */
 import { logEntries, loadedAt, type LogEntry } from './debugLog';
 
@@ -106,6 +106,10 @@ function log(entries: ReadonlyArray<LogEntry>): string {
   return `## Log (${entries.length}, times UTC, +seconds since this page loaded)\n${lines.join('\n') || '(nothing yet)'}`;
 }
 
+/** Every DID by its end only: enough to tell accounts apart, not to look one up */
+const shortDids = (text: string) =>
+  text.replace(/did:key:z[1-9A-HJ-NP-Za-km-z]{8,}([1-9A-HJ-NP-Za-km-z]{8})/g, 'did:…$1');
+
 /** The whole report, as text */
 export async function debugReport(app: string, build: string, details?: DebugDetails): Promise<string> {
   const now = Date.now();
@@ -120,7 +124,7 @@ export async function debugReport(app: string, build: string, details?: DebugDet
       : own === null
         ? []
         : [section(app, { Details: own })];
-  return [
+  const parts = [
     `# Minca debug report: ${app}`,
     section('Page', {
       Build: build,
@@ -132,5 +136,6 @@ export async function debugReport(app: string, build: string, details?: DebugDet
     section('Browser', browser()),
     section('Storage', await storage()),
     log(logEntries()),
-  ].join('\n\n');
+  ];
+  return shortDids(parts.join('\n\n'));
 }

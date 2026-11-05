@@ -1,11 +1,9 @@
 /**
  * What this app tells debug mode (`?debug`) about itself: its connection to
- * the account home, and its node. Never a grant's keys, and accounts only by
- * the end of their DID, since the report is made to be pasted elsewhere.
+ * the account home, and its node. Never a grant's keys; the report shortens
+ * the DIDs.
  */
 import { connection } from './minca';
-
-const short = (did: string) => `…${did.slice(-8)}`;
 
 /** Says each change of the connection's status in the log, so the report shows when each came */
 export function logConnection(): void {
@@ -30,10 +28,10 @@ export async function debugDetails(): Promise<Record<string, unknown>> {
       Home: home,
       Error: error ?? '(none)',
       'Acting for': grant
-        ? `${short(grant.did)}, from ${grant.home}, until ${new Date(grant.expiresAt * 1000).toISOString()}`
+        ? `${grant.did}, from ${grant.home}, until ${new Date(grant.expiresAt * 1000).toISOString()}`
         : '(nobody)',
       'Accounts connected here': accounts.map(
-        (account) => `${short(account.did)}, until ${new Date(account.expiresAt * 1000).toISOString()}`,
+        (account) => `${account.did}, until ${new Date(account.expiresAt * 1000).toISOString()}`,
       ),
       'Spaces on the node': spaces,
     },
