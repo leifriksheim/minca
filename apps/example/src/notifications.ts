@@ -15,11 +15,35 @@ import { madeNotify } from './components/apps/entries';
 import { launcherApp, sortLauncher, type LauncherApp } from './components/apps/launcher';
 import { message } from '@minca/app-shared/action';
 import { labelOf, setActivity } from './alerts';
+import { notificationSound, PING, play } from './sound';
 
 /** Offered whatever apps a space has */
 const CONTACTS: AutomationProposal = notifyOn('Someone asks to be your contact', 'std.contact-request');
 
 const supported = () => typeof globalThis.Notification === 'function';
+
+/**
+ * Shows one notification while nobody is looking at the app, or nothing. Silent, since the app
+ * plays its own sound; clicking it brings the app forward and runs `onClick`.
+ */
+export function notify(
+  title: string,
+  options: { body: string; tag: string; sticky?: boolean; onClick: () => void },
+): Notification | null {
+  if (!supported() || Notification.permission !== 'granted' || globalThis.document.hasFocus()) return null;
+  const shown = new Notification(title, {
+    body: options.body,
+    tag: options.tag,
+    silent: true,
+    requireInteraction: options.sticky ?? false,
+  });
+  shown.onclick = () => {
+    globalThis.focus();
+    options.onClick();
+    shown.close();
+  };
+  return shown;
+}
 
 /** What an automation looks for, as the same thing asked for again would be */
 const lookingFor = (own: Pick<AppAutomation, 'when'>) =>
@@ -174,6 +198,8 @@ export function useShowNotifications(openSpace: (id: string) => void) {
   const { did } = useAccount();
   const open = useRef(openSpace);
   open.current = openSpace;
+  // Follows the account's choice, so the sound below is the latest.
+  notificationSound.use();
   useEffect(() => {
     const waiting = new Map<
       string,
@@ -181,14 +207,13 @@ export function useShowNotifications(openSpace: (id: string) => void) {
     >();
     const show = (key: string, label: string, spaceId: string) => {
       waiting.delete(key);
-      if (!supported() || Notification.permission !== 'granted' || globalThis.document.hasFocus()) return;
       void node.spaces.get(spaceId).then((space) => {
-        const shown = new Notification(label, { body: space ? `In ${space.name}` : '', tag: key });
-        shown.onclick = () => {
-          globalThis.focus();
-          open.current(spaceId);
-          shown.close();
-        };
+        const shown = notify(label, {
+          body: space ? `In ${space.name}` : '',
+          tag: key,
+          onClick: () => open.current(spaceId),
+        });
+        if (shown && notificationSound.get().on) play(PING);
       });
     };
     const stop = watchNotifications(node, {

@@ -2,11 +2,13 @@ import { useState } from 'react';
 import type { SpaceSummary } from '@minca/core';
 import { useCollections, useHoldSpace } from '@minca/react';
 import { usePopover } from './usePopover';
-import { useAlerts, useReadingAlerts, useTabDot } from '../alerts';
+import { useAlerts, useReadingAlerts, useTabBadge } from '../alerts';
 import { useAppNotifications, useOwnAutomations } from '../notifications';
 import { ago } from '@minca/ui/time';
 import { SpaceMark } from './SpaceList';
 import { Icon } from '@minca/app-shared/Icon';
+import { Toggle } from '@minca/app-shared/Toggle';
+import { notificationSound, PING, play } from '../sound';
 import { WatchBuilder } from './automations/WatchBuilder';
 import { useSpaceName } from '../workspace';
 import styles from './Bell.module.css';
@@ -32,7 +34,7 @@ export function Bell({
   const { open, setOpen, root } = usePopover();
   const [tab, setTab] = useState<Tab>('activity');
   const [building, setBuilding] = useState(false);
-  useTabDot(unread > 0);
+  useTabBadge(unread);
   // Open is read, up to the newest, and what arrives while it is
   useReadingAlerts(open);
 
@@ -209,6 +211,7 @@ export function Settings({
           />
         )}
         <Action onClick={setup.manage} title="Pause or remove, in your account ↗" />
+        <SoundRow />
       </ul>
       {setup.error && <p role="alert">{setup.error}</p>}
 
@@ -241,6 +244,27 @@ export function Builder({ space, onClose }: { space: SpaceSummary; onClose: () =
   useHoldSpace(space.id);
   const collections = useCollections(space.id);
   return <WatchBuilder space={space} collections={collections} onClose={onClose} />;
+}
+
+/** Whether a notification makes a sound, on every device */
+function SoundRow() {
+  const [{ on }, setSound] = notificationSound.use();
+  return (
+    <li className="row">
+      <span className="stack truncate" data-gap="tight">
+        <strong>Sound</strong>
+        <small>A soft chime with each notification</small>
+      </span>
+      <Toggle
+        on={on}
+        label="Sound"
+        onChange={(next) => {
+          setSound({ on: next });
+          if (next) play(PING);
+        }}
+      />
+    </li>
+  );
 }
 
 /** One thing to do, as a row of the list */

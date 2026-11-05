@@ -30,7 +30,7 @@ import { createAppNode, keychainKey } from './app-node';
 import { createCarrier, type CarrierState } from './carrier';
 import { createNodeLink, MAX_NODE_MESSAGE, nodeUrl, type LinkSocket } from './node-link';
 import { connectionMenu, reminderAt, whenEnds, type MenuLine } from './menu';
-import { createNotifier } from './notify';
+import { createNotifier } from '@minca/app-shared/notify';
 import { preloadFor } from './page';
 import { createUpdates, updateMenu } from './updates';
 
@@ -95,7 +95,8 @@ const bridge = createBridge({
     }),
   openExternal: (url) => void Utils.openExternal(url),
   account: (who) => followApp(who),
-  notify: ({ title, body }) => Utils.showNotification({ title, body }),
+  // Silent: the window plays its own sound (apps/example/src/sound.ts).
+  notify: ({ title, body }) => Utils.showNotification({ title, body, silent: true }),
   open({ url, preload, width, height, app: isApp, closed }) {
     const offset = 40 * (openCount++ % 6);
     const win = new BrowserWindow({

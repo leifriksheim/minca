@@ -13,6 +13,7 @@
     "test": "node --conditions=@minca/source --import tsx --test tests/*.test.ts"
   },
   "dependencies": {
+    "@minca/app-shared": "*",
     "@minca/core": "*"
   },
   "devDependencies": {

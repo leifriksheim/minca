@@ -34,11 +34,11 @@ const KEEP: ReadonlyArray<Option<Keep>> = [
   { value: '4096', shape: 'coin', title: '4 GB', detail: 'Per space.' },
 ];
 
-/** What this device downloads ahead and keeps of others' files: per device, never synced */
+/** What the app downloads ahead and keeps of others' files: chosen for the account, on every device */
 export function DownloadsView({ onClose }: { onClose: () => void }) {
   const [downloads, setDownloads] = useDownloads();
   return (
-    <Modal title="Downloads on this device" onClose={onClose} width={480}>
+    <Modal title="Downloads" onClose={onClose} width={480}>
       <p>Files you add are always kept here. This is for what others share.</p>
       <h3>Download before you open</h3>
       <Options
