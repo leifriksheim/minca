@@ -82,7 +82,7 @@ const MOD = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+';
 const TYPED: ReadonlyArray<readonly [RegExp, string]> = [
   [/(?:^|[^*\w])(\*\*([^*\s](?:[^*]*[^*\s])?)\*\*)$/, 'strong'],
   [/(?:^|[^~])(~~([^~\s](?:[^~]*[^~\s])?)~~)$/, 's'],
-  [/(?:^|[^`])(`([^`]+)`)$/, 'code'],
+  [/(?:^|[^`])((`+)([^`]+)\2)$/, 'code'],
   [/(?:^|[^*\w])(\*([^*\s](?:[^*]*[^*\s])?)\*)$/, 'em'],
   [/(?:^|[^_\w])(_([^_\s](?:[^_]*[^_\s])?)_)$/, 'em'],
 ];
@@ -114,7 +114,9 @@ function formatTyped(data: string | null) {
   for (const [pattern, tag] of TYPED) {
     const match = pattern.exec(before);
     if (!match) continue;
-    const [, typed = '', inner = ''] = match;
+    // What was typed, and the last group: the words inside the marks
+    const typed = match[1] ?? '';
+    const inner = match.at(-1) ?? '';
     selection.setBaseAndExtent(node, before.length - typed.length, node, before.length);
     // The zero-width space after it lets what is typed next go outside it; Markdown leaves it out.
     exec('insertHTML', `<${tag}>${escape(inner)}</${tag}>​`);

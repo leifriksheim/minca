@@ -9,7 +9,8 @@ import { html } from './html';
 import { splitMentions } from './mentions';
 import type { Someone } from './minca';
 
-const FENCE = /^\s{0,3}(`{3,}|~{3,})/;
+/** A fence opens a code block only when nothing after it on the line is a backtick: ```hello``` is inline code */
+const FENCE = /^\s{0,3}(`{3,}(?=[^`]*$)|~{3,})/;
 /** A line drawn with box-drawing characters, like a table pasted from a terminal: kept as written, fenced or not */
 const BOX = /[─-╿]/;
 const HEADING = /^\s{0,3}#{1,6}\s+(.*?)[\s#]*$/;
@@ -105,13 +106,14 @@ function blocksOf(text: string): Block[] {
 }
 
 /**
- * The marks inside a line, the first to start winning: `code`, **bold**,
+ * The marks inside a line, the first to start winning: `code` (or ``code``, as
+ * many backticks closing it as opened it), **bold**,
  * __bold__, ~~struck~~, *emphasis*, _emphasis_, [a link](https://…) and a bare
  * https:// link. A mark hugs its words, so 2*3*4 and snake_case stay as written.
  */
 const INLINE = new RegExp(
   [
-    /`([^`\n]+)`/.source,
+    /(?<!`)(`+)(?!`)(.+?)(?<!`)\1(?!`)/.source,
     /\*\*(?=\S)(.+?)(?<=\S)\*\*/.source,
     /__(?=\S)(.+?)(?<=\S)__/.source,
     /~~(?=\S)(.+?)(?<=\S)~~/.source,
@@ -160,10 +162,10 @@ function inline(text: string, people: ReadonlyArray<Someone>): ComponentChildren
   let from = 0;
   for (const match of text.matchAll(INLINE)) {
     if (match.index > from) out.push(...words(text.slice(from, match.index), people));
-    const [, code, bold, bolder, struck, em, emphasis, label, href, url] = match;
+    const [, , code, bold, bolder, struck, em, emphasis, label, href, url] = match;
     const strong = bold ?? bolder;
     const italic = em ?? emphasis;
-    if (code !== undefined) out.push(html`<code>${code}</code>`);
+    if (code !== undefined) out.push(html`<code>${code.trim()}</code>`);
     else if (strong !== undefined) out.push(html`<strong>${inline(strong, people)}</strong>`);
     else if (struck !== undefined) out.push(html`<s>${inline(struck, people)}</s>`);
     else if (italic !== undefined) out.push(html`<em>${inline(italic, people)}</em>`);

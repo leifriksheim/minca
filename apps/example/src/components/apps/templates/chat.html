@@ -227,8 +227,20 @@
     const text = typeof message.body.text === 'string' ? message.body.text : '';
     const [draft, setDraft] = useState(text);
     const box = useRef(null);
+    // Editing ends with Escape wherever the focus is, or a press anywhere outside the box
     useEffect(() => {
-      if (editing) box.current?.querySelector('.editor')?.focus();
+      if (!editing) return;
+      box.current?.querySelector('.editor')?.focus();
+      const away = (event) => {
+        const outside = event instanceof PointerEvent && !box.current?.contains(event.target);
+        if (outside || event.key === 'Escape') onEdit(false);
+      };
+      addEventListener('pointerdown', away);
+      addEventListener('keydown', away);
+      return () => {
+        removeEventListener('pointerdown', away);
+        removeEventListener('keydown', away);
+      };
     }, [editing]);
     const edited = Date.parse(message.updatedAt) - Date.parse(message.createdAt) > 1000;
     const save = async () => {
@@ -277,7 +289,6 @@
               ref=${box}
               class="stack"
               data-gap="tight"
-              onKeyDown=${(event) => event.key === 'Escape' && onEdit(false)}
               onSubmit=${(event) => {
                 event.preventDefault();
                 save();
