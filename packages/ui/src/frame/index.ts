@@ -17,7 +17,9 @@ import { Comments } from './comments';
 import { useBlob, useCan, useFile, useMarked, usePeople, useRecords, useShown, useView } from './hooks';
 import { useLive, usePresence } from './live';
 import { html } from './html';
-import { MentionInput, MentionText, mentionsIn } from './mentions';
+import { FormatMenu, MentionInput } from './editor';
+import { MentionText } from './markdown';
+import { mentionsIn } from './mentions';
 import { Modal } from './modal';
 import { AddMenu, EmojiPicker, Reactions, react } from './menus';
 import { Record, recordTitle } from './record';
@@ -99,6 +101,7 @@ Object.defineProperty(globalThis, 'ui', {
     Modal,
     AddMenu,
     EmojiPicker,
+    FormatMenu,
     Reactions,
     react,
     Record,

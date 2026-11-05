@@ -1,9 +1,22 @@
-<!-- Chat: std.message as one room, with "@" mentions, replies, emoji reactions (std.reaction), files (std.file) dropped anywhere on it, pasted or picked, GIFs from GIPHY once the space has a key, and anything in the space shared with "+" or "/". -->
+<!-- Chat: std.message as one room, written in Markdown (bold, code, lists, tables) with "@" mentions, replies, emoji reactions (std.reaction), files (std.file) dropped anywhere on it, pasted or picked, GIFs from GIPHY once the space has a key, and anything in the space shared with "+" or "/". -->
 <script>
-  const { html, render, useState, useEffect, useRef, useRecords, useCan, usePeople, useShown, useShare } = ui;
+  const {
+    html,
+    render,
+    useState,
+    useEffect,
+    useLayoutEffect,
+    useRef,
+    useRecords,
+    useCan,
+    usePeople,
+    useShown,
+    useShare,
+  } = ui;
   const { Icon } = ui;
   const { Person, MentionInput, MentionText, mentionsIn, Attachments, attach, usePresence } = ui;
-  const { Shared, Sharing, recordTitle, AddMenu, EmojiPicker, Reactions, react, Modal, Empty } = ui;
+  const { Shared, Sharing, recordTitle, AddMenu, FormatMenu, EmojiPicker, Reactions, react, Modal, Empty } =
+    ui;
   const MESSAGE = 'std.message';
   const me = minca.me.did;
   const has = (collection) => minca.collections.includes(collection);
@@ -11,6 +24,8 @@
   const RUN_MS = 5 * 60 * 1000;
   /** How long someone shows as typing after their last key */
   const TYPING_MS = 3000;
+  /** How many messages are drawn at first, and how many more each time the list is scrolled near its top */
+  const PAGE = 100;
 
   const dayOf = (iso) => new Date(iso).toDateString();
   const dayLabel = (iso) => {
@@ -81,6 +96,27 @@
     // A message opened from elsewhere, like the one a file was shared on: scrolled to and marked a moment.
     const shown = useShown();
     const [marked, setMarked] = useState(null);
+    // A long chat draws only its latest messages, and older ones as it is scrolled up to them. Where they start is
+    // kept, so a message arriving while you read further up doesn't move what you are reading.
+    const start = useRef(null);
+    const [, redraw] = useState(0);
+    if (messages && start.current === null) start.current = Math.max(0, messages.length - PAGE);
+    // How far from the bottom the list was before older messages went in above, so it stays there: measured
+    // before they are drawn and put back once, rather than read and written in turn as they go in.
+    const fromEnd = useRef(null);
+    useLayoutEffect(() => {
+      const el = list.current;
+      if (!el || fromEnd.current === null) return;
+      el.scrollTop = el.scrollHeight - fromEnd.current;
+      fromEnd.current = null;
+    });
+    const drawFrom = (index) => {
+      const from = Math.max(0, index);
+      if (from >= start.current || fromEnd.current !== null) return;
+      fromEnd.current = list.current.scrollHeight - list.current.scrollTop;
+      start.current = from;
+      redraw((n) => n + 1);
+    };
     useEffect(() => {
       const last = messages?.at(-1);
       if (!marked && (atEnd.current || last?.mine))
@@ -90,18 +126,25 @@
       if (!shown || !messages?.some((m) => m.key === shown.key)) return;
       jumpTo(shown.key);
     }, [shown, count > 0]);
+    useEffect(() => {
+      if (marked)
+        document.getElementById(`m-${marked}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }, [marked]);
     if (!messages) return null;
 
     function jumpTo(key) {
+      // A message older than those drawn is drawn first, with a few before it
+      drawFrom(messages.findIndex((m) => m.key === key) - 10);
       setMarked(key);
-      document.getElementById(`m-${key}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
       setTimeout(() => setMarked((was) => (was === key ? null : was)), 2500);
     }
     const byKey = new Map(messages.map((m) => [m.key, m]));
+    const first = Math.min(start.current, messages.length);
+    const drawn = messages.slice(first);
     // Each day a section, and in it each run of one person's messages a stack of its own
     const days = [];
-    messages.forEach((m, i) => {
-      const before = messages[i - 1];
+    drawn.forEach((m, i) => {
+      const before = drawn[i - 1];
       const newDay = !before || dayOf(before.createdAt) !== dayOf(m.createdAt);
       const starts =
         newDay ||
@@ -114,7 +157,7 @@
       runs.at(-1).lines.push({ m, starts });
     });
 
-    return html`<main data-fill>
+    return html`<main data-fill data-wide>
       <div
         class="stack"
         data-gap="loose"
@@ -122,6 +165,7 @@
         onScroll=${(event) => {
           const el = event.currentTarget;
           atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+          if (el.scrollTop < 600) drawFrom(first - PAGE);
         }}
       >
         ${
@@ -184,7 +228,7 @@
     const [draft, setDraft] = useState(text);
     const box = useRef(null);
     useEffect(() => {
-      if (editing) box.current?.querySelector('input, textarea')?.focus();
+      if (editing) box.current?.querySelector('.editor')?.focus();
     }, [editing]);
     const edited = Date.parse(message.updatedAt) - Date.parse(message.createdAt) > 1000;
     const save = async () => {
@@ -242,7 +286,7 @@
               <${MentionInput} value=${draft} onChange=${setDraft} aria-label="Edit the message" />
               <small>Enter to save, Escape to cancel</small>
             </form>`
-          : html`<p><${MentionText} text=${text} />${edited && html`<small> (edited)</small>`}</p>`
+          : html`<${MentionText} text=${text} end=${edited && html`<small> (edited)</small>`} />`
       }
       <${Shared} from=${message} />
       <${Attachments} about=${message.key} />
@@ -407,7 +451,7 @@
     // Replying puts you in the box, ready to type.
     const bar = useRef(null);
     useEffect(() => {
-      if (replying) bar.current?.querySelector('textarea, input[aria-label="Message"]')?.focus();
+      if (replying) bar.current?.querySelector('.editor')?.focus();
     }, [replying]);
     const add = (list) => list?.length && setFiles((was) => [...was, ...list]);
     const type = (next) => {
@@ -543,6 +587,7 @@
         />
         <div class="composer-end">
           ${giphyKey && html`<${GifPicker} onPick=${send} disabled=${busy} />`}
+          <${FormatMenu} />
           <${EmojiPicker} onPick=${(emoji) => type(draft + emoji)} />
           <button type="submit" data-intent="primary" data-icon aria-label="Send" disabled=${busy || !ready}>
             <${Icon} name="send" />

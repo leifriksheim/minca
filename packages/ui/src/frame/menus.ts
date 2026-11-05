@@ -62,7 +62,7 @@ const EMOJIS = [
 ];
 
 /** Open until a pick, Escape, or a press anywhere outside `box` */
-function useOpen() {
+export function useOpen() {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
