@@ -43,4 +43,10 @@ export default {
     linux: { bundleCEF: false },
     win: { bundleCEF: false },
   },
+  // Updates come from the latest GitHub Release, whose assets keep the same
+  // names (src/bun/updates.ts). Whole versions only: no patches between them.
+  release: {
+    baseUrl: 'https://github.com/leifriksheim/minca/releases/latest/download',
+    generatePatch: false,
+  },
 } satisfies ElectrobunConfig;

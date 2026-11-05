@@ -115,7 +115,9 @@ puts the Mac `.dmg`, the Windows installer (a preview), the extension's zip and
 `SHA256SUMS` on a GitHub Release, each with a build attestation. Their names
 don't change between releases, so the site's `/download` page links to
 `releases/latest/download/<file>`. A tag with a `-` (`v0.2.0-rc.1`) makes a
-pre-release, which those links skip. None of them is signed yet. Every PR
+pre-release, which those links skip. The desktop app updates itself from
+the same links: the release also carries its `update.json` and `.tar.zst`. None
+of them is signed yet. Every PR
 builds them too (`.github/workflows/build.yml`), the desktop app only when
 something in it changes, and the Actions tab runs that workflow by hand.
 

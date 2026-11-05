@@ -11,18 +11,28 @@
  *   keeps running when it closes;
  * - runs a carrier for the person's account beside it (`carrier.ts`), which
  *   keeps their spaces online even once the app's connection has run out;
- * - puts Minca in the menu bar, where it stays when the window closes.
+ * - puts Minca in the menu bar, where it stays when the window closes, and
+ *   offers new versions there once they are downloaded (`updates.ts`).
  */
-import Electrobun, { ApplicationMenu, BrowserWindow, BuildConfig, PATHS, Tray, Utils } from 'electrobun/bun';
+import Electrobun, {
+  ApplicationMenu,
+  BrowserWindow,
+  BuildConfig,
+  PATHS,
+  Tray,
+  Updater,
+  Utils,
+} from 'electrobun/bun';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createBridge, type PaneHost } from './bridge';
 import { createAppNode, keychainKey } from './app-node';
 import { createCarrier, type CarrierState } from './carrier';
 import { createNodeLink, MAX_NODE_MESSAGE, nodeUrl, type LinkSocket } from './node-link';
-import { connectionMenu, reminderAt, whenEnds } from './menu';
+import { connectionMenu, reminderAt, whenEnds, type MenuLine } from './menu';
 import { createNotifier } from './notify';
 import { preloadFor } from './page';
+import { createUpdates, updateMenu } from './updates';
 
 const APP_PORT = 47830;
 const APP_URL = `http://127.0.0.1:${APP_PORT}`;
@@ -192,6 +202,13 @@ const network = {
   hosts: listed(runtime?.hosts),
 };
 
+// Updates: the version running now, against the latest release's.
+const updates = createUpdates({
+  updater: Updater,
+  current: await Updater.localInfo.version(),
+  changed: () => showMenu(),
+});
+
 // Minca's rainbow, in one colour: a template image, which macOS tints like the other icons in the bar (assets/tray.swift).
 const tray = new Tray({ image: 'views://tray.png', template: true, width: 22, height: 12 });
 let carrierState: CarrierState = { state: 'starting' };
@@ -340,26 +357,26 @@ function carrierItems() {
     offer(account),
   ];
 }
-/** The app's connection: until when, and a click to renew it near the end */
-function connectionItems() {
-  const menu = connectionMenu(appNode.state(), Date.now());
-  tray.setTitle(menu.attention ? '•' : '');
-  return menu.lines.map((line) => ({
-    type: 'normal' as const,
-    label: line.label,
-    action: line.action ?? 'status',
-    enabled: line.action !== undefined,
-  }));
-}
+const item = (line: MenuLine) => ({
+  type: 'normal' as const,
+  label: line.label,
+  action: line.action ?? 'status',
+  enabled: line.action !== undefined,
+});
 function showMenu() {
+  // The app's connection: until when, and a click to renew it near the end.
+  const connection = connectionMenu(appNode.state(), Date.now());
+  const update = updateMenu(updates.state());
+  tray.setTitle(connection.attention || update.attention ? '•' : '');
   tray.setMenu([
     { type: 'normal', label: 'Open Minca', action: 'open' },
     { type: 'normal', label: 'Account settings…', action: 'settings' },
     { type: 'divider' },
-    ...connectionItems(),
+    ...connection.lines.map(item),
     { type: 'divider' },
     ...carrierItems(),
     { type: 'divider' },
+    item(update.line),
     { type: 'normal', label: 'Keep in Dock', action: 'dock', checked: keepInDock },
     { type: 'normal', label: 'Quit Minca', action: 'quit' },
   ]);
@@ -373,15 +390,17 @@ tray.on('tray-clicked', (event) => {
   if (action === 'pause') void carrier.pause();
   if (action === 'resume') carrier.resume();
   if (action === 'dock') setKeepInDock(!keepInDock);
-  if (action === 'quit') quit();
+  if (action === 'check') void updates.check();
+  if (action === 'update') void updates.apply();
+  if (action === 'quit') Utils.quit();
 });
 
-function quit() {
+// However it quits, from the menu or to restart into an update, the node and carrier stop with it.
+Electrobun.events.on('before-quit', () => {
   appNode.close();
   carrier.close();
   tray.remove();
-  Utils.quit();
-}
+});
 
 // macOS sends ⌘C, ⌘V and the rest through the app's menu: without an Edit
 // menu, nothing can be copied or pasted in a window.
@@ -417,7 +436,7 @@ ApplicationMenu.setApplicationMenu([
   },
 ]);
 ApplicationMenu.on('application-menu-clicked', (event) => {
-  if (field(event, 'action') === 'quit') quit();
+  if (field(event, 'action') === 'quit') Utils.quit();
 });
 
 // The app brought to the front with no window (its dock icon, or a notification): its window again.
@@ -427,3 +446,6 @@ showMenu();
 // "Ends in 3 hours" stays true only if it is said again.
 setInterval(showMenu, 5 * 60_000);
 openApp();
+// A minute after launch, so starting up isn't slowed by it, then every six hours.
+setTimeout(() => void updates.check(), 60_000);
+setInterval(() => void updates.check(), 6 * 3600_000);

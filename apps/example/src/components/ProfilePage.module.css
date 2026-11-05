@@ -1,28 +1,22 @@
-/* Your picture, with a badge that says it can be changed, and the menu that does it under it */
+/* Your picture, beside the buttons that change it; the picture itself is one of them */
 .picture {
-  position: relative;
-
   & > button {
-    position: relative;
     padding: 0;
     border: none;
+    border-radius: 50%;
     background: none;
-
-    & > span {
-      position: absolute;
-      right: 0;
-      bottom: 0;
-      display: grid;
-      place-items: center;
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      background: var(--color-action);
-      color: var(--color-on-action);
-    }
   }
+}
 
-  & > menu {
-    top: calc(100% + 6px);
-  }
+/* A field's name where there is no field under it, as a label reads */
+.label {
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+
+/* Your ID, quiet under the card */
+.id {
+  padding-inline: 4px;
+  color: var(--color-text-muted);
 }

@@ -460,6 +460,7 @@ export type {
   AppAutomation,
   Wake,
   WakeView,
+  ActivityMatch,
   NotifyMatch,
   WatchNotificationsOptions,
 } from './node/index.js';

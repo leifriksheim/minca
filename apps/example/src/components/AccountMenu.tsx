@@ -101,8 +101,46 @@ function MenuHeader({ picture }: { picture: string | null }) {
   );
 }
 
-/** What you can do as you: in the sidebar's menu, or under your profile on the home screen */
-export function AccountActions({
+/**
+ * The accounts this app acts for, and moving between them: switching to another, removing one from
+ * the app, adding one, logging out. The sidebar's menu and Profile both use it.
+ */
+export function useAccounts(onDone?: () => void) {
+  const account = useAccount();
+  const { connection, state } = useConnection();
+  const navigate = useNavigate();
+  const others = state.accounts.filter((other) => other.did !== account.did);
+
+  return {
+    others,
+    /** The account home's address, where another account is added from */
+    home: new URL(state.home).host,
+    error: state.error,
+    // Switching is moving the address: the tab acts for whichever account it names (`account-address.ts`).
+    switchTo: (did: string) => {
+      onDone?.();
+      void navigate({ to: '/', search: { as: shortAccount(did) } });
+    },
+    remove: async (other: { readonly did: string; readonly name: string }) => {
+      const sure = await ask(
+        `${other.name} stops using this app here. The account, and its other apps and devices, are not touched; you can add it again.`,
+        { title: `Remove ${other.name} from this app?`, yes: 'Remove' },
+      );
+      if (!sure) return;
+      await connection.disconnect(other.did);
+      forgetPicture(other.did);
+    },
+    add: () => void connection.connect(),
+    logOut: () => void connection.disconnect(),
+    openHome: () => {
+      onDone?.();
+      connection.openHome();
+    },
+  };
+}
+
+/** What you can do as you, in the sidebar's menu */
+function AccountActions({
   onDone,
   onConnectAgent,
   onDownloads,
@@ -113,37 +151,14 @@ export function AccountActions({
   onDownloads: () => void;
 }) {
   const account = useAccount();
-  const { connection, state } = useConnection();
-  const navigate = useNavigate();
-
+  const accounts = useAccounts(onDone);
+  const { others } = accounts;
   const [downloads] = useDownloads();
-
-  const home = new URL(state.home).host;
-  const others = state.accounts.filter((other) => other.did !== account.did);
-
-  // Switching is moving the address: the tab acts for whichever account it names (`account-address.ts`).
-  const switchTo = (did: string) => {
-    onDone?.();
-    void navigate({ to: '/', search: { as: shortAccount(did) } });
-  };
-  const removeAccount = async (other: { readonly did: string; readonly name: string }) => {
-    const sure = await ask(
-      `${other.name} stops using this app here. The account, and its other apps and devices, are not touched; you can add it again.`,
-      { title: `Remove ${other.name} from this app?`, yes: 'Remove' },
-    );
-    if (!sure) return;
-    await connection.disconnect(other.did);
-    forgetPicture(other.did);
-  };
-  const openHome = () => {
-    onDone?.();
-    connection.openHome();
-  };
 
   return (
     <>
       <Section>
-        <Item onClick={openHome} hint="Security, devices, backups ↗">
+        <Item onClick={accounts.openHome} hint="Security, devices, backups ↗">
           Account settings
         </Item>
         <Item onClick={onConnectAgent} hint="Claude, ChatGPT, Cursor">
@@ -160,7 +175,7 @@ export function AccountActions({
             <button
               role="menuitem"
               data-intent="ghost"
-              onClick={() => switchTo(other.did)}
+              onClick={() => accounts.switchTo(other.did)}
               className={`row ${styles.item} truncate`}
             >
               <Avatar did={other.did} size={24} round />
@@ -168,7 +183,7 @@ export function AccountActions({
             </button>
             {/* Takes the account off this app only; it and its other apps carry on. */}
             <button
-              onClick={() => void removeAccount(other)}
+              onClick={() => void accounts.remove(other)}
               aria-label={`Remove ${other.name} from this app`}
               title={`Remove ${other.name} from this app`}
               data-intent="ghost"
@@ -178,14 +193,14 @@ export function AccountActions({
             </button>
           </div>
         ))}
-        <Item onClick={() => void connection.connect()} hint={home}>
+        <Item onClick={accounts.add} hint={accounts.home}>
           Add another account
         </Item>
-        {state.error && <small role="alert">{state.error}</small>}
+        {accounts.error && <small role="alert">{accounts.error}</small>}
       </Section>
 
       <Section>
-        <Item onClick={() => void connection.disconnect()} hint="Your account stays as it is">
+        <Item onClick={accounts.logOut} hint="Your account stays as it is">
           Log out{others.length > 0 ? ` of ${account.name}` : ''}
         </Item>
       </Section>
@@ -194,7 +209,7 @@ export function AccountActions({
 }
 
 /** What this device downloads before a file is opened, in a word or two */
-const DOWNLOADS = {
+export const DOWNLOADS = {
   thumbnails: 'Thumbnails first',
   photos: 'Photos ahead',
   everything: 'Everything ahead',

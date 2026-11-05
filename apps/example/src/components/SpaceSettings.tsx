@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useState, type FormEvent } from 'react';
 import { SPACE_KEEPERS, type SpaceSummary } from '@minca/core';
 import { spaceProfile } from '@minca/core/schemas';
 import { useCan, useNode } from '@minca/react';
@@ -9,12 +9,11 @@ import { FeatureIcon } from '@minca/app-shared/Feature';
 import { useWorkspace } from '../workspace';
 import { ConnectAgent } from './ConnectAgent';
 import { HOOD, settingsPagesOf, type SpaceScreen } from './SpaceView';
-import { Icon, type IconName } from '@minca/app-shared/Icon';
+import { LineIcon, SettingsRow } from './SettingsRow';
 import { useSpaceFace } from '../pictures';
 import { shrinkImage } from '@minca/app-shared/images';
 import { SpaceMark } from './SpaceList';
 import list from './SpaceList.module.css';
-import marks from './InvitePeople.module.css';
 
 /** A space's Settings: how it presents itself, its agents, where it is kept, what runs on its own, what is under the hood, and leaving */
 export function SpaceSettings({ space, go, mayDefine }: Pick<SpaceScreen, 'space' | 'go' | 'mayDefine'>) {
@@ -188,40 +187,5 @@ function GroupProfile({ space }: { space: SpaceSummary }) {
         </form>
       </article>
     </section>
-  );
-}
-
-/** A row that leads somewhere: its icon, what it is, a line on it, and the way there */
-function SettingsRow({
-  icon,
-  title,
-  detail,
-  onClick,
-}: {
-  icon: ReactNode;
-  title: string;
-  detail?: string;
-  onClick: () => void;
-}) {
-  return (
-    <li>
-      <button data-intent="open" onClick={onClick} className="row">
-        {icon}
-        <span className="stack truncate" data-gap="tight">
-          <strong>{title}</strong>
-          {detail && <small>{detail}</small>}
-        </span>
-        <Icon name="chevron" size={14} />
-      </button>
-    </li>
-  );
-}
-
-/** A line icon on the same tile an app's shape takes */
-function LineIcon({ name }: { name: IconName }) {
-  return (
-    <span className={marks.mark}>
-      <Icon name={name} size={18} />
-    </span>
   );
 }

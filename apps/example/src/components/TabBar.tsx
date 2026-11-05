@@ -13,10 +13,11 @@ import css from './TabBar.module.css';
 export function TabBar() {
   const account = useAccount();
   const picture = useAccountPicture();
-  const { unread } = useAlerts(account.did);
+  const { unread } = useAlerts();
   useTabDot(unread > 0);
   const path = useRouterState({ select: (state) => state.location.pathname });
   const onHome = path === '/' || path.startsWith('/groups') || path.startsWith('/people');
+  const onYou = path.startsWith('/profile') || path.startsWith('/settings');
   return (
     <nav className={css.bar} aria-label="Minca">
       <Link data-intent="ghost" to="/" aria-current={onHome ? 'page' : undefined}>
@@ -28,7 +29,7 @@ export function TabBar() {
         {unread > 0 && <span className={css.dot} aria-label={`${unread} new`} />}
         Activity
       </Link>
-      <Link data-intent="ghost" to="/profile">
+      <Link data-intent="ghost" to="/profile" aria-current={onYou ? 'page' : undefined}>
         <Avatar did={account.did} size={20} round src={picture} />
         Profile
       </Link>

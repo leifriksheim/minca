@@ -1,20 +1,22 @@
-/* A line to paste, on a dark row: words light, flags dimmed, addresses and the prompt green */
+/* A line to paste, on a dark row in day and night alike: words light, flags dimmed, addresses and
+   the prompt green. The row always takes the night side, so its colours don't flip with the page. */
 .terminal {
-  --flag: color-mix(in srgb, var(--color-page) 55%, var(--color-text-strong));
-  --address: color-mix(in srgb, var(--color-good) 45%, var(--color-good-soft));
+  color-scheme: dark;
+  --flag: var(--color-text-muted);
+  --address: var(--color-good);
 
   display: flex;
   align-items: center;
   padding: 6px 6px 6px 18px;
   border-radius: var(--radius);
-  background: var(--color-text-strong);
+  background: var(--color-sunken);
 
   & code {
     flex: 1;
     padding: 10px 0;
     overflow-x: auto;
     scrollbar-width: none;
-    color: var(--color-sunken);
+    color: var(--color-text-strong);
     white-space: nowrap;
   }
 

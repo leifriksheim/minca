@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { Link, Outlet } from '@tanstack/react-router';
 import {
   useAccount,
   useAccountPicture,
@@ -8,119 +9,254 @@ import {
   useNode,
   useObjectUrl,
 } from '@minca/react';
-import { message } from '@minca/app-shared/action';
+import { message, useCopy } from '@minca/app-shared/action';
 import { forgetPicture } from '@minca/app-shared/rememberedPictures';
 import { Avatar } from '@minca/app-shared/Avatar';
+import { FeatureIcon } from '@minca/app-shared/Feature';
 import { shortUsername } from '@minca/app-shared/usernames';
-import { AccountActions } from './AccountMenu';
-import { DownloadsView } from './DownloadsView';
-import { usePopover } from './usePopover';
 import { shrinkImage } from '@minca/app-shared/images';
-import { ConnectAgent } from './ConnectAgent';
-import { Icon } from '@minca/app-shared/Icon';
 import { ThemePicker } from '@minca/app-shared/theme';
+import { DOWNLOADS, useAccounts } from './AccountMenu';
+import { ConnectAgent } from './ConnectAgent';
+import { DownloadsView } from './DownloadsView';
+import { LineIcon, SettingsRow } from './SettingsRow';
+import { useDownloads } from '../downloads';
+import tabs from '../App.module.css';
 import styles from './ProfilePage.module.css';
 
 /**
- * You, at `/profile`: how others see you (your picture, name and username) is changed here, in the
- * app. What guards the account itself, its keys, devices and backups, stays in the account home.
+ * You: how others see you at `/profile`, and how this app works for you at `/settings`, under one
+ * header the way the home screen's tabs are. What guards the account itself, its keys, devices and
+ * backups, stays in the account home.
  */
+export function ProfileLayout() {
+  return (
+    <>
+      <header>
+        <nav aria-label="You" className={tabs.tabs}>
+          <Link to="/profile">Profile</Link>
+          <Link to="/settings">Settings</Link>
+        </nav>
+      </header>
+      <Outlet />
+    </>
+  );
+}
+
+/** How others see you, and the accounts this app acts for */
 export function ProfilePage() {
+  return (
+    <>
+      <section aria-label="Your profile">
+        <article className="stack" data-gap="loose">
+          <Picture />
+          <NameField />
+          <Username />
+        </article>
+        <YourId />
+      </section>
+      <Accounts />
+    </>
+  );
+}
+
+/** How this app works for you: its look, this device's downloads, agents, and the account's security */
+export function SettingsPage() {
   const { connection } = useConnection();
-  const node = useNode();
-  const me = useMyName();
-  const found = useAsync(() => node.inbox.get(), [node]);
-  const username = found.status === 'done' ? found.value?.username : undefined;
+  const [downloads] = useDownloads();
   const [connecting, setConnecting] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
   return (
-    <section>
-      <h1>Profile</h1>
-      <ul role="list">
-        <li className="empty">
-          <PictureButton name={me.name} />
-          <input
-            value={me.name}
-            onChange={(event) => me.setName(event.target.value)}
-            onBlur={() => void me.save()}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') event.currentTarget.blur();
-            }}
-            maxLength={200}
-            aria-label="Your name"
+    <>
+      <section aria-label="This app">
+        <h2>This app</h2>
+        <ol role="list">
+          <li className="row">
+            <LineIcon name="screen" />
+            <span className="stack" data-gap="tight">
+              <strong>Theme</strong>
+              <small>On every device you use</small>
+            </span>
+            <ThemePicker />
+          </li>
+          <SettingsRow
+            icon={<LineIcon name="download" />}
+            title="Downloads on this device"
+            detail={`${DOWNLOADS[downloads.ahead]}, ${size(downloads.keep)} a space`}
+            onClick={() => setDownloading(true)}
           />
-          {username ? (
-            <small>@{shortUsername(username)}</small>
-          ) : (
-            found.status === 'done' && (
-              <button data-intent="ghost" onClick={() => connection.openHome()}>
-                Pick a username
-              </button>
-            )
-          )}
-        </li>
-        <AccountActions onConnectAgent={() => setConnecting(true)} onDownloads={() => setDownloading(true)} />
-        <li className="row" data-spread>
-          <span>Theme</span>
-          <ThemePicker />
-        </li>
-      </ul>
+        </ol>
+      </section>
+
+      <section aria-label="Account">
+        <h2>Account</h2>
+        <ol role="list">
+          <SettingsRow
+            icon={<FeatureIcon kind="online" size={36} />}
+            title="Connect an agent"
+            detail="Claude, ChatGPT or Cursor, as you"
+            onClick={() => setConnecting(true)}
+          />
+          <SettingsRow
+            icon={<LineIcon name="shield" />}
+            title="Security and devices"
+            detail="Keys, devices and backups"
+            onClick={() => connection.openHome()}
+            away
+          />
+        </ol>
+      </section>
+
       {connecting && <ConnectAgent onClose={() => setConnecting(false)} />}
       {downloading && <DownloadsView onClose={() => setDownloading(false)} />}
-    </section>
+    </>
   );
 }
 
-/**
- * Your picture, with a badge that says it can be changed: a tap adds one when there is none, and
- * otherwise offers to change or remove it.
- */
-function PictureButton({ name }: { name: string }) {
+/** Megabytes, as a person reads them */
+const size = (megabytes: string): string => {
+  const mb = Number(megabytes);
+  return mb >= 1024 ? `${mb / 1024} GB` : `${mb} MB`;
+};
+
+/** Your picture, beside the buttons that change or remove it */
+function Picture() {
   const account = useAccount();
+  const { name } = useMyName();
   const { picture, choose, remove, picker, problem } = usePicture(name);
-  const { open, setOpen, close, root } = usePopover();
-  const label = picture ? 'Change or remove your picture' : 'Add a picture';
   return (
-    <div ref={root} className={styles.picture}>
-      <button
-        onClick={() => (picture ? setOpen((was) => !was) : choose())}
-        aria-label={label}
-        title={label}
-        aria-haspopup={picture ? 'menu' : undefined}
-        aria-expanded={picture ? open : undefined}
-      >
-        <Avatar did={account.did} size={88} round src={picture} />
-        <span aria-hidden>
-          <Icon name={picture ? 'pencil' : 'plus'} size={14} />
-        </span>
+    <div className={`row ${styles.picture}`}>
+      <button onClick={choose} aria-label={picture ? 'Change picture' : 'Add a picture'}>
+        <Avatar did={account.did} size={80} round src={picture} />
       </button>
-      {open && (
-        <menu role="menu">
-          {(
-            [
-              ['Change picture', choose, false],
-              ['Remove picture', remove, true],
-            ] as const
-          ).map(([text, act, danger]) => (
-            <li key={text}>
-              <button
-                role="menuitem"
-                data-intent={danger ? 'danger' : undefined}
-                onClick={() => {
-                  close();
-                  act();
-                }}
-              >
-                {text}
-              </button>
-            </li>
-          ))}
-        </menu>
-      )}
+      <div className="stack" data-gap="tight">
+        <div className="row" data-gap="tight">
+          <button onClick={choose}>{picture ? 'Change picture' : 'Add a picture'}</button>
+          {picture && (
+            <button data-intent="ghost" onClick={remove}>
+              Remove
+            </button>
+          )}
+        </div>
+        <small>Everyone in your spaces sees it.</small>
+      </div>
       {picker}
       {problem && <p role="alert">{problem}</p>}
     </div>
+  );
+}
+
+/** Your name as others see it, kept when you leave the field */
+function NameField() {
+  const me = useMyName();
+  return (
+    <label>
+      Name
+      <input
+        value={me.name}
+        onChange={(event) => me.setName(event.target.value)}
+        onBlur={() => void me.save()}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') event.currentTarget.blur();
+        }}
+        maxLength={200}
+      />
+    </label>
+  );
+}
+
+/** The username people find you by, picked and changed in the account home */
+function Username() {
+  const node = useNode();
+  const { connection } = useConnection();
+  const found = useAsync(() => node.inbox.get(), [node]);
+  if (found.status !== 'done') return null;
+  const username = found.value?.username;
+  const open = () => connection.openHome();
+  return (
+    <div className="stack" data-gap="tight">
+      <span className={styles.label}>Username</span>
+      <div className="row" data-spread>
+        {username ? (
+          <strong>@{shortUsername(username)}</strong>
+        ) : (
+          <small>None yet. With one, people can find you by it.</small>
+        )}
+        <button data-intent="ghost" onClick={open}>
+          {username ? 'Change' : 'Pick a username'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Your account's id, quietly under the card, to copy */
+function YourId() {
+  const { did } = useAccount();
+  const { copied, copy } = useCopy();
+  return (
+    <small className={`row ${styles.id}`}>
+      <span className="truncate" title={did}>
+        Your ID {did.slice(8, 16)}…{did.slice(-6)}
+      </span>
+      <button data-intent="inline" onClick={() => copy(did)}>
+        {copied ? 'Copied' : 'Copy'}
+      </button>
+    </small>
+  );
+}
+
+/** The accounts this app acts for: you, the others to switch to, adding one, and logging out */
+function Accounts() {
+  const account = useAccount();
+  const picture = useAccountPicture();
+  const { name } = useMyName();
+  const accounts = useAccounts();
+  const { others } = accounts;
+
+  return (
+    <section aria-label="Accounts">
+      <h2>Accounts</h2>
+      <ol role="list">
+        <li className="row">
+          <Avatar did={account.did} size={36} round src={picture} />
+          <strong className="truncate">{name}</strong>
+          <span className="tag">Using now</span>
+        </li>
+        {others.map((other) => (
+          <li key={other.did} className="row">
+            <button data-intent="open" onClick={() => accounts.switchTo(other.did)} className="row truncate">
+              <Avatar did={other.did} size={36} round />
+              <strong className="truncate">{other.name}</strong>
+            </button>
+            {/* Takes the account off this app only; it and its other apps carry on. */}
+            <button
+              onClick={() => void accounts.remove(other)}
+              aria-label={`Remove ${other.name} from this app`}
+              title={`Remove ${other.name} from this app`}
+              data-intent="ghost"
+              data-icon
+            >
+              ×
+            </button>
+          </li>
+        ))}
+        <SettingsRow
+          icon={<LineIcon name="plus" />}
+          title="Add another account"
+          detail={accounts.home}
+          onClick={accounts.add}
+        />
+        <li>
+          <button data-intent="open" onClick={accounts.logOut} className="row" data-tone="danger">
+            <LineIcon name="arrowLeft" />
+            {others.length > 0 ? `Log out of ${name}` : 'Log out'}
+          </button>
+        </li>
+      </ol>
+      {accounts.error && <small role="alert">{accounts.error}</small>}
+    </section>
   );
 }
 

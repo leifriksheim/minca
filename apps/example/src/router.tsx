@@ -9,7 +9,7 @@ import {
 } from '@tanstack/react-router';
 import { AllPage, App, ChatsLayout, GroupsPage, HomeLayout, PeoplePage } from './App';
 import { ActivityPage } from './components/ActivityPage';
-import { ProfilePage } from './components/ProfilePage';
+import { ProfileLayout, ProfilePage, SettingsPage } from './components/ProfilePage';
 import { OpenApp, SpaceLayout, useSpaceScreen, type SpaceScreen } from './components/SpaceView';
 import { AppsView } from './components/apps/AppsView';
 import { NewApp } from './components/apps/NewApp';
@@ -59,7 +59,9 @@ const all = createRoute({
 const groups = createRoute({ getParentRoute: () => chats, path: 'groups', component: GroupsPage });
 const people = createRoute({ getParentRoute: () => chats, path: 'people', component: PeoplePage });
 const activity = createRoute({ getParentRoute: () => home, path: 'activity', component: ActivityPage });
-const profile = createRoute({ getParentRoute: () => home, path: 'profile', component: ProfilePage });
+const you = createRoute({ getParentRoute: () => home, id: 'you', component: ProfileLayout });
+const profile = createRoute({ getParentRoute: () => you, path: 'profile', component: ProfilePage });
+const yourSettings = createRoute({ getParentRoute: () => you, path: 'settings', component: SettingsPage });
 // Where People was before: links to add someone, handed out already, still lead there.
 const contacts = createRoute({
   getParentRoute: () => root,
@@ -198,7 +200,11 @@ const elsewhere = createRoute({
 // Each route is a constant of its own: one written inline in this list loses
 // the router's types, and every path and param quietly becomes `any`.
 const routeTree = root.addChildren([
-  home.addChildren([chats.addChildren([all, groups, people]), activity, profile]),
+  home.addChildren([
+    chats.addChildren([all, groups, people]),
+    activity,
+    you.addChildren([profile, yourSettings]),
+  ]),
   contacts,
   space.addChildren([
     spaceApps,
