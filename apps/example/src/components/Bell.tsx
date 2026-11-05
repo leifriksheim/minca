@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import type { SpaceSummary } from '@minca/core';
-import { useAccount, useCollections, useHoldSpace } from '@minca/react';
+import { useCollections, useHoldSpace } from '@minca/react';
 import { usePopover } from './usePopover';
-import { markRead, useAlerts, useTabDot } from '../alerts';
+import { useAlerts, useReadingAlerts, useTabDot } from '../alerts';
 import { useAppNotifications, useOwnAutomations } from '../notifications';
 import { ago } from '@minca/ui/time';
 import { SpaceMark } from './SpaceList';
@@ -27,13 +27,14 @@ export function Bell({
   here?: SpaceSummary | undefined;
   onOpenSpace: (id: string) => void;
 }) {
-  const { did } = useAccount();
-  const { items, unread } = useAlerts(did);
+  const { items, unread } = useAlerts();
   const setup = useAppNotifications();
   const { open, setOpen, root } = usePopover();
   const [tab, setTab] = useState<Tab>('activity');
   const [building, setBuilding] = useState(false);
   useTabDot(unread > 0);
+  // Open is read, up to the newest, and what arrives while it is
+  useReadingAlerts(open);
 
   // Nothing is on yet: what there is to see is how to turn them on.
   const off = setup.on === 0;
@@ -46,7 +47,6 @@ export function Bell({
         onClick={() => {
           if (!open) setTab(off && items.length === 0 ? 'settings' : 'activity');
           setOpen((was) => !was);
-          markRead(did);
         }}
         aria-expanded={open}
         aria-label={unread ? `Notifications, ${unread} new` : 'Notifications'}
@@ -120,7 +120,7 @@ export function Activity({
   if (items.length === 0)
     return (
       <div className="empty">
-        <p>Nothing yet. What your notifications match shows up here, while this app is open.</p>
+        <p>Nothing yet. What your notifications match shows up here.</p>
         {off && onSettings && (
           <button data-intent="ghost" onClick={onSettings}>
             Turn notifications on →

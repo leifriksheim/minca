@@ -1,5 +1,5 @@
 /** What this browser keeps between visits, in local storage: lost with it, never synced. */
-import { useState, useSyncExternalStore } from 'react';
+import { useState } from 'react';
 
 function load(key: string): string | null {
   try {
@@ -38,44 +38,4 @@ export function useRemembered(key: string): readonly [string | null, (value: str
     keep(key, next);
   };
   return [value, set];
-}
-
-/**
- * Something kept per account under `prefix`: read once and cached, and read
- * again when another tab of this app changes it. With nothing kept yet it
- * starts from `fresh()`, and keeps that.
- */
-export function accountStore<T>(prefix: string, parse: (stored: unknown) => T | null, fresh: () => T) {
-  const cache = new Map<string, T>();
-  const listeners = new Set<() => void>();
-  const keyOf = (did: string) => `${prefix}:${did}`;
-
-  const read = (did: string): T => {
-    let value = cache.get(did);
-    if (value === undefined) {
-      const stored = parse(loadJson(keyOf(did)));
-      value = stored ?? fresh();
-      if (stored === null) keep(keyOf(did), JSON.stringify(value));
-      cache.set(did, value);
-    }
-    return value;
-  };
-  const write = (did: string, value: T) => {
-    cache.set(did, value);
-    keep(keyOf(did), JSON.stringify(value));
-    listeners.forEach((listener) => listener());
-  };
-
-  globalThis.addEventListener?.('storage', (event) => {
-    if (!event.key?.startsWith(`${prefix}:`)) return;
-    cache.delete(event.key.slice(prefix.length + 1));
-    listeners.forEach((listener) => listener());
-  });
-
-  const subscribe = (listener: () => void) => {
-    listeners.add(listener);
-    return () => void listeners.delete(listener);
-  };
-  const use = (did: string): T => useSyncExternalStore(subscribe, () => read(did));
-  return { read, write, use };
 }
