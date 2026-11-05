@@ -983,7 +983,7 @@ account's own devices may show a match there itself, saying no more than it
 sees: which space, which kind of record, and the wake's `open`. None sends a
 match to another device yet: that is what the wakes are for (below).
 
-_Source: `packages/core/src/space/own-automations.ts`, `packages/core/src/node/node-carriers.ts` (`automations`, `syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`), `packages/cli/src/carry.ts` (`runCarrier`), `apps/desktop/src/bun/notify.ts`. Tests: `packages/core/tests/carrier.test.ts` ("notifications through a carrier"), `apps/desktop/tests/notify.test.ts`._
+_Source: `packages/core/src/space/own-automations.ts`, `packages/core/src/node/node-carriers.ts` (`automations`, `syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`), `packages/cli/src/carry.ts` (`runCarrier`), `apps/shared/src/notify.ts` (`createNotifier`), `apps/extension/src/worker.ts` (`notify`). Tests: `packages/core/tests/carrier.test.ts` ("notifications through a carrier"), `apps/desktop/tests/notify.test.ts`._
 
 > **Planned: devices deliver wakes, by Web Push.** Issue:
 > [#60](https://github.com/leifriksheim/minca/issues/60). The account's own

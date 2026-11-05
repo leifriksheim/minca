@@ -9,6 +9,8 @@ import { nameOf, peopleFrom } from '../../derive/people';
 import { Icon, type IconName } from '@minca/app-shared/Icon';
 import { ask } from '@minca/app-shared/Ask';
 import { useNow } from '../NetworkView';
+import { notify } from '../../notifications';
+import { play, RING } from '../../sound';
 import styles from './Calls.module.css';
 
 /** Calls, drawn once above every space, so moving between spaces never touches one. */
@@ -38,6 +40,7 @@ export function CallLayer({
               spaceName={spaceNamed(ring.space)}
               inCall={state.current}
               first={i === 0}
+              onGoTo={() => goTo(ring.space)}
             />
           ))}
         </div>
@@ -293,16 +296,19 @@ function Ringing({
   spaceName,
   inCall,
   first,
+  onGoTo,
 }: {
   ring: IncomingCall;
   spaceName: string;
   inCall: CurrentCall | null;
   first: boolean;
+  onGoTo: () => void;
 }) {
   const { calls } = useCalls();
   const people = peopleFrom(useProfiles(ring.space));
   const [busy, setBusy] = useState(false);
   const name = nameOf(ring.from, people);
+  useCallNotice(ring.id, `${name} is calling`, `In ${spaceName}`, onGoTo);
   const answer = async (video: boolean) => {
     if (!calls || !(await mayLeaveFor(inCall, 'answer this one'))) return;
     setBusy(true);
@@ -535,36 +541,23 @@ function usePictureInPicture(): { supported: boolean; window: Window | null; tog
   return { supported: !!api, window: pip, toggle };
 }
 
-/** A soft two-note ring while someone is calling — made on the spot, no sound file */
+/** A call ringing while you look elsewhere: a notification that stays until it stops ringing */
+function useCallNotice(id: string, title: string, body: string, onGoTo: () => void) {
+  const goTo = useRef(onGoTo);
+  goTo.current = onGoTo;
+  useEffect(() => {
+    const shown = notify(title, { body, tag: id, sticky: true, onClick: () => goTo.current() });
+    return () => shown?.close();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once for the call: a name that loads later doesn't show it again
+  }, [id]);
+}
+
+/** A soft two-note ring while someone is calling */
 function useRingTone(ringing: boolean) {
   useEffect(() => {
-    if (!ringing || typeof AudioContext === 'undefined') return;
-    let context: AudioContext;
-    try {
-      context = new AudioContext();
-    } catch {
-      return;
-    }
-    const chime = () => {
-      if (context.state === 'suspended') void context.resume().catch(() => {});
-      [660, 880].forEach((hz, i) => {
-        const at = context.currentTime + i * 0.18;
-        const tone = context.createOscillator();
-        const gain = context.createGain();
-        tone.frequency.value = hz;
-        gain.gain.setValueAtTime(0.0001, at);
-        gain.gain.exponentialRampToValueAtTime(0.08, at + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.35);
-        tone.connect(gain).connect(context.destination);
-        tone.start(at);
-        tone.stop(at + 0.4);
-      });
-    };
-    chime();
-    const timer = setInterval(chime, 2000);
-    return () => {
-      clearInterval(timer);
-      void context.close().catch(() => {});
-    };
+    if (!ringing) return;
+    play(RING);
+    const timer = setInterval(() => play(RING), 2000);
+    return () => clearInterval(timer);
   }, [ringing]);
 }

@@ -9,6 +9,7 @@
 import { createCarrierNode, folderStores, indexedDBStores, type CarrierNode } from '@minca/core/node';
 import { appKey, deleteBrowserData, forgetAppKey, type CarryGrant } from '@minca/core/session';
 import { forgetDataFolder, queryFolderPermission, recallDataFolder } from '@minca/core/storage';
+import { createNotifier } from '@minca/app-shared/notify';
 import {
   BUILT_IN_RELAYS,
   forgetGrant,
@@ -42,6 +43,14 @@ function set(next: CarrierStatus): void {
   chrome.runtime.sendMessage(changed).catch(() => {});
   chrome.runtime.sendMessage(badge).catch(() => {});
 }
+
+// What the account asked to hear about, a burst in a space at a time, for the worker to show.
+const notifier = createNotifier({
+  show: (shown) =>
+    void chrome.runtime
+      .sendMessage({ to: 'worker', type: 'notify', shown } satisfies WorkerMessage)
+      .catch(() => {}),
+});
 
 const setPod = (state: PodState) => set({ ...status, pod: { state, folder: grant?.pod?.folder ?? null } });
 
@@ -102,6 +111,13 @@ async function start(): Promise<void> {
     carrier = node;
     node.subscribe((event) => {
       if (event.type === 'closed') void forget({ byAccount: true });
+      else if (event.type === 'wake')
+        notifier.woke({
+          space: event.space.name,
+          collection: event.record.collection,
+          at: event.record.createdAt,
+          ...(event.wake.open ? { open: event.wake.open } : {}),
+        });
       else refreshSoon();
     });
     await attachPod();

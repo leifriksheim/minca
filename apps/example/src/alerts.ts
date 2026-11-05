@@ -1,5 +1,5 @@
 /**
- * What this app's notifications match, for the bell and the dot on the tab's icon. The list is worked
+ * What this app's notifications match, for the bell and the tab's dot and count. The list is worked
  * out from the records (`watchNotifications`' activity), so every device shows the same, and what was
  * read is how far, kept with the rest of what you have seen (`seen.ts`).
  */
@@ -78,8 +78,16 @@ const DOT = `<circle cx="20" cy="5" r="4.5" fill="${state.danger}" stroke="${sta
 const icon = (dot: boolean) =>
   `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${MARK}${dot ? DOT : ''}</svg>`)}`;
 
-/** The tab's icon, with a red dot while something matched hasn't been looked at */
-export function useTabDot(dot: boolean) {
+/** How many are new, as the tab's title starts: `(3) Minca` */
+const COUNT = /^\(\d+\+?\) /;
+
+/** The tab's icon with a red dot, and its title with how many, while something matched hasn't been looked at */
+export function useTabBadge(unread: number) {
+  const dot = unread > 0;
+  useEffect(() => {
+    const title = globalThis.document.title.replace(COUNT, '');
+    globalThis.document.title = dot ? `(${unread > 99 ? '99+' : unread}) ${title}` : title;
+  }, [dot, unread]);
   useEffect(() => {
     let link = globalThis.document.querySelector<HTMLLinkElement>('link[rel="icon"]');
     if (!link) {

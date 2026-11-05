@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createNotifier, kindOf, type Shown } from '../src/bun/notify.ts';
+import { createNotifier, kindOf, type Shown } from '@minca/app-shared/notify';
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const at = new Date(0).toISOString();
@@ -36,4 +36,12 @@ test('a burst in one space is one notification; another space has its own', asyn
   notifier.woke({ space: 'Team', collection: 'app.chat.message', at });
   await wait(40);
   assert.deepEqual(shown, [{ title: 'Team', body: '2 new messages' }]);
+});
+
+test('a notification leads where its wake says: the app that asked for it', async () => {
+  const shown: Shown[] = [];
+  const notifier = createNotifier({ show: (it) => shown.push(it), gatherMs: 20 });
+  notifier.woke({ space: 'Team', collection: 'app.chat.message', at, open: 'https://app.minca.social/' });
+  await wait(40);
+  assert.deepEqual(shown, [{ title: 'Team', body: 'New message', open: 'https://app.minca.social/' }]);
 });

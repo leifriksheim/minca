@@ -35,7 +35,8 @@
     "./UsernamePicker": "./src/UsernamePicker.tsx",
     "./mcp": "./src/mcp.ts",
     "./Terminal": "./src/Terminal.tsx",
-    "./AppLogo": "./src/AppLogo.tsx"
+    "./AppLogo": "./src/AppLogo.tsx",
+    "./notify": "./src/notify.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

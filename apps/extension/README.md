@@ -54,26 +54,31 @@ the defaults too, so you only need the local one to work offline.
 
 ## How it's put together
 
-| File               | Runs in            | Does                                                                                                                                                               |
-| ------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/worker.ts`    | the service worker | Keeps the offscreen page alive (on start, install, and a one-minute alarm) and sets the badge. Chrome stops it after 30 quiet seconds, so nothing else lives here. |
-| `src/offscreen.ts` | a hidden page      | The carrier node (`createCarrierNode`): runs as long as Chrome does, over WebRTC. Attaches the pod when Chrome allows it.                                          |
-| `src/welcome.ts`   | a tab              | Connecting to the home, picking the pod, status, disconnecting. Connecting has to happen here: the toolbar popup closes when the home's window takes focus.        |
-| `src/popup.ts`     | the toolbar popup  | Status at a glance, and **Resume pod sync** when Chrome wants a click.                                                                                             |
+| File               | Runs in            | Does                                                                                                                                                                              |
+| ------------------ | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/worker.ts`    | the service worker | Keeps the offscreen page alive (on start, install, and a one-minute alarm), sets the badge, and shows notifications. Chrome stops it after 30 quiet seconds, so it keeps nothing. |
+| `src/offscreen.ts` | a hidden page      | The carrier node (`createCarrierNode`): runs as long as Chrome does, over WebRTC. Attaches the pod when Chrome allows it.                                                         |
+| `src/welcome.ts`   | a tab              | Connecting to the home, picking the pod, status, disconnecting. Connecting has to happen here: the toolbar popup closes when the home's window takes focus.                       |
+| `src/popup.ts`     | the toolbar popup  | Status at a glance, and **Resume pod sync** when Chrome wants a click.                                                                                                            |
 
 The pages follow the shared design system (`packages/ui/DESIGN.md`):
 `static/styles.css` reads its colours as `--minca-*` properties, which the
 build writes to `dist/tokens.css` from `@minca/app-shared/tokens`. The faces
 ship in `static/fonts/` (OFL), so opening the popup fetches nothing.
 
-Permissions: `offscreen`, `alarms`, `unlimitedStorage`. No
-host permissions and no content scripts, so installing it shows no warning
-about reading your sites.
+Permissions: `offscreen`, `alarms`, `unlimitedStorage`, `notifications`
+and `tabs`. No host permissions and no content scripts. `tabs` makes Chrome
+warn that it can read your browsing history: it reads only which tabs have an
+app open, so it stays quiet while one does.
 
 ## Notifications
 
-It shows none. Apps notify you themselves, about the automations you kept
-from them; the extension holds their wakes and keeps your spaces online.
+What you asked an app to tell you about, while no tab has that app open. The
+carrier sees a record from outside only, so a notification says where
+something arrived and what kind ("3 new messages" in a space), never what it
+says. A burst in one space is one notification. Clicking one opens the app;
+opening the app any other way clears them, since it shows them itself. The
+toolbar badge counts the ones waiting.
 
 The design, and what is still to be checked, is in
 [06 — Nodes, sessions and apps](../../spec/06-nodes-and-sessions.md).

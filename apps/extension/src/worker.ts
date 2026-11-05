@@ -1,15 +1,17 @@
 /**
  * The service worker. Chrome stops it after about thirty quiet seconds, so the
  * carrier cannot live here; its one job is to keep the offscreen page — where
- * the carrier does live — in existence, and to show how it is doing on the
- * toolbar button.
+ * the carrier does live — in existence, to show how it is doing on the
+ * toolbar button, and to show what the account asked to hear about while no
+ * tab has the app open.
  *
  * It makes the page when Chrome starts, when the extension is installed or
  * updated, when any page asks, and on a one-minute alarm in case Chrome closed
  * it for any reason.
  */
 import { state } from '@minca/ui/tokens';
-import type { CarrierStatus, WorkerMessage } from './shared';
+import type { Shown } from '@minca/app-shared/notify';
+import type { CarrierStatus, Request, WorkerMessage } from './shared';
 
 const OFFSCREEN = 'offscreen.html';
 
@@ -36,7 +38,8 @@ async function ensureOffscreen(): Promise<void> {
   await creating;
 }
 
-function showBadge(status: CarrierStatus): void {
+async function showBadge(status: CarrierStatus): Promise<void> {
+  const unread = Object.keys(await chrome.notifications.getAll()).length;
   const podNeedsYou = status.pod.state === 'not-picked' || status.pod.state === 'needs-permission';
   let text = '';
   let color: string = state.ink;
@@ -52,16 +55,75 @@ function showBadge(status: CarrierStatus): void {
     color = state.warn;
     title = 'Minca — your pod needs a click to keep syncing';
   } else if (status.state === 'running') {
-    // A small green mark: carrying.
-    text = ' ';
-    color = state.good;
+    // How many notifications wait, or a small green mark: carrying.
+    text = unread > 0 ? String(unread) : ' ';
+    color = unread > 0 ? state.danger : state.good;
     const carried = status.spaces.filter((space) => !space.carry).length;
-    title = `Minca — keeping ${carried} space${carried === 1 ? '' : 's'} online`;
+    title = `Minca — keeping ${carried} space${carried === 1 ? '' : 's'} online${unread > 0 ? `, ${unread} new` : ''}`;
   }
   void chrome.action.setBadgeText({ text });
   void chrome.action.setBadgeBackgroundColor({ color });
   void chrome.action.setTitle({ title });
 }
+
+/** The badge again, from the status the offscreen page holds */
+const redraw = () =>
+  chrome.runtime.sendMessage({ to: 'offscreen', type: 'status' } satisfies Request).then(showBadge, () => {});
+
+// ─── Notifications ──────────────────────────────────────────────────────
+//
+// A notification's id starts with the app it leads to, so a click knows where
+// to go and opening the app clears what it would show itself, with nothing
+// kept here for Chrome to lose when it stops the worker.
+
+const idFor = (open: string) => `${open} ${crypto.randomUUID()}`;
+const appOf = (id: string) => id.split(' ')[0] ?? '';
+
+function originOf(url: string | undefined): string | null {
+  try {
+    return new URL(url ?? '').origin;
+  } catch {
+    return null;
+  }
+}
+
+/** Whether a tab shows the app already: then it notifies for itself */
+async function appIsOpen(open: string): Promise<boolean> {
+  const origin = originOf(open);
+  if (!origin) return false;
+  return (await chrome.tabs.query({})).some((tab) => originOf(tab.url) === origin);
+}
+
+async function notify(shown: Shown): Promise<void> {
+  if (shown.open && (await appIsOpen(shown.open))) return;
+  await chrome.notifications.create(idFor(shown.open ?? ''), {
+    type: 'basic',
+    iconUrl: 'icons/128.png',
+    title: shown.title,
+    message: shown.body,
+  });
+  await redraw();
+}
+
+/** A tab opened the app: it shows what these said, so they go */
+async function clearFor(url: string): Promise<void> {
+  const origin = originOf(url);
+  if (!origin) return;
+  const ids = Object.keys(await chrome.notifications.getAll()).filter((id) => originOf(appOf(id)) === origin);
+  if (ids.length === 0) return;
+  await Promise.all(ids.map((id) => chrome.notifications.clear(id)));
+  await redraw();
+}
+
+chrome.notifications.onClicked.addListener((id) => {
+  const app = appOf(id);
+  if (app) void chrome.tabs.create({ url: app });
+  void chrome.notifications.clear(id).then(redraw);
+});
+chrome.notifications.onClosed.addListener(() => void redraw());
+chrome.tabs.onUpdated.addListener((_tab, change) => {
+  if (change.url) void clearFor(change.url);
+});
 
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') void chrome.tabs.create({ url: chrome.runtime.getURL('welcome.html') });
@@ -78,7 +140,11 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 chrome.runtime.onMessage.addListener((message: WorkerMessage, _sender, respond) => {
   if (message?.to !== 'worker') return false;
   if (message.type === 'badge') {
-    showBadge(message.status);
+    void showBadge(message.status);
+    return false;
+  }
+  if (message.type === 'notify') {
+    void notify(message.shown);
     return false;
   }
   ensureOffscreen().then(

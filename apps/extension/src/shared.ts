@@ -5,7 +5,8 @@
  * Four pieces:
  *
  * - **worker** — the service worker. Chrome stops it after half a minute of
- *   quiet, so it only makes sure the offscreen page exists, and sets the badge.
+ *   quiet, so it only makes sure the offscreen page exists, sets the badge,
+ *   and shows notifications.
  * - **offscreen** — a hidden page that lives as long as Chrome does. The
  *   carrier node runs here.
  * - **welcome** — a full tab: connecting to the account home, the pod, status.
@@ -16,6 +17,7 @@
  */
 import type { CarriedSpace } from '@minca/core/node';
 import type { CarryGrant } from '@minca/core/session';
+import type { Shown } from '@minca/app-shared/notify';
 
 declare const __MINCA_HOME__: string;
 declare const __MINCA_RELAYS__: string;
@@ -69,7 +71,9 @@ export type Request =
 /** Messages to the worker */
 export type WorkerMessage =
   | { readonly to: 'worker'; readonly type: 'ensure' }
-  | { readonly to: 'worker'; readonly type: 'badge'; readonly status: CarrierStatus };
+  | { readonly to: 'worker'; readonly type: 'badge'; readonly status: CarrierStatus }
+  /** Something the account asked to hear about arrived: a burst in one space */
+  | { readonly to: 'worker'; readonly type: 'notify'; readonly shown: Shown };
 
 /** Broadcast by the offscreen page whenever the status changes */
 export interface StatusChanged {

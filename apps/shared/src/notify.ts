@@ -1,8 +1,8 @@
 /**
- * Notifications from the menu bar: what the carrier says a wake matched
- * (`minca carry`, `state: 'wake'`), shown by the system. The carrier sees a
- * record from outside only, so a notification says where something arrived
- * and what kind of thing, never what it says; the app shows that.
+ * Notifications from a carrier, in the desktop's menu bar or the Chrome
+ * extension: what it says a wake matched, shown by the system. The carrier
+ * sees a record from outside only, so a notification says where something
+ * arrived and what kind of thing, never what it says; the app shows that.
  *
  * A burst in one space is one notification: a carrier that was away catches
  * up all at once.
@@ -10,15 +10,18 @@
 
 /** What the carrier says a wake matched */
 export interface Woke {
+  /** The space's name */
   readonly space: string;
   readonly collection: string;
   readonly at: string;
+  /** The app the wake's notification leads to */
   readonly open?: string;
 }
 
 export interface Shown {
   readonly title: string;
   readonly body: string;
+  readonly open?: string;
 }
 
 /** `app.chat.message` → `message`: the last part of a collection's name, in words */
@@ -52,7 +55,8 @@ export function createNotifier(params: {
       setTimeout(() => {
         const all = waiting.get(wake.space) ?? [];
         waiting.delete(wake.space);
-        if (all.length > 0) params.show({ title: wake.space, body: described(all) });
+        if (all.length > 0)
+          params.show({ title: wake.space, body: described(all), ...(wake.open ? { open: wake.open } : {}) });
       }, gatherMs);
     },
   };

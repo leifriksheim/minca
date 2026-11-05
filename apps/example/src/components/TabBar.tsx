@@ -1,7 +1,7 @@
 import { Link, useRouterState } from '@tanstack/react-router';
 import { useAccount, useAccountPicture } from '@minca/react';
 import { Avatar } from '@minca/app-shared/Avatar';
-import { useAlerts, useTabDot } from '../alerts';
+import { useAlerts, useTabBadge } from '../alerts';
 import { Icon } from '@minca/app-shared/Icon';
 import css from './TabBar.module.css';
 
@@ -14,7 +14,7 @@ export function TabBar() {
   const account = useAccount();
   const picture = useAccountPicture();
   const { unread } = useAlerts();
-  useTabDot(unread > 0);
+  useTabBadge(unread);
   const path = useRouterState({ select: (state) => state.location.pathname });
   const onHome = path === '/' || path.startsWith('/groups') || path.startsWith('/people');
   const onYou = path.startsWith('/profile') || path.startsWith('/settings');

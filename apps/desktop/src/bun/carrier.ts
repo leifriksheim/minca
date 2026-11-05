@@ -20,7 +20,7 @@ import { isAbsolute, join } from 'node:path';
 import { createP256Provider, didOf } from '@minca/core';
 import { connectCarrier, type CarryGrant } from '@minca/core/session';
 import type { ShellWindow } from './bridge';
-import type { Woke } from './notify';
+import type { Woke } from '@minca/app-shared/notify';
 
 export type CarrierState =
   | { readonly state: 'starting' }
