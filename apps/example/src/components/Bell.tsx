@@ -250,22 +250,20 @@ export function Builder({ space, onClose }: { space: SpaceSummary; onClose: () =
 function SoundRow() {
   const [on, setOn] = useState(soundOn);
   return (
-    <li>
-      <label className="row" data-intent="open">
-        <span className="stack" data-gap="tight">
-          <strong>Sound</strong>
-          <small>A soft chime with each notification</small>
-        </span>
-        <Toggle
-          on={on}
-          label="Sound"
-          onChange={(next) => {
-            setSoundOn(next);
-            setOn(next);
-            if (next) play(PING);
-          }}
-        />
-      </label>
+    <li className="row">
+      <span className="stack truncate" data-gap="tight">
+        <strong>Sound</strong>
+        <small>A soft chime with each notification</small>
+      </span>
+      <Toggle
+        on={on}
+        label="Sound"
+        onChange={(next) => {
+          setSoundOn(next);
+          setOn(next);
+          if (next) play(PING);
+        }}
+      />
     </li>
   );
 }

@@ -94,9 +94,13 @@ async function appIsOpen(open: string): Promise<boolean> {
   return (await chrome.tabs.query({})).some((tab) => originOf(tab.url) === origin);
 }
 
+/** Where a wake leads, if it is a web page: a click opens nothing else */
+const webPage = (open: string | undefined) => (open && /^https?:\/\//.test(open) ? open : '');
+
 async function notify(shown: Shown): Promise<void> {
-  if (shown.open && (await appIsOpen(shown.open))) return;
-  await chrome.notifications.create(idFor(shown.open ?? ''), {
+  const app = webPage(shown.open);
+  if (app && (await appIsOpen(app))) return;
+  await chrome.notifications.create(idFor(app), {
     type: 'basic',
     iconUrl: 'icons/128.png',
     title: shown.title,

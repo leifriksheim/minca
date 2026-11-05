@@ -45,3 +45,15 @@ test('a notification leads where its wake says: the app that asked for it', asyn
   await wait(40);
   assert.deepEqual(shown, [{ title: 'Team', body: 'New message', open: 'https://app.minca.social/' }]);
 });
+
+test('two apps notifying in one space are two notifications, each leading to its own app', async () => {
+  const shown: Shown[] = [];
+  const notifier = createNotifier({ show: (it) => shown.push(it), gatherMs: 20 });
+  notifier.woke({ space: 'Team', collection: 'app.chat.message', at, open: 'https://chat.example/' });
+  notifier.woke({ space: 'Team', collection: 'app.tasks.task', at, open: 'https://tasks.example/' });
+  await wait(40);
+  assert.deepEqual(shown, [
+    { title: 'Team', body: 'New message', open: 'https://chat.example/' },
+    { title: 'Team', body: 'New task', open: 'https://tasks.example/' },
+  ]);
+});

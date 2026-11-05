@@ -4,8 +4,8 @@
  * sees a record from outside only, so a notification says where something
  * arrived and what kind of thing, never what it says; the app shows that.
  *
- * A burst in one space is one notification: a carrier that was away catches
- * up all at once.
+ * A burst in one space, for one app, is one notification: a carrier that was
+ * away catches up all at once.
  */
 
 /** What the carrier says a wake matched */
@@ -49,12 +49,14 @@ export function createNotifier(params: {
   const waiting = new Map<string, Woke[]>();
   return {
     woke(wake: Woke): void {
-      const gathered = waiting.get(wake.space);
+      // One burst per space and app, so each notification leads to the app that asked for it.
+      const key = `${wake.space} ${wake.open ?? ''}`;
+      const gathered = waiting.get(key);
       if (gathered) return void gathered.push(wake);
-      waiting.set(wake.space, [wake]);
+      waiting.set(key, [wake]);
       setTimeout(() => {
-        const all = waiting.get(wake.space) ?? [];
-        waiting.delete(wake.space);
+        const all = waiting.get(key) ?? [];
+        waiting.delete(key);
         if (all.length > 0)
           params.show({ title: wake.space, body: described(all), ...(wake.open ? { open: wake.open } : {}) });
       }, gatherMs);
