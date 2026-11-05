@@ -56,38 +56,38 @@ const YOURS: ReadonlyArray<{ title: string; body: string; shape: ShapeKind }> = 
 /** What groups asked for, in their own words, and the tool each became */
 const ASKS: ReadonlyArray<{ ask: string; tool: string; kind: ShapeKind; colour: ShapeColour }> = [
   {
-    ask: 'A list of everything the landlord said he’d fix next week.',
-    tool: 'Repairs',
+    ask: 'Turn a message into a to-do, so ‘someone should’ gets a name next to it.',
+    tool: 'Tasks',
     kind: 'star',
     colour: 'peach',
   },
   {
-    ask: 'A sign-up sheet for the potluck. Joe says he’s bringing the rich.',
-    tool: 'Potluck',
+    ask: 'Who paid for the cabin, and who still owes for the ferry.',
+    tool: 'Split costs',
     kind: 'flower',
     colour: 'cobalt',
   },
   {
-    ask: 'A chore rota, so the dishes stop being a political issue.',
-    tool: 'Chore rota',
+    ask: 'Band practice on one calendar, so nobody double-books the drummer.',
+    tool: 'Calendar',
     kind: 'squircle',
     colour: 'sage',
   },
   {
-    ask: 'A vote on the protest signs. Max two puns per person.',
-    tool: 'Sign vote',
+    ask: 'Book the club’s van without texting three people first.',
+    tool: 'Bookings',
     kind: 'clover',
     colour: 'coral',
   },
   {
-    ask: 'Who needs groceries this week, and whose car actually starts?',
-    tool: 'Mutual aid',
+    ask: 'Every repair the landlord promised, with dates, ready for the tenants’ meeting.',
+    tool: 'Repairs',
     kind: 'burst',
     colour: 'lilac',
   },
   {
-    ask: 'Somewhere to swap kids’ clothes before they outgrow them again.',
-    tool: 'Clothes swap',
+    ask: 'Borrow a neighbour’s drill instead of the whole street buying one each.',
+    tool: 'Lending',
     kind: 'sparkle',
     colour: 'peach',
   },
@@ -244,7 +244,7 @@ export function Home() {
         </div>
       </Band>
 
-      <Band id="asks" title="Collaborate on the tools you need">
+      <Band id="asks" title="Add the tools your group is missing">
         <ul className="asks">
           {ASKS.map((item) => (
             <li key={item.tool} className={`tile c-${item.colour}`}>
