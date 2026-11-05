@@ -65,6 +65,14 @@
     const touched = (list) =>
       itemsOf(list.key).reduce((last, i) => (i.updatedAt > last ? i.updatedAt : last), list.updatedAt);
     const sorted = [...lists].sort((a, b) => touched(b).localeCompare(touched(a)));
+    // Done: something on it, and all of it ticked. The rest, empty ones too, come first.
+    const isDone = (list) => {
+      const all = itemsOf(list.key);
+      return all.length > 0 && all.every((i) => i.body.checked);
+    };
+    const done = sorted.filter(isDone);
+    const row = (list) =>
+      html`<${ListRow} key=${list.key} list=${list} items=${itemsOf(list.key)} go=${go} />`;
     const create = async (title) => {
       const made = await minca.put(LIST, { title, kind: 'checklist' });
       go(made.key, title);
@@ -72,9 +80,18 @@
     return html`<main>
       ${sorted.length === 0 && html`<${Empty} shape="tick" colour="peach" title="No lists yet" text="Start one for groceries, packing or the week." />`}
       <ul role="list" aria-label="Lists">
-        ${sorted.map((list) => html`<${ListRow} key=${list.key} list=${list} items=${itemsOf(list.key)} go=${go} />`)}
+        ${sorted.filter((list) => !isDone(list)).map(row)}
         ${mayCreate && html`<li><${AddRow} placeholder="New list" onAdd=${create} keep=${false} /></li>`}
       </ul>
+      ${
+        done.length > 0 &&
+        html`<section>
+          <h2>Done <span class="tag">${done.length}</span></h2>
+          <ul role="list" aria-label="Done">
+            ${done.map(row)}
+          </ul>
+        </section>`
+      }
     </main>`;
   }
 
