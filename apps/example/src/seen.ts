@@ -104,12 +104,21 @@ function createSeenStore(node: P2PNode) {
       }
     }
     const next = new Map(seen);
+    /** Spaces whose record lost reads this device made, when two devices wrote at once */
+    const lost: string[] = [];
     for (const [space, one] of found) {
       const here = next.get(space);
-      next.set(space, here ? merged(one, here) : one);
+      const both = here ? merged(one, here) : one;
+      next.set(space, both);
+      if (!unwritten.has(space) && JSON.stringify(both) !== JSON.stringify(one)) lost.push(space);
     }
     loaded = true;
     changed(next);
+    // Written back, so every device ends up with the reads of both.
+    for (const space of lost) {
+      unwritten.add(space);
+      keep(space);
+    }
   };
 
   const write = async (space: string) => {
@@ -175,6 +184,9 @@ function createSeenStore(node: P2PNode) {
     keep,
   };
 }
+
+/** How far ahead a writer's clock may run before a record dated so waits for its time */
+const AHEAD_MS = 5 * 60 * 1000;
 
 /** How long looking goes on with nothing new before it is written anyway */
 const QUIET_MS = 10_000;
@@ -268,12 +280,15 @@ export function useUnread(spaceId: string, apps: ReadonlyArray<AppEntry>): Reado
         let count = 0;
         let forMe = 0;
         let newest = '';
+        // A writer dates its own records: one dated ahead would be new for good, so it waits for its time.
+        const latest = new Date(Date.now() + AHEAD_MS).toISOString();
         for (const collection of app.collections) {
           const records = await node.records
             .list(spaceId, { collection, newestFirst: true, limit: 100 })
             .catch(() => []);
-          newest = later(newest, records[0]?.createdAt ?? '');
           for (const record of records) {
+            if (record.createdAt > latest) continue;
+            newest = later(newest, record.createdAt);
             if (record.createdBy === did || Date.parse(record.createdAt) <= app.after) continue;
             // Everyone sees that a direct message was written; only those it is for have something new.
             if (collection === direct.name && !sentTo(record.body, did)) continue;

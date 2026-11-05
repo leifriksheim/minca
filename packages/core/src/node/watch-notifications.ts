@@ -44,6 +44,9 @@ const LOOK_BACK = 50;
 /** How many matches the activity list holds */
 const ACTIVITY_LIMIT = 50;
 
+/** How far ahead a writer's clock may run: a match dated later is not listed until its time comes */
+const AHEAD_MS = 5 * 60 * 1000;
+
 /**
  * Starts matching. Needs a node with the account key — an app connected with
  * `scope: 'account'`; any other has no automations to read, and hears nothing.
@@ -101,17 +104,17 @@ export function watchNotifications(node: P2PNode, options: WatchNotificationsOpt
 
   /** Every match now, a record once under its most particular automation, newest first */
   function activity(): ReadonlyArray<ActivityMatch> {
+    // A writer dates its own records: one dated ahead would sit above everything, and stay new, for good.
+    const latest = new Date(Date.now() + AHEAD_MS).toISOString();
     const byRecord = new Map<string, ActivityMatch>();
     for (const matches of matching.values())
       for (const match of matches) {
+        if (match.at > latest) continue;
         const id = `${match.record.space}\n${match.record.key}`;
         const before = byRecord.get(id);
         if (!before || (!particular(before) && particular(match))) byRecord.set(id, match);
       }
-    // A writer dates its own records: one from the future sorts as now, not above everything for good.
-    const now = new Date().toISOString();
-    const when = (match: ActivityMatch) => (match.at > now ? now : match.at);
-    return [...byRecord.values()].sort((a, b) => when(b).localeCompare(when(a))).slice(0, ACTIVITY_LIMIT);
+    return [...byRecord.values()].sort((a, b) => b.at.localeCompare(a.at)).slice(0, ACTIVITY_LIMIT);
   }
 
   /** The newest records, and those the newest of what their computed fields read link to */

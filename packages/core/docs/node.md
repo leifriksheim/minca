@@ -924,8 +924,11 @@ For a list of what happened, pass `onActivity` too. After each change it gets
 what the automations match now, newest first, up to 50, each record once under
 the automation that asks about it most particularly. A match is dated by what
 set it off, and listed if it would have notified when that was written, so
-the 24 hours don't apply. The list comes from the records, so it is the same
-on every device, and holds what arrived while the app was closed.
+the 24 hours don't apply. It comes from the records, so it holds what arrived
+while the app was closed, and devices holding the same records list the same.
+Like notifications, it looks at the newest 50 records of a collection, by the
+time their writers gave them, so an older match drops out under newer ones. A
+match dated more than five minutes ahead waits for its time.
 
 ```js
 watchNotifications(node, {
@@ -935,7 +938,9 @@ watchNotifications(node, {
 ```
 
 What the person has read of it is the app's to keep: a time in the account
-registry, say, and what is newer counts as new.
+registry, say, and what is newer counts as new. A record that arrives late,
+dated before that time, then isn't new, though it still notifies within its
+24 hours.
 
 ## Carriers, hosting and notifications
 

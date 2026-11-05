@@ -265,4 +265,23 @@ describe('an app showing its own notifications', () => {
     assert.ok(Date.now() - Date.parse(second.at) < 15_000, 'dated by the second nod, not the chore');
     stop();
   });
+
+  test('a match dated ahead of now is not listed, so it can neither top the activity nor stay new for good', async () => {
+    const { node, add } = fakeNode();
+    // Mallory's clock, or her claim, a year ahead
+    add(dm('ahead', -365 * 24 * 60 * 60 * 1000));
+    add(dm('bo', 10_000));
+    let listed: ReadonlyArray<ActivityMatch> = [];
+    const stop = watchNotifications(node, {
+      origin: ORIGIN,
+      onNotify: () => {},
+      onActivity: (matches) => (listed = matches),
+    });
+    await until(() => listed.length > 0, 1000, 'the list');
+    assert.deepEqual(
+      listed.map((match) => match.record.key),
+      ['bo'],
+    );
+    stop();
+  });
 });
