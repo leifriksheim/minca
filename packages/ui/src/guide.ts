@@ -53,13 +53,13 @@ ui has:
     record (a "/" button), onChange=\${(next) => setDraft(share.typed(draft, next))} does the same for "/"
     typed into an empty box; put share.links on what you send, then share.clear(). <\${Sharing} share />
     is the one waiting; <\${Shared} from=\${record} /> what a record shares
-  <\${AddMenu} onShare onFiles? />  "+" for a message box: share from the space, and attach files when onFiles is given
+  <\${AddMenu} onShare onFiles? />  "+" for a message box: share from the space, and attach files given onFiles
   <\${EmojiPicker} onPick />  a smile button with a grid of emoji; put the one picked in the text, or react with it
   <\${Reactions} about=\${record} adding? />  emoji reactions (std.reaction), yours toggled; react(record, emoji) adds one
     (needs "std.reaction" in collections)
   A message box is one field, as in Comments: <div class="composer"> holding <\${AddMenu} />, the input, and
   <div class="composer-end"><\${EmojiPicker} /> and send (data-intent="primary" data-icon, <\${Icon} name="send" />)</div>
-  <\${RowMenu} label items />  "…" ending a row, to rename or delete: items { label, onClick, danger? }
+  <\${RowMenu} label items />  "…" ending a row (rename, edit, delete): { label, onClick, danger?, confirm? }
   <\${Modal} title onClose width?>…</\${Modal}>  a dialog over the screen, the only way to draw one
   <\${Empty} shape? colour? title text?>…</\${Empty}>  an empty app: a shape, a title, a line on what goes here,
     and the button that starts it inside

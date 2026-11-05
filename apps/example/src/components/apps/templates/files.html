@@ -13,7 +13,7 @@
     useBlob,
     useShown,
   } = ui;
-  const { Icon } = ui;
+  const { Icon, RowMenu } = ui;
   const { useSeen, Avatar, Person, Empty, Modal, attach, sizeOf, ago } = ui;
   const FILE = 'std.file';
   const LIST = 'std.list';
@@ -258,12 +258,6 @@
           <small>${shown.length} · ${sizeOf(total)}</small>
         </div>
         ${
-          group?.mine &&
-          html`<button type="button" data-intent="ghost" onClick=${() => dropGroup(group)}>
-            Remove category
-          </button>`
-        }
-        ${
           mayAdd &&
           html`<button
               type="button"
@@ -283,6 +277,20 @@
                 event.currentTarget.value = '';
               }}
             />`
+        }
+        ${
+          group?.mine &&
+          html`<${RowMenu}
+            label="More for this category"
+            items=${[
+              {
+                label: 'Remove category',
+                danger: true,
+                confirm: 'Remove this category? Its files stay.',
+                onClick: () => dropGroup(group),
+              },
+            ]}
+          />`
         }
       </header>
       <section>
@@ -503,7 +511,6 @@
     const picture = useFile(file.key, kind === 'picture' ? blob : null);
     const whole = useBlob(file.key, /^(picture|video|audio)$/.test(kind) ? blob : null);
     const [text, setText] = useState(null);
-    const [sure, setSure] = useState(false);
 
     useEffect(() => {
       const keys = (event) => {
@@ -555,6 +562,13 @@
           disabled=${!hasNext}
           onClick=${() => onStep(1)}
         ><${Icon} name="arrow" /></button>
+        ${
+          file.mine &&
+          html`<${RowMenu}
+            label="More for this file"
+            items=${[{ label: 'Delete', danger: true, confirm: 'Delete this file for everyone?', onClick: onDelete }]}
+          />`
+        }
       </div>
       ${
         kind === 'picture' && (whole || picture)
@@ -596,13 +610,6 @@
                 Download
               </button>`
             : url && html`<button type="button" onClick=${() => minca.link(url)}>Open</button>`
-        }
-        ${
-          file.mine &&
-          (sure
-            ? html`<button type="button" data-intent="danger" onClick=${onDelete}>Delete for everyone</button>
-                <button type="button" data-intent="ghost" onClick=${() => setSure(false)}>Keep</button>`
-            : html`<button type="button" data-intent="ghost" onClick=${() => setSure(true)}>Delete</button>`)
         }
       </div>
     </${Modal}>`;

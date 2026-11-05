@@ -16,7 +16,7 @@
     Empty,
     ago,
   } = ui;
-  const { Icon } = ui;
+  const { Icon, RowMenu } = ui;
   const POLL = 'std.poll';
   const VOTE = 'std.vote';
   const me = minca.me.did;
@@ -88,7 +88,22 @@
       <header>
         <h3>${question}</h3>
         ${closed && html`<span class="tag">Closed</span>`}
-        <button data-intent="ghost" onClick=${() => minca.open({ record: poll.key })}>Open</button>
+        <${RowMenu}
+          label="More for this poll"
+          items=${[
+            { label: 'Open', onClick: () => minca.open({ record: poll.key }) },
+            poll.mine && {
+              label: closed ? 'Reopen' : 'Close poll',
+              onClick: () => minca.update(poll.key, { ...poll.body, closed: !closed }),
+            },
+            poll.mine && {
+              label: 'Delete',
+              danger: true,
+              confirm: 'Delete this poll and its votes, for everyone?',
+              onClick: () => minca.remove(poll.key),
+            },
+          ]}
+        />
       </header>
       <small class="row" data-gap="tight">
         Asked by <${Person} did=${poll.createdBy} size=${16} /> · ${ago(poll.createdAt)}
@@ -127,24 +142,10 @@
           </div>`;
         })}
       </fieldset>
-      <div class="row" data-spread>
-        <small>
-          ${votes.length === 0 ? 'No votes yet' : `${votes.length} ${votes.length === 1 ? 'vote' : 'votes'}`}
-          ${open && mine && ' · tap your choice again to take it back'}
-        </small>
-        ${
-          poll.mine &&
-          html`<span class="row" data-gap="tight">
-            <button
-              data-intent="ghost"
-              onClick=${() => minca.update(poll.key, { ...poll.body, closed: !closed })}
-            >
-              ${closed ? 'Reopen' : 'Close poll'}
-            </button>
-            <button data-intent="danger" onClick=${() => minca.remove(poll.key)}>Delete</button>
-          </span>`
-        }
-      </div>
+      <small>
+        ${votes.length === 0 ? 'No votes yet' : `${votes.length} ${votes.length === 1 ? 'vote' : 'votes'}`}
+        ${open && mine && ' · tap your choice again to take it back'}
+      </small>
     </article>`;
   }
 

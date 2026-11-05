@@ -1,7 +1,7 @@
 <!-- Kanban: std.task and std.column as a board, like a small Trello. Moving a card rewrites only its in link (to its column) and position: by dragging with a mouse, or from the card itself. A card opens one level in (minca.go), so the app's bar names it and its Back comes back out. A card's checklist is tasks whose parent is the card; they stay off the board. -->
 <script>
   const { html, render, useState, useEffect, useRef, useRecords, useCan, usePeople, useShown, useView } = ui;
-  const { Icon } = ui;
+  const { Icon, RowMenu } = ui;
   const { Avatar, Person, Empty, Comments, Attachments, attach, positionBetween } = ui;
   const TASK = 'std.task';
   const COLUMN = 'std.column';
@@ -352,28 +352,13 @@
       <span class="tag">${count}</span>
       ${
         lane.record &&
-        mayRename &&
-        html`<button
-          data-intent="ghost"
-          data-icon
-          aria-label="Rename this column"
-          onClick=${() => setRenaming(true)}
-        >
-          <${Icon} name="pencil" />
-        </button>`
-      }
-      ${
-        lane.record &&
-        mayDelete &&
-        empty &&
-        html`<button
-          data-intent="ghost"
-          data-icon
-          aria-label="Delete this empty column"
-          onClick=${() => minca.remove(key)}
-        >
-          <${Icon} name="close" />
-        </button>`
+        html`<${RowMenu}
+          label=${`More for ${lane.name}`}
+          items=${[
+            mayRename && { label: 'Rename', onClick: () => setRenaming(true) },
+            mayDelete && empty && { label: 'Delete column', danger: true, onClick: () => minca.remove(key) },
+          ]}
+        />`
       }
     </header>`;
   }
@@ -436,7 +421,6 @@
     const [title, setTitle] = useState(task.body.title);
     const [notes, setNotes] = useState(task.body.notes ?? '');
     const [error, setError] = useState(null);
-    const [deleting, setDeleting] = useState(false);
     const fileInput = useRef(null);
     // What someone else changed shows, unless this person is changing it too
     useEffect(() => setTitle(task.body.title), [task.body.title]);
@@ -631,15 +615,17 @@
       ${error && html`<p role="alert">${error}</p>`} ${has(COMMENT) && html`<${Comments} about=${task} />`}
       <div class="row" data-spread>
         <small>Added by <${Person} did=${task.createdBy} face=${false} /></small>
-        ${
-          mayDelete &&
-          (deleting
-            ? html`<button data-intent="danger" onClick=${remove}>Delete for everyone</button>
-                <button data-intent="ghost" onClick=${() => setDeleting(false)}>Keep it</button>`
-            : html`<button data-intent="ghost" onClick=${() => setDeleting(true)}>
-                Delete ${parent ? 'item' : 'card'}
-              </button>`)
-        }
+        <${RowMenu}
+          label=${`More for ${task.body.title}`}
+          items=${[
+            mayDelete && {
+              label: `Delete ${parent ? 'item' : 'card'}`,
+              danger: true,
+              confirm: `Delete this ${parent ? 'item' : 'card'} for everyone?`,
+              onClick: remove,
+            },
+          ]}
+        />
       </div>
     </main>`;
   }

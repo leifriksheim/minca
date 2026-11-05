@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { useRecords, usePeople } from './hooks';
 import { html } from './html';
 import { Icon } from './shapes';
+import { Modal } from './modal';
 
 const REACTION = 'std.reaction';
 
@@ -144,20 +145,35 @@ export function AddMenu({
   </div>`;
 }
 
+/** One thing a row's menu does; with `confirm`, the question asked before it is done */
+interface RowAction {
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+  confirm?: string;
+}
+
 /**
  * "…" at the end of a row: the lesser things to do with it (rename, delete),
- * so a screen isn't lined with buttons. Opens below, from the right edge.
+ * so a screen isn't lined with buttons. Opens below, from the right edge. An
+ * item with `confirm` asks first, in a dialog.
  */
 export function RowMenu({
   label,
   items,
 }: {
   label: string;
-  items: ReadonlyArray<{ label: string; onClick: () => void; danger?: boolean } | false | null | undefined>;
+  items: ReadonlyArray<RowAction | false | null | undefined>;
 }) {
   const { open, setOpen, box } = useOpen();
+  const [asking, setAsking] = useState<RowAction | null>(null);
   const shown = items.filter((item) => !!item);
   if (shown.length === 0) return null;
+  const pick = (item: RowAction) => {
+    setOpen(false);
+    if (item.confirm) setAsking(item);
+    else item.onClick();
+  };
   return html`<div class="anchor down" ref=${box}>
     <button
       type="button"
@@ -181,16 +197,31 @@ export function RowMenu({
                 type="button"
                 role="menuitem"
                 data-intent=${item.danger ? 'danger' : undefined}
-                onClick=${() => {
-                  setOpen(false);
-                  item.onClick();
-                }}
+                onClick=${() => pick(item)}
               >
                 ${item.label}
               </button>
             </li>`,
         )}
       </menu>`
+    }
+    ${
+      asking &&
+      html`<${Modal} title=${asking.confirm ?? ''} onClose=${() => setAsking(null)}>
+        <div class="row" data-spread>
+          <button type="button" data-intent="ghost" onClick=${() => setAsking(null)}>Keep it</button>
+          <button
+            type="button"
+            data-intent=${asking.danger ? 'danger' : 'primary'}
+            onClick=${() => {
+              setAsking(null);
+              asking.onClick();
+            }}
+          >
+            ${asking.label}
+          </button>
+        </div>
+      </${Modal}>`
     }
   </div>`;
 }

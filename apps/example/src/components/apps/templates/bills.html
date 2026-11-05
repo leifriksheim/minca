@@ -327,7 +327,7 @@
   function TabRow({ tab, on, items, go }) {
     const mayRename = useCan('edit', tab.key);
     const mayDelete = useCan('delete', tab.key);
-    const [asking, setAsking] = useState(null);
+    const [renaming, setRenaming] = useState(false);
     const { expenses, settlements } = on;
     const title = titleOf(tab);
     const remove = async () => {
@@ -346,32 +346,22 @@
       <${RowMenu}
         label=${`More for ${title}`}
         items=${[
-          mayRename && { label: 'Rename', onClick: () => setAsking('rename') },
-          mayDelete && { label: 'Delete', danger: true, onClick: () => setAsking('delete') },
+          mayRename && { label: 'Rename', onClick: () => setRenaming(true) },
+          mayDelete && {
+            label: 'Delete',
+            danger: true,
+            confirm: 'Delete this tab and every expense on it, for everyone?',
+            onClick: remove,
+          },
         ]}
       />
       ${
-        asking === 'rename' &&
+        renaming &&
         html`<${Rename}
           title=${title}
-          onClose=${() => setAsking(null)}
+          onClose=${() => setRenaming(false)}
           onSave=${(next) => minca.update(tab.key, { ...tab.body, title: next })}
         />`
-      }
-      ${
-        asking === 'delete' &&
-        html`<${Modal} title=${`Delete ${title}?`} onClose=${() => setAsking(null)}>
-          <div class="stack">
-            <p>It goes for everyone in the space, with every expense and payment on it.</p>
-            <div class="row" data-spread>
-              <button data-intent="ghost" onClick=${() => setAsking(null)}>Keep it</button>
-              <button data-intent="danger" onClick=${() => {
-                setAsking(null);
-                remove();
-              }}>Delete for everyone</button>
-            </div>
-          </div>
-        </${Modal}>`
       }
     </li>`;
   }
