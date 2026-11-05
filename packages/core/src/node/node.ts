@@ -487,6 +487,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       if (!membership.deleted && !held.has(spaceId)) {
         try {
           await joinRegistry(membership.body!.invite);
+          // One still open from leaving it can't read under the new key.
+          await closeRuntime(spaceId);
           changed = true;
         } catch {
           // An unreadable invite; the next version written for it will do.
