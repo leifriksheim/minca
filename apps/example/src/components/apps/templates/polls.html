@@ -160,52 +160,57 @@
             { choice, ...(poll.createdBy && poll.createdBy !== me ? { respondingTo: poll.createdBy } : {}) },
             { links: [{ rel: 'about', to: poll.key }] },
           );
+    const count =
+      votes.length === 0 ? 'No votes yet' : `${votes.length} ${votes.length === 1 ? 'vote' : 'votes'}`;
+    const hint = closed
+      ? 'Closed'
+      : !mayVote
+        ? ''
+        : mine
+          ? 'Tap your pick again to take it back'
+          : 'Tap one to vote';
     return html`<main>
       <header>
-        <small class="row" data-gap="tight">
-          Asked by <${Person} did=${poll.createdBy} size=${16} /> · ${ago(poll.createdAt)}
-        </small>
-        ${closed && html`<span class="tag">Closed</span>`}
+        <span class="row" data-gap="tight">
+          <${Person} did=${poll.createdBy} size=${28} />
+          <small>· ${ago(poll.createdAt)}</small>
+        </span>
         <${RowMenu} label="More for this poll" items=${pollActions(poll, () => go(null))} />
       </header>
-      <fieldset class="stack" aria-label="Options" disabled=${!open}>
-        ${options.map((option, i) => {
-          const these = votes.filter((v) => v.body.choice === i);
-          const share = votes.length ? these.length / votes.length : 0;
-          // A closed poll's choice, or a tie for it
-          const won = closed && most > 0 && counts[i] === most;
-          return html`<div
-            class="stack"
-            data-gap="tight"
-            key=${i}
-            title=${these.map((v) => nameOf(v.createdBy)).join(', ') || undefined}
-          >
-            <div class="row" data-spread>
-              <label>
-                <input
-                  type="radio"
-                  name=${poll.key}
-                  checked=${mine?.body.choice === i}
-                  onClick=${() => vote(i)}
-                />
-                ${won ? html`<strong>${option}</strong>` : option}
-              </label>
+      <article class="stack">
+        <div class="stack" data-gap="tight">
+          <h2>${question}</h2>
+          <small>${[count, hint].filter(Boolean).join(' · ')}</small>
+        </div>
+        <div class="stack" data-gap="tight" role="group" aria-label="Options">
+          ${options.map((option, i) => {
+            const these = votes.filter((v) => v.body.choice === i);
+            const share = votes.length ? these.length / votes.length : 0;
+            const picked = mine?.body.choice === i;
+            // A closed poll's choice, or a tie for it
+            const won = closed && most > 0 && counts[i] === most;
+            return html`<button
+              key=${i}
+              data-intent="choice"
+              aria-pressed=${picked}
+              disabled=${!open}
+              title=${these.map((v) => nameOf(v.createdBy)).join(', ') || undefined}
+              onClick=${() => vote(i)}
+            >
+              <progress value=${share} max="1"></progress>
+              ${picked && html`<${Icon} name="check" />`}
+              <span>${won ? html`<strong>${option}</strong>` : option}</span>
               ${
                 these.length > 0 &&
                 html`<span class="row" data-gap="tight">
-                    ${these.slice(0, 3).map((v) => html`<${Avatar} key=${v.key} did=${v.createdBy} size=${20} round />`)}
-                  </span>
-                  <small>${Math.round(share * 100)}%</small>`
+                  ${these.slice(0, 3).map((v) => html`<${Avatar} key=${v.key} did=${v.createdBy} size=${22} round />`)}
+                </span>`
               }
-            </div>
-            ${votes.length > 0 && html`<progress value=${share} max="1"></progress>`}
-          </div>`;
-        })}
-      </fieldset>
-      <small>
-        ${votes.length === 0 ? 'No votes yet' : `${votes.length} ${votes.length === 1 ? 'vote' : 'votes'}`}
-        ${open && mine && ' · tap your choice again to take it back'}
-      </small>
+              ${votes.length > 0 && html`<small>${Math.round(share * 100)}%</small>`}
+            </button>`;
+          })}
+        </div>
+      </article>
     </main>`;
   }
 
@@ -243,22 +248,33 @@
         <legend>Options</legend>
         ${options.map(
           (option, i) =>
-            html`<input
-              key=${i}
-              value=${option}
-              onInput=${(e) => setOptions(options.map((o, j) => (j === i ? e.currentTarget.value : o)))}
-              placeholder=${`Option ${i + 1}`}
-              aria-label=${`Option ${i + 1}`}
-            />`,
+            html`<div class="row" key=${i}>
+              <input
+                value=${option}
+                onInput=${(e) => setOptions(options.map((o, j) => (j === i ? e.currentTarget.value : o)))}
+                placeholder=${`Option ${i + 1}`}
+                aria-label=${`Option ${i + 1}`}
+              />
+              ${
+                options.length > 2 &&
+                html`<button
+                  type="button"
+                  data-intent="ghost"
+                  data-icon
+                  aria-label=${`Remove option ${i + 1}`}
+                  onClick=${() => setOptions(options.filter((_, j) => j !== i))}
+                >
+                  <${Icon} name="close" />
+                </button>`
+              }
+            </div>`,
         )}
       </fieldset>
       ${
         options.length < 10 &&
-        html`<div class="row">
-          <button type="button" data-intent="ghost" onClick=${() => setOptions([...options, ''])}>
-            <${Icon} name="plus" /> Add option
-          </button>
-        </div>`
+        html`<button type="button" onClick=${() => setOptions([...options, ''])}>
+          <${Icon} name="plus" /> Add another option
+        </button>`
       }
       ${!unique && html`<p role="alert">Two options are the same.</p>`}
       <button type="submit" data-intent="primary" disabled=${!ready || busy}>

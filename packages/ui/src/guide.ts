@@ -82,18 +82,18 @@ Write plain HTML from this list, no CSS, <style> or style="": say what a thing i
     <header> title + actions; <section> a group under an h2
   h1 h2 h3 p a strong code; <small> meta and hints; <mark>; <s> done; class="truncate" one line, cut short, taking a row's room
   <button> data-intent="primary" (the main one) | "subtle" (back, close) | "ghost" (toolbars, rows) | "danger" | "open" (a task, a row;
-    .row lays it across) | "inline" (a word in a sentence); data-icon (icon only, aria-label); aria-pressed (on/off);
+    .row lays it across) | "inline" (a word in a sentence) | "choice" (a poll option, a <progress> in it); data-icon (icon only, aria-label); aria-pressed (on/off);
     <a data-intent> a link drawn as a button;
     <div role="tablist"> of buttons, one aria-selected="true"
   <label>Name <input></label>; <fieldset><legend>; input textarea select (in a row, a field takes the room left);
     <input type="checkbox" role="switch">; <p role="alert"> an error
   <article> one thing; <ul role="list"> of <li> (a data-intent="open" button in one is the row's text);
     class="grid" tiles; class="lanes" columns scrolled across (a board); class="tag" a label or count; <aside> a notice;
-    <progress> <meter> <table> <pre> <details><summary>; <figure> a picture (Cover draws one; a photo covers it, tags sit on top);
-    <div aria-roledescription="carousel"> pictures swiped through; <div role="grid"> of role="gridcell" a month
-  <div data-actions> buttons shown when what holds them is pointed at; aria-grabbed="true" dragged; <hr data-drop> lands here
+    <progress> <meter> <table> <pre> <details><summary>; <figure> a picture (Cover draws one; a photo fills it, tags on top);
+    <div aria-roledescription="carousel"> pictures to swipe; <div role="grid"> of role="gridcell" a month
+  <div data-actions> buttons shown on hover of what holds them; aria-grabbed="true" dragged; <hr data-drop> lands here
   class="row" | "stack", data-gap="tight" | "loose", data-spread (row: first at the start, the rest at the end)
-  class="lead": the buttons a page opens with, beside its h1, drawn larger; nowhere else
-  data-tone="good|warn|danger" colours text, and a tag's or aside's ground; data-hue="1"…"5" a category's colour: a tint on a tag or article, var(--hue)
+  class="lead": a page's opening buttons by its h1, larger; nowhere else
+  data-tone="good|warn|danger" colours text, a tag's or aside's ground; data-hue="1"…"5" a category's tint on a tag or article, var(--hue)
 Nothing else exists. Only a game or drawing styles itself, in <main data-wide>, with only var(--color-*, --text-*, --space-*, --hue), sizes in rem.
 Fonts from URLs never load.`;
