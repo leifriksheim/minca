@@ -1,16 +1,17 @@
 /**
  * Writing Markdown without seeing it, as a chat's box does: bold shows bold and
  * code shows as code, and what the box hands back is Markdown (markdown.ts
- * draws it). The keys chat apps use format what is selected, and so does the
- * format menu; Markdown typed as it is (**bold**, `code`, "- ") turns into what
- * it says. "@" suggests the space's people.
+ * draws it, here as in a message). The keys chat apps use format what is
+ * selected, and so does the format menu; Markdown typed or pasted as it is
+ * (**bold**, a fence, "- ") turns into what it says. "@" suggests the space's
+ * people.
  */
 import type { JSX } from 'preact';
 import { render } from 'preact';
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { usePeople } from './hooks';
 import { html } from './html';
-import { markdownOf } from './markdown';
+import { markdownOf, shortLink } from './markdown';
 import { useOpen } from './menus';
 import type { Someone } from './minca';
 import { Avatar } from './people';
@@ -78,51 +79,91 @@ const FORMATS = [
 
 const MOD = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+';
 
-/** Markdown typed as it is, at the end of what was just typed, and the element it becomes */
-const TYPED: ReadonlyArray<readonly [RegExp, string]> = [
-  [/(?:^|[^*\w])(\*\*([^*\s](?:[^*]*[^*\s])?)\*\*)$/, 'strong'],
-  [/(?:^|[^~])(~~([^~\s](?:[^~]*[^~\s])?)~~)$/, 's'],
-  [/(?:^|[^`])((`+)([^`]+)\2)$/, 'code'],
-  [/(?:^|[^*\w])(\*([^*\s](?:[^*]*[^*\s])?)\*)$/, 'em'],
-  [/(?:^|[^_\w])(_([^_\s](?:[^_]*[^_\s])?)_)$/, 'em'],
-];
+/** Stands for the caret while the box goes to Markdown and back: a character no one types */
+const CARET = '\ue000';
 
-/** Markdown that starts a line, followed by a space, and the block it starts */
-const LINE_STARTS: Readonly<Record<string, () => void>> = {
-  '-': () => exec('insertUnorderedList'),
-  '*': () => exec('insertUnorderedList'),
-  '1.': () => exec('insertOrderedList'),
-  '>': () => exec('formatBlock', '<blockquote>'),
-  '```': () => exec('formatBlock', '<pre>'),
-};
+/** The caret's line holds only what opens a block */
+const OPENING = new RegExp(`^[ \\t]*(?:\`{3,}[^\\s\`]*|~{3,}\\S*|>|[-*+]|\\d{1,9}[.)])[ \\t]*${CARET}$`, 'm');
 
-/** Turns Markdown just typed before the caret into what it says */
-function formatTyped(data: string | null) {
-  const selection = getSelection();
-  const node = selection?.anchorNode;
-  if (!selection || !(node instanceof Text) || !data) return;
-  const before = node.data.slice(0, selection.anchorOffset);
-  const lineStart = !node.previousSibling || node.previousSibling.nodeName === 'BR';
-  const start = LINE_STARTS[before.trimEnd()];
-  if (data === ' ' && lineStart && start && !around('pre, li, blockquote')) {
-    selection.setBaseAndExtent(node, 0, node, before.length);
-    exec('delete');
-    start();
-    return;
-  }
-  if (around('code, pre')) return;
-  for (const [pattern, tag] of TYPED) {
-    const match = pattern.exec(before);
-    if (!match) continue;
-    // What was typed, and the last group: the words inside the marks
-    const typed = match[1] ?? '';
-    const inner = match.at(-1) ?? '';
-    selection.setBaseAndExtent(node, before.length - typed.length, node, before.length);
-    // The zero-width space after it lets what is typed next go outside it; Markdown leaves it out.
-    exec('insertHTML', `<${tag}>${escape(inner)}</${tag}>​`);
-    return;
-  }
+/** What a box or a drawing shows, its spaces aside: if Markdown would draw something else, the box isn't showing it yet */
+const shown = (node: Node) => (node.textContent ?? '').replace(/[\s\u200b]/g, '');
+
+/** The node at the same place in `copy` as `node` is in `root` */
+function sameIn(root: Node, copy: Node, node: Node): Node | null {
+  const path: number[] = [];
+  for (let at: Node | null = node; at && at !== root; at = at.parentNode)
+    path.unshift([...(at.parentNode?.childNodes ?? [])].findIndex((child) => child === at));
+  return path.reduce<Node | null>((into, i) => into?.childNodes[i] ?? null, copy);
 }
+
+/**
+ * Draws the box as its Markdown will be drawn once sent, so what is typed as
+ * Markdown (**bold**, a fence, "- ", a pasted table) shows as what it says. The
+ * caret goes through as a character and is put back where it lands. Replaced
+ * through the browser, so undo takes it back.
+ */
+function redraw(box: HTMLElement) {
+  const selection = getSelection();
+  const caret = selection?.focusNode;
+  if (!selection || !caret || !box.contains(caret)) return;
+  const copy = box.cloneNode(true);
+  const at = sameIn(box, copy, caret);
+  if (at instanceof Text) at.insertData(selection.focusOffset, CARET);
+  else at?.insertBefore(document.createTextNode(CARET), at.childNodes[selection.focusOffset] ?? null);
+  const markdown = toMarkdown(copy);
+  // A line that only opens a block ("> ", "- ", a fence) waits for what goes in it
+  if (OPENING.test(markdown)) return;
+  const drawn = document.createElement('div');
+  render(html`${markdownOf(markdown)}`, drawn);
+  if (shown(drawn) === shown(copy)) return;
+  selection.selectAllChildren(box);
+  if (!exec('insertHTML', drawn.innerHTML)) return;
+  // A browser inserts HTML as it pastes, folding a first block (a code block) into the line around it; then the
+  // drawing goes in as it is, which undo doesn't follow
+  if (toMarkdown(box) !== markdown) box.innerHTML = drawn.innerHTML;
+  const walk = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+  for (let node = walk.nextNode(); node instanceof Text; node = walk.nextNode()) {
+    const offset = node.data.indexOf(CARET);
+    if (offset < 0) continue;
+    // A zero-width space keeps a place of its own after a mark, so what is typed next goes outside it
+    node.replaceData(offset, 1, node.data.length > 1 ? '' : '\u200b');
+    selection.collapse(node, node.data === '\u200b' ? 1 : offset);
+    return;
+  }
+  // The caret was in what Markdown drops: it goes to the end, inside what is last
+  let last: Node = box;
+  while (last.lastChild && last.lastChild.nodeName !== 'BR') last = last.lastChild;
+  if (!(last instanceof Text)) last = last.appendChild(document.createTextNode('\u200b'));
+  selection.collapse(last, last instanceof Text ? last.length : 0);
+}
+
+/** Shift+Enter on an empty last line of a code block or quote leaves it, as chat apps have it */
+function leaveBlock(): boolean {
+  const block = around('pre, blockquote');
+  const selection = getSelection();
+  if (!block || !selection?.focusNode) return false;
+  const rest = document.createRange();
+  rest.setStart(selection.focusNode, selection.focusOffset);
+  rest.setEndAfter(block);
+  const text = plainText(block);
+  if (rest.toString() || !text.trim() || !text.endsWith('\n')) return false;
+  // The breaks that made the empty line go, and a line after the block takes the caret
+  const last = () => {
+    let node = block.lastChild;
+    while (node?.lastChild) node = node.lastChild;
+    return node;
+  };
+  const blank = (node: ChildNode | null) => !!node && !node.textContent?.replace(/\u200b/g, '').trim();
+  for (let node = last(); node && blank(node); node = last()) node.remove();
+  const line = document.createElement('div');
+  line.append(document.createElement('br'));
+  block.after(line);
+  selection.collapse(line, 0);
+  return true;
+}
+
+/** Set while the box redraws itself, so the input that causes is not taken as typing */
+let redrawing = false;
 
 const MARKS: Readonly<Record<string, string>> = {
   B: '**',
@@ -175,7 +216,7 @@ function toMarkdown(root: Node): string {
     else if (tag === 'CODE') out += wrap('`', plainText(node));
     else if (tag === 'A' && href) {
       const label = toMarkdown(node);
-      out += !label || label === href ? href : `[${label}](${href})`;
+      out += !label || label === href || label === shortLink(href) ? href : `[${label}](${href})`;
     } else if (tag === 'PRE')
       block(2, () => (out += `\`\`\`\n${plainText(node).replace(/\n$/, '')}\n\`\`\``));
     else if (tag === 'BLOCKQUOTE') block(2, () => (out += toMarkdown(node).replace(/^/gm, '> ')));
@@ -300,6 +341,7 @@ export function MentionInput({
     if (event.key !== 'Enter' || event.isComposing) return;
     event.preventDefault();
     if (!event.shiftKey) box.current?.closest('form')?.requestSubmit();
+    else if (leaveBlock()) changed();
     else exec(around('li') ? 'insertParagraph' : 'insertLineBreak');
   };
 
@@ -341,8 +383,22 @@ export function MentionInput({
       aria-multiline="true"
       data-placeholder=${placeholder}
       onInput=${(event: InputEvent) => {
-        if (event.inputType === 'insertText') formatTyped(event.data);
+        // Our own redraw comes back through here; an input method's word isn't done until it is
+        if (redrawing || event.isComposing) return;
         changed();
+        // Undo takes a redraw back, and stays taken back
+        if (event.inputType.startsWith('history')) return;
+        // Once whatever made this input is done: a browser refuses a command (the redraw's) inside another (a paste's)
+        queueMicrotask(() => {
+          if (!box.current) return;
+          redrawing = true;
+          try {
+            redraw(box.current);
+          } finally {
+            redrawing = false;
+          }
+          changed();
+        });
       }}
       onKeyDown=${keyDown}
       onKeyUp=${track}

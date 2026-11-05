@@ -94,7 +94,8 @@ function blocksOf(text: string): Block[] {
     } else if (isTable(line(), lines[i + 1])) {
       const head = cellsOf(line());
       i += 2;
-      const rows = take((l) => l.includes('|')).map(cellsOf);
+      // A row has the head's columns: cells past them go, as GitHub has it
+      const rows = take((l) => l.includes('|')).map((l) => cellsOf(l).slice(0, head.length));
       blocks.push({ kind: 'table', head, rows });
     } else {
       const run = [lines[i++] ?? ''];
@@ -120,13 +121,14 @@ const INLINE = new RegExp(
     /(?<![\w*])\*(?=[^\s*])(.+?)(?<=[^\s*])\*(?![\w*])/.source,
     /(?<![\w_])_(?=[^\s_])(.+?)(?<=[^\s_])_(?![\w_])/.source,
     /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/.source,
-    /(https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]}*_~])/.source,
+    // A private-use character ends a link: the box that edits text stands it in for the caret
+    /(https?:\/\/[^\s<>"'\ue000]+[^\s<>"'.,;:!?)\]}*_~\ue000])/.source,
   ].join('|'),
   'g',
 );
 
 /** A link as it shows: its site and path, without https:// or www., cut short when long */
-function shortLink(link: string): string {
+export function shortLink(link: string): string {
   try {
     const url = new URL(link);
     const shown = url.host.replace(/^www\./, '') + url.pathname.replace(/\/$/, '') + url.search + url.hash;
