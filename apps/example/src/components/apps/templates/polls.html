@@ -8,70 +8,146 @@
     useRef,
     useRecords,
     useCan,
-    useMarked,
+    useShown,
+    useView,
     usePeople,
     Person,
     Avatar,
-    Modal,
     Empty,
     ago,
   } = ui;
   const { Icon, RowMenu } = ui;
   const POLL = 'std.poll';
   const VOTE = 'std.vote';
+  /** The view that asks a new question */
+  const NEW = 'new';
   const me = minca.me.did;
 
+  const votesOn = (votes, poll) =>
+    votes.filter((v) => v.links.some((l) => l.rel === 'about' && l.to === poll.key));
+  // Only votes for an option that exists count: a vote from a buggy app for option 7 of 2 is ignored.
+  const counted = (votes, poll) => votes.filter((v) => v.body.choice < poll.body.options.length);
+
+  /**
+   * The polls, open ones first; a poll opens one level in (minca.go), and so does asking a new
+   * one, so the app's bar names where you are and its Back comes out.
+   */
   function Polls() {
     const polls = useRecords(POLL);
     const votes = useRecords(VOTE);
     const mayAsk = useCan('create', POLL);
-    const mayVote = useCan('create', VOTE);
-    const [asking, setAsking] = useState(false);
-    // A poll opened from elsewhere, like one shared in a chat: scrolled to and lit up a moment.
-    const marked = useMarked();
+    const [view, go] = useView();
+    const shown = useShown();
+    const handled = useRef(null);
+    // A poll opened from elsewhere, like one shared in a chat, opens here once it has arrived.
+    useEffect(() => {
+      const poll = shown && handled.current !== shown && polls?.find((p) => p.key === shown.key);
+      if (!poll) return;
+      handled.current = shown;
+      go(poll.key, poll.body.question);
+    }, [shown, polls]);
     if (!polls || !votes) return null;
-    // Open ones first, the newest on top; closed ones after, the newest first too.
-    const shown = [...polls].reverse().sort((a, b) => Number(!!a.body.closed) - Number(!!b.body.closed));
-    const ask =
-      asking &&
-      html`<${Modal} title="New poll" onClose=${() => setAsking(false)} width=${480}>
+
+    if (view === NEW)
+      return html`<main>
         <${Ask}
-          onCancel=${() => setAsking(false)}
           onAsk=${async (question, options) => {
-            await minca.put(POLL, { question, options });
-            setAsking(false);
+            const made = await minca.put(POLL, { question, options });
+            go(made.key, question);
           }}
         />
-      </${Modal}>`;
+      </main>`;
+    const opened = view && polls.find((p) => p.key === view);
+    if (view && !opened)
+      return html`<main>
+        <${Empty} shape="bars" colour="coral" title="This poll is gone" text="Someone deleted it." />
+      </main>`;
+    if (opened)
+      return html`<${PollPage} key=${opened.key} poll=${opened} votes=${votesOn(votes, opened)} go=${go} />`;
+
+    const newest = [...polls].reverse();
+    const closed = newest.filter((p) => p.body.closed);
+    const row = (poll) =>
+      html`<${PollRow} key=${poll.key} poll=${poll} votes=${votesOn(votes, poll)} go=${go} />`;
     if (polls.length === 0)
       return html`<main>
         <${Empty} shape="bars" colour="coral" title="No polls yet" text="Ask the group something, and see what everyone picks.">
-          ${mayAsk && html`<button data-intent="primary" onClick=${() => setAsking(true)}>New poll</button>`}
+          ${mayAsk && html`<button data-intent="primary" onClick=${() => go(NEW, 'New poll')}>New poll</button>`}
         </${Empty}>
-        ${ask}
       </main>`;
     return html`<main>
-      ${mayAsk && html`<div class="row"><button data-intent="primary" onClick=${() => setAsking(true)}>New poll</button></div>`}
-      ${shown.map(
-        (poll) =>
-          html`<${Poll}
-            key=${poll.key}
-            poll=${poll}
-            votes=${votes.filter((v) => v.links.some((l) => l.rel === 'about' && l.to === poll.key))}
-            mayVote=${mayVote}
-            marked=${poll.key === marked}
-          />`,
-      )}
-      ${ask}
+      <ul role="list" aria-label="Polls">
+        ${newest.filter((p) => !p.body.closed).map(row)}
+        ${
+          mayAsk &&
+          html`<li>
+            <button data-intent="open" class="row" onClick=${() => go(NEW, 'New poll')}>
+              <${Icon} name="plus" /> <span>New poll</span>
+            </button>
+          </li>`
+        }
+      </ul>
+      ${
+        closed.length > 0 &&
+        html`<section>
+          <h2>Closed <span class="tag">${closed.length}</span></h2>
+          <ul role="list" aria-label="Closed">
+            ${closed.map(row)}
+          </ul>
+        </section>`
+      }
     </main>`;
   }
 
-  function Poll({ poll, votes: all, mayVote, marked }) {
+  /** What can be done with a poll besides voting: closing it, and taking it away */
+  function pollActions(poll, onGone) {
+    const closed = !!poll.body.closed;
+    return [
+      poll.mine && {
+        label: closed ? 'Reopen' : 'Close poll',
+        onClick: () => minca.update(poll.key, { ...poll.body, closed: !closed }),
+      },
+      poll.mine && {
+        label: 'Delete',
+        danger: true,
+        confirm: 'Delete this poll and its votes, for everyone?',
+        onClick: () => {
+          onGone?.();
+          minca.remove(poll.key);
+        },
+      },
+    ];
+  }
+
+  /** A poll in the overview: its question, how many voted and whether you did; a tap opens it */
+  function PollRow({ poll, votes: all, go }) {
+    const votes = counted(all, poll);
+    const mine = votes.find((v) => v.createdBy === me);
+    const count =
+      votes.length === 0 ? 'No votes yet' : `${votes.length} ${votes.length === 1 ? 'vote' : 'votes'}`;
+    const yours = mine
+      ? ` · You picked ${poll.body.options[mine.body.choice]}`
+      : poll.body.closed
+        ? ''
+        : ' · Not voted yet';
+    return html`<li class="row">
+      <button data-intent="open" class="truncate" onClick=${() => go(poll.key, poll.body.question)}>
+        <strong class="truncate">${poll.body.question}</strong>
+        <small class="truncate">${count}${yours}</small>
+      </button>
+      <${RowMenu} label=${`More for ${poll.body.question}`} items=${pollActions(poll)} />
+    </li>`;
+  }
+
+  /** One poll, opened: its options to pick from, and how the votes fall */
+  function PollPage({ poll, votes: all, go }) {
     const people = usePeople();
+    const mayVote = useCan('create', VOTE);
     const nameOf = (did) => (did === me ? 'You' : (people.find((p) => p.did === did)?.name ?? 'Someone'));
     const { question, options, closed } = poll.body;
-    // Only votes for an option that exists count: a vote from a buggy app for option 7 of 2 is ignored.
-    const votes = all.filter((v) => v.body.choice < options.length);
+    // The bar names the poll, and again if it changes.
+    useEffect(() => go(poll.key, question), [poll.key, question]);
+    const votes = counted(all, poll);
     const mine = votes.find((v) => v.createdBy === me);
     const open = mayVote && !closed;
     const counts = options.map((_, i) => votes.filter((v) => v.body.choice === i).length);
@@ -84,30 +160,14 @@
             { choice, ...(poll.createdBy && poll.createdBy !== me ? { respondingTo: poll.createdBy } : {}) },
             { links: [{ rel: 'about', to: poll.key }] },
           );
-    return html`<article data-key=${poll.key} data-marked=${marked}>
+    return html`<main>
       <header>
-        <h3>${question}</h3>
+        <small class="row" data-gap="tight">
+          Asked by <${Person} did=${poll.createdBy} size=${16} /> · ${ago(poll.createdAt)}
+        </small>
         ${closed && html`<span class="tag">Closed</span>`}
-        <${RowMenu}
-          label="More for this poll"
-          items=${[
-            { label: 'Open', onClick: () => minca.open({ record: poll.key }) },
-            poll.mine && {
-              label: closed ? 'Reopen' : 'Close poll',
-              onClick: () => minca.update(poll.key, { ...poll.body, closed: !closed }),
-            },
-            poll.mine && {
-              label: 'Delete',
-              danger: true,
-              confirm: 'Delete this poll and its votes, for everyone?',
-              onClick: () => minca.remove(poll.key),
-            },
-          ]}
-        />
+        <${RowMenu} label="More for this poll" items=${pollActions(poll, () => go(null))} />
       </header>
-      <small class="row" data-gap="tight">
-        Asked by <${Person} did=${poll.createdBy} size=${16} /> · ${ago(poll.createdAt)}
-      </small>
       <fieldset class="stack" aria-label="Options" disabled=${!open}>
         ${options.map((option, i) => {
           const these = votes.filter((v) => v.body.choice === i);
@@ -146,11 +206,11 @@
         ${votes.length === 0 ? 'No votes yet' : `${votes.length} ${votes.length === 1 ? 'vote' : 'votes'}`}
         ${open && mine && ' · tap your choice again to take it back'}
       </small>
-    </article>`;
+    </main>`;
   }
 
   /** A question and its options: two to start, more on demand, blanks dropped */
-  function Ask({ onAsk, onCancel }) {
+  function Ask({ onAsk }) {
     const [question, setQuestion] = useState('');
     const [options, setOptions] = useState(['', '']);
     const [busy, setBusy] = useState(false);
@@ -201,12 +261,9 @@
         </div>`
       }
       ${!unique && html`<p role="alert">Two options are the same.</p>`}
-      <div class="row" data-spread>
-        <button type="button" data-intent="ghost" onClick=${onCancel}>Cancel</button>
-        <button type="submit" data-intent="primary" disabled=${!ready || busy}>
-          ${busy ? 'Asking…' : 'Ask'}
-        </button>
-      </div>
+      <button type="submit" data-intent="primary" disabled=${!ready || busy}>
+        ${busy ? 'Asking…' : 'Ask'}
+      </button>
     </form>`;
   }
 

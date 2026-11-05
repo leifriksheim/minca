@@ -60,7 +60,7 @@ ui has:
   A message box is one field, as in Comments: <div class="composer"> holding <\${AddMenu} />, the input, and
   <div class="composer-end"><\${EmojiPicker} /> and send (data-intent="primary" data-icon, <\${Icon} name="send" />)</div>
   <\${RowMenu} label items />  "…" ending a row (rename, edit, delete): { label, onClick, danger?, confirm? }
-  <\${Modal} title onClose width?>…</\${Modal}>  a dialog over the screen, the only way to draw one
+  <\${Modal} title onClose width?>…</\${Modal}>  a dialog, seldom: a form or a page is a view (useView)
   <\${Empty} shape? colour? title text?>…</\${Empty}>  an empty app: a shape, a title, a line on what goes here,
     and the button that starts it inside
   <\${Shape} kind colour? size? />  a Minca shape; <\${Cover} seed colour size? wide?>…</\${Cover}> a thing's picture
