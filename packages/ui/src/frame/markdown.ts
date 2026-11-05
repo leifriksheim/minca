@@ -222,6 +222,10 @@ function drawBlock(block: Block, people: ReadonlyArray<Someone>, end: ComponentC
  */
 export function MentionText({ text, end = null }: { text: string; end?: ComponentChildren }) {
   const people = usePeople();
+  const blocks = blocksOf(text);
+  // One paragraph stays in its line, so a screen can still put it inside a sentence of its own
+  const only = blocks.length === 1 && blocks[0]?.kind === 'paragraph' ? blocks[0] : null;
+  if (only) return html`<span class="markdown">${inline(only.text, people)}${end}</span>`;
   return html`<div class="markdown">${markdownOf(text, people, end)}</div>`;
 }
 
