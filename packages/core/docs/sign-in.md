@@ -8,33 +8,34 @@ pairing a phone.
 
 ## The sign-in screen
 
-The quickest way in is the `<minca-auth>` element. It draws every screen of
-the flow, and fires `minca-session` when someone signs in or out:
+The flow is state and actions: draw a screen for each `stage`, and call an
+action from its buttons. `subscribe` calls back after every change.
 
-```html
-<minca-auth app-name="Todo" relays="wss://relay.minca.social"></minca-auth>
-<script type="module">
-  import '@minca/core/elements';
-  document.querySelector('minca-auth').addEventListener('minca-session', (event) => {
-    const session = event.detail.session; // { account, did, sessionDid, node }, or null
-    if (session) start(session.node);
-  });
-</script>
+```js
+import { createMincaAuth } from '@minca/core/session';
+
+const auth = createMincaAuth({ appName: 'Todo', network: { relays: ['wss://relay.minca.social'] } });
+
+auth.subscribe((state) => {
+  if (state.stage === 'ready') start(state.session.node);
+  else draw(state); // a screen for state.stage
+});
+passkeyButton.addEventListener('click', () => auth.signInWithPasskey());
+void auth.start();
 ```
 
-In React, make the flow with `createMincaAuth`, hand it to `MincaProvider`,
-and show `<MincaAuth>` until the person is signed in:
+In React, hand the flow to `MincaProvider`, and read it with `useMinca`:
 
 ```tsx
 import { createRoot } from 'react-dom/client';
 import { createMincaAuth } from '@minca/core/session';
-import { MincaProvider, MincaAuth, useMinca } from '@minca/react';
+import { MincaProvider, useMinca } from '@minca/react';
 
 const auth = createMincaAuth({ appName: 'Todo', network: { relays: ['wss://relay.minca.social'] } });
 
 function App() {
   const { state } = useMinca();
-  if (state?.stage !== 'ready') return <MincaAuth />;
+  if (state?.stage !== 'ready') return <p>{state?.stage}</p>; // a screen for each stage
   return <p>Signed in.</p>;
 }
 
@@ -45,9 +46,11 @@ createRoot(root).render(
 );
 ```
 
-Everything below the provider works as it does for a connected app. The
-rest of this page is for when you want to know what the flow does, or draw
-your own screens on it.
+The account home draws every stage
+([its screens](https://github.com/leifriksheim/minca/tree/main/apps/home/src/components));
+start from those. Everything below the provider works as it does for a
+connected app. The rest of this page is what each stage means and which
+action moves it on.
 
 ## Places
 
@@ -107,7 +110,7 @@ on the same stage. A dismissed passkey or folder prompt sets no error.
 Chrome keeps a pod's folder between visits, but not the permission to use
 it, unless the person chose "Allow on every visit". Then `start()` sets
 `podToReopen` to the folder's name and goes on as if there were no pod.
-`<minca-auth>` offers it first on the welcome screen. `reopenPod()`, called
+Offer it first on the welcome screen. `reopenPod()`, called
 from that click, asks for the permission and carries on as `start()` would
 have.
 
@@ -285,8 +288,8 @@ the person confirms on the computer. The phone then signs in, joins each
 space (`{ kind: 'joining', joined, total }`), and ends on `received`.
 
 It waits 60 seconds for the computer to answer, and 10 minutes for the
-person to confirm. Where accounts are already kept, `<minca-auth>` warns
-before going on: a link someone else sent would put the phone in their
+person to confirm. Where accounts are already kept, a page drawing its own
+screens must warn the person before the tap that calls `acceptPairing()`: a link someone else sent would put the phone in their
 account.
 
 After that, the account goes to `unlock` with `setup: 'paired'` if it has no
@@ -302,7 +305,7 @@ asking, and only its spaces are joined.
 
 `answerPairing(true)` adds the account, or switches to it, and keeps the
 other one filed to switch back to. `answerPairing(false)` lets it go.
-`<minca-auth>` asks "Add this account?" or "Switch to <name>?".
+Ask the person: "Add this account?" or "Switch to <name>?".
 
 Switching doesn't sign the other account out: its session key is left as it
 is, as when a tab closes. Only the session open when the account arrives
@@ -361,20 +364,10 @@ in a pod is not removed this way: the pod is its copy.
 
 ## Linking to the account home
 
-An app can link to the person's account home, for its settings say.
-`accountHomeLink(home, did, section?)` gives the account page, with the
-account in the fragment, so it never reaches the home's server:
-
-```ts
-import { accountHomeLink, popupFeatures } from '@minca/core/session';
-
-const home = 'https://home.minca.social/connect';
-window.open(accountHomeLink(home, did, 'notifications'), 'minca', popupFeatures(480, 640));
-```
-
-That opens `…#notifications&account=<did>`. `popupFeatures(width, height)`
-centres the popup on the window it opens from. Given only a size, a browser
-puts it where it likes, often the top left of the screen.
+A connected app opens the person's account home with
+[`connection.openHome()`](building-an-app.md#the-account-home). It opens the
+account page beside the connect page, with the account in the fragment, so it
+never reaches the home's server: `…#notifications&account=<did>`.
 
 On the home, `readAccountHint()` gives the DID, or null when there is none or
 it isn't a P-256 `did:key`. `clearAccountHint()` takes it out of the address

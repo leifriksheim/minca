@@ -17,7 +17,7 @@
     Empty,
   } = ui;
   const { Icon } = ui;
-  const { Comments, Modal } = ui;
+  const { Comments, Modal, RowMenu } = ui;
   const EXPENSE = 'std.expense';
   const SETTLEMENT = 'std.settlement';
   const LIST = 'std.list';
@@ -277,11 +277,11 @@
         <${Empty} shape="receipt" colour="lilac" title="This tab isn't here any more" />
       </main>`;
     if (open) return html`<${Tab} key=${open.key} ...${shared} tab=${open} ...${on(open.key)} />`;
-    return html`<${Tabs} tabs=${tabs} on=${on} go=${go} />`;
+    return html`<${Tabs} tabs=${tabs} on=${on} items=${items} go=${go} />`;
   }
 
   /** Every tab, the one last added to first, where you stand on each, and a row to start another */
-  function Tabs({ tabs, on, go }) {
+  function Tabs({ tabs, on, items, go }) {
     const mayCreate = useCan('create', LIST);
     const create = async (title) => {
       const made = await minca.put(LIST, { title, kind: TAB });
@@ -297,6 +297,15 @@
     const sorted = [...tabs].sort((a, b) => touched(b).localeCompare(touched(a)));
     const earlier = on(null);
     const anyEarlier = earlier.expenses.length + earlier.settlements.length > 0;
+    // Settled: something on it, and nobody owes anybody. Open tabs, and new empty ones, come first.
+    const isSettled = ({ expenses, settlements }) =>
+      expenses.length + settlements.length > 0 && simplify(balancesOf(expenses, settlements)).length === 0;
+    const open = sorted.filter((tab) => !isSettled(on(tab.key)));
+    const settled = sorted.filter((tab) => isSettled(on(tab.key)));
+    const tabRow = (tab) =>
+      html`<${TabRow} key=${tab.key} tab=${tab} on=${on(tab.key)} items=${items} go=${go} />`;
+    const earlierRow = anyEarlier && row(EARLIER, 'Earlier', '', earlier);
+    const earlierSettled = anyEarlier && isSettled(earlier);
     const row = (key, title, icon, { expenses, settlements }) =>
       html`<li key=${key}>
         <button data-intent="open" onClick=${() => go(key, title)}>
@@ -316,11 +325,102 @@
         />`
       }
       <ul role="list" aria-label="Tabs">
-        ${sorted.map((tab) => row(tab.key, titleOf(tab), tab.body.icon, on(tab.key)))}
-        ${anyEarlier && row(EARLIER, 'Earlier', '', earlier)}
+        ${open.map(tabRow)} ${!earlierSettled && earlierRow}
         ${mayCreate && html`<li><${AddRow} placeholder="New tab" onAdd=${create} /></li>`}
       </ul>
+      ${
+        (settled.length > 0 || earlierSettled) &&
+        html`<section>
+          <h2>Settled <span class="tag">${settled.length + (earlierSettled ? 1 : 0)}</span></h2>
+          <ul role="list" aria-label="Settled">
+            ${settled.map(tabRow)} ${earlierSettled && earlierRow}
+          </ul>
+        </section>`
+      }
     </main>`;
+  }
+
+  /** A tab in the overview: a tap opens it, and "…" renames or deletes it */
+  function TabRow({ tab, on, items, go }) {
+    const mayRename = useCan('edit', tab.key);
+    const mayDelete = useCan('delete', tab.key);
+    const [renaming, setRenaming] = useState(false);
+    const { expenses, settlements } = on;
+    const title = titleOf(tab);
+    const remove = async () => {
+      // What is on it goes with it, then what put it there, then the tab; what can't go stays, harmlessly.
+      await Promise.allSettled([...expenses, ...settlements].map((r) => minca.remove(r.key)));
+      await Promise.allSettled(
+        items.filter((i) => linkOf(i, 'in') === tab.key).map((i) => minca.remove(i.key)),
+      );
+      await minca.remove(tab.key);
+    };
+    if (renaming)
+      return html`<li class="row">
+        <${NameField}
+          initial=${title}
+          onDone=${() => setRenaming(false)}
+          onSave=${(next) => minca.update(tab.key, { ...tab.body, title: next })}
+        />
+      </li>`;
+    return html`<li class="row">
+      <button data-intent="open" class="truncate" onClick=${() => go(tab.key, title)}>
+        <strong class="truncate">${tab.body.icon ? `${tab.body.icon} ` : ''}${title}</strong>
+        ${standing(balancesOf(expenses, settlements), expenses.length + settlements.length)}
+      </button>
+      <${RowMenu}
+        label=${`More for ${title}`}
+        items=${[
+          mayRename && { label: 'Rename', onClick: () => setRenaming(true) },
+          mayDelete && {
+            label: 'Delete',
+            danger: true,
+            confirm: 'Delete this tab and every expense on it, for everyone?',
+            onClick: remove,
+          },
+        ]}
+      />
+    </li>`;
+  }
+
+  /**
+   * A row's name, typed over in place: Enter or leaving it saves, Escape keeps what was there.
+   * The row's own field, as adding one is, so renaming looks like the list it is in.
+   */
+  function NameField({ initial, onSave, onDone }) {
+    const [text, setText] = useState(initial);
+    const field = useRef(null);
+    const kept = useRef(false);
+    useEffect(() => {
+      field.current?.focus();
+      field.current?.select();
+    }, []);
+    const save = () => {
+      if (kept.current) return;
+      kept.current = true;
+      const next = text.trim();
+      onDone();
+      if (next && next !== initial) onSave(next);
+    };
+    return html`<span class="stack truncate" data-gap="tight">
+      <input
+        ref=${field}
+        value=${text}
+        aria-label="Name"
+        maxlength="200"
+        enterkeyhint="done"
+        onInput=${(e) => setText(e.currentTarget.value)}
+        onBlur=${save}
+        onKeyDown=${(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur();
+          if (e.key === 'Escape') {
+            kept.current = true;
+            onDone();
+          }
+        }}
+      />
+      <small>Enter to save, Esc to leave it</small>
+    </span>`;
   }
 
   /**
@@ -330,12 +430,8 @@
   function Tab({ tab, expenses, settlements, items, currency, remember, openKey, setOpenKey, go }) {
     const mayAdd = useCan('create', EXPENSE);
     const maySettle = useCan('create', SETTLEMENT);
-    const mayDelete = useCan('delete', tab?.key ?? '');
-    const mayRename = useCan('edit', tab?.key ?? '');
     const [adding, setAdding] = useState(null);
     const [settling, setSettling] = useState(null);
-    const [renaming, setRenaming] = useState(false);
-    const [deleting, setDeleting] = useState(false);
     // The bar names the tab, and again when someone renames it.
     const title = tab ? titleOf(tab) : 'Earlier';
     useEffect(() => go(tab?.key ?? EARLIER, title), [tab?.key, title]);
@@ -354,33 +450,7 @@
       [...one].filter(([, b]) => b !== 0).map(([did, b]) => ({ did, b, cur })),
     );
     people.sort((x, y) => (x.did === me ? -1 : y.did === me ? 1 : y.b - x.b));
-    const removeTab = async () => {
-      // What is on it goes with it, then what put it there, then the tab; what can't go stays, harmlessly.
-      await Promise.allSettled([...expenses, ...settlements].map((r) => minca.remove(r.key)));
-      await Promise.allSettled(
-        items.filter((i) => linkOf(i, 'in') === tab.key).map((i) => minca.remove(i.key)),
-      );
-      await minca.remove(tab.key);
-      go(null);
-    };
-
     return html`<main>
-      ${
-        renaming &&
-        html`<ul role="list">
-          <li>
-            <${AddRow}
-              placeholder="Name"
-              initial=${title}
-              onAdd=${async (next) => {
-                await minca.update(tab.key, { ...tab.body, title: next });
-                setRenaming(false);
-              }}
-              onCancel=${() => setRenaming(false)}
-            />
-          </li>
-        </ul>`
-      }
       ${
         entries.length > 0 &&
         html`<article>
@@ -466,19 +536,6 @@
                 )}
               </ul>
             </section>`
-      }
-      ${
-        tab &&
-        html`<div class="row">
-          ${mayRename && !renaming && html`<button data-intent="ghost" onClick=${() => setRenaming(true)}>Rename</button>`}
-          ${
-            mayDelete &&
-            (deleting
-              ? html`<button data-intent="danger" onClick=${removeTab}>Delete tab and what's on it</button>
-                  <button data-intent="ghost" onClick=${() => setDeleting(false)}>Keep it</button>`
-              : html`<button data-intent="ghost" onClick=${() => setDeleting(true)}>Delete tab</button>`)
-          }
-        </div>`
       }
       ${
         opened &&
@@ -923,8 +980,8 @@
   }
 
   /** A row to type a name into: Enter or Save makes it; Escape leaves it, where it can be left */
-  function AddRow({ placeholder, onAdd, initial = '', onCancel }) {
-    const [text, setText] = useState(initial);
+  function AddRow({ placeholder, onAdd }) {
+    const [text, setText] = useState('');
     const [busy, setBusy] = useState(false);
     const submit = async () => {
       const value = text.trim();
@@ -949,10 +1006,8 @@
         placeholder=${placeholder}
         aria-label=${placeholder}
         maxlength="200"
-        autofocus=${!!onCancel}
         enterkeyhint="done"
         onInput=${(e) => setText(e.currentTarget.value)}
-        onKeyDown=${(e) => e.key === 'Escape' && onCancel?.()}
       />
       ${
         text.trim() &&

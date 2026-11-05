@@ -20,7 +20,7 @@
     Modal,
     Empty,
   } = ui;
-  const { Icon } = ui;
+  const { Icon, RowMenu } = ui;
   const {
     Cover,
     PlaceField,
@@ -380,7 +380,6 @@
     const selling = listing.createdBy === me;
     const mayEdit = useCan('edit', listing.key);
     const condition = CONDITIONS.find((c) => c.id === body.condition);
-    const [confirmDelete, setConfirmDelete] = useState(false);
     const setStatus = (status) => minca.update(listing.key, { ...body, status });
 
     return html`<main>
@@ -389,6 +388,25 @@
         <header>
           <h1>${body.title}</h1>
           <strong>${priceLabel(body.price)}</strong>
+          ${
+            selling &&
+            mayEdit &&
+            html`<${RowMenu}
+              label="More for this listing"
+              items=${[
+                { label: 'Edit', onClick: onEdit },
+                {
+                  label: 'Delete',
+                  danger: true,
+                  confirm: 'Delete this listing for everyone?',
+                  onClick: () => {
+                    onBack();
+                    minca.remove(listing.key);
+                  },
+                },
+              ]}
+            />`
+          }
         </header>
         <small>
           ${`Listed ${ago(listing.createdAt)}`}${placeLabel(body.place) ? ` in ${placeLabel(body.place)}` : ''}${away ? ` · ${away} away` : ''}
@@ -403,31 +421,17 @@
       ${
         selling
           ? mayEdit &&
-            html`<div class="row" data-spread>
-              <div class="row" data-gap="tight" role="group" aria-label="Status">
-                ${['available', 'reserved', 'sold'].map(
-                  (s) =>
-                    html`<button
-                      key=${s}
-                      aria-pressed=${(body.status ?? 'available') === s}
-                      onClick=${() => setStatus(s)}
-                    >
-                      ${s === 'available' ? 'Available' : s === 'reserved' ? 'Reserved' : 'Sold'}
-                    </button>`,
-                )}
-              </div>
-              <button onClick=${onEdit}>Edit</button>
-              <button
-                data-intent="danger"
-                onBlur=${() => setConfirmDelete(false)}
-                onClick=${() => {
-                  if (!confirmDelete) return setConfirmDelete(true);
-                  onBack();
-                  minca.remove(listing.key);
-                }}
-              >
-                ${confirmDelete ? 'Delete for everyone?' : 'Delete'}
-              </button>
+            html`<div class="row" data-gap="tight" role="group" aria-label="Status">
+              ${['available', 'reserved', 'sold'].map(
+                (s) =>
+                  html`<button
+                    key=${s}
+                    aria-pressed=${(body.status ?? 'available') === s}
+                    onClick=${() => setStatus(s)}
+                  >
+                    ${s === 'available' ? 'Available' : s === 'reserved' ? 'Reserved' : 'Sold'}
+                  </button>`,
+              )}
             </div>`
           : html`<${Ask} listing=${listing} />`
       }

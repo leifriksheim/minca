@@ -45,6 +45,8 @@ import {
   type Proposed,
 } from './connect.js';
 import type { AutomationProposal } from '../space/own-automations.js';
+import { accountHomeLink } from './account-hint.js';
+import { popupFeatures } from './popup.js';
 import { WORKER_NOT_STARTED, type WorkerLike } from '../node/worker.js';
 import { defaultStorage, guardedStorage, type KeyValueStore } from './stay-signed-in.js';
 
@@ -127,6 +129,13 @@ export interface MincaConnection {
    */
   disconnect(did?: string): Promise<void>;
   /**
+   * Opens the person's account home in a window of its own, at the account
+   * this app acts for: its settings, or a `section` of them such as
+   * `notifications`. The home is never framed, since it holds the keys. Call
+   * it from a click.
+   */
+  openHome(section?: string): void;
+  /**
    * Offers the person automations that notify them — "notify me when…" — once connected.
    * Opens the home; call it from a click.
    * @returns What they kept
@@ -136,6 +145,21 @@ export interface MincaConnection {
 
 const accountsOf = (kept: ReadonlyArray<KeptGrant>): ReadonlyArray<ConnectedAccount> =>
   kept.map(({ grant }) => Object.freeze({ did: grant.did, name: grant.name, expiresAt: grant.expiresAt }));
+
+/**
+ * Opens the account home in a window of its own, at the account a connection
+ * acts for: `connection.openHome`, for a connection made some other way.
+ */
+export function openAccountHome(
+  {
+    home,
+    grant,
+  }: { readonly home: string; readonly grant: { readonly home: string; readonly did: string } | null },
+  section?: string,
+): void {
+  const link = accountHomeLink(grant?.home ?? home, grant?.did ?? null, section);
+  globalThis.open(link, 'minca-account', popupFeatures(720, 820));
+}
 
 export function createMincaConnection(config: MincaConnectionConfig): MincaConnection {
   const storage = defaultStorage(config.storage);
@@ -319,6 +343,8 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
       const target = did ?? state.grant?.did;
       if (target) await leave(target, null);
     },
+
+    openHome: (section) => openAccountHome(state, section),
 
     async propose(automations) {
       if (!state.grant) throw new Error('Connect to your account home first.');

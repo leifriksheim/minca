@@ -242,10 +242,7 @@ export function ContactsView({
         </section>
       )}
 
-      <details>
-        <summary>Other ways to connect</summary>
-        <Inbox inbox={inbox} act={act} onKnocked={setNotice} />
-      </details>
+      <Inbox inbox={inbox} act={act} onKnocked={setNotice} />
 
       {blocked.length > 0 && (
         <details>
@@ -324,11 +321,6 @@ function FindPeople({
           autoComplete="off"
           spellCheck={false}
         />
-        {query && (
-          <button data-intent="ghost" data-icon onClick={() => setQuery('')} aria-label="Clear">
-            ×
-          </button>
-        )}
       </div>
 
       {lookup.status === 'found' && (
@@ -578,9 +570,9 @@ function Rename({
 }
 
 /**
- * The inbox under the username: a link anyone can use to ask to become your
- * contact, a way to knock with a code someone gave you, and replacing or
- * clearing it when it is flooded.
+ * The inbox under the username, as two rows: its link to hand out, and adding
+ * someone by theirs. Clearing a flood and replacing it are rare, so they wait
+ * behind the first row's menu.
  */
 function Inbox({
   inbox,
@@ -596,51 +588,61 @@ function Inbox({
   const { copied, copy } = useCopy();
 
   return (
-    <div className="stack">
-      <small>
-        Your username leads to your inbox.
-        <Info label="About your inbox">
-          You can also hand out its link, which works without a username, or knock with a code someone gave
-          you. Replace the inbox and old links lead nowhere; your contacts stay.
-        </Info>
-      </small>
-      <div className="row">
-        {inbox ? (
-          <button data-intent="ghost" onClick={() => copy(inboxLink(inbox.code))}>
-            {copied ? 'Copied' : 'Copy inbox link'}
-          </button>
-        ) : (
-          <button data-intent="ghost" onClick={() => void act(() => node.inbox.open())}>
-            Open your inbox
-          </button>
-        )}
-        <button data-intent="ghost" onClick={() => setKnocking(true)}>
-          Use a link or code
-        </button>
-        {inbox && (
-          <>
-            <button
-              data-intent="ghost"
-              onClick={() => void act(() => node.inbox.clear())}
-              title="Clear every knock waiting, for an inbox someone is flooding"
-            >
-              Clear waiting requests
+    <section className="stack" aria-label="Other ways to connect">
+      <h2>Other ways to connect</h2>
+      <ul role="list">
+        <li className="row">
+          <span className="stack truncate" data-gap="tight">
+            <strong>Your inbox link</strong>
+            <small>
+              Where your username leads. Anyone with it can ask to connect.
+              <Info label="About your inbox">
+                The link works without a username too. Replace the inbox and old links lead nowhere; your
+                contacts stay.
+              </Info>
+            </small>
+          </span>
+          {inbox ? (
+            <>
+              <button data-intent="ghost" onClick={() => copy(inboxLink(inbox.code))}>
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+              <RowMenu
+                label="More for your inbox"
+                items={[
+                  {
+                    label: 'Clear waiting requests',
+                    onClick: () => void act(() => node.inbox.clear()),
+                  },
+                  {
+                    label: 'Replace inbox',
+                    danger: true,
+                    onClick: () =>
+                      confirmThen(
+                        'Links you shared stop working everywhere. Your username moves to the new inbox.',
+                        { title: 'Replace your inbox?', yes: 'Replace it' },
+                        () => act(() => node.inbox.rotate()),
+                      ),
+                  },
+                ]}
+              />
+            </>
+          ) : (
+            <button data-intent="ghost" onClick={() => void act(() => node.inbox.open())}>
+              Open it
             </button>
-            <button
-              data-intent="danger"
-              onClick={() =>
-                confirmThen(
-                  'Links you shared stop working everywhere. Your username moves to the new inbox.',
-                  { title: 'Replace your inbox?', yes: 'Replace it' },
-                  () => act(() => node.inbox.rotate()),
-                )
-              }
-            >
-              Replace inbox
-            </button>
-          </>
-        )}
-      </div>
+          )}
+        </li>
+        <li className="row">
+          <span className="stack truncate" data-gap="tight">
+            <strong>Someone’s link or code</strong>
+            <small>Ask them to connect with what they sent you.</small>
+          </span>
+          <button data-intent="ghost" onClick={() => setKnocking(true)}>
+            Use it
+          </button>
+        </li>
+      </ul>
       {knocking && (
         <KnockDialog
           onClose={() => setKnocking(false)}
@@ -653,7 +655,7 @@ function Inbox({
           }}
         />
       )}
-    </div>
+    </section>
   );
 }
 

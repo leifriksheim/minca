@@ -29,3 +29,67 @@
   object-fit: cover;
   border-radius: 25%;
 }
+
+/* A group's members, overlapping, each ringed in the row's colour so the edges read */
+.faces {
+  --ring: var(--color-surface);
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+
+  & > * + * {
+    margin-left: -6px;
+  }
+
+  /* Earlier faces lie on top, so each online dot on a right edge shows */
+  & > :nth-child(1) {
+    z-index: 4;
+  }
+  & > :nth-child(2) {
+    z-index: 3;
+  }
+  & > :nth-child(3) {
+    z-index: 2;
+  }
+  & > :nth-child(4) {
+    z-index: 1;
+  }
+}
+
+:hover > .faces {
+  --ring: var(--color-sunken);
+}
+
+.face {
+  position: relative;
+  display: inline-flex;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.online {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-good);
+  box-shadow: 0 0 0 1.5px var(--ring);
+}
+
+/* How many more, a face of its own */
+.more {
+  display: inline-grid;
+  place-items: center;
+  position: relative;
+  min-width: 24px;
+  height: 24px;
+  /* Room on the left for the face it tucks under */
+  padding: 0 5px 0 9px;
+  border-radius: 12px;
+  background: var(--color-divider);
+  box-shadow: 0 0 0 2px var(--ring);
+  color: var(--color-text);
+  font: 600 11px / 1 var(--font-body);
+}

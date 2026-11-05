@@ -218,15 +218,16 @@ function Room({
 
   return (
     <>
-      <header className={`row ${styles.title}`}>
+      {/* Faces and names, not a title with actions: a row, not the layout's header */}
+      <div className={`row ${styles.title}`}>
         <Faces dids={others} />
         <span className="stack truncate" data-gap="tight">
           <strong className="truncate">{names}</strong>
-          <small>
+          <small className="row" data-gap="tight">
             <Icon name="lock" size={11} /> Sealed for the people in this conversation
           </small>
         </span>
-      </header>
+      </div>
 
       <div ref={scroller} className={`stack ${styles.messages}`}>
         {messages.length === 0 && (

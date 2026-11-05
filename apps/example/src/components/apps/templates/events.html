@@ -18,7 +18,7 @@
     useFile,
     attach,
   } = ui;
-  const { Icon } = ui;
+  const { Icon, RowMenu } = ui;
   const { PlaceField, NearButton, MapLink, useNear, placeLabel, distanceText, inReach, nearWhere, when } = ui;
   const EVENT = 'std.event';
   const RSVP = 'std.rsvp';
@@ -348,7 +348,6 @@
   /** One event's own page */
   function EventPage({ event, now, near, answersOf, onBack, onEdit }) {
     const mayAnswer = useCan('create', RSVP);
-    const [confirmDelete, setConfirmDelete] = useState(false);
     const { body } = event;
     const k = kindOf(body.category);
     const hosting = event.mine;
@@ -366,33 +365,33 @@
         </div>
         ${cancelled && html`<span class="tag" data-tone="danger">Cancelled</span>`}
         ${past && !cancelled && html`<span class="tag">Ended</span>`}
+        ${
+          hosting &&
+          html`<${RowMenu}
+            label="More for this event"
+            items=${[
+              { label: 'Edit', onClick: onEdit },
+              !past && {
+                label: cancelled ? 'Restore event' : 'Cancel event',
+                onClick: () =>
+                  minca.update(event.key, { ...body, status: cancelled ? 'confirmed' : 'cancelled' }),
+              },
+              {
+                label: 'Delete',
+                danger: true,
+                confirm: 'Delete this event for everyone?',
+                onClick: () => {
+                  onBack();
+                  minca.remove(event.key);
+                },
+              },
+            ]}
+          />`
+        }
       </header>
       <div class="row" data-spread>
         ${mayAnswer && !past && !cancelled && html`<${RsvpButtons} event=${event} answers=${answers} />`}
         <button onClick=${() => download(event)}>Add to calendar</button>
-        ${
-          hosting &&
-          html`<button onClick=${onEdit}>Edit</button>
-            ${
-              !past &&
-              html`<button
-                onClick=${() => minca.update(event.key, { ...body, status: cancelled ? 'confirmed' : 'cancelled' })}
-              >
-                ${cancelled ? 'Restore event' : 'Cancel event'}
-              </button>`
-            }
-            <button
-              data-intent="danger"
-              onBlur=${() => setConfirmDelete(false)}
-              onClick=${() => {
-                if (!confirmDelete) return setConfirmDelete(true);
-                onBack();
-                minca.remove(event.key);
-              }}
-            >
-              ${confirmDelete ? 'Delete for everyone?' : 'Delete'}
-            </button>`
-        }
       </div>
       <section>
         <h3>Details</h3>

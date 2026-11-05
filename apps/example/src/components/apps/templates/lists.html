@@ -13,7 +13,7 @@
     Empty,
     positionBetween,
   } = ui;
-  const { Icon } = ui;
+  const { Icon, RowMenu } = ui;
   const LIST = 'std.list';
   const ITEM = 'std.list-item';
   /** The kinds of std.list this app shows: other apps keep lists too, like the categories of files */
@@ -65,6 +65,14 @@
     const touched = (list) =>
       itemsOf(list.key).reduce((last, i) => (i.updatedAt > last ? i.updatedAt : last), list.updatedAt);
     const sorted = [...lists].sort((a, b) => touched(b).localeCompare(touched(a)));
+    // Done: something on it, and all of it ticked. The rest, empty ones too, come first.
+    const isDone = (list) => {
+      const all = itemsOf(list.key);
+      return all.length > 0 && all.every((i) => i.body.checked);
+    };
+    const done = sorted.filter(isDone);
+    const row = (list) =>
+      html`<${ListRow} key=${list.key} list=${list} items=${itemsOf(list.key)} go=${go} />`;
     const create = async (title) => {
       const made = await minca.put(LIST, { title, kind: 'checklist' });
       go(made.key, title);
@@ -72,28 +80,104 @@
     return html`<main>
       ${sorted.length === 0 && html`<${Empty} shape="tick" colour="peach" title="No lists yet" text="Start one for groceries, packing or the week." />`}
       <ul role="list" aria-label="Lists">
-        ${sorted.map((list) => {
-          const all = itemsOf(list.key);
-          const left = all.filter((i) => !i.body.checked).length;
-          return html`<li key=${list.key}>
-            <button data-intent="open" onClick=${() => go(list.key, titleOf(list))}>
-              <strong class="truncate">${list.body.icon ? `${list.body.icon} ` : ''}${titleOf(list)}</strong>
-              <small>${all.length === 0 ? 'Empty' : left === 0 ? 'All done' : `${left} left`}</small>
-            </button>
-          </li>`;
-        })}
+        ${sorted.filter((list) => !isDone(list)).map(row)}
         ${mayCreate && html`<li><${AddRow} placeholder="New list" onAdd=${create} keep=${false} /></li>`}
       </ul>
+      ${
+        done.length > 0 &&
+        html`<section>
+          <h2>Done <span class="tag">${done.length}</span></h2>
+          <ul role="list" aria-label="Done">
+            ${done.map(row)}
+          </ul>
+        </section>`
+      }
     </main>`;
+  }
+
+  /** A list in the overview: a tap opens it, and "…" renames or deletes it */
+  function ListRow({ list, items, go }) {
+    const mayRename = useCan('edit', list.key);
+    const mayDelete = useCan('delete', list.key);
+    const [renaming, setRenaming] = useState(false);
+    const left = items.filter((i) => !i.body.checked).length;
+    const title = titleOf(list);
+    const remove = async () => {
+      // Its items first, so none is left on a list that is gone; one that can't go stays, harmlessly.
+      await Promise.allSettled(items.map((i) => minca.remove(i.key)));
+      await minca.remove(list.key);
+    };
+    if (renaming)
+      return html`<li class="row">
+        <${NameField}
+          initial=${title}
+          onDone=${() => setRenaming(false)}
+          onSave=${(next) => minca.update(list.key, { ...list.body, title: next })}
+        />
+      </li>`;
+    return html`<li class="row">
+      <button data-intent="open" class="truncate" onClick=${() => go(list.key, title)}>
+        <strong class="truncate">${list.body.icon ? `${list.body.icon} ` : ''}${title}</strong>
+        <small>${items.length === 0 ? 'Empty' : left === 0 ? 'All done' : `${left} left`}</small>
+      </button>
+      <${RowMenu}
+        label=${`More for ${title}`}
+        items=${[
+          mayRename && { label: 'Rename', onClick: () => setRenaming(true) },
+          mayDelete && {
+            label: 'Delete',
+            danger: true,
+            confirm: "Delete this list and what's on it, for everyone?",
+            onClick: remove,
+          },
+        ]}
+      />
+    </li>`;
+  }
+
+  /**
+   * A row's name, typed over in place: Enter or leaving it saves, Escape keeps what was there.
+   * The row's own field, as adding one is, so renaming looks like the list it is in.
+   */
+  function NameField({ initial, onSave, onDone }) {
+    const [text, setText] = useState(initial);
+    const field = useRef(null);
+    const kept = useRef(false);
+    useEffect(() => {
+      field.current?.focus();
+      field.current?.select();
+    }, []);
+    const save = () => {
+      if (kept.current) return;
+      kept.current = true;
+      const next = text.trim();
+      onDone();
+      if (next && next !== initial) onSave(next);
+    };
+    return html`<span class="stack truncate" data-gap="tight">
+      <input
+        ref=${field}
+        value=${text}
+        aria-label="Name"
+        maxlength="200"
+        enterkeyhint="done"
+        onInput=${(e) => setText(e.currentTarget.value)}
+        onBlur=${save}
+        onKeyDown=${(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur();
+          if (e.key === 'Escape') {
+            kept.current = true;
+            onDone();
+          }
+        }}
+      />
+      <small>Enter to save, Esc to leave it</small>
+    </span>`;
   }
 
   /** One list: what is left, a row to add to it, then what is done */
   function List({ list, items, go }) {
     const mayAdd = useCan('create', ITEM);
-    const mayDelete = useCan('delete', list.key);
-    const mayRename = useCan('edit', list.key);
-    const [renaming, setRenaming] = useState(false);
-    const [deleting, setDeleting] = useState(false);
     // The bar names the list, and again when someone renames it.
     useEffect(() => go(list.key, titleOf(list)), [list.key, titleOf(list)]);
 
@@ -105,31 +189,8 @@
         { text, checked: false, position: positionBetween(todo.at(-1)?.body.position) },
         { links: [{ rel: 'in', to: list.key }] },
       );
-    const removeList = async () => {
-      // Its items first, so none is left on a list that is gone; one that can't go stays, harmlessly.
-      await Promise.allSettled(items.map((i) => minca.remove(i.key)));
-      await minca.remove(list.key);
-      go(null);
-    };
 
     return html`<main>
-      ${
-        renaming &&
-        html`<ul role="list">
-          <li>
-            <${AddRow}
-              placeholder="Name"
-              initial=${titleOf(list)}
-              keep=${false}
-              onAdd=${async (title) => {
-                await minca.update(list.key, { ...list.body, title });
-                setRenaming(false);
-              }}
-              onCancel=${() => setRenaming(false)}
-            />
-          </li>
-        </ul>`
-      }
       <ul role="list" aria-label="To do">
         ${todo.map((item) => html`<${Item} key=${item.key} item=${item} />`)}
         ${mayAdd && html`<li><${AddRow} placeholder="Add an item" onAdd=${add} keep=${true} /></li>`}
@@ -147,16 +208,6 @@
           </ul>
         </section>`
       }
-      <div class="row" data-gap="tight">
-        ${mayRename && !renaming && html`<button data-intent="ghost" onClick=${() => setRenaming(true)}>Rename</button>`}
-        ${
-          mayDelete &&
-          (deleting
-            ? html`<button data-intent="danger" onClick=${removeList}>Delete for everyone</button>
-                <button data-intent="ghost" onClick=${() => setDeleting(false)}>Keep it</button>`
-            : html`<button data-intent="ghost" onClick=${() => setDeleting(true)}>Delete list</button>`)
-        }
-      </div>
     </main>`;
   }
 
@@ -224,8 +275,8 @@
   }
 
   /** A row to type something new into: Enter adds it (no button, so the row never changes size), and with `keep` the field stays for the next */
-  function AddRow({ placeholder, onAdd, keep, initial = '', onCancel }) {
-    const [text, setText] = useState(initial);
+  function AddRow({ placeholder, onAdd, keep }) {
+    const [text, setText] = useState('');
     const [busy, setBusy] = useState(false);
     const submit = async () => {
       const value = text.trim();
@@ -251,10 +302,8 @@
         placeholder=${placeholder}
         aria-label=${placeholder}
         maxlength="200"
-        autofocus=${!!onCancel}
         enterkeyhint=${keep ? 'next' : 'done'}
         onInput=${(e) => setText(e.currentTarget.value)}
-        onKeyDown=${(e) => e.key === 'Escape' && onCancel?.()}
       />
     </form>`;
   }

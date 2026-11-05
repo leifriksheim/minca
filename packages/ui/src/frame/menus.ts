@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { useRecords, usePeople } from './hooks';
 import { html } from './html';
 import { Icon } from './shapes';
+import { Modal } from './modal';
 
 const REACTION = 'std.reaction';
 
@@ -62,7 +63,7 @@ const EMOJIS = [
 ];
 
 /** Open until a pick, Escape, or a press anywhere outside `box` */
-function useOpen() {
+export function useOpen() {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -140,6 +141,88 @@ export function AddMenu({
           event.currentTarget.value = '';
         }}
       />`
+    }
+  </div>`;
+}
+
+/** One thing a row's menu does; with `confirm`, the question asked before it is done */
+interface RowAction {
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+  confirm?: string;
+}
+
+/**
+ * "…" at the end of a row: the lesser things to do with it (rename, delete),
+ * so a screen isn't lined with buttons. Opens below, from the right edge. An
+ * item with `confirm` asks first, in a dialog.
+ */
+export function RowMenu({
+  label,
+  items,
+}: {
+  label: string;
+  items: ReadonlyArray<RowAction | false | null | undefined>;
+}) {
+  const { open, setOpen, box } = useOpen();
+  const [asking, setAsking] = useState<RowAction | null>(null);
+  const shown = items.filter((item) => !!item);
+  if (shown.length === 0) return null;
+  const pick = (item: RowAction) => {
+    setOpen(false);
+    if (item.confirm) setAsking(item);
+    else item.onClick();
+  };
+  return html`<div class="anchor down" ref=${box}>
+    <button
+      type="button"
+      data-intent="ghost"
+      data-icon
+      aria-label=${label}
+      title=${label}
+      aria-haspopup="menu"
+      aria-expanded=${open}
+      onClick=${() => setOpen(!open)}
+    >
+      <${Icon} name="menu" />
+    </button>
+    ${
+      open &&
+      html`<menu role="menu">
+        ${shown.map(
+          (item) =>
+            html`<li key=${item.label}>
+              <button
+                type="button"
+                role="menuitem"
+                data-intent=${item.danger ? 'danger' : undefined}
+                onClick=${() => pick(item)}
+              >
+                ${item.label}
+              </button>
+            </li>`,
+        )}
+      </menu>`
+    }
+    ${
+      asking &&
+      html`<${Modal} title=${asking.confirm ?? ''} width=${400} onClose=${() => setAsking(null)}>
+        <div class="row" data-spread>
+          <small>It can't be undone.</small>
+          <button type="button" data-intent="ghost" onClick=${() => setAsking(null)}>Keep it</button>
+          <button
+            type="button"
+            data-intent=${asking.danger ? 'danger' : 'primary'}
+            onClick=${() => {
+              setAsking(null);
+              asking.onClick();
+            }}
+          >
+            ${asking.label}
+          </button>
+        </div>
+      </${Modal}>`
     }
   </div>`;
 }

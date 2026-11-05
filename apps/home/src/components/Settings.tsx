@@ -2,10 +2,6 @@ import { useEffect, useState, type ReactNode } from 'react';
 import type { CarrierSummary, P2PNode } from '@minca/core/node';
 import {
   STAY_SIGNED_IN_CHOICES,
-  passwordStrength,
-  accountCredentialName,
-  offerToSave,
-  recoveryKit,
   connectionKey,
   type AuthState,
   type Connection,
@@ -22,6 +18,7 @@ import { shapeFor, type ShapeKind } from '@minca/ui/shapes';
 import type { ShapeColour } from '@minca/ui/tokens';
 import { message, useAction, useCopy } from '@minca/app-shared/action';
 import { PairPhone } from './PairPhone';
+import { PasswordForm, RecoveryCodeShown, setPassword } from './credentials';
 import { ConfirmItsYou } from './ConfirmItsYou';
 import { Hosting } from './Hosting';
 import { Notifications } from './Notifications';
@@ -209,23 +206,19 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
               <PasswordForm
                 account={session.account.name}
                 busy={state.busy}
-                onSave={async (password) => {
+                onSave={(password) => {
                   const save = async () => {
-                    const ok = await auth.setPassword(password);
-                    if (ok) {
-                      const filedAs = accountCredentialName(session.account.name);
-                      await offerToSave(filedAs, password, filedAs);
-                      setChangingPassword(false);
-                    }
-                    return ok;
+                    if (await setPassword(auth, session.account.name, password)) setChangingPassword(false);
                   };
                   // Open longer than the proof lasts: ask again, then save.
-                  if (auth.isConfirmed()) return save();
-                  setWaiting({ why: 'change the password', then: () => void save() });
-                  return false;
+                  if (auth.isConfirmed()) void save();
+                  else setWaiting({ why: 'change the password', then: () => void save() });
                 }}
-                onCancel={() => setChangingPassword(false)}
-              />
+              >
+                <button type="button" onClick={() => setChangingPassword(false)} disabled={state.busy}>
+                  Cancel
+                </button>
+              </PasswordForm>
             )}
             {changingPassword && state.error && <p role="alert">{state.error.message}</p>}
             {waiting && (
@@ -595,72 +588,6 @@ function PageHead({ title, line }: { title: string; line: string }) {
   );
 }
 
-/** A new password, twice; a manager fills both and offers to save it under the account's name */
-function PasswordForm({
-  account,
-  busy,
-  onSave,
-  onCancel,
-}: {
-  account: string;
-  busy: boolean;
-  onSave: (password: string) => Promise<boolean>;
-  onCancel: () => void;
-}) {
-  const [password, setPassword] = useState('');
-  const [again, setAgain] = useState('');
-  const [mismatch, setMismatch] = useState(false);
-  return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        setMismatch(password !== again);
-        if (password === again) void onSave(password);
-      }}
-      className="stack"
-    >
-      <input
-        type="text"
-        name="username"
-        autoComplete="username"
-        value={accountCredentialName(account)}
-        readOnly
-        aria-label="Account"
-      />
-      <input
-        type="password"
-        name="password"
-        autoComplete="new-password"
-        placeholder="New password"
-        value={password}
-        onChange={(event) => setPassword(event.target.value)}
-        autoFocus
-        aria-label="New password"
-        aria-describedby="password-strength"
-      />
-      <Strength password={password} />
-      <input
-        type="password"
-        name="confirm-password"
-        autoComplete="new-password"
-        placeholder="The same again"
-        value={again}
-        onChange={(event) => setAgain(event.target.value)}
-        aria-label="Confirm password"
-      />
-      {mismatch && <p role="alert">Those two do not match.</p>}
-      <div className="row">
-        <button type="submit" disabled={busy || !password} data-intent="primary">
-          {busy ? 'Saving…' : 'Save password'}
-        </button>
-        <button type="button" onClick={onCancel} disabled={busy}>
-          Cancel
-        </button>
-      </div>
-    </form>
-  );
-}
-
 /**
  * The recovery code, hidden until asked for. It is the account itself, so it
  * is shown only on purpose, and never offered to a password manager as a login.
@@ -668,17 +595,6 @@ function PasswordForm({
 function RecoveryCode({ reveal, name, did }: { reveal: () => string | null; name: string; did: string }) {
   const [code, setCode] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
-  const { copied, copy } = useCopy();
-  const download = () => {
-    if (!code) return;
-    const kit = recoveryKit({ code, name, did });
-    const url = URL.createObjectURL(new Blob([kit.text], { type: 'text/plain' }));
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = kit.filename;
-    anchor.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  };
   return (
     <Section
       title="Recovery code"
@@ -686,12 +602,9 @@ function RecoveryCode({ reveal, name, did }: { reveal: () => string | null; name
     >
       {code ? (
         <>
-          <pre>{code}</pre>
-          <div className="row">
-            <button onClick={() => copy(code)}>{copied ? 'Copied' : 'Copy'}</button>
-            <button onClick={download}>Download</button>
+          <RecoveryCodeShown code={code} name={name} did={did}>
             <button onClick={() => setCode(null)}>Hide</button>
-          </div>
+          </RecoveryCodeShown>
           <small>Anyone who sees this can open your account.</small>
         </>
       ) : asking ? (
@@ -956,23 +869,6 @@ function RemoveAccount({ alone, apps, openApps }: { alone: boolean; apps: number
 }
 
 /** How strong a new password is, as it is typed: a warning, never a refusal */
-function Strength({ password }: { password: string }) {
-  const check = passwordStrength(password);
-  const filled = password ? { weak: 1, fair: 2, strong: 3 }[check.strength] : 0;
-  return (
-    <div className="stack">
-      <meter aria-hidden min={0} max={3} low={1.5} high={2.5} optimum={3} value={filled} />
-      <small
-        id="password-strength"
-        aria-live="polite"
-        data-tone={password && check.strength === 'weak' ? 'danger' : undefined}
-      >
-        {check.hint || 'Any password works. Let your password manager make a strong one.'}
-      </small>
-    </div>
-  );
-}
-
 /**
  * The account's carriers, one per key, and which are online now. Carriers are
  * in the account registry, so every device lists them, not only the home that

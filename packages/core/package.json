@@ -46,11 +46,6 @@
       "types": "./dist/session/index.d.ts",
       "import": "./dist/session/index.js"
     },
-    "./elements": {
-      "@minca/source": "./src/elements/index.ts",
-      "types": "./dist/elements/index.d.ts",
-      "import": "./dist/elements/index.js"
-    },
     "./inbox": {
       "@minca/source": "./src/inbox/index.ts",
       "types": "./dist/inbox/index.d.ts",

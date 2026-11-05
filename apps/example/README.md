@@ -293,7 +293,7 @@ src/
   contacts.ts              # inbox links, and the contact list kept current
   webmcp.ts                # node operations as WebMCP tools
   derive/                  # pure helpers: UI from schemas and links, names from profiles
-  components/              # spaces, collections, records, security (sign-in is <minca-auth>)
+  components/              # spaces, collections, records, security (sign-in is at the account home)
 ```
 
 ## Still to do

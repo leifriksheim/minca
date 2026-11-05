@@ -12,6 +12,7 @@ import {
   readAccountHint,
 } from '@minca/core/session';
 import { CONFIGURED_HOSTS, CONFIGURED_NODES, relayUrls } from '@minca/app-shared/relay';
+import { NAMES_DOMAIN } from '@minca/app-shared/usernames';
 
 /** Whether this is the page apps open to ask for access, which closes once they have their answer */
 export const isConnectPage = (globalThis.location.pathname.replace(/\/+$/, '') || '/') === '/connect';
@@ -30,7 +31,7 @@ export const auth = createMincaAuth({
   appName: 'Minca',
   network: { relays: relayUrls(), nodes: CONFIGURED_NODES, hosts: CONFIGURED_HOSTS },
   // A new account picks its username as it is made.
-  usernames: import.meta.env.VITE_NAMES_DOMAIN || 'minca.social',
+  usernames: NAMES_DOMAIN,
   // A pod is only kept up to date while the home is open, so it is offered on
   // the account page, not on one that closes.
   offerPod: !isConnectPage,
