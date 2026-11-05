@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useAccountPicture, useAuth, useSession } from '@minca/react';
 import { Avatar } from '@minca/app-shared/Avatar';
-import { rememberedPicture, useRememberPicture } from '@minca/app-shared/rememberedPictures';
+import { useRememberPicture } from '@minca/app-shared/rememberedPictures';
 import { useDismiss } from '@minca/app-shared/useDismiss';
 import { useCopy } from '@minca/app-shared/action';
 import styles from './AccountSwitcher.module.css';
@@ -116,7 +116,7 @@ export function AccountSwitcher() {
                   onClick={() => void switchTo(account.id)}
                   disabled={state.busy}
                 >
-                  <Avatar did={account.did} size={28} round src={rememberedPicture(account.did)} />
+                  <Avatar did={account.did} size={28} round />
                   <span className="stack" data-gap="tight">
                     <strong>{account.name}</strong>
                     <small>{named(account.name) > 1 ? `Switch · ${shortId(account.did)}` : 'Switch'}</small>

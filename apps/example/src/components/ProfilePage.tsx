@@ -12,7 +12,7 @@ import { message } from '@minca/app-shared/action';
 import { forgetPicture } from '@minca/app-shared/rememberedPictures';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { shortUsername } from '@minca/app-shared/usernames';
-import { AccountActions, openAccountHome } from './AccountMenu';
+import { AccountActions } from './AccountMenu';
 import { DownloadsView } from './DownloadsView';
 import { usePopover } from './usePopover';
 import { shrinkImage } from '@minca/app-shared/images';
@@ -26,8 +26,7 @@ import styles from './ProfilePage.module.css';
  * app. What guards the account itself, its keys, devices and backups, stays in the account home.
  */
 export function ProfilePage() {
-  const account = useAccount();
-  const { state } = useConnection();
+  const { connection } = useConnection();
   const node = useNode();
   const me = useMyName();
   const found = useAsync(() => node.inbox.get(), [node]);
@@ -55,7 +54,7 @@ export function ProfilePage() {
             <small>@{shortUsername(username)}</small>
           ) : (
             found.status === 'done' && (
-              <button data-intent="ghost" onClick={() => openAccountHome(state.home, account.did)}>
+              <button data-intent="ghost" onClick={() => connection.openHome()}>
                 Pick a username
               </button>
             )

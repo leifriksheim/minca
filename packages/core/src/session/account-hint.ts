@@ -16,13 +16,13 @@ const HINT = /[#&]account=([^&]+)/;
  * The address of the account page beside the home's connect page, saying
  * which account the app acts for.
  * @param home The home's address, as the connection remembers it
- * @param did The account the app acts for
+ * @param did The account the app acts for, or null before it acts for one
  * @param section A part of the page to open at, such as `notifications`
  */
-export function accountHomeLink(home: string, did: string, section?: string): string {
+export function accountHomeLink(home: string, did: string | null, section?: string): string {
   const url = new URL('.', home);
-  const hint = `account=${encodeURIComponent(did)}`;
-  url.hash = section ? `${section}&${hint}` : hint;
+  const hint = did ? `account=${encodeURIComponent(did)}` : '';
+  url.hash = [section && encodeURIComponent(section), hint].filter(Boolean).join('&');
   return url.href;
 }
 

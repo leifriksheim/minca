@@ -9,7 +9,6 @@ import {
   type OwnAutomationView,
   type P2PNode,
 } from '@minca/core';
-import { accountHomeLink, popupFeatures } from '@minca/core/session';
 import { notifyOn, type AppAutomation } from '@minca/core/schemas';
 import { TEMPLATES } from './components/apps/templates';
 import { madeNotify } from './components/apps/entries';
@@ -48,7 +47,7 @@ const proposalKey = (proposal: AutomationProposal) =>
 
 /** Asks the browser, then the home, from the click; what the home kept counts as on at once, before the account space syncs */
 export function useAsk() {
-  const { connection, state } = useConnection();
+  const { connection } = useConnection();
   const [permission, setPermission] = useState(() => (supported() ? Notification.permission : 'denied'));
   const [error, setError] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
@@ -109,13 +108,7 @@ export function useAsk() {
     if (supported()) void Notification.requestPermission().then(setPermission);
   }, []);
 
-  const manage = useCallback(() => {
-    const did = state.grant?.did;
-    const url = did
-      ? accountHomeLink(state.home, did, 'notifications')
-      : `${new URL('.', state.home).href}#notifications`;
-    globalThis.open(url, 'minca-account', popupFeatures(720, 820));
-  }, [state.home, state.grant?.did]);
+  const manage = useCallback(() => connection.openHome('notifications'), [connection]);
 
   return { permission, error, asking, kept, ask, allow, manage };
 }

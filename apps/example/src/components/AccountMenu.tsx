@@ -1,9 +1,8 @@
 import { useState, type ReactNode } from 'react';
 import { useAccount, useAccountPicture, useConnection, useMyName } from '@minca/react';
-import { accountHomeLink, popupFeatures } from '@minca/core/session';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { ask } from '@minca/app-shared/Ask';
-import { forgetPicture, rememberedPicture } from '@minca/app-shared/rememberedPictures';
+import { forgetPicture } from '@minca/app-shared/rememberedPictures';
 import { usePopover } from './usePopover';
 import { useCopy } from '@minca/app-shared/action';
 import { useNavigate } from '@tanstack/react-router';
@@ -138,7 +137,7 @@ export function AccountActions({
   };
   const openHome = () => {
     onDone?.();
-    openAccountHome(state.home, account.did);
+    connection.openHome();
   };
 
   return (
@@ -164,7 +163,7 @@ export function AccountActions({
               onClick={() => switchTo(other.did)}
               className={`row ${styles.item} truncate`}
             >
-              <Avatar did={other.did} size={24} round src={rememberedPicture(other.did)} />
+              <Avatar did={other.did} size={24} round />
               <span className="truncate">{other.name}</span>
             </button>
             {/* Takes the account off this app only; it and its other apps carry on. */}
@@ -192,14 +191,6 @@ export function AccountActions({
       </Section>
     </>
   );
-}
-
-/**
- * The account home, in a window of its own: it holds the account's keys, so it is never framed. The
- * home may be signed in to another account, so the link says which one this app acts for.
- */
-export function openAccountHome(home: string, did: string) {
-  globalThis.open(accountHomeLink(home, did), 'minca-account', popupFeatures(720, 820));
 }
 
 /** What this device downloads before a file is opened, in a word or two */

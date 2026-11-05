@@ -3,3 +3,17 @@
   flex-shrink: 0;
   object-fit: cover;
 }
+
+/* A picture, with the account's shape on its corner */
+.face {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.badge {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  box-shadow: 0 0 0 2px var(--color-surface);
+}

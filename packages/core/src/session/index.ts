@@ -25,7 +25,7 @@ export type {
   GrantChoice,
   ProposeChoice,
 } from './auth.js';
-export { createMincaConnection } from './connection.js';
+export { createMincaConnection, openAccountHome } from './connection.js';
 export type {
   MincaConnection,
   MincaConnectionConfig,
@@ -85,7 +85,7 @@ export type { Place, PodContents } from './places.js';
 export { createStaySignedIn, STAY_SIGNED_IN_CHOICES, DEFAULT_STAY_SIGNED_IN } from './stay-signed-in.js';
 export type { StaySignedIn, StaySignedInStore, KeyValueStore } from './stay-signed-in.js';
 export { offerToPhone, receiveFromDesktop, readPairingTicket, clearPairingTicket } from './pairing.js';
-export { accountHomeLink, readAccountHint, clearAccountHint } from './account-hint.js';
+export { readAccountHint, clearAccountHint } from './account-hint.js';
 export { popupFeatures } from './popup.js';
 export type { PairingStage, PairingOffer, Handover } from './pairing.js';
 export {

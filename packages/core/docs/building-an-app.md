@@ -52,6 +52,22 @@ the spaces it was given and nowhere else.
 The connection is remembered between visits, and lasts a week. When it runs
 out, `state.status` is `'expired'`, and connecting again renews it.
 
+## The account home
+
+The person's account, its settings and its other apps live at their home, not
+in your app. Open it from a click, for the account your app acts for:
+
+```ts
+import type { MincaConnection } from '@minca/core/session';
+declare const connection: MincaConnection;
+// ---cut---
+connection.openHome(); // the account page
+connection.openHome('notifications'); // at a section of it
+```
+
+It opens in a window of its own, centred on yours. The home holds the
+person's keys, so it is never shown inside your page.
+
 ## A collection
 
 Records live in collections, like rows in a table. Say what a to-do looks

@@ -1,0 +1,12 @@
+/*
+ * The username a password manager files a credential under: off-screen, but deliberately not
+ * display: none, which managers do not count as a username.
+ */
+.offscreen {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
