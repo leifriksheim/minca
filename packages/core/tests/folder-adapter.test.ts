@@ -12,6 +12,7 @@ import {
   createFolderAdapter,
   resolvePath,
   writeFolderFile,
+  type DirectoryHandleLike,
   type FolderAdapter,
 } from '../src/storage/folder-adapter.js';
 import { reconcileFolder } from '../src/storage/folder-reconcile.js';
@@ -44,6 +45,23 @@ async function makeVersion(text: string, space?: string, collection = COLLECTION
   const did = publicKeyToDid(await provider.exportPublicKey(keys.publicKey), P256_MULTICODEC);
   const unsigned = createVersion({ author: did, collection, body: { text }, ...(space ? { space } : {}) });
   return await signer.sign(unsigned, keys.privateKey);
+}
+
+/** A directory whose listings take a tick per name, as a big one on a real disk does */
+function slowListing(dir: DirectoryHandleLike): DirectoryHandleLike {
+  return {
+    name: dir.name,
+    getFileHandle: (name, options) => dir.getFileHandle(name, options),
+    removeEntry: (name, options) => dir.removeEntry(name, options),
+    values: () => dir.values(),
+    getDirectoryHandle: async (name, options) => slowListing(await dir.getDirectoryHandle(name, options)),
+    async *keys() {
+      for await (const name of dir.keys()) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        yield name;
+      }
+    },
+  };
 }
 
 describe('folder adapter — key/value storage', () => {
@@ -112,6 +130,57 @@ describe('folder adapter — key/value storage', () => {
     assert.equal(utf8Decode((await adapter.get('kept'))!), 'y');
     assert.equal(await adapter.get('gone'), null);
   });
+
+  test('one of its own lists from memory: another writer’s entry shows once it reloads', async () => {
+    const folder = createMemoryDirectory();
+    const own = await createFolderAdapter(folder.handle, 'notes');
+    const other = await createFolderAdapter(folder.open(), 'notes', { shared: true });
+    await own.put('space:mine', utf8Encode('1'));
+
+    // A listing reads no directory: with thousands of entries, every query read them all.
+    await other.put('space:theirs', utf8Encode('2'));
+    assert.deepEqual(await own.list('space:'), ['space:mine']);
+    assert.equal(await own.get('space:theirs'), null);
+
+    await own.reload();
+    assert.deepEqual((await own.list('space:')).sort(), ['space:mine', 'space:theirs']);
+    assert.equal(utf8Decode((await own.get('space:theirs'))!), '2');
+  });
+
+  test('closed, it reads the disk: anything still in flight never finds the store empty', async () => {
+    const folder = createMemoryDirectory();
+    const adapter = await createFolderAdapter(folder.handle, 'notes');
+    await adapter.put('r/note', utf8Encode('current'));
+    await adapter.close();
+    assert.equal(utf8Decode((await adapter.get('r/note'))!), 'current');
+    assert.deepEqual(await adapter.list('r/'), ['r/note']);
+  });
+
+  test('reloads asked for at once run as one, and a write between them is kept', async () => {
+    const folder = createMemoryDirectory();
+    await (await createFolderAdapter(folder.handle, 'notes')).put('a/old', utf8Encode('x'));
+    const adapter = await createFolderAdapter(slowListing(folder.open()), 'notes');
+
+    const first = adapter.reload();
+    const second = adapter.reload();
+    await adapter.put('a/new', utf8Encode('y'));
+    await Promise.all([first, second]);
+    assert.deepEqual((await adapter.list('a/')).sort(), ['a/new', 'a/old']);
+  });
+
+  test('while it reloads, every entry still reads, and one written meanwhile is kept', async () => {
+    const folder = createMemoryDirectory();
+    await (await createFolderAdapter(folder.handle, 'notes')).put('r/note', utf8Encode('current'));
+    const adapter = await createFolderAdapter(slowListing(folder.open()), 'notes');
+
+    // A disk lists a big directory slowly: a version judged meanwhile must still find the current one.
+    const reloading = adapter.reload();
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    assert.equal(utf8Decode((await adapter.get('r/note'))!), 'current');
+    await adapter.put('r/later', utf8Encode('written mid-reload'));
+    await reloading;
+    assert.deepEqual((await adapter.list('r/')).sort(), ['r/later', 'r/note']);
+  });
 });
 
 describe('folder adapter — versions', () => {
@@ -152,7 +221,7 @@ describe('two origins, one folder', () => {
   async function openOrigin(
     handle: ReturnType<typeof createMemoryDirectory>['handle'],
   ): Promise<{ adapter: FolderAdapter; storage: StorageProvider }> {
-    const adapter = await createFolderAdapter(handle, 'spaces/demo');
+    const adapter = await createFolderAdapter(handle, 'spaces/demo', { shared: true });
     return { adapter, storage: createStorageProvider(adapter) };
   }
 

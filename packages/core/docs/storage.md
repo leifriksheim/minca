@@ -314,6 +314,17 @@ The library's adapters are IndexedDB ([above](#indexeddb)), a directory
 (`directoryStores`, for a data folder's registry and a node's stores on
 disk), a sealing wrapper, and one in memory for tests.
 
+A directory store keeps its versions and its entries' keys in memory, so a
+query or a listing reads no directory. It reads the keys again when the node
+reloads it. The values stay on disk, since they include file chunks. A data
+folder's registry is written by every app of the account and reloaded by
+none, so it reads the disk each time instead (`shared`).
+
+Since the keys are in memory, one process writes a directory store, or the
+node that has it open watches it: the daemon finds a command's writes to a
+space's store when it reloads, every two seconds. Until then a key another
+writer deleted is still listed, though it reads as missing.
+
 ## The store in memory
 
 A store reads its entries once, then keeps what it needs in memory: each

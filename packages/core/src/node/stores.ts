@@ -37,13 +37,14 @@ export function indexedDBStores(prefix: string): StoreFactory {
  * Stores in a directory on this device, one file per entry and per version.
  * A data folder others share is {@link folderStores}.
  * @param options.localKey Seals the registry. Without it nothing is sealed.
+ * @param options.shared Others write these stores too, and nothing reloads them: read from the disk each time.
  */
 export function directoryStores(
   directory: DirectoryHandleLike,
-  options: { readonly localKey?: CryptoKey | null } = {},
+  options: { readonly localKey?: CryptoKey | null; readonly shared?: boolean } = {},
 ): StoreFactory {
   return async (path, storeOptions) => {
-    const adapter = await createFolderAdapter(directory, path);
+    const adapter = await createFolderAdapter(directory, path, { shared: options.shared ?? false });
     return storeOptions?.seal && options.localKey
       ? createEncryptedAdapter(adapter, options.localKey)
       : adapter;
@@ -83,7 +84,8 @@ export function folderStores(
     throw new Error('A data folder needs `local`, somewhere outside it for this device’s own stores.');
   const local =
     options.local ?? indexedDBStores(`minca-pod:${(options.basePath ?? 'folder').replace(/\//g, ':')}`);
-  const registry = directoryStores(directory, { localKey: options.localKey ?? null });
+  // Every app and device of the account writes the registry, and nothing reloads it.
+  const registry = directoryStores(directory, { localKey: options.localKey ?? null, shared: true });
   const factory = (path: string, storeOptions?: StoreOptions) =>
     path === 'registry' ? registry(at(path), storeOptions) : local(path, storeOptions);
   return Object.assign(factory, { folder: createDirectoryBlobStore(directory, at(SEGMENTS)) });

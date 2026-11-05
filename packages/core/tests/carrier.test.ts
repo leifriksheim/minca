@@ -328,6 +328,39 @@ describe('a carrier', () => {
     await until(async () => !(await carries(node, made.id)()), 5000, 'the space left to stop being carried');
   });
 
+  test('opens each pass once while it stays, though it reads them all on every change', async () => {
+    const me = await account();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const home = await device(me, hub);
+    const first = await home.spaces.create({ name: 'First', visibility: 'private' });
+    const added = await home.carriers.add({ did: (await carrierKey()).did, name: 'Chrome' });
+    let derived = 0;
+    const node = await createCarrierNode({
+      key: (await carrierKey()).keys,
+      account: me.did,
+      carry: added.invite,
+      stores: memoryStores(),
+      network: onHub(hub),
+      provider: {
+        ...provider,
+        deriveKeyPairFromSeed: (seed: Uint8Array) => {
+          derived += 1;
+          return provider.deriveKeyPairFromSeed(seed);
+        },
+      },
+    });
+    open.push(node);
+    await until(carries(node, first.id), 5000, 'the first space to be carried');
+    const before = derived;
+
+    // Each new pass is a change to the carry space: every pass is read again, and only the new one opened.
+    const more = [];
+    for (const name of ['Second', 'Third'])
+      more.push(await home.spaces.create({ name, visibility: 'private' }));
+    for (const space of more) await until(carries(node, space.id), 5000, `${space.name} to be carried`);
+    assert.equal(derived - before, more.length);
+  });
+
   test('keeps the pod current while every app is closed', async () => {
     const me = await account();
     const friend = await account();
