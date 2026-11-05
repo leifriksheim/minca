@@ -71,7 +71,9 @@ h1 {
 }
 
 /* The front page: a hero on grid paper, the topics as colour tiles, what Minca is. */
+/* Fumadocs lays its pages out on named areas; a page of our own takes the main one too. */
 .home {
+  grid-area: main;
   width: 100%;
   max-width: 72rem;
   margin: 0 auto;
@@ -149,7 +151,7 @@ h1 {
 /* The topics, a colour each, in the shapes' order */
 .topics {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(18rem, 100%), 1fr));
   gap: 1rem;
   padding: 1rem 0 5rem;
 }
@@ -226,6 +228,8 @@ h1 {
 .about {
   max-width: 44rem;
   display: grid;
+  /* A track that can shrink, so the long lines in the pre scroll instead of widening the page */
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
   padding-top: 4rem;
   border-top: 1px solid var(--color-divider);
@@ -272,7 +276,7 @@ h1 {
 }
 .enables ul {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(15rem, 100%), 1fr));
   gap: 0.75rem;
   margin: 0;
   padding: 0;
@@ -309,4 +313,50 @@ h1 {
 }
 .enables li:nth-child(5n + 5) {
   --c: var(--color-hue-5);
+}
+
+/* On a phone: less air around everything, the pills side by side as far as they fit */
+@media (max-width: 40rem) {
+  .home {
+    padding: 0 1.25rem 4rem;
+  }
+  .hero {
+    padding: 4rem 0 3rem;
+  }
+  .hero::before {
+    inset: 0 -1.25rem;
+  }
+  .hero p {
+    margin: 1.25rem auto 1.75rem;
+    font-size: 1.0625rem;
+  }
+  .actions {
+    gap: 0.5rem;
+  }
+  .actions a {
+    padding: 0 1rem;
+  }
+  .topics {
+    padding-bottom: 3rem;
+  }
+  .topic {
+    flex-direction: row;
+    align-items: center;
+    gap: 1.25rem;
+    padding: 1.25rem;
+  }
+  .topic-icon {
+    flex: none;
+    width: 3rem;
+    height: 3rem;
+  }
+  .topic strong {
+    font-size: 1.1875rem;
+  }
+  .about {
+    padding-top: 3rem;
+  }
+  .about pre {
+    padding: 1rem;
+  }
 }

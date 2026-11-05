@@ -1,5 +1,6 @@
 /* The playground: numbered steps, each its words and something to try on the left, its code on the right. */
 .playground-page {
+  grid-area: main;
   width: 100%;
   max-width: 80rem;
   margin: 0 auto;
@@ -22,6 +23,8 @@
 
 .playground {
   display: grid;
+  /* A track that can shrink, so wide code scrolls inside its step */
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
   margin: 0;
   padding: 0;
@@ -172,6 +175,7 @@
   padding: 0 1.25rem;
   border-radius: var(--radius-control);
   font-weight: 500;
+  white-space: nowrap;
   transition: background-color 0.15s ease;
 }
 .button-primary {
@@ -370,4 +374,34 @@
 }
 .screen-frame[data-drawn] {
   opacity: 1;
+}
+
+/* On a phone: the steps keep their words wide enough to read */
+@media (max-width: 40rem) {
+  .playground-page {
+    padding: 2.5rem 1rem 5rem;
+  }
+  .playground-page > header {
+    margin-bottom: 2rem;
+  }
+  .playground-page > header p {
+    font-size: 1.0625rem;
+  }
+  .step {
+    gap: 1.5rem;
+    padding: 1.25rem;
+  }
+  .step[data-locked] {
+    padding: 1rem 1.25rem;
+  }
+  .step h2 {
+    font-size: 1.375rem;
+  }
+  .try {
+    padding: 1rem;
+  }
+  .editor textarea,
+  .window {
+    min-height: 20rem;
+  }
 }
