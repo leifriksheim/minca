@@ -238,8 +238,10 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
     const late = grantExpired(grant);
     await stop({ status: late ? 'expired' : 'starting', home: grant.home, grant, error: null });
     kept.set(LAST, grant.did);
+    console.debug(`[minca] connection: starting ${grant.name}${late ? ', whose grant ran out' : ''}`);
     if (late) return;
     const key = await keys.get(keyName);
+    console.debug('[minca] connection: app key ready, starting the node');
     const start = (worker?: () => WorkerLike) =>
       startConnectedNode({
         grant,
@@ -252,8 +254,9 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
     // worker that started and refused says why instead.
     const node = config.worker
       ? await start(config.worker).catch((error: unknown) => {
-          if (error instanceof Error && error.name === WORKER_NOT_STARTED) return start();
-          throw error;
+          if (!(error instanceof Error) || error.name !== WORKER_NOT_STARTED) throw error;
+          console.warn('[minca] connection: the node’s worker did not start; starting the node in the page');
+          return start();
         })
       : await start();
     // Switched again while this one started: it is not wanted.
@@ -261,6 +264,7 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
       await node.close();
       return;
     }
+    console.debug('[minca] connection: ready');
     update({ status: 'ready', home: grant.home, grant, node, error: null });
 
     unwatch = watchGrant(node, grant, {

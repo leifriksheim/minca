@@ -658,6 +658,7 @@ export async function startConnectedNode(params: {
     },
     params,
   );
+  console.debug('[minca] connection: node started, joining the spaces the grant names');
   await joinGranted(node, params.grant);
   return node;
 }
