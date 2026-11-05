@@ -13,7 +13,7 @@ export type { ClaimedWriter, HeadStore, WriterKeySource } from './writer-keys.js
 export { copyAccountData } from './copy.js';
 export { createCarrierNode } from './carrier.js';
 export { watchNotifications } from './watch-notifications.js';
-export type { NotifyMatch, WatchNotificationsOptions } from './watch-notifications.js';
+export type { ActivityMatch, NotifyMatch, WatchNotificationsOptions } from './watch-notifications.js';
 export type {
   CarrierConfig,
   CarrierNode,

@@ -8,6 +8,10 @@
  * each record that comes to match: when it is written, or when something its
  * computed fields read is (a new 👍 can make a todo done). Each record is news
  * once per automation; what matched when it started never is.
+ *
+ * It can also list what they match now, newest first, for an app's activity:
+ * worked out from the records, so every device of the account lists the same,
+ * whether or not it was open when they arrived.
  */
 import { holdsFor, ownQuery, setsOff, type Trigger } from '../space/own-automations.js';
 import { causeOf, linkedReads, namedComputed, type ComputedFields } from '../query/computed.js';
@@ -20,15 +24,25 @@ export interface NotifyMatch {
   readonly record: NodeRecord;
 }
 
+/** A match in the activity list, and when what set it off was written */
+export interface ActivityMatch extends NotifyMatch {
+  readonly at: string;
+}
+
 export interface WatchNotificationsOptions {
   /** The app's origin, as the home saw it. Default: this page's. */
   readonly origin?: string;
   readonly onNotify: (match: NotifyMatch) => void;
+  /** What the automations match now, newest first, a record once: called after each change */
+  readonly onActivity?: (matches: ReadonlyArray<ActivityMatch>) => void;
   readonly onError?: (error: unknown) => void;
 }
 
 /** How many of the newest records of a collection are looked at after each change */
 const LOOK_BACK = 50;
+
+/** How many matches the activity list holds */
+const ACTIVITY_LIMIT = 50;
 
 /**
  * Starts matching. Needs a node with the account key — an app connected with
@@ -42,6 +56,8 @@ export function watchNotifications(node: P2PNode, options: WatchNotificationsOpt
   let spaces = new Set<string>();
   /** The records each automation has held for, by space: one that joins them is news, once */
   const holding = new Map<string, Set<string>>();
+  /** What each automation matches in each space now, for the activity list */
+  const matching = new Map<string, ReadonlyArray<ActivityMatch>>();
   /** Spaces with a change not yet looked at; null means the automations or spaces changed */
   const dirty = new Set<string | null>([null]);
 
@@ -61,19 +77,41 @@ export function watchNotifications(node: P2PNode, options: WatchNotificationsOpt
     // Only the fields the filter names: what the others read can't change whether it holds.
     const named = namedComputed(fields, where);
     const keys = await recentKeys(space, collection, named);
-    if (keys.size === 0) return;
-    const { records } = await node.records.query(space, {
-      collection,
-      where: { '@key': { $in: [...keys] } },
-    });
+    const { records } =
+      keys.size === 0
+        ? { records: [] }
+        : await node.records.query(space, { collection, where: { '@key': { $in: [...keys] } } });
+    const matched: ActivityMatch[] = [];
     for (const record of records) {
       if (stopped) return;
-      if (!holdsFor(own, record, node.did) || held.has(record.key)) continue;
+      if (!holdsFor(own, record, node.did)) continue;
+      const news = !first && !held.has(record.key);
       held.add(record.key);
-      if (first) continue;
+      // Without a list to keep, only news needs to know what set it off.
+      if (!news && !options.onActivity) continue;
       const trigger = await triggerOf(space, own, record, named);
-      if (trigger && setsOff(own, space, trigger, node.did)) options.onNotify({ automation: own, record });
+      if (!trigger) continue;
+      if (news && setsOff(own, space, trigger, node.did)) options.onNotify({ automation: own, record });
+      // Listed if it set the automation off when it was written, however long ago that was.
+      if (setsOff(own, space, trigger, node.did, Date.parse(trigger.createdAt)))
+        matched.push({ automation: own, record, at: trigger.createdAt });
     }
+    matching.set(at, matched);
+  }
+
+  /** Every match now, a record once under its most particular automation, newest first */
+  function activity(): ReadonlyArray<ActivityMatch> {
+    const byRecord = new Map<string, ActivityMatch>();
+    for (const matches of matching.values())
+      for (const match of matches) {
+        const id = `${match.record.space}\n${match.record.key}`;
+        const before = byRecord.get(id);
+        if (!before || (!particular(before) && particular(match))) byRecord.set(id, match);
+      }
+    // A writer dates its own records: one from the future sorts as now, not above everything for good.
+    const now = new Date().toISOString();
+    const when = (match: ActivityMatch) => (match.at > now ? now : match.at);
+    return [...byRecord.values()].sort((a, b) => when(b).localeCompare(when(a))).slice(0, ACTIVITY_LIMIT);
   }
 
   /** The newest records, and those the newest of what their computed fields read link to */
@@ -108,6 +146,8 @@ export function watchNotifications(node: P2PNode, options: WatchNotificationsOpt
   async function reload(): Promise<void> {
     automations = (await node.automations.list()).filter((own) => !own.paused && own.app?.origin === origin);
     spaces = new Set((await node.spaces.list()).map((space) => space.id));
+    // Every automation still on looks again below; what one paused or removed matched goes.
+    matching.clear();
     // Something newly looked at starts from what is there now; the rest still report what arrived since.
     for (const space of spaces) for (const own of lookingAt(space)) await look(space, own);
   }
@@ -123,6 +163,7 @@ export function watchNotifications(node: P2PNode, options: WatchNotificationsOpt
         if (space === null || !spaces.has(space)) continue;
         for (const own of lookingAt(space)) await look(space, own);
       }
+      if (!stopped) options.onActivity?.(activity());
     } catch (error) {
       options.onError?.(error);
     }
@@ -141,3 +182,6 @@ export function watchNotifications(node: P2PNode, options: WatchNotificationsOpt
     unsubscribe();
   };
 }
+
+/** Whether an automation asks about some records of its collection, not all: the one to list a match under */
+const particular = (match: ActivityMatch) => ownQuery(match.automation).where !== undefined;

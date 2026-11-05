@@ -4,9 +4,10 @@
  * agrees: what you read on your phone is not new on your laptop.
  *
  * Every edit to a record leaves a stub of a few hundred bytes that is kept for good, and every device
- * holds the registry whole. So looking is kept here in memory while it happens, and written when you
- * leave the app or hide the page, or after a quiet spell, in case the tab is closed before either can
- * be written: about one edit a visit, not one a message.
+ * holds the registry whole. So what is kept is how far you have read, the newest record you saw in
+ * each app, not when you looked: opening an app with nothing new changes nothing. A look is held in
+ * memory and written when you leave the app or hide the page, or after a quiet spell, in case the tab
+ * is closed before either: an edit each time you read something new, not one a visit or a message.
  */
 import { useEffect, useSyncExternalStore } from 'react';
 import { collection, type P2PNode, type SpaceSummary } from '@minca/core';
@@ -18,7 +19,7 @@ import { namesMe, useSpaceApps, type AppEntry } from './components/apps/entries'
 interface SpaceSeen {
   /** Nothing before this is new: when one of your devices first saw the space */
   readonly since: string;
-  /** Per app: when it was last open */
+  /** Per app: when the newest record you saw in it was written */
   readonly apps: Readonly<Record<string, string>>;
 }
 
@@ -149,11 +150,14 @@ function createSeenStore(node: P2PNode) {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
-    /** An app in a space is being looked at, now: held here until `keep` */
-    look(space: string, app: string) {
+    /** An app in a space was read up to a record written at `upTo`: held here until `keep` */
+    look(space: string, app: string, upTo: string) {
       const now = new Date().toISOString();
+      // A writer dates its own records: one from the future would hide everything after it.
+      const at = upTo > now ? now : upTo;
       const one = seen.get(space) ?? { since: now, apps: {} };
-      changed(new Map(seen).set(space, { ...one, apps: { ...one.apps, [app]: now } }));
+      if (!at || at <= (one.apps[app] ?? one.since)) return;
+      changed(new Map(seen).set(space, { ...one, apps: { ...one.apps, [app]: at } }));
       unwritten.add(space);
       clearTimeout(timers.get(space));
       timers.set(
@@ -188,15 +192,16 @@ function useSeenStore() {
 }
 
 /**
- * Keeps an app in a space looked at while it is open and the page is shown, so what arrives meanwhile
- * counts as seen; `arrived` changes when it does. It is written when you leave the app or hide the page.
+ * Keeps an app in a space read while it is open and the page is shown, up to its newest record
+ * (`upTo`, a time), so what arrives meanwhile counts as seen. Written when you leave the app or hide
+ * the page.
  */
-export function useLookingAt(space: string, app: string | undefined, arrived: number): void {
+export function useLookingAt(space: string, app: string | undefined, upTo: string): void {
   const store = useSeenStore();
   useEffect(() => {
     if (!app) return;
     const look = () => {
-      if (globalThis.document.visibilityState === 'visible') store.look(space, app);
+      if (globalThis.document.visibilityState === 'visible') store.look(space, app, upTo);
       else store.keep(space);
     };
     look();
@@ -205,10 +210,10 @@ export function useLookingAt(space: string, app: string | undefined, arrived: nu
       globalThis.document.removeEventListener('visibilitychange', look);
       store.keep(space);
     };
-  }, [store, space, app, arrived]);
+  }, [store, space, app, upTo]);
 }
 
-/** When an app in a space was last looked at, in ms; while that isn't known yet, nothing is new */
+/** How far an app in a space was read, in ms; while that isn't known yet, nothing is new */
 export const seenAt = (seen: Seen, space: string, app: string): number => {
   const one = seen.get(space);
   return one ? Date.parse(one.apps[app] ?? one.since) : Number.POSITIVE_INFINITY;
@@ -221,7 +226,7 @@ export function useSeen(): Seen {
 }
 
 /** Starts a space's seen state the first time any device of yours shows it */
-function useBegin(space: string): void {
+export function useBegin(space: string): void {
   const store = useSeenStore();
   const seen = useSeen();
   const known = seen.has(space);
@@ -234,9 +239,14 @@ function useBegin(space: string): void {
 export interface Unread {
   readonly count: number;
   readonly forMe: number;
+  /** When its newest record, of anyone's, was written: how far opening it reads; empty with none */
+  readonly newest: string;
 }
 
-const NONE: Unread = { count: 0, forMe: 0 };
+const NONE: Unread = { count: 0, forMe: 0, newest: '' };
+
+/** The later of two times, as ISO strings; empty is earliest */
+export const later = (a: string, b: string): string => (a > b ? a : b);
 
 /** What is new in each app in a space, by app id */
 export function useUnread(spaceId: string, apps: ReadonlyArray<AppEntry>): ReadonlyMap<string, Unread> {
@@ -257,10 +267,12 @@ export function useUnread(spaceId: string, apps: ReadonlyArray<AppEntry>): Reado
       for (const app of watch) {
         let count = 0;
         let forMe = 0;
+        let newest = '';
         for (const collection of app.collections) {
           const records = await node.records
             .list(spaceId, { collection, newestFirst: true, limit: 100 })
             .catch(() => []);
+          newest = later(newest, records[0]?.createdAt ?? '');
           for (const record of records) {
             if (record.createdBy === did || Date.parse(record.createdAt) <= app.after) continue;
             // Everyone sees that a direct message was written; only those it is for have something new.
@@ -269,7 +281,7 @@ export function useUnread(spaceId: string, apps: ReadonlyArray<AppEntry>): Reado
             if (namesMe(app.notify, collection, record, did)) forMe++;
           }
         }
-        out.set(app.id, { count, forMe });
+        out.set(app.id, { count, forMe, newest });
       }
       return out;
     },
@@ -295,11 +307,13 @@ export const unreadOf = (unread: ReadonlyMap<string, Unread>, id: string): Unrea
 export function totalOf(unread: Iterable<Unread>): Unread {
   let count = 0;
   let forMe = 0;
+  let newest = '';
   for (const one of unread) {
     count += one.count;
     forMe += one.forMe;
+    newest = later(newest, one.newest);
   }
-  return { count, forMe };
+  return { count, forMe, newest };
 }
 
 /** Everything new in a space, across its apps: for the list of spaces */

@@ -920,6 +920,23 @@ and nor is what a collection held when an automation first looked there.
 How to show a match is up to the app. A "Notify me" button is usually where a
 proposal starts.
 
+For a list of what happened, pass `onActivity` too. After each change it gets
+what the automations match now, newest first, up to 50, each record once under
+the automation that asks about it most particularly. A match is dated by what
+set it off, and listed if it would have notified when that was written, so
+the 24 hours don't apply. The list comes from the records, so it is the same
+on every device, and holds what arrived while the app was closed.
+
+```js
+watchNotifications(node, {
+  onNotify: ({ automation, record }) => showPopup(automation, record),
+  onActivity: (matches) => setActivity(matches),
+});
+```
+
+What the person has read of it is the app's to keep: a time in the account
+registry, say, and what is newer counts as new.
+
 ## Carriers, hosting and notifications
 
 A carrier is an always-on node that keeps the account's spaces online while

@@ -43,7 +43,7 @@ import { homeTab, Notices, useWorkspace } from '../workspace';
 import { peopleFrom } from '../derive/people';
 import { useBots } from '../bots';
 import { PersonScopeProvider } from './Person';
-import { seenAt, totalOf, unreadOf, useLookingAt, useSeen, useUnread, type Unread } from '../seen';
+import { later, seenAt, totalOf, unreadOf, useLookingAt, useSeen, useUnread, type Unread } from '../seen';
 
 /** Under the hood: the views for the curious, at the foot of the space's Overview */
 export const HOOD = [
@@ -307,7 +307,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
   const closeRecord = () =>
     void navigate({ to: '.', search: (was) => ({ ...was, record: undefined }), replace: true });
 
-  useLookingAt(space.id, open?.id, open ? unreadOf(unread, open.id).count : 0);
+  useLookingAt(space.id, open?.id, open ? unreadOf(unread, open.id).newest : '');
 
   // Proposed apps others, or an agent, wrote since All apps was last looked at.
   const proposalsSeen = seenAt(seen, space.id, PROPOSALS);
@@ -318,8 +318,9 @@ function SpaceView({ space }: { space: SpaceSummary }) {
         Date.parse(proposed.updatedAt) > proposalsSeen,
     ).length,
     forMe: 0,
+    newest: apps.proposed.reduce((newest, proposed) => later(newest, proposed.updatedAt), ''),
   };
-  useLookingAt(space.id, onApps ? PROPOSALS : undefined, newProposals.count);
+  useLookingAt(space.id, onApps ? PROPOSALS : undefined, newProposals.newest);
 
   const fill = open ? fills(open) : false;
   const title =

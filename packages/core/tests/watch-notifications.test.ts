@@ -6,7 +6,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { watchNotifications, type NotifyMatch } from '../src/node/watch-notifications.js';
+import { watchNotifications, type ActivityMatch, type NotifyMatch } from '../src/node/watch-notifications.js';
 import type { NodeEvent, NodeRecord, OwnAutomationView, P2PNode } from '../src/node/types.js';
 import type { Query } from '../src/query/types.js';
 import { until } from './helpers/until.js';
@@ -17,12 +17,12 @@ const ORIGIN = 'https://chat.test';
 
 const BO = 'did:key:zBo';
 
-/** A record in the club, written now */
+/** A record in the club, written now, or `ago` ms before */
 const written = (
   key: string,
   collection: string,
   body: unknown,
-  { by = BO, links = [] }: { by?: string; links?: NodeRecord['links'] } = {},
+  { by = BO, links = [], ago = 0 }: { by?: string; links?: NodeRecord['links']; ago?: number } = {},
 ): NodeRecord => ({
   key,
   version: `v-${key}`,
@@ -32,8 +32,8 @@ const written = (
   author: by,
   root: by,
   createdBy: by,
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
+  createdAt: new Date(Date.now() - ago).toISOString(),
+  updatedAt: new Date(Date.now() - ago).toISOString(),
   body,
   links,
   encrypted: true,
@@ -42,7 +42,7 @@ const written = (
 });
 
 /** A message to me, from someone else */
-const dm = (key: string) => written(key, 'std.direct', { to: [ME] });
+const dm = (key: string, ago = 0) => written(key, 'std.direct', { to: [ME] }, { ago });
 
 const DM: { readonly query: Query } = {
   query: { collection: 'std.direct', where: { to: { $contains: '$me' } } },
@@ -206,6 +206,63 @@ describe('an app showing its own notifications', () => {
       }
     }
     assert.deepEqual(heard, ['hello']);
+    stop();
+  });
+
+  test('the activity lists what matches, already or newly, newest first, from when the automation began', async () => {
+    const { node, add, emit } = fakeNode();
+    add(dm('older', 50_000));
+    add(dm('old', 30_000));
+    // Before the automation was kept: never listed
+    add(dm('before', 120_000));
+    let listed: ReadonlyArray<ActivityMatch> = [];
+    const stop = watchNotifications(node, {
+      origin: ORIGIN,
+      onNotify: () => {},
+      onActivity: (matches) => (listed = matches),
+    });
+    await until(() => listed.length > 0, 1000, 'the list');
+    assert.deepEqual(
+      listed.map((match) => match.record.key),
+      ['old', 'older'],
+    );
+
+    add(dm('new'));
+    emit({ type: 'records', space: 'club' });
+    await until(() => listed.length === 3, 1000, 'the new message');
+    assert.deepEqual(
+      listed.map((match) => match.record.key),
+      ['new', 'old', 'older'],
+    );
+    stop();
+  });
+
+  test('the activity dates a match by what set it off, and with others leaves out what I set off', async () => {
+    const { node, add } = fakeNode(DONE, true);
+    const nod = (key: string, chore: string, ago: number, by = BO) =>
+      written(key, 'app.nod', {}, { by, ago, links: [{ rel: 'on', to: chore }] });
+    add(written('dishes', 'app.chore', { text: 'Dishes' }, { ago: 50_000 }));
+    add(nod('n1', 'dishes', 40_000));
+    add(nod('n2', 'dishes', 10_000));
+    // Done by my own nod: nothing to tell me
+    add(written('laundry', 'app.chore', { text: 'Laundry' }, { ago: 50_000 }));
+    add(nod('n3', 'laundry', 40_000));
+    add(nod('n4', 'laundry', 20_000, ME));
+    let listed: ReadonlyArray<ActivityMatch> | null = null;
+    const stop = watchNotifications(node, {
+      origin: ORIGIN,
+      onNotify: () => {},
+      onActivity: (matches) => (listed = matches),
+    });
+    await until(() => listed !== null, 1000, 'the list');
+    const found: ReadonlyArray<ActivityMatch> = listed ?? [];
+    assert.deepEqual(
+      found.map((match) => match.record.key),
+      ['dishes'],
+    );
+    const second = found[0];
+    assert.ok(second);
+    assert.ok(Date.now() - Date.parse(second.at) < 15_000, 'dated by the second nod, not the chore');
     stop();
   });
 });
