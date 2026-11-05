@@ -8,6 +8,9 @@ import { Shape } from '@minca/app-shared/shapes';
 import { markFor } from '@minca/ui/shapes';
 import type { ShapeColour } from '@minca/ui/tokens';
 import { Loader } from '@minca/app-shared/Loader';
+import { useAccess, useAccount, useSpaceStatus } from '@minca/react';
+import { onlineAccounts } from '../derive/network';
+import { PersonFace } from './PersonFace';
 import { useSpaceUnread } from '../seen';
 import { useSpaceFace } from '../pictures';
 import { useFileUrl } from '../files';
@@ -158,9 +161,41 @@ export function GroupRow({
           <strong className="truncate">{space.name}</strong>
           <small className="truncate">{detail}</small>
         </span>
+        <MemberFaces space={space} />
         <SpaceCount space={space} />
       </button>
     </li>
+  );
+}
+
+/** How many faces a group row shows before the rest become "+N" */
+const FACES = 4;
+
+/**
+ * Who else is in a group, at a glance: a few faces overlapping, those online
+ * first with a dot, and how many more. The full list is under Members.
+ */
+function MemberFaces({ space }: { space: SpaceSummary }) {
+  const me = useAccount().did;
+  const access = useAccess(space.id);
+  const status = useSpaceStatus(space.id);
+  const online = status ? onlineAccounts(status, me) : new Set<string>();
+  const others = (access?.members ?? [])
+    .map((member) => member.did)
+    .filter((did) => did !== me)
+    .sort((a, b) => Number(online.has(b)) - Number(online.has(a)));
+  if (others.length === 0) return null;
+  const rest = others.length - FACES;
+  return (
+    <span className={styles.faces} aria-label={`${others.length + 1} members`}>
+      {others.slice(0, FACES).map((did) => (
+        <span key={did} className={styles.face}>
+          <PersonFace did={did} size={24} round />
+          {online.has(did) && <span title="Online now" className={styles.online} />}
+        </span>
+      ))}
+      {rest > 0 && <span className={styles.more}>+{rest}</span>}
+    </span>
   );
 }
 

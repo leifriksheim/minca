@@ -44,6 +44,11 @@ ol[role='list'] {
       padding: 0;
     }
 
+    /* A row that opens with buttons beside it (a person, their chat and call): the whole row lights up */
+    &:has(> button[data-intent='open']:not(:only-child, :disabled)):hover {
+      background: var(--color-sunken);
+    }
+
     /* Beside a tick or a face, a row's open button is its text, not a box of its own */
     & :not(li) > button[data-intent='open'],
     & > button[data-intent='open']:not(:only-child) {
