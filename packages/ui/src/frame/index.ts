@@ -19,7 +19,7 @@ import { useLive, usePresence } from './live';
 import { html } from './html';
 import { MentionInput, MentionText, mentionsIn } from './mentions';
 import { Modal } from './modal';
-import { AddMenu, EmojiPicker, Reactions, react } from './menus';
+import { AddMenu, EmojiPicker, Reactions, RowMenu, react } from './menus';
 import { Record, recordTitle } from './record';
 import { Shared, Sharing, useShare } from './share';
 import { Avatar, Person, useName } from './people';
@@ -98,6 +98,7 @@ Object.defineProperty(globalThis, 'ui', {
     sizeOf,
     Modal,
     AddMenu,
+    RowMenu,
     EmojiPicker,
     Reactions,
     react,

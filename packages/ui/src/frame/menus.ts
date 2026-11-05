@@ -144,6 +144,57 @@ export function AddMenu({
   </div>`;
 }
 
+/**
+ * "…" at the end of a row: the lesser things to do with it (rename, delete),
+ * so a screen isn't lined with buttons. Opens below, from the right edge.
+ */
+export function RowMenu({
+  label,
+  items,
+}: {
+  label: string;
+  items: ReadonlyArray<{ label: string; onClick: () => void; danger?: boolean } | false | null | undefined>;
+}) {
+  const { open, setOpen, box } = useOpen();
+  const shown = items.filter((item) => !!item);
+  if (shown.length === 0) return null;
+  return html`<div class="anchor down" ref=${box}>
+    <button
+      type="button"
+      data-intent="ghost"
+      data-icon
+      aria-label=${label}
+      title=${label}
+      aria-haspopup="menu"
+      aria-expanded=${open}
+      onClick=${() => setOpen(!open)}
+    >
+      <${Icon} name="menu" />
+    </button>
+    ${
+      open &&
+      html`<menu role="menu">
+        ${shown.map(
+          (item) =>
+            html`<li key=${item.label}>
+              <button
+                type="button"
+                role="menuitem"
+                data-intent=${item.danger ? 'danger' : undefined}
+                onClick=${() => {
+                  setOpen(false);
+                  item.onClick();
+                }}
+              >
+                ${item.label}
+              </button>
+            </li>`,
+        )}
+      </menu>`
+    }
+  </div>`;
+}
+
 /** How wide and tall the grid of emoji is, to tell which way it fits */
 const GRID = { width: 280, height: 220 };
 

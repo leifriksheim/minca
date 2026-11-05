@@ -39,6 +39,14 @@ button.person {
   left: 0;
 }
 
+/* A row's menu drops below its button, from the right edge */
+.anchor.down > menu {
+  top: calc(100% + 4px);
+  right: 0;
+  bottom: auto;
+  left: auto;
+}
+
 /* Comments: a face beside each */
 .comment {
   display: grid;

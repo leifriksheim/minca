@@ -17,10 +17,21 @@ ol[role='list'] {
   margin: 0;
   padding: 0;
   list-style: none;
-  overflow: hidden;
   border: 1px solid var(--color-outline);
   border-radius: var(--radius-surface);
   background: var(--color-surface);
+
+  /* The end rows round with the list, rather than the list clipping them, so a row's menu can drop out of it */
+  & > li:first-child,
+  & > li:first-child > button[data-intent='open']:only-child {
+    border-start-start-radius: inherit;
+    border-start-end-radius: inherit;
+  }
+  & > li:last-child,
+  & > li:last-child > button[data-intent='open']:only-child {
+    border-end-start-radius: inherit;
+    border-end-end-radius: inherit;
+  }
 
   & > li {
     padding: 10px 16px;
