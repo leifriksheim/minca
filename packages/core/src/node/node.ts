@@ -444,6 +444,25 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       .catch(() => false);
   }
 
+  /**
+   * Drops a space the account left on another device. If that device couldn't
+   * give up the account's place, this one does, in the background: a space
+   * just opened has no peers yet, so that waits the whole `LEAVE_WAIT_MS`, and
+   * the list must not wait with it.
+   */
+  async function followLeave(spaceId: string): Promise<void> {
+    // Opened while its record is here: a runtime needs it to open.
+    const open = runtime(spaceId);
+    await open.catch(() => null);
+    await registry.remove(spaceId);
+    inBackground(
+      giveUpPlace(spaceId).then(async () => {
+        // Joined again meanwhile, it was closed for the new key: leave the new one open.
+        if (runtimes.get(spaceId) === open) await closeRuntime(spaceId);
+      }),
+    );
+  }
+
   async function forget(spaceId: string): Promise<void> {
     if (!accountSpaceId) return;
     const open = await runtime(accountSpaceId);
@@ -459,6 +478,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     if (!accountSpaceId || closed) return;
     const held = new Set((await registry.list()).map((record) => record.space.id));
     const known = new Set<string>();
+    const left: string[] = [];
     let changed = false;
 
     for (const membership of await memberships()) {
@@ -471,14 +491,11 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         } catch {
           // An unreadable invite; the next version written for it will do.
         }
-      } else if (membership.deleted && held.has(spaceId)) {
-        // The account left it, on some device. If that one couldn't give up its place, this one does.
-        await giveUpPlace(spaceId);
-        await closeRuntime(spaceId);
-        await registry.remove(spaceId);
-        changed = true;
-      }
+      } else if (membership.deleted && held.has(spaceId)) left.push(spaceId);
     }
+    // The account left them, on some device: off this one's list now, all at once.
+    await Promise.all(left.map(followLeave));
+    if (left.length > 0) changed = true;
 
     // Held here but never recorded — joined before the registry existed, or on
     // a node without the account key. Recorded now, so other devices follow.

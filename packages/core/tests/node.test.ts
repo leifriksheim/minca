@@ -363,6 +363,46 @@ describe('the account registry', () => {
     await until(async () => (await names(laptop)).length === 0, 3000, 'the laptop to leave');
   });
 
+  test('a device that was away drops what the account left at once, not one wait at a time', async () => {
+    const seed = generateSeed();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const laptop = await device(seed, hub);
+    const phoneStores = memoryStores();
+    const phone = await device(seed, hub, phoneStores);
+    const friend = await startNode({ hub });
+
+    // Two spaces shared with a friend, so giving up a place there waits for the friend to store it.
+    const shared = [];
+    for (const name of ['Book club', 'Band']) {
+      const space = await laptop.spaces.create({ name, ...team, visibility: 'private' });
+      await friend.spaces.join(await laptop.spaces.invite(space.id));
+      await hold(laptop, space.id);
+      await hold(friend, space.id);
+      await joined(friend, space.id);
+      shared.push(space);
+    }
+    await until(async () => (await names(phone)).length === 2, 3000, 'the phone to join both');
+    for (const space of shared) {
+      await hold(phone, space.id);
+      await until(
+        async () => (await phone.spaces.access(space.id)).members.length === 2,
+        3000,
+        'the phone to see the friend',
+      );
+    }
+
+    // The phone is away while the laptop leaves both, then the friend goes too.
+    await phone.close();
+    for (const space of shared) await laptop.spaces.leave(space.id);
+    await friend.close();
+
+    // Back, the phone holds both still and the friend can't confirm anything: it drops them anyway.
+    const back = await device(seed, hub, phoneStores);
+    const started = Date.now();
+    await until(async () => (await names(back)).length === 0, 3000, 'the phone to drop both');
+    assert.ok(Date.now() - started < 3000);
+  });
+
   test('a device that was offline catches up when it comes back', async () => {
     const seed = generateSeed();
     const hub = createFakeHub({ latencyMs: 1 });
