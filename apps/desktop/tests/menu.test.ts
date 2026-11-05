@@ -54,7 +54,7 @@ test('once it has run out, it says what stopped and how to start it again, never
   const menu = connectionMenu({ ...ready(-HOUR), status: 'expired' }, now);
   assert.deepEqual(
     menu.lines.map((line) => line.label),
-    ['Ada', 'Paused: automations are off until you reconnect', 'Reconnect…'],
+    ['Ada', 'Paused: spaces offline until you reconnect', 'Reconnect…'],
   );
   assert.equal(menu.attention, true);
   assert.ok(

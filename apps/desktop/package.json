@@ -2,7 +2,7 @@
   "name": "@minca/desktop",
   "private": true,
   "type": "module",
-  "description": "Minca on the desktop: the example app in a window of its own, and a carrier in the menu bar that keeps your spaces online",
+  "description": "Minca on the desktop: the example app in a window of its own, whose node keeps your spaces online from the menu bar",
   "scripts": {
     "parts": "npm run parts:app && npm run parts:node",
     "parts:app": "cd ../example && vite build --outDir ../desktop/parts/app --emptyOutDir",

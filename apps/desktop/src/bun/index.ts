@@ -1,5 +1,5 @@
 /**
- * Minca on the desktop. One Bun process does five things:
+ * Minca on the desktop. One Bun process does four things:
  *
  * - serves the example app's build at a fixed loopback origin, so the
  *   account home knows it as one app across restarts (a new port would be a
@@ -8,9 +8,7 @@
  *   for, the account home among them (`bridge.ts`);
  * - runs the app's node in a process of its own (`app-node.ts`), which the
  *   window uses over a socket to the same server (`node-link.ts`) and which
- *   keeps running when it closes;
- * - runs a carrier for the person's account beside it (`carrier.ts`), which
- *   keeps their spaces online even once the app's connection has run out;
+ *   keeps running when it closes, so the account's spaces stay online;
  * - puts Minca in the menu bar, where it stays when the window closes, and
  *   offers new versions there once they are downloaded (`updates.ts`).
  */
@@ -27,10 +25,8 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createBridge, type PaneHost } from './bridge';
 import { createAppNode, keychainKey } from './app-node';
-import { createCarrier, type CarrierState } from './carrier';
 import { createNodeLink, MAX_NODE_MESSAGE, nodeUrl, type LinkSocket } from './node-link';
 import { connectionMenu, reminderAt, whenEnds, type MenuLine } from './menu';
-import { createNotifier } from '@minca/app-shared/notify';
 import { preloadFor } from './page';
 import { createUpdates, updateMenu } from './updates';
 
@@ -94,7 +90,6 @@ const bridge = createBridge({
       nodeUrl: node ? nodeUrl(origin, node) : null,
     }),
   openExternal: (url) => void Utils.openExternal(url),
-  account: (who) => followApp(who),
   // Silent: the window plays its own sound (apps/example/src/sound.ts).
   notify: ({ title, body }) => Utils.showNotification({ title, body, silent: true }),
   open({ url, preload, width, height, app: isApp, closed }) {
@@ -115,6 +110,8 @@ const bridge = createBridge({
       frame: isApp ? { x: 120, y: 80, width, height } : { x: 360 + offset, y: 120 + offset, width, height },
       ...(isApp ? { titleBarStyle: 'hiddenInset' as const, trafficLightOffset: { x: 6, y: 6 } } : {}),
     });
+    // The app's window fills the screen, as Slack's or Discord's does; the person can make it smaller.
+    if (isApp) win.maximize();
     win.on('close', () => {
       closed();
       if (host === homeWindow) homeWindow = null;
@@ -170,16 +167,12 @@ function openApp() {
   app = bridge.openWindow(`${APP_URL}/`, { width: 1200, height: 820 });
 }
 
-// The carrier. Its folder is a setting (`settings.json`, `carrierFolder`), in the
-// app's own data folder until someone picks another.
+// What the menu bar sets (`settings.json`).
 const settingsFile = join(Utils.paths.userData, 'settings.json');
 const settings: unknown = await readFile(settingsFile, 'utf8').then(
   (text): unknown => JSON.parse(text),
   () => ({}),
 );
-const chosen: unknown =
-  typeof settings === 'object' && settings !== null ? Reflect.get(settings, 'carrierFolder') : null;
-const carrierFolder = typeof chosen === 'string' && chosen ? chosen : join(Utils.paths.userData, 'carrier');
 // Keep in Dock, from the menu bar (`settings.json`, `keepInDock`): the dock icon stays when the window closes.
 let keepInDock =
   typeof settings === 'object' && settings !== null && Reflect.get(settings, 'keepInDock') === true;
@@ -212,27 +205,6 @@ const updates = createUpdates({
 
 // Minca's rainbow, in one colour: a template image, which macOS tints like the other icons in the bar (assets/tray.swift).
 const tray = new Tray({ image: 'views://tray.png', template: true, width: 22, height: 12 });
-let carrierState: CarrierState = { state: 'starting' };
-// What the account asked to hear about, as the carrier sees it arrive: shown by the system, app open or not.
-const notifier = createNotifier({ show: ({ title, body }) => Utils.showNotification({ title, body }) });
-const carrier = createCarrier({
-  // While the app's node runs, it says what arrived in words of its own; the carrier only knows where.
-  woke: (wake) => {
-    if (appNode.state().status !== 'ready') notifier.woke(wake);
-  },
-  folder: carrierFolder,
-  // The CLI, run by the Bun this app ships with. Quitting the app stops it.
-  cli: [process.execPath, join(VIEWS_FOLDER, 'minca.js')],
-  home,
-  openHome: (url, origin, hear) => bridge.openFromShell(url, { width: 460, height: 720 }, { origin, hear }),
-  changed: (state) => {
-    carrierState = state;
-    showMenu();
-    // It knows now what it carries: the app's account may still want asking.
-    if (state.state !== 'starting' && state.state !== 'connecting' && appAccount && !carrying(appAccount))
-      followApp(appAccount);
-  },
-});
 
 // The app's node: the window's, and the menu bar's while the window is closed.
 const appNode = createAppNode({
@@ -244,10 +216,7 @@ const appNode = createAppNode({
   sealKey: () => keychainKey(),
   openHome: (url, origin, hear) => bridge.openFromShell(url, { width: 460, height: 720 }, { origin, hear }),
   toWindow: (message) => link.toWindow(message),
-  changed: (state) => {
-    const who = state.grant ? { did: state.grant.did, name: state.grant.name } : null;
-    if (state.status === 'ready' || state.status === 'expired') followApp(who);
-    else if (state.status === 'disconnected') followApp(null);
+  changed: () => {
     remindLater();
     showMenu();
   },
@@ -287,83 +256,15 @@ function remindLater() {
   );
 }
 
-// One account: the one the app is connected as. The menu bar keeps that one's
-// spaces online and no other, and asks to, once for each account, as soon as
-// the app connects as one it isn't carrying yet.
-type Account = { readonly did: string; readonly name: string };
-let appAccount: Account | null = null;
-let carrierProblem: string | null = null;
-const askedFile = join(Utils.paths.userData, 'carrier-asked.json');
-const asked = new Set<string>(
-  await readFile(askedFile, 'utf8').then(
-    (text): string[] => {
-      const list: unknown = JSON.parse(text);
-      return Array.isArray(list) ? list.filter((item): item is string => typeof item === 'string') : [];
-    },
-    () => [],
-  ),
-);
-
-function carrying(account: Account | null): boolean {
-  return carrierState.state === 'carrying' && account !== null && carrierState.account === account.did;
-}
-
-function connectCarrier(account: Account) {
-  carrierProblem = null;
-  void carrier.connect(account).catch((error: unknown) => {
-    carrierProblem = error instanceof Error ? error.message : String(error);
-    showMenu();
-  });
-}
-
-function followApp(who: Account | null) {
-  appAccount = who;
-  showMenu();
-  if (!who || carrying(who) || asked.has(who.did)) return;
-  // Not while it is still finding out what it carries: it may be this one already.
-  if (carrierState.state === 'starting' || carrierState.state === 'connecting') return;
-  asked.add(who.did);
-  void writeFile(askedFile, JSON.stringify([...asked]), { mode: 0o600 }).catch(() => {});
-  connectCarrier(who);
-}
-
-/** The carrier, under the connection: it keeps the spaces online, and goes on when the connection has run out */
-function carrierItems() {
-  const said = (label: string) => ({ type: 'normal' as const, label, action: 'status', enabled: false });
-  const offer = (account: Account) => ({
+// A declaration, not a const: the menu can be drawn before this line has run.
+function item(line: MenuLine) {
+  return {
     type: 'normal' as const,
-    label: `Keep ${account.name}’s spaces online…`,
-    action: 'connect',
-  });
-  const state = carrierState;
-  const account = appAccount;
-  const problem = carrierProblem ? [said(carrierProblem)] : [];
-  if (!account) return state.state === 'carrying' ? [said(`Keeping ${state.name}’s spaces online`)] : [];
-  if (state.state === 'connecting') return [said('Spaces online: waiting for your account home…')];
-  if (carrying(account) && state.state === 'carrying')
-    return [
-      said(`${state.spaces} ${state.spaces === 1 ? 'space' : 'spaces'} online, always`),
-      { type: 'normal' as const, label: 'Pause', action: 'pause' },
-    ];
-  if (state.state === 'paused')
-    return [
-      said('Spaces online: paused, and your account home still lists it'),
-      { type: 'normal' as const, label: 'Resume', action: 'resume' },
-    ];
-  // Not carrying the app's account: carrying another's, stopped, or nothing yet.
-  return [
-    ...(state.state === 'carrying' ? [said(`Keeping ${state.name}’s spaces online instead`)] : []),
-    ...(state.state === 'stopped' ? [said(`Stopped: ${state.error}`)] : []),
-    ...problem,
-    offer(account),
-  ];
+    label: line.label,
+    action: line.action ?? 'status',
+    enabled: line.action !== undefined,
+  };
 }
-const item = (line: MenuLine) => ({
-  type: 'normal' as const,
-  label: line.label,
-  action: line.action ?? 'status',
-  enabled: line.action !== undefined,
-});
 function showMenu() {
   // The app's connection: until when, and a click to renew it near the end.
   const connection = connectionMenu(appNode.state(), Date.now());
@@ -375,8 +276,6 @@ function showMenu() {
     { type: 'divider' },
     ...connection.lines.map(item),
     { type: 'divider' },
-    ...carrierItems(),
-    { type: 'divider' },
     item(update.line),
     { type: 'normal', label: 'Keep in Dock', action: 'dock', checked: keepInDock },
     { type: 'normal', label: 'Quit Minca', action: 'quit' },
@@ -386,20 +285,16 @@ tray.on('tray-clicked', (event) => {
   const action = field(event, 'action');
   if (action === 'open') openApp();
   if (action === 'settings') openHome();
-  if (action === 'connect' && appAccount) connectCarrier(appAccount);
   if (action === 'renew') appNode.renew();
-  if (action === 'pause') void carrier.pause();
-  if (action === 'resume') carrier.resume();
   if (action === 'dock') setKeepInDock(!keepInDock);
   if (action === 'check') void updates.check();
   if (action === 'update') void updates.apply();
   if (action === 'quit') Utils.quit();
 });
 
-// However it quits, from the menu or to restart into an update, the node and carrier stop with it.
+// However it quits, from the menu or to restart into an update, the node stops with it.
 Electrobun.events.on('before-quit', () => {
   appNode.close();
-  carrier.close();
   tray.remove();
 });
 

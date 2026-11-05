@@ -11,7 +11,7 @@ export interface PageOptions {
   readonly origin: string;
   /** Opened by another window: it has an opener */
   readonly popup: boolean;
-  /** The app's own window, which says which account it is connected as */
+  /** The app's own window, which uses the app's node */
   readonly app: boolean;
   /**
    * For the app's own window, which has no title bar: how far from the top
@@ -280,19 +280,9 @@ function page(options: PageOptions): void {
     defineProperty(window, 'Notification', { value: ShellNotification, configurable: true, writable: true });
   }
 
-  // The app's own window says which account it is connected as: the menu bar
-  // keeps only that account's spaces online (apps/example/src/desktop.ts).
   if (options.app) {
     defineProperty(window, 'mincaDesktop', {
       value: Object.freeze({
-        account(who: unknown) {
-          const did: unknown = typeof who === 'object' && who !== null ? Reflect.get(who, 'did') : null;
-          const name: unknown = typeof who === 'object' && who !== null ? Reflect.get(who, 'name') : null;
-          send({
-            t: 'account',
-            who: typeof did === 'string' && typeof name === 'string' ? { did, name } : null,
-          });
-        },
         // The app's node runs in the shell, and the window uses it over this (apps/example/src/desktop.ts).
         node: Object.freeze({
           send(data: unknown) {

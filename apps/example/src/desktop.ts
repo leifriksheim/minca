@@ -2,9 +2,8 @@
  * In the desktop app (apps/desktop), this app's node runs in the shell, not
  * in the page: one node for the window and the menu bar, which keeps running
  * with the window closed. `desktopConnection` is the same `MincaConnection`
- * over it, so nothing else in the app changes. The menu bar is also told
- * which account the app is connected as. Anywhere else there is no shell,
- * and both do nothing.
+ * over it, so nothing else in the app changes. Anywhere else there is no
+ * shell, and it does nothing.
  */
 import { base64UrlDecode, base64UrlEncode, remoteNode, type P2PNode } from '@minca/core';
 import {
@@ -22,26 +21,19 @@ interface NodeChannel {
   listen(listener: (data: unknown) => void): void;
 }
 
-interface Desktop {
-  account(who: { readonly did: string; readonly name: string } | null): void;
-  readonly node?: NodeChannel;
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isDesktop(value: unknown): value is Desktop {
-  return isRecord(value) && typeof value.account === 'function';
 }
 
 function isChannel(value: unknown): value is NodeChannel {
   return isRecord(value) && typeof value.send === 'function' && typeof value.listen === 'function';
 }
 
-function desktop(): Desktop | null {
+/** The shell's channel to the app's node, in the desktop app's own window only */
+function desktopNode(): NodeChannel | null {
   const found: unknown = Reflect.get(globalThis, 'mincaDesktop');
-  return isDesktop(found) ? found : null;
+  const node: unknown = isRecord(found) ? found.node : null;
+  return isChannel(node) ? node : null;
 }
 
 /**
@@ -110,7 +102,7 @@ function said(value: unknown): NodeSaid | null {
 export function desktopConnection(
   config: Pick<MincaConnectionConfig, 'home' | 'request'>,
 ): MincaConnection | null {
-  const channel = desktop()?.node;
+  const channel = desktopNode();
   if (!isChannel(channel)) return null;
 
   let state: MincaConnectionState = Object.freeze({
@@ -240,26 +232,4 @@ export function desktopConnection(
       return answer;
     },
   };
-}
-
-/**
- * The menu bar keeps this app's account's spaces online, and only that
- * account's: so it is told which account this app is connected as, whenever
- * that changes.
- */
-export function tellDesktop(connection: MincaConnection): void {
-  const shell = desktop();
-  if (!shell) return;
-  let told: string | null | undefined;
-  const tell = () => {
-    const { status, grant } = connection.getState();
-    // Starting says nothing yet: the grant kept from before may still be loading.
-    if (status === 'starting' || status === 'connecting') return;
-    const who = status === 'ready' && grant ? { did: grant.did, name: grant.name } : null;
-    if ((who?.did ?? null) === told) return;
-    told = who?.did ?? null;
-    shell.account(who);
-  };
-  connection.subscribe(tell);
-  tell();
 }

@@ -3,8 +3,8 @@
 The example app in a window of its own, with no title bar. Its node runs in
 the shell, not the page, so it keeps running in the menu bar when the window
 closes: automations still notify, and the window opens onto a node that is
-already up to date. A carrier beside it keeps your spaces online even once
-the app's connection has run out. Built on
+already up to date. While it runs and its connection lasts, your spaces stay
+online. Built on
 [Electrobun](https://electrobun.dev) 1.18, whose main process is Bun.
 
 ```bash
@@ -14,7 +14,7 @@ npm test -w apps/desktop        # the popup bridge
 ```
 
 `npm run parts` builds the example app and the CLI, as one file for Bun.
-`VITE_MINCA_HOME` points both the app and the carrier at another account home:
+`VITE_MINCA_HOME` points the app at another account home:
 `VITE_MINCA_HOME=http://localhost:5174/connect npm run dev` for `apps/home` on
 this machine.
 
@@ -31,7 +31,8 @@ The app updates itself from the latest release (`release.baseUrl` in
 six hours it fetches `stable-macos-arm64-update.json`; when the version there
 differs, it downloads the whole app (`stable-macos-arm64-Minca.app.tar.zst`)
 in the background, then shows "Restart to update to 0.1.19" and the dot in the
-menu bar. It never restarts on its own, since the carrier keeps spaces online.
+menu bar. It never restarts on its own, since the app's node keeps spaces
+online.
 "Check for updates" in the menu bar looks at once. Pre-releases aren't
 `latest`, so they reach no one. It trusts what GitHub serves over HTTPS, as
 the first download does.
@@ -64,7 +65,7 @@ app-node` from the CLI (`packages/cli/src/app-node.ts`), with the Bun
   its grant, and its stores' registry, under a key kept in the macOS keychain
   (`Bun.secrets`, service `org.minca.desktop`) and handed to the node on
   stdin. Copied without the keychain, the folder yields no key, grant or
-  private body, only what a carrier sees. Renewing keeps the key; leaving an
+  private body. Renewing keeps the key; leaving an
   account (disconnecting, or the home answering as another account) forgets
   it and that account's stores, with anything written there that no peer had
   taken yet. A program
@@ -72,53 +73,26 @@ app-node` from the CLI (`packages/cli/src/app-node.ts`), with the Bun
 - Says in the menu bar how long the connection lasts: "Connected until Tue 21
   Oct" while it is far off; in its last two days "Connection ends tomorrow",
   "Renew connection…" and a dot beside the icon; once it has run out,
-  "Paused: automations are off until you reconnect" and "Reconnect…". One
+  "Paused: spaces offline until you reconnect" and "Reconnect…". One
   notification a day before the end, then nothing more. With the window
   closed, what the account's automations match shows as a notification in
-  the app's own words; the carrier's notifications (where, not what) show
-  only while the app's node isn't connected.
+  the app's own words.
 - Shows it in a window with no title bar (`titleBarStyle:
-'hiddenInset'`). An empty spot in the top 28 points drags the window, and a
+'hiddenInset'`), filling the screen when it opens. An empty spot in the top 28 points drags the window, and a
   double click there zooms it. The page gets `data-desktop` on `<html>`, so
   the app can make room for the window's buttons
   (`apps/example/src/styles.ts`).
 - Opens the windows the app asks for, the account home among them, through
   the popup bridge below. Links to new windows open in the person's browser.
-- Runs a carrier for your account beside it (`src/bun/carrier.ts`), which
-  keeps your spaces online after the app's connection has run out: `minca
-carry` from the CLI, with the Bun Electrobun ships. Like the Chrome extension
-  it holds a pass for each space and nothing that reads or writes them, and it
-  listens on no port. "Keep my spaces online…" in the menu bar connects it
-  once: the account home opens in a window the shell itself is the opener of,
-  and core's `connectCarrier()` asks for the grant and checks it.
-- Asks the home from an origin of the carrier's own,
-  `http://carrier-<hash of its seed>.localhost`, never the app's: the home
-  knows a connection by its origin, and keeps one app and one carrier per
-  origin (spec 06 §2.10). Each install has its own, and nobody else can know it.
-- Keeps the carrier in a folder: its key, its grant and what it carries. It is
-  `carrier/` in the app's data folder unless `settings.json` there names
-  another (`"carrierFolder"`, a full path), the one place a settings screen
-  would change. The folder and the key in it must be this user's own and
-  readable by them alone, not links; the grant is written whole or not at all.
 - Puts Minca's rainbow in the menu bar (a template image, tinted like the
   others: `assets/tray.swift` draws it): Open Minca, Account settings (the
-  account home in a titled window of its own, which says no account), the app's account and
-  what the carrier is doing for it, Pause or Resume, Quit. Pausing keeps the
-  folder: only the account takes a carrier off (Disconnect, in its home), and
-  then the carrier deletes what it carried. Closing the window leaves the tray
-  and the carrier running, and hides the dock icon, unless "Keep in Dock" is
+  account home in a titled window of its own), the app's connection, Quit.
+  Closing the window leaves the tray and the app's node running, and hides
+  the dock icon, unless "Keep in Dock" is
   checked in the menu bar (`settings.json`, `"keepInDock"`).
 - Has an icon of its own in the dock: the rainbow on a warm apricot ground
   (`assets/icon.swift` draws `assets/icon.iconset`, every size macOS asks for:
   `swift apps/desktop/assets/icon.swift apps/desktop/assets/icon.iconset`).
-- Keeps one account: the app's. The app tells the shell which account it is
-  connected as (`apps/example/src/desktop.ts`, `mincaDesktop.account`, which
-  only the app's own window has). The carrier keeps that account's spaces
-  online and no other's: right after the app connects as an account it isn't
-  carrying, the home opens once to ask (once per account,
-  `carrier-asked.json`), and a grant for any other account is refused. When
-  the app connects as another account, what the carrier kept for the last one
-  goes; that account's home still lists it until it is disconnected there.
 
 ## The popup bridge
 
@@ -183,9 +157,8 @@ WebKit browser too (`apps/example/src/minca.ts`).
 | Popups the app opens from its own UI | open, close themselves, tell their opener                                                                                |
 | Dragging the window by its top strip | moves it by the pointer's distance                                                                                       |
 | The app in the window                | `SharedWorker`, `RTCPeerConnection`, `crypto.subtle` and `indexedDB` all work                                            |
-| Closing the window                   | the tray stays, the carrier keeps running                                                                                |
-| Connecting the carrier               | against `apps/home` on localhost: the home asks to keep the account online, the grant lands in the folder, it carries    |
-| WebRTC in the carrier                | `node-datachannel` loads under Bun from the copy the app ships                                                           |
+| Closing the window                   | the tray stays, the app's node keeps running                                                                             |
+| WebRTC in the app's node             | `node-datachannel` loads under Bun from the copy the app ships                                                           |
 | Size                                 | 78 MB for the `.app`: 60 MB of Bun, 11 MB of main-process bundle; no Chromium                                            |
 
 Not yet:
@@ -204,16 +177,14 @@ Not yet:
   menu bar and notifications with the window closed need trying by hand. A
   grant the window kept from before the shared node is not carried over:
   connect once more.
-- **A space carried, seen.** The test account had none; connecting the app to
-  it needs a real click (above).
 - **The app's origin is fixed.** `http://127.0.0.1:47830` is the same app on
   every device of an account, to the account home: disconnecting it on one
   disconnects it on all. And something else holding that port first stops the
   app from starting.
-- **Choosing the folder.** The setting is read; nothing writes it yet, and a
-  folder picked later must be made readable by this user alone first. When
-  the account keeps a pod (`grant.pod`), the carrier could write into it too,
-  as the extension does (`usePod`).
+- **A carrier from an earlier version.** Earlier versions could run a carrier
+  beside the app. Nothing runs it now: it stays listed in the account
+  home until it is disconnected there, and its folder, `carrier/` in the app's
+  data folder, can be deleted.
 - **Only macOS was tried.**
 
 ## Electrobun's footing
@@ -224,7 +195,7 @@ Not yet:
 - Its main-process module imports `three` and `@babylonjs/core`, so both are
   bundled into the app's main process (most of its 11 MB).
 - Its own source doesn't typecheck under this repository's settings, so
-  `npm run typecheck` covers the bridge, the preload, the carrier and the
+  `npm run typecheck` covers the bridge, the preload and the
   tests, not `src/bun/index.ts`.
 - On first run it downloads its CLI and core binaries from GitHub releases.
 

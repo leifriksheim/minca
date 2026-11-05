@@ -1,7 +1,9 @@
-/* Before connecting, and the intro before that: a narrow column with room above */
+/* Before connecting, and the intro before that: a narrow column in the middle of the window */
 .screen {
   max-width: 412px;
-  padding-top: 64px;
+  min-height: 100dvh;
+  justify-content: safe center;
+  padding-block: 64px;
 }
 
 /* An intro card's colour tile, its shape off the corner as on the site */

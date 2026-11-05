@@ -1,5 +1,5 @@
 /**
- * WebRTC for the carrier, copied into the app beside the CLI, which is built
+ * WebRTC for the app's node, copied into the app beside the CLI, which is built
  * without it (`npm run parts:node`): node-datachannel, what it imports at run
  * time, and the binary for the machine this builds on.
  */

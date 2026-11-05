@@ -461,3 +461,18 @@ test('a home answering as another account is not used: the app leaves the last o
   node.lines.end();
   await node.done;
 });
+
+test('closing the home before it answers stops waiting, and the node says why', async () => {
+  const data = path.join(await mkdtemp(path.join(tmpdir(), 'minca-app-node-')), 'node');
+  const node = run(data, crypto.getRandomValues(new Uint8Array(32)));
+  await node.next(isState('disconnected'));
+  let from = node.said.length;
+  node.lines.push({ t: 'connect', home: HOME, request: { access: 'write', scope: 'account' } });
+  await node.next((message) => message.t === 'home-open', from);
+  from = node.said.length;
+  node.lines.push({ t: 'home-closed' });
+  const after = await node.next(isState('disconnected'), from);
+  assert.match(String(after.t === 'state' ? after.error : ''), /closed/);
+  node.lines.end();
+  await node.done;
+});

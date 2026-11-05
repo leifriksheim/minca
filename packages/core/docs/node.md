@@ -1004,9 +1004,8 @@ remove ([the account home's side](sign-in.md#the-account-homes-side)).
 
 When a version wakes one of the account's wakes, a `CarrierNode` sends a
 `wake` event with only the wake, the space, and the record's key, collection
-and `createdAt`. `wakes()` lists the wakes it holds. The desktop app shows
-these as notifications. The browser
-extension doesn't yet.
+and `createdAt`. `wakes()` lists the wakes it holds. The browser extension
+shows these as notifications.
 
 ### Hosting
 

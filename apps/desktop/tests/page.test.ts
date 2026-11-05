@@ -209,25 +209,6 @@ test('a window here has no SharedWorker and no passkeys, so pages take the paths
   }
 });
 
-test('the app’s window can tell the menu bar its account; a popup has no way to', () => {
-  const { windows, envelopes, flush, openApp } = setupHarness();
-  const app = openApp();
-  app.page.click();
-  call(app.page, 'open', HOME, 'minca-home', 'popup');
-  flush();
-  const home = windows[1];
-  assert.ok(home);
-  assert.equal(Reflect.get(home.page.context, 'mincaDesktop'), undefined);
-  const desktop: unknown = Reflect.get(app.page.context, 'mincaDesktop');
-  const account: unknown = Reflect.get(Object(desktop), 'account');
-  assert.ok(typeof account === 'function');
-  const before = envelopes.length;
-  Reflect.apply(account, desktop, [{ did: 'did:key:zLeif', name: 'Leif' }]);
-  flush();
-  assert.equal(envelopes.length, before + 1);
-  assert.ok(envelopes.at(-1)?.includes('did:key:zLeif'));
-});
-
 test('the app’s window shows notifications through the system; a popup has none to show', async () => {
   const { windows, notified, flush, openApp } = setupHarness();
   const app = openApp();

@@ -5,15 +5,12 @@ import { RouterProvider } from '@tanstack/react-router';
 import { exposeToAgents } from './webmcp';
 import { MincaProvider } from '@minca/react';
 import { connection } from './minca';
-import { tellDesktop } from './desktop';
 import { router } from './router';
 import { applyRememberedTheme } from '@minca/app-shared/theme';
 
 // The node's operations as WebMCP tools, from the start — agents and
 // extensions read the list on load. They act for whoever signs in.
 exposeToAgents();
-// In the desktop app, its menu bar follows the account this app is connected as.
-tellDesktop(connection);
 
 // In the account's theme from the first paint, as this device last saw it.
 applyRememberedTheme();

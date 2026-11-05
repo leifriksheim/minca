@@ -2029,7 +2029,7 @@ wake carries no words of the person's and no topic values, only their tags,
 at most 16 for a space; a device that would need more leaves that space
 without an entry.
 A carrier on one of the account's own devices may show a match there itself,
-as the desktop app's and the Chrome extension's do; a wake is also what a carrier needs to wake an app
+as the Chrome extension's does; a wake is also what a carrier needs to wake an app
 that is closed ([06](06-nodes-and-sessions.md) §4.4).
 
 _Source: `packages/core/src/space/own-automations.ts` (`readWake`, `wakes`, `wakeFor`, `linkedWakes`), `packages/core/src/node/node-carriers.ts` (`syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`), `apps/shared/src/notify.ts`, `apps/extension/src/worker.ts` (`notify`). Tests: `packages/core/tests/carrier.test.ts` ("a carrier gets tags, never the values it matches", "someone mentions you in a private space: the carrier says so, and nothing else"), `packages/core/tests/computed.test.ts` ("a wake for a filter on a computed field also wakes on what that field reads"), `apps/desktop/tests/notify.test.ts`._
