@@ -363,6 +363,47 @@ describe('the account registry', () => {
     await until(async () => (await names(laptop)).length === 0, 3000, 'the laptop to leave');
   });
 
+  /** Two spaces the laptop makes and shares with a friend of another account */
+  async function sharedWithFriend(laptop: P2PNode, friend: P2PNode) {
+    const shared = [];
+    for (const name of ['Book club', 'Band']) {
+      const space = await laptop.spaces.create({ name, ...team, visibility: 'private' });
+      await friend.spaces.join(await laptop.spaces.invite(space.id));
+      await hold(laptop, space.id);
+      await hold(friend, space.id);
+      await joined(friend, space.id);
+      shared.push(space);
+    }
+    return shared;
+  }
+
+  const isMember = async (node: P2PNode, spaceId: string, did: string) =>
+    (await node.spaces.access(spaceId)).members.some((member) => member.did === did);
+
+  test('a device that was away drops what the account left at once', async () => {
+    const seed = generateSeed();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const laptop = await device(seed, hub);
+    const phoneStores = memoryStores();
+    const phone = await device(seed, hub, phoneStores);
+    const friend = await device(generateSeed(), hub);
+    const shared = await sharedWithFriend(laptop, friend);
+    await until(async () => (await names(phone)).length === 2, 3000, 'the phone to join both');
+    for (const space of shared) {
+      await hold(phone, space.id);
+      await until(async () => isMember(phone, space.id, friend.did), 3000, 'the phone to see the friend');
+    }
+
+    // The phone is away while the laptop leaves both, then the friend goes too.
+    await phone.close();
+    for (const space of shared) await laptop.spaces.leave(space.id);
+    await friend.close();
+
+    // Back, with nobody of another account to hand anything to, the phone drops both anyway.
+    const back = await device(seed, hub, phoneStores);
+    await until(async () => (await names(back)).length === 0, 1000, 'the phone to drop both');
+  });
+
   test('a device that was offline catches up when it comes back', async () => {
     const seed = generateSeed();
     const hub = createFakeHub({ latencyMs: 1 });

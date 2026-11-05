@@ -435,7 +435,10 @@ one run at a time:
 
 1. It joins every space a `sys.joined` record names that it doesn't hold,
    with the view-only invite in the record.
-2. It leaves every space whose `sys.joined` record was deleted.
+2. It leaves every space whose `sys.joined` record was deleted, all at once.
+   The space leaves the list right away. If the account still holds a place
+   there, giving it up runs in the background, as [leaving](#leaving-a-space)
+   describes.
 3. It writes a `sys.joined` record for a space it holds that the registry
    doesn't know.
 4. It brings every carrier's passes and wakes up to date.

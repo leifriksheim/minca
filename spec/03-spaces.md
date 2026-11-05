@@ -1090,7 +1090,7 @@ becomes due (§9.2), and someone granted `/key/change` changes the key (§9.3).
 What the library does, and how long it waits for a peer, is in
 [its docs](../packages/core/docs/node.md#leaving-a-space).
 
-_Source: `packages/core/src/node/node.ts` (`spaces.leave`, `giveUpPlace`, `reconcileOnce`), `packages/core/src/node/space-membership.ts` (`giveUpPlace`, `assign`, `removeAccount`, `defineRole`), `packages/core/src/node/space-peers.ts` (`writeUntilStored`). Tests: `packages/core/tests/key-change.test.ts` ("leaving a private space"), `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/roles.test.ts` ("a founder steps down by leaving…"), `packages/core/tests/constitution.test.ts` ("stepping down")._
+_Source: `packages/core/src/node/node.ts` (`spaces.leave`, `giveUpPlace`, `followLeave`, `reconcileOnce`), `packages/core/src/node/space-membership.ts` (`giveUpPlace`, `assign`, `removeAccount`, `defineRole`), `packages/core/src/node/space-peers.ts` (`writeUntilStored`). Tests: `packages/core/tests/key-change.test.ts` ("leaving a private space"), `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/roles.test.ts` ("a founder steps down by leaving…"), `packages/core/tests/constitution.test.ts` ("stepping down")._
 
 ### 6.3 Cutoffs
 
