@@ -2,8 +2,8 @@
  * Updates, from the GitHub Releases the app is published on
  * (`release.baseUrl` in electrobun.config.ts). It looks shortly after launch
  * and every few hours, downloads a new version quietly, then waits: the
- * carrier is keeping spaces online, so only the person restarts it, from the
- * menu bar.
+ * app's node is keeping spaces online, so only the person restarts it, from
+ * the menu bar.
  */
 import type { MenuLine } from './menu';
 

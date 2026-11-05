@@ -301,4 +301,4 @@ mcp-server` (`packages/cli/src/remote-mcp/oauth.ts`):
   why the desktop app is a prototype: 2.x moved to its own toolchain, so
   1.18 is the last of its kind (mid-rewrite), and its main module pulls in
   `three` and `@babylonjs/core`. The desktop app also ships `node-datachannel`
-  (above) beside the CLI, for the carrier's WebRTC.
+  (above) beside the CLI, for the app's node's WebRTC.

@@ -1,6 +1,5 @@
 /**
- * Notifications from a carrier, in the desktop's menu bar or the Chrome
- * extension: what it says a wake matched, shown by the system. The carrier
+ * Notifications from a carrier, in the Chrome extension: what it says a wake matched, shown by the system. The carrier
  * sees a record from outside only, so a notification says where something
  * arrived and what kind of thing, never what it says; the app shows that.
  *

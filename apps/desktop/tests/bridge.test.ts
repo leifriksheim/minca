@@ -21,11 +21,9 @@ function setup() {
   const windows: FakeWindow[] = [];
   const external: string[] = [];
   const focused: string[] = [];
-  const accounts: unknown[] = [];
   const shell: Shell = {
     preload: ({ secret, origin, node }) => `${secret} ${origin} ${node ?? ''}`,
     openExternal: (url) => external.push(url),
-    account: (who) => accounts.push(who),
     open({ url, preload, popup, closed }) {
       const [secret = '', origin = '', node = ''] = preload.split(' ');
       const win: FakeWindow = {
@@ -58,7 +56,7 @@ function setup() {
   /** What a page sends, as its preload would */
   const send = (from: FakeWindow, message: object) =>
     bridge.receive({ s: from.secret, m: JSON.stringify(message) });
-  return { bridge, windows, external, focused, accounts, send };
+  return { bridge, windows, external, focused, send };
 }
 
 /** What the bridge delivered to a window, and the origin each delivery was guarded by */
@@ -241,7 +239,7 @@ test('a window the shell opens hears the shell as its opener, at the origin the 
   const home = bridge.openFromShell(
     'https://home.example/connect',
     { width: 460, height: 720 },
-    { origin: 'http://carrier-abc.localhost', hear: (event) => heard.push(event) },
+    { origin: 'http://shell-abc.localhost', hear: (event) => heard.push(event) },
   );
   assert.ok(home);
   const page = windows[0];
@@ -252,10 +250,10 @@ test('a window the shell opens hears the shell as its opener, at the origin the 
   home.postMessage({ type: 'lost' }, 'https://other.example');
   assert.deepEqual(
     delivered(page).map(({ message }) => message),
-    [{ t: 'message', from: null, origin: 'http://carrier-abc.localhost', data: { type: 'minca:request' } }],
+    [{ t: 'message', from: null, origin: 'http://shell-abc.localhost', data: { type: 'minca:request' } }],
   );
 
-  send(page, { t: 'post', to: null, origin: 'http://carrier-abc.localhost', data: '{"type":"minca:grant"}' });
+  send(page, { t: 'post', to: null, origin: 'http://shell-abc.localhost', data: '{"type":"minca:grant"}' });
   send(page, { t: 'post', to: null, origin: 'http://127.0.0.1:47830', data: '{"type":"elsewhere"}' });
   assert.deepEqual(heard, [{ data: { type: 'minca:grant' }, origin: 'https://home.example' }]);
 
@@ -277,26 +275,6 @@ test('a window brings another to the front at most once a second', () => {
   assert.ok(popup);
   for (let i = 0; i < 50; i++) t.send(popup, { t: 'focus', to: null });
   assert.equal(t.focused.length, 1);
-});
-
-test('only the app’s own window says which account it is connected as, never a popup', () => {
-  const { windows, accounts, send } = withHome();
-  const [app, home] = windows;
-  assert.ok(app && home);
-  send(home, { t: 'account', who: { did: 'did:key:zEvil', name: 'Mallory' } });
-  send(app, { t: 'account', who: { did: 'not a did', name: 'Leif' } });
-  send(app, { t: 'account', who: { did: 'did:key:zLeif', name: 'Leif' } });
-  send(app, { t: 'account', who: null });
-  assert.deepEqual(accounts, [{ did: 'did:key:zLeif', name: 'Leif' }, null]);
-});
-
-test('a window the shell opens as no app — the account home, from the menu bar — says no account', () => {
-  const t = setup();
-  t.bridge.openWindow('https://home.example/', { width: 720, height: 820 }, { app: false });
-  const home = t.windows[0];
-  assert.ok(home);
-  t.send(home, { t: 'account', who: { did: 'did:key:zLeif', name: 'Leif' } });
-  assert.deepEqual(t.accounts, []);
 });
 
 test('only the app’s own window gets a node token: not a popup it opened, nor a window the menu bar opened', () => {

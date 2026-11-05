@@ -44,17 +44,12 @@ export interface Shell {
     readonly height: number;
     /** A popup, opened by another window */
     readonly popup: boolean;
-    /** The app's own window: the one that says which account it is connected as */
+    /** The app's own window: the one its node and notifications are for */
     readonly app: boolean;
     readonly closed: () => void;
   }): PaneHost;
   /** Opens a link in the person's own browser */
   openExternal(url: string): void;
-  /**
-   * The account the app's window says it is connected as, or null when none.
-   * Only a window nothing opened says it: the app's own, not a popup.
-   */
-  account?(who: { readonly did: string; readonly name: string } | null): void;
   /** A notification the app's own window shows, as the system's */
   notify?(shown: { readonly title: string; readonly body: string }): void;
   /**
@@ -81,7 +76,7 @@ interface Pane {
   readonly ref: string | null;
   readonly name: string;
   readonly children: Map<string, Pane>;
-  /** The app's own window, as the shell opened it: only it says which account it is connected as */
+  /** The app's own window, as the shell opened it: only it reaches the node and shows notifications */
   readonly app: boolean;
   /** For the app's own window, the token its node's socket opens with */
   readonly nodeToken: string | null;
@@ -230,7 +225,6 @@ export function createBridge(shell: Shell): Bridge {
     else if (message.t === 'external') external(pane, message.url);
     else if (message.t === 'drag') drag(pane, message);
     else if (message.t === 'zoom') pane.host.zoom();
-    else if (message.t === 'account' && pane.app) account(message.who);
     else if (message.t === 'notify' && pane.app) notify(pane, message);
   }
 
@@ -298,13 +292,6 @@ export function createBridge(shell: Shell): Bridge {
     if (now - pane.lastFocus < EXTERNAL_EVERY_MS) return;
     pane.lastFocus = now;
     target(pane, to)?.host.activate();
-  }
-
-  function account(who: unknown): void {
-    if (who === null) return shell.account?.(null);
-    if (!isRecord(who) || typeof who.did !== 'string' || typeof who.name !== 'string') return;
-    if (!who.did.startsWith('did:') || who.did.length > 200) return;
-    shell.account?.({ did: who.did, name: who.name.slice(0, 80) });
   }
 
   function notify(pane: Pane, message: Record<string, unknown>): void {

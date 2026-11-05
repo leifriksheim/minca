@@ -2,7 +2,7 @@
  * What the menu bar says about the app's connection. Quiet while it lasts: a
  * date, far off. In its last two days it says when it ends and offers to
  * renew; once it has run out, what stopped and how to start it again. It says
- * what stops ("automations are off"), never why ("the note expired").
+ * what stops ("spaces offline"), never why ("the note expired").
  */
 import type { AppNodeState } from './app-node';
 
@@ -65,7 +65,7 @@ export function connectionMenu(state: AppNodeState, now: number, locale?: string
       return {
         lines: [
           ...(name ? [{ label: name }] : []),
-          { label: 'Paused: automations are off until you reconnect' },
+          { label: 'Paused: spaces offline until you reconnect' },
           { label: 'Reconnect…', action: 'renew' as const },
         ],
         attention: true,
