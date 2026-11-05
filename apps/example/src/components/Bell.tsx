@@ -8,7 +8,7 @@ import { ago } from '@minca/ui/time';
 import { SpaceMark } from './SpaceList';
 import { Icon } from '@minca/app-shared/Icon';
 import { Toggle } from '@minca/app-shared/Toggle';
-import { PING, play, setSoundOn, soundOn } from '../sound';
+import { notificationSound, PING, play } from '../sound';
 import { WatchBuilder } from './automations/WatchBuilder';
 import { useSpaceName } from '../workspace';
 import styles from './Bell.module.css';
@@ -246,9 +246,9 @@ export function Builder({ space, onClose }: { space: SpaceSummary; onClose: () =
   return <WatchBuilder space={space} collections={collections} onClose={onClose} />;
 }
 
-/** Whether a notification makes a sound, on this device */
+/** Whether a notification makes a sound, on every device */
 function SoundRow() {
-  const [on, setOn] = useState(soundOn);
+  const [{ on }, setSound] = notificationSound.use();
   return (
     <li className="row">
       <span className="stack truncate" data-gap="tight">
@@ -259,8 +259,7 @@ function SoundRow() {
         on={on}
         label="Sound"
         onChange={(next) => {
-          setSoundOn(next);
-          setOn(next);
+          setSound({ on: next });
           if (next) play(PING);
         }}
       />

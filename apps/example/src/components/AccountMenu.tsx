@@ -217,7 +217,7 @@ export function openAccountHome(home: string, did: string) {
   globalThis.open(accountHomeLink(home, did), 'minca-account', popupFeatures(720, 820));
 }
 
-/** What this device downloads before a file is opened, in a word or two */
+/** What is downloaded before a file is opened, in a word or two */
 export const DOWNLOADS = {
   thumbnails: 'Thumbnails first',
   photos: 'Photos ahead',

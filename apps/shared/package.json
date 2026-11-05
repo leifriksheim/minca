@@ -36,7 +36,8 @@
     "./mcp": "./src/mcp.ts",
     "./Terminal": "./src/Terminal.tsx",
     "./AppLogo": "./src/AppLogo.tsx",
-    "./notify": "./src/notify.ts"
+    "./notify": "./src/notify.ts",
+    "./setting": "./src/setting.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

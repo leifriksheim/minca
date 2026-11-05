@@ -16,7 +16,7 @@ import { madeNotify } from './components/apps/entries';
 import { launcherApp, sortLauncher, type LauncherApp } from './components/apps/launcher';
 import { message } from '@minca/app-shared/action';
 import { labelOf, setActivity } from './alerts';
-import { PING, play, soundOn } from './sound';
+import { notificationSound, PING, play } from './sound';
 
 /** Offered whatever apps a space has */
 const CONTACTS: AutomationProposal = notifyOn('Someone asks to be your contact', 'std.contact-request');
@@ -205,6 +205,8 @@ export function useShowNotifications(openSpace: (id: string) => void) {
   const { did } = useAccount();
   const open = useRef(openSpace);
   open.current = openSpace;
+  // Follows the account's choice, so the sound below is the latest.
+  notificationSound.use();
   useEffect(() => {
     const waiting = new Map<
       string,
@@ -218,7 +220,7 @@ export function useShowNotifications(openSpace: (id: string) => void) {
           tag: key,
           onClick: () => open.current(spaceId),
         });
-        if (shown && soundOn()) play(PING);
+        if (shown && notificationSound.get().on) play(PING);
       });
     };
     const stop = watchNotifications(node, {

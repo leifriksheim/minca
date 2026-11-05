@@ -1,5 +1,5 @@
 /** Short sounds made on the spot from a few notes, so there is no file to fetch. */
-import { readKept, writeKept } from './kept';
+import { accountSetting, fieldOf } from '@minca/app-shared/setting';
 
 /** Someone calling: played again every two seconds while it rings */
 export const RING = [660, 880];
@@ -32,7 +32,11 @@ export function play(notes: ReadonlyArray<number>): void {
   });
 }
 
-/** Whether notifications make a sound on this device: on until turned off */
-const SOUND = 'minca:notification-sound';
-export const soundOn = (): boolean => readKept(SOUND) !== false;
-export const setSoundOn = (on: boolean): void => writeKept(SOUND, on);
+/** Whether notifications make a sound: chosen for the account, on until turned off */
+export const notificationSound = accountSetting({
+  name: 'minca.notification-sound',
+  title: 'Notification sound',
+  schema: { type: 'object', properties: { on: { type: 'boolean' } }, required: ['on'] },
+  valid: (body): body is { readonly on: boolean } => typeof fieldOf(body, 'on') === 'boolean',
+  fallback: { on: true },
+});

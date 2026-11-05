@@ -60,7 +60,7 @@ export function ProfilePage() {
   );
 }
 
-/** How this app works for you: its look, this device's downloads, agents, and the account's security */
+/** How this app works for you: its look, downloads, agents, and the account's security */
 export function SettingsPage() {
   const { state } = useConnection();
   const account = useAccount();
@@ -83,7 +83,7 @@ export function SettingsPage() {
           </li>
           <SettingsRow
             icon={<LineIcon name="download" />}
-            title="Downloads on this device"
+            title="Downloads"
             detail={`${DOWNLOADS[downloads.ahead]}, ${size(downloads.keep)} a space`}
             onClick={() => setDownloading(true)}
           />
