@@ -59,9 +59,50 @@ button.person {
   }
 }
 
-.comment-text {
-  white-space: pre-wrap;
-  word-break: break-word;
+/* Text written in Markdown (MentionText), and the box that writes it: a chat's paragraphs, close together */
+.markdown {
+  min-width: 0;
+  overflow-wrap: anywhere;
+
+  & > * + * {
+    margin-top: 6px;
+  }
+
+  & :is(ul, ol) {
+    margin: 0;
+    padding-inline-start: 1.5em;
+  }
+
+  & blockquote {
+    padding-inline-start: 12px;
+    border-inline-start: 3px solid var(--color-divider);
+    color: var(--color-text-muted);
+  }
+
+  /* Code as it was written: a long line scrolls rather than wraps, so a drawn table keeps its columns */
+  /* As wide as its longest line, up to a reading column's width, past which it scrolls */
+  & pre {
+    width: fit-content;
+    max-width: min(100%, var(--reading-width));
+    line-height: 1.2;
+    white-space: pre;
+    word-break: normal;
+    overflow-wrap: normal;
+  }
+
+  & code:not(pre > code) {
+    padding: 1px 5px;
+    border: 1px solid var(--color-divider);
+    border-radius: var(--radius-small);
+    background: var(--color-sunken);
+  }
+
+  & table {
+    display: block;
+    width: max-content;
+    max-width: 100%;
+    overflow-x: auto;
+  }
 }
 
 /* A message box as chat apps have it: one field, "+" at its start, then the words, then 🙂 and send */
@@ -82,7 +123,7 @@ button.person {
   }
 
   /* The field is the box around them, so what is typed in has none of its own */
-  & :is(input, textarea) {
+  & :is(input, textarea, .editor) {
     min-height: 32px;
     padding: 4px 6px;
     border: none;
@@ -102,15 +143,45 @@ button.person {
   gap: 2px;
 }
 
-/* A box that grows with its lines (MentionInput), one to start, never dragged to a size */
+/* The box to write in (MentionInput): it grows with its lines, about six, then scrolls */
 .mention-input {
   position: relative;
   flex: 1;
   min-width: 0;
+}
 
-  & textarea {
-    resize: none;
-    overflow-y: auto;
+.editor {
+  display: block;
+  max-height: 140px;
+  overflow-y: auto;
+  outline: none;
+  cursor: text;
+
+  &:empty::before {
+    content: attr(data-placeholder);
+    color: var(--color-text-muted);
+    pointer-events: none;
+  }
+
+  /* Lines a browser makes as you type sit as close as the lines of a paragraph */
+  & > div {
+    margin-top: 0;
+  }
+}
+
+/* The formats, from a button at the box's end: they open leftwards, each with its keys */
+.anchor > menu.formats {
+  left: auto;
+  right: 0;
+
+  & button {
+    justify-content: space-between;
+    gap: var(--space-loose);
+  }
+
+  & kbd {
+    color: var(--color-text-muted);
+    font: var(--text-small) var(--font-body);
   }
 }
 

@@ -11,7 +11,9 @@ import { attach, Attachments } from './attachments';
 import type { ScreenRecord } from './minca';
 import { useCan, usePeople, useRecords } from './hooks';
 import { html } from './html';
-import { MentionInput, MentionText, mentionsIn } from './mentions';
+import { FormatMenu, MentionInput } from './editor';
+import { MentionText } from './markdown';
+import { mentionsIn } from './mentions';
 import { AddMenu, EmojiPicker } from './menus';
 import { Avatar, Person } from './people';
 import { recordTitle } from './record';
@@ -79,7 +81,7 @@ export function Comments({ about }: { about: Pick<ScreenRecord, 'key' | 'created
               <${Person} did=${c.createdBy ?? ''} face=${false} />
               <small>· ${ago(c.createdAt)}</small>
             </div>
-            <p class="comment-text"><${MentionText} text=${c.body.text ?? ''} /></p>
+            <${MentionText} text=${c.body.text ?? ''} />
             <${Shared} from=${c} />
             ${mayAttach && html`<${Attachments} about=${c.key} />`}
           </div>
@@ -128,6 +130,7 @@ export function Comments({ about }: { about: Pick<ScreenRecord, 'key' | 'created
             aria-label="Write a comment"
           />
           <div class="composer-end">
+            <${FormatMenu} />
             <${EmojiPicker} onPick=${(emoji: string) => setDraft(draft + emoji)} />
             <button
               type="submit"

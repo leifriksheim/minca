@@ -308,6 +308,20 @@ until an admin redefines the member role.
 The example app reads no `std.space-profile` in a space for two. It names
 the space for the other person.
 
+## Text is Markdown
+
+The `text` of a `std.message`, `std.comment` or `std.post` is Markdown:
+CommonMark, with GitHub's tables and `~~strikethrough~~`. A plain sentence is
+Markdown too, so an app that shows text as it is still shows it right.
+
+````json
+{ "text": "Shipped **today**:\n\n- the chat\n- `code` blocks\n\n```\nnpm run dev\n```" }
+````
+
+Draw it as elements, never as HTML, so a message can't put markup on the
+screen. A screen gets this from the kit: `MentionText` draws it and
+`MentionInput` writes it.
+
 ## Mentions and replies
 
 A `std.message`, `std.comment` or `std.post` names the accounts it calls on
