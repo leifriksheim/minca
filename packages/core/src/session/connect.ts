@@ -9,7 +9,7 @@
 import { createP256Provider } from '../identity/crypto-p256.js';
 import { didOf, didToPublicKey } from '../identity/did.js';
 import { canonicalize } from '../schema/version.js';
-import { dropAppKeys, keepAppKeys, readAppKeys } from '../identity/app-keys.js';
+import { idbOnce } from '../identity/idb.js';
 import { base64UrlDecode, base64UrlEncode, utf8Encode } from '../utils/encoding.js';
 import { verifyNote, type Delegation } from '../identity/ucan.js';
 import {
@@ -323,11 +323,11 @@ export async function checkKeyProof(audience: string, proof: unknown, terms: Key
 }
 
 export interface AppKey {
-  /** What `appKey` keeps it under: a node in a worker reads it there by this */
-  readonly name?: string;
   readonly keys: CryptoKeyPair;
   readonly did: string;
 }
+
+const KEY_DB = 'minca-app-key';
 
 /**
  * This app's key: made once, kept in this site's IndexedDB, and never
@@ -335,18 +335,23 @@ export interface AppKey {
  * there, but cannot carry it off.
  */
 export async function appKey(name = 'default'): Promise<AppKey> {
-  let keys = await readAppKeys(name);
+  const stored = await idbOnce(KEY_DB, 'keys', 'readonly', (store) => store.get(name));
+  let keys = isKeyPair(stored) ? stored : null;
   if (!keys) {
     const { privateKey, publicKey } = await createP256Provider().generateKeyPair();
     keys = { privateKey, publicKey };
-    await keepAppKeys(name, keys);
+    await idbOnce(KEY_DB, 'keys', 'readwrite', (store) => store.put(keys, name));
   }
-  return { name, keys, did: await didOf(keys.publicKey) };
+  return { keys, did: await didOf(keys.publicKey) };
+}
+
+function isKeyPair(value: unknown): value is CryptoKeyPair {
+  return isObject(value) && value.privateKey instanceof CryptoKey && value.publicKey instanceof CryptoKey;
 }
 
 /** Forgets this app's key. The next connection makes a new one. */
 export async function forgetAppKey(name = 'default'): Promise<void> {
-  await dropAppKeys(name);
+  await idbOnce(KEY_DB, 'keys', 'readwrite', (store) => store.delete(name));
 }
 
 export interface ConnectOptions {
@@ -646,7 +651,7 @@ export async function startConnectedNode(params: {
   const node = await startPageNode(
     {
       signer: grantSigner(params.grant),
-      sessionKey: key,
+      sessionKey: key.keys,
       stores: { indexedDB: `minca-app:${params.grant.did}` },
       ...(network ? { network } : {}),
       ...(params.cache === false ? {} : { cache: params.cache ?? {} }),

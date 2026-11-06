@@ -844,9 +844,7 @@ default.
 node with:
 
 - `signer`: `grantSigner(grant)`, so `did` is `grant.did`;
-- `sessionKey`: the app's key. A node in a worker is sent its name, not the
-  key, and reads it where `appKey` keeps it: WebKit drops, without an error,
-  a message to a shared worker that holds a `CryptoKey`;
+- `sessionKey`: the app's key;
 - stores: `indexedDBStores('minca-app:<grant.did>')` unless given;
 - `cache: {}` unless `cache: false`;
 - `accountKey`, `contactKey` and `contactsSpace` from the grant when there,

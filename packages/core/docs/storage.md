@@ -327,12 +327,11 @@ When another writer changes the same store, the node reads all of it again
 
 - **Tabs in one browser.** Where shared workers work, the apps in this
   repository run one node for all of a site's tabs in a `SharedWorker`, one
-  per account and key. Then there's nothing to tell. Two nodes on one site's
-  stores also wait on each other's transactions, and a tab an iPhone froze in
-  the background never finishes its own, so one node is the safe way.
+  per account and key. Then there's nothing to tell.
 - **Elsewhere** each tab runs its node in a worker of its own. Tabs tell each other through a
   `BroadcastChannel` named `minca-node:<root DID>:<space id>`. Chrome on
-  Android has no shared workers.
+  Android has no shared workers, and WebKit drops a message to one that
+  holds a `CryptoKey`.
 - **Writers on a shared folder** are found by reading it again
   ([data folders](#data-folders)).
 
