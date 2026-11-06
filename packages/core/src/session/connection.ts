@@ -238,7 +238,11 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
    * in the tab in view, and it closes when the tab is put away.
    */
   let ownTurn: { readonly kept: KeptGrant; readonly release: () => void } | null = null;
-  /** The grant to open again when the tab comes back, having closed its node when put away */
+  /**
+   * The grant this tab closed its node for when put away, to open again on
+   * coming back: cleared by anything else that opens or stops, and checked
+   * against the grants then, so it never opens what was since replaced.
+   */
   let putAway: KeptGrant | null = null;
   /** How many keep the node running while the tab is put away (`keepAwake`), as a call must */
   let awake = 0;
@@ -247,6 +251,7 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
   async function stop(next: Partial<MincaConnectionState>): Promise<void> {
     unwatch?.();
     unwatch = null;
+    putAway = null;
     const node = state.node;
     const turn = ownTurn;
     ownTurn = null;
@@ -257,17 +262,21 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
 
   function followVisibility(): void {
     if (hidden()) {
-      if (!ownTurn || awake > 0 || state.status !== 'ready') return;
+      // Whatever its status: an expired tab's node holds the stores, and its turn, all the same.
+      if (!ownTurn || awake > 0) return;
       markStep('connection: put away, closing the node');
-      putAway = ownTurn.kept;
-      void stop({ status: 'starting' });
+      const kept = ownTurn.kept;
+      void stop({ status: state.status === 'expired' ? 'expired' : 'starting' });
+      putAway = kept;
       return;
     }
     const back = putAway;
     putAway = null;
-    if (back && state.status === 'starting' && !state.node) {
+    // Only the grant still kept for that account, to the same key: another tab may have let it go or renewed it.
+    const still = back && grants.get(back.grant.did);
+    if (back && still?.keyName === back.keyName) {
       markStep('connection: back, opening the node again');
-      void open(back).catch(failed);
+      void open(still).catch(failed);
     }
   }
   globalThis.document?.addEventListener('visibilitychange', followVisibility);

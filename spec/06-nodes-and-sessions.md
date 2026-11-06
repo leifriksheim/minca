@@ -159,9 +159,16 @@ place in them is taken under a lock every tab shares, and read from the
 storage they share. A tab still open on a key the app has since replaced goes
 on signing with it, its own lines, until it starts again.
 
+Where each tab runs a node of its own (no shared worker), the reference runs
+one at a time per account, in the tab in view, and closes it when the tab is
+put away; tabs that share one node in a shared worker are one peer anyway.
+Which tab runs a node is the app's own business, not protocol: the
+reference's is in [the app-side client](../packages/core/docs/node.md#the-connection).
+
 > **Known defect:** so every tab or window of one app is the same DID in a
-> room, and a peer holds one connection per DID: one tab connects to each
-> peer, and the others don't sync with that peer until it closes.
+> room, and a peer holds one connection per DID: where two tabs both run a
+> node, one connects to each peer, and the other doesn't sync with that peer
+> until it closes.
 > The fix is a key per tab, each with its own one-link note signed by the
 > account through the home: the app's key can't pass its note on
 > ([01](01-identity.md) §7.5). See

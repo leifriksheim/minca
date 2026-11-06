@@ -1976,6 +1976,60 @@ describe('an app connected to several accounts', () => {
     );
   });
 
+  test('an account connected while the tab is put away is the one acted for when it comes back', async () => {
+    const page = fakeDocument();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const a = await granted(hub);
+    const other = await home(hub);
+    const storage = memoryStorage();
+    grantStore(storage).save(a.grant, 'account-a');
+    const connection = tab(hub, storage, keyStore([['account-a', a.key]]));
+    await connection.start();
+    await withHome(other, [], async () => {
+      const connecting = connection.connect();
+      // On a phone the home opens as a tab of its own: the app's is put away while the person approves.
+      page.hide();
+      await until(
+        () => (connection.getState().grant?.did ?? a.grant.did) !== a.grant.did,
+        3000,
+        'the new account',
+      );
+      const chosen = connection.getState().grant?.did;
+      page.show();
+      await connecting;
+      await until(() => connection.getState().status === 'ready', 3000, 'ready');
+      assert.equal(
+        connection.getState().grant?.did,
+        chosen,
+        'the account just connected, not the one before',
+      );
+    });
+  });
+
+  test('a tab whose grant ran out closes its node when put away, so a renewed tab can start', async () => {
+    fakeLocks();
+    const page = fakeDocument();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const a = await granted(hub);
+    const storage = memoryStorage();
+    const grants = grantStore(storage);
+    grants.save({ ...a.grant, expiresAt: Math.floor(Date.now() / 1000) + 2 }, 'account-a');
+    const keys = keyStore([['account-a', a.key]]);
+    const first = tab(hub, storage, keys);
+    await first.start();
+    await until(() => first.getState().status === 'expired', 5000, 'the grant to run out');
+    page.hide();
+    await until(() => first.getState().node === null, 2000, 'expired and put away, its node closes');
+    assert.equal(first.getState().status, 'expired');
+    page.show();
+    const fresh = await appKey();
+    grants.save(await grantFrom(a.auth, fresh), 'account-a2');
+    keys.held.set('account-a2', fresh);
+    const second = tab(hub, storage, keys);
+    await second.start();
+    assert.equal(second.getState().status, 'ready', 'renewed in another tab, it starts');
+  });
+
   test('switching away from an account and back opens it again: closing lets go of its turn', async () => {
     fakeLocks();
     fakeDocument();
