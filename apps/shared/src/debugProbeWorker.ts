@@ -61,7 +61,7 @@ async function probe(sent: unknown): Promise<Record<string, unknown>> {
     result['Reading the app key'] = `failed: ${String(error)}`;
   }
   const posted: unknown = typeof sent === 'object' && sent !== null ? Reflect.get(sent, 'key') : undefined;
-  result['A CryptoKey posted here arrived as one'] = posted instanceof CryptoKey;
+  result['Sent a CryptoKey with this'] = posted instanceof CryptoKey;
   return result;
 }
 

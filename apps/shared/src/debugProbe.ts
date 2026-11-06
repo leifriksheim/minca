@@ -53,13 +53,16 @@ export async function probeWorkers(): Promise<Record<string, Answer>> {
       name: `minca-debug-probe-${Date.now()}`,
     });
     shared.port.start();
-    found['Shared worker'] = await ask(shared.port, key);
+    // First with no key, which WebKit is known to drop: then what the worker reads is still heard.
+    found['Shared worker'] = await ask(shared.port, null);
+    found['Shared worker, sent a key'] = await ask(shared.port, key);
   } catch (error) {
     found['Shared worker'] = `could not start: ${String(error)}`;
   }
   try {
     const dedicated = new Worker(new URL('./debugProbeWorker.ts', import.meta.url), { type: 'module' });
-    found['Dedicated worker'] = await ask(dedicated, key);
+    found['Dedicated worker'] = await ask(dedicated, null);
+    found['Dedicated worker, sent a key'] = await ask(dedicated, key);
     dedicated.terminate();
   } catch (error) {
     found['Dedicated worker'] = `could not start: ${String(error)}`;
