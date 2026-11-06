@@ -33,10 +33,6 @@ jobs:
           # Format, lint, typecheck and fallow: seconds each, so one runner.
           - name: check
             run: npm run check
-          # Two tabs sharing one node in WebKit, the engine of every browser on an iPhone.
-          - name: webkit
-            run: npx playwright install --with-deps webkit && npm run test:webkit
-            paths: '^(packages/core/(src|tests/webkit)/|package(-lock)?\.json$|\.github/workflows/check\.yml$)'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -69,6 +65,20 @@ jobs:
         run: npm ci
       - if: steps.changed.outputs.run == 'true'
         run: ${{ matrix.run }}
+
+  # Two tabs sharing one node in WebKit, the engine of every browser on an iPhone. In
+  # Playwright's own image, whose WebKit and system libraries are installed already:
+  # installing them on the runner can take longer than the job may.
+  webkit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container: mcr.microsoft.com/playwright:v1.65.0-noble
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: npm ci
+      - run: npm run test:webkit
 
   # The downloads (build.yml) build on every PR, so a broken one shows before a
   # release does. The desktop app takes a macOS runner and minutes, so only when
