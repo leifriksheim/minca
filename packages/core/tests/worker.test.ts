@@ -250,12 +250,12 @@ describe('a node shared by the tabs of a site', () => {
     const me = await signer();
     const before = await startNodeInWorker(shared.connect(), {
       signer: me,
-      appKey: 'account-old',
+      appKey: { name: 'account-old', did: await didOf(oldKey.publicKey) },
       stores: { indexedDB: 'minca-app:me' },
     });
     const after = await startNodeInWorker(shared.connect(), {
       signer: me,
-      appKey: 'account-new',
+      appKey: { name: 'account-new', did: await didOf(newKey.publicKey) },
       stores: { indexedDB: 'minca-app:me' },
     });
     cleanup.push(
@@ -271,7 +271,7 @@ describe('a node shared by the tabs of a site', () => {
     const shared = fakeSharedWorker(new Map([['account-1', key]]));
     const node = await startNodeInWorker(shared.connect(), {
       signer: await signer(),
-      appKey: 'account-1',
+      appKey: { name: 'account-1', did: await didOf(key.publicKey) },
       stores: { indexedDB: 'minca-app:me' },
     });
     cleanup.push(() => node.close());
@@ -280,12 +280,26 @@ describe('a node shared by the tabs of a site', () => {
     assert.ok(!shared.sent.some(holdsCryptoKey), 'no CryptoKey in any message to the worker');
   });
 
+  test('a key kept again under the same name is refused: the grant is made out to the first', async () => {
+    const provider = createP256Provider();
+    const [meant, replaced] = [await provider.generateKeyPair(), await provider.generateKeyPair()];
+    const shared = fakeSharedWorker(new Map([['account-1', replaced]]));
+    await assert.rejects(
+      startNodeInWorker(shared.connect(), {
+        signer: await signer(),
+        appKey: { name: 'account-1', did: await didOf(meant.publicKey) },
+        stores: { indexedDB: 'minca-app:me' },
+      }),
+      /key changed/,
+    );
+  });
+
   test('a key this browser doesn’t keep says so, rather than starting a node under another', async () => {
     const shared = fakeSharedWorker();
     await assert.rejects(
       startNodeInWorker(shared.connect(), {
         signer: await signer(),
-        appKey: 'forgotten',
+        appKey: { name: 'forgotten', did: 'did:key:zForgotten' },
         stores: { indexedDB: 'minca-app:me' },
       }),
       /not kept in this browser/,

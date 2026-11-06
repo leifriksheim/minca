@@ -38,8 +38,11 @@ export interface WorkerNodeConfig extends Pick<
   NodeConfig,
   'accountKey' | 'contactKey' | 'contactsSpace' | 'sessionTtlSeconds' | 'cache'
 > {
-  /** The app's key the node signs with, by the name it is kept under in this origin (`appKey`) */
-  readonly appKey?: string;
+  /**
+   * The app's key the node signs with: the name it is kept under in this
+   * origin (`appKey`), and its DID, which the key read there must have
+   */
+  readonly appKey?: { readonly name: string; readonly did: string };
   readonly stores: WorkerStores;
   readonly network?: Pick<NodeNetworkConfig, 'relays' | 'nodes' | 'hosts' | 'iceServers'>;
 }
@@ -236,7 +239,7 @@ export async function startPageNode(
     readonly signer: RootSigner;
     readonly network?: NodeNetworkConfig;
     /** The app's key: here its keys sign, and a worker is told its name and reads it itself */
-    readonly sessionKey?: { readonly name?: string; readonly keys: CryptoKeyPair };
+    readonly sessionKey?: { readonly name?: string; readonly did: string; readonly keys: CryptoKeyPair };
   },
   options: { readonly worker?: () => WorkerLike; readonly stores?: StoreFactory } = {},
 ): Promise<P2PNode> {
@@ -249,7 +252,7 @@ export async function startPageNode(
     ? startNodeInWorker(options.worker(), {
         ...shared,
         stores,
-        ...(sessionKey?.name ? { appKey: sessionKey.name } : {}),
+        ...(sessionKey?.name ? { appKey: { name: sessionKey.name, did: sessionKey.did } } : {}),
         ...(network ? { network: workerNetwork(network) } : {}),
       })
     : createNode({
@@ -299,9 +302,12 @@ export function runNodeWorker(
       if (!isWorkerNodeConfig(sent)) throw new Error('The page sent no node config');
       markStep('worker: a tab asks for the node');
       const signer = await remoteSigner(signerPort);
-      const sessionKey = sent.appKey ? await readKey(sent.appKey) : null;
+      const sessionKey = sent.appKey ? await readKey(sent.appKey.name) : null;
       if (sent.appKey && !sessionKey) throw new Error('This app’s key is not kept in this browser');
       const sessionDid = sessionKey ? await didOf(sessionKey.publicKey) : undefined;
+      // Kept again under that name meanwhile, by another tab: not the key the grant is made out to.
+      if (sent.appKey && sessionDid !== sent.appKey.did)
+        throw new Error('This app’s key changed in this browser; connect again');
       const key = nodeKey(signer.did, sent.stores, sessionDid);
       markStep(`worker: ${held.has(key) ? 'sharing the node already running' : 'starting a node'}`);
       entry = held.get(key) ?? start(key, sent, signer, sessionKey);
@@ -346,7 +352,8 @@ export function runNodeWorker(
     signer: RootSigner,
     sessionKey: CryptoKeyPair | null,
   ): Held {
-    const { stores, network, appKey: _named, ...rest } = config;
+    // Only what a worker is sent: a key comes by name, never as a key.
+    const { stores, network, appKey: _named, ...rest } = pick(config);
     const signers = createSignerSwitch(signer.did);
     const connections = createTransportSwitch();
     let meshIce: () => ReadonlyArray<RTCIceServer> = () => [];
@@ -407,9 +414,26 @@ function forgetTab(entry: Held, tab: string): void {
 }
 
 function isWorkerNodeConfig(value: unknown): value is WorkerNodeConfig {
+  const named = isRecord(value) ? value.appKey : null;
   return (
     isRecord(value) &&
     isRecord(value.stores) &&
-    (value.appKey === undefined || typeof value.appKey === 'string')
+    (named === undefined ||
+      (isRecord(named) && typeof named.name === 'string' && typeof named.did === 'string'))
   );
+}
+
+/** A worker's config, and nothing else a page put beside it */
+function pick(config: WorkerNodeConfig): WorkerNodeConfig {
+  const { accountKey, contactKey, contactsSpace, sessionTtlSeconds, cache, appKey, stores, network } = config;
+  return {
+    ...(accountKey ? { accountKey } : {}),
+    ...(contactKey ? { contactKey } : {}),
+    ...(contactsSpace ? { contactsSpace } : {}),
+    ...(sessionTtlSeconds !== undefined ? { sessionTtlSeconds } : {}),
+    ...(cache ? { cache } : {}),
+    ...(appKey ? { appKey } : {}),
+    stores,
+    ...(network ? { network } : {}),
+  };
 }
