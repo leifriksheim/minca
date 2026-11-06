@@ -5,5 +5,9 @@
  * is cleared at once, and observers still hear it.
  */
 export function markStep(name: string): void {
-  performance.clearMarks(performance.mark(`minca ${name}`).name);
+  try {
+    performance.clearMarks(performance.mark(`minca ${name}`).name);
+  } catch {
+    // An engine without User Timing 3 has nothing to watch with, and starting must not fail for it.
+  }
 }
