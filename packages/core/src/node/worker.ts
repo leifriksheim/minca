@@ -207,8 +207,8 @@ function startedOn(port: MessagePort, worker: WorkerLike, timeoutMs: number): Pr
 
 /**
  * A signer made of every tab's: the one that signed last first, then the
- * newest, since an app's newest tab holds its freshest grant. Each has a
- * minute, long enough for a passkey prompt, as a tab put away may be frozen.
+ * newest, since an app's newest tab holds its freshest grant. Each has five
+ * minutes, long enough for a passkey prompt, as a tab put away may be frozen.
  */
 function createSignerSwitch(did: string) {
   const signers = new Map<string, RootSigner>();
@@ -245,28 +245,28 @@ function inTurn(tabs: ReadonlyMap<string, unknown>, answered: string | null): st
 /** Why the node couldn't sign: every tab that keeps the key is closed, or frozen in the background */
 const NO_TAB_SIGNS = 'No Minca tab answered to sign. Bring a Minca tab to the front, or reload it.';
 
-/** How long one tab has to sign before the next is asked: a tab put away may be frozen */
-const TAB_SIGNS_WITHIN_MS = 3000;
-/** How long one tab has to sign a session note, which may wait on a passkey prompt */
-const TAB_DELEGATES_WITHIN_MS = 60_000;
+/** How long the tabs have to sign, together: past it, none is answering */
+const NO_TAB_SIGNS_WITHIN_MS = 60_000;
+/** How long one tab has to sign a session note, which may wait on a passkey prompt, before the next is asked */
+const TAB_DELEGATES_WITHIN_MS = 300_000;
 
-/** The session key every tab of an app holds, as one: asked in turn as the signer is */
+/**
+ * The session key every tab of an app holds, as one: every tab is asked at
+ * once, and the first signature back is taken. Two signatures by one key over
+ * the same bytes are as good as each other, and a tab the browser froze in
+ * the background never makes the one in view wait.
+ */
 function createKeySwitch() {
   const keys = new Map<string, KeyElsewhere>();
-  let answered: string | null = null;
   const key: KeyElsewhere = Object.freeze({
     async sign(data: Uint8Array): Promise<Uint8Array> {
-      let refused: unknown = new Error(NO_TAB_SIGNS);
-      for (const tab of inTurn(keys, answered)) {
-        try {
-          const signature = await within(keys.get(tab)!.sign(data), TAB_SIGNS_WITHIN_MS);
-          answered = tab;
-          return signature;
-        } catch (error) {
-          refused = error;
-        }
+      const asked = [...keys.values()].map((each) => each.sign(data));
+      if (asked.length === 0) throw new Error(NO_TAB_SIGNS);
+      try {
+        return await within(Promise.any(asked), NO_TAB_SIGNS_WITHIN_MS);
+      } catch {
+        throw new Error(NO_TAB_SIGNS);
       }
-      throw refused;
     },
   });
   return {

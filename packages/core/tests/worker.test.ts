@@ -291,6 +291,35 @@ describe('a node shared by the tabs of a site', () => {
     assert.equal(written.author, await didOf(appKey.publicKey));
   });
 
+  test("tabs frozen in the background don't make the tab in view wait to sign", async () => {
+    const shared = fakeSharedWorker();
+    const me = await signer();
+    const appKey = await createP256Provider().generateKeyPair();
+    // The same key in three more tabs, each frozen: asked to sign, it never answers.
+    const frozen = {
+      publicKey: appKey.publicKey,
+      privateKey: { sign: () => new Promise<Uint8Array>(() => {}) },
+    };
+    const inView = await startNodeInWorker(shared.connect(), {
+      signer: me,
+      sessionKey: appKey,
+      stores: { indexedDB: 'minca-app:me' },
+    });
+    cleanup.push(() => inView.close());
+    for (let i = 0; i < 3; i++) {
+      const tab = await startNodeInWorker(shared.connect(), {
+        signer: me,
+        sessionKey: frozen,
+        stores: { indexedDB: 'minca-app:me' },
+      });
+      cleanup.push(() => tab.close());
+    }
+    const { id: space } = await inView.spaces.create({ name: 'Groceries', ...team, visibility: 'private' });
+    const started = Date.now();
+    await inView.records.put(space, 'app.todo.item', { text: 'Milk' });
+    assert.ok(Date.now() - started < 1000, `signed at once, in ${Date.now() - started} ms`);
+  });
+
   test('the node outlives a tab that closes it, and closes with the last', async () => {
     const me = await signer();
     const shared = fakeSharedWorker();

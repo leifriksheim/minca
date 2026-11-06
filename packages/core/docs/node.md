@@ -105,10 +105,19 @@ There are three kinds:
 An app's node signs as its session with the app's key. In a worker, that key
 stays on the page too: `serveKey` signs there what the node asks, and the
 worker is told only the key's public half. No `CryptoKey` is ever sent to a
-worker, since WebKit drops a message to a shared worker that holds one. When
-several tabs share the node, the tab that signed last is asked first, then the
-newest. Each has 3 seconds to sign, or a minute for a session note, which may
-wait on a passkey, before the next is asked, since a tab put away may be frozen.
+worker, since WebKit drops a message to a shared worker that holds one.
+
+When several tabs share the node, every tab is asked to sign at once, and the
+first signature back is taken, so a tab frozen in the background never makes
+the one in view wait. With no tab answering for a minute, signing fails with
+a message saying to bring a Minca tab to the front. Signing needs a tab that
+runs: while every tab is frozen, the node keeps the connections it has but
+makes no new ones. A session note is asked of one tab at a time, the one that
+signed last first, then the newest, each for up to five minutes, long enough
+for a passkey prompt.
+
+A `CryptoProvider` of your own must sign with a key held elsewhere too: a
+`SigningKey` is a `CryptoKey`, or a `KeyElsewhere`, whose `sign` it calls.
 
 ### The session note
 

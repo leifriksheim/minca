@@ -105,13 +105,11 @@ const NOT_ANSWERING =
 /** Opens the database, wiping one made at an earlier version */
 function openDatabase(dbName: string): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(NOT_ANSWERING)), OPEN_WITHIN_MS);
-    const settle =
-      <T>(then: (value: T) => void) =>
-      (value: T) => {
-        clearTimeout(timer);
-        then(value);
-      };
+    let gaveUp = false;
+    const timer = setTimeout(() => {
+      gaveUp = true;
+      reject(new Error(NOT_ANSWERING));
+    }, OPEN_WITHIN_MS);
     const request = globalThis.indexedDB.open(dbName, DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
@@ -120,11 +118,21 @@ function openDatabase(dbName: string): Promise<IDBDatabase> {
       db.createObjectStore('kv');
       db.createObjectStore('versions', { keyPath: 'id' });
     };
-    request.onsuccess = () => settle(resolve)(request.result);
-    request.onerror = () =>
-      settle(reject)(
+    request.onsuccess = () => {
+      clearTimeout(timer);
+      const db = request.result;
+      // Opened after this gave up: closed, or it would hold the database from every later upgrade.
+      if (gaveUp) return db.close();
+      // Another tab upgrading waits on every connection open: this one lets go.
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
+    request.onerror = () => {
+      clearTimeout(timer);
+      reject(
         new Error(`This browser's storage for Minca wouldn't open (${request.error?.message ?? dbName}).`),
       );
+    };
   });
 }
 

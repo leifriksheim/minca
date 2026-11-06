@@ -67,9 +67,9 @@ try {
     MessagePort.prototype.postMessage = () => {};
   });
   const second = await a.evaluate((id) => window.tab.write(id, 'eggs'), space);
-  assert.ok(second.ms < 10_000, `tab A wrote while tab B was frozen, in ${second.ms} ms`);
+  assert.ok(second.ms < 1000, `tab A wrote without waiting on tab B, frozen, in ${second.ms} ms`);
   const third = await a.evaluate((id) => window.tab.write(id, 'bread'), space);
-  assert.ok(third.ms < 1000, `and then without waiting on tab B, in ${third.ms} ms`);
+  assert.ok(third.ms < 1000, `and again, in ${third.ms} ms`);
   assert.deepEqual(await a.evaluate((id) => window.tab.texts(id), space), ['bread', 'eggs', 'milk']);
   console.log(`tab B frozen: tab A still wrote, in ${second.ms} ms, then in ${third.ms} ms`);
 
