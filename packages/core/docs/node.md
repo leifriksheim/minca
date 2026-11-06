@@ -53,7 +53,10 @@ the signer refuses, `createNode` fails.
 
 With an account key, the node also opens the account registry and makes its
 spaces match it before `createNode` returns
-([following the account](#following-the-account)).
+([following the account](#following-the-account)). That waits on nothing
+from the network: a node starts from what it holds, with no host answering.
+Recording in the registry a space it holds but the registry doesn't name asks
+the account's hosts for an invite, so it happens in the background.
 
 A node acts for one account (`node.did`) and signs with one key for its whole
 life. To act for another account, start another node.
@@ -440,7 +443,10 @@ one run at a time:
    there, giving it up runs in the background, as [leaving](#leaving-a-space)
    describes.
 3. It writes a `sys.joined` record for a space it holds that the registry
-   doesn't know.
+   doesn't know. That asks the account's hosts for the space's invite, so it
+   runs in the background, one run at a time apart from reconciling, reading
+   afresh each run what the registry still lacks. A space left meanwhile
+   stays left.
 4. It brings every carrier's passes and wakes up to date.
 5. It names the account's carriers as keepers of the open spaces it manages.
 6. It asks each host the account uses how it stands, without waiting, and

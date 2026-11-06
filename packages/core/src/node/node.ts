@@ -419,20 +419,63 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
    * `refresh`, rewrites the record if the space's key changed since, so a
    * new device joins with the key in use now.
    */
-  async function remember(spaceId: string, options: { refresh?: boolean } = {}): Promise<void> {
+  /**
+   * Records a space in the account's list. `unlessLeft`, for one found unlisted
+   * rather than one just made or joined: a leave recorded meanwhile, on any
+   * device, is never written over (rejoining is, as the next version).
+   */
+  async function remember(
+    spaceId: string,
+    options: { refresh?: boolean; unlessLeft?: boolean } = {},
+  ): Promise<void> {
     if (!accountSpaceId || narrowNote) return;
     const open = await runtime(accountSpaceId);
-    const known = await open.get<Membership>(membershipKey(spaceId));
+    const recorded = () => open.get<Membership>(membershipKey(spaceId));
+    const known = await recorded();
     if (known && (!options.refresh || known.deleted)) return;
     // A view-only invite: what lets the account write is its role in the
     // space, which every device reads there. Invite secrets are never kept.
     const invite = await carrying.inviteTo(spaceId);
-    if (known && inviteKeyOf(known.body?.invite) === inviteKeyOf(invite)) return;
+    if (options.unlessLeft) {
+      // Asking the hosts takes a while: left meanwhile, here or on another device, it stays left.
+      if (leaving.has(spaceId) || !(await registry.get(spaceId))) return;
+      const left = (await memberships()).some(
+        (membership) => membership.key === membershipKey(spaceId) && membership.deleted,
+      );
+      if (left) return;
+    }
+    // Recorded meanwhile: not again.
+    const now = await recorded();
+    if (now && !options.refresh) return;
+    if (now && inviteKeyOf(now.body?.invite) === inviteKeyOf(invite)) return;
     await open.upsertSystem<Membership>(MEMBERSHIP_COLLECTION, membershipKey(spaceId), {
       space: spaceId,
       invite,
     });
   }
+
+  /** Spaces being left on this node: none of them is recorded again */
+  const leaving = new Set<string>();
+
+  /**
+   * Records in the account's list the spaces held here that it doesn't name,
+   * one run at a time, reading afresh what is still unnamed: recording one
+   * asks the account's hosts for an invite, so it runs apart from following
+   * the list, and a host that doesn't answer keeps nothing waiting.
+   */
+  const recordUnlisted = serial(async () => {
+    if (!accountSpaceId || closed || narrowNote) return;
+    const named = new Set((await memberships()).map((membership) => membership.key.slice('space:'.length)));
+    for (const record of await registry.list()) {
+      const spaceId = record.space.id;
+      if (closed) return;
+      if (named.has(spaceId) || leaving.has(spaceId) || (await kindOf(spaceId))) continue;
+      // One that won't record (gone meanwhile, say) leaves the rest to record.
+      await remember(spaceId, { unlessLeft: true }).catch((error: unknown) => {
+        if (!closed) console.error(`Could not record ${spaceId} in the account list:`, error);
+      });
+    }
+  });
 
   /**
    * Writes the account's own removal from a space it is leaving, so the
@@ -482,7 +525,9 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     const left: string[] = [];
     let changed = false;
 
-    for (const membership of await memberships()) {
+    const listed = await memberships();
+    markStep(`node: the account's list names ${listed.length} spaces; ${held.size} held here`);
+    for (const membership of listed) {
       const spaceId = membership.key.slice('space:'.length);
       known.add(spaceId);
       if (!membership.deleted && !held.has(spaceId)) {
@@ -503,10 +548,18 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
     // Held here but never recorded — joined before the registry existed, or on
     // a node without the account key. Recorded now, so other devices follow.
-    // Held still: one left while this ran stays left.
+    // Held still: one left while this ran stays left. Not awaited: recording
+    // one asks the account's hosts for an invite, and a node must start, and
+    // follow its list, with no host answering.
     const stillHeld = new Set((await registry.list()).map((record) => record.space.id));
-    for (const spaceId of held) {
-      if (!known.has(spaceId) && stillHeld.has(spaceId) && !(await kindOf(spaceId))) await remember(spaceId);
+    let unrecorded = 0;
+    for (const spaceId of held)
+      if (!known.has(spaceId) && stillHeld.has(spaceId) && !(await kindOf(spaceId))) unrecorded++;
+    if (unrecorded > 0) {
+      markStep(`node: recording ${unrecorded} spaces the account's list lacks, in the background`);
+      void recordUnlisted().catch((error: unknown) => {
+        if (!closed) console.error('Could not record the spaces the account list lacks:', error);
+      });
     }
 
     // Not awaited: it opens every space the account holds, which from a data
@@ -653,10 +706,15 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       const kind = await kindOf(spaceId);
       if (kind)
         throw new Error(`The ${kind === 'registry' ? 'account registry' : `${kind} space`} cannot be left`);
-      await giveUpPlace(spaceId);
-      await forget(spaceId);
-      await closeRuntime(spaceId);
-      await registry.remove(spaceId);
+      leaving.add(spaceId);
+      try {
+        await giveUpPlace(spaceId);
+        await forget(spaceId);
+        await closeRuntime(spaceId);
+        await registry.remove(spaceId);
+      } finally {
+        leaving.delete(spaceId);
+      }
       emit({ type: 'spaces' });
     },
 
