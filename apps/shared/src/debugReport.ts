@@ -5,6 +5,7 @@
  * end, and the app's own details are its to keep clean.
  */
 import { logEntries, loadedAt, type LogEntry } from './debugLog';
+import { probeWorkers } from './debugProbe';
 
 /** What an app adds about itself, by heading */
 export type DebugDetails = () => Record<string, unknown> | Promise<Record<string, unknown>>;
@@ -135,6 +136,9 @@ export async function debugReport(app: string, build: string, details?: DebugDet
     ...ownSections,
     section('Browser', browser()),
     section('Storage', await storage()),
+    ...Object.entries(await probeWorkers()).map(([title, seen]) =>
+      section(title, typeof seen === 'string' ? { Probe: seen } : seen),
+    ),
     log(logEntries()),
   ];
   return shortDids(parts.join('\n\n'));
