@@ -18,10 +18,10 @@ function within<T>(promise: Promise<T>, ms = 1500): Promise<T | string> {
   ]);
 }
 
-async function attempt(read: () => unknown): Promise<unknown> {
+async function attempt(read: () => unknown, ms?: number): Promise<unknown> {
   try {
     const value = read();
-    return value instanceof Promise ? await within(value) : value;
+    return value instanceof Promise ? await within(value, ms) : value;
   } catch (error) {
     return `(failed: ${error instanceof Error ? error.message : String(error)})`;
   }
@@ -114,7 +114,8 @@ const shortDids = (text: string) =>
 /** The whole report, as text */
 export async function debugReport(app: string, build: string, details?: DebugDetails): Promise<string> {
   const now = Date.now();
-  const own = details ? await attempt(details) : null;
+  // The app's details may time the node, which can take a while to answer.
+  const own = details ? await attempt(details, 10_000) : null;
   const ownSections =
     typeof own === 'object' && own !== null
       ? Object.entries(own).map(([title, values]: [string, unknown]) =>

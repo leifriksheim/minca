@@ -83,9 +83,12 @@ function Workspace() {
   const joinLink = (link: string) => mine.join(inviteFromLink(link));
   // A new group starts with Chat, with any contacts it was made for invited, and opens in it to add people.
   const create = async (params: NewSpace, invite: ReadonlyArray<string> = []) => {
+    console.debug('[app] making a group');
     const space = await mine.create(params);
+    console.debug(`[app] group ${space ? 'made, adding Chat' : `not made: ${mine.error ?? 'no reason'}`}`);
     if (!space) return;
     await addChat(node, space.id).catch(() => {});
+    console.debug('[app] Chat added');
     const [role] = invite.length > 0 ? await invitableRoles(node, space.id).catch(() => []) : [];
     for (const did of invite) await node.contacts.invite(did, space.id, role ? { role } : {}).catch(() => {});
     void navigate({

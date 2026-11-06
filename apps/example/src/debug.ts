@@ -19,9 +19,28 @@ export function logConnection(): void {
   say();
 }
 
+/** How long the node takes to answer `ask`, or that it didn't within 8 s */
+async function timed(ask: () => Promise<unknown>): Promise<string> {
+  const started = performance.now();
+  const ms = () => `${Math.round(performance.now() - started)} ms`;
+  return Promise.race([
+    ask().then(
+      (answer) => `${Array.isArray(answer) ? `${answer.length} ` : ''}in ${ms()}`,
+      (error: unknown) => `failed in ${ms()}: ${String(error)}`,
+    ),
+    new Promise<string>((resolve) => setTimeout(() => resolve('no answer in 8 s'), 8000)),
+  ]);
+}
+
 export async function debugDetails(): Promise<Record<string, unknown>> {
   const { status, home, grant, accounts, error, node } = connection.getState();
-  const spaces = node ? await node.spaces.list().then((list) => list.length, String) : '(no node)';
+  const answers = node
+    ? await Promise.all([
+        timed(() => node.spaces.get('none')),
+        timed(() => node.spaces.list()),
+        timed(() => node.contacts.list()),
+      ])
+    : null;
   return {
     Connection: {
       Status: status,
@@ -33,7 +52,9 @@ export async function debugDetails(): Promise<Record<string, unknown>> {
       'Accounts connected here': accounts.map(
         (account) => `${account.did}, until ${new Date(account.expiresAt * 1000).toISOString()}`,
       ),
-      'Spaces on the node': spaces,
     },
+    'Node answers': answers
+      ? { 'One space by id': answers[0], 'Spaces listed': answers[1], 'Contacts listed': answers[2] }
+      : { Node: '(no node)' },
   };
 }
