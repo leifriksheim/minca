@@ -422,17 +422,42 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   async function remember(spaceId: string, options: { refresh?: boolean } = {}): Promise<void> {
     if (!accountSpaceId || narrowNote) return;
     const open = await runtime(accountSpaceId);
-    const known = await open.get<Membership>(membershipKey(spaceId));
+    const recorded = () => open.get<Membership>(membershipKey(spaceId));
+    const known = await recorded();
     if (known && (!options.refresh || known.deleted)) return;
     // A view-only invite: what lets the account write is its role in the
     // space, which every device reads there. Invite secrets are never kept.
     const invite = await carrying.inviteTo(spaceId);
-    if (known && inviteKeyOf(known.body?.invite) === inviteKeyOf(invite)) return;
+    // Asking the hosts takes a while: left meanwhile, it stays left, and one recorded meanwhile isn't again.
+    if (leaving.has(spaceId) || !(await registry.get(spaceId))) return;
+    const now = await recorded();
+    if (now?.deleted || (now && !options.refresh)) return;
+    if (now && inviteKeyOf(now.body?.invite) === inviteKeyOf(invite)) return;
     await open.upsertSystem<Membership>(MEMBERSHIP_COLLECTION, membershipKey(spaceId), {
       space: spaceId,
       invite,
     });
   }
+
+  /** Spaces being left on this node: none of them is recorded again */
+  const leaving = new Set<string>();
+
+  /**
+   * Records in the account's list the spaces held here that it doesn't name,
+   * one run at a time, reading afresh what is still unnamed: recording one
+   * asks the account's hosts for an invite, so it runs apart from following
+   * the list, and a host that doesn't answer keeps nothing waiting.
+   */
+  const recordUnlisted = serial(async () => {
+    if (!accountSpaceId || closed || narrowNote) return;
+    const named = new Set((await memberships()).map((membership) => membership.key.slice('space:'.length)));
+    for (const record of await registry.list()) {
+      const spaceId = record.space.id;
+      if (closed) return;
+      if (named.has(spaceId) || leaving.has(spaceId) || (await kindOf(spaceId))) continue;
+      await remember(spaceId);
+    }
+  });
 
   /**
    * Writes the account's own removal from a space it is leaving, so the
@@ -509,16 +534,12 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     // one asks the account's hosts for an invite, and a node must start, and
     // follow its list, with no host answering.
     const stillHeld = new Set((await registry.list()).map((record) => record.space.id));
-    const unrecorded: string[] = [];
+    let unrecorded = 0;
     for (const spaceId of held)
-      if (!known.has(spaceId) && stillHeld.has(spaceId) && !(await kindOf(spaceId))) unrecorded.push(spaceId);
-    if (unrecorded.length > 0) {
-      markStep(`node: recording ${unrecorded.length} spaces the account's list lacks, in the background`);
-      inBackground(
-        (async () => {
-          for (const spaceId of unrecorded) await remember(spaceId);
-        })(),
-      );
+      if (!known.has(spaceId) && stillHeld.has(spaceId) && !(await kindOf(spaceId))) unrecorded++;
+    if (unrecorded > 0) {
+      markStep(`node: recording ${unrecorded} spaces the account's list lacks, in the background`);
+      inBackground(recordUnlisted());
     }
 
     // Not awaited: it opens every space the account holds, which from a data
@@ -665,10 +686,15 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       const kind = await kindOf(spaceId);
       if (kind)
         throw new Error(`The ${kind === 'registry' ? 'account registry' : `${kind} space`} cannot be left`);
-      await giveUpPlace(spaceId);
-      await forget(spaceId);
-      await closeRuntime(spaceId);
-      await registry.remove(spaceId);
+      leaving.add(spaceId);
+      try {
+        await giveUpPlace(spaceId);
+        await forget(spaceId);
+        await closeRuntime(spaceId);
+        await registry.remove(spaceId);
+      } finally {
+        leaving.delete(spaceId);
+      }
       emit({ type: 'spaces' });
     },
 

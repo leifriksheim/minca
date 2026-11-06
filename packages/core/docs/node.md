@@ -443,7 +443,10 @@ one run at a time:
    there, giving it up runs in the background, as [leaving](#leaving-a-space)
    describes.
 3. It writes a `sys.joined` record for a space it holds that the registry
-   doesn't know.
+   doesn't know. That asks the account's hosts for the space's invite, so it
+   runs in the background, one run at a time apart from reconciling, reading
+   afresh each run what the registry still lacks. A space left meanwhile
+   stays left.
 4. It brings every carrier's passes and wakes up to date.
 5. It names the account's carriers as keepers of the open spaces it manages.
 6. It asks each host the account uses how it stands, without waiting, and
