@@ -864,8 +864,11 @@ and its status is a [`ConnectionStatus`](https://minca.dev/api/session/type-alia
 - With `worker`, the node runs in a worker. If the worker fails to load or
   doesn't start the node within 30 seconds (`WorkerNotStarted`), the node runs
   in the page instead. A worker that started and refused passes its reason on.
-- A tab whose node is its own (a dedicated worker's, or the page's) lets go
-  of it when it's put away, and starts it again when it comes back. A browser
+- A tab whose node is its own (a dedicated worker's, or the page's) runs it
+  only while in view, one at a time per account (a Web Lock,
+  `minca-node:<account DID>`): two nodes on one site's stores get in each
+  other's way. It lets go of it when it's put away, at once when the page is
+  left, and starts it again when it comes back. A browser
   that freezes background tabs, as an iPhone does, would otherwise freeze the
   node holding the stores, and another tab's node would wait on them for
   good. `state.node` stays the same object throughout: calls running when

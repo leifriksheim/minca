@@ -19,8 +19,12 @@ import type { NodeEvent, P2PNode } from './types.js';
 export interface ResumableNode {
   /** The node to use: the same object, whichever node is under it */
   readonly node: P2PNode;
-  /** Lets go of the node under it: calls from now on wait, and once those running are done, it ends (`end`) */
-  pause(): void;
+  /**
+   * Lets go of the node under it: calls from now on wait, and once those
+   * running are done (a few seconds at most), it ends (`end`). `now` ends it
+   * at once, for a page being left, which may be frozen any moment.
+   */
+  pause(now?: boolean): void;
   /** Starts a node again, and lets waiting calls through */
   resume(): Promise<void>;
   /** Whether a node is under it, or still finishing what it was doing */
@@ -34,6 +38,10 @@ interface Running {
 }
 
 const CLOSED = 'That node has closed';
+/** How long a pause waits for calls running to finish before ending the node anyway */
+const DRAIN_MS = 3000;
+/** Said of a call the node ended under: whether it was stored isn't known */
+const UNSURE = 'This tab was put away before that finished: it may or may not have been saved';
 
 /** A promise to settle later, from outside */
 function gate<T>() {
@@ -65,6 +73,8 @@ export async function resumableNode(start: () => Promise<Running>): Promise<Resu
   let draining = false;
   /** Calls running on the node under it, which a pause lets finish */
   const running = new Set<Promise<unknown>>();
+  /** Fails the calls still running when the node under them ends */
+  let cutOff = gate<never>();
 
   const listeners = new Set<(event: NodeEvent) => void>();
   const watches = new Set<{ stop: () => void; attach: (node: P2PNode) => void }>();
@@ -105,20 +115,31 @@ export async function resumableNode(start: () => Promise<Running>): Promise<Resu
       () => running.delete(done),
       () => running.delete(done),
     );
-    return done;
+    // A node ended under it never answers: say so, rather than leave it waiting.
+    return Promise.race([done, cutOff.promise]);
   }
 
   /** Ends the node under it, once what it was doing is done, unless it's wanted again by then */
-  async function letGo(): Promise<void> {
+  async function letGo(now: boolean): Promise<void> {
     draining = true;
-    while (running.size > 0) await Promise.allSettled([...running]);
+    const deadline = Date.now() + (now ? 0 : DRAIN_MS);
+    while (running.size > 0 && Date.now() < deadline)
+      await Promise.race([
+        Promise.allSettled([...running]),
+        new Promise((resolve) => setTimeout(resolve, deadline - Date.now())),
+      ]);
     draining = false;
     const ending = current;
     if (closed || !ending) return;
-    if (wanted) {
+    if (wanted && !now) {
       // Back before it was let go: carry on with the same node.
       openTo(ending.node);
       return;
+    }
+    if (running.size > 0) {
+      cutOff.fail(new Error(UNSURE));
+      cutOff = gate<never>();
+      running.clear();
     }
     current = null;
     lastStatus = ending.node.network.status();
@@ -231,12 +252,12 @@ export async function resumableNode(start: () => Promise<Running>): Promise<Resu
     get running() {
       return current !== null;
     },
-    pause() {
+    pause(now = false) {
       wanted = false;
-      if (!current || closed || draining) return;
+      if (!current || closed || (draining && !now)) return;
       // Calls from now on wait; those running finish on this node first.
       waiting ??= gate<P2PNode>();
-      void letGo();
+      void letGo(now);
     },
     resume() {
       wanted = true;

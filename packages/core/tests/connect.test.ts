@@ -1924,6 +1924,55 @@ describe('an app connected to several accounts', () => {
     assert.equal(connection.getState().status, 'ready');
   });
 
+  /** Web Locks as browsers have them, for a runtime without: exclusive, granted in turn */
+  function fakeLocks() {
+    const held = new Map<string, Promise<void>>();
+    const locks = {
+      request(name: string, run: () => Promise<void>) {
+        const before = held.get(name) ?? Promise.resolve();
+        const mine = before.then(run);
+        held.set(
+          name,
+          mine.catch(() => {}),
+        );
+        return mine;
+      },
+    };
+    const g: Record<string, unknown> = globalThis;
+    const saved = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+    Object.defineProperty(globalThis, 'navigator', { value: { locks }, configurable: true, writable: true });
+    cleanup.push(async () => {
+      if (saved) Object.defineProperty(globalThis, 'navigator', saved);
+      else delete g.navigator;
+    });
+  }
+
+  test('two tabs of one account run one node at a time: the one in view', async () => {
+    fakeLocks();
+    const page = fakeDocument();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const a = await granted(hub);
+    const storage = memoryStorage();
+    grantStore(storage).save(a.grant, 'account-a');
+    const keys = keyStore([['account-a', a.key]]);
+    const first = tab(hub, storage, keys);
+    await first.start();
+    assert.equal(first.getState().status, 'ready');
+
+    // A second tab waits for the first to let go of its node.
+    const second = tab(hub, storage, keys);
+    let started = false;
+    const starting = second.start().then(() => (started = true));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(started, false, 'it waits while the first runs its node');
+
+    // The first put away lets go, and the second starts.
+    page.hide();
+    page.show();
+    await starting;
+    assert.equal(second.getState().status, 'ready');
+  });
+
   test('kept awake, as in a call, a tab put away keeps its node', async () => {
     const page = fakeDocument();
     const hub = createFakeHub({ latencyMs: 1 });

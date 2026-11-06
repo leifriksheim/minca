@@ -170,6 +170,34 @@ export function openAccountHome(
   globalThis.open(link, 'minca-account', popupFeatures(720, 820));
 }
 
+const ANOTHER_TAB =
+  'Minca is open in another tab or window. It carries on here once that one is put away or closed.';
+
+/** Settles once the page is in view (at once without a document) */
+function inView(): Promise<void> {
+  const page = globalThis.document;
+  if (!page || page.visibilityState !== 'hidden') return Promise.resolve();
+  return new Promise((resolve) => {
+    const check = () => {
+      if (page.visibilityState === 'hidden') return;
+      page.removeEventListener('visibilitychange', check);
+      resolve();
+    };
+    page.addEventListener('visibilitychange', check);
+  });
+}
+
+/** Holds a Web Lock, once granted, until the returned function lets go (nothing to hold without Web Locks) */
+function holdLock(name: string): Promise<() => void> {
+  const locks = globalThis.navigator?.locks;
+  if (!locks) return Promise.resolve(() => {});
+  return new Promise((granted) => {
+    locks
+      .request(name, () => new Promise<void>((letGo) => granted(() => letGo())))
+      .catch(() => granted(() => {}));
+  });
+}
+
 export function createMincaConnection(config: MincaConnectionConfig): MincaConnection {
   const storage = defaultStorage(config.storage);
   const grants = grantStore(storage);
@@ -234,6 +262,9 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
     );
   }
   globalThis.document?.addEventListener('visibilitychange', followVisibility);
+  // Left (reloaded, closed, or kept frozen to come back to): the node ends at once, for the next page's turn.
+  globalThis.addEventListener?.('pagehide', () => putAway?.pause(true));
+  globalThis.addEventListener?.('pageshow', followVisibility);
 
   /** Stops acting for the account acted for, if any, saying in the same breath what comes next */
   async function stop(next: Partial<MincaConnectionState>): Promise<void> {
@@ -300,25 +331,51 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
     const make = config.worker;
     const resumable = await resumableNode(async () => {
       const end = new AbortController();
+      const made = make?.();
       // A dedicated worker can be terminated; a shared one's port can't, and other tabs use it.
-      const worker =
-        make &&
-        (() => {
-          const made = make();
-          own = typeof made.terminate === 'function';
-          return made;
-        });
-      // A browser whose worker never starts still gets a node, in the page. A
-      // worker that started and refused says why instead.
-      const node = worker
-        ? await start(end.signal, worker).catch((error: unknown) => {
-            if (!(error instanceof Error) || error.name !== WORKER_NOT_STARTED) throw error;
-            markStep('connection: the node’s worker did not start; starting the node in the page');
-            own = true;
-            return start(end.signal);
-          })
-        : await start(end.signal);
-      return { node, end: () => end.abort() };
+      own = !made || typeof made.terminate === 'function';
+      let release = () => {};
+      /**
+       * A node of a tab's own runs only in view, and one at a time per
+       * account: two on one site's stores get in each other's way, and a tab
+       * frozen in the background with one would hold the other up for good.
+       */
+      const takeTurn = async () => {
+        await inView();
+        markStep('connection: waiting for any other tab to let go of its node');
+        // Said only if it takes a while: another tab in view has it, or one frozen before letting go.
+        const slow = setTimeout(() => update({ error: ANOTHER_TAB }), 5000);
+        release = await holdLock(`minca-node:${grant.did}`);
+        clearTimeout(slow);
+        if (state.error === ANOTHER_TAB) update({ error: null });
+      };
+      try {
+        if (own) await takeTurn();
+        // A browser whose worker never starts still gets a node, in the page. A
+        // worker that started and refused says why instead.
+        const node = made
+          ? await start(end.signal, () => made).catch(async (error: unknown) => {
+              if (!(error instanceof Error) || error.name !== WORKER_NOT_STARTED) throw error;
+              markStep('connection: the node’s worker did not start; starting the node in the page');
+              if (!own) {
+                own = true;
+                await takeTurn();
+              }
+              return start(end.signal);
+            })
+          : await start(end.signal);
+        return {
+          node,
+          end: () => {
+            end.abort();
+            release();
+          },
+        };
+      } catch (error) {
+        end.abort();
+        release();
+        throw error;
+      }
     });
     const { node } = resumable;
     // Switched again while this one started: it is not wanted.
