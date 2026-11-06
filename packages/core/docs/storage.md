@@ -330,8 +330,9 @@ When another writer changes the same store, the node reads all of it again
   per account and key. Then there's nothing to tell.
 - **Elsewhere** each tab runs its node in a worker of its own. Tabs tell each other through a
   `BroadcastChannel` named `minca-node:<root DID>:<space id>`. Chrome on
-  Android has no shared workers, and WebKit drops a message to one that
-  holds a `CryptoKey`.
+  Android has no shared workers, and WebKit can't use a `CryptoKey` in one,
+  sent or stored. Only the tab in view runs its node, one at a time per
+  account, so a frozen tab holds no store another is waiting on.
 - **Writers on a shared folder** are found by reading it again
   ([data folders](#data-folders)).
 

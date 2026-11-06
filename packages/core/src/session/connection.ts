@@ -137,6 +137,12 @@ export interface MincaConnection {
    */
   openHome(section?: string): void;
   /**
+   * Keeps this tab's node open while the tab is put away, as a call must;
+   * returns what lets it go. Otherwise a tab whose node is its own closes it
+   * when put away, and opens it again on coming back.
+   */
+  keepAwake(): () => void;
+  /**
    * Offers the person automations that notify them — "notify me when…" — once connected.
    * Opens the home; call it from a click.
    * @returns What they kept
@@ -160,6 +166,37 @@ export function openAccountHome(
 ): void {
   const link = accountHomeLink(grant?.home ?? home, grant?.did ?? null, section);
   globalThis.open(link, 'minca-account', popupFeatures(720, 820));
+}
+
+const ANOTHER_TAB =
+  'Minca is open in another tab or window. It carries on here once that one is put away or closed.';
+
+/** Whether the page is out of view: put away, or being left */
+const hidden = () => globalThis.document?.visibilityState === 'hidden';
+
+/** Settles once the page is in view (at once without a document) */
+function inView(): Promise<void> {
+  const page = globalThis.document;
+  if (!page || page.visibilityState !== 'hidden') return Promise.resolve();
+  return new Promise((resolve) => {
+    const check = () => {
+      if (page.visibilityState === 'hidden') return;
+      page.removeEventListener('visibilitychange', check);
+      resolve();
+    };
+    page.addEventListener('visibilitychange', check);
+  });
+}
+
+/** Holds a Web Lock, once granted, until the returned function lets go (nothing to hold without Web Locks) */
+function holdLock(name: string): Promise<() => void> {
+  const locks = globalThis.navigator?.locks;
+  if (!locks) return Promise.resolve(() => {});
+  return new Promise((granted) => {
+    locks
+      .request(name, () => new Promise<void>((letGo) => granted(() => letGo())))
+      .catch(() => granted(() => {}));
+  });
 }
 
 export function createMincaConnection(config: MincaConnectionConfig): MincaConnection {
@@ -193,14 +230,50 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
   let started: Promise<void> | null = null;
   let unwatch: (() => void) | null = null;
 
+  /**
+   * The node this tab runs itself (a dedicated worker's, or the page's), and
+   * the turn it holds. Two such nodes on one site's stores get in each
+   * other's way, and a browser that freezes background tabs (an iPhone's)
+   * would freeze one holding the stores: so one runs at a time per account,
+   * in the tab in view, and it closes when the tab is put away.
+   */
+  let ownTurn: { readonly kept: KeptGrant; readonly release: () => void } | null = null;
+  /** The grant to open again when the tab comes back, having closed its node when put away */
+  let putAway: KeptGrant | null = null;
+  /** How many keep the node running while the tab is put away (`keepAwake`), as a call must */
+  let awake = 0;
+
   /** Stops acting for the account acted for, if any, saying in the same breath what comes next */
   async function stop(next: Partial<MincaConnectionState>): Promise<void> {
     unwatch?.();
     unwatch = null;
     const node = state.node;
+    const turn = ownTurn;
+    ownTurn = null;
     update({ ...next, node: null });
-    await node?.close();
+    // Its turn goes once its stores are closed, not before.
+    await node?.close().finally(() => turn?.release());
   }
+
+  function followVisibility(): void {
+    if (hidden()) {
+      if (!ownTurn || awake > 0 || state.status !== 'ready') return;
+      markStep('connection: put away, closing the node');
+      putAway = ownTurn.kept;
+      void stop({ status: 'starting' });
+      return;
+    }
+    const back = putAway;
+    putAway = null;
+    if (back && state.status === 'starting' && !state.node) {
+      markStep('connection: back, opening the node again');
+      void open(back).catch(failed);
+    }
+  }
+  globalThis.document?.addEventListener('visibilitychange', followVisibility);
+  // Left (reloaded, closed, or kept frozen to come back to): closed now, for the next page's turn.
+  globalThis.addEventListener?.('pagehide', followVisibility);
+  globalThis.addEventListener?.('pageshow', followVisibility);
 
   /**
    * Forgets an account. Let go here, it acts for the next one, or for none;
@@ -251,22 +324,47 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
         ...(config.stores ? { stores: config.stores(grant) } : {}),
         ...(worker ? { worker } : {}),
       });
-    // A browser whose worker never starts still gets a node, in the page. A
-    // worker that started and refused says why instead.
-    const node = config.worker
-      ? await start(config.worker).catch((error: unknown) => {
-          if (!(error instanceof Error) || error.name !== WORKER_NOT_STARTED) throw error;
-          markStep('connection: the node’s worker did not start; starting the node in the page');
-          return start();
-        })
-      : await start();
+    const made = config.worker?.();
+    // A dedicated worker's node is this tab's own; a shared worker's, every tab's.
+    let release: (() => void) | null = null;
+    const takeTurn = async (): Promise<() => void> => {
+      await inView();
+      markStep('connection: waiting for any other tab to close its node');
+      // Said only if it takes a while: another tab or window in view has it.
+      const slow = setTimeout(() => update({ error: ANOTHER_TAB }), 5000);
+      const letGo = await holdLock(`minca-node:${grant.did}`);
+      clearTimeout(slow);
+      if (state.error === ANOTHER_TAB) update({ error: null });
+      return letGo;
+    };
+    let node: P2PNode;
+    try {
+      if (!made || typeof made.terminate === 'function') release = await takeTurn();
+      // A browser whose worker never starts still gets a node, in the page. A
+      // worker that started and refused says why instead.
+      node = made
+        ? await start(() => made).catch(async (error: unknown) => {
+            if (!(error instanceof Error) || error.name !== WORKER_NOT_STARTED) throw error;
+            markStep('connection: the node’s worker did not start; starting the node in the page');
+            release ??= await takeTurn();
+            return start();
+          })
+        : await start();
+    } catch (error) {
+      release?.();
+      throw error;
+    }
+    const turn = release;
     // Switched again while this one started: it is not wanted.
     if (mine !== opening) {
-      await node.close();
+      await node.close().finally(() => turn?.());
       return;
     }
     markStep('connection: ready');
+    ownTurn = turn ? { kept: { grant, keyName }, release: turn } : null;
     update({ status: 'ready', home: grant.home, grant, node, error: null });
+    // Opened in a tab put away meanwhile.
+    followVisibility();
 
     unwatch = watchGrant(node, grant, {
       // Writes stop working when the note runs out; say so rather than fail quietly.
@@ -350,6 +448,17 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
     },
 
     openHome: (section) => openAccountHome(state, section),
+
+    keepAwake() {
+      awake++;
+      let kept = true;
+      return () => {
+        if (!kept) return;
+        kept = false;
+        awake--;
+        followVisibility();
+      };
+    },
 
     async propose(automations) {
       if (!state.grant) throw new Error('Connect to your account home first.');
