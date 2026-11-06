@@ -4,7 +4,9 @@ import { useAccount, useLive, useNode } from '@minca/react';
 import { Modal } from '@minca/app-shared/Modal';
 import ui from 'virtual:minca-ui';
 import { placeAt, searchPlaces, whereAmI } from '@minca/app-shared/places';
+import { linkPreview } from '@minca/app-shared/previews';
 import { showsRecord } from './launcher';
+import { TEMPLATES } from './templates';
 import {
   createScreenBridge,
   offLimits,
@@ -159,7 +161,7 @@ export function ScreenFrame({
         collections: list,
         app: appKey,
         port: channel.port1,
-        host: screenHost(`minca.screen:${node.did}:${spaceId}:${appKey}:`, {
+        host: screenHost(`minca.screen:${node.did}:${spaceId}:${appKey}:`, ownScreen(screen), {
           go: (next, title) => goes.current?.(next, title),
           open: (open) => ('record' in open ? opens.current(open.record) : setPerson(open.person)),
           // One choice at a time, asked of the person in this page, never the screen's to make.
@@ -283,12 +285,26 @@ function SharePicker({
 }
 
 /**
+ * Whether a screen is one of this app's ready-made ones, as written here: code
+ * this app vouches for, unlike a screen made for a space, which runs sealed.
+ */
+const ownScreen = (screen: string): boolean => TEMPLATES.some(({ app }) => app.screen === screen);
+
+/**
  * What this page does for a screen when it asks (`ScreenHost`): finds places
  * and where the person is the way the rest of the app does, opens pages and
  * saves files, asks the person to choose a record, and keeps the app's own
  * small things under `kept`, a prefix for this person, space and app.
+ *
+ * Only a ready-made screen (`ours`) gets links previewed. Asking for a
+ * preview sends its address out, so a sealed screen could send what it reads
+ * along with it, to any site, unseen; made screens show links as links.
  */
-function screenHost(kept: string, { go, open, pick }: Pick<ScreenHost, 'go' | 'open' | 'pick'>): ScreenHost {
+function screenHost(
+  kept: string,
+  ours: boolean,
+  { go, open, pick }: Pick<ScreenHost, 'go' | 'open' | 'pick'>,
+): ScreenHost {
   return {
     go,
     open,
@@ -303,6 +319,7 @@ function screenHost(kept: string, { go, open, pick }: Pick<ScreenHost, 'go' | 'o
         : { name: 'My location', detail: '', lat: at.lat, lon: at.lon, kind: 'point' };
     },
     link: (url) => void globalThis.open(url, '_blank', 'noopener,noreferrer'),
+    preview: ours ? linkPreview : async () => null,
     save: (name, bytes, type) => saveFile(bytes, name, type),
     recall: (key) => {
       try {

@@ -319,8 +319,8 @@ Markdown too, so an app that shows text as it is still shows it right.
 ````
 
 Draw it as elements, never as HTML, so a message can't put markup on the
-screen. A screen gets this from the kit: `MentionText` draws it and
-`MentionInput` writes it.
+screen. A screen gets this from the kit: `MentionText` draws it, with a
+preview of the first links it sends, and `MentionInput` writes it.
 
 ## Mentions and replies
 

@@ -47,6 +47,93 @@ button.person {
   left: auto;
 }
 
+/*
+ * A link's preview, at the end of the text that sends it (MentionText): the
+ * site, the page's title and a few lines about it, and its picture beside
+ * them, or across the card when the page asks for it large. A thing inside a
+ * surface, as a shared record is, and no wider than a column of text.
+ */
+.link-cards {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+
+  /* Empty until a card comes, so it takes no room of its own */
+  .markdown > & {
+    margin-top: 0;
+  }
+}
+
+.link-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.75rem;
+  max-width: min(100%, 24rem);
+  margin-top: var(--space);
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-decoration: none;
+
+  &:hover {
+    border-color: var(--color-field);
+  }
+
+  & > img {
+    width: 4.5rem;
+    height: 4.5rem;
+    object-fit: cover;
+    border-radius: var(--radius-small);
+  }
+
+  &[data-large] {
+    grid-template-columns: minmax(0, 1fr);
+    width: 24rem;
+
+    & > img {
+      width: 100%;
+      height: auto;
+      aspect-ratio: 1.91;
+    }
+  }
+}
+
+.link-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+
+  & > small {
+    color: var(--color-text-muted);
+  }
+
+  & > strong {
+    color: var(--color-action);
+  }
+
+  & > span {
+    font-size: var(--text-small);
+  }
+
+  /* The title in two lines at most, what it says in three */
+  & > :is(strong, span) {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+  }
+
+  & > span {
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+  }
+}
+
 /* Comments: a face beside each */
 .comment {
   display: grid;

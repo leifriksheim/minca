@@ -18,4 +18,6 @@ interface ImportMetaEnv {
   readonly VITE_MINCA_PLACES?: string;
   /** The commit this build is of, for debug mode's report (`DebugMode.tsx`); vite.config.ts sets it */
   readonly VITE_MINCA_BUILD?: string;
+  /** The link preview function (`previews.ts`); app.minca.social's when unset */
+  readonly VITE_MINCA_PREVIEWS?: string;
 }
