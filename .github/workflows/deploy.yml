@@ -1,0 +1,83 @@
+name: Deploy
+
+# The services on Fly, each deployed when main changes something it is built
+# from, or by hand from the Actions tab. Main has passed Check as a PR already.
+#
+# FLY_API_TOKEN, a repository secret, deploys them all: an org token
+# (`fly tokens create org`), or make it from the dashboard's Tokens page.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      app:
+        description: The app to deploy, whether or not it changed
+        type: choice
+        options: [all, minca, minca-host, minca-mcp, minca-names]
+        default: all
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: ${{ matrix.app }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # One deploy of an app at a time, each to the end: a cancelled one can leave
+    # its machines half replaced.
+    concurrency:
+      group: deploy-${{ matrix.app }}
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      # `dir` is the build context `config` is read from; `paths` what it is built from.
+      matrix:
+        include:
+          # The relay
+          - app: minca
+            dir: packages/relay
+            config: fly.toml
+            paths: '^(packages/relay/|\.github/workflows/deploy\.yml$)'
+          - app: minca-names
+            dir: packages/names
+            config: fly.toml
+            paths: '^(packages/names/|\.github/workflows/deploy\.yml$)'
+          # The CLI's two services bundle core and the relay from the workspace.
+          - app: minca-host
+            dir: .
+            config: packages/cli/fly.toml
+            paths: '^(packages/(core|relay|cli)/|apps/(home|example|extension)/package\.json$|package(-lock)?\.json$|\.github/workflows/deploy\.yml$)'
+          - app: minca-mcp
+            dir: .
+            config: packages/cli/fly.mcp.toml
+            paths: '^(packages/(core|relay|cli)/|apps/(home|example|extension)/package\.json$|package(-lock)?\.json$|\.github/workflows/deploy\.yml$)'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: ${{ github.event_name == 'push' && '0' || '1' }}
+      - id: changed
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          CHOSEN: ${{ inputs.app }}
+          APP: ${{ matrix.app }}
+          PATHS: ${{ matrix.paths }}
+          BASE: ${{ github.event.before }}
+        # A push deploys what it changed, or everything when its base can't be read.
+        run: |
+          if [[ "$EVENT" == workflow_dispatch ]]; then
+            [[ "$CHOSEN" == all || "$CHOSEN" == "$APP" ]] && echo "run=true" >> "$GITHUB_OUTPUT"
+          elif ! files=$(git diff --name-only "$BASE"...HEAD 2>/dev/null) || grep -qE "$PATHS" <<<"$files"; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+          exit 0
+      - if: steps.changed.outputs.run == 'true'
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # 1.6
+      - if: steps.changed.outputs.run == 'true'
+        working-directory: ${{ matrix.dir }}
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          CONFIG: ${{ matrix.config }}
+        run: flyctl deploy . --config "$CONFIG" --remote-only
