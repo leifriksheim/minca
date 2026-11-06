@@ -539,7 +539,9 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       if (!known.has(spaceId) && stillHeld.has(spaceId) && !(await kindOf(spaceId))) unrecorded++;
     if (unrecorded > 0) {
       markStep(`node: recording ${unrecorded} spaces the account's list lacks, in the background`);
-      inBackground(recordUnlisted());
+      void recordUnlisted().catch((error: unknown) => {
+        if (!closed) console.error('Could not record the spaces the account list lacks:', error);
+      });
     }
 
     // Not awaited: it opens every space the account holds, which from a data

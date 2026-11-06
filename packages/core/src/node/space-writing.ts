@@ -117,6 +117,9 @@ export interface WritingDeps extends SpaceBase {
   readonly use: (collections: ReadonlyArray<string>) => boolean;
 }
 
+/** Said of a write to a space that has closed */
+const CLOSED_SPACE = 'This space has closed: nothing more is written to it';
+
 export function createWriting(deps: WritingDeps) {
   const { record, keyring, storage, signer, session } = deps;
   const { space } = record;
@@ -249,8 +252,13 @@ export function createWriting(deps: WritingDeps) {
       // Every version under a contract: it reads the one before, and others cite it.
       (!deleted && hasContract(definition?.contract));
 
+    // Closed, a space signs nothing more: its node may have let go of the key,
+    // and another may hold it now (spec 02 §4.10). Asked again under the key's
+    // lock, just before signing, for a close that came while this waited.
+    if (deps.isClosed()) throw new Error(CLOSED_SPACE);
     // The next place in this key's line for the collection: given back if the version is refused below.
     const signed = await deps.writers.append(writer.did, space.id, collection, async (log) => {
+      if (deps.isClosed()) throw new Error(CLOSED_SPACE);
       const { history, events: held } = await access();
       const seen = await seenFor(history, collection);
       // Checks in force as of the very point it names: a definition arriving meanwhile can't leave it unkept.
