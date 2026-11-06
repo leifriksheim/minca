@@ -148,7 +148,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   const memberPair = deps.memberKey ? await contactKeyPair(deps.memberKey) : null;
 
   const adapter = await deps.stores(`spaces/${space.id}`);
-  const storage = createStorageProvider(adapter);
+  const storage = createStorageProvider(adapter, deps.stores.cache);
 
   // What this node holds (`node/space-holding.ts`): settled here, since sync asks on every hello.
   const holding = await openSpaceHolding({

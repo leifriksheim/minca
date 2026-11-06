@@ -478,7 +478,7 @@ async function host(args: string[]): Promise<number> {
     ...fundFromEnv(env),
     stats: statsFromEnv(env),
     reminders,
-    measure: spaceSize(data),
+    measure: spaceSize(stores),
     ...(quotaBytes ? { quotaBytes } : {}),
     limits,
     ...(limits ? abuseFromEnv(env) : {}),

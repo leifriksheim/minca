@@ -168,6 +168,13 @@ minca host --host 0.0.0.0 --port 8787 --data /var/lib/minca-host
   Settings, with a Copy button. `--allow` works on a paying host too.
 - The host's key is made once, in `--data` (`host-key`, readable by you alone).
   A new key is a new host: every account would hand its spaces over again.
+- What it carries is in `--data` too, in one SQLite database, `host.sqlite`.
+  A host from before kept it as files in `store/`: its first start moves them
+  in and renames the folder `store.imported`. Delete that once the host runs
+  well. To go back to an older release, rename it `store` again: what the host
+  wrote since is only in the database. With both a `store/` folder and the
+  database, the host won't start, rather than guess which is newer. It needs
+  Node 22.13 or later.
 - **Pay as it grows.** Every subscription has a balance: an account's, and
   a community's fund. Paying adds any amount to it, at least
   `MINCA_FUND_MIN` dollars (default 5, so a card's fixed fee stays small),

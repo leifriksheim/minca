@@ -26,6 +26,7 @@ import { utf8Encode, utf8Decode, bytesToHex } from '../utils/encoding.js';
 import { cidDigest } from '../utils/hash.js';
 import { getOrAdd } from '../utils/map.js';
 import { queue } from '../utils/serial.js';
+import { createBodyCache, type BodyCache } from './body-cache.js';
 import {
   addToSum,
   combineSums,
@@ -82,7 +83,7 @@ export const CURRENT_PREFIX = 'r/';
 export const GENESIS_PREFIX = 'g/';
 export const HISTORY_PREFIX = 'h/';
 export const ITEM_PREFIX = 'i/';
-/** Version bodies a store keeps in memory, the oldest let go first */
+/** Version bodies a store keeps in memory when it has a cache of its own, the one used longest ago let go first */
 const MAX_BODIES = 50_000;
 
 const currentKey = (key: string) => `${CURRENT_PREFIX}${key}`;
@@ -175,8 +176,12 @@ function sumOf(items: Iterable<Item>): Sum {
   return sum;
 }
 
-/** Creates a StorageProvider wrapping an adapter. */
-export function createStorageProvider(adapter: StorageAdapter): StorageProvider {
+/**
+ * Creates a StorageProvider wrapping an adapter.
+ * @param cache Where it keeps version bodies in memory: shared with other
+ *   stores, or by default one of its own of 50,000
+ */
+export function createStorageProvider(adapter: StorageAdapter, cache?: BodyCache): StorageProvider {
   // A change reads the current version, then writes: two interleaved would
   // decide against the same one. So changes take turns.
   const exclusively = queue();
@@ -190,18 +195,14 @@ export function createStorageProvider(adapter: StorageAdapter): StorageProvider 
 
   /** `r/` and `g/` entries: the id they name, or null for none */
   const pointers = new Map<string, string | null>();
-  /** Version bodies by id, the oldest let go first */
-  const bodies = new Map<string, Version>();
+  /** Version bodies by id, the one used longest ago let go first */
+  const bodies = (cache ?? createBodyCache(MAX_BODIES)).part();
   /** Counts changes landed, so a read that raced one is not kept */
   let landed = 0;
 
   const isPointer = (key: string) => key.startsWith(CURRENT_PREFIX) || key.startsWith(GENESIS_PREFIX);
 
-  const remember = (version: Version) => {
-    bodies.delete(version.id);
-    bodies.set(version.id, version);
-    if (bodies.size > MAX_BODIES) bodies.delete(bodies.keys().next().value!);
-  };
+  const remember = (version: Version) => bodies.set(version);
 
   /** Bodies the changes landing now will store: readable by the changes after them in the same group */
   const staging = new Map<string, Version>();
@@ -401,16 +402,30 @@ export function createStorageProvider(adapter: StorageAdapter): StorageProvider 
     entries.set(historyKey(version), version.id);
   }
 
-  /** Versions by id, those held, in one read where the adapter can */
+  /**
+   * Versions by id, those held, in one read where the adapter can. What it
+   * read is returned, not read back from the cache, which may hold fewer.
+   */
   async function load(ids: Iterable<string>): Promise<Version[]> {
     const wanted = [...ids];
-    const missing = wanted.filter((id) => !bodies.has(id));
-    if (adapter.getVersions && missing.length > 1) {
-      for (const version of await adapter.getVersions(missing)) if (version) remember(version);
-    } else {
-      await Promise.all(missing.map((id) => body(id)));
+    const found = new Map<string, Version>();
+    const missing: string[] = [];
+    for (const id of wanted) {
+      const held = bodies.get(id);
+      if (held) found.set(id, held);
+      else missing.push(id);
     }
-    return wanted.map((id) => bodies.get(id)).filter((v): v is Version => v !== undefined);
+    if (adapter.getVersions && missing.length > 1) {
+      for (const version of await adapter.getVersions(missing)) {
+        if (!version) continue;
+        found.set(version.id, version);
+        remember(version);
+      }
+    } else {
+      for (const version of await Promise.all(missing.map((id) => body(id))))
+        if (version) found.set(version.id, version);
+    }
+    return wanted.flatMap((id) => found.get(id) ?? []);
   }
 
   /** `[entry key, version id]` for every pointer under a prefix, in one read where the adapter can */

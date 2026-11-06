@@ -11,6 +11,7 @@ import { createIndexedDBAdapter } from '../storage/indexeddb-adapter.js';
 import { createFolderAdapter, type DirectoryHandleLike } from '../storage/folder-adapter.js';
 import { createEncryptedAdapter } from '../storage/encrypted-adapter.js';
 import type { BlobStore } from '../storage/blob-store.js';
+import type { BodyCache } from '../storage/body-cache.js';
 import { createDirectoryBlobStore } from '../storage/blob/directory.js';
 import { browserWriterKeys, type WriterKeySource } from './writer-keys.js';
 
@@ -19,9 +20,14 @@ export interface StoreOptions {
   readonly seal?: boolean;
 }
 
-/** Opens the store for a `/`-separated path. Over a data folder, `folder` is where spaces are mirrored (spec 05 §14). */
+/**
+ * Opens the store for a `/`-separated path. Over a data folder, `folder` is
+ * where spaces are mirrored (spec 05 §14). With `cache`, every space's store
+ * keeps its version bodies in that one cache; without, each keeps its own.
+ */
 export type StoreFactory = ((path: string, options?: StoreOptions) => Promise<StorageAdapter>) & {
   readonly folder?: BlobStore;
+  readonly cache?: BodyCache;
 };
 
 /**
