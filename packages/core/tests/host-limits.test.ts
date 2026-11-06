@@ -122,6 +122,9 @@ async function community(
     (await bobNode.carriers.add({ did: node.did, name: 'Host' })).invite,
   );
   await until(carries(node, shared.id), 8000, 'the shared space to be carried');
+  // Each account's pass for it arrives on its own: carried for one is not yet named by both.
+  for (const id of subscriptions)
+    await until(async () => (await node.namedFor(id)).includes(shared.id), 8000, 'both passes to arrive');
   return { alice, bob, aliceNode, bobNode, space: shared.id, invite, subscriptions };
 }
 

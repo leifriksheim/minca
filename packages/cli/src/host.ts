@@ -1128,13 +1128,13 @@ function startedNotes(options: HostOptions, limited: boolean): string {
   ].join('');
 }
 
-/** Each space's size, measured at most every ten minutes */
+/** Each space's size, measured at most every ten minutes: callers while it is measured share the one walk */
 function cachedSizes(measure: (spaceId: string) => Promise<number>) {
-  const sizes = new Map<string, { bytes: number; at: number }>();
-  return async (spaceId: string): Promise<number> => {
+  const sizes = new Map<string, { bytes: Promise<number>; at: number }>();
+  return (spaceId: string): Promise<number> => {
     const known = sizes.get(spaceId);
     if (known && now() - known.at < MEASURE_EVERY_SECONDS) return known.bytes;
-    const bytes = await measure(spaceId).catch(() => known?.bytes ?? 0);
+    const bytes = measure(spaceId).catch(() => known?.bytes ?? 0);
     sizes.set(spaceId, { bytes, at: now() });
     return bytes;
   };

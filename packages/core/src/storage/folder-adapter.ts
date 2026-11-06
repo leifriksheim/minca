@@ -149,12 +149,20 @@ export async function removeFile(dir: DirectoryHandleLike, name: string): Promis
 
 /**
  * Opens a storage adapter backed by a directory on the user's disk. Versions
- * are held in memory too, or a query would read one file per record.
+ * are held in memory too, or a query would read one file per record; so are
+ * the entries' keys, or every listing would read the whole directory. Their
+ * values are not: they include file chunks, and the disk's cache holds them.
  *
  * @param path Where to keep these files from the folder root, `/` separating
  *   subdirectories, so several accounts can each have a subtree.
+ * @param options.shared Others write these entries as this reads them, and
+ *   nothing reloads it: every read of an entry goes to the disk.
  */
-export async function createFolderAdapter(root: DirectoryHandleLike, path: string): Promise<FolderAdapter> {
+export async function createFolderAdapter(
+  root: DirectoryHandleLike,
+  path: string,
+  options: { readonly shared?: boolean } = {},
+): Promise<FolderAdapter> {
   const segments = path.split('/').filter(Boolean).map(encodeKey);
   if (segments.length === 0) throw new Error('A folder adapter needs a path to live in.');
   const base = await resolvePath(root, segments);
@@ -162,8 +170,16 @@ export async function createFolderAdapter(root: DirectoryHandleLike, path: strin
   const versionsDir = await base.getDirectoryHandle('versions', { create: true });
 
   const versions = new Map<string, Version>();
-  /** Entries read or written, null for a miss; `reload` drops it, since another writer may have changed any */
-  const kvCache = new Map<string, Uint8Array | null>();
+  /** The entries' keys, as of the last `reload` and this adapter's own writes since; none kept when shared */
+  let keys = options.shared ? null : new Set<string>();
+  /** Writes made while a reload lists the directory, which its listing may have missed: whether each key is there */
+  let writtenDuringReload: Map<string, boolean> | null = null;
+
+  async function listKeys(): Promise<string[]> {
+    const found: string[] = [];
+    for await (const name of kvDir.keys()) found.push(decodeKey(name));
+    return found;
+  }
 
   async function readVersionFile(name: string): Promise<Version | null> {
     const bytes = await readFolderFile(versionsDir, name);
@@ -179,15 +195,24 @@ export async function createFolderAdapter(root: DirectoryHandleLike, path: strin
 
   async function put(key: string, value: Uint8Array): Promise<void> {
     await writeFolderFile(kvDir, encodeKey(key), value);
-    kvCache.set(key, value);
+    keys?.add(key);
+    writtenDuringReload?.set(key, true);
   }
 
   async function remove(key: string): Promise<void> {
     await removeFile(kvDir, encodeKey(key));
-    kvCache.set(key, null);
+    keys?.delete(key);
+    writtenDuringReload?.set(key, false);
   }
 
-  async function reload(): Promise<FolderReload> {
+  /** The reload running now: one at a time, so writes made during it are kept by exactly one */
+  let reloading: Promise<FolderReload> | null = null;
+  const reload = (): Promise<FolderReload> =>
+    (reloading ??= reloadOnce().finally(() => {
+      reloading = null;
+    }));
+
+  async function reloadOnce(): Promise<FolderReload> {
     const seen = new Set<string>();
     const added: string[] = [];
 
@@ -206,7 +231,17 @@ export async function createFolderAdapter(root: DirectoryHandleLike, path: strin
     const removed = [...versions.keys()].filter((id) => !seen.has(id));
     for (const id of removed) versions.delete(id);
 
-    kvCache.clear();
+    // Built aside and swapped in whole: an entry must never read as missing while the directory is listed.
+    if (keys) {
+      writtenDuringReload = new Map();
+      const listed = new Set(await listKeys());
+      for (const [key, there] of writtenDuringReload) {
+        if (there) listed.add(key);
+        else listed.delete(key);
+      }
+      keys = listed;
+      writtenDuringReload = null;
+    }
     return { added, removed };
   }
 
@@ -221,27 +256,14 @@ export async function createFolderAdapter(root: DirectoryHandleLike, path: strin
     },
 
     async get(key: string): Promise<Uint8Array | null> {
-      const cached = kvCache.get(key);
-      if (cached !== undefined) return cached;
-
-      const bytes = await readFolderFile(kvDir, encodeKey(key));
-      kvCache.set(key, bytes);
-      return bytes;
+      return !keys || keys.has(key) ? readFolderFile(kvDir, encodeKey(key)) : null;
     },
 
     put,
     delete: remove,
 
     async list(prefix = ''): Promise<string[]> {
-      const keys: string[] = [];
-      for await (const name of kvDir.keys()) {
-        const key = decodeKey(name);
-        if (!key.startsWith(prefix)) continue;
-        keys.push(key);
-        // Another writer created it since this process missed it.
-        if (kvCache.get(key) === null) kvCache.delete(key);
-      }
-      return keys;
+      return [...(keys ?? (await listKeys()))].filter((key) => key.startsWith(prefix));
     },
 
     async putVersion(version: Version): Promise<void> {
@@ -273,7 +295,8 @@ export async function createFolderAdapter(root: DirectoryHandleLike, path: strin
 
     async close(): Promise<void> {
       versions.clear();
-      kvCache.clear();
+      // Anything still in flight reads the disk again, never an empty index.
+      keys = null;
     },
   });
 }

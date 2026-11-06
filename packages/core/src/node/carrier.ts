@@ -266,7 +266,8 @@ export async function createCarryCore(config: CarryCoreConfig) {
       writers,
       rootDid: as.did,
       network,
-      watchIntervalMs: config.watchIntervalMs ?? 2000,
+      // Only the pod has other writers to look for: the carrier's own copy is written by it alone.
+      watchIntervalMs: as === session ? 0 : (config.watchIntervalMs ?? 2000),
       // It keeps spaces for others: their files too, so they are there while the writer is away.
       fileLimits: () => null,
       emit: onEvent,
@@ -363,10 +364,16 @@ export async function createCarryCore(config: CarryCoreConfig) {
     }),
   );
 
+  /** The passes opened at the last refresh, by their record's body: opening one derives a key, a scalar multiplication */
+  let openedPasses = new Map<string, OpenedPass | null>();
+
   async function refreshOnce(): Promise<void> {
     if (closed) return;
     const wanted = new Map<string, SpaceRecord>();
-    for (const [carrySpace, entry] of carries) await readCarry(carrySpace, entry, wanted);
+    const openedNow = new Map<string, OpenedPass | null>();
+    for (const [carrySpace, entry] of carries) await readCarry(carrySpace, entry, wanted, openedNow);
+    // Only what the carry spaces still hold is kept for next time.
+    openedPasses = openedNow;
     for (const record of direct.values()) preferLater(wanted, record);
     const opened = await carryWanted(wanted);
     const released = await releaseUnwanted(wanted);
@@ -378,6 +385,7 @@ export async function createCarryCore(config: CarryCoreConfig) {
     carrySpace: string,
     entry: Carry,
     wanted: Map<string, SpaceRecord>,
+    openedNow: Map<string, OpenedPass | null>,
   ): Promise<void> {
     const carryRuntime = carried.get(carrySpace)?.runtime;
     if (!carryRuntime) return;
@@ -395,7 +403,7 @@ export async function createCarryCore(config: CarryCoreConfig) {
     entry.wakes = wakesIn(await own(WAKE_COLLECTION));
     entry.links = await linksIn(carryRuntime, entry.account);
 
-    const passes = await passesIn(records);
+    const passes = await passesIn(records, openedNow);
     entry.named = new Set(passes.map((pass) => pass.space.id));
     const wants = new Set<string>();
     for (const pass of passesToCarry(carrySpace, entry, passes)) {
@@ -407,12 +415,17 @@ export async function createCarryCore(config: CarryCoreConfig) {
     entry.wants = wants;
   }
 
-  /** The passes among a carry space's records, but those for carry spaces */
-  async function passesIn(records: ReadonlyArray<{ key: string; body: unknown }>): Promise<OpenedPass[]> {
+  /** The passes among a carry space's records, but those for carry spaces: each opened once while it stays */
+  async function passesIn(
+    records: ReadonlyArray<{ key: string; body: unknown }>,
+    openedNow: Map<string, OpenedPass | null>,
+  ): Promise<OpenedPass[]> {
     const passes: OpenedPass[] = [];
     for (const record of records) {
       if (!record.key.startsWith('pass:')) continue;
-      const pass = await openPass(record.body, provider);
+      const id = JSON.stringify(record.body);
+      const pass = openedPasses.has(id) ? openedPasses.get(id)! : await openPass(record.body, provider);
+      openedNow.set(id, pass);
       if (pass && !carries.has(pass.space.id)) passes.push(pass);
     }
     return passes;

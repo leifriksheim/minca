@@ -91,6 +91,11 @@ reference implementation, or any implementation, honestly.
     It can found a space naming anyone as a founder; that space gives them
     power, and takes nothing from them.
 - **Does not hold yet.**
+  - Anyone holding a space's invite can make a host without limits drop its
+    bucket copy of the space while it still carries it for the members: they
+    subscribe, hand the space over as their carry space, and take it back,
+    and letting go of a carry space deletes its copy
+    ([#407](https://github.com/leifriksheim/minca/issues/407)).
   - Usernames on a Minca name service are first come, someone's real name
     included, and a name that lapses or is given up goes to whoever claims it
     next, with the knocks of everyone who still has it written down. One
@@ -685,9 +690,10 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     notice when pushed over again, which is the time its members have to
     remove whoever did it. Handing a shared space over as a carry space
     neither escapes the line nor hides its notice from the other members who
-    use the host, nor drops the host's copy: a host with limits refuses one
-    it carries or others name ("a shared space handed over as someone's
-    carry space is refused"). One no other member uses the host for is
+    use the host, nor, at a host with limits, drops the host's copy: such a
+    host refuses one it carries or others name ("a shared space handed over
+    as someone's carry space is refused"). A host without limits does not
+    (§3.1). One no other member uses the host for is
     refused only once its members are known, at the next look, and a member
     without a role is not seen as sharing it. Any member can also put a space several write
     in over on bytes, and removing them leaves what they wrote. After `graceDays` only the space's fund

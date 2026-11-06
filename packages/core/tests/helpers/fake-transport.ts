@@ -106,6 +106,8 @@ export function createFakeHub(options: FakeHubOptions = {}): FakeHub {
       closeAll: () => {
         dialled.get(room)?.delete(did);
         for (const peer of [...endpoint.links]) unlink(room, did, peer);
+        // Gone, as a closed socket is: nothing reaches it, and it holds nothing up.
+        if (endpoints.get(at(room, did)) === endpoint) endpoints.delete(at(room, did));
       },
       on: <K extends keyof PeerTransportEvents>(event: K, callback: PeerTransportEvents[K]) =>
         emitter.on(event, callback),
