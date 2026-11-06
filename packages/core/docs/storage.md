@@ -312,7 +312,8 @@ names a version that isn't there.
 
 The library's adapters are IndexedDB ([above](#indexeddb)), a directory
 (`directoryStores`, for a data folder's registry and a node's stores on
-disk), a sealing wrapper, and one in memory for tests.
+disk), SQLite (`sqliteStores`, [below](#sqlite)), a sealing wrapper, and one
+in memory for tests.
 
 A directory store keeps its versions and its entries' keys in memory, so a
 query or a listing reads no directory. It reads the keys again when the node
@@ -325,13 +326,44 @@ node that has it open watches it: the daemon finds a command's writes to a
 space's store when it reloads, every two seconds. Until then a key another
 writer deleted is still listed, though it reads as missing.
 
+### SQLite
+
+`sqliteStores(db)` keeps every store of a node in one SQLite database. A
+host keeps its stores this way. Pass it a connection: `DatabaseSync` from
+`node:sqlite` in Node, or `Database` from `bun:sqlite` in Bun. The library
+imports no driver, so it runs wherever one does.
+
+```ts
+import { sqliteStores, type SqliteDatabase } from '@minca/core';
+declare const DatabaseSync: new (file: string) => SqliteDatabase;
+// ---cut---
+// import { DatabaseSync } from 'node:sqlite';
+const stores = sqliteStores(new DatabaseSync('node.sqlite'));
+```
+
+Each store is a path, and its entries and version bodies are rows. Every
+write is one transaction, and listing a prefix reads an index. A key may not
+hold U+0000. It keeps
+nothing in memory between calls, so there is nothing to reload, and nothing
+polls it. One process writes the database. `stores.size(path)` gives what a
+store takes, in bytes.
+
+Closing a store leaves the database open, since the other stores share it.
+Close the connection when the node is done.
+
 ## The store in memory
 
 A store reads its entries once, then keeps what it needs in memory: each
 collection's set of records, and the entries it read or wrote. It also keeps
-up to 50,000 version bodies, letting the oldest go first. A body never
+version bodies, letting the one used longest ago go first. A body never
 changes, so this is always safe. An entry read while a change was landing is
 not kept.
+
+Each store keeps up to 50,000 bodies of its own, unless its store factory
+has a `cache`. Then all the stores share that one. The SQLite stores share
+4,000, since reading a body again is cheap: the bodies a node keeps then
+take the same memory however many spaces it holds. Each open space still
+keeps its sets and entries.
 
 When another writer changes the same store, the node reads all of it again
 (`invalidate`):
@@ -350,6 +382,23 @@ When another writer changes the same store, the node reads all of it again
 The store's fingerprint, in `spaces.status`, is the Negentropy fingerprint
 of every collection together, as hex. Two nodes with the same fingerprint
 hold the same data.
+
+### Planned: stores that scale with what is in use
+
+> **Planned.** Not built yet.
+
+- **Sync sets that don't rebuild.** Today a write to a collection drops its
+  sorted set, and the next sync sorts it again. Kept in blocks, each with its
+  sum, a write would change one block, and a sync in progress would keep the
+  blocks it started with.
+- **Files beside the database.** File chunks are 256 KiB, past the size SQLite
+  reads faster than separate files. A host would keep them as files under a
+  budget, with its bucket holding them all, and the database would know which
+  files each version names, so deleting what nothing names is one query.
+- **Spaces open while used.** A host would close a space that has been idle,
+  and open it again when a peer asks for it.
+- **The same store in the browser.** IndexedDB answering what SQLite does,
+  before deciding whether a browser needs SQLite at all.
 
 ## Pacing sync
 

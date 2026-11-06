@@ -181,6 +181,9 @@ What a path means is up to the factory:
 - `directoryStores(directory, { localKey? })` uses a directory on this
   device, one file per entry and per version, sealing the `registry` the same
   way.
+- `sqliteStores(db, { localKey? })` keeps every path in one SQLite database,
+  given its connection ([SQLite](storage.md#sqlite)), sealing the `registry`
+  the same way.
 
 [Sign-in](sign-in.md) picks stores with `storesFor(account)`: IndexedDB with
 prefix `minca:<dataPath with : for />` in the browser, or `folderStores(pod,

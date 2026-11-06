@@ -13,7 +13,9 @@
  * space's writers and readers, to see what metering costs.
  */
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
+import { DatabaseSync } from 'node:sqlite';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -24,7 +26,6 @@ import { createLocalRootSigner } from '../../../core/src/identity/root-signer.js
 import { generateSeed } from '../../../core/src/identity/recovery-code.js';
 import { deriveAccountKey } from '../../../core/src/identity/account-vault.js';
 import { memoryStores } from '../../../core/tests/helpers/memory-stores.js';
-import { spaceSize } from '../../src/host-setup.js';
 
 const [spaces = 1000, accounts = 20, records = 20] = process.argv.slice(2).map(Number);
 const PORT = 18_700 + Math.floor(Math.random() * 200);
@@ -76,14 +77,27 @@ async function hostUp(): Promise<boolean> {
   );
 }
 
+/** The spaces the host's database holds, and their bytes: read beside the running host, which WAL allows */
 async function carried(data: string): Promise<{ count: number; bytes: number }> {
-  const size = spaceSize(data);
-  const dir = path.join(data, 'store', 'spaces');
-  const ids = await import('node:fs/promises').then((fs) => fs.readdir(dir).catch(() => []));
-  let bytes = 0;
-  // A file renamed away mid-walk is counted next time round.
-  for (const id of ids) bytes += await size(id).catch(() => 0);
-  return { count: ids.length, bytes };
+  const file = path.join(data, 'host.sqlite');
+  if (!existsSync(file)) return { count: 0, bytes: 0 };
+  const db = new DatabaseSync(file, { readOnly: true });
+  try {
+    const spaces = "SELECT id FROM stores WHERE path LIKE 'spaces/%'";
+    const count = db.prepare(`SELECT count(*) AS n FROM (${spaces})`).get()?.n;
+    const entries = db
+      .prepare(`SELECT coalesce(sum(length(value)), 0) AS n FROM entries WHERE store IN (${spaces})`)
+      .get()?.n;
+    const versions = db
+      .prepare(`SELECT coalesce(sum(length(body)), 0) AS n FROM versions WHERE store IN (${spaces})`)
+      .get()?.n;
+    return { count: Number(count ?? 0), bytes: Number(entries ?? 0) + Number(versions ?? 0) };
+  } catch {
+    // Not made yet, or mid-checkpoint: counted next time round.
+    return { count: 0, bytes: 0 };
+  } finally {
+    db.close();
+  }
 }
 
 async function account(): Promise<P2PNode> {

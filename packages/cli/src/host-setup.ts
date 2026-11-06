@@ -2,16 +2,21 @@
  * What `minca host` starts from: a data folder, the host's key in it, and a
  * payment provider from the environment.
  */
-import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  createFolderAdapter,
   createP256Provider,
   createS3BlobStore,
-  directoryStores,
+  decodeKey,
+  sqliteStores,
+  type BatchOp,
   type BlobStore,
   type HostLimits,
-  type StoreFactory,
+  type SqliteStores,
+  type Version,
 } from '@minca/core';
 import { openFsDirectory } from './fs-directory.js';
 import type { Billing } from './host.js';
@@ -49,26 +54,100 @@ export async function hostKey(data: string, name = 'host-key'): Promise<CryptoKe
   return { publicKey: pair.publicKey, privateKey: pair.privateKey };
 }
 
-/** The host's stores, in the data folder: its subscriptions, and a copy of every space it carries */
-export async function hostStores(data: string): Promise<StoreFactory> {
-  return directoryStores(await openFsDirectory(path.join(data, 'store')));
+/**
+ * The host's stores, in one SQLite database in the data folder, `host.sqlite`:
+ * its subscriptions, and a copy of every space it carries. A host that kept
+ * them as folders, in `store/`, has them moved in the first time.
+ */
+export async function hostStores(data: string): Promise<SqliteStores> {
+  await mkdir(data, { recursive: true, mode: 0o700 });
+  // Loaded here, so only a host does: other commands run on any Node 22.
+  const { DatabaseSync } = await import('node:sqlite');
+  const file = path.join(data, 'host.sqlite');
+  const folder = path.join(data, 'store');
+  if (existsSync(folder)) {
+    // A folder beside a database is one written after the move, by an older release run again:
+    // moved in, it would put back what the database has since changed.
+    if (existsSync(file))
+      throw new Error(
+        `${folder} and ${file} are both here. Either the move into ${file} stopped before it put ` +
+          `${folder} aside (then rename the folder ${folder}.imported), or an older release ran since ` +
+          `and wrote the folder (then keep whichever holds what you want, and move the other away).`,
+      );
+    // Built aside and put in place whole: a move stopped halfway leaves no database to start from.
+    const building = `${file}.importing`;
+    for (const suffix of ['', '-wal', '-shm']) await rm(building + suffix, { force: true });
+    const db = new DatabaseSync(building);
+    await importStoreFolder(folder, sqliteStores(db));
+    db.close();
+    await rename(building, file);
+    await rename(folder, await freeName(`${folder}.imported`));
+  }
+  return sqliteStores(new DatabaseSync(file));
 }
 
-/** What a carried space takes on disk, in bytes: its folder under `hostStores`, walked */
-export function spaceSize(data: string): (spaceId: string) => Promise<number> {
-  const walk = async (dir: string): Promise<number> => {
-    let bytes = 0;
-    for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
-      const at = path.join(dir, entry.name);
-      if (entry.isDirectory()) bytes += await walk(at);
-      else if (entry.isFile()) bytes += (await stat(at)).size;
+/** `name`, or with the date after it when that is taken */
+async function freeName(name: string): Promise<string> {
+  return existsSync(name) ? `${name}-${new Date().toISOString().replace(/[:.]/g, '-')}` : name;
+}
+
+/** What a carried space takes, in bytes: its keys, values and version bodies in `hostStores` */
+export function spaceSize(stores: SqliteStores): (spaceId: string) => Promise<number> {
+  return async (spaceId) => (/^[A-Za-z0-9_-]{1,120}$/.test(spaceId) ? stores.size(`spaces/${spaceId}`) : 0);
+}
+
+/** Entries or versions copied in one write, at most: a space's files must not all be in memory at once */
+const IMPORT_BATCH = 256;
+
+/**
+ * Copies the stores a host kept as folders, one file per entry and per
+ * version, into a database: every one as it was, writer keys' places
+ * included, which must never go back.
+ */
+async function importStoreFolder(dir: string, stores: SqliteStores): Promise<void> {
+  const paths = await storePaths(dir);
+  const root = await openFsDirectory(dir);
+  for (const storePath of paths) {
+    const from = await createFolderAdapter(root, storePath);
+    const to = await stores(storePath);
+    let ops: BatchOp[] = [];
+    let versions: Version[] = [];
+    const flush = async () => {
+      await to.commit!({ store: versions, ops, remove: [] });
+      ops = [];
+      versions = [];
+    };
+    for (const key of await from.list('')) {
+      const value = await from.get(key);
+      if (value) ops.push({ type: 'put', key, value });
+      if (ops.length === IMPORT_BATCH) await flush();
     }
-    return bytes;
+    for (const id of await from.listVersionIds()) {
+      const version = await from.getVersion(id);
+      if (version) versions.push(version);
+      if (versions.length === IMPORT_BATCH) await flush();
+    }
+    await flush();
+    await Promise.all([from.close(), to.close()]);
+  }
+}
+
+/**
+ * Every store kept in a folder of stores, as the path it was opened by: each
+ * folder holding `kv` or `versions` is one.
+ */
+async function storePaths(dir: string): Promise<string[]> {
+  const found: string[] = [];
+  const walk = async (at: string, segments: string[]): Promise<void> => {
+    const children = (await readdir(at, { withFileTypes: true })).filter((entry) => entry.isDirectory());
+    if (children.some((entry) => entry.name === 'kv' || entry.name === 'versions'))
+      found.push(segments.map(decodeKey).join('/'));
+    for (const child of children)
+      if (child.name !== 'kv' && child.name !== 'versions')
+        await walk(path.join(at, child.name), [...segments, child.name]);
   };
-  return (spaceId) =>
-    /^[A-Za-z0-9_-]{1,120}$/.test(spaceId)
-      ? walk(path.join(data, 'store', 'spaces', spaceId))
-      : Promise.resolve(0);
+  await walk(dir, []);
+  return found;
 }
 
 /**

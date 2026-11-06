@@ -162,7 +162,7 @@ export { createStorageProvider } from './storage/storage-provider.js';
 export type { StorageProvider } from './storage/storage-provider.js';
 
 // Storage in a folder the user owns — the one store that is not origin-scoped
-export { createFolderAdapter, readFolderFile, writeFolderFile } from './storage/folder-adapter.js';
+export { createFolderAdapter, decodeKey, readFolderFile, writeFolderFile } from './storage/folder-adapter.js';
 export type {
   FolderAdapter,
   FolderReload,
@@ -173,6 +173,8 @@ export type {
 export { createEncryptedAdapter, DEFAULT_ENCRYPTED_PREFIXES } from './storage/encrypted-adapter.js';
 export type { EncryptedAdapterOptions } from './storage/encrypted-adapter.js';
 export { reconcileFolder } from './storage/folder-reconcile.js';
+export { sqliteStores } from './storage/sqlite-adapter.js';
+export type { SqliteDatabase, SqliteStatement, SqliteStores, SqliteValue } from './storage/sqlite-adapter.js';
 export type { FolderReconciliation } from './storage/folder-reconcile.js';
 export {
   isFolderStorageAvailable,
