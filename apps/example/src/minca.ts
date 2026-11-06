@@ -25,11 +25,13 @@ export const connection =
     network: { relays: relayUrls(), nodes: CONFIGURED_NODES, hosts: CONFIGURED_HOSTS },
     // A tab opened at an address that names an account acts for that one (`?as=`).
     account: accountFromAddress,
-    // Checking, decrypting and syncing happen there, so the page never stutters. One worker for
-    // every tab where shared workers work (not Chrome on Android, nor WebKit): the tabs share one node.
-    // A worker that fails to load says so, and the node runs in the page instead.
+    // Checking, decrypting and syncing happen there, so the page never stutters. One shared
+    // worker for every tab: one node, the only one writing the stores, so a tab the browser
+    // freezes holds nothing another waits on. The app's key stays here and signs for it.
+    // Without shared workers it runs in a worker of its own, in the tab in view; one that fails
+    // to load, in the page.
     worker: () => {
-      if (!sharedWorkers())
+      if (typeof SharedWorker !== 'function')
         return new Worker(new URL('./minca-worker.ts', import.meta.url), { type: 'module' });
       const shared = new SharedWorker(new URL('./minca-worker.ts', import.meta.url), {
         type: 'module',
@@ -42,15 +44,6 @@ export const connection =
       };
     },
   });
-
-/**
- * WebKit (Safari, and every browser on an iPhone) drops, without an error, a
- * message to a shared worker that holds a `CryptoKey`, and the node's worker
- * starts with one: each load would wait 30 s for it, then run the node here.
- */
-function sharedWorkers(): boolean {
-  return typeof SharedWorker === 'function' && navigator.vendor !== 'Apple Computer, Inc.';
-}
 
 /** The node acting for the account, for code outside React (the WebMCP tools). Null before connecting. */
 export function getNode() {

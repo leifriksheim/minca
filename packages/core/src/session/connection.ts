@@ -171,6 +171,12 @@ export function openAccountHome(
 const ANOTHER_TAB =
   'Minca is open in another tab or window. It carries on here once that one is put away or closed.';
 
+/** Said when opening the account takes far longer than it should: nothing has failed, but something waits */
+const SLOW_START =
+  'Opening your account is taking longer than it should. If Minca is open in other tabs, closing them may help; reloading this page starts again.';
+/** How long opening may take before that is said */
+const SLOW_START_MS = 10_000;
+
 /** Whether the page is out of view: put away, or being left */
 const hidden = () => globalThis.document?.visibilityState === 'hidden';
 
@@ -309,7 +315,7 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
     update({
       status: 'disconnected',
       grant: null,
-      error: error instanceof Error ? error.message : String(error),
+      error: `Your account couldn't be opened here: ${error instanceof Error ? error.message : String(error)}`,
     });
 
   /** Counts opens, so one overtaken by a later one closes what it started */
@@ -347,6 +353,10 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
       return letGo;
     };
     let node: P2PNode;
+    // Nothing failed, but the person should hear that something waits, and what to try.
+    const slow = setTimeout(() => {
+      if (mine === opening && state.status === 'starting' && !state.error) update({ error: SLOW_START });
+    }, SLOW_START_MS);
     try {
       if (!made || typeof made.terminate === 'function') release = await takeTurn();
       // A browser whose worker never starts still gets a node, in the page. A
@@ -362,6 +372,8 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
     } catch (error) {
       release?.();
       throw error;
+    } finally {
+      clearTimeout(slow);
     }
     const turn = release;
     // Switched again while this one started: it is not wanted.

@@ -21,7 +21,7 @@
  * A connection that ends up in no room is closed.
  */
 import { getOrAdd } from '../utils/map.js';
-import type { PeerInfo, NetworkMessage } from '../types.js';
+import type { PeerInfo, NetworkMessage, SigningKey } from '../types.js';
 import { utf8Encode, utf8Decode } from '../utils/encoding.js';
 import { createEmitter, type Emitter } from '../utils/events.js';
 import type { RelayStatus } from './relay-socket.js';
@@ -51,7 +51,7 @@ import {
 export interface MeshConfig {
   readonly did: string;
   /** The private half of the key `did` names: it signs what this node says in a room */
-  readonly key: CryptoKey;
+  readonly key: SigningKey;
   /** Relays of any kind, used all at once (`rendezvous.ts`) */
   readonly relays: ReadonlyArray<string>;
   readonly iceServers?: ReadonlyArray<RTCIceServer>;

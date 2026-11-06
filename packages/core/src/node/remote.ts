@@ -21,6 +21,7 @@ import { storedComputed, storedContract } from '../records/contract-builder.js';
 import { isRecord } from '../utils/guards.js';
 import { SESSION_COMMAND } from './node.js';
 import type { MessagePortLike } from '../utils/port.js';
+import type { CryptoProvider, KeyElsewhere, SigningKey } from '../types.js';
 import type { DefineCollection, NodeCollection, NodeEvent, P2PNode } from './types.js';
 import { API, buildNamespaces, callMethod, givenFor, type Namespace } from './api.js';
 
@@ -37,6 +38,7 @@ type Message = Record<string, unknown>;
 /** Tags every message, so a port shared with other traffic can tell ours apart */
 const TAG = 'minca-node';
 const SIGNER_TAG = 'minca-signer';
+const KEY_TAG = 'minca-key';
 
 /** The node's own methods that cross; every namespace's do (`node/api.ts`) */
 const OWN_METHODS = Object.freeze({
@@ -369,6 +371,42 @@ export async function remoteSigner(port: MessagePortLike): Promise<RootSigner> {
       return token;
     },
   } satisfies RootSigner);
+}
+
+/**
+ * Serves a session key on `port`, for a node in a shared worker: WebKit
+ * can't hand one a `CryptoKey`, so the key stays on this side and signs what
+ * the node asks. It signs only as that node's session key, which signs what
+ * the node writes and says to peers; the root key never signs this way.
+ */
+export function serveKey(key: SigningKey, port: MessagePortLike, provider: CryptoProvider): () => void {
+  return listen(port, KEY_TAG, (message) => {
+    const { id, data } = message;
+    if (typeof id !== 'number') return;
+    void (async () => {
+      if (!(data instanceof Uint8Array)) throw new Error('A key across a port signs bytes');
+      return provider.sign(key, data);
+    })().then(
+      (value) => send(port, KEY_TAG, { kind: 'reply', id, ok: true, value }),
+      (error: unknown) => send(port, KEY_TAG, { kind: 'reply', id, ok: false, error: sendable(error) }),
+    );
+  });
+}
+
+/** The key a `serveKey` keeps on the other side of `port` */
+export function remoteKey(port: MessagePortLike): KeyElsewhere {
+  const calls = createCalls();
+  listen(port, KEY_TAG, (message) => {
+    if (message.kind === 'reply') calls.settle(message);
+  });
+  return Object.freeze({
+    async sign(data: Uint8Array): Promise<Uint8Array> {
+      const signature = await calls.call<unknown>((id) => send(port, KEY_TAG, { kind: 'sign', data, id }));
+      if (!(signature instanceof Uint8Array))
+        throw new Error('The key answered with something that is not a signature');
+      return signature;
+    },
+  });
 }
 
 /** A session note's request, and nothing else: the far end still picks the key and the time */

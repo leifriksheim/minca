@@ -168,11 +168,14 @@ function fakeSharedWorker() {
     return {
       postMessage: (message: unknown, transfer: Transferable[]) => {
         if (isRecord(message) && typeof message.tab === 'string') tabs.push(message.tab);
+        posted.push(message);
         channel.port1.postMessage(message, transfer);
       },
     };
   };
-  return { connect, opened, tabs };
+  /** Every message a tab posted to the worker: WebKit drops one that holds a CryptoKey */
+  const posted: unknown[] = [];
+  return { connect, opened, tabs, posted };
 }
 
 describe('a node shared by the tabs of a site', () => {
@@ -248,6 +251,46 @@ describe('a node shared by the tabs of a site', () => {
     assert.equal(after.sessionDid, await didOf(newKey.publicKey));
   });
 
+  test("an app's key stays on the page: the worker is sent no CryptoKey, and the page signs as the session", async () => {
+    const shared = fakeSharedWorker();
+    const me = await signer();
+    const appKey = await createP256Provider().generateKeyPair();
+    const node = await startNodeInWorker(shared.connect(), {
+      signer: me,
+      sessionKey: appKey,
+      stores: { indexedDB: 'minca-app:me' },
+    });
+    cleanup.push(() => node.close());
+    assert.ok(
+      !shared.posted.some((message) => holdsCryptoKey(message)),
+      'nothing posted to the worker holds a CryptoKey',
+    );
+    assert.equal(node.sessionDid, await didOf(appKey.publicKey));
+    const { id: space } = await node.spaces.create({ name: 'Groceries', ...team, visibility: 'private' });
+    const written = await node.records.put(space, 'app.todo.item', { text: 'Milk' });
+    assert.equal(written.author, await didOf(appKey.publicKey), 'signed by the key the page keeps');
+  });
+
+  test("tabs of one app share its key: one closing, the next signs; none left, the node can't", async () => {
+    const shared = fakeSharedWorker();
+    const me = await signer();
+    const appKey = await createP256Provider().generateKeyPair();
+    const open = () =>
+      startNodeInWorker(shared.connect(), {
+        signer: me,
+        sessionKey: appKey,
+        stores: { indexedDB: 'minca-app:me' },
+      });
+    const first = await open();
+    const second = await open();
+    cleanup.push(() => second.close());
+    assert.equal(shared.opened.length, 1, 'one node for both tabs');
+    const { id: space } = await second.spaces.create({ name: 'Groceries', ...team, visibility: 'private' });
+    await first.close();
+    const written = await second.records.put(space, 'app.todo.item', { text: 'Eggs' });
+    assert.equal(written.author, await didOf(appKey.publicKey));
+  });
+
   test('the node outlives a tab that closes it, and closes with the last', async () => {
     const me = await signer();
     const shared = fakeSharedWorker();
@@ -313,3 +356,11 @@ describe('a node shared by the tabs of a site', () => {
     },
   );
 });
+
+/** Whether a message holds a CryptoKey anywhere in it */
+function holdsCryptoKey(value: unknown, seen = new Set<unknown>()): boolean {
+  if (value instanceof CryptoKey) return true;
+  if (typeof value !== 'object' || value === null || seen.has(value)) return false;
+  seen.add(value);
+  return Object.values(value).some((inner) => holdsCryptoKey(inner, seen));
+}

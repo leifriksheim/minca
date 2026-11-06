@@ -11,7 +11,7 @@
  * `proof` against its `createdAt`. What a valid one counts as is its
  * collection's business; no space's history or rules are consulted.
  */
-import type { CryptoProvider, Version } from '../types.js';
+import type { CryptoProvider, SigningKey, Version } from '../types.js';
 import { createVersion, canonicalize } from '../schema/version.js';
 import { createSigner } from '../schema/signer.js';
 import { checkVersionShape } from './version.js';
@@ -23,7 +23,7 @@ import { isRecord } from '../utils/guards.js';
 /** Who signs a loose version: a key, and the note that lets it act for its account (none when the account signs) */
 export interface LooseSigner {
   readonly did: string;
-  readonly key: CryptoKey;
+  readonly key: SigningKey;
   readonly proof?: Delegation;
 }
 
