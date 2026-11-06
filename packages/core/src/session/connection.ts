@@ -68,11 +68,7 @@ export interface MincaConnectionConfig {
    * the worker ends when it closes. Not with `stores`.
    */
   readonly worker?: () => WorkerLike;
-  /**
-   * Where the app's keys are kept, one per account, by name. Default: this
-   * site's IndexedDB (`appKey`). With `worker`, keys must be kept there too:
-   * the worker reads its key by name.
-   */
+  /** Where the app's keys are kept, one per account, by name. Default: this site's IndexedDB (`appKey`). */
   readonly keys?: {
     get(name: string): Promise<AppKey>;
     forget(name: string): Promise<void>;

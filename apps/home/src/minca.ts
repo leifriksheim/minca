@@ -36,10 +36,10 @@ export const auth = createMincaAuth({
   // the account page, not on one that closes.
   offerPod: !isConnectPage,
   // Checking, decrypting and syncing happen there, so the page never stutters; the seed stays here.
-  // One worker for every tab, where shared workers work (not Chrome on Android): two nodes on one
-  // origin's stores wait on each other, and an iPhone's frozen background tab never lets go.
+  // One worker for every tab, where shared workers work: not Chrome on Android, nor WebKit
+  // (Safari, every browser on an iPhone), which drops a message to one that holds a CryptoKey.
   worker: () =>
-    typeof SharedWorker === 'function'
+    typeof SharedWorker === 'function' && navigator.vendor !== 'Apple Computer, Inc.'
       ? new SharedWorker(new URL('./minca-worker.ts', import.meta.url), {
           type: 'module',
           name: 'minca-node',

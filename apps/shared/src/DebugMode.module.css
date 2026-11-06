@@ -64,12 +64,3 @@
     -webkit-user-select: text;
   }
 }
-
-/* The field a copy is made from: on the page, so it can be selected, but out of sight */
-.offscreen {
-  position: fixed;
-  top: 0;
-  left: -9999px;
-  font-size: 16px;
-  opacity: 0;
-}
