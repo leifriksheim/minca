@@ -1,8 +1,10 @@
 /**
  * A node closed while it records an unlisted space in the background, its
- * invite still waiting on the hosts, signs nothing after: it has let go of its
- * lasting key's slot, which another node may hold now, and a key in two places
- * at once forks its line (spec 02 §4.10).
+ * invite still waiting on the hosts, doesn't then go on to sign: it has let go
+ * of its lasting key's slot, which another node may hold now, and a key in two
+ * places at once forks its line (spec 02 §4.10). A write already past the
+ * check when the node closes still finishes; places are taken under the key's
+ * shared lock and read afresh, so that one can't be handed out twice.
  */
 import { test, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
@@ -23,7 +25,7 @@ afterEach(() => {
   globalThis.fetch = realFetch;
 });
 
-test('a closed node signs nothing with a key it has let go of', async () => {
+test('a write waiting when its node closes doesn’t then sign with the key let go of', async () => {
   const seed = generateSeed();
   const manager = createIdentityManager();
   const signer = createLocalRootSigner(await manager.fromSeed(seed), manager.getProvider());

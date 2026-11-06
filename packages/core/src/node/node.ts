@@ -419,7 +419,15 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
    * `refresh`, rewrites the record if the space's key changed since, so a
    * new device joins with the key in use now.
    */
-  async function remember(spaceId: string, options: { refresh?: boolean } = {}): Promise<void> {
+  /**
+   * Records a space in the account's list. `unlessLeft`, for one found unlisted
+   * rather than one just made or joined: a leave recorded meanwhile, on any
+   * device, is never written over (rejoining is, as the next version).
+   */
+  async function remember(
+    spaceId: string,
+    options: { refresh?: boolean; unlessLeft?: boolean } = {},
+  ): Promise<void> {
     if (!accountSpaceId || narrowNote) return;
     const open = await runtime(accountSpaceId);
     const recorded = () => open.get<Membership>(membershipKey(spaceId));
@@ -428,10 +436,17 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     // A view-only invite: what lets the account write is its role in the
     // space, which every device reads there. Invite secrets are never kept.
     const invite = await carrying.inviteTo(spaceId);
-    // Asking the hosts takes a while: left meanwhile, it stays left, and one recorded meanwhile isn't again.
-    if (leaving.has(spaceId) || !(await registry.get(spaceId))) return;
+    if (options.unlessLeft) {
+      // Asking the hosts takes a while: left meanwhile, here or on another device, it stays left.
+      if (leaving.has(spaceId) || !(await registry.get(spaceId))) return;
+      const left = (await memberships()).some(
+        (membership) => membership.key === membershipKey(spaceId) && membership.deleted,
+      );
+      if (left) return;
+    }
+    // Recorded meanwhile: not again.
     const now = await recorded();
-    if (now?.deleted || (now && !options.refresh)) return;
+    if (now && !options.refresh) return;
     if (now && inviteKeyOf(now.body?.invite) === inviteKeyOf(invite)) return;
     await open.upsertSystem<Membership>(MEMBERSHIP_COLLECTION, membershipKey(spaceId), {
       space: spaceId,
@@ -455,7 +470,10 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       const spaceId = record.space.id;
       if (closed) return;
       if (named.has(spaceId) || leaving.has(spaceId) || (await kindOf(spaceId))) continue;
-      await remember(spaceId);
+      // One that won't record (gone meanwhile, say) leaves the rest to record.
+      await remember(spaceId, { unlessLeft: true }).catch((error: unknown) => {
+        if (!closed) console.error(`Could not record ${spaceId} in the account list:`, error);
+      });
     }
   });
 
