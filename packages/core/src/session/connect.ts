@@ -644,6 +644,8 @@ export async function startConnectedNode(params: {
   readonly cache?: CacheConfig | false;
   /** Runs the node in a worker, off the page's main thread. Not with `stores`, which a worker can't be handed. */
   readonly worker?: () => WorkerLike;
+  /** Ends the node at once when it aborts: its worker terminated, not asked to close */
+  readonly end?: AbortSignal;
 }): Promise<P2PNode> {
   const key = params.key ?? (await appKey());
   const { relays, ...keys } = nodeOptionsFromGrant(params.grant, params.network?.relays);

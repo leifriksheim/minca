@@ -22,7 +22,7 @@ import { ConnectScreen } from './components/ConnectScreen';
 import { useAccountInAddress } from './account-address';
 import { Pictures, SpaceFaces, usePictures, useSpaceFaces } from './pictures';
 import { ContactsView } from './components/ContactsView';
-import { RelayDown } from './components/RelayNotice';
+import { HeldUp, RelayDown } from './components/RelayNotice';
 import { GroupRow, SpaceCount, SpaceDialog, SpaceList } from './components/SpaceList';
 import { PersonRow } from './components/PeopleParts';
 import { Loading } from './components/Loading';
@@ -169,6 +169,7 @@ export function HomeLayout() {
       <TabBar />
       <Notices />
       <RelayDown />
+      <HeldUp />
       <Outlet />
     </main>
   );

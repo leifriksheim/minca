@@ -50,6 +50,7 @@ import { popupFeatures } from './popup.js';
 import { WORKER_NOT_STARTED, type WorkerLike } from '../node/worker.js';
 import { defaultStorage, guardedStorage, type KeyValueStore } from './stay-signed-in.js';
 import { markStep } from '../utils/step.js';
+import { resumableNode, type ResumableNode } from '../node/resumable.js';
 
 export interface MincaConnectionConfig {
   /** The account home to suggest — the person can use their own instead */
@@ -137,6 +138,13 @@ export interface MincaConnection {
    */
   openHome(section?: string): void;
   /**
+   * Keeps this tab's node running while the tab is put away, as a call must;
+   * returns what lets it go. Otherwise a tab whose node is its own lets go of
+   * it when put away, and starts it again on coming back: the same node
+   * object, whose calls wait meanwhile.
+   */
+  keepAwake(): () => void;
+  /**
    * Offers the person automations that notify them — "notify me when…" — once connected.
    * Opens the home; call it from a click.
    * @returns What they kept
@@ -193,8 +201,32 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
   let started: Promise<void> | null = null;
   let unwatch: (() => void) | null = null;
 
+  /**
+   * This tab's own node, which lets go while the tab is put away: a browser
+   * that freezes background tabs (an iPhone's) would freeze it holding the
+   * stores another tab's node waits on. Null for a node the tabs share.
+   */
+  let putAway: ResumableNode | null = null;
+  /** How many keep the node running while the tab is put away (`keepAwake`), as a call must */
+  let awake = 0;
+  const hidden = () => globalThis.document?.visibilityState === 'hidden';
+  function followVisibility(): void {
+    const own = putAway;
+    if (!own) return;
+    if (hidden()) {
+      if (awake > 0 || !own.running) return;
+      markStep('connection: put away, letting go of the node');
+      own.pause();
+    } else if (!own.running) {
+      markStep('connection: back, starting the node again');
+      void own.resume().then(() => markStep('connection: node running again'), failed);
+    }
+  }
+  globalThis.document?.addEventListener('visibilitychange', followVisibility);
+
   /** Stops acting for the account acted for, if any, saying in the same breath what comes next */
   async function stop(next: Partial<MincaConnectionState>): Promise<void> {
+    putAway = null;
     unwatch?.();
     unwatch = null;
     const node = state.node;
@@ -243,30 +275,51 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
     if (late) return;
     const key = await keys.get(keyName);
     markStep('connection: app key ready, starting the node');
-    const start = (worker?: () => WorkerLike) =>
+    /** Whether the node is this tab's own (a dedicated worker's, or the page's), not one tabs share */
+    let own = true;
+    const start = (end: AbortSignal, worker?: () => WorkerLike) =>
       startConnectedNode({
         grant,
         key,
+        end,
         ...(config.network ? { network: config.network } : {}),
         ...(config.stores ? { stores: config.stores(grant) } : {}),
         ...(worker ? { worker } : {}),
       });
-    // A browser whose worker never starts still gets a node, in the page. A
-    // worker that started and refused says why instead.
-    const node = config.worker
-      ? await start(config.worker).catch((error: unknown) => {
-          if (!(error instanceof Error) || error.name !== WORKER_NOT_STARTED) throw error;
-          markStep('connection: the node’s worker did not start; starting the node in the page');
-          return start();
-        })
-      : await start();
+    const make = config.worker;
+    const resumable = await resumableNode(async () => {
+      const end = new AbortController();
+      // A dedicated worker can be terminated; a shared one's port can't, and other tabs use it.
+      const worker =
+        make &&
+        (() => {
+          const made = make();
+          own = typeof made.terminate === 'function';
+          return made;
+        });
+      // A browser whose worker never starts still gets a node, in the page. A
+      // worker that started and refused says why instead.
+      const node = worker
+        ? await start(end.signal, worker).catch((error: unknown) => {
+            if (!(error instanceof Error) || error.name !== WORKER_NOT_STARTED) throw error;
+            markStep('connection: the node’s worker did not start; starting the node in the page');
+            own = true;
+            return start(end.signal);
+          })
+        : await start(end.signal);
+      return { node, end: () => end.abort() };
+    });
+    const { node } = resumable;
     // Switched again while this one started: it is not wanted.
     if (mine !== opening) {
       await node.close();
       return;
     }
     markStep('connection: ready');
+    putAway = own ? resumable : null;
     update({ status: 'ready', home: grant.home, grant, node, error: null });
+    // Opened in a tab already put away.
+    followVisibility();
 
     unwatch = watchGrant(node, grant, {
       // Writes stop working when the note runs out; say so rather than fail quietly.
@@ -350,6 +403,17 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
     },
 
     openHome: (section) => openAccountHome(state, section),
+
+    keepAwake() {
+      awake++;
+      let kept = true;
+      return () => {
+        if (!kept) return;
+        kept = false;
+        awake--;
+        followVisibility();
+      };
+    },
 
     async propose(automations) {
       if (!state.grant) throw new Error('Connect to your account home first.');

@@ -211,6 +211,8 @@ export function desktopConnection(
       await until();
     },
     openHome: (section) => openAccountHome(state, section),
+    // The node runs in the shell and never stops for the window: nothing to keep awake.
+    keepAwake: () => () => {},
     async use(did) {
       if (state.grant?.did !== did)
         throw new Error('The desktop app acts for one account. Disconnect it to use another.');

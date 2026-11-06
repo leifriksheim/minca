@@ -1885,6 +1885,68 @@ describe('an app connected to several accounts', () => {
     assert.deepEqual(grants.list(), []);
   });
 
+  /** A page whose tab can be put away and brought back, as `document` says */
+  function fakeDocument() {
+    const page = Object.assign(new EventTarget(), { visibilityState: 'visible' });
+    const g: Record<string, unknown> = globalThis;
+    const saved = g.document;
+    g.document = page;
+    cleanup.push(async () => {
+      g.document = saved;
+    });
+    const show = (state: 'visible' | 'hidden') => {
+      page.visibilityState = state;
+      page.dispatchEvent(new Event('visibilitychange'));
+    };
+    return { hide: () => show('hidden'), show: () => show('visible') };
+  }
+
+  test('a tab put away lets go of its node, and the same node object carries on when it comes back', async () => {
+    const page = fakeDocument();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const a = await granted(hub);
+    const storage = memoryStorage();
+    grantStore(storage).save(a.grant, 'account-a');
+    const connection = tab(hub, storage, keyStore([['account-a', a.key]]));
+    await connection.start();
+    const node = connection.getState().node;
+    assert.ok(node);
+
+    page.hide();
+    let answered = false;
+    const asked = node.spaces.list().then(() => (answered = true));
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(answered, false, 'put away, the node is let go and calls wait');
+
+    page.show();
+    await asked;
+    assert.equal(connection.getState().node, node, 'the app keeps the same node');
+    assert.equal(connection.getState().status, 'ready');
+  });
+
+  test('kept awake, as in a call, a tab put away keeps its node', async () => {
+    const page = fakeDocument();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const a = await granted(hub);
+    const storage = memoryStorage();
+    grantStore(storage).save(a.grant, 'account-a');
+    const connection = tab(hub, storage, keyStore([['account-a', a.key]]));
+    await connection.start();
+    const node = connection.getState().node;
+    assert.ok(node);
+
+    const letGo = connection.keepAwake();
+    page.hide();
+    await node.spaces.list();
+    letGo();
+    let answered = false;
+    const asked = node.spaces.list().then(() => (answered = true));
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(answered, false, 'let go of, a tab still put away lets go of its node');
+    page.show();
+    await asked;
+  });
+
   test('switches account with no trip to the home, and letting one go acts for the next', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const a = await granted(hub);

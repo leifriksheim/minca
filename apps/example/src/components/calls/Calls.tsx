@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import type { SpaceSummary } from '@minca/core';
 import type { CallAround, CallPeer, CurrentCall, IncomingCall } from '@minca/calls';
 import { useCalls } from '@minca/calls/react';
-import { useAccount, useProfiles } from '@minca/react';
+import { useAccount, useConnection, useProfiles } from '@minca/react';
 import { nameOf, peopleFrom } from '../../derive/people';
 import { Icon, type IconName } from '@minca/app-shared/Icon';
 import { ask } from '@minca/app-shared/Ask';
@@ -22,6 +22,10 @@ export function CallLayer({
   onGoTo: (space: SpaceSummary) => void;
 }) {
   const { state } = useCalls();
+  const { connection } = useConnection();
+  // In a call, this tab keeps its node while put away: the call's presence and setup go through it.
+  const inCall = state.current !== null;
+  useEffect(() => (inCall ? connection.keepAwake() : undefined), [connection, inCall]);
   const spaceNamed = (id: string) => spaces.find((s) => s.id === id)?.name ?? 'a space';
   const goTo = (id: string) => {
     const space = spaces.find((s) => s.id === id);

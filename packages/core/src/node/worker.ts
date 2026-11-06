@@ -81,12 +81,14 @@ function locks(): LockManager | null {
  * @param worker Running `runNodeWorker`, as `@minca/core/node-worker` does
  * @param config.signer Who the node acts for; its key stays on this side
  * @param startTimeoutMs How long to wait for the worker to say the node started. Default 30 s.
+ * @param end Ends the node at once when it aborts: a dedicated worker is terminated, not asked to close
  * @throws When the worker could not start the node, with its reason, or said nothing in time
  */
 export async function startNodeInWorker(
   worker: WorkerLike,
   config: WorkerNodeConfig & { readonly signer: RootSigner },
   startTimeoutMs = 30_000,
+  end?: AbortSignal,
 ): Promise<P2PNode> {
   const { signer, ...sent } = config;
   const tab = globalThis.crypto.randomUUID();
@@ -104,6 +106,7 @@ export async function startNodeInWorker(
     letGo();
     worker.terminate?.();
   };
+  end?.addEventListener('abort', stop, { once: true });
 
   markStep('worker: asking it to start the node');
   const started = startedOn(nodes.port1, worker, startTimeoutMs);
@@ -120,6 +123,8 @@ export async function startNodeInWorker(
     return Object.freeze({
       ...node,
       async close() {
+        // Ended already: the worker that would answer is gone.
+        if (end?.aborted) return;
         try {
           await node.close();
         } finally {
@@ -231,23 +236,31 @@ export async function startPageNode(
     readonly signer: RootSigner;
     readonly network?: NodeNetworkConfig;
   },
-  options: { readonly worker?: () => WorkerLike; readonly stores?: StoreFactory } = {},
+  options: {
+    readonly worker?: () => WorkerLike;
+    readonly stores?: StoreFactory;
+    /** Ends the node at once when it aborts (`startNodeInWorker`); a node here is closed */
+    readonly end?: AbortSignal;
+  } = {},
 ): Promise<P2PNode> {
   if (options.worker && options.stores)
     throw new Error('A node in a worker opens its own stores: pass worker or stores, not both');
   const { network, stores, ...shared } = config;
-  return options.worker
-    ? startNodeInWorker(options.worker(), {
-        ...shared,
-        stores,
-        ...(network ? { network: workerNetwork(network) } : {}),
-      })
-    : createNode({
-        ...shared,
-        stores: options.stores ?? workerStores(stores),
-        ...withWriterKey(stores),
-        ...(network ? { network } : {}),
-      });
+  if (options.worker)
+    return startNodeInWorker(
+      options.worker(),
+      { ...shared, stores, ...(network ? { network: workerNetwork(network) } : {}) },
+      undefined,
+      options.end,
+    );
+  const node = await createNode({
+    ...shared,
+    stores: options.stores ?? workerStores(stores),
+    ...withWriterKey(stores),
+    ...(network ? { network } : {}),
+  });
+  options.end?.addEventListener('abort', () => void node.close().catch(() => {}), { once: true });
+  return node;
 }
 
 /** The account's lasting writer key, kept in this origin beside its stores, when it names an account */
