@@ -864,6 +864,15 @@ and its status is a [`ConnectionStatus`](https://minca.dev/api/session/type-alia
 - With `worker`, the node runs in a worker. If the worker fails to load or
   doesn't start the node within 30 seconds (`WorkerNotStarted`), the node runs
   in the page instead. A worker that started and refused passes its reason on.
+- A tab whose node is its own (a dedicated worker's, or the page's) runs it
+  only in view, one at a time per account (a Web Lock,
+  `minca-node:<account DID>`): two nodes on one site's stores get in each
+  other's way, and a browser that freezes background tabs, as an iPhone
+  does, would freeze one holding them. Put away, the tab closes its node
+  (`starting`, with no node) and opens it again on coming back. A node the
+  tabs share, in a shared worker, stays.
+- `keepAwake()` keeps the node open while the tab is put away, as a call
+  must, and returns what lets it go.
 - It turns `expired` when the grant's `expiresAt` passes.
 - When the node sees its note revoked (`revoked`), the connection forgets that
   account's grant and key.

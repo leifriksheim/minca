@@ -1885,6 +1885,177 @@ describe('an app connected to several accounts', () => {
     assert.deepEqual(grants.list(), []);
   });
 
+  /** A page whose tab can be put away and brought back, as `document` says */
+  function fakeDocument() {
+    const page = Object.assign(new EventTarget(), { visibilityState: 'visible' });
+    const g: Record<string, unknown> = globalThis;
+    const saved = g.document;
+    g.document = page;
+    cleanup.push(async () => {
+      g.document = saved;
+    });
+    const show = (state: 'visible' | 'hidden') => {
+      page.visibilityState = state;
+      page.dispatchEvent(new Event('visibilitychange'));
+    };
+    return { hide: () => show('hidden'), show: () => show('visible') };
+  }
+
+  /** Web Locks as browsers have them, for a runtime without: exclusive, granted in turn */
+  function fakeLocks() {
+    const held = new Map<string, Promise<void>>();
+    const locks = {
+      request(name: string, run: () => Promise<void>) {
+        const mine = (held.get(name) ?? Promise.resolve()).then(run);
+        held.set(
+          name,
+          mine.catch(() => {}),
+        );
+        return mine;
+      },
+    };
+    const g: Record<string, unknown> = globalThis;
+    const saved = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+    Object.defineProperty(globalThis, 'navigator', { value: { locks }, configurable: true, writable: true });
+    cleanup.push(async () => {
+      if (saved) Object.defineProperty(globalThis, 'navigator', saved);
+      else delete g.navigator;
+    });
+  }
+
+  /** A connection on its own account, started */
+  async function started(page = fakeDocument()) {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const a = await granted(hub);
+    const storage = memoryStorage();
+    grantStore(storage).save(a.grant, 'account-a');
+    const keys = keyStore([['account-a', a.key]]);
+    const connection = tab(hub, storage, keys);
+    await connection.start();
+    return { page, hub, storage, keys, connection };
+  }
+
+  test('a tab put away closes its node, and opens it again when it comes back', async () => {
+    const { page, connection } = await started();
+    assert.equal(connection.getState().status, 'ready');
+    page.hide();
+    await until(() => connection.getState().node === null, 2000, 'the node to close');
+    assert.equal(connection.getState().status, 'starting');
+    page.show();
+    await until(() => connection.getState().status === 'ready', 2000, 'the node to open again');
+  });
+
+  test('kept awake, as in a call, a tab put away keeps its node', async () => {
+    const { page, connection } = await started();
+    const node = connection.getState().node;
+    const letGo = connection.keepAwake();
+    page.hide();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(connection.getState().node, node, 'still open while kept awake');
+    letGo();
+    await until(() => connection.getState().node === null, 2000, 'let go of, it closes');
+    page.show();
+    await until(() => connection.getState().status === 'ready', 2000, 'and opens again');
+  });
+
+  test('two tabs of one account run one node at a time: the one in view', async () => {
+    fakeLocks();
+    const { page, hub, storage, keys, connection: first } = await started();
+    const second = tab(hub, storage, keys);
+    let ready = false;
+    void second.start().then(() => (ready = second.getState().status === 'ready'));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(ready, false, 'it waits while the first runs its node');
+    // One document stands for both tabs here: kept awake, the second stands for the tab in view.
+    second.keepAwake();
+    page.hide();
+    await until(
+      () => first.getState().node === null && ready,
+      3000,
+      'the second to run once the first closes',
+    );
+  });
+
+  test('an account connected while the tab is put away is the one acted for when it comes back', async () => {
+    const page = fakeDocument();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const a = await granted(hub);
+    const other = await home(hub);
+    const storage = memoryStorage();
+    grantStore(storage).save(a.grant, 'account-a');
+    const connection = tab(hub, storage, keyStore([['account-a', a.key]]));
+    await connection.start();
+    await withHome(other, [], async () => {
+      const connecting = connection.connect();
+      // On a phone the home opens as a tab of its own: the app's is put away while the person approves.
+      page.hide();
+      await until(
+        () => (connection.getState().grant?.did ?? a.grant.did) !== a.grant.did,
+        3000,
+        'the new account',
+      );
+      const chosen = connection.getState().grant?.did;
+      page.show();
+      await connecting;
+      await until(() => connection.getState().status === 'ready', 3000, 'ready');
+      assert.equal(
+        connection.getState().grant?.did,
+        chosen,
+        'the account just connected, not the one before',
+      );
+    });
+  });
+
+  test('a tab whose grant ran out closes its node when put away, so a renewed tab can start', async () => {
+    fakeLocks();
+    const page = fakeDocument();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const a = await granted(hub);
+    const storage = memoryStorage();
+    const grants = grantStore(storage);
+    grants.save({ ...a.grant, expiresAt: Math.floor(Date.now() / 1000) + 2 }, 'account-a');
+    const keys = keyStore([['account-a', a.key]]);
+    const first = tab(hub, storage, keys);
+    await first.start();
+    await until(() => first.getState().status === 'expired', 5000, 'the grant to run out');
+    page.hide();
+    await until(() => first.getState().node === null, 2000, 'expired and put away, its node closes');
+    assert.equal(first.getState().status, 'expired');
+    page.show();
+    const fresh = await appKey();
+    grants.save(await grantFrom(a.auth, fresh), 'account-a2');
+    keys.held.set('account-a2', fresh);
+    const second = tab(hub, storage, keys);
+    await second.start();
+    assert.equal(second.getState().status, 'ready', 'renewed in another tab, it starts');
+  });
+
+  test('switching away from an account and back opens it again: closing lets go of its turn', async () => {
+    fakeLocks();
+    fakeDocument();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const a = await granted(hub);
+    const b = await granted(hub);
+    const storage = memoryStorage();
+    const grants = grantStore(storage);
+    grants.save(a.grant, 'account-a');
+    grants.save(b.grant, 'account-b');
+    const connection = tab(
+      hub,
+      storage,
+      keyStore([
+        ['account-a', a.key],
+        ['account-b', b.key],
+      ]),
+      b.grant.did,
+    );
+    await connection.start();
+    await connection.use(a.grant.did);
+    await connection.use(b.grant.did);
+    assert.equal(connection.getState().status, 'ready');
+    assert.equal(connection.getState().node?.did, b.grant.did);
+  });
+
   test('switches account with no trip to the home, and letting one go acts for the next', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const a = await granted(hub);
