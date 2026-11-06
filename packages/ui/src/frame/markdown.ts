@@ -8,6 +8,7 @@ import { usePeople } from './hooks';
 import { html } from './html';
 import { splitMentions } from './mentions';
 import type { Someone } from './minca';
+import { LinkPreviews } from './previews';
 
 /** A fence opens a code block only when nothing after it on the line is a backtick: ```hello``` is inline code */
 const FENCE = /^\s{0,3}(`{3,}(?=[^`]*$)|~{3,})/;
@@ -179,6 +180,26 @@ function inline(text: string, people: ReadonlyArray<Someone>): ComponentChildren
   return out;
 }
 
+/** The links a text sends, in order, each once: not those in code or quoted from someone else */
+function linksIn(blocks: ReadonlyArray<Block>): string[] {
+  const found = new Set<string>();
+  const visit = (line: string) => {
+    for (const match of line.matchAll(INLINE)) {
+      const [, , , bold, bolder, struck, em, emphasis, , href, url] = match;
+      const marked = bold ?? bolder ?? struck ?? em ?? emphasis;
+      const link = href ?? url;
+      if (marked !== undefined) visit(marked);
+      else if (link !== undefined) found.add(link);
+    }
+  };
+  for (const block of blocks) {
+    if (block.kind === 'heading' || block.kind === 'paragraph') visit(block.text);
+    else if (block.kind === 'list') block.items.forEach(visit);
+    else if (block.kind === 'table') [block.head, ...block.rows].flat().forEach(visit);
+  }
+  return [...found];
+}
+
 function drawBlock(block: Block, people: ReadonlyArray<Someone>, end: ComponentChildren): ComponentChildren {
   switch (block.kind) {
     case 'code':
@@ -222,15 +243,17 @@ function drawBlock(block: Block, people: ReadonlyArray<Someone>, end: ComponentC
 
 /**
  * A text as Markdown, with its "@Name"s marked. `end` goes at the end of its
- * last paragraph, like "(edited)" after a message.
+ * last paragraph, like "(edited)" after a message. The links it sends get a
+ * preview under it, as in a chat.
  */
 export function MentionText({ text, end = null }: { text: string; end?: ComponentChildren }) {
   const people = usePeople();
   const blocks = blocksOf(text);
+  const previews = html`<${LinkPreviews} links=${linksIn(blocks)} />`;
   // One paragraph stays in its line, so a screen can still put it inside a sentence of its own
   const only = blocks.length === 1 && blocks[0]?.kind === 'paragraph' ? blocks[0] : null;
-  if (only) return html`<span class="markdown">${inline(only.text, people)}${end}</span>`;
-  return html`<div class="markdown">${markdownOf(text, people, end)}</div>`;
+  if (only) return html`<span class="markdown">${inline(only.text, people)}${end}${previews}</span>`;
+  return html`<div class="markdown">${markdownOf(text, people, end)}${previews}</div>`;
 }
 
 /** The elements for a Markdown text, for the box that edits it too */

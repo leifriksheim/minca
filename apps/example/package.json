@@ -6,7 +6,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit && tsc -p tests",
+    "typecheck": "tsc --noEmit && tsc -p tests && tsc -p netlify",
     "test": "node --conditions=@minca/source --import tsx --test --test-concurrency=4 --test-timeout=60000 --test-force-exit tests/*.test.ts"
   },
   "dependencies": {

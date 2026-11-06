@@ -72,6 +72,8 @@ export interface Minca {
     here(): Promise<FoundPlace | null>;
   };
   link(url: string): Promise<null>;
+  /** What a page says about itself, as a chat shows a link; null when it says nothing */
+  preview(url: string): Promise<LinkPreview | null>;
   recall(key: string): Promise<unknown>;
   remember(key: string, value: unknown): Promise<null>;
   onChange(listener: () => void): () => void;
@@ -86,6 +88,17 @@ export interface Minca {
     send(data: unknown, options?: { to?: string }): Promise<boolean>;
     on(listener: (heard: Heard) => void): () => void;
   };
+}
+
+/** A link's preview: its picture a data: URL */
+export interface LinkPreview {
+  readonly url: string;
+  readonly title: string;
+  readonly description: string;
+  readonly site: string;
+  readonly image: string | null;
+  /** Whether the page asks for its picture to be shown large */
+  readonly large: boolean;
 }
 
 /** A live message from another device with this app open */

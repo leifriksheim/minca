@@ -422,6 +422,31 @@ describe('screens', () => {
       close();
     }
   });
+
+  test('a link’s preview comes through the page, its picture as one a screen can show', async () => {
+    const { alice, space } = await setup();
+    const { host, asked } = fakeHost();
+    const { call, close } = bridgeFor(alice.node, space, [], host);
+    try {
+      assert.equal((await call('preview', 'javascript:alert(1)')).ok, false);
+      assert.equal((await call('preview', 'file:///etc/passwd')).ok, false);
+      assert.deepEqual((await call('preview', 'https://example.com/a')).value, {
+        url: 'https://example.com/a',
+        title: 'A page',
+        description: 'What it is about',
+        site: 'Example',
+        image: 'data:image/png;base64,AQID',
+        large: true,
+      });
+      assert.equal((await call('preview', 'https://example.com/nothing')).value, null);
+      assert.deepEqual(asked, [
+        ['preview', 'https://example.com/a'],
+        ['preview', 'https://example.com/nothing'],
+      ]);
+    } finally {
+      close();
+    }
+  });
 });
 
 /** A page that does what a screen asks by writing it down */
@@ -436,6 +461,18 @@ function fakeHost(chosen: NodeRecord | null = null) {
     searchPlaces: async (text, near) => (asked.push(['searchPlaces', text, near]), []),
     here: async () => null,
     link: (url) => void asked.push(['link', url]),
+    preview: async (url) => {
+      asked.push(['preview', url]);
+      if (url !== 'https://example.com/a') return null;
+      return {
+        url,
+        title: 'A page',
+        description: 'What it is about',
+        site: 'Example',
+        image: { bytes: new Uint8Array([1, 2, 3]), mime: 'image/png' },
+        large: true,
+      };
+    },
     save: (name, bytes, type) => void asked.push(['save', name, new TextDecoder().decode(bytes), type]),
     recall: (key) => (asked.push(['recall', key]), kept.get(key) ?? null),
     remember: (key, value) => {

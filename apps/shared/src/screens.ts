@@ -25,6 +25,7 @@ import {
   type P2PNode,
 } from '@minca/core';
 import type { FoundPlace } from './places';
+import type { LinkPreview } from './previews';
 import { UI_GUIDE } from '@minca/ui/guide';
 import { shrinkImage } from './images';
 
@@ -284,6 +285,7 @@ export const SCREEN_CLIENT = `(() => {
       here: () => call('here'),
     }),
     link: (url) => call('link', url),
+    preview: (url) => call('preview', url),
     save: (name, text, type) => call('save', name, text, type),
     recall: (key) => call('recall', key),
     remember: (key, value) => call('remember', key, value),
@@ -435,6 +437,11 @@ export interface ScreenHost {
   here(): Promise<FoundPlace | null>;
   /** Opens an http or https page in a new tab */
   link(url: string): void;
+  /**
+   * What an http or https page says about itself, its picture as bytes; null when it says nothing.
+   * Asking sends the address out, so a host answers only screens it trusts with that, and null to the rest.
+   */
+  preview(url: string): Promise<LinkPreview | null>;
   /** Saves bytes as a file on the person's device */
   save(name: string, bytes: Uint8Array, type: string): void;
   /** What this app kept on this device under a name, or null */
@@ -489,6 +496,13 @@ function fileIn(body: unknown, hash: string): FileRef | null {
     if (found) return found;
   }
   return null;
+}
+
+/** An http or https address, written out in full, or `refusal` thrown */
+function webAddress(url: unknown, refusal: string): string {
+  const parsed = typeof url === 'string' && URL.canParse(url) ? new URL(url) : null;
+  if (!parsed || (parsed.protocol !== 'https:' && parsed.protocol !== 'http:')) throw new Error(refusal);
+  return parsed.href;
 }
 
 /** Bytes as a data: URL, without anything only a browser has */
@@ -809,12 +823,24 @@ export function createScreenBridge(params: {
     },
     here: async () => hosted().here(),
     link: async (...args) => {
-      const [url] = args;
-      const parsed = typeof url === 'string' && URL.canParse(url) ? new URL(url) : null;
-      if (!parsed || (parsed.protocol !== 'https:' && parsed.protocol !== 'http:'))
-        throw new Error('minca.link opens an http or https address');
-      hosted().link(parsed.href);
+      hosted().link(webAddress(args[0], 'minca.link opens an http or https address'));
       return null;
+    },
+    // A link's preview, its picture made small enough to hand over like any other.
+    preview: async (...args) => {
+      const found = await hosted().preview(
+        webAddress(args[0], 'minca.preview takes an http or https address'),
+      );
+      if (!found) return null;
+      const { url, title, description, site, image, large } = found;
+      return {
+        url,
+        title,
+        description,
+        site,
+        image: image ? await picture(image.bytes, image.mime) : null,
+        large,
+      };
     },
     save: async (...args) => {
       const [name, text, type = 'text/plain'] = args;

@@ -8,7 +8,9 @@ A Vite + React app on top of [`@minca/core`](../../README.md). It imports the
 protocol straight from its source in the workspace (`packages/core/src`), so
 edits to the library hot-reload here. `public/_redirects` sends every path to
 `index.html` on Netlify, and `netlify.toml` builds it for a site whose base
-directory is `apps/example`.
+directory is `apps/example`. Beside it runs one Netlify Function,
+`netlify/functions/preview.ts`, which reads a page's Open Graph tags for the
+link previews under a message (`apps/shared/src/previews.ts` asks it).
 
 ## Routes
 
