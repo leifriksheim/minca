@@ -214,13 +214,24 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
     const own = putAway;
     if (!own) return;
     if (hidden()) {
-      if (awake > 0 || !own.running) return;
+      if (awake > 0) return;
       markStep('connection: put away, letting go of the node');
       own.pause();
-    } else if (!own.running) {
-      markStep('connection: back, starting the node again');
-      void own.resume().then(() => markStep('connection: node running again'), failed);
+      return;
     }
+    // Always: one put away and back before it let go carries on with the same node.
+    if (!own.running) markStep('connection: back, starting the node again');
+    void own.resume().then(
+      () => markStep('connection: node running'),
+      // Its calls fail with it, rather than wait for a node that won't come.
+      (error: unknown) =>
+        putAway === own &&
+        void stop({
+          status: 'disconnected',
+          grant: null,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+    );
   }
   globalThis.document?.addEventListener('visibilitychange', followVisibility);
 

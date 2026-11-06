@@ -6,10 +6,10 @@
  * that freezes background tabs (an iPhone's) never freezes one holding the
  * stores another tab's node is waiting on.
  *
- * While paused, calls wait for the next node. Calls still running when it
- * paused fail, since the node that took them is gone: what it had not
- * finished storing was not stored. Event listeners, watches and holds carry
- * over to each new node.
+ * Pausing lets the calls already running finish first, so none is cut off
+ * half done, then ends the node; calls from then on wait for the next one.
+ * Event listeners, watches and holds carry over to each new node. Closing
+ * fails the calls still waiting.
  */
 import { buildNamespaces, callMethod, givenFor, type Namespace } from './api.js';
 import type { Query } from '../query/types.js';
@@ -19,11 +19,11 @@ import type { NodeEvent, P2PNode } from './types.js';
 export interface ResumableNode {
   /** The node to use: the same object, whichever node is under it */
   readonly node: P2PNode;
-  /** Ends the node under it at once (`end`), failing what it was doing. Calls from now on wait. */
+  /** Lets go of the node under it: calls from now on wait, and once those running are done, it ends (`end`) */
   pause(): void;
   /** Starts a node again, and lets waiting calls through */
   resume(): Promise<void>;
-  /** Whether a node is under it */
+  /** Whether a node is under it, or still finishing what it was doing */
   readonly running: boolean;
 }
 
@@ -33,7 +33,20 @@ interface Running {
   readonly end: () => void;
 }
 
-const PUT_AWAY = 'This tab was put away while that was being done; try again';
+const CLOSED = 'That node has closed';
+
+/** A promise to settle later, from outside */
+function gate<T>() {
+  let open: (value: T) => void = () => {};
+  let fail: (error: Error) => void = () => {};
+  const promise = new Promise<T>((resolve, reject) => {
+    open = resolve;
+    fail = reject;
+  });
+  // Nobody may be waiting when it fails.
+  promise.catch(() => {});
+  return { promise, open, fail };
+}
 
 /**
  * Wraps the node `start` starts. `start` gives the node and how to end it at
@@ -42,17 +55,16 @@ const PUT_AWAY = 'This tab was put away while that was being done; try again';
 export async function resumableNode(start: () => Promise<Running>): Promise<ResumableNode> {
   let current: Running | null = await start();
   const first = current.node;
-  /** The node calls go to, once there is one; replaced on each pause */
-  let ready: Promise<P2PNode> = Promise.resolve(first);
-  let letThrough: ((node: P2PNode) => void) | null = null;
+  /** Where calls wait while there's no node to take them; null while there is */
+  let waiting: ReturnType<typeof gate<P2PNode>> | null = null;
   let closed = false;
   /** Whether it should be running: a pause during a resume ends the node that resume starts */
   let wanted = true;
   let resuming: Promise<void> | null = null;
-  /** Calls in flight, failed when the node under them ends */
-  const inFlight = new Set<(error: Error) => void>();
-  /** Bumped on each pause, so a call knows whether its node is still the one */
-  let epoch = 0;
+  /** Letting go: waiting for the calls running to finish before ending the node */
+  let draining = false;
+  /** Calls running on the node under it, which a pause lets finish */
+  const running = new Set<Promise<unknown>>();
 
   const listeners = new Set<(event: NodeEvent) => void>();
   const watches = new Set<{ stop: () => void; attach: (node: P2PNode) => void }>();
@@ -74,20 +86,54 @@ export async function resumableNode(start: () => Promise<Running>): Promise<Resu
   }
   await attach(first);
 
-  /** Runs `call` on the node, waiting for one; fails if that node ends before it answers */
+  /** The node to call now, waiting while there is none */
+  async function nodeNow(): Promise<P2PNode> {
+    for (;;) {
+      if (closed) throw new Error(CLOSED);
+      if (waiting) await waiting.promise;
+      else if (current) return current.node;
+      else waiting = gate<P2PNode>();
+    }
+  }
+
+  /** Runs `call` on the node, waiting for one; a pause lets it finish */
   async function run<R>(call: (node: P2PNode) => R | Promise<R>): Promise<R> {
-    if (closed) throw new Error('That node has closed');
-    const node = await ready;
-    const mine = epoch;
-    return new Promise<R>((resolve, reject) => {
-      if (mine !== epoch) return void reject(new Error(PUT_AWAY));
-      const fail = (error: Error) => reject(error);
-      inFlight.add(fail);
-      Promise.resolve()
-        .then(() => call(node))
-        .then(resolve, reject)
-        .finally(() => inFlight.delete(fail));
-    });
+    const node = await nodeNow();
+    const done = Promise.resolve().then(() => call(node));
+    running.add(done);
+    void done.then(
+      () => running.delete(done),
+      () => running.delete(done),
+    );
+    return done;
+  }
+
+  /** Ends the node under it, once what it was doing is done, unless it's wanted again by then */
+  async function letGo(): Promise<void> {
+    draining = true;
+    while (running.size > 0) await Promise.allSettled([...running]);
+    draining = false;
+    const ending = current;
+    if (closed || !ending) return;
+    if (wanted) {
+      // Back before it was let go: carry on with the same node.
+      openTo(ending.node);
+      return;
+    }
+    current = null;
+    lastStatus = ending.node.network.status();
+    unsubscribe?.();
+    unsubscribe = null;
+    for (const entry of watches) entry.stop();
+    for (const entry of holds) entry.release = null;
+    ending.end();
+  }
+
+  /** Lets the calls that waited through, to `node` */
+  function openTo(node: P2PNode): void {
+    const opened = waiting;
+    waiting = null;
+    opened?.open(node);
   }
 
   const watch = <const C extends CollectionRef, const I extends IncludeMap | undefined = undefined>(
@@ -107,7 +153,7 @@ export async function resumableNode(start: () => Promise<Running>): Promise<Resu
       },
     };
     watches.add(entry);
-    if (current) entry.attach(current.node);
+    if (current && !draining) entry.attach(current.node);
     return () => {
       entry.stop();
       watches.delete(entry);
@@ -173,7 +219,9 @@ export async function resumableNode(start: () => Promise<Running>): Promise<Resu
       const ending = current;
       current = null;
       unsubscribe?.();
-      for (const fail of inFlight) fail(new Error('That node has closed'));
+      // Calls waiting for a node fail: there won't be one.
+      waiting?.fail(new Error(CLOSED));
+      waiting = null;
       await ending?.node.close();
     },
   } satisfies P2PNode);
@@ -185,23 +233,16 @@ export async function resumableNode(start: () => Promise<Running>): Promise<Resu
     },
     pause() {
       wanted = false;
-      if (!current || closed) return;
-      const ending = current;
-      current = null;
-      epoch++;
-      lastStatus = ending.node.network.status();
-      unsubscribe?.();
-      unsubscribe = null;
-      for (const entry of watches) entry.stop();
-      for (const entry of holds) entry.release = null;
-      ready = new Promise((resolve) => (letThrough = resolve));
-      for (const fail of inFlight) fail(new Error(PUT_AWAY));
-      inFlight.clear();
-      ending.end();
+      if (!current || closed || draining) return;
+      // Calls from now on wait; those running finish on this node first.
+      waiting ??= gate<P2PNode>();
+      void letGo();
     },
     resume() {
       wanted = true;
-      if (current || closed) return Promise.resolve();
+      if (closed) return Promise.reject(new Error(CLOSED));
+      // Still finishing what it was doing: it carries on (`letGo`).
+      if (current) return Promise.resolve();
       resuming ??= (async () => {
         try {
           const started = await start();
@@ -209,9 +250,7 @@ export async function resumableNode(start: () => Promise<Running>): Promise<Resu
           if (closed || !wanted) return void started.end();
           current = started;
           await attach(started.node);
-          letThrough?.(started.node);
-          letThrough = null;
-          ready = Promise.resolve(started.node);
+          openTo(started.node);
         } finally {
           resuming = null;
         }

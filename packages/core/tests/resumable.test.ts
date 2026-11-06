@@ -88,6 +88,31 @@ describe('a node that lets go and comes back', () => {
     assert.equal(started(), 3);
   });
 
+  test('a write running when it is put away finishes, and says so: never "failed" when it was stored', async () => {
+    const { made } = await resumable();
+    const space = await made.node.spaces.create({ name: 'Pay', ...team, visibility: 'private' });
+    for (const ms of [0, 1, 2, 5]) {
+      const writing = made.node.records.put(space.id, 'app.todo.item', {
+        text: `after ${ms} ms`,
+        done: false,
+      });
+      await new Promise((resolve) => setTimeout(resolve, ms));
+      made.pause();
+      const record = await writing;
+      await made.resume();
+      assert.ok(await made.node.records.get(space.id, record.key), 'what it said it stored is there');
+    }
+  });
+
+  test('closed while put away, the calls waiting for a node fail', async () => {
+    const { made } = await resumable();
+    made.pause();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const waiting = made.node.spaces.list();
+    await made.node.close();
+    await assert.rejects(waiting, /closed/);
+  });
+
   test('closed, calls fail rather than wait', async () => {
     const { made } = await resumable();
     made.pause();

@@ -22,6 +22,8 @@ export function logConnection(): void {
 export async function debugDetails(): Promise<Record<string, unknown>> {
   const { status, home, grant, accounts, error, node } = connection.getState();
   const spaces = node ? await node.spaces.list().then((list) => list.length, String) : '(no node)';
+  const network = node?.network.status();
+  const ago = (at: number | null) => (at === null ? 'never' : `${Math.round((Date.now() - at) / 1000)}s ago`);
   return {
     Connection: {
       Status: status,
@@ -35,5 +37,16 @@ export async function debugDetails(): Promise<Record<string, unknown>> {
       ),
       'Spaces on the node': spaces,
     },
+    Network: network
+      ? {
+          Relays: network.relays.map(
+            (relay) =>
+              `${relay.url}: ${relay.state} since ${ago(relay.since)}, opened ${ago(relay.openedAt)}, ${relay.failures} failures`,
+          ),
+          'Peers connected': network.links.map((link) => `${link.peer} in ${link.rooms} rooms`),
+          Connecting: network.connecting.map((pending) => `${pending.peer}, try ${pending.tries}`),
+          TURN: network.turn,
+        }
+      : { Network: '(no node)' },
   };
 }
