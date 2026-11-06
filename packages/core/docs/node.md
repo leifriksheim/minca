@@ -53,7 +53,10 @@ the signer refuses, `createNode` fails.
 
 With an account key, the node also opens the account registry and makes its
 spaces match it before `createNode` returns
-([following the account](#following-the-account)).
+([following the account](#following-the-account)). That waits on nothing
+from the network: a node starts from what it holds, with no host answering.
+Recording in the registry a space it holds but the registry doesn't name asks
+the account's hosts for an invite, so it happens in the background.
 
 A node acts for one account (`node.did`) and signs with one key for its whole
 life. To act for another account, start another node.

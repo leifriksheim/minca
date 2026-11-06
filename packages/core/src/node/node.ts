@@ -482,7 +482,9 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     const left: string[] = [];
     let changed = false;
 
-    for (const membership of await memberships()) {
+    const listed = await memberships();
+    markStep(`node: the account's list names ${listed.length} spaces; ${held.size} held here`);
+    for (const membership of listed) {
       const spaceId = membership.key.slice('space:'.length);
       known.add(spaceId);
       if (!membership.deleted && !held.has(spaceId)) {
@@ -503,10 +505,20 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
     // Held here but never recorded — joined before the registry existed, or on
     // a node without the account key. Recorded now, so other devices follow.
-    // Held still: one left while this ran stays left.
+    // Held still: one left while this ran stays left. Not awaited: recording
+    // one asks the account's hosts for an invite, and a node must start, and
+    // follow its list, with no host answering.
     const stillHeld = new Set((await registry.list()).map((record) => record.space.id));
-    for (const spaceId of held) {
-      if (!known.has(spaceId) && stillHeld.has(spaceId) && !(await kindOf(spaceId))) await remember(spaceId);
+    const unrecorded: string[] = [];
+    for (const spaceId of held)
+      if (!known.has(spaceId) && stillHeld.has(spaceId) && !(await kindOf(spaceId))) unrecorded.push(spaceId);
+    if (unrecorded.length > 0) {
+      markStep(`node: recording ${unrecorded.length} spaces the account's list lacks, in the background`);
+      inBackground(
+        (async () => {
+          for (const spaceId of unrecorded) await remember(spaceId);
+        })(),
+      );
     }
 
     // Not awaited: it opens every space the account holds, which from a data
