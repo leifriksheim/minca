@@ -1,0 +1,66 @@
+/* Debug mode's strip, along the bottom over everything, out of the way of the home indicator */
+.strip {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 2147483647;
+  display: flex;
+  gap: var(--space-tight);
+  align-items: center;
+  padding: 6px 12px calc(6px + env(safe-area-inset-bottom));
+  border: 0;
+  border-top: 1px solid var(--color-outline);
+  border-radius: 0;
+  background: var(--color-sunken);
+  color: var(--color-text);
+  font: var(--text-small);
+  font-family: var(--font-mono);
+  text-align: left;
+  cursor: pointer;
+
+  & [data-tone='danger'] {
+    color: var(--color-danger);
+  }
+}
+
+/* The last line logged, cut to the strip's width */
+.last {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The report, over the whole page */
+.screen {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-page);
+  color: var(--color-text);
+
+  & header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-tight);
+    padding: calc(var(--space-tight) + env(safe-area-inset-top)) var(--space) var(--space-tight);
+    border-bottom: 1px solid var(--color-divider);
+  }
+
+  & pre {
+    flex: 1;
+    margin: 0;
+    padding: var(--space) var(--space) calc(var(--space) + env(safe-area-inset-bottom));
+    overflow: auto;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+    user-select: text;
+    -webkit-user-select: text;
+  }
+}

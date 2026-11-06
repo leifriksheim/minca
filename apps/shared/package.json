@@ -37,7 +37,9 @@
     "./Terminal": "./src/Terminal.tsx",
     "./AppLogo": "./src/AppLogo.tsx",
     "./notify": "./src/notify.ts",
-    "./setting": "./src/setting.ts"
+    "./setting": "./src/setting.ts",
+    "./debugLog": "./src/debugLog.ts",
+    "./DebugMode": "./src/DebugMode.tsx"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

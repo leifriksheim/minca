@@ -32,6 +32,7 @@ import { checkProposal, MAX_PROPOSALS, type AutomationProposal } from '../space/
 import { defaultStorage, guardedStorage, type KeyValueStore } from './stay-signed-in.js';
 import { isObject, unref } from '../utils/guards.js';
 import { popupFeatures } from './popup.js';
+import { markStep } from '../utils/step.js';
 
 /** Messages between an app and the home it opened */
 const HELLO = 'minca:hello';
@@ -658,6 +659,7 @@ export async function startConnectedNode(params: {
     },
     params,
   );
+  markStep('connection: node started, joining the spaces the grant names');
   await joinGranted(node, params.grant);
   return node;
 }

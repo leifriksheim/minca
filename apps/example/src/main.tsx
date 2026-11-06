@@ -1,3 +1,5 @@
+// First, so everything said while the app starts is kept for debug mode (`?debug`).
+import '@minca/app-shared/debugLog';
 import '@minca/ui/minca.css';
 import './app.css';
 import { createRoot } from 'react-dom/client';
@@ -7,6 +9,8 @@ import { MincaProvider } from '@minca/react';
 import { connection } from './minca';
 import { router } from './router';
 import { applyRememberedTheme } from '@minca/app-shared/theme';
+import { mountDebugMode } from '@minca/app-shared/DebugMode';
+import { debugDetails, logConnection } from './debug';
 
 // The node's operations as WebMCP tools, from the start — agents and
 // extensions read the list on load. They act for whoever signs in.
@@ -14,6 +18,10 @@ exposeToAgents();
 
 // In the account's theme from the first paint, as this device last saw it.
 applyRememberedTheme();
+
+// `?debug` anywhere: a strip along the bottom, and a report to copy.
+logConnection();
+mountDebugMode({ app: 'Minca app', details: debugDetails });
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Root element not found');
