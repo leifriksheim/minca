@@ -26,15 +26,20 @@ import { remoteNode, remoteSigner, serveNode, serveSigner } from './remote.js';
 import { workerStores, writerKeysFor, type StoreFactory, type WorkerStores } from './stores.js';
 import type { NodeConfig, NodeNetworkConfig, P2PNode } from './types.js';
 import { markStep } from '../utils/step.js';
+import { readAppKeys } from '../identity/app-keys.js';
 
 /**
  * What a worker needs to start a node: `NodeConfig`, less what can't be sent
- * to it. The signer stays on the page, and the stores are described.
+ * to it. The signer stays on the page, the stores are described, and an app's
+ * key is named: WebKit drops, without an error, a message to a shared worker
+ * that holds a `CryptoKey`, so the worker reads the key itself.
  */
 export interface WorkerNodeConfig extends Pick<
   NodeConfig,
-  'accountKey' | 'contactKey' | 'contactsSpace' | 'sessionTtlSeconds' | 'sessionKey' | 'cache'
+  'accountKey' | 'contactKey' | 'contactsSpace' | 'sessionTtlSeconds' | 'cache'
 > {
+  /** The app's key the node signs with, by the name it is kept under in this origin (`appKey`) */
+  readonly appKey?: string;
   readonly stores: WorkerStores;
   readonly network?: Pick<NodeNetworkConfig, 'relays' | 'nodes' | 'hosts' | 'iceServers'>;
 }
@@ -227,24 +232,30 @@ function nodeKey(did: string, stores: WorkerStores, sessionDid?: string): string
  * are described so a worker can open them; `stores` replaces them here only.
  */
 export async function startPageNode(
-  config: Omit<WorkerNodeConfig, 'network'> & {
+  config: Omit<WorkerNodeConfig, 'network' | 'appKey'> & {
     readonly signer: RootSigner;
     readonly network?: NodeNetworkConfig;
+    /** The app's key: here its keys sign, and a worker is told its name and reads it itself */
+    readonly sessionKey?: { readonly name?: string; readonly keys: CryptoKeyPair };
   },
   options: { readonly worker?: () => WorkerLike; readonly stores?: StoreFactory } = {},
 ): Promise<P2PNode> {
   if (options.worker && options.stores)
     throw new Error('A node in a worker opens its own stores: pass worker or stores, not both');
-  const { network, stores, ...shared } = config;
+  const { network, stores, sessionKey, ...shared } = config;
+  if (options.worker && sessionKey && !sessionKey.name)
+    throw new Error('A node in a worker reads its key where appKey keeps it: name the key');
   return options.worker
     ? startNodeInWorker(options.worker(), {
         ...shared,
         stores,
+        ...(sessionKey?.name ? { appKey: sessionKey.name } : {}),
         ...(network ? { network: workerNetwork(network) } : {}),
       })
     : createNode({
         ...shared,
         stores: options.stores ?? workerStores(stores),
+        ...(sessionKey ? { sessionKey: sessionKey.keys } : {}),
         ...withWriterKey(stores),
         ...(network ? { network } : {}),
       });
@@ -272,9 +283,12 @@ export function runNodeWorker(
   options: {
     /** Opens the stores the page described. Default `workerStores`; a test hands out memory ones. */
     readonly openStores?: (stores: WorkerStores) => StoreFactory;
+    /** Reads an app's key by name. Default: from this origin's IndexedDB, where `appKey` keeps it. */
+    readonly readKey?: (name: string) => Promise<CryptoKeyPair | null>;
   } = {},
 ): void {
   const openStores = options.openStores ?? workerStores;
+  const readKey = options.readKey ?? readAppKeys;
   const held = new Map<string, Held>();
 
   async function attach(tab: string, sent: unknown, ports: ReadonlyArray<MessagePort>): Promise<void> {
@@ -285,10 +299,12 @@ export function runNodeWorker(
       if (!isWorkerNodeConfig(sent)) throw new Error('The page sent no node config');
       markStep('worker: a tab asks for the node');
       const signer = await remoteSigner(signerPort);
-      const sessionDid = sent.sessionKey ? await didOf(sent.sessionKey.publicKey) : undefined;
+      const sessionKey = sent.appKey ? await readKey(sent.appKey) : null;
+      if (sent.appKey && !sessionKey) throw new Error('This app’s key is not kept in this browser');
+      const sessionDid = sessionKey ? await didOf(sessionKey.publicKey) : undefined;
       const key = nodeKey(signer.did, sent.stores, sessionDid);
       markStep(`worker: ${held.has(key) ? 'sharing the node already running' : 'starting a node'}`);
-      entry = held.get(key) ?? start(key, sent, signer);
+      entry = held.get(key) ?? start(key, sent, signer, sessionKey);
       const own = entry;
       own.signers.add(tab, signer);
       own.connections.add(tab, remoteTransport(transportPort, own.iceServers));
@@ -324,8 +340,13 @@ export function runNodeWorker(
     await (await entry.node).close();
   }
 
-  function start(key: string, config: WorkerNodeConfig, signer: RootSigner): Held {
-    const { stores, network, ...rest } = config;
+  function start(
+    key: string,
+    config: WorkerNodeConfig,
+    signer: RootSigner,
+    sessionKey: CryptoKeyPair | null,
+  ): Held {
+    const { stores, network, appKey: _named, ...rest } = config;
     const signers = createSignerSwitch(signer.did);
     const connections = createTransportSwitch();
     let meshIce: () => ReadonlyArray<RTCIceServer> = () => [];
@@ -336,6 +357,7 @@ export function runNodeWorker(
       tabs: new Map(),
       node: createNode({
         ...rest,
+        ...(sessionKey ? { sessionKey } : {}),
         signer: signers.signer,
         stores: openStores(stores),
         ...withWriterKey(stores),
@@ -385,5 +407,9 @@ function forgetTab(entry: Held, tab: string): void {
 }
 
 function isWorkerNodeConfig(value: unknown): value is WorkerNodeConfig {
-  return isRecord(value) && isRecord(value.stores);
+  return (
+    isRecord(value) &&
+    isRecord(value.stores) &&
+    (value.appKey === undefined || typeof value.appKey === 'string')
+  );
 }

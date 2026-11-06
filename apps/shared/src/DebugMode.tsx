@@ -77,12 +77,12 @@ function DebugMode({ app, details }: DebugModeOptions) {
 
 function DebugScreen({ app, details, onClose }: DebugModeOptions & { onClose: () => void }) {
   const [report, setReport] = useState('Gathering…');
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<'yes' | 'no' | null>(null);
   const text = useRef<HTMLPreElement>(null);
 
   const refresh = () => {
     askWorkers();
-    setCopied(false);
+    setCopied(null);
     // The workers' answers come over a channel: give them a moment.
     setTimeout(() => void debugReport(app, build, details).then(setReport), 300);
   };
@@ -90,11 +90,21 @@ function DebugScreen({ app, details, onClose }: DebugModeOptions & { onClose: ()
   useEffect(refresh, []);
 
   const copy = () => {
-    const done = () => setCopied(true);
-    // Straight from the tap, so the browser allows it. Where it won't, the text is selected to copy by hand.
-    if (navigator.clipboard) void navigator.clipboard.writeText(report).then(done, select);
-    else select();
+    // Straight from the tap, as a selection copied: what an iPhone's web views allow, where the
+    // clipboard API is often refused. Then the clipboard API; then the text selected, to copy by hand.
+    if (copyBySelection(report)) return setCopied('yes');
+    const failed = () => {
+      select();
+      setCopied('no');
+    };
+    if (navigator.clipboard) void navigator.clipboard.writeText(report).then(() => setCopied('yes'), failed);
+    else failed();
   };
+  // The phone's own share sheet, which can copy too, or send the report straight on.
+  const share =
+    typeof navigator.share === 'function'
+      ? () => void navigator.share({ title: `Minca debug report: ${app}`, text: report }).catch(() => {})
+      : null;
   const select = () => {
     const range = document.createRange();
     if (!text.current) return;
@@ -115,8 +125,13 @@ function DebugScreen({ app, details, onClose }: DebugModeOptions & { onClose: ()
     <div className={styles.screen} role="dialog" aria-label="Debug report">
       <header>
         <button type="button" data-intent="primary" onClick={copy}>
-          {copied ? 'Copied' : 'Copy all'}
+          {copied === 'yes' ? 'Copied' : copied === 'no' ? 'Selected: copy it' : 'Copy all'}
         </button>
+        {share && (
+          <button type="button" onClick={share}>
+            Share
+          </button>
+        )}
         <button type="button" onClick={refresh}>
           Refresh
         </button>
@@ -130,4 +145,28 @@ function DebugScreen({ app, details, onClose }: DebugModeOptions & { onClose: ()
       <pre ref={text}>{report}</pre>
     </div>
   );
+}
+
+/**
+ * Copies `text` by selecting it in a field out of sight and asking the
+ * browser to copy, inside the tap that asked. Says whether it did.
+ */
+function copyBySelection(text: string): boolean {
+  const field = document.createElement('textarea');
+  field.value = text;
+  // Read-only, so an iPhone neither opens its keyboard nor zooms in on it.
+  field.readOnly = true;
+  field.className = styles.offscreen ?? '';
+  document.body.append(field);
+  try {
+    field.select();
+    field.setSelectionRange(0, text.length);
+    // eslint-disable-next-line typescript/no-deprecated -- the one copy an iPhone's web views reliably allow
+    return document.execCommand('copy');
+  } catch {
+    return false;
+  } finally {
+    field.remove();
+    getSelection()?.removeAllRanges();
+  }
 }

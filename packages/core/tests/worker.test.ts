@@ -136,8 +136,11 @@ describe('a node in a worker', () => {
   });
 });
 
-/** A pretend `SharedWorker` running `runNodeWorker`: each tab connects on a port of its own */
-function fakeSharedWorker() {
+/**
+ * A pretend `SharedWorker` running `runNodeWorker`: each tab connects on a port
+ * of its own. `keys` stands for the app keys this origin keeps, by name.
+ */
+function fakeSharedWorker(keys = new Map<string, CryptoKeyPair>()) {
   const target = new EventTarget();
   const scope = {
     addEventListener: (type: 'message' | 'connect', listener: (event: MessageEvent) => void) =>
@@ -155,9 +158,11 @@ function fakeSharedWorker() {
       stores.set(name, kept);
       return kept;
     },
+    readKey: async (name) => keys.get(name) ?? null,
   });
-  /** What a tab's `new SharedWorker(…).port` would be; `tabs` collects the id each start names */
+  /** What a tab's `new SharedWorker(…).port` would be; `tabs` collects the id each start names, `sent` every message */
   const tabs: string[] = [];
+  const sent: unknown[] = [];
   const connect = () => {
     const channel = new MessageChannel();
     target.dispatchEvent(new MessageEvent('connect', { ports: [channel.port2] }));
@@ -167,12 +172,20 @@ function fakeSharedWorker() {
     });
     return {
       postMessage: (message: unknown, transfer: Transferable[]) => {
+        sent.push(message);
         if (isRecord(message) && typeof message.tab === 'string') tabs.push(message.tab);
         channel.port1.postMessage(message, transfer);
       },
     };
   };
-  return { connect, opened, tabs };
+  return { connect, opened, tabs, sent };
+}
+
+/** Whether a `CryptoKey` is anywhere in a value */
+function holdsCryptoKey(value: unknown): boolean {
+  if (value instanceof CryptoKey) return true;
+  if (typeof value !== 'object' || value === null || ArrayBuffer.isView(value)) return false;
+  return Object.values(value).some(holdsCryptoKey);
 }
 
 describe('a node shared by the tabs of a site', () => {
@@ -226,18 +239,23 @@ describe('a node shared by the tabs of a site', () => {
   });
 
   test('a tab signing with another key gets a node of its own, so an app connected again never signs with the old one', async () => {
-    const shared = fakeSharedWorker();
-    const me = await signer();
     const provider = createP256Provider();
     const [oldKey, newKey] = [await provider.generateKeyPair(), await provider.generateKeyPair()];
+    const shared = fakeSharedWorker(
+      new Map([
+        ['account-old', oldKey],
+        ['account-new', newKey],
+      ]),
+    );
+    const me = await signer();
     const before = await startNodeInWorker(shared.connect(), {
       signer: me,
-      sessionKey: oldKey,
+      appKey: 'account-old',
       stores: { indexedDB: 'minca-app:me' },
     });
     const after = await startNodeInWorker(shared.connect(), {
       signer: me,
-      sessionKey: newKey,
+      appKey: 'account-new',
       stores: { indexedDB: 'minca-app:me' },
     });
     cleanup.push(
@@ -246,6 +264,32 @@ describe('a node shared by the tabs of a site', () => {
     );
     assert.equal(before.sessionDid, await didOf(oldKey.publicKey));
     assert.equal(after.sessionDid, await didOf(newKey.publicKey));
+  });
+
+  test('the worker reads the app’s key itself, so no CryptoKey is sent to it, which WebKit would drop', async () => {
+    const key = await createP256Provider().generateKeyPair();
+    const shared = fakeSharedWorker(new Map([['account-1', key]]));
+    const node = await startNodeInWorker(shared.connect(), {
+      signer: await signer(),
+      appKey: 'account-1',
+      stores: { indexedDB: 'minca-app:me' },
+    });
+    cleanup.push(() => node.close());
+    assert.equal(node.sessionDid, await didOf(key.publicKey));
+    assert.ok(shared.sent.length > 0);
+    assert.ok(!shared.sent.some(holdsCryptoKey), 'no CryptoKey in any message to the worker');
+  });
+
+  test('a key this browser doesn’t keep says so, rather than starting a node under another', async () => {
+    const shared = fakeSharedWorker();
+    await assert.rejects(
+      startNodeInWorker(shared.connect(), {
+        signer: await signer(),
+        appKey: 'forgotten',
+        stores: { indexedDB: 'minca-app:me' },
+      }),
+      /not kept in this browser/,
+    );
   });
 
   test('the node outlives a tab that closes it, and closes with the last', async () => {
