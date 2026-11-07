@@ -484,11 +484,10 @@ the account registry and the contacts space, an account with no name, and
 any note without `/account/write`, such as an agent's.
 
 A space that doesn't show the account's profile yet may just not have caught
-up on this device. The node waits until it has caught up with a peer, up to
-10 s, before writing one, or a new device would write over the profile every
-other device wrote. A picture the account has goes out as the space's own copy
-of the file; the name goes out at once, with the picture the space already
-has.
+up on this device. Where the account may write, the node first waits, in the
+background, until it has caught up with a peer, up to 10 s; otherwise a new
+device would write over the profile every other device wrote. A space made on
+this node has nothing to catch up on, so its profile goes out at once.
 
 ### Joining
 

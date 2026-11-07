@@ -78,6 +78,29 @@ describe('profiles', () => {
     assert.ok(await picture(bob.node));
   });
 
+  test('the creator of a new space is named in it at once, with nobody to catch up with', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const alice = await person(hub, 'Alice');
+    const { id: space } = await alice.node.spaces.create({ name: 'Solo', ...team, visibility: 'private' });
+    await hold(alice.node, space);
+    await until(async () => (await nameIn(alice.node, space, alice.node.did)) === 'Alice', 2000, 'her name');
+  });
+
+  test('a rename never waits on a space this account only follows', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const alice = await person(hub, 'Alice');
+    const bob = await person(hub, 'Bob');
+    const { id: space } = await alice.node.spaces.create({ name: 'News', ...team, visibility: 'private' });
+    const note = await alice.node.records.put(space, 'app.note', { text: 'hi' });
+    await bob.node.spaces.join(await alice.node.spaces.invite(space, { write: false }));
+    await hold(bob.node, space);
+    await until(async () => (await bob.node.records.get(space, note.key)) !== null, 6000, 'the note');
+    await alice.node.close();
+    const started = Date.now();
+    await bob.node.account.setName('Robert');
+    assert.ok(Date.now() - started < 2000, `the rename took ${Date.now() - started} ms`);
+  });
+
   test('a rename reaches the spaces that are open', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const alice = await person(hub, 'Alice');
@@ -144,10 +167,11 @@ describe('profiles', () => {
     await createStorageProvider(await mallory.stores(`spaces/${space}`)).addVersion(forged);
     await hold(mallory.node, space);
 
-    // Mallory's own records reach Alice, so sync is working…
+    // Mallory's own records reach Alice, so sync is working… Her node writes her profile once it
+    // has caught up with a peer, which a version Alice refuses keeps it from: up to 10 s.
     await until(
       async () => (await nameIn(alice.node, space, mallory.node.did)) === 'Mallory',
-      4000,
+      12_000,
       'Mallory’s profile',
     );
     await new Promise((resolve) => setTimeout(resolve, 200));

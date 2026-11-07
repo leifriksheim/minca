@@ -100,11 +100,28 @@ export function createNodeContacts(ctx: NodeContext) {
    */
   async function publishProfile(spaceId: string, open: SpaceRuntime): Promise<void> {
     if (ctx.narrowNote || (await ctx.kindOf(spaceId))) return;
+    if (madeHere.has(spaceId) || (await shownHere(open))) return publishNow(spaceId, open);
+    // What the space says of this account comes with the rest of it: a device that hasn't caught
+    // up there would write over a profile it can't see yet, as every new device did. So where the
+    // account may write, it catches up first, in the background, once per space at a time.
+    if (!(await open.can('create', PROFILE_COLLECTION))) return;
+    // Keyed by the runtime: one opened again after this one closed waits for itself.
+    if (catchingUp.has(open)) return;
+    catchingUp.add(open);
+    inBackground(
+      open
+        .caughtUp(CATCH_UP_MS)
+        .then(() => publishNow(spaceId, open))
+        .finally(() => catchingUp.delete(open)),
+    );
+  }
+  const catchingUp = new WeakSet<SpaceRuntime>();
+  /** Spaces made on this node since it started: it holds all there is of them, so nothing to catch up on */
+  const madeHere = new Set<string>();
+
+  async function publishNow(spaceId: string, open: SpaceRuntime): Promise<void> {
     const own = await ownProfile();
     if (!own) return;
-    // What the space says of this account comes with the rest of it: a device that hasn't caught
-    // up yet would write over a profile it can't see, and every device that opens it would again.
-    if (!(await shownHere(open))) await open.caughtUp(CATCH_UP_MS);
     const base = { name: own.name, ...(contactKeys ? { contactKey: contactKeys.publicKey } : {}) };
     const held = await heldAvatar(open);
     const copied = held?.source === own.avatar?.hash ? held : undefined;
@@ -957,5 +974,12 @@ export function createNodeContacts(ctx: NodeContext) {
     },
   });
 
-  return Object.freeze({ account, contacts, inbox, publishProfile, publishProfileToOpenSpaces });
+  return Object.freeze({
+    account,
+    contacts,
+    inbox,
+    publishProfile,
+    publishProfileToOpenSpaces,
+    made: (spaceId: string) => void madeHere.add(spaceId),
+  });
 }
