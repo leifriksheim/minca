@@ -5,7 +5,7 @@
  * body: a sealed one opens with the keys of the space this node holds.
  */
 import { setCapped } from '../utils/map.js';
-import type { CryptoProvider, Link, Space, Version } from '../types.js';
+import type { CryptoProvider, Link, SigningKey, Space, Version } from '../types.js';
 import type { SpaceRecord } from '../space/space-manager.js';
 import { verifyNote, type Delegation } from '../identity/ucan.js';
 import { writeRequirement } from '../identity/abilities.js';
@@ -19,7 +19,7 @@ import { isRecord } from '../utils/guards.js';
 /** The key that signs, and the delegation that lets it */
 export interface ActiveSession {
   readonly did: string;
-  readonly key: CryptoKey;
+  readonly key: SigningKey;
   /** The current note from the account — it is renewed, so always read it fresh. None for a key that signs for itself. */
   readonly proof: () => Delegation | undefined;
 }

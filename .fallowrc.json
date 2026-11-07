@@ -9,6 +9,7 @@
     "packages/cli/tests/bench/**/*.ts",
     "packages/cli/tests/helpers/*-child.ts",
     "packages/core/tests/bench/**/*.ts",
+    "packages/core/tests/webkit/*.{ts,mjs}",
     "apps/docs/examples/given.ts",
     "apps/docs/scripts/catalogues.ts"
   ],

@@ -91,9 +91,25 @@ export async function createIndexedDBAdapter(dbName = 'minca-storage'): Promise<
   });
 }
 
+/**
+ * How long opening a database may take. It takes milliseconds, unless
+ * another tab or worker holds it in a way that makes this one wait, which
+ * otherwise waits for ever, saying nothing.
+ */
+const OPEN_WITHIN_MS = 15_000;
+
+/** Why a database won't open, in words a person can act on */
+const NOT_ANSWERING =
+  "This browser's storage for Minca isn't answering. Another Minca tab or window may be holding it: close the others, then reload this page.";
+
 /** Opens the database, wiping one made at an earlier version */
 function openDatabase(dbName: string): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
+    let gaveUp = false;
+    const timer = setTimeout(() => {
+      gaveUp = true;
+      reject(new Error(NOT_ANSWERING));
+    }, OPEN_WITHIN_MS);
     const request = globalThis.indexedDB.open(dbName, DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
@@ -102,8 +118,21 @@ function openDatabase(dbName: string): Promise<IDBDatabase> {
       db.createObjectStore('kv');
       db.createObjectStore('versions', { keyPath: 'id' });
     };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error(`Could not open ${dbName}`));
+    request.onsuccess = () => {
+      clearTimeout(timer);
+      const db = request.result;
+      // Opened after this gave up: closed, or it would hold the database from every later upgrade.
+      if (gaveUp) return db.close();
+      // Another tab upgrading waits on every connection open: this one lets go.
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
+    request.onerror = () => {
+      clearTimeout(timer);
+      reject(
+        new Error(`This browser's storage for Minca wouldn't open (${request.error?.message ?? dbName}).`),
+      );
+    };
   });
 }
 

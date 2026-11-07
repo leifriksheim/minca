@@ -56,6 +56,7 @@ to `packages/core/src`, so nothing needs building first.
 npm install          # once, at the root
 npm test             # every workspace
 npm run scenarios    # the scenario suite (scenarios/README.md)
+npm run test:webkit  # two tabs sharing one node in WebKit (npx playwright install webkit first)
 npm run typecheck    # every workspace, and core's tests (TypeScript 7)
 npm run lint         # oxlint, type-aware (.oxlintrc.json)
 npm run format       # Prettier
@@ -235,6 +236,11 @@ Elsewhere:
 
 - `ws` in `packages/cli` and `packages/relay`: Node has a WebSocket client but
   no server.
+- `playwright`, a dev dependency at the root, never bundled
+  (`packages/core/tests/webkit/run.mjs`): drives WebKit, the engine of every
+  browser on an iPhone, where a shared worker can't be handed a `CryptoKey`.
+  Microsoft's, released since 2020, very widely used; its one dependency is
+  `playwright-core`. Tests only.
 - `@clack/prompts`, a dev dependency of `packages/cli`, bundled
   (`packages/cli/src/ask.ts`): prompts at a terminal, reading keys in raw
   mode and redrawing, which is fiddly across terminals to get right. Released

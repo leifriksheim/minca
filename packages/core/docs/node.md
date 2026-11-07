@@ -102,6 +102,23 @@ There are three kinds:
   only session notes (command `/`, no subject, no policy) and refuses anything
   else without asking the signer behind it.
 
+An app's node signs as its session with the app's key. In a worker, that key
+stays on the page too: `serveKey` signs there what the node asks, and the
+worker is told only the key's public half. No `CryptoKey` is ever sent to a
+worker, since WebKit drops a message to a shared worker that holds one.
+
+When several tabs share the node, every tab is asked to sign at once, and the
+first signature back is taken, so a tab frozen in the background never makes
+the one in view wait. With no tab answering for a minute, signing fails with
+a message saying to bring a Minca tab to the front. Signing needs a tab that
+runs: while every tab is frozen, the node keeps the connections it has but
+makes no new ones. A session note is asked of one tab at a time, the one that
+signed last first, then the newest, each for up to five minutes, long enough
+for a passkey prompt.
+
+A `CryptoProvider` of your own must sign with a key held elsewhere too: a
+`SigningKey` is a `CryptoKey`, or a `KeyElsewhere`, whose `sign` it calls.
+
 ### The session note
 
 This is the note a node asks for when it starts:
@@ -873,6 +890,12 @@ and its status is a [`ConnectionStatus`](https://minca.dev/api/session/type-alia
 - With `worker`, the node runs in a worker. If the worker fails to load or
   doesn't start the node within 30 seconds (`WorkerNotStarted`), the node runs
   in the page instead. A worker that started and refused passes its reason on.
+- Opening an account that takes more than 10 seconds says so in `error`,
+  while the status stays `starting`: what is likely wrong (another tab
+  holding the browser's storage) and what to try (closing other tabs,
+  reloading). A store in IndexedDB that won't open within 15 seconds fails
+  with the same advice, rather than waiting for ever. An account that can't
+  be opened is `disconnected`, its `error` saying why.
 - A tab whose node is its own (a dedicated worker's, or the page's) runs it
   only in view, one at a time per account (a Web Lock,
   `minca-node:<account DID>`): two nodes on one site's stores get in each

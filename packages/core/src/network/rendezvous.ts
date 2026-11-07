@@ -43,7 +43,7 @@ import { openValue, sealValue } from '../identity/envelope.js';
 import { openValueFrom, sealValueTo } from '../identity/hpke.js';
 import { contactKeyPair, isContactPublicKey } from '../identity/contact-key.js';
 import type { RelayStatus } from './relay-socket.js';
-import type { CryptoProvider } from '../types.js';
+import type { CryptoProvider, SigningKey } from '../types.js';
 import { createP256Provider } from '../identity/crypto-p256.js';
 import { signLabel, verifyBy } from './peer-auth.js';
 import { createRelayLink, relayKind, type RelayLink } from './relays.js';
@@ -151,7 +151,7 @@ interface RoomState {
 /** Meets peers through every relay given, of whatever kind; kinds this library doesn't speak are passed over */
 export function createRendezvous(
   urls: ReadonlyArray<string>,
-  session: { readonly did: string; readonly key: CryptoKey },
+  session: { readonly did: string; readonly key: SigningKey },
   provider: CryptoProvider = createP256Provider(),
 ): Rendezvous {
   const { did } = session;

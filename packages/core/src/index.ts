@@ -13,6 +13,9 @@
 export type {
   CryptoProvider,
   CryptoKeyPairResult,
+  KeyElsewhere,
+  SigningKey,
+  SigningKeyPair,
   StandardSchemaV1,
   StandardJSONSchemaV1,
   StandardSchemaResult,
@@ -409,6 +412,7 @@ export type {
   P2PNode,
   NodeConfig,
   WorkerNodeConfig,
+  PageNodeConfig,
   WorkerStores,
   WorkerLike,
   NodeNetworkConfig,

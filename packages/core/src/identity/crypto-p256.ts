@@ -1,4 +1,4 @@
-import { CryptoProvider, CryptoKeyPairResult } from '../types.js';
+import type { CryptoProvider, CryptoKeyPairResult, KeyElsewhere, SigningKey } from '../types.js';
 import { base64UrlEncode, bytesToHex, utf8Encode } from '../utils/encoding.js';
 import { bufferSource } from '../utils/guards.js';
 import { hkdf } from './hkdf.js';
@@ -43,7 +43,8 @@ export function createP256Provider(): CryptoProvider {
       return Object.freeze({ publicKey, privateKey });
     },
 
-    async sign(privateKey: CryptoKey, data: Uint8Array): Promise<Uint8Array> {
+    async sign(privateKey: SigningKey, data: Uint8Array): Promise<Uint8Array> {
+      if (isElsewhere(privateKey)) return privateKey.sign(data);
       return new Uint8Array(await globalThis.crypto.subtle.sign(SIGNING, privateKey, bufferSource(data)));
     },
 
@@ -90,4 +91,9 @@ function remember(id: string, key: Promise<CryptoKey>): void {
   publicKeys.set(id, key);
   key.catch(() => publicKeys.delete(id));
   if (publicKeys.size > MAX_PUBLIC_KEYS) publicKeys.delete(publicKeys.keys().next().value!);
+}
+
+/** A key held elsewhere, not a `CryptoKey`: it signs itself */
+function isElsewhere(key: SigningKey): key is KeyElsewhere {
+  return 'sign' in key && typeof key.sign === 'function';
 }

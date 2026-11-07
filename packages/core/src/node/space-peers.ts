@@ -6,7 +6,7 @@
  * A space is the unit of sync — its own rooms and sockets — so a peer you
  * share one space with learns nothing about the others.
  */
-import type { NetworkMessage, PeerInfo, Version } from '../types.js';
+import type { NetworkMessage, PeerInfo, SigningKey, Version } from '../types.js';
 import type { SpaceRecord } from '../space/space-manager.js';
 import { verifyNote } from '../identity/ucan.js';
 import { DEFINE_COMMAND, grantsBeyondRecords, writesRecords } from '../identity/abilities.js';
@@ -72,7 +72,7 @@ export async function relayRoom(spaceId: string): Promise<string> {
 /** The one mesh a node's spaces share, when it has relays to meet on */
 export function meshFor(
   network: NodeNetworkConfig | undefined,
-  session: { readonly did: string; readonly key: CryptoKey },
+  session: { readonly did: string; readonly key: SigningKey },
 ): Mesh | undefined {
   if (!network?.relays?.length) return undefined;
   const mesh = createMesh({

@@ -1935,6 +1935,30 @@ describe('an app connected to several accounts', () => {
     return { page, hub, storage, keys, connection };
   }
 
+  test('opening that takes far too long says so, and what to try, without giving up', async (t) => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const a = await granted(hub);
+    const storage = memoryStorage();
+    grantStore(storage).save(a.grant, 'account-a');
+    // Stores that never answer, as a browser's storage another tab holds.
+    const connection = createMincaConnection({
+      home: HOME,
+      request: { name: 'Todo', access: 'write' },
+      storage,
+      stores: () => () => new Promise(() => {}),
+      keys: keyStore([['account-a', a.key]]),
+    });
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    void connection.start();
+    for (let i = 0; i < 50 && connection.getState().status !== 'starting'; i++)
+      await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(connection.getState().error, null, 'nothing said at first');
+    t.mock.timers.tick(10_000);
+    assert.equal(connection.getState().status, 'starting', 'still trying');
+    assert.match(connection.getState().error ?? '', /taking longer than it should.*other tabs.*reload/s);
+  });
+
   test('a tab put away closes its node, and opens it again when it comes back', async () => {
     const { page, connection } = await started();
     assert.equal(connection.getState().status, 'ready');

@@ -100,7 +100,13 @@ export function ConnectScreen() {
 
       {state.error && (
         <aside data-tone="danger" role="alert">
-          {state.error}
+          <p>{state.error}</p>
+          {/* Still trying, but stuck: reloading is what helps, so offer it right here. */}
+          {state.status === 'starting' && (
+            <button data-intent="ghost" onClick={() => globalThis.location.reload()}>
+              Reload
+            </button>
+          )}
         </aside>
       )}
     </main>

@@ -5,7 +5,7 @@
  * both sides do the same, bound to the connection's DTLS fingerprints.
  * spec/04-network.md says why each part is there.
  */
-import type { CryptoProvider } from '../types.js';
+import type { CryptoProvider, SigningKey } from '../types.js';
 import { base64UrlDecode, base64UrlEncode, utf8Encode } from '../utils/encoding.js';
 import { didToPublicKey } from '../identity/did.js';
 import { verifyNote, type Delegation } from '../identity/ucan.js';
@@ -218,7 +218,7 @@ export async function verifyBy(
 /** Signs `label`, as base64url */
 export async function signLabel(
   provider: CryptoProvider,
-  key: CryptoKey,
+  key: SigningKey,
   label: Uint8Array,
 ): Promise<string> {
   return base64UrlEncode(await provider.sign(key, label));
@@ -231,7 +231,7 @@ export async function signLabel(
  */
 export function createClientAuth(
   spaceId: string,
-  session: { readonly did: string; readonly key: CryptoKey },
+  session: { readonly did: string; readonly key: SigningKey },
   read: ReadAccess | { readonly privateKey: CryptoKey } | null,
   provider: CryptoProvider,
 ): ClientAuth {
@@ -253,7 +253,7 @@ export function createClientAuth(
 export function createServerAuth(
   spaceId: string,
   read: ReadAccess | string | null,
-  nodeKey: CryptoKey,
+  nodeKey: SigningKey,
   provider: CryptoProvider,
   note: () => Delegation | null = () => null,
 ): ServerAuth {
@@ -318,7 +318,7 @@ const meshLabel = (
 /** One side of the handshake between peers; `read` is, in a private space, the read key to prove with and the public half to check others against. */
 export function createMeshAuth(
   spaceId: string,
-  session: { readonly did: string; readonly key: CryptoKey },
+  session: { readonly did: string; readonly key: SigningKey },
   read: ReadAccessInput | null,
   provider: CryptoProvider,
 ): MeshAuth {
