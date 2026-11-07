@@ -474,6 +474,12 @@ one run at a time:
 
 Creating or joining a space writes its `sys.joined` record. Leaving deletes it.
 
+The account's own spaces (the table above) are never in the list: joining a
+carry space's invite writes no record, and a record that names one is passed
+over in every step, neither joined nor left. A device that hadn't heard of the
+carrier yet may have written one, and may have joined the space from the list;
+it opens the space directly once it hears.
+
 ### Profiles
 
 The node publishes the account's profile, `{ name, contactKey? }`, in a space
