@@ -693,3 +693,37 @@ describe('space access: taking it back', () => {
     assert.equal(await alice.node.records.get(space, leaf.key), null, 'the leaf alone names no member');
   });
 });
+
+describe('space access: saying it again', () => {
+  const isMember = async (who: Person, space: string, did: string) =>
+    (await who.node.spaces.access(space)).members.some((member) => member.did === did);
+
+  test('someone removed and assigned again by the same admin is back', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const alice = await person(hub, { name: 'Alice', accountKey: true });
+    const bob = await person(hub, { name: 'Bob', accountKey: true });
+    const { id: space } = await alice.node.spaces.create({ name: 'T', ...team, visibility: 'private' });
+    await alice.node.spaces.assign(space, bob.node.did, 'editor');
+    await alice.node.spaces.removeMember(space, bob.node.did);
+    assert.equal(await isMember(alice, space, bob.node.did), false);
+    await alice.node.spaces.assign(space, bob.node.did, 'editor');
+    assert.ok(await isMember(alice, space, bob.node.did), 'assigned again, but not back');
+  });
+
+  test('a member removed a second time by the same admin is out, however quiet they kept', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const alice = await person(hub, { name: 'Alice', accountKey: true });
+    const bob = await person(hub, { name: 'Bob', accountKey: true });
+    const { id: space } = await alice.node.spaces.create({ name: 'T', ...team, visibility: 'private' });
+    await bob.node.spaces.join(await alice.node.spaces.invite(space));
+    await hold(alice.node, space);
+    await hold(bob.node, space);
+    await until(async () => isMember(alice, space, bob.node.did), 6000, 'Bob in, as Alice sees it');
+    await alice.node.spaces.removeMember(space, bob.node.did);
+    await alice.node.spaces.assign(space, bob.node.did, 'editor');
+    assert.ok(await isMember(alice, space, bob.node.did));
+    // Bob writes nothing more, and Alice removes him again: the same cutoff, after a re-add.
+    await alice.node.spaces.removeMember(space, bob.node.did);
+    assert.equal(await isMember(alice, space, bob.node.did), false, 'removed again, but still in');
+  });
+});
