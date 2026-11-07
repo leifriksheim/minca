@@ -1,8 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { describeHost, type HostDescription } from '@minca/core';
+import { describeHost, type HostDescription, type HostingView } from '@minca/core';
 import { DEFAULT_HOST } from './relay';
 import { HostAddressForm, type Wanted } from './HostAddress';
-import { FeatureIcon, StatusPill, type Tone } from './Feature';
+import { FeatureIcon, StatusPill, shortDate, timeLeft, type Tone } from './Feature';
+import { dollars } from './Payment';
+
+const DAY = 86_400;
+/** Days before a balance runs out that it is said to run out soon */
+export const DUE_DAYS = 14;
 
 /** Bytes as people read them: 12 KB, 3.4 MB, 10 GB */
 export function size(bytes: number): string {
@@ -158,5 +163,68 @@ export function HostStatusRow({
       </div>
       <span className="row">{children}</span>
     </>
+  );
+}
+
+/** How the account stands at a host, as a pill and one line */
+export function accountStanding(host: HostingView): { tone: Tone; pill: string; line: string } {
+  const status = host.status;
+  const offline = host.live ? '' : ` · can't reach it right now`;
+  if (!status) return { tone: 'bad', pill: "Can't reach host", line: host.error ?? 'Try again in a while' };
+  const room =
+    status.bytes !== undefined && status.quota !== undefined && status.bytes >= status.quota ? ' · full' : '';
+  if (status.state === 'active' && (status.paidUntil === 0 || status.plan === 'free'))
+    return { tone: 'good', pill: 'Online', line: `${status.plan ? 'Free plan' : 'Free'}${room}${offline}` };
+  if (status.state === 'active') {
+    const soon = status.paidUntil - Date.now() / 1000 < DUE_DAYS * DAY;
+    return {
+      tone: soon ? 'warn' : 'good',
+      pill: soon ? `Runs out ${timeLeft(status.paidUntil)}` : 'Online',
+      line: `${dollars(status.balance ?? 0)} left · lasts until about ${shortDate(status.paidUntil)}${room}${offline}`,
+    };
+  }
+  if (status.state === 'grace')
+    return {
+      tone: 'bad',
+      pill: 'Needs money',
+      line: `Ran out ${shortDate(status.paidUntil)}. Your spaces stay online a little longer, paid for from what you add next${offline}`,
+    };
+  return {
+    tone: 'neutral',
+    pill: host.fund ? 'Not paid yet' : 'Off',
+    line: host.fund ? `Add money to turn it on${offline}` : `This host isn't taking new accounts${offline}`,
+  };
+}
+
+/**
+ * How much the host keeps for the account: a bar against its room where it
+ * has one, else what that costs a month. Nothing when the host doesn't say.
+ */
+export function HostRoom({ host }: { host: HostingView }) {
+  const status = host.status;
+  if (status?.bytes === undefined) return null;
+  if (status.quota !== undefined) {
+    const room = Math.min(1, status.bytes / status.quota);
+    return (
+      <div className="stack" data-gap="tight">
+        <progress value={Math.max(room, 0.01)} />
+        <small>
+          {size(status.bytes)} of {size(status.quota)} used
+          {status.full
+            ? stillFree(status.full)
+              ? ` · over your room: make some, or get more, by ${shortDate(status.full.until)}`
+              : ` · over your room: ${host.name} keeps your spaces online again once they fit`
+            : room >= 1
+              ? ' · a new space waits until there is room'
+              : ''}
+        </small>
+      </div>
+    );
+  }
+  if (status.daily === undefined || status.daily <= 0) return null;
+  return (
+    <small>
+      {size(status.bytes)} kept · about {dollars(status.daily * 30)} a month as they are now
+    </small>
   );
 }

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Link, Outlet } from '@tanstack/react-router';
 import {
   useAccount,
@@ -9,7 +9,10 @@ import {
   useNode,
   useObjectUrl,
 } from '@minca/react';
+import type { HostingView } from '@minca/core';
 import { message, useCopy } from '@minca/app-shared/action';
+import { HostRoom, HostStatusRow, accountStanding, useAskAgain } from '@minca/app-shared/HostOffer';
+import { Icon } from '@minca/app-shared/Icon';
 import { forgetPicture } from '@minca/app-shared/rememberedPictures';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { FeatureIcon } from '@minca/app-shared/Feature';
@@ -60,7 +63,7 @@ export function ProfilePage() {
   );
 }
 
-/** How this app works for you: its look, downloads, agents, and the account's security */
+/** How this app works for you: its look, downloads, agents, and the account's hosting and security */
 export function SettingsPage() {
   const { connection } = useConnection();
   const [downloads] = useDownloads();
@@ -92,6 +95,7 @@ export function SettingsPage() {
       <section aria-label="Account">
         <h2>Account</h2>
         <ol role="list">
+          <AlwaysOnline />
           <SettingsRow
             icon={<FeatureIcon kind="online" size={36} />}
             title="Connect an agent"
@@ -112,6 +116,44 @@ export function SettingsPage() {
       {downloading && <DownloadsView onClose={() => setDownloading(false)} />}
     </>
   );
+}
+
+/**
+ * The hosts keeping the account's spaces online, how each stands and how much
+ * room it uses. Choosing and paying stay in the account home, which each row opens.
+ */
+function AlwaysOnline() {
+  const node = useNode();
+  const { connection } = useConnection();
+  const [hosts, setHosts] = useState<ReadonlyArray<HostingView> | null>(null);
+  // Each host's own trouble comes back in its view; a list that fails shows nothing rather than an offer.
+  const load = useCallback(() => node.hosting.list().then(setHosts, () => {}), [node]);
+  useAskAgain(load);
+  const open = () => connection.openHome('hosting');
+  if (hosts === null) return null;
+  if (hosts.length === 0)
+    return (
+      <SettingsRow
+        icon={<FeatureIcon kind="online" size={36} />}
+        title="Keep your spaces online"
+        detail="Reachable when all your devices are off"
+        onClick={open}
+        away
+      />
+    );
+  return hosts.map((host) => {
+    const state = accountStanding(host);
+    return (
+      <li key={host.url} className="stack" data-gap="tight">
+        <button data-intent="open" onClick={open} className="row">
+          <HostStatusRow size={36} name={host.name} pill={state} line={state.line}>
+            <Icon name="external" size={14} />
+          </HostStatusRow>
+        </button>
+        <HostRoom host={host} />
+      </li>
+    );
+  });
 }
 
 /** Megabytes, as a person reads them */
