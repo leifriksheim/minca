@@ -487,8 +487,8 @@ A space that doesn't show the account's profile yet may just not have caught
 up on this device. The node waits until it has caught up with a peer, up to
 10 s, before writing one, or a new device would write over the profile every
 other device wrote. A picture the account has goes out as the space's own copy
-of the file. While that copy is made, the space keeps showing the picture it
-has: a profile that already shows one is never written without it.
+of the file; the name goes out at once, with the picture the space already
+has.
 
 ### Joining
 

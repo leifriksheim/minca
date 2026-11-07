@@ -195,10 +195,6 @@ export function createWriting(deps: WritingDeps) {
       const problem = await cannotWrite();
       if (problem) throw new Error(problem);
     }
-    // A write that changes nothing is not a write: every version is kept and synced for good, so
-    // two devices echoing each other would otherwise fill the space.
-    const same = deleted ? null : await unchanged(version.key, body, links);
-    if (same) return same;
 
     let payload: unknown = null;
     let tags: string[] = [];
@@ -351,22 +347,6 @@ export function createWriting(deps: WritingDeps) {
       return { version: version.id, ...verdict };
     }
     return null;
-  }
-
-  /** The record's current version, when this account wrote it and it says exactly this */
-  async function unchanged(
-    recordKey: string,
-    body: unknown,
-    links: ReadonlyArray<Link>,
-  ): Promise<Version | null> {
-    const current = await currentOf(recordKey);
-    if (!current || current.deleted) return null;
-    const shown = await view(current).catch(() => null);
-    if (!shown || shown.root !== deps.rootDid) return null;
-    return JSON.stringify(shown.body) === JSON.stringify(body) &&
-      JSON.stringify(shown.links) === JSON.stringify(links)
-      ? current
-      : null;
   }
 
   /** The live current version of a record, or a clear error. */

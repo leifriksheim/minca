@@ -126,18 +126,6 @@ describe('records', () => {
     );
   });
 
-  test('an edit that changes nothing writes nothing, in a private space too', async () => {
-    const node = await startNode();
-    for (const visibility of ['public', 'private'] as const) {
-      const { id: space } = await node.spaces.create({ name: 'Todos', visibility });
-      const todo = await node.records.put<Todo>(space, 'app.todo.item', { text: 'milk', done: false });
-      const same = await node.records.update<Todo>(space, todo.key, { text: 'milk', done: false });
-      assert.equal(same.version, todo.version);
-      const done = await node.records.update<Todo>(space, todo.key, { text: 'milk', done: true });
-      assert.notEqual(done.version, todo.version);
-    }
-  });
-
   test('a known collection refuses a malformed body; an unknown one takes anything', async () => {
     const node = await startNode();
     const { id: space } = await node.spaces.create({ name: 'Todos', visibility: 'public' });
