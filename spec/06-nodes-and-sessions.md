@@ -108,6 +108,13 @@ registry, one per space, keyed `space:<id>` ([03](03-spaces.md)). Only
 A record whose space key changed is rewritten with an invite carrying the key
 in use now, so a new device joins with it.
 
+The list never names the account's own spaces: its registry, its contacts
+space and its carry spaces (§4.2), which a node opens directly. A node MUST NOT
+write a `sys.joined` record for one, and MUST NOT join or leave one because a
+record names it. A device that has not yet heard of a carrier cannot tell its
+carry space from any other, and may list it; every node holding the account
+key passes over that record from then on.
+
 A node holding the account key follows that list, and keeps what carriers
 depend on current: each live carrier's passes and `carry:closed` (§4.2), and
 the account's carriers named as keepers of the spaces it manages (§4.2). A
@@ -125,7 +132,7 @@ When a node joins, leaves and reconciles, which spaces it hides from its own
 list, and when it publishes the account's profile are the node's own; the
 reference node is in [the node](../packages/core/docs/node.md#following-the-account).
 
-_Source: `packages/core/src/node/node.ts` (`reconcileOnce`), `packages/core/src/node/node-carriers.ts` (`syncPasses`, `nameKeepers`), `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/records-only.test.ts` ("it never writes the account itself…", "in the account's own spaces, a version under a records-only note does not stand")._
+_Source: `packages/core/src/node/node.ts` (`reconcileOnce`), `packages/core/src/node/node-carriers.ts` (`syncPasses`, `nameKeepers`), `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/carrier.test.ts` ("the account's list never names its carry space…"), `packages/core/tests/records-only.test.ts` ("it never writes the account itself…", "in the account's own spaces, a version under a records-only note does not stand")._
 
 ## 2. The account home protocol
 

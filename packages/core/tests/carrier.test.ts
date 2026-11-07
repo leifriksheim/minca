@@ -311,6 +311,45 @@ describe('a carrier', () => {
     assert.deepEqual((await phone.records.list(notes.id))[0]?.body, { text: 'the secret plan' });
   });
 
+  test("the account's list never names its carry space, and a list that does is not followed", async () => {
+    const me = await account();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const home = await device(me, hub);
+    const added = await home.carriers.add({ did: (await carrierKey()).did, name: 'Chrome' });
+    const carrySpace = parseSpaceInvite(added.invite).space.id;
+    const registry = await home.account.space();
+    assert.ok(registry);
+    const listed = async (node: P2PNode) =>
+      (await node.records.list(registry, { collection: 'sys.joined' })).map((record) => record.key);
+
+    // Joined with its invite where the carrier is known, it stays off the list.
+    await home.spaces.join(added.invite);
+    assert.deepEqual(await listed(home), []);
+
+    // A device that hasn't heard of the carrier yet lists it, as older devices did.
+    const offline = memoryStores();
+    const old = await device(me, null, offline);
+    await old.spaces.join(added.invite);
+    assert.deepEqual(await listed(old), [`space:${carrySpace}`]);
+    await old.close();
+    await device(me, hub, offline);
+    await until(async () => (await listed(home)).length === 1, 5000, 'the listing to reach the home');
+
+    // A new device opens it as the carry space it is, and never joins it as one of the account's spaces.
+    const stores = memoryStores();
+    const phone = await device(me, hub, stores);
+    await until(async () => (await listed(phone)).length === 1, 5000, 'the list to reach the phone');
+    await until(
+      async () => (await phone.carriers.list()).length === 1,
+      5000,
+      'the phone to hear of the carrier',
+    );
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const registryStore = await stores('registry');
+    const held = (await registryStore.list('')).join(' ');
+    assert.equal(held.includes(carrySpace), false, 'joined the carry space from the list');
+  });
+
   test('a space made after it was added is carried, with nothing done in the home', async () => {
     const me = await account();
     const hub = createFakeHub({ latencyMs: 1 });

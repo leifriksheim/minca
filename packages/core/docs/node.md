@@ -457,7 +457,9 @@ At start, and whenever the account registry changes, the node reconciles,
 one run at a time:
 
 1. It joins every space a `sys.joined` record names that it doesn't hold,
-   with the view-only invite in the record.
+   with the view-only invite in the record. A record naming one of the
+   account's own spaces, which an older device may have written, is passed
+   over: those are opened directly.
 2. It leaves every space whose `sys.joined` record was deleted, all at once.
    The space leaves the list right away. If the account still holds a place
    there, giving it up runs in the background, as [leaving](#leaving-a-space)

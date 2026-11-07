@@ -428,7 +428,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     spaceId: string,
     options: { refresh?: boolean; unlessLeft?: boolean } = {},
   ): Promise<void> {
-    if (!accountSpaceId || narrowNote) return;
+    // The account's own spaces are opened directly, not followed from the list.
+    if (!accountSpaceId || narrowNote || (await kindOf(spaceId))) return;
     const open = await runtime(accountSpaceId);
     const recorded = () => open.get<Membership>(membershipKey(spaceId));
     const known = await recorded();
@@ -469,7 +470,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     for (const record of await registry.list()) {
       const spaceId = record.space.id;
       if (closed) return;
-      if (named.has(spaceId) || leaving.has(spaceId) || (await kindOf(spaceId))) continue;
+      if (named.has(spaceId) || leaving.has(spaceId)) continue;
       // One that won't record (gone meanwhile, say) leaves the rest to record.
       await remember(spaceId, { unlessLeft: true }).catch((error: unknown) => {
         if (!closed) console.error(`Could not record ${spaceId} in the account list:`, error);
@@ -530,6 +531,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     for (const membership of listed) {
       const spaceId = membership.key.slice('space:'.length);
       known.add(spaceId);
+      // One of the account's own spaces, listed by an older device: opened directly, never joined or left.
+      if (await kindOf(spaceId)) continue;
       if (!membership.deleted && !held.has(spaceId)) {
         try {
           await joinRegistry(membership.body!.invite);
