@@ -33,6 +33,12 @@ await node.records.update(space.id, todo.key, { text: 'Buy milk', done: true });
 It takes the whole new body, not a patch. Every edit is a new version, and it
 syncs to everyone in the space.
 
+An edit that changes nothing writes nothing. When your account wrote the
+record and the body and links are the same as now, `update` gives back the
+record as it is. Every version is kept and synced for good, so two devices
+saying the same thing over and over would otherwise fill the space. Node
+writes of its own, such as the account's profile in a space, go the same way.
+
 ## Deleting a record
 
 ```typescript

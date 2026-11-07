@@ -54,6 +54,30 @@ describe('profiles', () => {
     );
   });
 
+  test('a new device of the account leaves the profile it finds in a space as it is', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const alice = await somebody(hub, { name: 'Alice', accountKey: true, contactKey: true });
+    await alice.node.account.setAvatar({ bytes: new Uint8Array(3000).fill(7), mime: 'image/webp' });
+    const bob = await person(hub, 'Bob');
+    const { id: space } = await alice.node.spaces.create({ name: 'Chat', ...team, visibility: 'private' });
+    await bob.node.spaces.join(await alice.node.spaces.invite(space));
+    await hold(bob.node, space);
+    const picture = async (node: P2PNode) =>
+      (await node.spaces.profiles(space).catch(() => [])).find((p) => p.did === alice.node.did)?.avatar;
+    await until(async () => (await picture(bob.node)) !== undefined, 5000, 'Alice’s picture to reach Bob');
+    const key = await profileKey(alice.node.did);
+    const versions = async () => (await bob.node.records.get(space, key))?.version;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const before = await versions();
+
+    // Her phone, with only the recovery code, follows her list into the space.
+    const phone = await somebody(hub, { seed: alice.seed, accountKey: true });
+    await until(async () => (await picture(phone.node)) !== undefined, 8000, 'the space to reach the phone');
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    assert.equal(await versions(), before, 'the phone wrote her profile again');
+    assert.ok(await picture(bob.node));
+  });
+
   test('a rename reaches the spaces that are open', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const alice = await person(hub, 'Alice');

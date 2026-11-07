@@ -63,6 +63,9 @@ import { ensureDefined, errorText, inBackground, type NodeContext } from './node
 
 const DAY_MS = 24 * 3600 * 1000;
 
+/** How long a space opened here may take to catch up before the account's profile is written there anyway */
+const CATCH_UP_MS = 10_000;
+
 export function createNodeContacts(ctx: NodeContext) {
   const { config, provider, registry, mailbox, accountSpaceId, contactsSpaceId, contactKeys } = ctx;
 
@@ -99,18 +102,26 @@ export function createNodeContacts(ctx: NodeContext) {
     if (ctx.narrowNote || (await ctx.kindOf(spaceId))) return;
     const own = await ownProfile();
     if (!own) return;
+    // What the space says of this account comes with the rest of it: a device that hasn't caught
+    // up yet would write over a profile it can't see, and every device that opens it would again.
+    const shown = (await shownHere(open)) || ((await open.caughtUp(CATCH_UP_MS)) && (await shownHere(open)));
     const base = { name: own.name, ...(contactKeys ? { contactKey: contactKeys.publicKey } : {}) };
     const held = await heldAvatar(open);
     const copied = held?.source === own.avatar?.hash ? held : undefined;
     // The name goes out now with the picture the space has; a new picture follows once copied,
-    // which may wait on its bytes reaching this device.
-    const shown = own.avatar ? (copied ?? held) : undefined;
-    await open.publishProfile({ ...base, ...(shown ? { avatar: shown } : {}) });
+    // which may wait on its bytes reaching this device. A profile the space shows already keeps
+    // its picture meanwhile: written without it, the picture would go until the copy is made.
+    if (!own.avatar || held || !shown)
+      await open.publishProfile({ ...base, ...(own.avatar && held ? { avatar: copied ?? held } : {}) });
     if (own.avatar && !copied)
       inBackground(
         avatarIn(spaceId, open, own.avatar).then((avatar) => open.publishProfile({ ...base, avatar })),
       );
   }
+
+  /** Whether the space shows a profile of this account yet */
+  const shownHere = async (open: SpaceRuntime) =>
+    (await open.profiles()).some((profile) => profile.did === config.signer.did);
 
   /** The account's picture as this space shows it */
   async function heldAvatar(open: SpaceRuntime): Promise<AvatarRef | undefined> {

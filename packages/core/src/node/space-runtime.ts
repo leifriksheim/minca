@@ -387,6 +387,20 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     filesChanged,
     onArrived: deps.onArrived,
   });
+
+  /** Whether a peer connected now has nothing in flight with this node, within `waitMs` */
+  async function caughtUp(waitMs: number): Promise<boolean> {
+    const deadline = Date.now() + waitMs;
+    do {
+      const left = Math.max(0, deadline - Date.now());
+      const level = await Promise.all(
+        peers.connectedPeers().map((peer) => peers.syncedWith(peer, Math.min(2000, left))),
+      );
+      if (level.some(Boolean)) return true;
+      await new Promise((resolve) => setTimeout(resolve, Math.min(250, left)));
+    } while (Date.now() < deadline);
+    return false;
+  }
   // Whether to hold part of the space is settled before the first hello says what this node holds.
   await holding.refreshHolds().catch(() => {});
   peers.connect();
@@ -562,17 +576,10 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     async kept(waitMs: number, since?: number): Promise<'keepers' | 'peer' | null> {
       if ((await history.access()).history.current.keepers.length > 0)
         return (await holding.kept(waitMs, since)) ? 'keepers' : null;
-      const deadline = Date.now() + waitMs;
-      do {
-        const left = Math.max(0, deadline - Date.now());
-        const level = await Promise.all(
-          peers.connectedPeers().map((peer) => peers.syncedWith(peer, Math.min(2000, left))),
-        );
-        if (level.some(Boolean)) return 'peer';
-        await new Promise((resolve) => setTimeout(resolve, Math.min(250, left)));
-      } while (Date.now() < deadline);
-      return null;
+      return (await caughtUp(waitMs)) ? 'peer' : null;
     },
+
+    caughtUp,
 
     async versionsOf(keys: ReadonlyArray<string>) {
       return (await Promise.all(keys.map((key) => storage.history(key)))).flat();

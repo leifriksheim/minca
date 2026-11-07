@@ -5,6 +5,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
+import { until } from './helpers/until.js';
 import { createMemoryAdapter } from './helpers/memory-adapter.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { issueDelegation } from '../src/identity/ucan.js';
@@ -83,12 +84,16 @@ function createPair() {
 }
 
 /** Signs a note carrying a UCAN from `root` to the signing key. */
-async function delegatedNote(root: { did: string; privateKey: CryptoKey }, text: string) {
+async function delegatedNote(
+  root: { did: string; privateKey: CryptoKey },
+  text: string,
+  collection = COLLECTION,
+) {
   const session = await makeKey();
   const ucan = await issueDelegation({ issuer: root, audience: session.did, ...WRITE }, provider);
   const unsigned = createVersion({
     author: session.did,
-    collection: COLLECTION,
+    collection,
     body: { text },
     proof: ucan,
   });
@@ -124,6 +129,26 @@ describe('sync engine', () => {
     const notes = await b.storage.queryVersions(COLLECTION);
     assert.equal(notes.length, 3);
     assert.equal(await b.storage.fingerprint(), await a.storage.fingerprint());
+  });
+
+  test('reconciles who may do what first, then the smallest collections, whatever their names', async () => {
+    const reconciled: string[] = [];
+    const a = createPeer((_peerId, message) => {
+      if (message.type === 'reconcile' && !reconciled.includes(message.collection))
+        reconciled.push(message.collection);
+      void b.sync.handleMessage('a', message);
+    });
+    const b = createPeer((_peerId, message) => void a.sync.handleMessage('b', message));
+    const root = await makeKey();
+    const kept = { 'app.a-long-log': 6, 'app.b-profiles': 1, 'sys.role': 2, 'app.c-settings': 3 };
+    for (const [collection, count] of Object.entries(kept))
+      for (let i = 0; i < count; i++)
+        await a.storage.addVersion(await delegatedNote(root, `${i}`, collection));
+    a.sync.addPeer('b');
+    b.sync.addPeer('a');
+    b.sync.notifyPeers(['a']);
+    await until(async () => reconciled.length === 4, 3000, 'every collection to be reconciled');
+    assert.deepEqual(reconciled, ['sys.role', 'app.b-profiles', 'app.c-settings', 'app.a-long-log']);
   });
 
   test('drops a forged version instead of committing it', async () => {
