@@ -418,9 +418,13 @@ a node speaks, and how much it asks for at once, is its own choice:
 | Versions waiting      | 1,000                              | Versions held back for later wait in memory. Past 1,000 the oldest go                  |
 | Refusals remembered   | 10,000                             | A refused version isn't asked of that peer again. Past 10,000 the oldest are forgotten |
 
-The node asks first for the space's own records (`sys.*`), and for earlier
-versions a waiting version needs. Everything else waits its turn. An id
-already asked for is not asked again.
+The side that starts reconciling begins with the space's own records
+(`sys.*`, profiles among them), then the rest from the collection it holds
+fewest versions of to the most, so a long log goes last. Which side starts is
+down to the peers' ids. A new device that starts holds nothing yet, so past
+`sys.*` it goes in the order the peer named the collections. The node asks
+first for `sys.*` too, and for earlier versions a waiting version needs.
+Everything else waits its turn. An id already asked for is not asked again.
 
 A session with a peer that is running and has heard something in the last
 30 s isn't started again. It runs once more when it ends.

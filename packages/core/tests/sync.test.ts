@@ -5,6 +5,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
+import { until } from './helpers/until.js';
 import { createMemoryAdapter } from './helpers/memory-adapter.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { issueDelegation } from '../src/identity/ucan.js';
@@ -26,7 +27,7 @@ const COLLECTION = 'app.test.note';
 const WRITE = { command: '/record/write', subject: `space:${COLLECTION}` } as const;
 
 /** A storage provider plus the validating sync engine in front of it. */
-function createPeer(send: (peerId: string, message: SyncMessage) => void) {
+function createPeer(send: (peerId: string, message: SyncMessage) => void, self?: string) {
   const storage = createStorageProvider(createMemoryAdapter());
 
   const check = createVersionCheck({
@@ -37,6 +38,7 @@ function createPeer(send: (peerId: string, message: SyncMessage) => void) {
   const sync = createSyncEngine({
     storageProvider: storage,
     sendToPeer: send,
+    ...(self !== undefined ? { self } : {}),
     validate: async (version) => {
       const result = await check(version);
       return { valid: result.passed, reason: result.reason };
@@ -83,12 +85,16 @@ function createPair() {
 }
 
 /** Signs a note carrying a UCAN from `root` to the signing key. */
-async function delegatedNote(root: { did: string; privateKey: CryptoKey }, text: string) {
+async function delegatedNote(
+  root: { did: string; privateKey: CryptoKey },
+  text: string,
+  collection = COLLECTION,
+) {
   const session = await makeKey();
   const ucan = await issueDelegation({ issuer: root, audience: session.did, ...WRITE }, provider);
   const unsigned = createVersion({
     author: session.did,
-    collection: COLLECTION,
+    collection,
     body: { text },
     proof: ucan,
   });
@@ -124,6 +130,48 @@ describe('sync engine', () => {
     const notes = await b.storage.queryVersions(COLLECTION);
     assert.equal(notes.length, 3);
     assert.equal(await b.storage.fingerprint(), await a.storage.fingerprint());
+  });
+
+  /** The order a peer holding these collections and a new one reconcile them in, `starts` naming who starts */
+  async function reconcileOrder(starts: 'holder' | 'newcomer') {
+    const reconciled: string[] = [];
+    const note = (message: SyncMessage) => {
+      if (message.type === 'reconcile' && !reconciled.includes(message.collection))
+        reconciled.push(message.collection);
+    };
+    // Of two peers, the one whose id sorts first starts.
+    const [holderId, newId] = starts === 'holder' ? ['a', 'b'] : ['b', 'a'];
+    const holder = createPeer((_peerId, message) => {
+      note(message);
+      void newcomer.sync.handleMessage(holderId, message);
+    }, holderId);
+    const newcomer = createPeer((_peerId, message) => {
+      note(message);
+      void holder.sync.handleMessage(newId, message);
+    }, newId);
+    const root = await makeKey();
+    const kept = { 'app.a-long-log': 6, 'app.b-profiles': 1, 'sys.role': 2, 'app.c-settings': 3 };
+    for (const [collection, count] of Object.entries(kept))
+      for (let i = 0; i < count; i++)
+        await holder.storage.addVersion(await delegatedNote(root, `${i}`, collection));
+    holder.sync.addPeer(newId);
+    newcomer.sync.addPeer(holderId);
+    newcomer.sync.notifyPeers([holderId]);
+    await until(async () => reconciled.length === 4, 3000, 'every collection to be reconciled');
+    return reconciled;
+  }
+
+  test('a holder that starts reconciling takes who may do what first, then the smallest collections', async () => {
+    assert.deepEqual(await reconcileOrder('holder'), [
+      'sys.role',
+      'app.b-profiles',
+      'app.c-settings',
+      'app.a-long-log',
+    ]);
+  });
+
+  test('a new peer that starts takes who may do what first, though it knows no sizes', async () => {
+    assert.equal((await reconcileOrder('newcomer'))[0], 'sys.role');
   });
 
   test('drops a forged version instead of committing it', async () => {

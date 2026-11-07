@@ -399,7 +399,10 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
       if (!reply) await hello(peerId, true);
       return;
     }
-    for (const collection of differing) await begin(peerId, collection);
+    // Who may do what first, then the smallest: what a screen shows first is rarely a long log.
+    const sizes = await storage.sums();
+    const order = (c: string) => (c.startsWith('sys.') ? -1 : (sizes.get(c)?.count ?? 0));
+    for (const collection of differing.sort((a, b) => order(a) - order(b))) await begin(peerId, collection);
   };
 
   // ─── Reconciling, as initiator ─────────────────────────────────────
