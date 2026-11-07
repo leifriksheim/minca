@@ -647,7 +647,6 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         ...(params.creatorRoles?.length ? { assigned: { [me]: params.creatorRoles } } : {}),
         ...(params.succeeds !== undefined ? { succeeds: params.succeeds } : {}),
       });
-      people.made(record.space.id);
       await remember(record.space.id);
       emit({ type: 'spaces' });
       return summarize(record);

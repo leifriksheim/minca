@@ -420,11 +420,11 @@ a node speaks, and how much it asks for at once, is its own choice:
 
 The side that starts reconciling begins with the space's own records
 (`sys.*`, profiles among them), then the rest from the collection it holds
-fewest versions of to the most, so a long log goes last. A host, which
-usually starts, holds them all, so a new device gets the small collections
-first. The node asks first for `sys.*` too, and for earlier versions a waiting
-version needs. Everything else waits its turn. An id already asked for is not
-asked again.
+fewest versions of to the most, so a long log goes last. Which side starts is
+down to the peers' ids. A new device that starts holds nothing yet, so past
+`sys.*` it goes in the order the peer named the collections. The node asks
+first for `sys.*` too, and for earlier versions a waiting version needs.
+Everything else waits its turn. An id already asked for is not asked again.
 
 A session with a peer that is running and has heard something in the last
 30 s isn't started again. It runs once more when it ends.

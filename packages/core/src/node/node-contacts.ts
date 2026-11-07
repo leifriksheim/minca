@@ -63,9 +63,6 @@ import { ensureDefined, errorText, inBackground, type NodeContext } from './node
 
 const DAY_MS = 24 * 3600 * 1000;
 
-/** How long a space opened here may take to catch up before the account's profile is written there anyway */
-const CATCH_UP_MS = 10_000;
-
 export function createNodeContacts(ctx: NodeContext) {
   const { config, provider, registry, mailbox, accountSpaceId, contactsSpaceId, contactKeys } = ctx;
 
@@ -100,26 +97,6 @@ export function createNodeContacts(ctx: NodeContext) {
    */
   async function publishProfile(spaceId: string, open: SpaceRuntime): Promise<void> {
     if (ctx.narrowNote || (await ctx.kindOf(spaceId))) return;
-    if (madeHere.has(spaceId) || (await shownHere(open))) return publishNow(spaceId, open);
-    // What the space says of this account comes with the rest of it: a device that hasn't caught
-    // up there would write over a profile it can't see yet, as every new device did. So where the
-    // account may write, it catches up first, in the background, once per space at a time.
-    if (!(await open.can('create', PROFILE_COLLECTION))) return;
-    // Keyed by the runtime: one opened again after this one closed waits for itself.
-    if (catchingUp.has(open)) return;
-    catchingUp.add(open);
-    inBackground(
-      open
-        .caughtUp(CATCH_UP_MS)
-        .then(() => publishNow(spaceId, open))
-        .finally(() => catchingUp.delete(open)),
-    );
-  }
-  const catchingUp = new WeakSet<SpaceRuntime>();
-  /** Spaces made on this node since it started: it holds all there is of them, so nothing to catch up on */
-  const madeHere = new Set<string>();
-
-  async function publishNow(spaceId: string, open: SpaceRuntime): Promise<void> {
     const own = await ownProfile();
     if (!own) return;
     const base = { name: own.name, ...(contactKeys ? { contactKey: contactKeys.publicKey } : {}) };
@@ -134,10 +111,6 @@ export function createNodeContacts(ctx: NodeContext) {
         avatarIn(spaceId, open, own.avatar).then((avatar) => open.publishProfile({ ...base, avatar })),
       );
   }
-
-  /** Whether the space shows a profile of this account yet */
-  const shownHere = async (open: SpaceRuntime) =>
-    (await open.profiles()).some((profile) => profile.did === config.signer.did);
 
   /** The account's picture as this space shows it */
   async function heldAvatar(open: SpaceRuntime): Promise<AvatarRef | undefined> {
@@ -974,12 +947,5 @@ export function createNodeContacts(ctx: NodeContext) {
     },
   });
 
-  return Object.freeze({
-    account,
-    contacts,
-    inbox,
-    publishProfile,
-    publishProfileToOpenSpaces,
-    made: (spaceId: string) => void madeHere.add(spaceId),
-  });
+  return Object.freeze({ account, contacts, inbox, publishProfile, publishProfileToOpenSpaces });
 }

@@ -483,12 +483,6 @@ record, and `contactKey` is included only when the node holds it. It skips
 the account registry and the contacts space, an account with no name, and
 any note without `/account/write`, such as an agent's.
 
-A space that doesn't show the account's profile yet may just not have caught
-up on this device. Where the account may write, the node first waits, in the
-background, until it has caught up with a peer, up to 10 s; otherwise a new
-device would write over the profile every other device wrote. A space made on
-this node has nothing to catch up on, so its profile goes out at once.
-
 ### Joining
 
 `spaces.join(invite)` takes a bare invite, or any link with `#invite=…`,

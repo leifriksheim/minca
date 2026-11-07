@@ -27,7 +27,7 @@ const COLLECTION = 'app.test.note';
 const WRITE = { command: '/record/write', subject: `space:${COLLECTION}` } as const;
 
 /** A storage provider plus the validating sync engine in front of it. */
-function createPeer(send: (peerId: string, message: SyncMessage) => void) {
+function createPeer(send: (peerId: string, message: SyncMessage) => void, self?: string) {
   const storage = createStorageProvider(createMemoryAdapter());
 
   const check = createVersionCheck({
@@ -38,6 +38,7 @@ function createPeer(send: (peerId: string, message: SyncMessage) => void) {
   const sync = createSyncEngine({
     storageProvider: storage,
     sendToPeer: send,
+    ...(self !== undefined ? { self } : {}),
     validate: async (version) => {
       const result = await check(version);
       return { valid: result.passed, reason: result.reason };
@@ -131,24 +132,46 @@ describe('sync engine', () => {
     assert.equal(await b.storage.fingerprint(), await a.storage.fingerprint());
   });
 
-  test('reconciles who may do what first, then the smallest collections, whatever their names', async () => {
+  /** The order a peer holding these collections and a new one reconcile them in, `starts` naming who starts */
+  async function reconcileOrder(starts: 'holder' | 'newcomer') {
     const reconciled: string[] = [];
-    const a = createPeer((_peerId, message) => {
+    const note = (message: SyncMessage) => {
       if (message.type === 'reconcile' && !reconciled.includes(message.collection))
         reconciled.push(message.collection);
-      void b.sync.handleMessage('a', message);
-    });
-    const b = createPeer((_peerId, message) => void a.sync.handleMessage('b', message));
+    };
+    // Of two peers, the one whose id sorts first starts.
+    const [holderId, newId] = starts === 'holder' ? ['a', 'b'] : ['b', 'a'];
+    const holder = createPeer((_peerId, message) => {
+      note(message);
+      void newcomer.sync.handleMessage(holderId, message);
+    }, holderId);
+    const newcomer = createPeer((_peerId, message) => {
+      note(message);
+      void holder.sync.handleMessage(newId, message);
+    }, newId);
     const root = await makeKey();
     const kept = { 'app.a-long-log': 6, 'app.b-profiles': 1, 'sys.role': 2, 'app.c-settings': 3 };
     for (const [collection, count] of Object.entries(kept))
       for (let i = 0; i < count; i++)
-        await a.storage.addVersion(await delegatedNote(root, `${i}`, collection));
-    a.sync.addPeer('b');
-    b.sync.addPeer('a');
-    b.sync.notifyPeers(['a']);
+        await holder.storage.addVersion(await delegatedNote(root, `${i}`, collection));
+    holder.sync.addPeer(newId);
+    newcomer.sync.addPeer(holderId);
+    newcomer.sync.notifyPeers([holderId]);
     await until(async () => reconciled.length === 4, 3000, 'every collection to be reconciled');
-    assert.deepEqual(reconciled, ['sys.role', 'app.b-profiles', 'app.c-settings', 'app.a-long-log']);
+    return reconciled;
+  }
+
+  test('a holder that starts reconciling takes who may do what first, then the smallest collections', async () => {
+    assert.deepEqual(await reconcileOrder('holder'), [
+      'sys.role',
+      'app.b-profiles',
+      'app.c-settings',
+      'app.a-long-log',
+    ]);
+  });
+
+  test('a new peer that starts takes who may do what first, though it knows no sizes', async () => {
+    assert.equal((await reconcileOrder('newcomer'))[0], 'sys.role');
   });
 
   test('drops a forged version instead of committing it', async () => {
