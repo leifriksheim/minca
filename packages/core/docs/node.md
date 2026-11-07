@@ -457,9 +457,7 @@ At start, and whenever the account registry changes, the node reconciles,
 one run at a time:
 
 1. It joins every space a `sys.joined` record names that it doesn't hold,
-   with the view-only invite in the record. A record naming one of the
-   account's own spaces, which an older device may have written, is passed
-   over: those are opened directly.
+   with the view-only invite in the record.
 2. It leaves every space whose `sys.joined` record was deleted, all at once.
    The space leaves the list right away. If the account still holds a place
    there, giving it up runs in the background, as [leaving](#leaving-a-space)
@@ -475,6 +473,12 @@ one run at a time:
    hands it the spaces if it was paid ([hosting](#carriers-hosting-and-notifications)).
 
 Creating or joining a space writes its `sys.joined` record. Leaving deletes it.
+
+The account's own spaces (the table above) are never in the list: joining a
+carry space's invite writes no record, and a record that names one is passed
+over in every step, neither joined nor left. A device that hadn't heard of the
+carrier yet may have written one, and may have joined the space from the list;
+it opens the space directly once it hears.
 
 ### Profiles
 

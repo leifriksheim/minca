@@ -108,12 +108,12 @@ registry, one per space, keyed `space:<id>` ([03](03-spaces.md)). Only
 A record whose space key changed is rewritten with an invite carrying the key
 in use now, so a new device joins with it.
 
-The list never names the account's own spaces: its registry, its contacts
+The list is not for the account's own spaces: its registry, its contacts
 space and its carry spaces (§4.2), which a node opens directly. A node MUST NOT
-write a `sys.joined` record for one, and MUST NOT join or leave one because a
-record names it. A device that has not yet heard of a carrier cannot tell its
-carry space from any other, and may list it; every node holding the account
-key passes over that record from then on.
+write a `sys.joined` record for a space it knows to be one of them, and MUST
+NOT join or leave such a space because a record names it. A device that has
+not yet heard of a carrier cannot tell its carry space from any other: it may
+list it, or join it from the list, and opens it directly once it hears.
 
 A node holding the account key follows that list, and keeps what carriers
 depend on current: each live carrier's passes and `carry:closed` (§4.2), and
@@ -902,7 +902,7 @@ device waits for a refill already under way.
 | `readKey` | Present once the space's key has changed since it began: the read key's DID, which the space's history (not its constitution) vouches for. |
 
 Passes are written for the account registry, the contacts space, and every
-space in `sys.joined` that this device holds with its key (a private space held
+other space in `sys.joined` that this device holds with its key (a private space held
 without its key gets none until the key arrives). Passes for other spaces are
 deleted.
 

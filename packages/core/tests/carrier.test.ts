@@ -350,6 +350,35 @@ describe('a carrier', () => {
     assert.equal(held.includes(carrySpace), false, 'joined the carry space from the list');
   });
 
+  test('a listing of its carry space that is deleted is not followed as leaving it', async () => {
+    const me = await account();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const homeStores = memoryStores();
+    const home = await device(me, hub, homeStores);
+    const added = await home.carriers.add({ did: (await carrierKey()).did, name: 'Chrome' });
+    const carrySpace = parseSpaceInvite(added.invite).space.id;
+    await home.spaces.join(added.invite);
+    const registry = await home.account.space();
+    assert.ok(registry);
+
+    // A device that hasn't heard of the carrier lists the carry space, then leaves it.
+    const offline = memoryStores();
+    const old = await device(me, null, offline);
+    await old.spaces.join(added.invite);
+    await old.spaces.leave(carrySpace);
+    await old.close();
+    await device(me, hub, offline);
+    await until(
+      async () =>
+        (await home.records.list(registry, { collection: 'sys.joined', includeDeleted: true })).length === 1,
+      5000,
+      'the deleted listing to reach the home',
+    );
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const held = (await (await homeStores('registry')).list('')).join(' ');
+    assert.equal(held.includes(carrySpace), true, 'the home let its carry space go');
+  });
+
   test('a space made after it was added is carried, with nothing done in the home', async () => {
     const me = await account();
     const hub = createFakeHub({ latencyMs: 1 });
