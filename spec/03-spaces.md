@@ -1885,13 +1885,13 @@ account is ignored by readers), and nothing written under a note without
 
 ### 13.2 What the registry records
 
-| Collection       | Record key                               | Body                                       | Meaning                                                                                                                                             |
-| ---------------- | ---------------------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sys.joined`     | `space:<spaceId>`                        | `{ space: spaceId, invite }`               | The account belongs to the space. `invite` is a **view-only** invite (§7.5) — secrets are never kept. Deleted: the account left.                    |
-| `sys.carrier`    | `carrier:<hex40(carrySpaceId)>`          | `{ did, name, since, gen?, removed? }`     | A carrier the account uses, or used until `removed` (§14).                                                                                          |
-| `sys.automation` | `automation:<base32 of 10 random bytes>` | An automation, in the library's format     | One of the account's own automations, from which its wakes are made (§15).                                                                          |
-| `sys.hosting`    | —                                        | —                                          | Hosting; see [08](08-hosting.md).                                                                                                                   |
-| `sys.link`       | `link:<hex of the pin>`                  | `{ space, blob, invite?, keyId?, until? }` | A short link the account keeps (§7.7): its sealed invite, the space, the invite DID of a role link, the id of the key it carries. Never its secret. |
+| Collection       | Record key                               | Body                                       | Meaning                                                                                                                                                                                      |
+| ---------------- | ---------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sys.joined`     | `space:<spaceId>`                        | `{ space: spaceId, invite }`               | The account belongs to the space, never one of its own ([06](06-nodes-and-sessions.md) §1.3). `invite` is a **view-only** invite (§7.5) — secrets are never kept. Deleted: the account left. |
+| `sys.carrier`    | `carrier:<hex40(carrySpaceId)>`          | `{ did, name, since, gen?, removed? }`     | A carrier the account uses, or used until `removed` (§14).                                                                                                                                   |
+| `sys.automation` | `automation:<base32 of 10 random bytes>` | An automation, in the library's format     | One of the account's own automations, from which its wakes are made (§15).                                                                                                                   |
+| `sys.hosting`    | —                                        | —                                          | Hosting; see [08](08-hosting.md).                                                                                                                                                            |
+| `sys.link`       | `link:<hex of the pin>`                  | `{ space, blob, invite?, keyId?, until? }` | A short link the account keeps (§7.7): its sealed invite, the space, the invite DID of a role link, the id of the key it carries. Never its secret.                                          |
 
 A membership counts only if it verifies, its root is the account, and (unless
 deleted) its key is `space:<body.space>`.
