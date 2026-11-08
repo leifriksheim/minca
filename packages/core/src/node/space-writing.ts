@@ -9,7 +9,7 @@
  */
 import type { Link, Version } from '../types.js';
 import type { Signer } from '../schema/signer.js';
-import { accessRequirement, actsForAccount, noteGrants, writeRequirement } from '../identity/abilities.js';
+import { accessRequirement, actsForAccount, noteGrants } from '../identity/abilities.js';
 import { createVersion, isStub } from '../schema/version.js';
 import { MAX_SEEN, nextVersion } from '../records/version.js';
 import { keyKind, newRecordKey, onePerForm, ownedKey, ownsKey, RECORD_KEY_PATTERN } from '../records/key.js';
@@ -100,11 +100,6 @@ export const CANNOT_DEFINE =
 const CANNOT_CHANGE_ACCESS =
   "This key's note doesn't let it change who may do what in a space. Ask the person.";
 const NOT_ACCOUNT = "This key's note doesn't let it change the account itself. Ask the person.";
-/** Why a key's note doesn't reach a record: it may not delete, or not write in that collection */
-const outsideNote = (collection: string, deleted: boolean) =>
-  deleted
-    ? `This key's note doesn't let it delete ${collection} records here. Ask the person, or connect again with deleting allowed.`
-    : `This key's note doesn't let it write ${collection} records here: the person kept it to other collections. Ask them, or connect again with ${collection} allowed.`;
 export interface WritingDeps extends SpaceBase {
   readonly signer: Signer;
   readonly writers: Writers;
@@ -194,9 +189,6 @@ export function createWriting(deps: WritingDeps) {
     ) {
       throw new Error(collection === CATALOG_COLLECTION ? CANNOT_DEFINE : CANNOT_CHANGE_ACCESS);
     }
-    // Every peer would refuse it (the capability gate): a note kept to some collections, or that may not delete.
-    if (!noteGrants(writer.proof(), writeRequirement(space.id, collection, deleted)))
-      throw new Error(outsideNote(collection, deleted));
     // Every other copy would refuse it, so refuse it here rather than show a
     // change that exists on this device alone.
     if (!options.joining) {
@@ -497,9 +489,6 @@ export function createWriting(deps: WritingDeps) {
     action: 'create' | 'edit' | 'delete',
     first: Version | null,
   ): Promise<boolean> {
-    // What this key's own note allows comes first: every peer checks it, whatever the account's roles.
-    if (!noteGrants(session.proof(), writeRequirement(space.id, collection, action === 'delete')))
-      return false;
     const { history } = await access();
     const state = history.current;
     if (!isMember(state, deps.rootDid)) return false;

@@ -19,7 +19,7 @@ import { createLocalRootSigner } from '../../core/src/identity/root-signer.js';
 import { deriveAccountKey } from '../../core/src/identity/account-vault.js';
 import { generateSeed } from '../../core/src/identity/recovery-code.js';
 import { GRANT_VERSION } from '../../core/src/session/connect.js';
-import { noteTerms, type NoteLimits } from '../../core/src/identity/abilities.js';
+import { noteTerms } from '../../core/src/identity/abilities.js';
 import { base64UrlEncode } from '../../core/src/utils/encoding.js';
 import { memoryStores } from '../../core/tests/helpers/memory-stores.js';
 import { createFakeHub, type FakeHub } from '../../core/tests/helpers/fake-transport.js';
@@ -82,7 +82,7 @@ async function accountHolder(hub: FakeHub) {
     };
   };
   /** Every space, records only, as her home signs it when she gives a chat app every space: the account key follows them */
-  const everySpace = async (audience: string, limits: NoteLimits = {}): Promise<Grant> => {
+  const everySpace = async (audience: string): Promise<Grant> => {
     const expiration = Math.floor(Date.now() / 1000) + 3600;
     return {
       v: GRANT_VERSION,
@@ -91,7 +91,7 @@ async function accountHolder(hub: FakeHub) {
       note: await signer.delegate({
         audience,
         expiration,
-        ...noteTerms('/record', 'all', limits),
+        ...noteTerms('/record', 'all'),
       }),
       access: 'write',
       scope: 'account',
@@ -768,55 +768,6 @@ describe('a host’s MCP endpoint', () => {
         ),
       8000,
       'the note to reach Ada',
-    );
-  });
-
-  test('a note kept to some collections and from deleting: the app is told, isn’t offered delete, and is refused plainly', async () => {
-    const hub = createFakeHub({ latencyMs: 1 });
-    const ada = await accountHolder(hub);
-    const space = await ada.node.spaces.create({ name: 'Todos', visibility: 'private' });
-    await hold(ada.node, space.id);
-    await ada.node.spaces.setKeepers(space.id, [{ did: ada.node.sessionDid, name: 'Ada’s laptop' }]);
-    const host = await aHost(hub);
-    const app = await anApp(host.resource);
-    const { tokens } = await signIn(app, host.resource, (audience) =>
-      ada.everySpace(audience, { deletes: false, collections: ['app.todo.*'] }),
-    );
-    const client = await mcpClient(host.resource, tokens.access_token);
-    const instructions = client.getInstructions() ?? '';
-    assert.match(instructions, /only in these collections: app\.todo\.\*/);
-    assert.match(instructions, /may not delete records/);
-    assert.ok(!(await client.listTools()).tools.some((tool) => tool.name === 'records_delete'));
-    const deleting = await client.callTool({
-      name: 'records_delete',
-      arguments: { space: space.id, key: 'x' },
-    });
-    assert.equal(deleting.isError, true);
-    assert.match(textOf(deleting), /may not delete records/);
-
-    let outside = '';
-    await until(
-      async () => {
-        const result = await client.callTool({
-          name: 'records_put',
-          arguments: { space: space.id, collection: 'app.note', body: { text: 'no' } },
-        });
-        outside = textOf(result);
-        return result.isError === true && /doesn't let it write app\.note/.test(outside);
-      },
-      10_000,
-      'a plain refusal outside its collections',
-    );
-    await until(
-      async () =>
-        !(
-          await client.callTool({
-            name: 'records_put',
-            arguments: { space: space.id, collection: 'app.todo.item', body: { text: 'yes' } },
-          })
-        ).isError,
-      10_000,
-      'a write inside them',
     );
   });
 

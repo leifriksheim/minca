@@ -15,9 +15,8 @@ claude mcp add --transport http minca https://mcp.minca.social/mcp
 
 [minca.social/mcp](https://minca.social/mcp) has one-click links for Claude
 and Cursor. The app opens a page where you sign in at your account home and
-choose what it gets: every space, including ones you make later, or up to 8
-you pick, and, if you like, only some collections and no deleting. The access
-lasts 30 days. Then its tools arrive, and the chat app's own model does the
+choose what it gets: up to 8 spaces you pick, or every space, including ones
+you make later. The access lasts 30 days. Then its tools arrive, and the chat app's own model does the
 thinking.
 
 How the service works, and how to run your own, is under
@@ -61,33 +60,6 @@ What it writes counts as the person's. Each record carries
 `recordsOnly: true`, which apps may show. The example app says "via agent".
 
 The note's format is in [spec 01 §8](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md).
-
-## Keeping an agent to less
-
-At the account home the person can keep an agent's note to some collections,
-and from deleting. Every peer checks both, as it checks the rest of the note:
-
-```typescript
-import { grantTerms } from '@minca/core/session';
-
-// Every space, writing only to-dos, never deleting.
-grantTerms('records', 'all', { collections: ['app.todo.*'], deletes: false });
-```
-
-A collection is a name (`app.todo.item`) or every one under a prefix
-(`app.todo.*`). Kept to some collections, the agent may still write
-`std.activity` and `std.blueprint`, so it can say what it is doing and propose
-what it needs. `grantTerms` adds them.
-
-Two things to know before offering these:
-
-- A note limits writing, never reading. An agent kept to `app.todo.*` still
-  reads every collection in the spaces it got.
-- Keeping it from deleting doesn't keep what a record said: an edit replaces
-  it too, unless the collection keeps its history (`history: 'all'`).
-
-A program sees what its note allows with `noteSpaces`, `noteCollections` and
-`deletesRecords`, and `node.records.can` answers with the note in mind.
 
 ## The tools
 

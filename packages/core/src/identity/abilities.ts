@@ -18,8 +18,6 @@
  * So a key is a device or an app by what its note says: a note for `/` about
  * the whole account acts as the account; anything narrower acts in spaces.
  * A key the account trusts less gets `/record`, and proposes what it can't do.
- * A policy on `.collection` keeps a note to some collections, and one on
- * `.deleted` keeps it from deleting (`noteTerms`).
  */
 import { DEFINITION_COLLECTION } from '../space/roles.js';
 import { commandCovers, noteCovers, parseDelegation, type Delegation, type Requirement } from './ucan.js';
@@ -38,15 +36,11 @@ export const ACCOUNT_COMMAND = '/account/write';
 /** The prefix of a definition record's key, before the collection it defines (spec 02 §6.1) */
 const DEFINITION_KEY = 'collection:';
 
-/**
- * What writing a version in a space needs: `/record/write`, with the space,
- * the collection and whether it is a delete as arguments, all read from the
- * version alone.
- */
-export const writeRequirement = (space: string, collection: string, deleted = false): Requirement => ({
+/** What writing a version in a space needs: `/record/write`, with the space and the collection as arguments */
+export const writeRequirement = (space: string, collection: string): Requirement => ({
   space,
   cmd: WRITE_COMMAND,
-  args: { collection, deleted, space },
+  args: { collection, space },
 });
 
 /**
@@ -110,91 +104,18 @@ export interface NoteTerms {
 }
 
 /**
- * A collection a note may be kept to: a name (`app.todo.item`), or every
- * collection under a prefix (`app.todo.*`).
- */
-export const COLLECTION_PATTERN = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)*\.([a-z][a-z0-9-]*|\*)$/;
-
-/** What a records-only note may be kept to, besides spaces: some collections, and no deleting */
-export interface NoteLimits {
-  /** Collections it may write in, by name or `prefix.*`. Absent: every one. */
-  readonly collections?: ReadonlyArray<string>;
-  /** False: it may not delete. Default true. */
-  readonly deletes?: boolean;
-}
-
-/**
- * The statement that keeps a note to some collections: a use that names one
- * of them, or none at all. A use with no collection, like sharing a space to
- * view (03 §7.4), is let through: reading isn't kept to collections anyway.
- */
-const collectionsStatement = (patterns: ReadonlyArray<string>) => [
-  'or',
-  [
-    ['==', '.collection', null],
-    ...[...new Set(patterns)].sort().map((pattern) => ['like', '.collection', pattern]),
-  ],
-];
-
-/** The statement that keeps a note from deleting: every use but a delete, which alone says `deleted: true` */
-const NO_DELETES: ReadonlyArray<unknown> = Object.freeze(['!=', '.deleted', true]);
-
-/**
  * The terms of a note for these spaces. Every space is a note about the
  * account. One space is a note about it. Several are a note about the
  * account whose policy names them, by the `space` argument; none, one whose
- * policy nothing satisfies. `limits` add a statement that keeps it to some
- * collections, and one that keeps it from deleting.
- * @throws When `limits.collections` is empty, or one is not a name or a `prefix.*` pattern
+ * policy nothing satisfies.
  */
-export function noteTerms(
-  command: string,
-  spaceIds: ReadonlyArray<string> | 'all',
-  limits: NoteLimits = {},
-): NoteTerms {
-  const { collections } = limits;
-  if (collections?.length === 0) throw new Error('Name at least one collection, or leave them all');
-  const bad = collections?.find((pattern) => !COLLECTION_PATTERN.test(pattern));
-  if (bad !== undefined) throw new Error(`"${bad}" is not a collection, nor one like app.todo.*`);
-  const kept: Policy = [
-    ...(collections ? [collectionsStatement(collections)] : []),
-    ...(limits.deletes === false ? [NO_DELETES] : []),
-  ];
-  const terms = (subject: string | undefined, spaces: Policy): NoteTerms => {
-    const policy = [...spaces, ...kept];
-    return { command, ...(subject ? { subject } : {}), ...(policy.length ? { policy } : {}) };
-  };
-  if (spaceIds === 'all') return terms(undefined, []);
+export function noteTerms(command: string, spaceIds: ReadonlyArray<string> | 'all'): NoteTerms {
+  if (spaceIds === 'all') return { command };
   const ids = [...new Set(spaceIds)].sort();
-  if (ids.length === 1) return terms(`space:${ids[0]!}`, []);
+  if (ids.length === 1) return { command, subject: `space:${ids[0]!}` };
   if (ids.length === 0) return { command, policy: [['not', ['and', []]]] };
-  return terms(undefined, [['or', ids.map((id) => ['==', '.space', id])]]);
+  return { command, policy: [['or', ids.map((id) => ['==', '.space', id])]] };
 }
-
-/** The patterns one statement keeps a note to, when it is one `noteTerms` writes for collections; else null */
-function collectionsNamed(statement: ReadonlyArray<unknown>): string[] | null {
-  const [op, options] = statement;
-  if (op !== 'or' || !Array.isArray(options)) return null;
-  const listed: ReadonlyArray<unknown> = options;
-  const [none, ...rest] = listed;
-  if (JSON.stringify(none) !== '["==",".collection",null]' || rest.length === 0) return null;
-  const named: string[] = [];
-  for (const option of rest) {
-    if (
-      !Array.isArray(option) ||
-      option[0] !== 'like' ||
-      option[1] !== '.collection' ||
-      typeof option[2] !== 'string'
-    )
-      return null;
-    named.push(option[2]);
-  }
-  return named;
-}
-
-/** Whether a statement is the one `noteTerms` writes to keep a note from deleting */
-const isNoDeletes = (statement: ReadonlyArray<unknown>) =>
-  JSON.stringify(statement) === JSON.stringify(NO_DELETES);
 
 /** The spaces one statement limits a note to, when it is `==` on `.space` or an `or` of those; else null */
 function spacesNamed(statement: ReadonlyArray<unknown>): string[] | null {
@@ -229,8 +150,6 @@ export function noteSpaces(note: Delegation): ReadonlyArray<string> | 'all' {
   for (const statement of pol) {
     // The policy nothing satisfies, as noteTerms writes it.
     if (statement[0] === 'not' && JSON.stringify(statement[1]) === '["and",[]]') return [];
-    // Keeping it to some collections, or from deleting, limits no space.
-    if (collectionsNamed(statement) || isNoDeletes(statement)) continue;
     const named = spacesNamed(statement);
     if (!named) return [];
     limits.push(named);
@@ -238,33 +157,4 @@ export function noteSpaces(note: Delegation): ReadonlyArray<string> | 'all' {
   const [first, ...rest] = limits;
   if (!first) return 'all';
   return [...new Set(first.filter((id) => rest.every((list) => list.includes(id))))];
-}
-
-/**
- * The collections a note reaches, for what a program shows: every
- * collection, or the patterns (`app.todo.*`) it is kept to. Reads only what
- * `noteTerms` writes; with more than one such statement, the patterns they
- * share. Peers judge each use against the note itself.
- */
-export function noteCollections(note: Delegation): ReadonlyArray<string> | 'all' {
-  let kept: string[] | null = null;
-  for (const statement of note.payload.pol) {
-    const named = collectionsNamed(statement);
-    if (named) kept = kept ? kept.filter((pattern) => named.includes(pattern)) : named;
-  }
-  return kept ?? 'all';
-}
-
-/**
- * Whether a note lets its key delete records, for what a program shows: it
- * writes records, and has no statement keeping it from deleting. False for
- * anything unreadable.
- */
-export function deletesRecords(note: unknown): boolean {
-  const parsed = parseDelegation(note);
-  return (
-    parsed !== null &&
-    commandCovers(parsed.payload.cmd, WRITE_COMMAND) &&
-    !parsed.payload.pol.some(isNoDeletes)
-  );
 }

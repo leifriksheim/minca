@@ -651,12 +651,12 @@ program and a borrowed device are told apart only by what their notes grant.
 A note for `/` about the whole account acts as the account itself: that key
 is one of its devices. Any narrower note is an app's, whatever holds it.
 
-| A version in space `S`…                                                         | requires (in `S`)                            | with arguments                                                                               |
-| ------------------------------------------------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| any record                                                                      | `/record/write`                              | `{ "space": S, "collection": <its collection>, "deleted": <true for a delete, else false> }` |
-| and in `sys.collection`                                                         | `/collection/define`                         | `{ "space": S, "collection": C }`, `C` the collection defined: its key after `collection:`   |
-| and in any other collection of the access history ([03 — Spaces](03-spaces.md)) | `/access/change`                             | `{ "space": S, "collection": <its collection> }`                                             |
-| and about the account itself (below)                                            | `/account/write`, for the account as a whole | `{}`                                                                                         |
+| A version in space `S`…                                                         | requires (in `S`)                            | with arguments                                                                             |
+| ------------------------------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| any record                                                                      | `/record/write`                              | `{ "space": S, "collection": <its collection> }`                                           |
+| and in `sys.collection`                                                         | `/collection/define`                         | `{ "space": S, "collection": C }`, `C` the collection defined: its key after `collection:` |
+| and in any other collection of the access history ([03 — Spaces](03-spaces.md)) | `/access/change`                             | `{ "space": S, "collection": <its collection> }`                                           |
+| and about the account itself (below)                                            | `/account/write`, for the account as a whole | `{}`                                                                                       |
 
 A version is **about the account itself** when it is in one of the
 account's own spaces (its registry, its contacts space, its carry spaces;
@@ -676,10 +676,8 @@ account grants it, and a policy that limits it to some spaces does not hold
 there.
 
 `space` is the space's id, without `space:`. `S` is the space the version is
-judged in, never one it claims. `deleted` is whether the version is a delete
-([02](02-records.md) §4.4), read from the version itself. The arguments are
-exactly these: a policy that reads anything else finds `null` (a missing
-member) or nothing.
+judged in, never one it claims. The arguments are exactly these: a policy
+that reads anything else finds `null` (a missing member) or nothing.
 
 - A version with no `proof` was signed by its author key itself, which may
   do anything (§6).
@@ -700,19 +698,8 @@ anything more for someone who may to apply
 A note for one space is about that space (`sub: "space:<id>"`); a note for
 several is about the account, with a policy naming them:
 `[["or", [["==", ".space", "<id>"], …]]]`. Policies on `.collection` narrow
-a note to some collections, and one on `.deleted` keeps it from deleting;
-reading stays a matter of keys ([03 — Spaces](03-spaces.md)), which a note
-doesn't narrow. A home writes them as two statements
-([06](06-nodes-and-sessions.md) §2.5):
-
-- **some collections:** `["or", [["==", ".collection", null], ["like", ".collection", "<pattern>"], …]]`,
-  each pattern a collection's name or a prefix and `.*` (`app.todo.*`), sorted;
-- **no deleting:** `["!=", ".deleted", true]`.
-
-Both let a use with no such argument through: sharing a space to view needs
-`/record/read` with only `space` (03 §7.4), and reading is not kept to
-collections. Every record version carries both arguments, so neither lets a
-version through that it names otherwise. An action about
+a note to some collections; reading stays a matter of keys
+([03 — Spaces](03-spaces.md)), which a note doesn't narrow. An action about
 the account as a whole (a knock, the account's own spaces) carries no
 `space` argument, so `.space` reads as null there: a policy that only
 excludes spaces (`["not", ["==", ".space", "<id>"]]`) holds for it. To keep
@@ -750,7 +737,7 @@ what the proof grants.
 > keep everything notes granted before.
 
 _Source:_ `packages/core/src/identity/abilities.ts` (`writeRequirement`, `accessRequirement`, `ACCOUNT_REQUIREMENT`, `actsForAccount`, `noteGrants`, `noteTerms`), `packages/core/src/node/space-history.ts` (`aboutItself`, `buildEvent`), `packages/core/src/node/space-standing.ts` (`judgeStanding`), `packages/core/src/node/space-writing.ts` (`write`), `packages/core/src/inbox/inbox.ts` (`openKnock`), `packages/core/src/session/connect.ts` (`grantTerms`).
-_Tests:_ `packages/core/tests/records-only.test.ts` ("what counts is what the note grants", "a note's policy is checked by every peer", "a definition signed by hand under a records-only note is ignored by every peer", "taking someone out of the space, under a records-only note, is ignored too", "an app given a space never changes the account's own place there: every peer ignores it", "the same change under a note about the whole account counts: that key is one of the account’s devices", "in the account's own spaces, a version under a records-only note does not stand", "a note kept from deleting: every peer refuses its delete, and takes the same delete without that statement", "a note kept to some collections, as a home writes it, reaches only those, and patterns cover what is under them"), `packages/core/tests/connect.test.ts` ("it lists them and opens requests sent to the account, and sees no other space"), `packages/core/tests/inbox.test.ts` ("needs a note that grants /account/write: …"), `packages/core/tests/contacts.test.ts` ("a knock left in a space stands only from a note that may write for the whole account…").
+_Tests:_ `packages/core/tests/records-only.test.ts` ("what counts is what the note grants", "a note's policy is checked by every peer", "a definition signed by hand under a records-only note is ignored by every peer", "taking someone out of the space, under a records-only note, is ignored too", "an app given a space never changes the account's own place there: every peer ignores it", "the same change under a note about the whole account counts: that key is one of the account’s devices", "in the account's own spaces, a version under a records-only note does not stand"), `packages/core/tests/connect.test.ts` ("it lists them and opens requests sent to the account, and sees no other space"), `packages/core/tests/inbox.test.ts` ("needs a note that grants /account/write: …"), `packages/core/tests/contacts.test.ts` ("a knock left in a space stands only from a note that may write for the whole account…").
 
 ---
 

@@ -52,7 +52,6 @@ export {
   watchGrant,
   grantStore,
   grantTerms,
-  AGENT_COLLECTIONS,
   GRANT_VERSION,
   appKey,
   forgetAppKey,
@@ -70,7 +69,6 @@ export type {
   IncomingRequest,
   AppKey,
   KeyTerms,
-  RecordLimits,
 } from './connect.js';
 export {
   browserPlace,

@@ -314,9 +314,8 @@ Connecting is the sign-in the app already has. The app finds the service's
 authorization server from the endpoint's `401`, registers itself, and opens
 the consent page, which says which app it is and where it will send you
 back. There you continue to your account home, as with any app, and choose
-what it gets: every space, including ones you make later, or up to 8 you
-pick; and, if you like, only some collections, and no deleting. Then allow
-it: the home signs a records-only note, for 30 days, made out to a key the
+what it gets: up to 8 spaces you pick, or every space, including ones you
+make later. Then allow it: the home signs a records-only note, for 30 days, made out to a key the
 page made. Every space means the service gets your account key while the app
 uses it, which reads every space and which disconnecting can't take back. The
 page hands both to the service, which checks them and keeps them sealed

@@ -1,9 +1,8 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { ConfirmItsYou } from './ConfirmItsYou';
 import { SignIn } from './SignIn';
-import { COLLECTION_PATTERN, type NewSpace, type P2PNode, type SpaceSummary } from '@minca/core';
+import type { NewSpace, P2PNode, SpaceSummary } from '@minca/core';
 import {
-  AGENT_COLLECTIONS,
   isProposeRequest,
   receiveConnectCode,
   receiveConnectRequest,
@@ -296,44 +295,30 @@ function Approve({
   const asksWhole = request.scope === 'account';
   // A key given records only needs nothing only the account key opens, so the person may keep it to some spaces.
   const narrowable = asksWhole && recordsOnly && writes;
+  // On the person's own computer every space is the usual answer; a service someone else runs gets less unless they say.
   const [reach, setReach] = useState<'every' | 'some'>(() =>
-    narrowable && previous?.scope === 'spaces' ? 'some' : 'every',
+    previous ? (previous.scope === 'spaces' ? 'some' : 'every') : byCode ? 'every' : 'some',
   );
   const whole = asksWhole && (!narrowable || reach === 'every');
   const choosing = (!asksWhole && request.chooseSpaces !== false) || (narrowable && reach === 'some');
-
-  // What a key given records only may write: every collection or some, and whether it deletes.
-  const limiting = recordsOnly && writes;
-  const [kept, setKept] = useState<'all' | 'some'>(() => (previous?.limits?.collections ? 'some' : 'all'));
-  const [collections, setCollections] = useState<ReadonlySet<string>>(
-    () => new Set(previous?.limits?.collections ?? []),
-  );
-  const [deletes, setDeletes] = useState(() => previous?.limits?.deletes !== false);
   // Spaces the app can use as asked: to change one, the account must be able to.
   const offered = spaces.filter((space) => !writes || space.writable);
   const privateChosen = offered.some((space) => chosen.has(space.id) && space.visibility === 'private');
   const creating = request.create ?? [];
   // A whole-account app gets the contacts anyway; the box below is for one that asks for them alone.
   const contacts = request.contacts === true && !recordsOnly && !whole;
-  const nothing =
-    (!whole && !contacts && chosen.size === 0 && creating.length === 0) ||
-    (limiting && kept === 'some' && collections.size === 0);
+  const nothing = !whole && !contacts && chosen.size === 0 && creating.length === 0;
 
   // A program keeps its note only once the person gives it the check code: this page then waits for that.
   const [sent, setSent] = useState(false);
   const [handing, setHanding] = useState(false);
   const grant = () =>
     run(async () => {
-      const limits = {
-        ...(kept === 'some' ? { collections: [...collections] } : {}),
-        ...(deletes ? {} : { deletes: false }),
-      };
       const answer = await auth.grant({
         origin,
         request,
         spaceIds: [...chosen],
         ...(narrowable ? { everySpace: reach === 'every' } : {}),
-        ...(limiting && Object.keys(limits).length > 0 ? { limits } : {}),
       });
       // Only an app that reads the contacts reads the inbox: the whole account, or the contacts alone.
       const contacts = answer.scope === 'account' || answer.contactsSpace !== undefined;
@@ -394,13 +379,12 @@ function Approve({
             <>
               <Point shape="pass" title="What it can do">
                 Read {whole ? 'every space, including ones you make later' : 'the spaces you pick'}, write
-                records in them as you{deletes ? '' : ', never deleting one,'} and propose new collections and
-                apps there. Everything it writes shows as yours, and apps can tell it came from a key that may
-                only write records.
+                records in them as you, and propose new collections and apps there. Everything it writes shows
+                as yours, and apps can tell it came from a key that may only write records.
               </Point>
               <Point shape="shield" title="What always needs you">
-                Adding an app or a collection, changing roles, inviting or removing people, joining or leaving
-                spaces. Every device ignores a key like this that tries. It can't sign in as you.
+                Adding an app or a collection, changing roles, giving anyone a role or removing them, joining
+                or leaving spaces. Every device ignores a key like this that tries. It can't sign in as you.
               </Point>
             </>
           )}
@@ -435,7 +419,8 @@ function Approve({
               value: 'every',
               shape: 'grid',
               title: 'Every space',
-              detail: 'Including ones you make or join later. It can read all of them.',
+              detail:
+                'Including ones you make or join later, your contact list and your apps’ settings. It can read all of them, and disconnecting it doesn’t take that back.',
             },
             {
               value: 'some',
@@ -465,19 +450,6 @@ function Approve({
             ))}
           </ul>
         </fieldset>
-      )}
-
-      {limiting && (
-        <Limits
-          spaceIds={whole ? 'all' : [...chosen]}
-          kept={kept}
-          onKeep={setKept}
-          collections={collections}
-          onCollections={setCollections}
-          deletes={deletes}
-          onDeletes={setDeletes}
-          busy={busy}
-        />
       )}
 
       {creating.length > 0 && (
@@ -740,149 +712,6 @@ function ApproveProposal({ incoming, request }: { incoming: IncomingRequest; req
 }
 
 /** A line to tick, with a note on the right */
-/**
- * What a key given records only may change: every collection, or some, and
- * whether it deletes. Every peer checks both against its note. Reading stays
- * the whole space: a note doesn't narrow that.
- */
-function Limits({
-  spaceIds,
-  kept,
-  onKeep,
-  collections,
-  onCollections,
-  deletes,
-  onDeletes,
-  busy,
-}: {
-  spaceIds: ReadonlyArray<string> | 'all';
-  kept: 'all' | 'some';
-  onKeep: (kept: 'all' | 'some') => void;
-  collections: ReadonlySet<string>;
-  onCollections: (next: ReadonlySet<string>) => void;
-  deletes: boolean;
-  onDeletes: (deletes: boolean) => void;
-  busy: boolean;
-}) {
-  const known = useCollections(spaceIds);
-  const [typed, setTyped] = useState('');
-  const [problem, setProblem] = useState<string | null>(null);
-  // What it may write anyway, so it can say what it is doing and ask for more: not a choice.
-  const always = new Set(AGENT_COLLECTIONS);
-  const listed = [...new Set([...known.filter((name) => !always.has(name)), ...collections])].sort();
-
-  const add = () => {
-    const pattern = typed.trim().toLowerCase();
-    if (!pattern) return;
-    if (!COLLECTION_PATTERN.test(pattern)) {
-      setProblem(
-        `“${pattern}” isn’t a collection. Use a name like app.todo.item, or app.todo.* for all under it.`,
-      );
-      return;
-    }
-    setProblem(null);
-    setTyped('');
-    onCollections(new Set([...collections, pattern]));
-  };
-
-  return (
-    <>
-      <Choices
-        label="What it may change"
-        picked={kept}
-        onPick={onKeep}
-        disabled={busy}
-        options={[
-          {
-            value: 'all',
-            shape: 'stack',
-            title: 'Any collection',
-            detail: 'Whatever your roles let you write.',
-          },
-          {
-            value: 'some',
-            shape: 'dots',
-            title: 'Only some collections',
-            detail: 'It still reads everything in the spaces it gets.',
-          },
-        ]}
-      />
-      {kept === 'some' && (
-        <fieldset>
-          <legend>Collections it may write in</legend>
-          {listed.length === 0 && <small>No collections in these spaces yet. Type one below.</small>}
-          <ul role="list">
-            {listed.map((name) => (
-              <Tick
-                key={name}
-                on={collections.has(name)}
-                onToggle={() => onCollections(toggled(collections, name))}
-                note={name.endsWith('.*') ? 'and all under it' : ''}
-              >
-                {name}
-              </Tick>
-            ))}
-          </ul>
-          <div className="row">
-            <input
-              aria-label="Add a collection, or a pattern like app.todo.*"
-              placeholder="app.todo.*"
-              value={typed}
-              spellCheck={false}
-              autoCapitalize="off"
-              onChange={(event) => setTyped(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key !== 'Enter') return;
-                event.preventDefault();
-                add();
-              }}
-              disabled={busy}
-            />
-            <button type="button" onClick={add} disabled={busy || !typed.trim()}>
-              Add
-            </button>
-          </div>
-          {problem && <small data-tone="danger">{problem}</small>}
-          <small>It may always say what it’s doing, and propose new collections for you to add.</small>
-        </fieldset>
-      )}
-      <label className="row">
-        <input type="checkbox" checked={deletes} onChange={() => onDeletes(!deletes)} disabled={busy} />
-        <span>It may delete records</span>
-      </label>
-      {!deletes && (
-        <small>
-          It can still edit records, and an edit replaces what a record said unless its collection keeps
-          history.
-        </small>
-      )}
-    </>
-  );
-}
-
-/** How many spaces the collections to pick from are looked for in */
-const MAX_LOOKED = 24;
-
-/** The collections in these spaces, by name, for picking from; none of the protocol's own */
-function useCollections(spaceIds: ReadonlyArray<string> | 'all'): ReadonlyArray<string> {
-  const key = spaceIds === 'all' ? 'all' : [...spaceIds].sort().join(',');
-  const names = useWatched(
-    async (node) => {
-      const ids = spaceIds === 'all' ? (await node.spaces.list()).map((space) => space.id) : spaceIds;
-      const found = new Set<string>();
-      // A long list of spaces costs a moment each: the first ones are enough to pick from.
-      for (const id of ids.slice(0, MAX_LOOKED)) {
-        for (const collection of await node.collections.list(id).catch(() => []))
-          if (!collection.name.startsWith('sys.')) found.add(collection.name);
-      }
-      return [...found];
-    },
-    [key],
-    { when: (event) => event.type === 'spaces' || event.type === 'records' },
-  );
-  return names ?? [];
-}
-
 function Tick({
   on,
   onToggle,

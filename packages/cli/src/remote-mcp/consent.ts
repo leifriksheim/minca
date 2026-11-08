@@ -308,10 +308,10 @@ function consentHtml(params: {
 <ul aria-label="What ${app} can and can’t do">
 ${yes('Reads the spaces you choose: every one, or only some')}
 ${yes('Writes records there as you, marked “via agent”')}
-${no('Can’t add collections, change roles or invite people. It proposes them for someone who may')}
+${no('Can’t add collections, change roles, or add or remove members. It proposes them for someone who may')}
 ${no('Never sees your password or passkeys')}
 </ul>
-<p class="next">Next, your account home opens in a new window. There you choose which spaces it gets, and what it may change.</p>
+<p class="next">Next, your account home opens in a new window. There you choose which spaces it gets: the ones you pick, or every one.</p>
 <form id="connect" novalidate>
 <div class="home" id="home-shown"><span>Account home: <strong id="home-name">${homeHost}</strong></span><button type="button" class="link" id="change-home">Change</button></div>
 <div id="home-field" hidden><label for="home">Your account home</label><input id="home" name="home" autocomplete="url" inputmode="url" spellcheck="false" autocapitalize="off" value="${home}"></div>

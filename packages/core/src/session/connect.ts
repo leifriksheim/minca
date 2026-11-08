@@ -18,7 +18,6 @@ import {
   noteTerms,
   READ_COMMAND,
   RECORDS_COMMAND,
-  type NoteLimits,
   type NoteTerms,
 } from '../identity/abilities.js';
 import type { RootSigner } from '../identity/root-signer.js';
@@ -249,37 +248,17 @@ export function homeAddress(input: string): string {
 }
 
 /**
- * What a person may keep a records-only note to, at their home: some
- * collections, and whether it deletes. Absent: every collection, deleting too.
- */
-export type RecordLimits = NoteLimits;
-
-/**
- * Collections a key kept to some collections may write anyway: saying what it
- * is doing (`std.activity`), and proposing collections for someone who may add
- * them (`std.blueprint`). Without them an agent can neither show its work nor
- * ask for more.
- */
-export const AGENT_COLLECTIONS: ReadonlyArray<string> = Object.freeze(['std.activity', 'std.blueprint']);
-
-/**
  * The terms of the note a grant carries, for these spaces. Writing is every
  * command; `records` is records only, for a key the account trusts less: it
  * can't define collections, change who may do what, or write for the
- * account (`identity/abilities.ts`). Records only may be kept further by
- * `limits`: to some collections, which always adds {@link AGENT_COLLECTIONS},
- * and from deleting.
+ * account (`identity/abilities.ts`).
  */
 export function grantTerms(
   access: 'read' | 'write' | 'records',
   spaceIds: ReadonlyArray<string> | 'all',
-  limits: RecordLimits = {},
 ): NoteTerms {
-  if (access !== 'records') return noteTerms(access === 'write' ? ALL_COMMAND : READ_COMMAND, spaceIds);
-  return noteTerms(RECORDS_COMMAND, spaceIds, {
-    ...(limits.collections ? { collections: [...limits.collections, ...AGENT_COLLECTIONS] } : {}),
-    ...(limits.deletes === false ? { deletes: false } : {}),
-  });
+  const command = access === 'write' ? ALL_COMMAND : access === 'records' ? RECORDS_COMMAND : READ_COMMAND;
+  return noteTerms(command, spaceIds);
 }
 
 // ─── The app's side ──────────────────────────────────────────────────

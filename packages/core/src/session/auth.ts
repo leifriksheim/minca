@@ -80,11 +80,9 @@ import {
   type GrantedSpace,
   type ProposeRequest,
   type Proposed,
-  type RecordLimits,
   checkKeyProof,
   requestTerms,
 } from './connect.js';
-import { COLLECTION_PATTERN } from '../identity/abilities.js';
 import { fromProposal, proposalSpaces, sameAutomation } from '../space/own-automations.js';
 import type { Automation, AutomationApp, AutomationSpaces } from '../schemas/automations.js';
 import type { PeerTransport } from '../network/transport.js';
@@ -258,8 +256,6 @@ export interface Connection {
   readonly via?: 'code';
   /** Present, and true, when its note grants records only */
   readonly recordsOnly?: true;
-  /** For records only, what the person kept it to: some collections, or no deleting */
-  readonly limits?: RecordLimits;
   /**
    * Keys that wrote, which this connection replaced, left unrevoked: revoking
    * from what this home has seen would withdraw what they wrote that it
@@ -321,16 +317,7 @@ const CONNECTION_FIELDS = new Set([
   'expiresAt',
   'via',
   'recordsOnly',
-  'limits',
 ]);
-
-/** Whether kept limits have this shape, and nothing else */
-const isLimits = (value: unknown): value is RecordLimits =>
-  isObject(value) &&
-  Object.keys(value).every((field) => field === 'collections' || field === 'deletes') &&
-  (value.collections === undefined ||
-    (Array.isArray(value.collections) && value.collections.every((one) => typeof one === 'string'))) &&
-  (value.deletes === undefined || typeof value.deletes === 'boolean');
 
 /** Whether a kept connection has this shape, and nothing else */
 function isConnection(value: unknown): value is Connection {
@@ -351,38 +338,8 @@ function isConnection(value: unknown): value is Connection {
     typeof expiresAt === 'number' &&
     (via === undefined || via === 'code') &&
     (value.recordsOnly === undefined || value.recordsOnly === true) &&
-    (value.limits === undefined || isLimits(value.limits)) &&
     (value.retired === undefined || (Array.isArray(value.retired) && value.retired.every(isRetired)))
   );
-}
-
-/** The most collections a person may keep one note to: each is a statement in it, carried by every record */
-const MAX_LIMITED_COLLECTIONS = 32;
-
-/**
- * Limits as a note is made from them: collections sorted and once each,
- * nothing at all when they keep nothing.
- * @throws When a collection isn't a name or `prefix.*`, or there are none, or too many
- */
-function tidyLimits(limits: RecordLimits | undefined): RecordLimits | undefined {
-  if (!limits) return undefined;
-  const collections = limits.collections
-    ? [...new Set(limits.collections.map((one) => one.trim()))].sort()
-    : undefined;
-  if (collections?.length === 0)
-    throw new Error('Pick at least one collection, or let it write in all of them.');
-  if (collections && collections.length > MAX_LIMITED_COLLECTIONS)
-    throw new Error(
-      `Keep it to at most ${MAX_LIMITED_COLLECTIONS} collections, or use a pattern like app.todo.*`,
-    );
-  const bad = collections?.find((one) => !COLLECTION_PATTERN.test(one));
-  if (bad !== undefined)
-    throw new Error(
-      `"${bad}" isn't a collection. Use a name like app.todo.item, or app.todo.* for all under it.`,
-    );
-  const deletes = limits.deletes === false ? false : undefined;
-  if (!collections && deletes === undefined) return undefined;
-  return { ...(collections ? { collections } : {}), ...(deletes === false ? { deletes } : {}) };
 }
 
 /** What the person chose on the approval screen */
@@ -398,8 +355,6 @@ export interface GrantChoice {
    * `spaceIds` instead, with no account key. Default true.
    */
   readonly everySpace?: boolean;
-  /** For a records-only request: the collections it may write in, and whether it deletes. Default: no limits. */
-  readonly limits?: RecordLimits;
 }
 
 /** What the person chose on the screen for a later proposal */
@@ -1961,9 +1916,6 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       const whole = request.scope === 'account' && choice.everySpace !== false;
       if (whole === false && request.scope === 'account' && choice.spaceIds.length === 0)
         throw new Error('Pick at least one space, or give it every space.');
-      if (choice.limits && !recordsOnly)
-        throw new Error('Only a key given records only can be kept to some collections.');
-      const limits = recordsOnly ? tidyLimits(choice.limits) : undefined;
       // Like any sign-in elsewhere: the person proves it is them before an app gets anything,
       // not only a home that stayed signed in on a computer anyone may walk up to.
       if (!mayGrant()) throw new Error('Confirm it is you first.');
@@ -1998,7 +1950,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       const { signer } = await rootFromSeed(seed);
       const note = await signer.delegate({
         audience: request.audience,
-        ...grantTerms(recordsOnly && access === 'write' ? 'records' : access, whole ? 'all' : ids, limits),
+        ...grantTerms(recordsOnly && access === 'write' ? 'records' : access, whole ? 'all' : ids),
         expiration: expiresAt,
       });
 
@@ -2013,7 +1965,6 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
         expiresAt,
         ...(byCode ? { via: 'code' as const } : {}),
         ...(recordsOnly ? { recordsOnly: true as const } : {}),
-        ...(limits ? { limits } : {}),
       };
       // Connecting again replaces the old note. A program connected by code is kept by its key: connecting one replaces only that one.
       // A carrier at the same origin is not the app, and stays (§2.10).

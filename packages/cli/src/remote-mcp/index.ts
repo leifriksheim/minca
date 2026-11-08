@@ -13,7 +13,7 @@
  *
  * Each token opens an agent of the person's account: a key, with a
  * records-only note their account home signed for the spaces they picked, or
- * for every space (`sessions.ts`), maybe kept to some collections. It writes as them, "via agent", and can't add collections
+ * for every space (`sessions.ts`). It writes as them, "via agent", and can't add collections
  * or change who is in a space. The tools are `NODE_ACTIONS`, less what needs
  * a person (`mcpTools` in `mcp.ts`). The service keeps the key sealed under one only the
  * token carries, and a copy of the spaces only while their node runs
@@ -36,9 +36,7 @@ import {
 import { toNodeHandler } from '@modelcontextprotocol/node';
 import {
   callAction,
-  deletesRecords,
   NODE_ACTIONS,
-  noteCollections,
   type NodeConfig,
   type StorageAdapter,
   type StoreFactory,
@@ -68,16 +66,8 @@ const AGENT = { agent: true } as const;
  */
 const NOT_HOSTED = new Set(['spaces_preview_invite']);
 
-/** Deleting a record, which a note that may not delete never offers */
-const DELETE_TOOL = 'records_delete';
-
-/** The tools a connection is offered: none its note would refuse every time */
-const hostedTools = (granted: Granted | null) =>
-  mcpTools(AGENT).filter(
-    (tool) =>
-      !NOT_HOSTED.has(tool.name) &&
-      !(tool.name === DELETE_TOOL && granted && !deletesRecords(granted.grant.note)),
-  );
+/** The tools a connection is offered */
+const hostedTools = () => mcpTools(AGENT).filter((tool) => !NOT_HOSTED.has(tool.name));
 
 /** What a model is told of what its connection reaches, so it doesn't try what every peer would refuse */
 function reachLine(granted: Granted): string {
@@ -86,11 +76,7 @@ function reachLine(granted: Granted): string {
     grant.scope === 'account'
       ? 'Every space of the account, including ones made later.'
       : `Only these spaces: ${grant.spaces.map((space) => `${space.name} (${space.id})`).join(', ') || 'none'}.`;
-  const kept = noteCollections(grant.note);
-  const collections =
-    kept === 'all' ? '' : ` It may write only in these collections: ${kept.join(', ')}; propose others.`;
-  const deletes = deletesRecords(grant.note) ? '' : ' It may not delete records.';
-  return ` This connection reaches: ${spaces}${collections}${deletes}`;
+  return ` This connection reaches: ${spaces}`;
 }
 
 /** Why a call names a space this connection can't use, or null */
@@ -247,7 +233,7 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
         },
       );
       server.setRequestHandler('tools/list', () => ({
-        tools: hostedTools(granted).map((tool) => ({
+        tools: hostedTools().map((tool) => ({
           ...tool,
           inputSchema: { ...objectOf(tool.inputSchema), type: 'object' },
         })),
@@ -255,12 +241,8 @@ export async function createRemoteMcp(options: RemoteMcpOptions): Promise<Remote
       server.setRequestHandler('tools/call', async (request) => {
         const name = request.params.name;
         const failed = (text: string) => ({ content: [{ type: 'text' as const, text }], isError: true });
-        if (!hostedTools(granted).some((tool) => tool.name === name))
-          return failed(
-            name === DELETE_TOOL
-              ? 'This connection may not delete records: the person didn’t allow it. Ask them to delete it, or to connect again with deleting allowed.'
-              : `There is no tool ${name} here. tools/list has the ones this connection offers.`,
-          );
+        if (!hostedTools().some((tool) => tool.name === name))
+          return failed(`There is no tool ${name} here. tools/list has the ones this connection offers.`);
         if (!session || !granted)
           return failed('This chat app isn’t signed in to Minca. Connect it again from the app’s settings.');
         const args = request.params.arguments ?? {};

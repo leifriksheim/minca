@@ -1055,13 +1055,16 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     its calls name in memory, reads them and writes records there "via
     agent", as the app's model asks. The person gives it some spaces, or every
     space: then its grant carries the account key, which opens every private
-    space the account is in or joins later, and keeps opening them after a
-    disconnect, since it is derived from the seed and no revoke takes it back.
-    A compromise of the running service while that connection is in use
-    therefore reads, for good, every space of that account whose ciphertext
-    it can get, where some spaces lose only those; the home says so when the
-    person chooses (06 §2.5). Kept to some collections or from deleting, it
-    writes nothing else, by its note, which every peer checks (01 §8); and whoever holds its sealing key and a
+    space the account is in or joins later, the account registry (its list of
+    spaces, its apps' settings and automations) and the contacts space, and
+    keeps opening them after a disconnect, since it is derived from the seed
+    and no revoke takes it back. A compromise of the running service while
+    that connection is in use therefore reads, for good, all of that whose
+    ciphertext it can get, where some spaces lose only those; the home says so
+    on the choice, and picks some spaces unless the person says otherwise
+    (06 §2.5). Either way its records-only note covers `/record/read`, so
+    whoever holds the key and note can share a space it has to view
+    (03 §7.4), though the service offers no tool that does; and whoever holds its sealing key and a
     token can do the same until the note runs out or the person disconnects
     it. A write is done once the space's keepers have it (05 §9), or, in a
     space that names none, once a member's device online then does, which the

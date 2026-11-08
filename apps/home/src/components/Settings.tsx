@@ -661,14 +661,9 @@ function appDetail(app: Connection): ReadonlyArray<string> {
     day: 'numeric',
     month: 'long',
   });
-  // What the person kept it to, when they did: some collections, or no deleting.
-  const kept = [
-    app.limits?.collections ? `writes only ${app.limits.collections.join(', ')}` : null,
-    app.limits?.deletes === false ? 'never deletes' : null,
-  ].filter((part) => part !== null);
   return [
     app.via === 'code' ? `By code, via ${host}${app.recordsOnly ? ', records only' : ''}` : host,
-    `${app.access === 'write' ? 'Reads and changes' : 'Reads'} ${what}${kept.length ? `; ${kept.join(', ')}` : ''}`,
+    `${app.access === 'write' ? 'Reads and changes' : 'Reads'} ${what}`,
     expired
       ? app.access === 'write'
         ? 'Stopped syncing; can still change things until disconnected'

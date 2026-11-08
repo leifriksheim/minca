@@ -343,14 +343,6 @@ When the person approves, the home:
    - `scope: spaces`, none → `sub` = the account's DID, `pol` =
      `[["not", ["and", []]]]`, which nothing satisfies.
 
-   For `recordsOnly: true` the person MAY keep the note further, and the home
-   then appends to `pol`, in this order, the statements of
-   [01](01-identity.md) §8: to some collections (at least one, each a name or
-   `prefix.*`), and from deleting. The reference home adds `std.activity` and
-   `std.blueprint` to any collections picked, so the key can still say what it
-   is doing and propose collections
-   ([agents](../packages/core/docs/agents.md)).
-
    The note carries no `meta`.
 
 6. Remembers the connection (§2.10).
@@ -413,7 +405,7 @@ Example (shortened):
 > the space's key. Invites are view-only because what lets the app write is the
 > note, under the account's own role — never a secret of the space's.
 
-_Source: `packages/core/src/session/auth.ts` (`grant`, `audienceProblem`), `packages/core/src/session/connect.ts` (`ConnectRequest`, `Grant`, `GRANT_VERSION`, `grantTerms`, `isRequest`, `keyProof`, `checkKeyProof`). Tests: `packages/core/tests/connect.test.ts` ("connecting an app to an account home", "an app can only ask for a key it holds, and none the home already uses for something else", "a request with a field it does not know is refused…"), `packages/core/tests/records-only.test.ts` ("the person may keep a records-only key asked for every space to some spaces, some collections, and from deleting")._
+_Source: `packages/core/src/session/auth.ts` (`grant`, `audienceProblem`), `packages/core/src/session/connect.ts` (`ConnectRequest`, `Grant`, `GRANT_VERSION`, `grantTerms`, `isRequest`, `keyProof`, `checkKeyProof`). Tests: `packages/core/tests/connect.test.ts` ("connecting an app to an account home", "an app can only ask for a key it holds, and none the home already uses for something else", "a request with a field it does not know is refused…"), `packages/core/tests/records-only.test.ts` ("the person may keep a records-only key that asked for every space to some spaces")._
 
 ### 2.6 What the app checks
 
@@ -468,12 +460,17 @@ its password or passkeys. Its note stops working for live checks at
 `expiresAt`, and its records stop counting once the account disconnects it
 (§2.9, §2.10).
 
-> **Planned: reading narrower than a space.** Reading a private space is
+> **Planned: grants narrower than a space.** Reading a private space is
 > holding its key, so an app granted a private space reads all of it until
-> the space's key changes ([03](03-spaces.md), `changeKey`). A home can keep a
-> records-only key to writing in some collections (§2.5), which every peer
-> checks ([01](01-identity.md) §8), but reading per collection would need
-> collection keys the home can hand out alone. Not designed yet.
+> the space's key changes ([03](03-spaces.md), `changeKey`). A note can
+> already limit writing to some collections, with a policy on `.collection`
+> that every peer checks ([01](01-identity.md) §8), but a home doesn't offer
+> one yet: a key that writes as the account may write a first version at any
+> key the account owns, in a collection its note allows, and a record's
+> current version is chosen by key alone ([02](02-records.md) §4.3), so it
+> could replace the account's record in any other collection. Reading per
+> collection would need collection keys the home can hand out alone. Not
+> designed yet.
 
 ### 2.9 Expiry and renewal
 
