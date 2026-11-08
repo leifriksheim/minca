@@ -883,7 +883,7 @@ describe('an account home typed by a person', () => {
 
   test('something that is not an address says so', () => {
     assert.throws(() => homeAddress(''), /address/);
-    assert.throws(() => homeAddress('not a url at all'), /not a web address/);
+    assert.throws(() => homeAddress('not a url at all'), /isn’t a web address/);
   });
 
   test("the grant carries the home's relays", async () => {

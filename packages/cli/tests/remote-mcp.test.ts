@@ -81,7 +81,27 @@ async function accountHolder(hub: FakeHub) {
       home: 'https://home.test/connect',
     };
   };
-  /** The whole account, key and all, as an app given everything gets */
+  /** Every space, records only, as her home signs it when she gives a chat app every space: the account key follows them */
+  const everySpace = async (audience: string): Promise<Grant> => {
+    const expiration = Math.floor(Date.now() / 1000) + 3600;
+    return {
+      v: GRANT_VERSION,
+      did: me.did,
+      name: 'Ada',
+      note: await signer.delegate({
+        audience,
+        expiration,
+        ...noteTerms('/record', 'all'),
+      }),
+      access: 'write',
+      scope: 'account',
+      spaces: [],
+      accountKey: base64UrlEncode(accountKey),
+      expiresAt: expiration,
+      home: 'https://home.test/connect',
+    };
+  };
+  /** A note naming her spaces, labelled as the whole account and carrying its key: the label is the home's word */
   const wholeAccount = async (audience: string): Promise<Grant> => ({
     ...(await grantFor(audience)),
     scope: 'account',
@@ -97,7 +117,7 @@ async function accountHolder(hub: FakeHub) {
       expiration: Math.floor(Date.now() / 1000) + 3600,
     }),
   });
-  return { node, did: me.did, grantFor, wholeAccount, wholeNoteLabelledSpaces };
+  return { node, did: me.did, grantFor, everySpace, wholeAccount, wholeNoteLabelledSpaces };
 }
 
 /** The key the consent page makes in the browser, as it hands it over */
@@ -712,7 +732,64 @@ describe('a host’s MCP endpoint', () => {
     assert.ok(expiresAt <= Date.now() / 1000 + 3600, 'gone when the one-hour note runs out');
   });
 
-  test('a sign-in is answered once, and never for the whole account', async () => {
+  test('given every space, a chat app finds and writes in one made after it connected', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    const host = await aHost(hub);
+    const app = await anApp(host.resource);
+    const { tokens } = await signIn(app, host.resource, (audience) => ada.everySpace(audience));
+    const client = await mcpClient(host.resource, tokens.access_token);
+    assert.match(client.getInstructions() ?? '', /Every space of the account, including ones made later/);
+
+    // Made after the chat app connected: nobody connects it again.
+    const later = await ada.node.spaces.create({ name: 'Made later', visibility: 'private' });
+    await hold(ada.node, later.id);
+    await ada.node.spaces.setKeepers(later.id, [{ did: ada.node.sessionDid, name: 'Ada’s laptop' }]);
+    await until(
+      async () => textOf(await client.callTool({ name: 'spaces_list', arguments: {} })).includes(later.id),
+      10_000,
+      'the agent to find the space made later',
+    );
+    await until(
+      async () =>
+        !(
+          await client.callTool({
+            name: 'records_put',
+            arguments: { space: later.id, collection: 'app.note', body: { text: 'Found it' } },
+          })
+        ).isError,
+      10_000,
+      'the agent to write there',
+    );
+    await until(
+      async () =>
+        (await ada.node.records.list(later.id, { collection: 'app.note' })).some(
+          (record) => field(record.body)('text') === 'Found it',
+        ),
+      8000,
+      'the note to reach Ada',
+    );
+  });
+
+  test('a space the connection wasn’t given is refused at once, naming the ones it can use', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    await ada.node.spaces.create({ name: 'Given', visibility: 'private' });
+    const host = await aHost(hub);
+    const app = await anApp(host.resource);
+    const { tokens } = await signIn(app, host.resource, (audience) => ada.grantFor(audience));
+    const client = await mcpClient(host.resource, tokens.access_token);
+    const started = Date.now();
+    const result = await client.callTool({
+      name: 'records_query',
+      arguments: { space: 'not-given', collection: 'app.note' },
+    });
+    assert.equal(result.isError, true);
+    assert.match(textOf(result), /wasn’t given the space not-given\. It can use: Given/);
+    assert.ok(Date.now() - started < 5000, 'without waiting to catch up with a space it can’t have');
+  });
+
+  test('a sign-in is answered once, and a grant must be what its note is', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const ada = await accountHolder(hub);
     const host = await aHost(hub);
@@ -723,7 +800,7 @@ describe('a host’s MCP endpoint', () => {
       key: wholeKey.jwk,
       grant: await ada.wholeAccount(wholeKey.did),
     });
-    assert.equal(everything.status, 400, 'nor the whole account, whose key opens every space');
+    assert.equal(everything.status, 400, 'not the account key with a note that names some spaces');
     const labelled = await startSignIn(app, host.resource);
     const labelledKey = await browserKey();
     const relabelled = await postFromPage(labelled, 'allow', {
@@ -731,6 +808,25 @@ describe('a host’s MCP endpoint', () => {
       grant: await ada.wholeNoteLabelledSpaces(labelledKey.did),
     });
     assert.equal(relabelled.status, 400, 'nor a whole-account note called something else');
+    for (const [what, grant] of [
+      [
+        'a note for every space without the account key',
+        async (did: string) => ({ ...(await ada.everySpace(did)), accountKey: undefined }),
+      ],
+      ['the contact key', async (did: string) => ({ ...(await ada.everySpace(did)), contactKey: 'AAAA' })],
+    ] as const) {
+      const started = await startSignIn(app, host.resource);
+      const key = await browserKey();
+      const answer = await postFromPage(started, 'allow', { key: key.jwk, grant: await grant(key.did) });
+      assert.equal(answer.status, 400, `not ${what}`);
+    }
+    const every = await startSignIn(app, host.resource);
+    const everyKey = await browserKey();
+    const given = await postFromPage(every, 'allow', {
+      key: everyKey.jwk,
+      grant: await ada.everySpace(everyKey.did),
+    });
+    assert.equal(given.status, 200, 'every space, with the account key and a note for every space, is taken');
 
     const started = await startSignIn(app, host.resource);
     const first = await browserKey();

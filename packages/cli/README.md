@@ -313,9 +313,12 @@ MINCA_MCP_URL=https://mcp.example.com npx @minca/cli mcp-server --port 8788 --ho
 Connecting is the sign-in the app already has. The app finds the service's
 authorization server from the endpoint's `401`, registers itself, and opens
 the consent page, which says which app it is and where it will send you
-back. There you continue to your account home, as with any app, pick the
-spaces it may use (up to 8, never the whole account) and allow it: the home
-signs a records-only note, for 30 days, made out to a key the page made. The
+back. There you continue to your account home, as with any app, and choose
+what it gets: up to 8 spaces you pick, or every space, including ones you
+make later. Then allow it: the home signs a records-only note, for 30 days, made out to a key the
+page made. Every space means the service holds your account key, sealed, for
+as long as the access lasts: it reads every space, your contacts and your
+apps' settings, and disconnecting can't take that back. The
 page hands both to the service, which checks them and keeps them sealed
 under a key only the app's access token carries, itself sealed under a key
 only the service holds. Then you are back in the app,
@@ -326,7 +329,8 @@ neither its disk nor a token opens alone (the token stays small however many
 spaces you pick), and each call opens them and starts a node from them. So
 its data folder holds what opens every connection with its token: lose it and
 every chat app connects again. That
-node holds your spaces in memory while the app uses it (at most 32 MB), and
+node holds the spaces the app's calls name in memory while the app uses it
+(at most 32 MB), and
 reaches them as any device would: through the always-on nodes your invites
 and spaces name, such as your free host, so it works with every device of
 yours offline; and through the relays they meet at (and

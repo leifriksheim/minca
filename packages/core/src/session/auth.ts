@@ -350,6 +350,11 @@ export interface GrantChoice {
   readonly spaceIds: ReadonlyArray<string>;
   /** How long the note lasts, overriding what the request asked for. Default: the request's `days`, or 7. */
   readonly days?: number;
+  /**
+   * For a records-only request for the whole account: false to give only
+   * `spaceIds` instead, with no account key. Default true.
+   */
+  readonly everySpace?: boolean;
 }
 
 /** What the person chose on the screen for a later proposal */
@@ -1902,7 +1907,15 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
         throw new Error('A key given records only works in spaces that exist — none are made for it.');
       if (recordsOnly && request.contacts)
         throw new Error('A key given records only is not given your contacts.');
-      const whole = request.scope === 'account';
+      // A records-only key asked for the whole account may be kept to some spaces: it needs nothing only the
+      // account key opens. Anything else asked for the whole account gets it, or nothing.
+      if (choice.everySpace === false && !(recordsOnly && request.scope === 'account'))
+        throw new Error(
+          'Only a key given records only can be kept to some spaces when it asked for every one.',
+        );
+      const whole = request.scope === 'account' && choice.everySpace !== false;
+      if (whole === false && request.scope === 'account' && choice.spaceIds.length === 0)
+        throw new Error('Pick at least one space, or give it every space.');
       // Like any sign-in elsewhere: the person proves it is them before an app gets anything,
       // not only a home that stayed signed in on a computer anyone may walk up to.
       if (!mayGrant()) throw new Error('Confirm it is you first.');

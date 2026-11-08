@@ -211,5 +211,5 @@ test('a space the always-on nodes don’t carry fails its own calls only', async
     body: { text: 'Unseen' },
   });
   assert.match(elsewhere, /"isError":true/);
-  assert.match(elsewhere, /can’t be reached/);
+  assert.match(elsewhere, /Nobody who keeps this space is online right now/);
 });

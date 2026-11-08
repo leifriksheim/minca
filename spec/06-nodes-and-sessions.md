@@ -316,7 +316,12 @@ When the person approves, the home:
 1. Makes the spaces in `create`, in the account (so they land in its list on
    every device).
 2. With `contacts` and `scope: spaces`, adds the contacts space to the spaces
-   granted. (With `scope: account` the app derives it itself.)
+   granted. (With `scope: account` the app derives it itself.) With
+   `recordsOnly: true` and `scope: account`, the person MAY keep the key to
+   spaces they pick instead: the grant is then `scope: spaces` for those
+   spaces, as if asked so, and carries no account key. A records-only key
+   needs nothing only the account key opens (§2.8). The app reads what it got
+   from the grant's `scope`.
 3. For each granted space — the ones the person picked, the ones made, and the
    contacts space — makes a **view-only invite** (for a private space it
    carries the key; it never carries a role secret) and, for a private space
@@ -400,7 +405,7 @@ Example (shortened):
 > the space's key. Invites are view-only because what lets the app write is the
 > note, under the account's own role — never a secret of the space's.
 
-_Source: `packages/core/src/session/auth.ts` (`grant`, `audienceProblem`), `packages/core/src/session/connect.ts` (`ConnectRequest`, `Grant`, `GRANT_VERSION`, `grantTerms`, `isRequest`, `keyProof`, `checkKeyProof`). Tests: `packages/core/tests/connect.test.ts` ("connecting an app to an account home", "an app can only ask for a key it holds, and none the home already uses for something else", "a request with a field it does not know is refused…")._
+_Source: `packages/core/src/session/auth.ts` (`grant`, `audienceProblem`), `packages/core/src/session/connect.ts` (`ConnectRequest`, `Grant`, `GRANT_VERSION`, `grantTerms`, `isRequest`, `keyProof`, `checkKeyProof`). Tests: `packages/core/tests/connect.test.ts` ("connecting an app to an account home", "an app can only ask for a key it holds, and none the home already uses for something else", "a request with a field it does not know is refused…"), `packages/core/tests/records-only.test.ts` ("the person may keep a records-only key that asked for every space to some spaces")._
 
 ### 2.6 What the app checks
 
@@ -460,8 +465,12 @@ its password or passkeys. Its note stops working for live checks at
 > the space's key changes ([03](03-spaces.md), `changeKey`). A note can
 > already limit writing to some collections, with a policy on `.collection`
 > that every peer checks ([01](01-identity.md) §8), but a home doesn't offer
-> one yet; reading per collection would need collection keys the home can
-> hand out alone. Not designed yet.
+> one yet: a key that writes as the account may write a first version at any
+> key the account owns, in a collection its note allows, and a record's
+> current version is chosen by key alone ([02](02-records.md) §4.3), so it
+> could replace the account's record in any other collection. Reading per
+> collection would need collection keys the home can hand out alone. Not
+> designed yet. See [#348](https://github.com/leifriksheim/minca/issues/348).
 
 ### 2.9 Expiry and renewal
 
@@ -740,7 +749,8 @@ Home                                                  Program
   ask, and MUST ignore `code:done` from any other peer. It sends `code:heard` at once, and MUST show the person the
   name the program gives, as a name only, and the check.
 - **What it gets** is a note that grants records only, in the whole account
-  (§2.8), for as long as the home decides. The home makes the
+  (§2.8), or in the spaces the person keeps it to (§2.5), for as long as the
+  home decides. The home makes the
   `ConnectRequest` (§2.4) itself, with `audience` = the ask's `did`, `proof`
   = its `proof`, `via: "code"`, `recordsOnly: true`, `access: "write"` and
   `scope: "account"`, and grants it as §2.5 says, checking the proof against

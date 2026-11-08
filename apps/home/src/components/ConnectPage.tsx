@@ -291,9 +291,16 @@ function Approve({
   );
   const { run, busy, error } = useAction();
 
-  const whole = request.scope === 'account';
-  const choosing = !whole && request.chooseSpaces !== false;
   const writes = request.access === 'write';
+  const asksWhole = request.scope === 'account';
+  // A key given records only needs nothing only the account key opens, so the person may keep it to some spaces.
+  const narrowable = asksWhole && recordsOnly && writes;
+  // Every space, as asked, unless the person kept the last connection to some.
+  const [reach, setReach] = useState<'every' | 'some'>(() =>
+    previous?.scope === 'spaces' ? 'some' : 'every',
+  );
+  const whole = asksWhole && (!narrowable || reach === 'every');
+  const choosing = (!asksWhole && request.chooseSpaces !== false) || (narrowable && reach === 'some');
   // Spaces the app can use as asked: to change one, the account must be able to.
   const offered = spaces.filter((space) => !writes || space.writable);
   const privateChosen = offered.some((space) => chosen.has(space.id) && space.visibility === 'private');
@@ -307,7 +314,12 @@ function Approve({
   const [handing, setHanding] = useState(false);
   const grant = () =>
     run(async () => {
-      const answer = await auth.grant({ origin, request, spaceIds: [...chosen] });
+      const answer = await auth.grant({
+        origin,
+        request,
+        spaceIds: [...chosen],
+        ...(narrowable ? { everySpace: reach === 'every' } : {}),
+      });
       // Only an app that reads the contacts reads the inbox: the whole account, or the contacts alone.
       const contacts = answer.scope === 'account' || answer.contactsSpace !== undefined;
       const handed = made
@@ -371,8 +383,8 @@ function Approve({
                 as yours, and apps can tell it came from a key that may only write records.
               </Point>
               <Point shape="shield" title="What always needs you">
-                Adding an app or a collection, changing roles, inviting or removing people, joining or leaving
-                spaces. Every device ignores a key like this that tries. It can't sign in as you.
+                Adding an app or a collection, changing roles, giving anyone a role or removing them, joining
+                or leaving spaces. Every device ignores a key like this that tries. It can't sign in as you.
               </Point>
             </>
           )}
@@ -394,6 +406,30 @@ function Approve({
             </Point>
           )}
         </ul>
+      )}
+
+      {narrowable && (
+        <Choices
+          label="Which spaces it may use"
+          picked={reach}
+          onPick={setReach}
+          disabled={busy}
+          options={[
+            {
+              value: 'every',
+              shape: 'grid',
+              title: 'Every space',
+              detail:
+                'Including ones you make or join later, your contact list and your apps’ settings. It can read all of them, and disconnecting it doesn’t take that back.',
+            },
+            {
+              value: 'some',
+              shape: 'checker',
+              title: 'Only the spaces I pick',
+              detail: 'It can’t see the rest. To add one later, connect it again.',
+            },
+          ]}
+        />
       )}
 
       {choosing && (

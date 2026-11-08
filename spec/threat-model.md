@@ -944,19 +944,20 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     what this computer holds, and its writer keys, outside the home"). It
     can hide versions from a client that hasn't read
     them yet, which only a peer can then bring.
-  - A program connected by code gets records only, in the whole account,
-    never more: the home makes its request itself and grants nothing else,
-    and no app can send a request for a program's key. The whole account
-    includes the account key, so it reads every private space, and the
-    person can't narrow it to some spaces. Its proof can't be
+  - A program connected by code gets records only, in the whole account
+    unless the person keeps it to some spaces, never more: the home makes its
+    request itself and grants nothing else, and no app can send a request for
+    a program's key. The whole account includes the account key, so it reads
+    every private space; kept to some spaces, it gets no account key and
+    reads only those. Its proof can't be
     used for an app's connection, nor for more than records, nor at another
     home; and an app's own proof can't be passed off as a program's (06
     §2.4, §3). A request with `recordsOnly` never gets the contact key (06
     §2.8).
   - The note carries no label a peer reads: what a version, a live message or
     a knock may do is what its note grants, whatever its `meta` says (01 §8).
-  - A policy on its note (a limit to some collections, say) binds it at
-    every peer, and it can't escape its note by signing one for another key
+  - A policy on its note binds it at every peer, and it can't escape its
+    note by signing one for another key
     of its own: that note acts for no account, so a records-only key can't
     shed the label others show it with, nor knock or pin as the account
     (01 §7.4, §7.5).
@@ -965,6 +966,13 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     at a key of a `onePer` key's form outside a `onePer` that gives it
     (02 §4.1).
 - **Does not hold yet.**
+  - A policy keeping its note to some collections doesn't keep it from the
+    account's records in others: it may write a first version at any key the
+    account owns, in a collection its note allows, then a later one there,
+    and a record's current version is chosen by key alone (02 §4.3), so it
+    replaces or deletes the account's record at that key whatever its
+    collection. So no home offers collection limits yet
+    ([#348](https://github.com/leifriksheim/minca/issues/348), 06 §2.8).
   - Given the contacts under a grant for some spaces, it holds the contact
     key, and with it the inbox keys (06 §2.8, 07 §1): it can open every
     knock on the account's inbox, join a space for two first under its
@@ -1052,8 +1060,21 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     twenty minutes at most, and in memory while a node runs. A disconnect the
     service sees drops the sealed copy, and with it the token; losing its
     data folder ends every connection. While the app uses it, a node of its holds the spaces
-    the person picked in memory, reads them and writes records there "via
-    agent", as the app's model asks; and whoever holds its sealing key and a
+    its calls name in memory, reads them and writes records there "via
+    agent", as the app's model asks. The person gives it some spaces, or every
+    space, which its page asks for only when the person picks it there: then
+    its grant carries the account key, which opens every private space the
+    account is in or joins later, its direct messages, the account registry
+    (its list of spaces, its apps' settings and automations), the contacts
+    space and carry spaces, and keeps opening them after a disconnect, since
+    it is derived from the seed and no revoke takes it back. The service holds
+    that key from the moment the person allows it, sealed as above, for as
+    long as the token lasts, used or not: its operator, or whoever breaks in
+    and also gets a token, reads for good all of that whose ciphertext they
+    can get, where some spaces lose only those. The page and the home both say
+    so on the choice (06 §2.5). Either way its records-only note covers `/record/read`, so
+    whoever holds the key and note can share a space it has to view
+    (03 §7.4), though the service offers no tool that does; and whoever holds its sealing key and a
     token can do the same until the note runs out or the person disconnects
     it. A write is done once the space's keepers have it (05 §9), or, in a
     space that names none, once a member's device online then does, which the
@@ -1086,8 +1107,9 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     disconnects them all, and one more allowed, by a sign-in someone else
     started, shows as nothing new. The reference service takes a key only with
     the private half that goes with it, since a note travels with every record
-    and is no secret; refuses a note for the whole account, read from the note
-    itself; and reaches the spaces through the always-on nodes and relays
+    and is no secret; takes the account key only with a note for every space,
+    and a note for every space only with the account key, each read from the
+    note itself, and never the contact key; and reaches the spaces through the always-on nodes and relays
     the grant's invites and the spaces name only over TLS at public
     addresses, besides its operator's own (`network.reach`), so a grant's
     invites and the records its node reads can't make it connect inside its
@@ -1119,9 +1141,9 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     it keep or do is an app's registration, gone after a day unless used;
     each sign-in's sealed grant, up to the 64 KB a consent post may be,
     until its note runs out, at most a month;
-    nodes that run while called, each with up to 8 spaces those always-on
-    nodes carry, in memory, and up to an hour after for writes their keepers
-    don't have; each a few bytes of places for a key that wrote, for a
+    nodes that run while called, each holding in memory the spaces its calls
+    name that those always-on nodes carry, at most 32 MB, and up to an hour
+    after for writes their keepers don't have; each a few bytes of places for a key that wrote, for a
     month; and, through its own spaces' records, requests to as many public
     hosts as it names, and sockets to them while its node runs, their names
     looked up a few at a time, each for two seconds at most, so they hold up

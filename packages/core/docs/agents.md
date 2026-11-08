@@ -15,9 +15,9 @@ claude mcp add --transport http minca https://mcp.minca.social/mcp
 
 [minca.social/mcp](https://minca.social/mcp) has one-click links for Claude
 and Cursor. The app opens a page where you sign in at your account home and
-pick the spaces it may use, up to 8. The access lasts 30 days. Then its
-tools arrive, and the chat app's own
-model does the thinking.
+choose what it gets: up to 8 spaces you pick, or every space, including ones
+you make later. The access lasts 30 days. Then its tools arrive, and the chat app's own model does the
+thinking.
 
 How the service works, and how to run your own, is under
 [The MCP service](#the-mcp-service) below.
@@ -160,14 +160,18 @@ account home does.
 endpoint at `/mcp`, and apps sign in with OAuth.
 
 The consent page the app opens is an app like any other to the account home.
-It makes a key in the browser and asks for a records-only note in the spaces
-the person picks, with `connectToHome`. It hands the key and note to the
-service. The service checks them with
+It makes a key in the browser and asks for a records-only note for every
+space, with `connectToHome`; the person may keep it to some spaces at their
+home. It hands the key and note to the service. The service checks them with
 `checkGrant(grant, did, { recordsOnly: true })`, and keeps them sealed under
 a key only the app's access token carries.
 
+A grant for every space carries the account key. It reads every space the
+account is in, now and later, and disconnecting doesn't take that back: it is
+the price of never connecting again for a new space.
+
 Each call starts a node in memory from what the token opens
-(`startGrantedAgent`). It reaches only the always-on nodes and relays the
+(`startGrantedAgent`), and opens a space only when a call names it. It reaches only the always-on nodes and relays the
 person's invites and spaces name at public addresses, and the service's own
 (`network.reach`, see [The node](node.md)). A write is done once the space's
 keepers have it (`spaces.kept`). The one thing kept between calls is where

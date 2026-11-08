@@ -1324,6 +1324,61 @@ describe('a program connected by code, through the account home', () => {
       ['Agent on desk'],
     );
   });
+
+  test('the person may keep a records-only key that asked for every space to some spaces', async () => {
+    const auth = await home(createFakeHub({ latencyMs: 1 }));
+    const session = auth.getState().session!;
+    const club = await session.node.spaces.create({ name: 'Club', visibility: 'private' });
+    await session.node.spaces.create({ name: 'Elsewhere', visibility: 'private' });
+    const origin = 'https://mcp.test';
+    const request = async (audience: string) =>
+      asked({ v: 1, access: 'write', scope: 'account', recordsOnly: true, audience } as const);
+
+    const kept = await auth.grant({
+      origin,
+      request: await request('did:key:zKept'),
+      spaceIds: [club.id],
+      everySpace: false,
+    });
+    assert.equal(kept.scope, 'spaces', 'kept to the spaces picked');
+    assert.equal(kept.accountKey, undefined, 'so no account key, which opens every space');
+    assert.deepEqual(
+      kept.spaces.map((space) => space.id),
+      [club.id],
+    );
+    assert.ok(kept.spaces[0]?.memberKey, 'and the member key of the one private space it got');
+    assert.equal(kept.note.payload.cmd, '/record');
+    assert.equal(kept.note.payload.sub, `space:${club.id}`);
+    assert.equal(auth.connections()[0]?.scope, 'spaces');
+
+    const every = await auth.grant({
+      origin: 'https://other.test',
+      request: await request('did:key:zEvery'),
+      spaceIds: [],
+    });
+    assert.ok(every.accountKey, 'every space, as asked, follows the account');
+    assert.equal(every.note.payload.sub, every.did);
+
+    // An app that needs the account key gets it or nothing, and keeping it to no space is no answer.
+    await assert.rejects(
+      auth.grant({
+        origin: 'https://whole.test',
+        request: await asked({
+          v: 1,
+          access: 'write',
+          scope: 'account',
+          audience: 'did:key:zWhole',
+        } as const),
+        spaceIds: [club.id],
+        everySpace: false,
+      }),
+      /Only a key given records only can be kept to some spaces/,
+    );
+    await assert.rejects(
+      auth.grant({ origin, request: await request('did:key:zNone'), spaceIds: [], everySpace: false }),
+      /Pick at least one space/,
+    );
+  });
 });
 
 describe('an agent running a node of its own', () => {
