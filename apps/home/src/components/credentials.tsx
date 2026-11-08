@@ -7,6 +7,106 @@ import {
   type MincaAuth,
 } from '@minca/core/session';
 import { useCopy } from '@minca/app-shared/action';
+import styles from './SignIn.module.css';
+
+/** The everyday ways into an account, as it has them here */
+type Way = 'passkey' | 'password';
+
+/**
+ * Opening an account with what it has here: its passkey, its password, or
+ * either. With both, they sit side by side as two tabs, the passkey first,
+ * since it is the one with nothing to type. Signing in and confirming it's
+ * you both ask this way, so they look the same.
+ */
+export function KnownWays({
+  account,
+  hasPasskey,
+  hasPassword,
+  busy,
+  passkeyLabel,
+  passwordLabel,
+  onPasskey,
+  onPassword,
+}: {
+  /** The account's name, which a password manager files its password under */
+  account: string;
+  hasPasskey: boolean;
+  hasPassword: boolean;
+  busy: boolean;
+  passkeyLabel: string;
+  passwordLabel: string;
+  onPasskey: () => unknown;
+  onPassword: (password: string) => unknown;
+}) {
+  const [way, setWay] = useState<Way>(hasPasskey ? 'passkey' : 'password');
+  const [password, setPassword] = useState('');
+  return (
+    <div className="stack" data-gap="loose">
+      {hasPasskey && hasPassword && (
+        <div role="tablist" aria-label="Sign in with" className={styles.ways}>
+          {(['passkey', 'password'] as const).map((each) => (
+            <button
+              key={each}
+              type="button"
+              role="tab"
+              aria-selected={way === each}
+              onClick={() => setWay(each)}
+              disabled={busy}
+            >
+              {each === 'passkey' ? 'Passkey' : 'Password'}
+            </button>
+          ))}
+        </div>
+      )}
+      {way === 'passkey' ? (
+        <div className="stack">
+          <div className={`lead ${styles.go}`}>
+            <button onClick={() => void onPasskey()} disabled={busy} data-intent="primary">
+              {busy ? 'Waiting for your passkey…' : passkeyLabel}
+            </button>
+          </div>
+          <small className={styles.centred}>Face ID, Touch ID, Windows Hello or your password manager.</small>
+        </div>
+      ) : (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (password) void onPassword(password);
+          }}
+          className="stack"
+        >
+          {/* Off-screen, not hidden: a password manager reads it to pick the entry filed under the account. */}
+          <input
+            type="text"
+            name="username"
+            autoComplete="username"
+            value={accountCredentialName(account)}
+            readOnly
+            className={styles.offscreen}
+            tabIndex={-1}
+            aria-hidden
+          />
+          <input
+            type="password"
+            name="password"
+            autoComplete="current-password"
+            placeholder="Password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            autoFocus
+            aria-label="Password"
+            disabled={busy}
+          />
+          <div className={`lead ${styles.go}`}>
+            <button type="submit" disabled={busy || !password} data-intent="primary">
+              {busy ? 'Opening…' : passwordLabel}
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
 
 /** Sets the account's password, then offers it to the browser's password manager under the account's name */
 export async function setPassword(auth: MincaAuth, account: string, password: string): Promise<boolean> {

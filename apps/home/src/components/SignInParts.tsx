@@ -1,9 +1,6 @@
 import type { ReactNode } from 'react';
 import type { AuthError } from '@minca/core/session';
 import { useAuth } from '@minca/react';
-import { Shape } from '@minca/app-shared/shapes';
-import type { ShapeKind } from '@minca/ui/shapes';
-import type { ShapeColour } from '@minca/ui/tokens';
 
 /* What every sign-in screen is made of, on the design system's own elements. */
 
@@ -29,42 +26,19 @@ export function Problem({ error }: { error: AuthError | null }) {
   );
 }
 
-/** One choice in a list of them (`<ul role="list">`), marked with its shape */
-export function Choice({
-  shape: [kind, colour],
-  title,
-  text,
+/** A lesser way on from a screen (Back, another way in), in a row of them; `inline`, a word in a sentence */
+export function Way({
   onClick,
-  recommended = false,
+  inline = false,
+  children,
 }: {
-  shape: readonly [ShapeKind, ShapeColour];
-  title: string;
-  text: string;
   onClick: () => unknown;
-  recommended?: boolean;
+  inline?: boolean;
+  children: ReactNode;
 }) {
   const { state } = useAuth();
   return (
-    <li>
-      <button onClick={() => void onClick()} disabled={state.busy} data-intent="open" className="row">
-        <Shape kind={kind} colour={colour} size={32} />
-        <span className="stack" data-gap="tight">
-          <strong className="row">
-            {title}
-            {recommended && <span className="tag">Recommended</span>}
-          </strong>
-          <small>{text}</small>
-        </span>
-      </button>
-    </li>
-  );
-}
-
-/** A lesser way on from a screen (Back, another way in), in a row of them */
-export function Way({ onClick, children }: { onClick: () => unknown; children: ReactNode }) {
-  const { state } = useAuth();
-  return (
-    <button onClick={() => void onClick()} disabled={state.busy} data-intent="ghost">
+    <button onClick={() => void onClick()} disabled={state.busy} data-intent={inline ? 'inline' : 'ghost'}>
       {children}
     </button>
   );

@@ -9,7 +9,7 @@ import { inboxLink, usernameLink } from '../contacts';
 import { useWorkspace } from '../workspace';
 import styles from './NewSheet.module.css';
 import type { ShapeKind } from '@minca/ui/shapes';
-import { Options } from './Options';
+import { Choices } from '@minca/app-shared/Choices';
 import { SpaceDialog } from './SpaceList';
 
 /** Shares a username the way a phone shares anything; elsewhere its link is copied */
@@ -55,7 +55,7 @@ export function NewSheet({ on, onClose }: { on: 'people' | 'groups'; onClose: ()
   if (step === 'share') return <ShareMe onClose={onClose} />;
   return (
     <Modal title="Start something" onClose={onClose}>
-      <Options
+      <Choices
         label="Start something"
         options={order.map((what) => ({ value: what, ...STARTS[what] }))}
         onPick={start}

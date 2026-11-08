@@ -3,8 +3,10 @@ import { accountCredentialName, type AccountEntry } from '@minca/core/session';
 import type { AccountSummary } from '@minca/core';
 import { useAuth } from '@minca/react';
 import { Avatar } from '@minca/app-shared/Avatar';
+import { Choices, MARK_SIZE, type Choice } from '@minca/app-shared/Choices';
 import { Info } from '@minca/app-shared/Info';
-import { Choice, Problem, Step, Way } from './SignInParts';
+import { KnownWays } from './credentials';
+import { Problem, Step, Way } from './SignInParts';
 import styles from './SignIn.module.css';
 
 /* The screens for someone who has an account: finding it, and getting in. */
@@ -14,20 +16,25 @@ export function Welcome() {
   const { auth, state } = useAuth();
   return (
     <Step title="Welcome to Minca" lead="One account for every Minca app.">
-      <ul role="list">
-        <Choice
-          shape={['sparkle', 'cobalt']}
-          title="Create an account"
-          text="Takes a minute."
-          onClick={() => auth.startCreating()}
-        />
-        <Choice
-          shape={['key', 'coral']}
-          title="I already have one"
-          text="Sign in, or bring it to this device."
-          onClick={() => auth.showExisting()}
-        />
-      </ul>
+      <Choices
+        label="Get started"
+        disabled={state.busy}
+        options={[
+          {
+            value: 'create',
+            shape: 'sparkle',
+            title: 'Create an account',
+            detail: 'Free, and takes a minute.',
+          },
+          {
+            value: 'existing',
+            shape: 'key',
+            title: 'I already have one',
+            detail: 'Sign in, or bring it to this device.',
+          },
+        ]}
+        onPick={(way) => (way === 'create' ? auth.startCreating() : auth.showExisting())}
+      />
       <Problem error={state.error} />
       <PodLine />
     </Step>
@@ -45,47 +52,68 @@ export function Existing() {
   const [pairHelp, setPairHelp] = useState(false);
   return (
     <Step title="Find your account" lead="Any of these gets you in.">
-      <ul role="list">
-        {state.podToReopen && state.folderAvailable && (
-          <Choice
-            shape={['stack', 'sage']}
-            title={`Open “${state.podToReopen}” again`}
-            text="The browser asks once more."
-            onClick={() => auth.reopenPod()}
-          />
-        )}
-        {state.folderAvailable && (
-          <Choice
-            shape={['stack', 'sage']}
-            title="Open your pod"
-            text="The folder your account is kept in."
-            onClick={() => auth.choosePod()}
-          />
-        )}
-        <Choice
-          shape={['signal', 'peach']}
-          title="Add this device from another"
-          text="Scan a code on a device you’re signed in on."
-          onClick={() => setPairHelp((was) => !was)}
-        />
-        {pairHelp && (
-          <li>
-            <ol>
-              <li>On the signed-in device, open your account page.</li>
-              <li>
-                Choose <strong>Add your phone</strong> and show the pairing code.
-              </li>
-              <li>Scan it with this device’s camera and open the link.</li>
-            </ol>
-          </li>
-        )}
-        <Choice
-          shape={['lock', 'lilac']}
-          title="Use your recovery code"
-          text="The code you kept when you made it."
-          onClick={() => auth.showRestore()}
-        />
-      </ul>
+      <Choices
+        label="Ways to your account"
+        disabled={state.busy}
+        options={[
+          ...(state.podToReopen && state.folderAvailable
+            ? [
+                {
+                  value: 'reopen',
+                  shape: 'stack',
+                  colour: 'sage',
+                  title: `Open “${state.podToReopen}” again`,
+                  detail: 'The browser asks once more.',
+                } as const,
+              ]
+            : []),
+          ...(state.folderAvailable
+            ? [
+                {
+                  value: 'pod',
+                  shape: 'stack',
+                  colour: 'sage',
+                  title: 'Open your pod',
+                  detail: 'The folder your account is kept in.',
+                } as const,
+              ]
+            : []),
+          {
+            value: 'pair',
+            shape: 'signal',
+            colour: 'peach',
+            title: 'Add this device from another',
+            detail: 'Scan a code on a device you’re signed in on.',
+          },
+          {
+            value: 'restore',
+            shape: 'lock',
+            colour: 'lilac',
+            title: 'Use your recovery code',
+            detail: 'The code you kept when you made it.',
+          },
+        ]}
+        onPick={(way) =>
+          way === 'reopen'
+            ? auth.reopenPod()
+            : way === 'pod'
+              ? auth.choosePod()
+              : way === 'pair'
+                ? setPairHelp((was) => !was)
+                : auth.showRestore()
+        }
+      />
+      {pairHelp && (
+        <aside>
+          <ol>
+            <li>On the signed-in device, open your account page.</li>
+            <li>
+              Choose <strong>Add your phone</strong> and show the pairing code.
+            </li>
+            <li>Scan it with this device’s camera and open the link.</li>
+          </ol>
+        </aside>
+      )}
       <Problem error={state.error} />
       <div className="row">
         <Way onClick={() => (state.accounts.length > 0 ? auth.showSignIn() : auth.showWelcome())}>Back</Way>
@@ -104,41 +132,27 @@ export function Accounts() {
   const others = accounts.filter((account) => account !== open);
   return (
     <Step
-      title="Welcome back"
-      // With one account its name is under its face already, so the line above it doesn't say it again.
+      title={open ? 'Welcome back' : 'Choose your account'}
       lead={
-        accounts.length === 1
-          ? 'Sign in to continue.'
-          : accounts.length > 0
-            ? 'Choose your account.'
-            : 'There are no accounts here yet.'
+        open ? undefined : accounts.length > 0 ? 'The accounts kept here.' : 'There are no accounts here yet.'
       }
     >
       {open && entry && (
-        <article>
-          <span className="row">
-            <Avatar did={open.did} size={40} round />
-            <strong className="truncate">{open.name}</strong>
-          </span>
+        <article className={styles.account}>
+          <div className={`stack ${styles.who}`}>
+            <Avatar did={open.did} size={64} round />
+            <h2 className="truncate">{open.name}</h2>
+          </div>
           <WaysIn account={open} entry={entry} />
         </article>
       )}
       {others.length > 0 && (
-        <ul role="list">
-          {others.map((account) => (
-            <li key={account.id}>
-              <button
-                onClick={() => void auth.select(account.id)}
-                disabled={state.busy}
-                data-intent="open"
-                className="row"
-              >
-                <Avatar did={account.did} size={32} round />
-                <strong className="truncate">{account.name}</strong>
-              </button>
-            </li>
-          ))}
-        </ul>
+        <Choices
+          label={open ? 'Another account here' : 'Accounts here'}
+          disabled={state.busy}
+          options={others.map((account) => accountChoice(account))}
+          onPick={(id) => auth.select(id)}
+        />
       )}
       <Problem error={state.error} />
       <div className="row">
@@ -152,10 +166,14 @@ export function Accounts() {
             : 'Accounts kept in this browser'}
           {state.folderAvailable && (
             <>
-              <Way onClick={() => auth.choosePod()}>
+              <Way onClick={() => auth.choosePod()} inline>
                 {place.kind === 'folder' ? 'Open another folder' : 'Open a folder'}
               </Way>
-              {place.kind === 'folder' && <Way onClick={() => auth.useBrowser()}>Use this browser</Way>}
+              {place.kind === 'folder' && (
+                <Way onClick={() => auth.useBrowser()} inline>
+                  Use this browser
+                </Way>
+              )}
             </>
           )}
         </small>
@@ -164,12 +182,20 @@ export function Accounts() {
   );
 }
 
-/** The ways into the open account: one main button, the rest set back */
+/** An account as a choice in a list: its face, its name, and a line under it */
+export function accountChoice(account: AccountSummary, detail?: string): Choice<string> {
+  return {
+    value: account.id,
+    face: <Avatar did={account.did} size={MARK_SIZE} round />,
+    title: account.name,
+    ...(detail ? { detail } : {}),
+  };
+}
+
+/** The ways into the open account: its passkey or password, and the recovery code when neither will do */
 function WaysIn({ account, entry }: { account: AccountSummary; entry: AccountEntry }) {
   const { auth, state } = useAuth();
   const hasPasskey = entry.shortcuts.length > 0;
-  // One way in at a time: the passkey, with the password a tap away when there is one too.
-  const [byPassword, setByPassword] = useState(!hasPasskey);
 
   if (!hasPasskey && !entry.hasPassword)
     return (
@@ -189,23 +215,22 @@ function WaysIn({ account, entry }: { account: AccountSummary; entry: AccountEnt
 
   return (
     <>
-      {byPassword ? (
-        <PasswordSignIn account={account} />
-      ) : (
-        <button onClick={() => void auth.signInWithPasskey()} disabled={state.busy} data-intent="primary">
-          {state.busy ? 'Waiting…' : 'Sign in with passkey'}
-        </button>
-      )}
-      <div className="row">
-        {hasPasskey && entry.hasPassword && (
-          <Way onClick={() => setByPassword((was) => !was)}>
-            {byPassword ? 'Use your passkey instead' : 'Use your password instead'}
-          </Way>
-        )}
-        <Way onClick={() => auth.showRestore()}>
-          {entry.hasPassword ? 'Forgot it? Use your recovery code' : 'Use your recovery code instead'}
+      <KnownWays
+        account={account.name}
+        hasPasskey={hasPasskey}
+        hasPassword={entry.hasPassword}
+        busy={state.busy}
+        passkeyLabel="Sign in with passkey"
+        passwordLabel="Sign in"
+        onPasskey={() => auth.signInWithPasskey()}
+        onPassword={(password) => auth.signInWithPassword(password)}
+      />
+      <small className={styles.centred}>
+        Can’t get in?{' '}
+        <Way onClick={() => auth.showRestore()} inline>
+          Use your recovery code
         </Way>
-      </div>
+      </small>
     </>
   );
 }
@@ -288,46 +313,6 @@ function CodeForm({ account }: { account: AccountSummary | null }) {
   );
 }
 
-/** The everyday password, filed under the account's name so a manager fills the right one. */
-function PasswordSignIn({ account }: { account: AccountSummary }) {
-  const { auth, state } = useAuth();
-  const [password, setPassword] = useState('');
-  return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (password) void auth.signInWithPassword(password);
-      }}
-      className="stack"
-    >
-      <input
-        type="text"
-        name="username"
-        autoComplete="username"
-        value={accountCredentialName(account.name)}
-        readOnly
-        className={styles.offscreen}
-        tabIndex={-1}
-        aria-hidden
-      />
-      <input
-        type="password"
-        name="password"
-        autoComplete="current-password"
-        placeholder="Password"
-        value={password}
-        onChange={(event) => setPassword(event.target.value)}
-        autoFocus
-        aria-label="Password"
-        disabled={state.busy}
-      />
-      <button type="submit" disabled={state.busy} data-intent="primary">
-        {state.busy ? 'Signing in…' : 'Sign in'}
-      </button>
-    </form>
-  );
-}
-
 /** Where accounts are read from, shown only when it is a pod — a new person should not have to think about it. */
 export function PodLine() {
   const { auth, state } = useAuth();
@@ -335,7 +320,9 @@ export function PodLine() {
   return (
     <small className="row">
       Pod: {state.place.directory?.name ?? 'your folder'}
-      <Way onClick={() => auth.useBrowser()}>Use this browser instead</Way>
+      <Way onClick={() => auth.useBrowser()} inline>
+        Use this browser instead
+      </Way>
     </small>
   );
 }

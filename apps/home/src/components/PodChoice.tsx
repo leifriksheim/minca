@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { AuthError, Place, PodContents } from '@minca/core/session';
+import { Choices } from '@minca/app-shared/Choices';
 import { Modal } from '@minca/app-shared/Modal';
 
 /**
@@ -68,21 +69,29 @@ export function PodChoice({
       <p>
         What should happen to the data {here}?{others}
       </p>
-      <ul role="list" aria-label="What to do with your data">
-        <Choice
-          checked={how === 'combine'}
-          onSelect={() => setHow('combine')}
-          title="Combine them"
-          recommended
-          description={`Bring everything ${here} into “${podName}”. Nothing is overwritten or lost — an item edited in both places is settled the same way your devices settle it when they sync.`}
-        />
-        <Choice
-          checked={how === 'switch'}
-          onSelect={() => setHow('switch')}
-          title="Use the pod as it is"
-          description={`Switch to the pod's copy and bring nothing over. Anything only ${here} stays behind.`}
-        />
-      </ul>
+      <Choices
+        label="What to do with your data"
+        picked={how}
+        onPick={setHow}
+        disabled={loading}
+        options={[
+          {
+            value: 'combine',
+            shape: 'stack',
+            colour: 'sage',
+            title: 'Combine them',
+            tag: 'Recommended',
+            detail: `Bring everything ${here} into “${podName}”. Nothing is overwritten or lost — an item edited in both places is settled the same way your devices settle it when they sync.`,
+          },
+          {
+            value: 'switch',
+            shape: 'arch',
+            colour: 'peach',
+            title: 'Use the pod as it is',
+            detail: `Switch to the pod's copy and bring nothing over. Anything only ${here} stays behind.`,
+          },
+        ]}
+      />
       {error && <p role="alert">{error.message}</p>}
       <Actions
         loading={loading}
@@ -92,35 +101,6 @@ export function PodChoice({
         onCancel={onCancel}
       />
     </Modal>
-  );
-}
-
-function Choice({
-  checked,
-  onSelect,
-  title,
-  description,
-  recommended,
-}: {
-  checked: boolean;
-  onSelect: () => void;
-  title: string;
-  description: string;
-  recommended?: boolean;
-}) {
-  return (
-    <li>
-      <label>
-        <input type="radio" name="pod-choice" checked={checked} onChange={onSelect} />
-        <span className="stack" data-gap="tight">
-          <strong className="row">
-            {title}
-            {recommended && <span className="tag">Recommended</span>}
-          </strong>
-          <small>{description}</small>
-        </span>
-      </label>
-    </li>
   );
 }
 

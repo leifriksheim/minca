@@ -8,7 +8,7 @@ import { createInviteLink, madeLinks } from '../spaces';
 import { confirmThen } from '../confirm';
 import { ContactPicker, JoinsAs, useJoinsAs } from './InvitePeople';
 import { Loader } from '@minca/app-shared/Loader';
-import { Options, type Option } from './Options';
+import { Choices, type Choice } from '@minca/app-shared/Choices';
 
 /**
  * `/spaces/<id>/invite`: bringing people in. Your contacts get the invite in your space for two,
@@ -96,7 +96,7 @@ function MakeLink({
   const [link, setLink] = useState<string | null>(null);
   const { run, busy, error } = useAction();
   const { copied, copy } = useCopy();
-  const options: ReadonlyArray<Option<string>> = [
+  const options: ReadonlyArray<Choice<string>> = [
     ...[...offered]
       .sort((x, y) => rank(x) - rank(y))
       .map((name) => {
@@ -141,7 +141,7 @@ function MakeLink({
 
   return (
     <Modal title="Who is this link for?" onClose={onClose}>
-      <Options label="They join as" options={options} picked={picked} onPick={setPicked} />
+      <Choices label="They join as" options={options} picked={picked} onPick={setPicked} />
       {error && <p role="alert">{error}</p>}
       <button data-intent="primary" onClick={() => void make()} disabled={busy}>
         {busy ? 'Making a link…' : 'Create link'}

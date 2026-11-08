@@ -1,8 +1,8 @@
 import { Modal } from '@minca/app-shared/Modal';
 import { useDownloads, type Ahead, type Keep } from '../downloads';
-import { Options, type Option } from './Options';
+import { Choices, type Choice } from '@minca/app-shared/Choices';
 
-const AHEAD: ReadonlyArray<Option<Ahead>> = [
+const AHEAD: ReadonlyArray<Choice<Ahead>> = [
   {
     value: 'thumbnails',
     shape: 'grid',
@@ -23,7 +23,7 @@ const AHEAD: ReadonlyArray<Option<Ahead>> = [
   },
 ];
 
-const KEEP: ReadonlyArray<Option<Keep>> = [
+const KEEP: ReadonlyArray<Choice<Keep>> = [
   {
     value: '256',
     shape: 'dots',
@@ -41,14 +41,14 @@ export function DownloadsView({ onClose }: { onClose: () => void }) {
     <Modal title="Downloads" onClose={onClose} width={480}>
       <p>Files you add are always kept here. This is for what others share.</p>
       <h3>Download before you open</h3>
-      <Options
+      <Choices
         label="Download before you open"
         options={AHEAD}
         picked={downloads.ahead}
         onPick={(ahead) => setDownloads({ ...downloads, ahead })}
       />
       <h3>Keep at most</h3>
-      <Options
+      <Choices
         label="Keep at most"
         options={KEEP}
         picked={downloads.keep}

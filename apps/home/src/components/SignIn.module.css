@@ -10,3 +10,33 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* Passkey or password, when the account has both: two tabs sharing the width */
+.ways {
+  width: 100%;
+
+  & > button {
+    flex: 1;
+  }
+}
+
+/* The one way on from a sign-in: a page's opening call, across the column */
+.go > * {
+  flex: 1;
+}
+
+/* A line under that call, set under its middle */
+.centred {
+  text-align: center;
+}
+
+/* The account being opened, as a sign-in card leads: its face and name over the ways in */
+.account {
+  gap: var(--space-loose);
+  padding: 24px 20px 20px;
+}
+
+.who {
+  align-items: center;
+  text-align: center;
+}

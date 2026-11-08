@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { adHocName, nameFromUsername } from '@minca/core/inbox';
 import { useAuth } from '@minca/react';
+import { Choices } from '@minca/app-shared/Choices';
 import { Info } from '@minca/app-shared/Info';
 import { usernameStatus } from '@minca/app-shared/UsernamePicker';
 import { shortUsername, useAvailability } from '@minca/app-shared/usernames';
 import { PasswordForm, RecoveryCodeShown, setPassword } from './credentials';
 import { PodLine } from './GettingIn';
 import { PairingLine } from './PairArrival';
-import { Choice, Problem, Step, Way } from './SignInParts';
+import { Problem, Step, Way } from './SignInParts';
 
 /* The screens for making an account: its name, its recovery code, how it is opened every day, and where it is kept. */
 
@@ -178,23 +179,30 @@ export function Unlock() {
     >
       <Claimed />
       {passkeys && (
-        <ul role="list">
-          <Choice
-            shape={['pass', 'cobalt']}
-            title="Passkey"
-            text="Touch ID, Windows Hello, or your password manager. Nothing to type."
-            onClick={() => auth.addPasskey()}
-            recommended
-          />
-          {!choosingPassword && (
-            <Choice
-              shape={['key', 'coral']}
-              title="Password"
-              text="Saved in your password manager, like any other login."
-              onClick={() => setChoosingPassword(true)}
-            />
-          )}
-        </ul>
+        <Choices
+          label="Sign in with"
+          disabled={state.busy}
+          options={[
+            {
+              value: 'passkey',
+              shape: 'pass',
+              title: 'Passkey',
+              tag: 'Recommended',
+              detail: 'Face ID, Touch ID, Windows Hello or your password manager. Nothing to type.',
+            },
+            ...(choosingPassword
+              ? []
+              : [
+                  {
+                    value: 'password',
+                    shape: 'key',
+                    title: 'Password',
+                    detail: 'Saved in your password manager, like any other login.',
+                  } as const,
+                ]),
+          ]}
+          onPick={(way) => (way === 'passkey' ? auth.addPasskey() : setChoosingPassword(true))}
+        />
       )}
       {choosingPassword && (
         <PasswordForm
@@ -231,14 +239,20 @@ export function PodOffer() {
       title="Keep your data in a folder?"
       lead="A folder on your computer that keeps your account and spaces. Back it up, or keep it in iCloud or Dropbox."
     >
-      <ul role="list">
-        <Choice
-          shape={['stack', 'sage']}
-          title="Choose a folder"
-          text="Your browser will ask to see it, then to save into it."
-          onClick={() => auth.choosePod()}
-        />
-      </ul>
+      <Choices
+        label="Where to keep it"
+        disabled={state.busy}
+        options={[
+          {
+            value: 'folder',
+            shape: 'stack',
+            colour: 'sage',
+            title: 'Choose a folder',
+            detail: 'Your browser will ask to see it, then to save into it.',
+          },
+        ]}
+        onPick={() => auth.choosePod()}
+      />
       <Problem error={state.error} />
       <div className="row">
         <Way onClick={() => auth.finishSetup()}>Not now — keep it in this browser</Way>

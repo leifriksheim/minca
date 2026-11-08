@@ -3,7 +3,17 @@
   max-width: 412px;
   min-height: 100dvh;
   justify-content: safe center;
-  padding-block: 64px;
+  padding-block: 32px 48px;
+}
+
+/* The one way on from the screen: a page's opening call, across the column */
+.go > * {
+  flex: 1;
+}
+
+/* A line under it, under its middle */
+.centred {
+  text-align: center;
 }
 
 /* An intro card's colour tile, its shape off the corner as on the site */

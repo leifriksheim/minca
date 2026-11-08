@@ -12,10 +12,14 @@ import {
   type ProposeRequest,
 } from '@minca/core/session';
 import { useAccountPicture, useAuth, useSession, useMinca, useWatched } from '@minca/react';
-import { Wordmark } from '@minca/app-shared/Wordmark';
+import { Mark, Wordmark } from '@minca/app-shared/Wordmark';
+import { Icon } from '@minca/app-shared/Icon';
+import type { ShapeColour } from '@minca/ui/tokens';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { Shape } from '@minca/app-shared/shapes';
-import { shapeFor } from '@minca/ui/shapes';
+import { Choices } from '@minca/app-shared/Choices';
+import { accountChoice } from './GettingIn';
+import { shapeFor, type ShapeKind } from '@minca/ui/shapes';
 import { useAction } from '@minca/app-shared/action';
 import styles from './ConnectPage.module.css';
 import { Loader } from '@minca/app-shared/Loader';
@@ -143,7 +147,7 @@ export function ConnectPage() {
         <Asking incoming={incoming} step="Confirm it’s you" />
         <WhichAccount label="Continuing as" busy={false} onSwitch={() => setChosen(null)} />
         <ConfirmItsYou
-          why={`continue to ${asker(incoming.origin)}`}
+          why={`continue to ${who(incoming)}`}
           onConfirmed={() => setProved((n) => n + 1)}
           onCancel={() => setChosen(null)}
         />
@@ -177,44 +181,36 @@ function ChooseAccount({
   const current = state.session?.account.id ?? null;
   const named = (name: string) => state.accounts.filter((account) => account.name === name).length;
   return (
-    <Frame title="Choose an account">
+    <Frame top={<Handshake />} title="Choose an account">
       <p>
-        to continue to <strong>{asker(incoming.origin)}</strong>
+        to continue to{' '}
+        {byCode(incoming) ? <strong>{who(incoming)}</strong> : <Origin origin={incoming.origin} />}
       </p>
-      <ul role="list">
-        {state.accounts.map((account) => (
-          <li key={account.id}>
-            <button
-              onClick={() => onChoose(account.id)}
-              disabled={state.busy}
-              data-intent="open"
-              className="row"
-            >
-              <Avatar did={account.did} size={32} round />
-              <span className="stack truncate" data-gap="tight">
-                <strong>{account.name}</strong>
-                <small>
-                  {account.id === current
-                    ? 'Signed in'
-                    : named(account.name) > 1
-                      ? `…${account.did.slice(-6)}`
-                      : 'Signed out'}
-                </small>
-              </span>
-            </button>
-          </li>
-        ))}
-        <li>
-          <button onClick={() => onChoose(null)} disabled={state.busy} data-intent="open" className="row">
-            <span aria-hidden="true">+</span>
-            Use another account
-          </button>
-        </li>
-      </ul>
+      <Choices
+        label="Accounts"
+        disabled={state.busy}
+        options={[
+          ...state.accounts.map((account) =>
+            accountChoice(
+              account,
+              account.id === current
+                ? 'Signed in'
+                : named(account.name) > 1
+                  ? `…${account.did.slice(-6)}`
+                  : 'Signed out',
+            ),
+          ),
+          { value: OTHER, shape: 'sparkle', colour: 'coral', title: 'Use another account' },
+        ]}
+        onPick={(id) => onChoose(id === OTHER ? null : id)}
+      />
       <small>Next you confirm it’s you, then decide what it gets.</small>
     </Frame>
   );
 }
+
+/** The row for an account this browser doesn't list, among those it does */
+const OTHER = 'other';
 
 /** After a few seconds: a phone may pause the app's tab while this one is in front */
 function SlowApp() {
@@ -235,20 +231,31 @@ function asker(origin: string): string {
     : url.host;
 }
 
+/** Whether a program reached the home by a code: then the origin is the home's own, and tells nothing */
+function byCode(incoming: IncomingRequest): boolean {
+  return !isProposeRequest(incoming.request) && incoming.request.via === 'code';
+}
+
+/** Who is asking, in words: the address the browser reports, or for a program by code, what it calls itself */
+function who(incoming: IncomingRequest): string {
+  return byCode(incoming) && !isProposeRequest(incoming.request)
+    ? `a program calling itself “${incoming.request.name ?? 'a program'}”`
+    : asker(incoming.origin);
+}
+
 /** A small line above sign-in, so it is clear why this window opened */
 function Asking({ incoming, step = 'Sign in' }: { incoming: IncomingRequest; step?: string }) {
+  const proposing = isProposeRequest(incoming.request);
   return (
-    <aside>
-      <strong>
-        {!isProposeRequest(incoming.request) && incoming.request.via === 'code'
-          ? `A program calling itself “${incoming.request.name ?? 'a program'}”`
-          : asker(incoming.origin)}
-      </strong>{' '}
-      {isProposeRequest(incoming.request)
-        ? 'suggests what to notify you about.'
-        : 'wants to use your Minca account.'}{' '}
-      {step} to decide
-      {isProposeRequest(incoming.request) ? '.' : ' what it gets.'}
+    <aside className="row">
+      <Shape kind="pass" colour="cobalt" size={32} />
+      <p>
+        <strong>{byCode(incoming) ? `A${who(incoming).slice(1)}` : who(incoming)}</strong>{' '}
+        {proposing ? 'suggests what to notify you about.' : 'wants to use your Minca account.'}{' '}
+        <small>
+          {step} to decide{proposing ? '.' : ' what it gets.'}
+        </small>
+      </p>
     </aside>
   );
 }
@@ -326,53 +333,67 @@ function Approve({
     );
 
   return (
-    <Frame title={byCode ? `Connect “${request.name ?? 'a program'}”` : `Connect to ${host}`}>
+    <Frame
+      top={<Handshake />}
+      title={byCode ? `Connect “${request.name ?? 'a program'}”?` : `Connect ${host}?`}
+    >
       <p>
         {byCode
           ? 'A program on your computer or a server, such as your AI, opened this page. '
-          : request.name && <>It calls itself “{request.name}”, and </>}
-        {byCode || !request.name ? 'It wants' : 'wants'} to {writes ? 'read and change' : 'read'}{' '}
-        {whole ? 'everything in' : 'spaces in'} your account.
+          : // The address is the title, since it is what is trusted; a name is only what the app calls itself.
+            request.name && <>It calls itself “{request.name}”. </>}
+        It wants to {writes ? 'read and change' : 'read'} {whole ? 'everything in' : 'spaces in'} your
+        account.
         {byCode && ' Allow it only if you started it just now.'}
       </p>
 
       <WhichAccount label={byCode ? 'The account it will work in' : 'The account it will use'} busy={busy} />
 
       {incoming.check && (
-        <Note title="Its code">
-          It can use your account as soon as you allow it, so allow it only if something you started just now
-          is asking for this code. Then give it the code, in its terminal or by telling your AI, so it knows
-          this is your account.
+        <aside className="stack" data-gap="tight">
+          <strong>Its code</strong>
+          <small>
+            It can use your account as soon as you allow it, so allow it only if something you started just
+            now is asking for this code. Then give it the code, in its terminal or by telling your AI, so it
+            knows this is your account.
+          </small>
           <CheckCode check={incoming.check} />
-        </Note>
+        </aside>
       )}
 
-      {recordsOnly && writes && (
-        <>
-          <Note title="What it can do">
-            Read {whole ? 'every space, including ones you make later' : 'the spaces you pick'}, write records
-            in them as you, and propose new collections and apps there. Everything it writes shows as yours,
-            and apps can tell it came from a key that may only write records.
-          </Note>
-          <Note title="What always needs you">
-            Adding an app or a collection, changing roles, inviting or removing people, joining or leaving
-            spaces. Every device ignores a key like this that tries. It can't sign in as you.
-          </Note>
-        </>
-      )}
-
-      {whole && !recordsOnly && (
-        <Note title="Your whole account">
-          Every space, private ones too, your direct messages, contacts and contact requests. It can make and
-          join spaces for you, but can’t sign in as you or change your password or passkeys.
-        </Note>
-      )}
-
-      {contacts && (
-        <Note title="Your contacts">
-          Who is on your contact list, and contact requests sent to you in the spaces it gets. It can change
-          the list. Asking someone, or saying yes to a request, also needs your whole account.
-        </Note>
+      {((recordsOnly && writes) || (whole && !recordsOnly) || contacts) && (
+        <ul role="list" aria-label="What it gets">
+          {recordsOnly && writes && (
+            <>
+              <Point shape="pass" title="What it can do">
+                Read {whole ? 'every space, including ones you make later' : 'the spaces you pick'}, write
+                records in them as you, and propose new collections and apps there. Everything it writes shows
+                as yours, and apps can tell it came from a key that may only write records.
+              </Point>
+              <Point shape="shield" title="What always needs you">
+                Adding an app or a collection, changing roles, inviting or removing people, joining or leaving
+                spaces. Every device ignores a key like this that tries. It can't sign in as you.
+              </Point>
+            </>
+          )}
+          {whole && !recordsOnly && (
+            <>
+              <Point shape="grid" title="Your whole account">
+                Every space, private ones too, your direct messages, contacts and contact requests. It can
+                make and join spaces for you.
+              </Point>
+              <Point shape="lock" title="Never your sign-in">
+                It can’t sign in as you or change your password or passkeys, and never sees them.
+              </Point>
+            </>
+          )}
+          {contacts && (
+            <Point shape="group" title="Your contacts">
+              Who is on your contact list, and contact requests sent to you in the spaces it gets. It can
+              change the list. Asking someone, or saying yes to a request, also needs your whole account.
+            </Point>
+          )}
+        </ul>
       )}
 
       {choosing && (
@@ -510,7 +531,7 @@ function ApproveCarrier({ incoming, request }: { incoming: IncomingRequest; requ
     });
 
   return (
-    <Frame title="Keep your spaces online">
+    <Frame top={<Handshake />} title="Keep your spaces online">
       <p>
         {/* Where it asks from, always: a name is only what the asker calls itself (spec 06 §2.3). */}
         {request.name ? (
@@ -536,15 +557,17 @@ function ApproveCarrier({ incoming, request }: { incoming: IncomingRequest; requ
         </aside>
       )}
 
-      <Note title="What it can do">
-        Hold your spaces as they travel, with private ones still locked, and pass them on to your other
-        devices and the people you share with.
-        {pod ? ` Keep your pod, “${pod}”, up to date — it asks you to pick the folder next.` : ''}
-      </Note>
-      <Note title="What it can't do">
-        Read your private spaces, change anything in them, or sign in as you. It never gets your password or a
-        space's key.
-      </Note>
+      <ul role="list" aria-label="What it gets">
+        <Point shape="signal" title="What it can do">
+          Hold your spaces as they travel, with private ones still locked, and pass them on to your other
+          devices and the people you share with.
+          {pod ? ` Keep your pod, “${pod}”, up to date — it asks you to pick the folder next.` : ''}
+        </Point>
+        <Point shape="lock" title="What it can't do">
+          Read your private spaces, change anything in them, or sign in as you. It never gets your password or
+          a space's key.
+        </Point>
+      </ul>
 
       <small>
         Like a relay, it can see who wrote something and when, but not what it says. You can disconnect it any
@@ -715,27 +738,70 @@ function WhichAccount({ label, busy, onSwitch }: { label: string; busy: boolean;
   const session = useSession();
   const picture = useAccountPicture();
   return (
-    <div className="row">
-      <Avatar did={session.did} size={32} src={picture} />
+    <article className="row">
+      <Avatar did={session.did} size={40} src={picture} round />
       <div className="stack truncate" data-gap="tight">
-        <strong>{session.account.name}</strong>
+        <strong className="truncate">{session.account.name}</strong>
         <small>{label}</small>
       </div>
-      <button onClick={onSwitch ?? chooseAgain} disabled={busy} data-intent="ghost">
-        Use another account
+      <button onClick={onSwitch ?? chooseAgain} disabled={busy} data-intent="subtle">
+        Switch
       </button>
+    </article>
+  );
+}
+
+/** One point of what an app gets, or doesn't, in a ruled list: marked with its shape, as points are */
+function Point({ shape, title, children }: { shape: ShapeKind; title: string; children: ReactNode }) {
+  return (
+    <li className={`row ${styles.point}`}>
+      <Shape kind={shape} colour={POINT_COLOURS[shape] ?? 'cobalt'} size={28} />
+      <span className="stack" data-gap="tight">
+        <strong>{title}</strong>
+        <small>{children}</small>
+      </span>
+    </li>
+  );
+}
+
+/** Each point's shape in its own colour, so points side by side differ */
+const POINT_COLOURS: Partial<Record<ShapeKind, ShapeColour>> = {
+  pass: 'cobalt',
+  grid: 'cobalt',
+  signal: 'peach',
+  group: 'coral',
+  shield: 'sage',
+  lock: 'coral',
+};
+
+/**
+ * An app and an account, side by side: the account's face once there is one.
+ * The app is named by its address in the title, never by a picture.
+ */
+function Handshake() {
+  const { state } = useAuth();
+  return (
+    <div className={`row ${styles.handshake}`} aria-hidden>
+      {/* The same for every app: a shape picked by its address could be matched by a lookalike one. */}
+      <Shape kind="pass" colour="cobalt" size={56} />
+      <span className={styles.link}>
+        <Icon name="link" size={16} />
+      </span>
+      {state.stage === 'ready' ? <Face size={56} /> : <Mark size={56} />}
     </div>
   );
 }
 
-/** A boxed explanation: what something may do, or may not */
-function Note({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <aside className="stack" data-gap="tight">
-      <strong>{title}</strong>
-      <small>{children}</small>
-    </aside>
-  );
+/** The face of the account signed in here */
+function Face({ size }: { size: number }) {
+  const session = useSession();
+  const picture = useAccountPicture();
+  return <Avatar did={session.did} size={size} src={picture} round />;
+}
+
+/** The address an app asks from, as the browser reports it: what is trusted, whatever it calls itself */
+function Origin({ origin }: { origin: string }) {
+  return <span className="tag">{asker(origin)}</span>;
 }
 
 /**
@@ -781,12 +847,13 @@ function Answer({
   return (
     <>
       {error && <aside data-tone="danger">{error}</aside>}
-      <div className="stack">
-        <button onClick={allow} disabled={busy || blocked} data-intent="primary">
-          {allowLabel}
-        </button>
+      {/* Allow last, where the thumb and the eye end up; both as wide, so neither is the easy one */}
+      <div className={`lead ${styles.answer}`}>
         <button onClick={onDeny} disabled={busy}>
           {denyLabel}
+        </button>
+        <button onClick={allow} disabled={busy || blocked} data-intent="primary">
+          {allowLabel}
         </button>
       </div>
     </>
@@ -831,11 +898,12 @@ function lasts(days: number): string {
   return days === 1 ? '1 day' : `${days} days`;
 }
 
-/** The page around it, under Minca's mark; the sign-in element's own is hidden in the home's styles */
-function Frame({ title, children }: { title?: ReactNode; children: ReactNode }) {
+/** The page around it, under Minca's mark: what it is about (`top`), its title, and the rest */
+function Frame({ title, top, children }: { title?: ReactNode; top?: ReactNode; children: ReactNode }) {
   return (
     <main className={styles.frame}>
       <Wordmark />
+      {top}
       {title && <h1>{title}</h1>}
       {children}
     </main>

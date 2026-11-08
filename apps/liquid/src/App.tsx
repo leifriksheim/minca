@@ -32,7 +32,7 @@ function Connect() {
         </p>
       </div>
       <button onClick={() => void connection.connect()} disabled={waiting} data-intent="primary">
-        {state.status === 'connecting' ? 'Waiting for your account home…' : 'Connect with Minca'}
+        {state.status === 'connecting' ? 'Waiting for your account home…' : 'Continue with Minca'}
       </button>
       {state.error && <p role="alert">{state.error}</p>}
     </main>

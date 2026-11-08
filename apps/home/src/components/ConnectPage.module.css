@@ -10,3 +10,40 @@
   font: 600 1.75rem var(--font-mono);
   letter-spacing: 0.12em;
 }
+
+/* The app and the account, side by side over the title, a link between them */
+.handshake {
+  flex-wrap: nowrap;
+  gap: var(--space-loose);
+  padding-block: var(--space);
+}
+
+/* What joins them: a small round link */
+.link {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--color-outline);
+  border-radius: 50%;
+  background: var(--color-surface);
+  color: var(--color-text-strong);
+}
+
+/* A point of what an app gets: its shape at the top of its lines */
+.point {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: var(--space-loose);
+  padding-block: 14px;
+}
+
+/* Don't allow and Allow, side by side, as wide as each other */
+.answer {
+  flex-wrap: nowrap;
+  gap: var(--space);
+
+  & > * {
+    flex: 1;
+  }
+}
