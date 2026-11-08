@@ -44,6 +44,30 @@ so it always matches the code.
 `spaces_assign`, `spaces_remove_member`, `spaces_step_down`, `spaces_succeed`
 and `spaces_close_invite` return `spaces.access()` afterwards.
 
+### Spaces
+
+`spaces_list` gives `spaces.list()` without `writable` and `role`. Those are
+what this node saw when it last opened a space, and a node that has not
+opened one since, like the MCP service's, would say you hold nothing there.
+
+`spaces_access` gives `spaces.access()`, plus `names`: the name each person
+gave, by DID. That covers the DIDs in a record's `root` and `createdBy`, so
+one call says who is in a space, what you hold there, and who wrote what.
+
+### Records
+
+`records_query`, `records_get` and `records_linked` give each record without
+what every sound version carries alike: `version`, `seq`, `space`, `author`
+(the session key), `encrypted`, and `verified` and `conforms` when they are
+true. Empty `computed` and `included` go too. A version that fails a check
+keeps `verified: false` or `conforms: false`, with its `reason` or `issues`.
+`records_history` gives versions whole.
+
+`records_query` gives 50 records a page by default, and stops early at the
+record that would take the page past 40,000 characters of JSON, so one call
+can't fill an agent's context. Its `cursor` is the last record given, so the
+next page picks up after it. A page always has at least one record.
+
 ### Collections
 
 `collections_list` without `names` gives each collection in a line:

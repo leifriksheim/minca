@@ -162,7 +162,7 @@ describe('profiles', () => {
     assert.equal(await nameIn(carol.node, space, carol.node.did), undefined);
   });
 
-  test('agents read names through spaces_profiles', async () => {
+  test('agents read names through spaces_access', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const alice = await person(hub, 'Alice');
     const { id: space } = await alice.node.spaces.create({ name: 'Notes', visibility: 'private' });
@@ -172,12 +172,9 @@ describe('profiles', () => {
       4000,
       'own profile',
     );
-    const listed = z
-      .array(z.object({ did: z.string(), name: z.string() }))
-      .parse(await runAction(alice.node, 'spaces_profiles', { space }));
-    assert.deepEqual(
-      listed.map((p) => [p.did, p.name]),
-      [[alice.node.did, 'Alice']],
-    );
+    const { names } = z
+      .object({ names: z.record(z.string(), z.string()) })
+      .parse(await runAction(alice.node, 'spaces_access', { space }));
+    assert.deepEqual(names, { [alice.node.did]: 'Alice' });
   });
 });
