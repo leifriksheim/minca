@@ -182,6 +182,11 @@ The shapes are the brand. A space is a grid, and each tool in it is a shape.
   for marking points in a list. Not as decoration for its own sake.
 - Points in a list are marked with these shapes, never with line icons: on
   the site, `Marked` (`apps/site/src/pages/Site.tsx`) sets them in a ruled grid.
+- A list of ways on (making an account or finding one, choosing an account,
+  starting a group, how it is run) is `Choices` (`apps/shared/src/Choices.tsx`):
+  a ruled list, a row per choice, marked with its shape or a face at the size a
+  contact's is, a chevron where it goes on, a ring where one is picked. A screen
+  that offers choices uses it rather than drawing rows of its own.
 
 ## Motion
 

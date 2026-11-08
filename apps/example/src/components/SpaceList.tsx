@@ -15,7 +15,7 @@ import { useSpaceUnread } from '../seen';
 import { useSpaceFace } from '../pictures';
 import { useFileUrl } from '../files';
 import { Count } from './apps/AppIcon';
-import { Options, type Option } from './Options';
+import { Choices, type Choice } from '@minca/app-shared/Choices';
 import styles from './SpaceList.module.css';
 import steps from './ConnectScreen.module.css';
 
@@ -56,7 +56,7 @@ export function SpaceMark({ space, size = 40 }: { space: Pick<SpaceSummary, 'id'
  * The ways a group can be run, in plain words: each founds it with a preset's roles
  * (`rolePresets` in `packages/core/src/space/presets.ts`).
  */
-const RUNS: ReadonlyArray<Option<Run> & { readonly preset: keyof typeof rolePresets }> = [
+const RUNS: ReadonlyArray<Choice<Run> & { readonly preset: keyof typeof rolePresets }> = [
   {
     value: 'friends',
     preset: 'team',
@@ -82,7 +82,7 @@ const RUNS: ReadonlyArray<Option<Run> & { readonly preset: keyof typeof rolePres
 type Run = 'friends' | 'community' | 'coop';
 
 /** Who can read it; who can write is decided by the roles */
-const READS: ReadonlyArray<Option<SpaceVisibility>> = [
+const READS: ReadonlyArray<Choice<SpaceVisibility>> = [
   {
     value: 'private',
     shape: 'lock',
@@ -299,13 +299,13 @@ export function SpaceDialog({
         )}
         {step === 'run' && (
           <>
-            <Options label="How it's run" options={RUNS} picked={run} onPick={setRun} />
+            <Choices label="How it's run" options={RUNS} picked={run} onPick={setRun} />
             <small>Roles can be changed later, under Roles.</small>
           </>
         )}
         {step === 'read' && (
           <>
-            <Options label="Who can read it" options={READS} picked={visibility} onPick={setVisibility} />
+            <Choices label="Who can read it" options={READS} picked={visibility} onPick={setVisibility} />
             <small>This one can't be changed later.</small>
           </>
         )}

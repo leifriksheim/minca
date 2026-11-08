@@ -14,6 +14,7 @@
     "./HostAddress": "./src/HostAddress.tsx",
     "./HostOffer": "./src/HostOffer.tsx",
     "./Modal": "./src/Modal.tsx",
+    "./Choices": "./src/Choices.tsx",
     "./Toggle": "./src/Toggle.tsx",
     "./rememberedPictures": "./src/rememberedPictures.ts",
     "./Ask": "./src/Ask.tsx",

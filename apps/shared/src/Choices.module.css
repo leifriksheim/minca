@@ -1,0 +1,46 @@
+/* A row to pick: room at the end for its chevron or its radio, the chosen one on the soft action colour */
+.choice {
+  min-height: 4rem;
+
+  &[aria-checked='true'],
+  &[aria-checked='true']:hover:not(:disabled) {
+    background: var(--color-action-soft);
+  }
+}
+
+/* A face in a shape's place, as wide as one */
+.mark {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+/* Where a row leads: on, quietly, darker when pointed at */
+.chevron {
+  display: inline-flex;
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--color-text-muted);
+  transition: color 0.15s ease;
+
+  :hover > & {
+    color: var(--color-text-strong);
+  }
+}
+
+/* One of a few: an empty ring, filled with a tick when it is the one */
+.radio {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-left: auto;
+  border: 1.5px solid var(--color-field);
+  border-radius: 50%;
+  color: var(--color-on-action);
+
+  [aria-checked='true'] > & {
+    border-color: var(--color-action);
+    background: var(--color-action);
+  }
+}

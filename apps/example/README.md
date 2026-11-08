@@ -55,7 +55,7 @@ and the home at the rest of `npm run dev`. Override any of them in a
 
 ## Connecting
 
-This app never signs anyone in. **Connect with Minca** opens the account home
+This app never signs anyone in. **Continue with Minca** opens the account home
 (`home/`, on :5174 in development) in a small window: you make an account or
 sign in there, and allow this app your whole account. The home hands back a
 note signed by your account for this app's own key; the app keeps it for seven

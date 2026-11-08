@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { useAuth } from '@minca/react';
+import { KnownWays } from './credentials';
 
 /**
  * Proof that the person at this screen is the account's owner, before
  * anything that hands out the whole account: the recovery code, or the
  * account sent to a phone. Being signed in is not enough, since a sign-in can
  * be kept for days on a computer anyone may walk up to.
+ *
+ * It asks the way signing in does, so the two look the same.
  */
 export function ConfirmItsYou({
   why,
@@ -21,7 +24,7 @@ export function ConfirmItsYou({
   const hasPasskey = (state.entry?.shortcuts.length ?? 0) > 0;
   const hasPassword = state.entry?.hasPassword ?? false;
   const [byCode, setByCode] = useState(!hasPasskey && !hasPassword);
-  const [answer, setAnswer] = useState('');
+  const [code, setCode] = useState('');
   const [wrong, setWrong] = useState<string | null>(null);
 
   const confirm = async (proof: Parameters<typeof auth.confirm>[0]) => {
@@ -33,40 +36,40 @@ export function ConfirmItsYou({
   };
 
   return (
-    <aside className="stack">
+    <aside className="stack" data-gap="loose">
       <strong>Confirm it’s you to {why}.</strong>
-      {hasPasskey && !byCode && (
-        <div>
-          <button onClick={() => void confirm({ passkey: true })} disabled={state.busy} data-intent="primary">
-            {state.busy ? 'Waiting…' : 'Use your passkey'}
-          </button>
-        </div>
-      )}
-      {(hasPassword || byCode) && (
+      {byCode ? (
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            if (answer) void confirm(byCode ? { code: answer.trim() } : { password: answer });
+            if (code) void confirm({ code: code.trim() });
           }}
           className="row"
         >
           <input
-            type={byCode ? 'text' : 'password'}
-            value={answer}
-            onChange={(event) => setAnswer(event.target.value)}
-            placeholder={byCode ? 'Your recovery code' : 'Your password'}
-            autoComplete={byCode ? 'off' : 'current-password'}
+            value={code}
+            onChange={(event) => setCode(event.target.value)}
+            placeholder="Your recovery code"
+            autoComplete="off"
             spellCheck={false}
-            aria-label={byCode ? 'Recovery code' : 'Password'}
+            autoFocus
+            aria-label="Recovery code"
           />
-          <button
-            type="submit"
-            disabled={!answer || state.busy}
-            data-intent={hasPasskey && !byCode ? undefined : 'primary'}
-          >
+          <button type="submit" disabled={!code || state.busy} data-intent="primary">
             Confirm
           </button>
         </form>
+      ) : (
+        <KnownWays
+          account={state.session?.account.name ?? 'My account'}
+          hasPasskey={hasPasskey}
+          hasPassword={hasPassword}
+          busy={state.busy}
+          passkeyLabel="Confirm with passkey"
+          passwordLabel="Confirm"
+          onPasskey={() => confirm({ passkey: true })}
+          onPassword={(password) => confirm({ password })}
+        />
       )}
       {wrong && <p role="alert">{wrong}</p>}
       <div className="row">
@@ -74,7 +77,7 @@ export function ConfirmItsYou({
           <button
             onClick={() => {
               setByCode((was) => !was);
-              setAnswer('');
+              setCode('');
               setWrong(null);
             }}
             data-intent="ghost"
