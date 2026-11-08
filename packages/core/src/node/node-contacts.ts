@@ -139,6 +139,21 @@ export function createNodeContacts(ctx: NodeContext) {
     }
   }
 
+  /** The account's profile as the open spaces were last told it, by when it was written */
+  let told: string | null = null;
+
+  /**
+   * Tells the open spaces a profile changed on another device. Only when the profile did:
+   * the registry changes for many other reasons, and a write that doesn't take each time
+   * would otherwise be written again on every one of them.
+   */
+  async function followProfile(): Promise<void> {
+    const at = (await ownProfile())?.updatedAt ?? null;
+    if (at === told) return;
+    told = at;
+    await publishProfileToOpenSpaces();
+  }
+
   /** Writes the account's profile, and tells every open space */
   async function writeProfile(registryRt: SpaceRuntime, profile: AccountProfile) {
     const written = await registryRt.upsertSystem<AccountProfile>(PROFILE_COLLECTION, PROFILE_KEY, profile);
@@ -947,5 +962,5 @@ export function createNodeContacts(ctx: NodeContext) {
     },
   });
 
-  return Object.freeze({ account, contacts, inbox, publishProfile, publishProfileToOpenSpaces });
+  return Object.freeze({ account, contacts, inbox, publishProfile, followProfile });
 }

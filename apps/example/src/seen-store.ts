@@ -58,12 +58,6 @@ function spaceSeenOf(body: unknown): (SpaceSeen & { readonly space: string }) | 
   return { space: body.space, since: body.since, apps: Object.fromEntries(looks.map((l) => [l.app, l.at])) };
 }
 
-/** Whether a stored record lacks a look made here: an earlier start, or a later look at some app */
-function lacks(stored: SpaceSeen, here: SpaceSeen): boolean {
-  if (here.since < stored.since) return true;
-  return Object.entries(here.apps).some(([app, at]) => at > (stored.apps[app] ?? ''));
-}
-
 /** The later of two times for each app: a record from another device never takes back a look made here */
 function merged(a: SpaceSeen, b: SpaceSeen): SpaceSeen {
   const apps: Record<string, string> = { ...a.apps };
@@ -99,20 +93,14 @@ export function createSeenStore(node: P2PNode) {
       }
     }
     const next = new Map(seen);
-    /** Spaces whose record lost reads this device made, when two devices wrote at once */
-    const lost: string[] = [];
     for (const [space, one] of found) {
       const here = next.get(space);
       next.set(space, here ? merged(one, here) : one);
-      if (here && !unwritten.has(space) && lacks(one, here)) lost.push(space);
     }
     loaded = true;
+    // Only read: a read made here that another device's write lost goes out with this device's next
+    // look. Written back now, every device would answer every other's write, for ever.
     changed(next);
-    // Written back, so every device ends up with the reads of both.
-    for (const space of lost) {
-      unwritten.add(space);
-      keep(space);
-    }
   };
 
   const write = async (space: string) => {

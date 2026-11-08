@@ -247,7 +247,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       emit({ type: 'account' });
       void reconcile();
       // A rename on another device reaches the spaces open here too.
-      void people.publishProfileToOpenSpaces();
+      void people.followProfile();
     }
   };
 
