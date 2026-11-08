@@ -18,6 +18,7 @@ import {
   noteTerms,
   READ_COMMAND,
   RECORDS_COMMAND,
+  type NoteLimits,
   type NoteTerms,
 } from '../identity/abilities.js';
 import type { RootSigner } from '../identity/root-signer.js';
@@ -230,16 +231,16 @@ export function homeAddress(input: string): string {
   try {
     url = new URL(withScheme);
   } catch {
-    throw new Error(`"${trimmed}" is not a web address.`);
+    throw new Error(`"${trimmed}" isn’t a web address. Type one like home.minca.social.`);
   }
   const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
   // Browsers parse more than they should ("not a url" becomes a host), so ask
   // for a name that could be a real domain.
   if (!loopback && !/^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i.test(url.hostname)) {
-    throw new Error(`"${trimmed}" is not a web address.`);
+    throw new Error(`"${trimmed}" isn’t a web address. Type one like home.minca.social.`);
   }
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) {
-    throw new Error('An account home must be on https.');
+    throw new Error('An account home must be on https://. Check the address.');
   }
   if (url.pathname === '/' || url.pathname === '') url.pathname = '/connect';
   url.hash = '';
@@ -248,17 +249,37 @@ export function homeAddress(input: string): string {
 }
 
 /**
+ * What a person may keep a records-only note to, at their home: some
+ * collections, and whether it deletes. Absent: every collection, deleting too.
+ */
+export type RecordLimits = NoteLimits;
+
+/**
+ * Collections a key kept to some collections may write anyway: saying what it
+ * is doing (`std.activity`), and proposing collections for someone who may add
+ * them (`std.blueprint`). Without them an agent can neither show its work nor
+ * ask for more.
+ */
+export const AGENT_COLLECTIONS: ReadonlyArray<string> = Object.freeze(['std.activity', 'std.blueprint']);
+
+/**
  * The terms of the note a grant carries, for these spaces. Writing is every
  * command; `records` is records only, for a key the account trusts less: it
  * can't define collections, change who may do what, or write for the
- * account (`identity/abilities.ts`).
+ * account (`identity/abilities.ts`). Records only may be kept further by
+ * `limits`: to some collections, which always adds {@link AGENT_COLLECTIONS},
+ * and from deleting.
  */
 export function grantTerms(
   access: 'read' | 'write' | 'records',
   spaceIds: ReadonlyArray<string> | 'all',
+  limits: RecordLimits = {},
 ): NoteTerms {
-  const command = access === 'write' ? ALL_COMMAND : access === 'records' ? RECORDS_COMMAND : READ_COMMAND;
-  return noteTerms(command, spaceIds);
+  if (access !== 'records') return noteTerms(access === 'write' ? ALL_COMMAND : READ_COMMAND, spaceIds);
+  return noteTerms(RECORDS_COMMAND, spaceIds, {
+    ...(limits.collections ? { collections: [...limits.collections, ...AGENT_COLLECTIONS] } : {}),
+    ...(limits.deletes === false ? { deletes: false } : {}),
+  });
 }
 
 // ─── The app's side ──────────────────────────────────────────────────
@@ -476,7 +497,10 @@ function checkCarryGrant(grant: CarryGrant): void {
 
 function openHome(homeUrl: URL): Window {
   const popup = globalThis.open(homeUrl.href, 'minca-home', popupFeatures(460, 720));
-  if (!popup) throw new Error('The browser blocked the window. Allow pop-ups for this site and try again.');
+  if (!popup)
+    throw new Error(
+      'The browser blocked the window your account home opens in. Allow pop-ups for this site, then try again.',
+    );
   return popup;
 }
 
@@ -535,16 +559,22 @@ function askHome<T>(
         done(() => resolve(data.grant as T));
       else if (data.type === DENIED)
         done(() =>
-          reject(new Error(typeof data.reason === 'string' ? data.reason : 'Access was not given.')),
+          reject(
+            new Error(
+              typeof data.reason === 'string' ? data.reason : 'You didn’t allow it at your account home.',
+            ),
+          ),
         );
     };
     const watch = globalThis.setInterval(() => {
-      if (popup.closed) done(() => reject(new Error('The window was closed before access was given.')));
+      if (popup.closed)
+        done(() => reject(new Error('Your account home was closed before you allowed it. Try again.')));
       // Until the home answers; one that has its request already ignores the rest.
       else send();
     }, 500);
     const timer = globalThis.setTimeout(
-      () => done(() => reject(new Error('No answer from your account home.'))),
+      () =>
+        done(() => reject(new Error('Your account home didn’t answer. Check its address, and try again.'))),
       timeoutMs,
     );
     globalThis.addEventListener('message', onMessage);

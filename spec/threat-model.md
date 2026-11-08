@@ -1052,8 +1052,16 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     twenty minutes at most, and in memory while a node runs. A disconnect the
     service sees drops the sealed copy, and with it the token; losing its
     data folder ends every connection. While the app uses it, a node of its holds the spaces
-    the person picked in memory, reads them and writes records there "via
-    agent", as the app's model asks; and whoever holds its sealing key and a
+    its calls name in memory, reads them and writes records there "via
+    agent", as the app's model asks. The person gives it some spaces, or every
+    space: then its grant carries the account key, which opens every private
+    space the account is in or joins later, and keeps opening them after a
+    disconnect, since it is derived from the seed and no revoke takes it back.
+    A compromise of the running service while that connection is in use
+    therefore reads, for good, every space of that account whose ciphertext
+    it can get, where some spaces lose only those; the home says so when the
+    person chooses (06 §2.5). Kept to some collections or from deleting, it
+    writes nothing else, by its note, which every peer checks (01 §8); and whoever holds its sealing key and a
     token can do the same until the note runs out or the person disconnects
     it. A write is done once the space's keepers have it (05 §9), or, in a
     space that names none, once a member's device online then does, which the
@@ -1086,8 +1094,9 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     disconnects them all, and one more allowed, by a sign-in someone else
     started, shows as nothing new. The reference service takes a key only with
     the private half that goes with it, since a note travels with every record
-    and is no secret; refuses a note for the whole account, read from the note
-    itself; and reaches the spaces through the always-on nodes and relays
+    and is no secret; takes the account key only with a note for every space,
+    and a note for every space only with the account key, each read from the
+    note itself, and never the contact key; and reaches the spaces through the always-on nodes and relays
     the grant's invites and the spaces name only over TLS at public
     addresses, besides its operator's own (`network.reach`), so a grant's
     invites and the records its node reads can't make it connect inside its
@@ -1119,9 +1128,9 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     it keep or do is an app's registration, gone after a day unless used;
     each sign-in's sealed grant, up to the 64 KB a consent post may be,
     until its note runs out, at most a month;
-    nodes that run while called, each with up to 8 spaces those always-on
-    nodes carry, in memory, and up to an hour after for writes their keepers
-    don't have; each a few bytes of places for a key that wrote, for a
+    nodes that run while called, each holding in memory the spaces its calls
+    name that those always-on nodes carry, at most 32 MB, and up to an hour
+    after for writes their keepers don't have; each a few bytes of places for a key that wrote, for a
     month; and, through its own spaces' records, requests to as many public
     hosts as it names, and sockets to them while its node runs, their names
     looked up a few at a time, each for two seconds at most, so they hold up

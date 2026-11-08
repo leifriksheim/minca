@@ -15,7 +15,14 @@ import { profileKey } from '../src/node/space-profiles.js';
 import { runAction } from '../src/node/actions.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
-import { noteTerms } from '../src/identity/abilities.js';
+import {
+  deletesRecords,
+  noteCollections,
+  noteGrants,
+  noteSpaces,
+  noteTerms,
+  writeRequirement,
+} from '../src/identity/abilities.js';
 import type { Policy } from '../src/identity/policy.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
@@ -360,6 +367,90 @@ describe('an agent acting for a person', () => {
     );
     assert.equal((await bob.node.records.get(space, outside.key))?.verified ?? null, null);
     assert.equal((await bob.node.records.get(space, inside.key))?.verified, true);
+  });
+
+  test('a note kept from deleting: every peer refuses its delete, and takes the same delete without that statement', async () => {
+    const { alice, bob, space } = await setup();
+    const written = await alice.node.records.put(space, 'app.note', { text: 'kept' });
+    const bobs = async () => createStorageProvider(await bob.stores(`spaces/${space}`));
+    await until(async () => (await bob.node.records.get(space, written.key)) !== null, 4000, 'the note');
+    const current = await (await stored(alice.stores, space)).getCurrent(written.key);
+    const noDeletes = noteTerms('/record', 'all', { deletes: false }).policy ?? [];
+    const deleting = { collection: 'app.note', body: null, deleted: true, version: nextVersion(current!) };
+
+    await letGo(alice.node, space);
+    const refused = await forgeAsAgent(alice, space, deleting, { policy: noDeletes });
+    await hold(alice.node, space);
+    await settle(600);
+    // A delete is `/record/write` with `deleted: true`, which the statement refuses (01 §8).
+    assert.equal(await (await bobs()).getVersion(refused.id), null);
+    assert.ok(await bob.node.records.get(space, written.key), 'still there for Bob');
+
+    await letGo(alice.node, space);
+    const taken = await forgeAsAgent(alice, space, deleting);
+    await hold(alice.node, space);
+    await until(
+      async () => (await (await bobs()).getVersion(taken.id)) !== null,
+      4000,
+      'the delete /record allows',
+    );
+  });
+
+  test('a note kept to some collections, as a home writes it, reaches only those, and patterns cover what is under them', async () => {
+    const terms = noteTerms('/record', ['s1', 's2'], { collections: ['app.todo.*', 'std.activity'] });
+    assert.deepEqual(terms.policy, [
+      [
+        'or',
+        [
+          ['==', '.space', 's1'],
+          ['==', '.space', 's2'],
+        ],
+      ],
+      [
+        'or',
+        [
+          ['==', '.collection', null],
+          ['like', '.collection', 'app.todo.*'],
+          ['like', '.collection', 'std.activity'],
+        ],
+      ],
+    ]);
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await person(hub);
+    const note = await createLocalRootSigner(ada.me, ada.manager.getProvider()).delegate({
+      audience: (await agentFor(ada, 'all')).did,
+      ...terms,
+      expiration: Math.floor(Date.now() / 1000) + 3600,
+    });
+    // What a program shows: the spaces and the collections, each read past the other's statement.
+    assert.deepEqual(noteSpaces(note), ['s1', 's2']);
+    assert.deepEqual(noteCollections(note), ['app.todo.*', 'std.activity']);
+    assert.equal(deletesRecords(note), true);
+    const covers = (space: string, collection: string, deleted = false) =>
+      noteGrants(note, writeRequirement(space, collection, deleted));
+    assert.ok(covers('s1', 'app.todo.item'));
+    assert.ok(covers('s2', 'app.todo.list', true));
+    assert.ok(covers('s1', 'std.activity'));
+    assert.ok(!covers('s1', 'app.todos'), 'a pattern covers what is under it, not what starts the same');
+    assert.ok(!covers('s1', 'std.activity.x'), 'a name is itself only');
+    assert.ok(!covers('s3', 'app.todo.item'), 'nor another space');
+    // Sharing a space to view names no collection: reading isn't kept to collections, so it passes (03 §7.4).
+    assert.ok(noteGrants(note, { space: 's1', cmd: '/record/read', args: { space: 's1' } }));
+
+    const kept = await createLocalRootSigner(ada.me, ada.manager.getProvider()).delegate({
+      audience: (await agentFor(ada, 'all')).did,
+      ...noteTerms('/record', 'all', { deletes: false }),
+      expiration: Math.floor(Date.now() / 1000) + 3600,
+    });
+    assert.equal(deletesRecords(kept), false);
+    assert.equal(noteSpaces(kept), 'all', 'keeping it from deleting limits no space');
+    assert.ok(noteGrants(kept, writeRequirement('s1', 'app.x')));
+    assert.ok(!noteGrants(kept, writeRequirement('s1', 'app.x', true)));
+    assert.ok(noteGrants(kept, { space: 's1', cmd: '/record/read', args: { space: 's1' } }));
+    // No collections must never read as every one: an `or` of nothing holds (01 §7.4).
+    assert.throws(() => noteTerms('/record', 'all', { collections: [] }), /at least one collection/);
+    assert.throws(() => noteTerms('/record', 'all', { collections: ['app.*.item'] }), /not a collection/);
+    assert.throws(() => noteTerms('/record', 'all', { collections: ['*'] }), /not a collection/);
   });
 
   test('taking someone out of the space, under a records-only note, is ignored too', async () => {
@@ -1322,6 +1413,110 @@ describe('a program connected by code, through the account home', () => {
     assert.deepEqual(
       auth.connections().map((c) => c.name),
       ['Agent on desk'],
+    );
+  });
+
+  test('the person may keep a records-only key asked for every space to some spaces, some collections, and from deleting', async () => {
+    const auth = await home(createFakeHub({ latencyMs: 1 }));
+    const session = auth.getState().session!;
+    const club = await session.node.spaces.create({ name: 'Club', visibility: 'private' });
+    await session.node.spaces.create({ name: 'Elsewhere', visibility: 'private' });
+    const origin = 'https://mcp.test';
+    const request = async (audience: string, extra: object = {}) =>
+      asked({ v: 1, access: 'write', scope: 'account', recordsOnly: true, audience, ...extra } as const);
+
+    const kept = await auth.grant({
+      origin,
+      request: await request('did:key:zKept'),
+      spaceIds: [club.id],
+      everySpace: false,
+      limits: { collections: ['app.todo.*', 'app.todo.*', ' app.note '], deletes: false },
+    });
+    assert.equal(kept.scope, 'spaces', 'kept to the spaces picked');
+    assert.equal(kept.accountKey, undefined, 'so no account key, which opens every space');
+    assert.deepEqual(
+      kept.spaces.map((space) => space.id),
+      [club.id],
+    );
+    assert.ok(kept.spaces[0]?.memberKey, 'and the member key of the one private space it got');
+    assert.equal(kept.note.payload.cmd, '/record');
+    assert.equal(kept.note.payload.sub, `space:${club.id}`);
+    assert.deepEqual(kept.note.payload.pol, [
+      [
+        'or',
+        [
+          ['==', '.collection', null],
+          ...['app.note', 'app.todo.*', 'std.activity', 'std.blueprint'].map((one) => [
+            'like',
+            '.collection',
+            one,
+          ]),
+        ],
+      ],
+      ['!=', '.deleted', true],
+    ]);
+    assert.deepEqual(auth.connections()[0]?.limits, {
+      collections: ['app.note', 'app.todo.*'],
+      deletes: false,
+    });
+
+    // Every space, as asked, kept only from deleting: the account key, and a note about the account.
+    const every = await auth.grant({
+      origin: 'https://other.test',
+      request: await request('did:key:zEvery'),
+      spaceIds: [],
+      limits: { deletes: false },
+    });
+    assert.ok(every.accountKey);
+    assert.equal(every.note.payload.sub, every.did);
+    assert.deepEqual(every.note.payload.pol, [['!=', '.deleted', true]]);
+    assert.equal(every.note.payload.cmd, '/record');
+
+    // What can't be kept: an app that needs the account key, limits on more than records, or nothing at all.
+    await assert.rejects(
+      auth.grant({
+        origin: 'https://whole.test',
+        request: await asked({
+          v: 1,
+          access: 'write',
+          scope: 'account',
+          audience: 'did:key:zWhole',
+        } as const),
+        spaceIds: [club.id],
+        everySpace: false,
+      }),
+      /Only a key given records only can be kept to some spaces/,
+    );
+    await assert.rejects(
+      auth.grant({
+        origin: 'https://app.test',
+        request: await asked({ v: 1, access: 'write', audience: 'did:key:zApp' } as const),
+        spaceIds: [club.id],
+        limits: { deletes: false },
+      }),
+      /Only a key given records only can be kept to some collections/,
+    );
+    await assert.rejects(
+      auth.grant({ origin, request: await request('did:key:zNone'), spaceIds: [], everySpace: false }),
+      /Pick at least one space/,
+    );
+    await assert.rejects(
+      auth.grant({
+        origin,
+        request: await request('did:key:zEmpty'),
+        spaceIds: [],
+        limits: { collections: [] },
+      }),
+      /at least one collection/,
+    );
+    await assert.rejects(
+      auth.grant({
+        origin,
+        request: await request('did:key:zBad'),
+        spaceIds: [],
+        limits: { collections: ['App Todo'] },
+      }),
+      /isn't a collection/,
     );
   });
 });

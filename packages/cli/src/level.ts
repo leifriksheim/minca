@@ -45,12 +45,22 @@ async function levelIn(node: P2PNode, space: string, waitMs: number): Promise<bo
   }
 }
 
-/** Waits for the node to be level in the space; refuses when it can't be, in time */
+/** Waits for the node to be level in the space; refuses when it can't be, in time, saying why */
 export async function catchUp(node: P2PNode, space: string): Promise<void> {
-  if (!(await levelIn(node, space, CATCH_UP_MS)))
+  if (await levelIn(node, space, CATCH_UP_MS)) return;
+  const listed = await node.spaces.list().catch(() => []);
+  if (!listed.some((one) => one.id === space))
     throw new Error(
-      'This space can’t be reached through the always-on nodes right now. Try again in a moment.',
+      `There is no space ${space} here: spaces_list shows the ones this connection can use. ` +
+        'If the person just joined it, try again in a moment.',
     );
+  const status = await node.spaces.status(space).catch(() => null);
+  throw new Error(
+    status && status.peers.length === 0
+      ? 'Nobody who keeps this space is online right now: no always-on node, and no member’s device. ' +
+          'Try again later, or ask the person to open Minca.'
+      : 'This space’s always-on nodes didn’t answer in time, so what is here may be behind. Try again in a moment.',
+  );
 }
 
 /**

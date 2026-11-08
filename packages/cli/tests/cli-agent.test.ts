@@ -116,7 +116,7 @@ describe('the minca command, as the connected agent', () => {
     closed = true;
     await assert.rejects(
       minca('records', 'put', '--space', space, '--collection', 'app.note', '--body', '{"text":"late"}'),
-      /can’t be reached through the always-on nodes/,
+      /Nobody who keeps this space is online right now/,
     );
   });
 });

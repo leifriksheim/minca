@@ -15,9 +15,10 @@ claude mcp add --transport http minca https://mcp.minca.social/mcp
 
 [minca.social/mcp](https://minca.social/mcp) has one-click links for Claude
 and Cursor. The app opens a page where you sign in at your account home and
-pick the spaces it may use, up to 8. The access lasts 30 days. Then its
-tools arrive, and the chat app's own
-model does the thinking.
+choose what it gets: every space, including ones you make later, or up to 8
+you pick, and, if you like, only some collections and no deleting. The access
+lasts 30 days. Then its tools arrive, and the chat app's own model does the
+thinking.
 
 How the service works, and how to run your own, is under
 [The MCP service](#the-mcp-service) below.
@@ -60,6 +61,33 @@ What it writes counts as the person's. Each record carries
 `recordsOnly: true`, which apps may show. The example app says "via agent".
 
 The note's format is in [spec 01 §8](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md).
+
+## Keeping an agent to less
+
+At the account home the person can keep an agent's note to some collections,
+and from deleting. Every peer checks both, as it checks the rest of the note:
+
+```typescript
+import { grantTerms } from '@minca/core/session';
+
+// Every space, writing only to-dos, never deleting.
+grantTerms('records', 'all', { collections: ['app.todo.*'], deletes: false });
+```
+
+A collection is a name (`app.todo.item`) or every one under a prefix
+(`app.todo.*`). Kept to some collections, the agent may still write
+`std.activity` and `std.blueprint`, so it can say what it is doing and propose
+what it needs. `grantTerms` adds them.
+
+Two things to know before offering these:
+
+- A note limits writing, never reading. An agent kept to `app.todo.*` still
+  reads every collection in the spaces it got.
+- Keeping it from deleting doesn't keep what a record said: an edit replaces
+  it too, unless the collection keeps its history (`history: 'all'`).
+
+A program sees what its note allows with `noteSpaces`, `noteCollections` and
+`deletesRecords`, and `node.records.can` answers with the note in mind.
 
 ## The tools
 
@@ -160,14 +188,18 @@ account home does.
 endpoint at `/mcp`, and apps sign in with OAuth.
 
 The consent page the app opens is an app like any other to the account home.
-It makes a key in the browser and asks for a records-only note in the spaces
-the person picks, with `connectToHome`. It hands the key and note to the
-service. The service checks them with
+It makes a key in the browser and asks for a records-only note for every
+space, with `connectToHome`; the person may keep it to some spaces at their
+home. It hands the key and note to the service. The service checks them with
 `checkGrant(grant, did, { recordsOnly: true })`, and keeps them sealed under
 a key only the app's access token carries.
 
+A grant for every space carries the account key. It reads every space the
+account is in, now and later, and disconnecting doesn't take that back: it is
+the price of never connecting again for a new space.
+
 Each call starts a node in memory from what the token opens
-(`startGrantedAgent`). It reaches only the always-on nodes and relays the
+(`startGrantedAgent`), and opens a space only when a call names it. It reaches only the always-on nodes and relays the
 person's invites and spaces name at public addresses, and the service's own
 (`network.reach`, see [The node](node.md)). A write is done once the space's
 keepers have it (`spaces.kept`). The one thing kept between calls is where

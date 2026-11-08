@@ -116,7 +116,7 @@ export function createVersions({ space, storage, provider, keyring }: SpaceBase)
   // The note behind a key must cover this space; whether its account may write is the history's question.
   const checkVersion = createVersionCheck({
     provider,
-    required: (version) => writeRequirement(space.id, version.collection),
+    required: (version) => writeRequirement(space.id, version.collection, version.deleted === true),
   });
 
   /** Signature verdicts. Only passes are kept: failures are what a stranger can mint for free. */

@@ -147,10 +147,13 @@ export {
   noteGrants,
   noteTerms,
   noteSpaces,
+  noteCollections,
+  deletesRecords,
+  COLLECTION_PATTERN,
   writeRequirement,
   grantsRecordsOnly,
 } from './identity/abilities.js';
-export type { NoteTerms } from './identity/abilities.js';
+export type { NoteLimits, NoteTerms } from './identity/abilities.js';
 
 // Schema & Data Structures
 export { createSchemaEngine } from './schema/schema-engine.js';
