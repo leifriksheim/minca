@@ -147,7 +147,7 @@ export function ConnectPage() {
         <Asking incoming={incoming} step="Confirm it’s you" />
         <WhichAccount label="Continuing as" busy={false} onSwitch={() => setChosen(null)} />
         <ConfirmItsYou
-          why={`continue to ${asker(incoming.origin)}`}
+          why={`continue to ${who(incoming)}`}
           onConfirmed={() => setProved((n) => n + 1)}
           onCancel={() => setChosen(null)}
         />
@@ -181,9 +181,10 @@ function ChooseAccount({
   const current = state.session?.account.id ?? null;
   const named = (name: string) => state.accounts.filter((account) => account.name === name).length;
   return (
-    <Frame top={<Handshake incoming={incoming} />} title="Choose an account">
+    <Frame top={<Handshake />} title="Choose an account">
       <p>
-        to continue to <Origin origin={incoming.origin} />
+        to continue to{' '}
+        {byCode(incoming) ? <strong>{who(incoming)}</strong> : <Origin origin={incoming.origin} />}
       </p>
       <Choices
         label="Accounts"
@@ -230,18 +231,26 @@ function asker(origin: string): string {
     : url.host;
 }
 
+/** Whether a program reached the home by a code: then the origin is the home's own, and tells nothing */
+function byCode(incoming: IncomingRequest): boolean {
+  return !isProposeRequest(incoming.request) && incoming.request.via === 'code';
+}
+
+/** Who is asking, in words: the address the browser reports, or for a program by code, what it calls itself */
+function who(incoming: IncomingRequest): string {
+  return byCode(incoming) && !isProposeRequest(incoming.request)
+    ? `a program calling itself “${incoming.request.name ?? 'a program'}”`
+    : asker(incoming.origin);
+}
+
 /** A small line above sign-in, so it is clear why this window opened */
 function Asking({ incoming, step = 'Sign in' }: { incoming: IncomingRequest; step?: string }) {
   const proposing = isProposeRequest(incoming.request);
   return (
     <aside className="row">
-      <Shape {...shapeFor(incoming.origin)} size={32} />
+      <Shape kind="pass" colour="cobalt" size={32} />
       <p>
-        <strong>
-          {!proposing && incoming.request.via === 'code'
-            ? `A program calling itself “${incoming.request.name ?? 'a program'}”`
-            : asker(incoming.origin)}
-        </strong>{' '}
+        <strong>{byCode(incoming) ? `A${who(incoming).slice(1)}` : who(incoming)}</strong>{' '}
         {proposing ? 'suggests what to notify you about.' : 'wants to use your Minca account.'}{' '}
         <small>
           {step} to decide{proposing ? '.' : ' what it gets.'}
@@ -325,7 +334,7 @@ function Approve({
 
   return (
     <Frame
-      top={<Handshake incoming={incoming} />}
+      top={<Handshake />}
       title={byCode ? `Connect “${request.name ?? 'a program'}”?` : `Connect ${host}?`}
     >
       <p>
@@ -522,7 +531,7 @@ function ApproveCarrier({ incoming, request }: { incoming: IncomingRequest; requ
     });
 
   return (
-    <Frame top={<Handshake incoming={incoming} />} title="Keep your spaces online">
+    <Frame top={<Handshake />} title="Keep your spaces online">
       <p>
         {/* Where it asks from, always: a name is only what the asker calls itself (spec 06 §2.3). */}
         {request.name ? (
@@ -766,14 +775,15 @@ const POINT_COLOURS: Partial<Record<ShapeKind, ShapeColour>> = {
 };
 
 /**
- * Who is asking, and who for, side by side: the app's shape, picked by its
- * address so it is always the same one, and the account's face once there is one.
+ * An app and an account, side by side: the account's face once there is one.
+ * The app is named by its address in the title, never by a picture.
  */
-function Handshake({ incoming }: { incoming: IncomingRequest }) {
+function Handshake() {
   const { state } = useAuth();
   return (
     <div className={`row ${styles.handshake}`} aria-hidden>
-      <Shape {...shapeFor(incoming.origin)} size={56} />
+      {/* The same for every app: a shape picked by its address could be matched by a lookalike one. */}
+      <Shape kind="pass" colour="cobalt" size={56} />
       <span className={styles.link}>
         <Icon name="link" size={16} />
       </span>
