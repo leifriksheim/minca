@@ -61,12 +61,19 @@ what every sound version carries alike: `version`, `seq`, `space`, `author`
 (the session key), `encrypted`, and `verified` and `conforms` when they are
 true. Empty `computed` and `included` go too. A version that fails a check
 keeps `verified: false` or `conforms: false`, with its `reason` or `issues`.
-`records_history` gives versions whole.
+`body` is null when this node can't open the record. `records_history` gives
+versions whole. The CLI prints these actions the same way, so a script that
+needs `version` or `author` reads `records_history`.
+
+To find what someone wrote, filter on `@root` (who wrote the version) or
+`@createdBy`. `@author` is the session key, which these results leave out.
 
 `records_query` gives 50 records a page by default, and stops early at the
-record that would take the page past 40,000 characters of JSON, so one call
-can't fill an agent's context. Its `cursor` is the last record given, so the
-next page picks up after it. A page always has at least one record.
+record that would take the page past 40,000 characters of JSON, so a long
+collection takes several calls. Its `cursor` is the last record given, so the
+next page picks up after it. A page always has its first record whole, with
+what it includes, so one long record, or one with many included, can still
+be more. `records_linked` gives every record that links, in one result.
 
 ### Collections
 

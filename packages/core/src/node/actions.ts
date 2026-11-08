@@ -131,7 +131,7 @@ function recordLine(record: ReadRecord): object {
   };
 }
 
-/** Where a page stops early, in characters of JSON, so one call can't fill an agent's context */
+/** Where a page of records stops early, in characters of JSON, so a long collection takes several calls */
 const PAGE_CHARACTERS = 40_000;
 
 // Inputs reach `run` only after `checkActionInput`, so these find what the schema promised.
@@ -823,9 +823,9 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
     title: 'Find records',
     description:
       'Find records: filter, sort, page, and pull in what links to them. ' +
-      'where: { done: false, "@author": "did:…", amount: { "$gt": 10 } } — bare names are body fields (dotted for nested) ' +
+      'where: { done: false, "@root": "did:…", amount: { "$gt": 10 } } — bare names are body fields (dotted for nested) ' +
       "or the collection's computed fields, which each result carries as computed; " +
-      '"@key", "@author", "@root", "@createdAt", "@updatedAt", "@seq" are about the record; ' +
+      '"@key", "@root" (who wrote this version), "@createdBy", "@createdAt", "@updatedAt", "@seq" are about the record; ' +
       'operators $eq $ne $gt $gte $lt $lte $in $nin $exists $contains, combined with $and $or $not. ' +
       'include: { reactions: { rel: "about", from: "std.reaction", count: true } } — records linking to each result ' +
       '(direction "out" for what each result links to), nested up to 3 deep. ' +
@@ -851,7 +851,8 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
     // runQuery refuses a malformed query, after resolving collection references.
     // A page by default, so a busy chat doesn't fill an agent's context in one call, and one that stops
     // early at the record that would take it past PAGE_CHARACTERS: the cursor is a key, so the next page
-    // picks up after the last one given. The first record is always given, however long.
+    // picks up after the last one given. The first record is always given whole, with what it includes,
+    // so one long record, or one with many included, can still be more.
     run: async (node, input) => {
       const found = await node.records.query(str(input, 'space'), {
         limit: 50,
