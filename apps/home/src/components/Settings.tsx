@@ -650,8 +650,10 @@ function appDetail(app: Connection): ReadonlyArray<string> {
   const extension = url.protocol === 'chrome-extension:' || url.protocol === 'moz-extension:';
   const host = extension ? 'Browser extension' : url.host;
   if (app.access === 'carry') return ['Keeps your spaces online', "Can't read them"];
+  // A key it was given before, and still holds until it is disconnected, may reach more than the latest one.
+  const wider = app.scope !== 'account' && (app.retired ?? []).some((key) => key.scope === 'account');
   const what =
-    app.scope === 'account'
+    app.scope === 'account' || wider
       ? 'your whole account'
       : app.spaces.length
         ? app.spaces.map((space) => space.name).join(', ')

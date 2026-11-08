@@ -295,9 +295,9 @@ function Approve({
   const asksWhole = request.scope === 'account';
   // A key given records only needs nothing only the account key opens, so the person may keep it to some spaces.
   const narrowable = asksWhole && recordsOnly && writes;
-  // On the person's own computer every space is the usual answer; a service someone else runs gets less unless they say.
+  // Every space, as asked, unless the person kept the last connection to some.
   const [reach, setReach] = useState<'every' | 'some'>(() =>
-    previous ? (previous.scope === 'spaces' ? 'some' : 'every') : byCode ? 'every' : 'some',
+    previous?.scope === 'spaces' ? 'some' : 'every',
   );
   const whole = asksWhole && (!narrowable || reach === 'every');
   const choosing = (!asksWhole && request.chooseSpaces !== false) || (narrowable && reach === 'some');

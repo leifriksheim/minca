@@ -2,9 +2,8 @@
  * The consent page's script, in the person's browser (bundled by
  * `consent-bundle.ts`). The page is an app like any other to the account
  * home: it makes a key, opens the home in a popup and asks for a records-only
- * note made out to that key (`connectToHome`), for every space. The home lets
- * the person keep it to some spaces, some collections, or from deleting.
- * Then it hands the key and the note to the host, which runs the agent under
+ * note made out to that key (`connectToHome`), for the spaces the person
+ * picks there, or for every space when they chose that here. Then it hands the key and the note to the host, which runs the agent under
  * them from now on, and goes where the host says: back to the chat app.
  */
 import { didOf } from '@minca/core';
@@ -138,10 +137,12 @@ form.addEventListener('submit', (event) => {
   say('Allow it in the window that opened. Don’t see it? Press the button to open it again.', 'busy');
   // Made while the popup opens, so the popup still counts as the click's.
   const key = newKey();
+  // Every space only when the person picked it here: a home that offers no other choice then gives just that.
+  const scope = new FormData(form).get('scope') === 'account' ? 'account' : 'spaces';
   void connectToHome({
     home,
     key,
-    request: { name: data.name, access: 'write', scope: 'account', recordsOnly: true, days: data.days },
+    request: { name: data.name, access: 'write', scope, recordsOnly: true, days: data.days },
   })
     .then(async (grant) => {
       if (finishing) return;

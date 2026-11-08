@@ -9,7 +9,7 @@
  */
 import { didOf, noteSpaces, type NodeConfig, type P2PNode, type StoreFactory } from '@minca/core';
 import { checkGrant, usableGrant, type Grant } from '@minca/core/session';
-import { startGrantedAgent } from '../agent.js';
+import { holdEverySpace, startGrantedAgent } from '../agent.js';
 import { catchUp } from '../level.js';
 import { isRecord, messageOf } from '../json.js';
 import { importKeyJwk } from '../writer-keys.js';
@@ -230,10 +230,16 @@ export function createSessions(options: {
       options.onRevoked?.(id);
       void stop(id);
     });
+    // Given some spaces, at most a few, it holds them from the start, so it hears a revoke there before any call.
+    // Given every space it holds the account's list, where a revoke reaches it too, and opens spaces as calls name them.
+    const picked = given.grant.scope === 'spaces';
+    const used = new Set<string>(picked ? given.grant.spaces.map((space) => space.id) : []);
+    const stopHolding = picked ? await holdEverySpace(agent.node) : () => {};
     return {
       node: agent.node,
-      used: new Set(),
+      used,
       stop: async () => {
+        stopHolding();
         unsubscribe();
         await agent.stop();
       },
@@ -284,9 +290,9 @@ export function createSessions(options: {
         // there, and write a first version in a line that has one, which ends it (09 §7.5).
         // Checked on every call, since a link that drops leaves it behind again.
         if (space !== undefined) {
-          // Opened only now, by the first call that names it: a session given every space holds what it uses.
-          started.used.add(space);
           await catchUp(started.node, space);
+          // Opened by the first call that names it, and counted once it is a space here: none a caller merely names.
+          started.used.add(space);
         }
         return await work(started.node);
       } finally {

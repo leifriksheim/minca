@@ -316,8 +316,9 @@ the consent page, which says which app it is and where it will send you
 back. There you continue to your account home, as with any app, and choose
 what it gets: up to 8 spaces you pick, or every space, including ones you
 make later. Then allow it: the home signs a records-only note, for 30 days, made out to a key the
-page made. Every space means the service gets your account key while the app
-uses it, which reads every space and which disconnecting can't take back. The
+page made. Every space means the service holds your account key, sealed, for
+as long as the access lasts: it reads every space, your contacts and your
+apps' settings, and disconnecting can't take that back. The
 page hands both to the service, which checks them and keeps them sealed
 under a key only the app's access token carries, itself sealed under a key
 only the service holds. Then you are back in the app,

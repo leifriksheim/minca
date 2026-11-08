@@ -808,6 +808,25 @@ describe('a host’s MCP endpoint', () => {
       grant: await ada.wholeNoteLabelledSpaces(labelledKey.did),
     });
     assert.equal(relabelled.status, 400, 'nor a whole-account note called something else');
+    for (const [what, grant] of [
+      [
+        'a note for every space without the account key',
+        async (did: string) => ({ ...(await ada.everySpace(did)), accountKey: undefined }),
+      ],
+      ['the contact key', async (did: string) => ({ ...(await ada.everySpace(did)), contactKey: 'AAAA' })],
+    ] as const) {
+      const started = await startSignIn(app, host.resource);
+      const key = await browserKey();
+      const answer = await postFromPage(started, 'allow', { key: key.jwk, grant: await grant(key.did) });
+      assert.equal(answer.status, 400, `not ${what}`);
+    }
+    const every = await startSignIn(app, host.resource);
+    const everyKey = await browserKey();
+    const given = await postFromPage(every, 'allow', {
+      key: everyKey.jwk,
+      grant: await ada.everySpace(everyKey.did),
+    });
+    assert.equal(given.status, 200, 'every space, with the account key and a note for every space, is taken');
 
     const started = await startSignIn(app, host.resource);
     const first = await browserKey();

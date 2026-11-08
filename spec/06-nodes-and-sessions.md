@@ -470,7 +470,7 @@ its password or passkeys. Its note stops working for live checks at
 > current version is chosen by key alone ([02](02-records.md) §4.3), so it
 > could replace the account's record in any other collection. Reading per
 > collection would need collection keys the home can hand out alone. Not
-> designed yet.
+> designed yet. See [#348](https://github.com/leifriksheim/minca/issues/348).
 
 ### 2.9 Expiry and renewal
 
@@ -749,7 +749,8 @@ Home                                                  Program
   ask, and MUST ignore `code:done` from any other peer. It sends `code:heard` at once, and MUST show the person the
   name the program gives, as a name only, and the check.
 - **What it gets** is a note that grants records only, in the whole account
-  (§2.8), for as long as the home decides. The home makes the
+  (§2.8), or in the spaces the person keeps it to (§2.5), for as long as the
+  home decides. The home makes the
   `ConnectRequest` (§2.4) itself, with `audience` = the ask's `did`, `proof`
   = its `proof`, `via: "code"`, `recordsOnly: true`, `access: "write"` and
   `scope: "account"`, and grants it as §2.5 says, checking the proof against
