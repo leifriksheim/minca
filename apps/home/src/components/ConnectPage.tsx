@@ -317,7 +317,7 @@ function Approve({
       const answer = await auth.grant({
         origin,
         request,
-        spaceIds: [...chosen],
+        spaceIds: offered.filter((space) => chosen.has(space.id)).map((space) => space.id),
         ...(narrowable ? { everySpace: reach === 'every' } : {}),
       });
       // Only an app that reads the contacts reads the inbox: the whole account, or the contacts alone.

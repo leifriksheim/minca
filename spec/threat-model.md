@@ -1062,7 +1062,7 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     data folder ends every connection. While the app uses it, a node of its holds the spaces
     its calls name in memory, reads them and writes records there "via
     agent", as the app's model asks. The person gives it some spaces, or every
-    space, which its page asks for only when the person picks it there: then
+    space, which its page asks for and the home lets the person narrow: then
     its grant carries the account key, which opens every private space the
     account is in or joins later, its direct messages, the account registry
     (its list of spaces, its apps' settings and automations), the contacts
@@ -1072,7 +1072,8 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     long as the token lasts, used or not: its operator, or whoever breaks in
     and also gets a token, reads for good all of that whose ciphertext they
     can get, where some spaces lose only those. The page and the home both say
-    so on the choice (06 §2.5). Either way its records-only note covers `/record/read`, so
+    so (06 §2.5); a home that offers no way to narrow it gives every space or
+    nothing, and says which. Either way its records-only note covers `/record/read`, so
     whoever holds the key and note can share a space it has to view
     (03 §7.4), though the service offers no tool that does; and whoever holds its sealing key and a
     token can do the same until the note runs out or the person disconnects
