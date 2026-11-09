@@ -3,6 +3,7 @@ content/
 .api/
 public/*
 !public/favicon.*
+!public/_headers
 # Next's build
 .next/
 out/
